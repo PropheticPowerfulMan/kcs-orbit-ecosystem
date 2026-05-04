@@ -5,6 +5,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 export type JwtPayload = {
   userId: string;
   role: string;
+  organizationId?: string | null;
 };
 
 export function signToken(payload: JwtPayload) {

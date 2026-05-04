@@ -5,6 +5,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import authRoutes from "./routes/auth.routes";
 import coreRoutes from "./routes/core.routes";
+import integrationRoutes from "./routes/integration.routes";
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.get("/", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api", coreRoutes);
+app.use("/api/integration", integrationRoutes);
 
 const port = Number(process.env.PORT || 4000);
 

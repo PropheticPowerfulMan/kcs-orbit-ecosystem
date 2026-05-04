@@ -15,14 +15,112 @@ enum Role {
   STUDENT
 }
 
+enum AppSlug {
+  KCS_NEXUS
+  EDUPAY
+  EDUSYNCAI
+  SAVANEX
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SyncDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum SyncStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Organization {
+  id             String          @id @default(cuid())
+  name           String
+  slug           String          @unique
+  isActive       Boolean         @default(true)
+  users          User[]
+  externalLinks  ExternalLink[]
+  appConnections AppConnection[]
+  syncEvents     SyncEvent[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
 model User {
   id           String   @id @default(cuid())
   fullName     String
   email        String   @unique
   passwordHash String
   role         Role
+  organizationId String?
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  auditLogs     AuditLog[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model AppConnection {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  appSlug        AppSlug
+  baseUrl        String
+  status         ConnectionStatus @default(ACTIVE)
+  lastSyncedAt   DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, appSlug])
+}
+
+model ExternalLink {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  appSlug        AppSlug
+  entityType     String
+  nexusEntityId  String
+  externalId     String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, appSlug, entityType, externalId])
+}
+
+model SyncEvent {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  appSlug        AppSlug
+  eventType      String
+  entityType     String
+  entityId       String
+  direction      SyncDirection
+  status         SyncStatus    @default(PENDING)
+  payload        Json?
+  processedAt    DateTime?
+  errorMessage   String?
+  createdAt      DateTime      @default(now())
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
 }
 
 model Parent {
