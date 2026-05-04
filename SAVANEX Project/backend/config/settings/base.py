@@ -87,11 +87,13 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default='savanex_pass'),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('DB_PORT', default='5432'),
-        'OPTIONS': {
-            'connect_timeout': 10,
-        },
     }
 }
+
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default']['OPTIONS'] = {
+        'connect_timeout': 10,
+    }
 
 # ─── Custom User Model ──────────────────────────────────────────────────────────
 AUTH_USER_MODEL = 'users.User'
