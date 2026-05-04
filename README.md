@@ -187,6 +187,68 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
 JWT_SECRET="your_secret"
 PORT=4000
 CORS_ORIGIN="http://localhost:5173,https://propheticpowerfulman.github.io"
+KCS_NEXUS_INTEGRATION_KEY="change_this_kcs_nexus_key"
+EDUPAY_INTEGRATION_KEY="change_this_edupay_key"
+EDUSYNCAI_INTEGRATION_KEY="change_this_edusyncai_key"
+SAVANEX_INTEGRATION_KEY="change_this_savanex_key"
+```
+
+## Inbound integration endpoints
+
+Ces endpoints sont faits pour les applications externes. Ils utilisent l'entete `x-api-key` et ne remplacent pas les routes metier internes existantes.
+
+```txt
+POST /api/integration/ingest/edupay/payments
+POST /api/integration/ingest/savanex/parents
+POST /api/integration/ingest/savanex/teachers
+POST /api/integration/ingest/savanex/students
+POST /api/integration/ingest/savanex/classes
+POST /api/integration/ingest/savanex/grades
+POST /api/integration/ingest/savanex/attendance
+POST /api/integration/ingest/edusyncai/announcements
+```
+
+### Contrat de connexion par application
+
+- SAVANEX doit pousser les eleves et classes avec `organizationId` et `externalId`
+- EduPay doit pousser les paiements avec `organizationId`, `externalId` et `studentExternalId`
+- EduSyncAI doit pousser les annonces avec `organizationId` et `externalId`
+
+Chaque ingestion fait quatre choses:
+
+- cree ou met a jour l'entite centrale
+- maintient la table `ExternalLink`
+- enregistre un `SyncEvent` entrant
+- ecrit un `AuditLog`
+
+### Exemples d'appel
+
+```bash
+curl -X POST http://localhost:4000/api/integration/ingest/savanex/students \
+	-H "Content-Type: application/json" \
+	-H "x-api-key: YOUR_SAVANEX_KEY" \
+	-d '{
+		"organizationId": "org_id",
+		"externalId": "student_legacy_1",
+		"firstName": "Grace",
+		"lastName": "Mboyo",
+		"gender": "F"
+	}'
+```
+
+```bash
+curl -X POST http://localhost:4000/api/integration/ingest/edupay/payments \
+	-H "Content-Type: application/json" \
+	-H "x-api-key: YOUR_EDUPAY_KEY" \
+	-d '{
+		"organizationId": "org_id",
+		"externalId": "payment_legacy_1",
+		"studentExternalId": "student_legacy_1",
+		"amount": 250,
+		"motif": "Tuition",
+		"method": "mobile_money",
+		"reference": "PAY-2026-001"
+	}'
 ```
 
 ## Main endpoints
