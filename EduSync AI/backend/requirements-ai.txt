@@ -1,0 +1,4 @@
+# Optional AI/NLP extensions.
+# Recommended with Python 3.11 and build tools installed.
+spacy==3.8.0
+transformers==4.44.2

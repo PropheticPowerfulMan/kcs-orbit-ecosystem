@@ -1,0 +1,40 @@
+﻿# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Builds
+frontend/dist/
+dist/
+build/
+
+# Python
+.venv/
+venv/
+backend/venv/
+backend/.venv311/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+
+# Local databases and backups
+backend/db.sqlite3
+backend/db.sqlite3.bak-*
+*.sqlite3
+
+# Environment files
+.env
+backend/.env
+frontend/.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+frontend/*.log
+backend/*.log
+
+# IDE / OS
+.vscode/
+.DS_Store
+Thumbs.db

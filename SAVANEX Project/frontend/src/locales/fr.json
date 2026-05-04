@@ -1,0 +1,42 @@
+﻿{
+  "app": {
+    "title": "Gestion Scolaire SAVANEX"
+  },
+  "actions": {
+    "logout": "Se deconnecter"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "students": "Eleves",
+    "parents": "Parents",
+    "teachers": "Enseignants",
+    "timetable": "Emploi du temps",
+    "communication": "Communication",
+    "analytics": "Analytique"
+  },
+  "auth": {
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "signIn": "Se connecter",
+    "signingIn": "Connexion en cours...",
+    "signInSubtitle": "Utilisez vos identifiants scolaires pour acceder a votre tableau de bord.",
+    "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide."
+  },
+  "dashboard": {
+    "overview": "Vue d'ensemble de la plateforme",
+    "subtitle": "Surveillez les operations cles en temps reel.",
+    "students": "Eleves",
+    "teachers": "Enseignants",
+    "classes": "Classes",
+    "attendanceRate": "Presence (30j)",
+    "avgGrade": "Moyenne"
+  },
+  "analytics": {
+    "title": "Intelligence d'alerte precoce",
+    "subtitle": "Identifiez les eleves en difficulte avant l'echec.",
+    "student": "Eleve",
+    "attendanceRate": "Presence",
+    "average": "Moyenne",
+    "flags": "Signaux de risque"
+  }
+}

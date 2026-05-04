@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Élite Immo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              night: '#1a202c',
+              ivory: '#f8f8f6',
+              royal: '#2b50e6',
+              gold: '#b58b45',
+            },
+            boxShadow: {
+              soft: '0 14px 35px -15px rgba(26, 32, 44, 0.25)',
+            },
+          },
+        },
+      }
+    </script>
+    <style>
+      :root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .field { display:flex; align-items:center; gap:.5rem; border-radius:.75rem; border:1px solid rgb(226 232 240); background:white; padding:.75rem; }
+      .field:focus-within { border-color:#2b50e6; box-shadow:0 0 0 3px rgb(43 80 230 / .2); }
+      .field input,.field select{ width:100%; border:none; background:transparent; outline:none; color:rgb(51 65 85); font-size:.875rem; }
+    </style>
+  </head>
+  <body class="bg-ivory text-night antialiased">
+    <header id="nav" class="fixed inset-x-0 top-0 z-30 transition-all duration-300 bg-transparent">
+      <nav class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-8">
+        <span class="text-xl font-extrabold tracking-tight">Élite Immo</span>
+        <button id="menuBtn" class="md:hidden rounded p-2 border border-slate-200 bg-white/80">☰</button>
+        <ul id="menu" class="hidden absolute left-0 right-0 top-full border-b border-slate-200 bg-white px-6 py-4 md:static md:flex md:items-center md:gap-8 md:border-none md:bg-transparent md:p-0">
+          <li><a class="font-medium text-slate-700 transition hover:text-royal" href="#">Acheter</a></li>
+          <li><a class="font-medium text-slate-700 transition hover:text-royal" href="#">Louer</a></li>
+          <li><a class="font-medium text-slate-700 transition hover:text-royal" href="#">Vendre</a></li>
+          <li><a class="font-medium text-slate-700 transition hover:text-royal" href="#">Estimer</a></li>
+          <li class="mt-4 md:mt-0 md:ml-4"><button class="w-full rounded-full bg-royal px-5 py-2.5 font-semibold text-white transition hover:bg-night md:w-auto">Connexion</button></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <section class="relative flex min-h-[92vh] items-center justify-center bg-cover bg-center" style="background-image:linear-gradient(rgba(12,16,25,.55), rgba(12,16,25,.55)),url('https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1800&q=80')">
+        <div class="mx-auto w-full max-w-5xl px-4 text-center text-white md:px-8">
+          <p class="mb-4 inline-block rounded-full border border-white/30 bg-white/10 px-4 py-1 text-sm">Immobilier premium en France</p>
+          <h1 class="mx-auto max-w-3xl text-4xl font-extrabold leading-tight md:text-6xl">Trouvez le lieu parfait pour votre prochain chapitre.</h1>
+          <div class="mt-10 rounded-2xl border border-white/20 bg-white/95 p-4 text-night shadow-soft backdrop-blur-md md:p-5">
+            <div class="grid gap-3 md:grid-cols-[1.5fr_1fr_1fr_auto]">
+              <label class="field"><span>📍</span><input type="text" placeholder="Lieu"></label>
+              <label class="field"><span>🏠</span><select><option>Type de bien</option><option>Appartement</option><option>Maison</option><option>Villa</option></select></label>
+              <label class="field"><span class="text-royal font-bold">€</span><select><option>Budget</option><option>0 € - 250 000 €</option><option>250 000 € - 750 000 €</option><option>750 000 € - 1 500 000 €</option></select></label>
+              <button class="rounded-xl bg-royal px-6 py-3 font-semibold text-white transition hover:bg-night">Rechercher</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mx-auto max-w-7xl px-4 py-20 md:px-8">
+        <div class="mb-10 flex items-center justify-between">
+          <h2 class="text-3xl font-bold md:text-4xl">Propriétés à la une</h2>
+          <a href="#" class="font-semibold text-royal hover:text-night">Voir tout</a>
+        </div>
+        <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          <article class="overflow-hidden rounded-2xl bg-white shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div class="relative"><img class="h-52 w-full object-cover" src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80"><span class="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold">Nouveau</span><button class="absolute right-3 top-3 rounded-full bg-white/90 p-2">♡</button></div>
+            <div class="space-y-2 p-4"><p class="text-2xl font-extrabold">1 250 000 €</p><h3 class="font-semibold">Penthouse panoramique</h3><p class="text-sm text-slate-500">Avenue Victor Hugo, Paris 16e</p></div>
+          </article>
+          <article class="overflow-hidden rounded-2xl bg-white shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div class="relative"><img class="h-52 w-full object-cover" src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80"><span class="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold">Location</span><button class="absolute right-3 top-3 rounded-full bg-white/90 p-2">♡</button></div>
+            <div class="space-y-2 p-4"><p class="text-2xl font-extrabold">3 400 €/mois</p><h3 class="font-semibold">Loft lumineux</h3><p class="text-sm text-slate-500">Rue de la République, Lyon</p></div>
+          </article>
+          <article class="overflow-hidden rounded-2xl bg-white shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div class="relative"><img class="h-52 w-full object-cover" src="https://images.unsplash.com/photo-1600607687644-c7171b42498f?auto=format&fit=crop&w=1400&q=80"><span class="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold">Nouveau</span><button class="absolute right-3 top-3 rounded-full bg-white/90 p-2">♡</button></div>
+            <div class="space-y-2 p-4"><p class="text-2xl font-extrabold">2 890 000 €</p><h3 class="font-semibold">Villa contemporaine</h3><p class="text-sm text-slate-500">Corniche Kennedy, Marseille</p></div>
+          </article>
+          <article class="overflow-hidden rounded-2xl bg-white shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-xl">
+            <div class="relative"><img class="h-52 w-full object-cover" src="https://images.unsplash.com/photo-1600566753051-f0b8f03e9f09?auto=format&fit=crop&w=1400&q=80"><span class="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold">Location</span><button class="absolute right-3 top-3 rounded-full bg-white/90 p-2">♡</button></div>
+            <div class="space-y-2 p-4"><p class="text-2xl font-extrabold">2 150 €/mois</p><h3 class="font-semibold">Appartement design</h3><p class="text-sm text-slate-500">Place du Capitole, Toulouse</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="bg-white py-20">
+        <div class="mx-auto grid max-w-7xl gap-8 px-4 md:grid-cols-3 md:px-8">
+          <article class="rounded-2xl border border-slate-100 p-7"><h3 class="mb-2 text-xl font-bold">Expertise</h3><p class="text-slate-600">Une équipe locale premium pour vous guider à chaque étape de votre projet immobilier.</p></article>
+          <article class="rounded-2xl border border-slate-100 p-7"><h3 class="mb-2 text-xl font-bold">Rapidité</h3><p class="text-slate-600">Des estimations et des rendez-vous organisés en un temps record grâce à nos outils intelligents.</p></article>
+          <article class="rounded-2xl border border-slate-100 p-7"><h3 class="mb-2 text-xl font-bold">Sécurité</h3><p class="text-slate-600">Transactions vérifiées et accompagnement juridique complet.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="bg-night py-12 text-slate-300">
+      <div class="mx-auto flex max-w-7xl flex-col gap-8 px-4 md:flex-row md:items-center md:justify-between md:px-8">
+        <div><p class="text-xl font-bold text-white">Élite Immo</p><p class="mt-2 text-sm text-slate-400">Votre partenaire immobilier d'exception.</p></div>
+        <ul class="flex flex-wrap gap-6 text-sm"><li><a class="hover:text-white" href="#">Acheter</a></li><li><a class="hover:text-white" href="#">Louer</a></li><li><a class="hover:text-white" href="#">Vendre</a></li><li><a class="hover:text-white" href="#">Estimer</a></li></ul>
+      </div>
+    </footer>
+
+    <script>
+      const nav = document.getElementById('nav');
+      const menu = document.getElementById('menu');
+      const menuBtn = document.getElementById('menuBtn');
+      menuBtn.addEventListener('click', () => menu.classList.toggle('hidden'));
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 24) {
+          nav.className = 'fixed inset-x-0 top-0 z-30 transition-all duration-300 bg-white/95 backdrop-blur border-b border-slate-200/80 shadow-sm';
+        } else {
+          nav.className = 'fixed inset-x-0 top-0 z-30 transition-all duration-300 bg-transparent';
+        }
+      });
+    </script>
+  </body>
+</html>

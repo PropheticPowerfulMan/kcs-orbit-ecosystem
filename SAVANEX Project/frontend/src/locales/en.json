@@ -1,0 +1,42 @@
+﻿{
+  "app": {
+    "title": "SAVANEX School Management"
+  },
+  "actions": {
+    "logout": "Logout"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "students": "Students",
+    "parents": "Parents",
+    "teachers": "Teachers",
+    "timetable": "Timetable",
+    "communication": "Communication",
+    "analytics": "Analytics"
+  },
+  "auth": {
+    "username": "Username",
+    "password": "Password",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "signInSubtitle": "Use your school credentials to access your dashboard.",
+    "invalidCredentials": "Invalid username or password."
+  },
+  "dashboard": {
+    "overview": "Platform Overview",
+    "subtitle": "Monitor key operations in real-time.",
+    "students": "Students",
+    "teachers": "Teachers",
+    "classes": "Classes",
+    "attendanceRate": "Attendance (30d)",
+    "avgGrade": "Average Grade"
+  },
+  "analytics": {
+    "title": "Early Warning Intelligence",
+    "subtitle": "Identify struggling students before failure.",
+    "student": "Student",
+    "attendanceRate": "Attendance",
+    "average": "Average",
+    "flags": "Risk Flags"
+  }
+}

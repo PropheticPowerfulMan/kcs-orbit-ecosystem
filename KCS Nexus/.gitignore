@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+coverage/
+*.log
+.vscode/
+frontend/node_modules/
+backend/node_modules/
+backend/prisma/dev.db

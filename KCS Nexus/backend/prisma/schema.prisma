@@ -1,0 +1,610 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum NewsCategory {
+  NEWS
+  EVENT
+  ANNOUNCEMENT
+  ACHIEVEMENT
+  SPORTS
+  ARTS
+}
+
+enum EventType {
+  ACADEMIC
+  SPIRITUAL
+  SPORTS
+  CULTURAL
+  ADMINISTRATIVE
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  INTERVIEW_SCHEDULED
+  ACCEPTED
+  WAITLISTED
+  REJECTED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  MESSAGE
+}
+
+enum AssignmentType {
+  HOMEWORK
+  QUIZ
+  EXAM
+  PROJECT
+  LAB
+}
+
+enum SubmissionStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+  LATE
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+  SICK
+  SUSPENDED
+}
+
+enum FeeStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+model User {
+  id                 String               @id @default(cuid())
+  email              String               @unique
+  passwordHash       String?
+  firstName          String
+  lastName           String
+  role               UserRole
+  staffFunction      String?
+  permissions        String[]             @default([])
+  avatar             String?
+  phone              String?
+  googleId           String?              @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  studentProfile     StudentProfile?
+  teacherProfile     TeacherProfile?
+  parentLinks        ParentStudentLink[]  @relation("ParentLinks")
+  notifications      Notification[]
+  authoredNews       NewsPost[]           @relation("NewsAuthor")
+  contactMessages    ContactMessage[]
+  refreshTokens      RefreshToken[]
+  forumPosts         ParentForumPost[]    @relation("ForumPostAuthor")
+  forumComments      ParentForumComment[] @relation("ForumCommentAuthor")
+  aiForumReports     AIForumReport[]      @relation("AIForumReportReviewer")
+  studentForumPosts  StudentForumPost[]   @relation("StudentForumPostAuthor")
+  studentForumComments StudentForumComment[] @relation("StudentForumCommentAuthor")
+  aiStudentForumReports AIStudentForumReport[] @relation("AIStudentForumReportReviewer")
+  auditLogs          AuditLog[]            @relation("AuditActor")
+  staffProfile       StaffProfile?
+  attendanceRecorded AttendanceRecord[]    @relation("AttendanceRecorder")
+  sentMessages        InternalMessage[]     @relation("MessageSender")
+  receivedMessages    InternalMessage[]     @relation("MessageRecipient")
+  approvedReportCards ReportCard[]          @relation("ReportCardApprover")
+}
+
+model StaffProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  employeeNumber     String   @unique
+  function           String
+  department         String
+  permissions        String[] @default([])
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String?
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([targetType])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StudentProfile {
+  id                 String               @id @default(cuid())
+  userId             String               @unique
+  studentNumber      String               @unique
+  grade              String
+  section            String
+  enrollmentDate     DateTime             @default(now())
+  status             String               @default("active")
+  gpa                Float?
+  attendanceRate     Float?
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentLinks        ParentStudentLink[]  @relation("StudentLinks")
+  enrollments        Enrollment[]
+  grades             Grade[]
+  submissions        AssignmentSubmission[]
+  aiSessions         AITutorSession[]
+  aiRecommendations  AIRecommendation[]
+  attendanceRecords  AttendanceRecord[]
+  reportCards        ReportCard[]
+  transcripts        Transcript[]
+  feeInvoices        FeeInvoice[]
+}
+
+model ParentStudentLink {
+  id         String         @id @default(cuid())
+  parentId   String
+  studentId  String
+  relation   String
+  parent     User           @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Cascade)
+  student    StudentProfile @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
+}
+
+model TeacherProfile {
+  id                 String        @id @default(cuid())
+  userId             String        @unique
+  employeeNumber     String        @unique
+  department         String
+  qualification      String
+  yearsOfExperience  Int
+  bio                String?
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courses            Course[]
+}
+
+model Course {
+  id            String                 @id @default(cuid())
+  name          String
+  code          String                 @unique
+  description   String
+  grade         String
+  teacherId     String
+  credits       Int                    @default(1)
+  syllabus      String?
+  teacher       TeacherProfile         @relation(fields: [teacherId], references: [id])
+  schedules     CourseSchedule[]
+  assignments   Assignment[]
+  grades        Grade[]
+  enrollments   Enrollment[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+}
+
+model CourseSchedule {
+  id         String   @id @default(cuid())
+  courseId   String
+  day        String
+  startTime  String
+  endTime    String
+  room       String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Enrollment {
+  id         String         @id @default(cuid())
+  courseId   String
+  studentId  String
+  createdAt  DateTime       @default(now())
+  course     Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId])
+}
+
+model Assignment {
+  id           String                 @id @default(cuid())
+  courseId     String
+  title        String
+  description  String
+  dueDate      DateTime
+  maxScore     Float
+  type         AssignmentType
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  course       Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions  AssignmentSubmission[]
+}
+
+model AssignmentSubmission {
+  id            String           @id @default(cuid())
+  assignmentId  String
+  studentId     String
+  submittedAt   DateTime?
+  score         Float?
+  feedback      String?
+  status        SubmissionStatus @default(PENDING)
+  assignment    Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student       StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+}
+
+model Grade {
+  id          String         @id @default(cuid())
+  studentId   String
+  courseId    String
+  assignmentId String?
+  score       Float
+  maxScore    Float
+  percentage  Float
+  letterGrade String
+  period      String
+  createdAt   DateTime       @default(now())
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model NewsPost {
+  id          String       @id @default(cuid())
+  title       String
+  slug        String       @unique
+  excerpt     String
+  content     String
+  category    NewsCategory
+  coverImage  String?
+  tags        String[]
+  publishedAt DateTime     @default(now())
+  views       Int          @default(0)
+  authorId    String
+  author      User         @relation("NewsAuthor", fields: [authorId], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Event {
+  id                    String    @id @default(cuid())
+  title                 String
+  description           String
+  startDate             DateTime
+  endDate               DateTime
+  location              String
+  type                  EventType
+  coverImage            String?
+  registrationRequired  Boolean   @default(false)
+  maxAttendees          Int?
+  liveStreamEnabled     Boolean   @default(false)
+  liveStreamUrl         String?
+  liveStreamPlatform    String?
+  liveStreamStatus      String    @default("scheduled")
+  liveStreamStartsAt    DateTime?
+  replayUrl             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model AttendanceRecord {
+  id          String           @id @default(cuid())
+  studentId   String
+  recordedById String?
+  date        DateTime
+  className   String
+  period      String?
+  subject     String?
+  status      AttendanceStatus
+  note        String?
+  notifiedAt  DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  student     StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recordedBy  User?            @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([status])
+  @@unique([studentId, date, className, period])
+}
+
+model InternalMessage {
+  id          String   @id @default(cuid())
+  senderId    String?
+  recipientId String?
+  subject     String
+  body        String
+  targetRole  UserRole?
+  readAt      DateTime?
+  priority    String   @default("normal")
+  createdAt   DateTime @default(now())
+  sender      User?    @relation("MessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient   User?    @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([targetRole])
+  @@index([createdAt])
+}
+
+model ReportCard {
+  id                String         @id @default(cuid())
+  studentId         String
+  term              String
+  average           Float
+  conduct           String?
+  teacherComment    String?
+  principalStatus   String         @default("DRAFT")
+  approvedById      String?
+  approvedAt        DateTime?
+  pdfUrl            String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  student           StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  approvedBy        User?          @relation("ReportCardApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, term])
+}
+
+model Transcript {
+  id             String         @id @default(cuid())
+  studentId      String
+  academicYears  String
+  credits        Float
+  cumulativeGpa  Float
+  status         String         @default("IN_PROGRESS")
+  pdfUrl         String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model FeeInvoice {
+  id          String       @id @default(cuid())
+  studentId   String
+  invoiceNo   String       @unique
+  amount      Float
+  balance     Float
+  status      FeeStatus    @default(PENDING)
+  dueDate     DateTime
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  payments    FeePayment[]
+}
+
+model FeePayment {
+  id          String     @id @default(cuid())
+  invoiceId   String
+  amount      Float
+  method      String
+  reference   String?
+  paidAt      DateTime   @default(now())
+  receiptUrl  String?
+  invoice     FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model AdmissionApplication {
+  id                 String              @id @default(cuid())
+  applicationNumber  String              @unique
+  firstName          String
+  lastName           String
+  dateOfBirth        DateTime
+  gender             String
+  nationality        String
+  gradeApplying      String
+  previousSchool     String?
+  parentName         String
+  parentEmail        String
+  parentPhone        String
+  relationship       String
+  address            String
+  notes              String?
+  status             ApplicationStatus   @default(SUBMITTED)
+  submittedAt        DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  documents          AdmissionDocument[]
+}
+
+model AdmissionDocument {
+  id             String                @id @default(cuid())
+  applicationId  String
+  name           String
+  type           String
+  url            String
+  uploadedAt     DateTime              @default(now())
+  application    AdmissionApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model MediaItem {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  url          String
+  thumbnailUrl String?
+  type         MediaType
+  category     String
+  tags         String[]
+  uploadedAt   DateTime  @default(now())
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  title      String
+  message    String
+  type       NotificationType
+  isRead     Boolean          @default(false)
+  link       String?
+  createdAt  DateTime         @default(now())
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ContactMessage {
+  id         String   @id @default(cuid())
+  userId     String?
+  name       String
+  email      String
+  phone      String?
+  subject    String
+  message    String
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model AITutorSession {
+  id         String           @id @default(cuid())
+  studentId  String
+  subject    String
+  topic      String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  student    StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  messages   AITutorMessage[]
+}
+
+model AITutorMessage {
+  id         String          @id @default(cuid())
+  sessionId  String
+  role       String
+  content    String
+  createdAt  DateTime        @default(now())
+  session    AITutorSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AIRecommendation {
+  id          String         @id @default(cuid())
+  studentId   String
+  title       String
+  description String
+  riskLevel   String
+  createdAt   DateTime       @default(now())
+  student     StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model ParentForumPost {
+  id           String               @id @default(cuid())
+  authorId     String
+  title        String
+  content      String
+  category     String
+  status       String               @default("open")
+  sentiment    String               @default("neutral")
+  priority     String               @default("normal")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  author       User                 @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments     ParentForumComment[]
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+model ParentForumComment {
+  id        String          @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  sentiment String          @default("neutral")
+  createdAt DateTime        @default(now())
+  post      ParentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User            @relation("ForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model AIForumReport {
+  id             String    @id @default(cuid())
+  title          String
+  summary        String
+  sentiment      String
+  riskLevel      String
+  keyTopics      String[]
+  recommendations String[]
+  actionItems    String[]
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  reviewedBy     User?     @relation("AIForumReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+}
+
+model StudentForumPost {
+  id           String                @id @default(cuid())
+  authorId     String
+  title        String
+  content      String
+  category     String
+  status       String                @default("open")
+  sentiment    String                @default("neutral")
+  priority     String                @default("normal")
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  author       User                  @relation("StudentForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments     StudentForumComment[]
+
+  @@index([category])
+  @@index([createdAt])
+}
+
+model StudentForumComment {
+  id        String           @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  sentiment String           @default("neutral")
+  createdAt DateTime         @default(now())
+  post      StudentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User             @relation("StudentForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model AIStudentForumReport {
+  id             String    @id @default(cuid())
+  title          String
+  summary        String
+  sentiment      String
+  riskLevel      String
+  keyTopics      String[]
+  recommendations String[]
+  actionItems    String[]
+  reviewedById   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  reviewedBy     User?     @relation("AIStudentForumReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+}
