@@ -17,7 +17,7 @@ class StudentSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
-    class_name = serializers.CharField(source='current_class.__str__', read_only=True)
+    class_name = serializers.SerializerMethodField()
     parent_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -34,6 +34,11 @@ class StudentSerializer(serializers.ModelSerializer):
     def get_parent_name(self, obj):
         if obj.parent:
             return obj.parent.get_full_name()
+        return None
+
+    def get_class_name(self, obj):
+        if obj.current_class:
+            return str(obj.current_class)
         return None
 
 
@@ -139,7 +144,12 @@ class FamilyRegistrationSerializer(serializers.Serializer):
 
 class StudentDetailSerializer(serializers.ModelSerializer):
     user = UserMeSerializer(read_only=True)
-    class_name = serializers.CharField(source='current_class.__str__', read_only=True)
+    class_name = serializers.SerializerMethodField()
+
+    def get_class_name(self, obj):
+        if obj.current_class:
+            return str(obj.current_class)
+        return None
 
     class Meta:
         model = Student

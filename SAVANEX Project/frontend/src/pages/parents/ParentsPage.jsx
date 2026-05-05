@@ -1,35 +1,141 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
-import { parents } from '../../data/demoSchoolData';
+import { studentsService } from '../../services/api';
 
-const balanceClass = {
-  Paid: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
-  Pending: 'border-amber-400/30 bg-amber-400/10 text-amber-200',
-  Overdue: 'border-rose-400/30 bg-rose-400/10 text-rose-200',
+const normalizeLabel = (value, fallback) => {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+
+  return fallback;
 };
+
+const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 const ParentsPage = () => {
   const [query, setQuery] = useState('');
-  const filtered = useMemo(
-    () => parents.filter((parent) => `${parent.name} ${parent.student} ${parent.phone} ${parent.email}`.toLowerCase().includes(query.toLowerCase())),
-    [query]
+  const [classFilter, setClassFilter] = useState('all');
+  const [familyFilter, setFamilyFilter] = useState('all');
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadStudents = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const data = await studentsService.getAll();
+        setStudents(data);
+      } catch {
+        setError('Impossible de charger les familles pour le moment.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadStudents();
+  }, []);
+
+  const familyRows = useMemo(() => {
+    const groups = new Map();
+
+    for (const student of students) {
+      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lie');
+      const current = groups.get(familyName) || {
+        id: slugify(familyName),
+        family_name: familyName,
+        students: [],
+        classes: new Set(),
+        activeStudents: 0,
+      };
+
+      current.students.push(student.full_name);
+      current.classes.add(normalizeLabel(student.class_name, 'Non assignee'));
+      if (student.is_active) {
+        current.activeStudents += 1;
+      }
+
+      groups.set(familyName, current);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        id: group.id,
+        family_name: group.family_name,
+        students_label: group.students.join(', '),
+        classes_label: Array.from(group.classes).sort((left, right) => left.localeCompare(right)).join(', '),
+        student_count: group.students.length,
+        activeStudents: group.activeStudents,
+      }))
+      .sort((left, right) => right.student_count - left.student_count || left.family_name.localeCompare(right.family_name));
+  }, [students]);
+
+  const classOptions = useMemo(
+    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignee')))).sort((left, right) => left.localeCompare(right)),
+    [students]
   );
-  const avgEngagement = Math.round(parents.reduce((sum, parent) => sum + parent.engagement, 0) / parents.length);
-  const overdue = parents.filter((parent) => parent.balance === 'Overdue').length;
-  const lowEngagement = parents.filter((parent) => parent.engagement < 60).length;
+
+  const familyOptions = useMemo(
+    () => familyRows.map((row) => row.family_name),
+    [familyRows]
+  );
+
+  const filtered = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return familyRows.filter((family) => {
+      if (classFilter !== 'all') {
+        const classLabels = family.classes_label.split(', ').filter(Boolean);
+        if (!classLabels.includes(classFilter)) {
+          return false;
+        }
+      }
+
+      if (familyFilter !== 'all' && family.family_name !== familyFilter) {
+        return false;
+      }
+
+      const haystack = `${family.family_name} ${family.students_label} ${family.classes_label}`.toLowerCase();
+      if (normalizedQuery && !haystack.includes(normalizedQuery)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [classFilter, familyFilter, familyRows, query]);
+
+  const classGroups = useMemo(() => {
+    const groups = new Map();
+
+    for (const family of filtered) {
+      const classLabels = family.classes_label.split(', ').filter(Boolean);
+      for (const className of classLabels.length ? classLabels : ['Non assignee']) {
+        const current = groups.get(className) || { className, families: [], students: 0 };
+        current.families.push(family.family_name);
+        current.students += family.student_count;
+        groups.set(className, current);
+      }
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({ ...group, families: Array.from(new Set(group.families)).sort((left, right) => left.localeCompare(right)) }))
+      .sort((left, right) => right.students - left.students || left.className.localeCompare(right.className));
+  }, [filtered]);
+
+  const activeFamilies = filtered.filter((family) => family.activeStudents > 0).length;
+  const totalStudents = filtered.reduce((sum, family) => sum + family.student_count, 0);
+  const classesCovered = classGroups.length;
 
   const columns = [
-    { key: 'name', label: 'Parent / Tuteur' },
-    { key: 'student', label: 'Eleve lie' },
-    { key: 'relation', label: 'Relation' },
-    { key: 'phone', label: 'Telephone' },
-    { key: 'email', label: 'Email' },
-    { key: 'engagement', label: 'Engagement', render: (v) => `${v}%` },
-    { key: 'lastContact', label: 'Dernier contact' },
-    { key: 'balance', label: 'Frais', render: (v) => <span className={`rounded-full border px-2 py-1 text-xs ${balanceClass[v]}`}>{v}</span> },
-    { key: 'meetings', label: 'RDV' },
+    { key: 'family_name', label: 'Famille / Parent' },
+    { key: 'students_label', label: 'Eleves lies' },
+    { key: 'classes_label', label: 'Classes' },
+    { key: 'student_count', label: 'Effectif' },
+    { key: 'activeStudents', label: 'Actifs' },
   ];
 
   return (
@@ -37,53 +143,105 @@ const ParentsPage = () => {
       <section className="mb-6 flex flex-col gap-4 page-enter lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Parent relationship management</p>
-          <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">Gestion complete des parents</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400">Dossiers parents, contacts, engagement, rendez-vous, suivi financier et relances personnalisees.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="rounded-xl bg-kcs-blue px-4 py-2 text-sm font-semibold text-slate-950">Ajouter un parent</button>
-          <button className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Planifier RDV</button>
-          <button className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Relance automatique</button>
+          <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">Classement des familles et parents</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">Recherche et regroupement des foyers par famille et par classe a partir des eleves relies dans SAVANEX.</p>
         </div>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard title="Parents actifs" value={parents.length} accent="text-cyan-300" />
-        <StatCard title="Engagement moyen" value={`${avgEngagement}%`} subtitle="Portail + messages" accent="text-emerald-300" />
-        <StatCard title="Faible engagement" value={lowEngagement} subtitle="A rappeler cette semaine" accent="text-amber-300" />
-        <StatCard title="Frais en retard" value={overdue} subtitle="Suivi comptable" accent="text-rose-300" />
+        <StatCard title="Familles actives" value={activeFamilies} accent="text-cyan-300" />
+        <StatCard title="Eleves relies" value={totalStudents} subtitle="Visibles dans les familles" accent="text-emerald-300" />
+        <StatCard title="Classes couvertes" value={classesCovered} subtitle="Classes reliees aux familles" accent="text-amber-300" />
+        <StatCard title="Resultats filtres" value={filtered.length} subtitle="Familles correspondant a la recherche" accent="text-rose-300" />
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
         <article className="card p-5 xl:col-span-2">
-          <p className="font-display text-lg font-semibold text-slate-100">Workflow parent complet</p>
+          <p className="font-display text-lg font-semibold text-slate-100">Classement par famille</p>
           <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {['Profil', 'Contacts', 'Paiements', 'Communication'].map((step, index) => (
-              <div key={step} className="rounded-2xl border border-github-border bg-slate-950/40 p-4">
-                <p className="text-xs text-slate-500">Etape {index + 1}</p>
-                <p className="mt-1 font-semibold text-slate-100">{step}</p>
-                <p className="mt-2 text-xs text-slate-400">Disponible</p>
+            {filtered.slice(0, 4).map((family, index) => (
+              <div key={family.id} className="rounded-2xl border border-github-border bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-500">Famille {index + 1}</p>
+                <p className="mt-1 font-semibold text-slate-100">{family.family_name}</p>
+                <p className="mt-2 text-xs text-slate-400">{family.student_count} eleve(s) - {family.classes_label || 'Non assignee'}</p>
               </div>
             ))}
           </div>
         </article>
         <article className="card p-5">
-          <p className="font-display text-lg font-semibold text-slate-100">Priorite IA</p>
-          <p className="mt-2 text-sm text-slate-400">Contacter Claire Nsimba : engagement bas, frais en retard, eleve en risque eleve.</p>
-          <button className="mt-4 w-full rounded-xl bg-rose-400 px-4 py-2 text-sm font-semibold text-slate-950">Ouvrir le dossier</button>
+          <p className="font-display text-lg font-semibold text-slate-100">Classement par classe</p>
+          <div className="mt-4 space-y-3">
+            {classGroups.slice(0, 4).map((group) => (
+              <div key={group.className} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <p className="font-semibold text-slate-100">{group.className}</p>
+                <p className="mt-1 text-xs text-slate-400">{group.students} eleve(s) - {group.families.length} famille(s)</p>
+              </div>
+            ))}
+          </div>
         </article>
       </section>
 
       <div className="mb-4 card p-4">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Rechercher parent, eleve, telephone ou email..."
-          className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
-        />
+        <div className="grid gap-3 lg:grid-cols-3">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Rechercher parent, famille, eleve ou classe..."
+            className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
+          />
+          <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+            <option value="all">Toutes les classes</option>
+            {classOptions.map((className) => (
+              <option key={className} value={className}>{className}</option>
+            ))}
+          </select>
+          <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+            <option value="all">Toutes les familles</option>
+            {familyOptions.map((familyName) => (
+              <option key={familyName} value={familyName}>{familyName}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
+      {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des familles...</p> : null}
+      {error ? <p className="mb-4 text-sm text-rose-300">{error}</p> : null}
       <DataTable columns={columns} data={filtered} />
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-2">
+        <article className="card p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Recherche parents</p>
+          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement detaille par famille</h3>
+          <div className="mt-4 space-y-3">
+            {filtered.length ? filtered.map((family) => (
+              <div key={family.id} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-100">{family.family_name}</p>
+                  <span className="text-xs text-slate-400">{family.student_count} eleve(s)</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">Classes: {family.classes_label || 'Non assignee'}</p>
+                <p className="mt-3 text-sm text-slate-300">{family.students_label}</p>
+              </div>
+            )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
+          </div>
+        </article>
+
+        <article className="card p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Classement</p>
+          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Classes et familles associees</h3>
+          <div className="mt-4 space-y-3">
+            {classGroups.length ? classGroups.map((group) => (
+              <div key={slugify(group.className)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-100">{group.className}</p>
+                  <span className="text-xs text-slate-400">{group.students} eleve(s)</span>
+                </div>
+                <p className="mt-3 text-sm text-slate-300">{group.families.join(', ')}</p>
+              </div>
+            )) : <p className="text-sm text-slate-400">Aucune classe ne correspond aux filtres en cours.</p>}
+          </div>
+        </article>
+      </section>
     </DashboardLayout>
   );
 };

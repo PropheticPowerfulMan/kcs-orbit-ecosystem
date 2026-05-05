@@ -3,6 +3,8 @@ import { NavLink } from 'react-router-dom';
 import {
   BarChart3,
   CalendarClock,
+  ChevronLeft,
+  ChevronRight,
   GraduationCap,
   LayoutDashboard,
   MessageSquare,
@@ -13,7 +15,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import SchoolLogo from '../ui/SchoolLogo';
 
-const Sidebar = ({ role = 'admin', isOpen = false, onClose = () => {} }) => {
+const Sidebar = ({ role = 'admin', isOpen = false, isCollapsed = false, onClose = () => {}, onToggleCollapse = () => {} }) => {
   const { t } = useTranslation();
 
   const links = [
@@ -28,22 +30,33 @@ const Sidebar = ({ role = 'admin', isOpen = false, onClose = () => {} }) => {
 
   const navigation = (
     <>
-      <div className="flex items-start justify-between gap-3 px-5 py-5 lg:block lg:px-6 lg:py-6">
-        <div>
-          <SchoolLogo withText />
-          <p className="mt-4 text-xs uppercase tracking-[0.2em] text-slate-500">{role}</p>
+      <div className={`flex items-start justify-between gap-3 px-5 py-5 lg:px-4 lg:py-5 ${isCollapsed ? 'lg:flex-col lg:items-center' : 'lg:block lg:px-6 lg:py-6'}`}>
+        <div className={isCollapsed ? 'lg:flex lg:flex-col lg:items-center' : ''}>
+          <SchoolLogo withText={!isCollapsed} />
+          <p className={`mt-4 text-xs uppercase tracking-[0.2em] text-slate-500 ${isCollapsed ? 'lg:mt-3 lg:text-center' : ''}`}>{role}</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-github-border bg-slate-900/70 text-slate-300 transition hover:border-kcs-blue/50 hover:text-sky-200 lg:hidden"
-          aria-label="Fermer le menu"
-        >
-          <X size={18} />
-        </button>
+        <div className={`flex shrink-0 items-center gap-2 ${isCollapsed ? 'lg:w-full lg:justify-center' : ''}`}>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="hidden h-10 w-10 items-center justify-center rounded-xl border border-github-border bg-slate-900/55 text-slate-300 transition hover:border-kcs-blue/50 hover:text-sky-200 lg:flex"
+            aria-label={isCollapsed ? 'Etendre la barre laterale' : 'Reduire la barre laterale'}
+            title={isCollapsed ? 'Etendre la barre laterale' : 'Reduire la barre laterale'}
+          >
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-github-border bg-slate-900/70 text-slate-300 transition hover:border-kcs-blue/50 hover:text-sky-200 lg:hidden"
+            aria-label="Fermer le menu"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 pb-4">
+      <nav className={`flex-1 space-y-1 px-3 pb-4 ${isCollapsed ? 'lg:px-2' : ''}`}>
         {links.map((link) => {
           const Icon = link.icon;
           return (
@@ -51,16 +64,17 @@ const Sidebar = ({ role = 'admin', isOpen = false, onClose = () => {} }) => {
               key={link.to}
               to={link.to}
               onClick={onClose}
+              title={isCollapsed ? link.label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
+                `flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${isCollapsed ? 'lg:justify-center lg:px-2' : ''} ${
                   isActive
                     ? 'border-kcs-blue/40 bg-kcs-blue/15 text-sky-200 shadow-glass'
                     : 'border-transparent text-slate-300 hover:border-github-border hover:bg-slate-800/55 hover:text-slate-100'
                 }`
               }
             >
-              <Icon size={16} />
-              <span>{link.label}</span>
+              <Icon size={16} className="shrink-0" />
+              <span className={isCollapsed ? 'lg:hidden' : ''}>{link.label}</span>
             </NavLink>
           );
         })}
@@ -70,8 +84,10 @@ const Sidebar = ({ role = 'admin', isOpen = false, onClose = () => {} }) => {
 
   return (
     <>
-      <aside className="hidden w-72 flex-col border-r border-github-border bg-github-canvas/70 backdrop-blur-xl lg:flex">
-        {navigation}
+      <aside className={`hidden shrink-0 lg:block ${isCollapsed ? 'w-24' : 'w-72'}`}>
+        <div className="flex h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-[1.75rem] border border-github-border bg-github-canvas/78 shadow-glass backdrop-blur-xl">
+          {navigation}
+        </div>
       </aside>
 
       <div
