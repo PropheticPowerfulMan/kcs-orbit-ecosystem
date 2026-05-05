@@ -43,7 +43,7 @@ app.use("/api/integration", integrationRoutes);
 app.use("/api/integration/read", integrationReadRoutes);
 app.use("/api/integration/ingest", integrationIngestRoutes);
 
-const port = Number(process.env.PORT || 4000);
+const port = Number(process.env.PORT || 4500);
 
 app.listen(port, () => {
   console.log(`KCS Orbit API running on port ${port}`);

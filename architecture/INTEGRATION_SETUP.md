@@ -34,7 +34,7 @@ Dans [kcs-orbit-api/.env.example](../kcs-orbit-api/.env.example):
 
 Dans l'environnement du backend Django:
 
-- `KCS_ORBIT_API_URL=http://localhost:4000`
+- `KCS_ORBIT_API_URL=http://localhost:4500`
 - `KCS_ORBIT_API_KEY=<SAVANEX_INTEGRATION_KEY>`
 - `KCS_ORBIT_ORGANIZATION_ID=<organization_id_orbit>`
 - `KCS_ORBIT_TIMEOUT_SECONDS=5`
@@ -43,7 +43,7 @@ Dans l'environnement du backend Django:
 
 Dans [EduPay Smart System/apps/api/.env.example](../EduPay%20Smart%20System/apps/api/.env.example):
 
-- `KCS_ORBIT_API_URL=http://localhost:4000`
+- `KCS_ORBIT_API_URL=http://localhost:4500`
 - `KCS_ORBIT_API_KEY=<EDUPAY_INTEGRATION_KEY>`
 - `KCS_ORBIT_ORGANIZATION_ID=<organization_id_orbit>`
 
@@ -55,7 +55,7 @@ Important:
 
 Dans [EduSync AI/backend/.env.example](../EduSync%20AI/backend/.env.example):
 
-- `KCS_ORBIT_API_URL=http://localhost:4000`
+- `KCS_ORBIT_API_URL=http://localhost:4500`
 - `KCS_ORBIT_API_KEY=<EDUSYNCAI_INTEGRATION_KEY>`
 - `KCS_ORBIT_ORGANIZATION_ID=<organization_id_orbit>`
 - `KCS_ORBIT_TIMEOUT_SECONDS=5`

@@ -1,6 +1,12 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from uuid import uuid4
+
 from .models import User
+
+
+def _generate_username(prefix: str) -> str:
+    return f"{prefix}-{uuid4().hex[:10]}"
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -39,9 +45,18 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'password', 'role', 'phone', 'language']
+        extra_kwargs = {
+            'username': {'required': False, 'allow_blank': True},
+            'role': {'required': False},
+        }
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        role = validated_data.get('role', User.ROLE_STUDENT)
+        username = (validated_data.get('username') or '').strip()
+        if not username:
+            prefix = 'par' if role == User.ROLE_PARENT else 'usr'
+            validated_data['username'] = _generate_username(prefix)
         user = User(**validated_data)
         user.set_password(password)
         user.save()

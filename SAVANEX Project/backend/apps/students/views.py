@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from apps.integration.orbit import sync_parent, sync_student
 from .models import Student
-from .serializers import StudentSerializer, StudentCreateSerializer, StudentDetailSerializer
+from .serializers import FamilyRegistrationSerializer, StudentSerializer, StudentCreateSerializer, StudentDetailSerializer
 from apps.users.permissions import IsAdminUser, IsTeacherOrAdmin, IsOwnerOrAdmin
 
 
@@ -28,6 +28,11 @@ class StudentListCreateView(generics.ListCreateAPIView):
         if student.parent_id:
             sync_parent(student.parent)
         sync_student(student)
+
+
+class FamilyRegistrationView(generics.CreateAPIView):
+    serializer_class = FamilyRegistrationSerializer
+    permission_classes = [IsAdminUser]
 
 
 class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):

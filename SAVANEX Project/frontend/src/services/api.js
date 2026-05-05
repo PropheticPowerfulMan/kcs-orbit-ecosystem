@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { students as demoStudents } from '../data/demoSchoolData';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 const DEMO_ACCESS_TOKEN = 'demo-access-token';
@@ -124,6 +125,34 @@ export const analyticsService = {
     }
 
     const res = await api.get('/analytics/early-warning/');
+    return res.data;
+  },
+};
+
+export const studentsService = {
+  async getAll() {
+    if (isDemoSession()) {
+      return demoStudents.map((student, index) => ({
+        id: index + 1,
+        student_id: `DEMO-${index + 1}`,
+        full_name: student.name,
+        email: undefined,
+        class_name: student.className,
+        parent_name: student.parent,
+        is_active: true,
+      }));
+    }
+
+    const res = await api.get('/students/');
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+
+  async registerFamily(data) {
+    if (isDemoSession()) {
+      throw new Error('Family registration is disabled in demo mode.');
+    }
+
+    const res = await api.post('/students/family-registration/', data);
     return res.data;
   },
 };

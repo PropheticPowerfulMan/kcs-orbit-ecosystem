@@ -7,12 +7,10 @@ import { registryAPI } from '@/services/api'
 
 type RegistryFamily = {
   id: string
-  studentNumber: string
-  grade: string
-  section: string
-  status?: string
-  student: { firstName: string; lastName: string; email?: string }
-  parents: Array<{ relation: string; parent: { firstName: string; lastName: string; email?: string; phone?: string } }>
+  familyLabel: string
+  studentCount: number
+  parents: Array<{ id?: string; externalId?: string; relation: string; parent: { firstName: string; lastName: string; fullName: string; email?: string; phone?: string } }>
+  children: Array<{ id: string; externalId?: string; studentNumber: string; grade: string; section: string; status?: string; student: { firstName: string; lastName: string; fullName: string; email?: string } }>
 }
 
 const SchoolRegistryPage = () => {
@@ -54,7 +52,7 @@ const SchoolRegistryPage = () => {
   }, [])
 
   const filteredFamilies = families.filter((family) => {
-    const haystack = `${family.student.firstName} ${family.student.lastName} ${family.studentNumber} ${family.grade} ${family.parents.map((item) => `${item.parent.firstName} ${item.parent.lastName}`).join(' ')}`.toLowerCase()
+    const haystack = `${family.familyLabel} ${family.parents.map((item) => item.parent.fullName).join(' ')} ${family.children.map((child) => `${child.student.fullName} ${child.studentNumber} ${child.grade}`).join(' ')}`.toLowerCase()
     return haystack.includes(query.toLowerCase())
   })
 
@@ -179,9 +177,9 @@ const SchoolRegistryPage = () => {
             ) : null}
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: 'Students', value: families.length, icon: BookOpen },
+                { label: 'Students', value: families.reduce((sum, item) => sum + item.children.length, 0), icon: BookOpen },
                 { label: 'Parent links', value: families.reduce((sum, item) => sum + item.parents.length, 0), icon: Users },
-                { label: 'Grades covered', value: new Set(families.map((item) => item.grade)).size, icon: UserRound },
+                { label: 'Grades covered', value: new Set(families.flatMap((item) => item.children.map((child) => child.grade))).size, icon: UserRound },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                   <Icon size={18} className="mb-3 text-kcs-blue-600" />
@@ -208,19 +206,31 @@ const SchoolRegistryPage = () => {
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="font-bold text-kcs-blue-900 dark:text-white">{family.student.firstName} {family.student.lastName}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{family.studentNumber} · {family.grade} · Section {family.section}</p>
+                        <p className="font-bold text-kcs-blue-900 dark:text-white">{family.familyLabel}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{family.studentCount} student{family.studentCount > 1 ? 's' : ''} · {family.parents.length} parent link{family.parents.length > 1 ? 's' : ''}</p>
                       </div>
                       <span className="badge-blue">Active</span>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       {family.parents.map(({ parent, relation }) => (
-                        <div key={`${family.id}-${parent.email}`} className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/50">
+                        <div key={`${family.id}-${parent.fullName}-${relation}`} className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/50">
                           <p className="font-semibold text-kcs-blue-900 dark:text-white">{parent.firstName} {parent.lastName} <span className="text-xs font-normal text-gray-400">({relation})</span></p>
                           <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500"><Mail size={12} /> {parent.email || 'No email recorded'}</p>
                           <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500"><Phone size={12} /> {parent.phone || 'No phone recorded'}</p>
                         </div>
                       ))}
+                    </div>
+                    <div className="mt-4 rounded-xl border border-gray-100 bg-white/70 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Children linked in this family</p>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {family.children.map((child) => (
+                          <div key={child.id} className="rounded-xl border border-gray-100 bg-white p-3 text-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                            <p className="font-semibold text-kcs-blue-900 dark:text-white">{child.student.fullName}</p>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{child.studentNumber} · {child.grade} · Section {child.section}</p>
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Status: {child.status || 'ACTIVE'}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </motion.div>
                 ))}

@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import timezone
 from pathlib import Path
 from threading import Lock
 from urllib import error, request
@@ -154,6 +155,14 @@ def _map_audience(channel: str) -> list[str]:
     return mapping.get(normalized, ["STAFF"])
 
 
+def _contract_datetime(value) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
+
+
 def sync_announcement(announcement) -> None:
     if not orbit_sync_is_enabled():
         logger.info("Orbit sync skipped: missing EduSync AI configuration")
@@ -163,7 +172,7 @@ def sync_announcement(announcement) -> None:
         "organizationId": settings.kcs_orbit_organization_id,
         "externalId": str(announcement.id),
         "sourceApp": "EDUSYNCAI",
-        "occurredAt": announcement.created_at.isoformat(),
+        "occurredAt": _contract_datetime(announcement.created_at),
         "version": "1.0.0",
         "payload": {
             "title": announcement.title,

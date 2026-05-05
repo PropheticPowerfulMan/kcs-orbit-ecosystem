@@ -230,7 +230,7 @@ Chaque ingestion fait quatre choses:
 ### Exemples d'appel
 
 ```bash
-curl -X POST http://localhost:4000/api/integration/ingest/savanex/students \
+curl -X POST http://localhost:4500/api/integration/ingest/savanex/students \
 	-H "Content-Type: application/json" \
 	-H "x-api-key: YOUR_SAVANEX_KEY" \
 	-d '{
@@ -243,7 +243,7 @@ curl -X POST http://localhost:4000/api/integration/ingest/savanex/students \
 ```
 
 ```bash
-curl -X POST http://localhost:4000/api/integration/ingest/edupay/payments \
+curl -X POST http://localhost:4500/api/integration/ingest/edupay/payments \
 	-H "Content-Type: application/json" \
 	-H "x-api-key: YOUR_EDUPAY_KEY" \
 	-d '{

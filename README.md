@@ -94,6 +94,14 @@ Option brutale si un process resiste:
 - `SAVANEX` est lance en local sur SQLite via le script racine pour simplifier le demarrage.
 - `EduPay` et `Orbit` utilisent PostgreSQL local dans la procedure racine actuelle.
 
+## Documentation d'architecture
+
+- [architecture/ECOSYSTEM_BLUEPRINT.md](c:\Users\user\Downloads\Aexams\Ecosystem\architecture\ECOSYSTEM_BLUEPRINT.md)
+- [architecture/DATA_CONTRACTS.md](c:\Users\user\Downloads\Aexams\Ecosystem\architecture\DATA_CONTRACTS.md)
+- [architecture/INTEGRATION_SETUP.md](c:\Users\user\Downloads\Aexams\Ecosystem\architecture\INTEGRATION_SETUP.md)
+- [architecture/MIGRATION_ROADMAP.md](c:\Users\user\Downloads\Aexams\Ecosystem\architecture\MIGRATION_ROADMAP.md)
+- [architecture/PRODUCTION_DEPLOYMENT.md](c:\Users\user\Downloads\Aexams\Ecosystem\architecture\PRODUCTION_DEPLOYMENT.md)
+
 ## Demarrage manuel par service
 
 La procedure d'integration et l'ordre recommande restent documentes dans [architecture/INTEGRATION_SETUP.md](c:\Users\user\Downloads\Aexams\Ecosystem\architecture\INTEGRATION_SETUP.md).

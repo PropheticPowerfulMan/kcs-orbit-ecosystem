@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from urllib import error, request
@@ -143,42 +144,69 @@ def _post_json(path: str, payload: dict) -> None:
     _append_outbox(_outbox_record(path, payload, error_message or "Unknown Orbit delivery error"))
 
 
+def _contract_datetime(value: datetime | None) -> str:
+    if value is None:
+        value = datetime.now(timezone.utc)
+    elif value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _compact(mapping: dict) -> dict:
+    return {key: value for key, value in mapping.items() if value is not None}
+
+
 def sync_student(student) -> None:
     if student.parent_id:
         sync_parent(student.parent)
+
+    parent_external_id = str(student.parent_id) if student.parent_id else None
+    metadata = {
+        "parentExternalId": parent_external_id,
+        "parentUsername": student.parent.username if student.parent_id else None,
+    }
 
     payload = {
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": student.student_id,
         "sourceApp": "SAVANEX",
-        "occurredAt": student.updated_at.isoformat() if hasattr(student, "updated_at") else None,
+        "occurredAt": _contract_datetime(getattr(student, "updated_at", None)),
         "version": "1.0.0",
-        "payload": {
+        "metadata": metadata,
+        "payload": _compact({
             "firstName": student.user.first_name,
             "lastName": student.user.last_name,
             "gender": student.gender,
             "classExternalId": str(student.current_class_id) if student.current_class_id else None,
-            "parentExternalId": str(student.parent_id) if student.parent_id else None,
+            "parentExternalId": parent_external_id,
             "email": student.user.email or None,
             "phone": student.user.phone or None,
             "status": "ACTIVE" if student.is_active else "INACTIVE",
-        },
+        }),
     }
     _post_json("/api/integration/ingest/savanex/students", payload)
 
 
 def sync_parent(parent) -> None:
+    metadata = {
+        "childrenExternalIds": list(parent.children.filter(is_active=True).values_list("student_id", flat=True)),
+        "username": parent.username,
+    }
+
     payload = {
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": str(parent.pk),
         "sourceApp": "SAVANEX",
-        "occurredAt": parent.updated_at.isoformat() if hasattr(parent, "updated_at") else None,
+        "occurredAt": _contract_datetime(getattr(parent, "updated_at", None)),
         "version": "1.0.0",
-        "payload": {
+        "metadata": metadata,
+        "payload": _compact({
             "fullName": parent.get_full_name() or parent.username,
             "email": parent.email or None,
             "phone": parent.phone or None,
-        },
+        }),
     }
     _post_json("/api/integration/ingest/savanex/parents", payload)
 
@@ -188,14 +216,14 @@ def sync_teacher(teacher) -> None:
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": teacher.teacher_id,
         "sourceApp": "SAVANEX",
-        "occurredAt": None,
+        "occurredAt": _contract_datetime(getattr(teacher, "updated_at", None)),
         "version": "1.0.0",
-        "payload": {
+        "payload": _compact({
             "fullName": teacher.user.get_full_name(),
             "email": teacher.user.email or None,
             "phone": teacher.user.phone or None,
             "subject": teacher.specialization or None,
-        },
+        }),
     }
     _post_json("/api/integration/ingest/savanex/teachers", payload)
 
@@ -208,13 +236,13 @@ def sync_class(class_instance) -> None:
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": str(class_instance.pk),
         "sourceApp": "SAVANEX",
-        "occurredAt": None,
+        "occurredAt": _contract_datetime(getattr(class_instance, "updated_at", None)),
         "version": "1.0.0",
-        "payload": {
+        "payload": _compact({
             "name": class_instance.name,
             "gradeLevel": class_instance.level.name,
             "teacherExternalId": class_instance.class_teacher.teacher_id if class_instance.class_teacher else None,
-        },
+        }),
     }
     _post_json("/api/integration/ingest/savanex/classes", payload)
 
@@ -224,15 +252,15 @@ def sync_grade(grade) -> None:
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": str(grade.pk),
         "sourceApp": "SAVANEX",
-        "occurredAt": grade.created_at.isoformat() if hasattr(grade, "created_at") else None,
+        "occurredAt": _contract_datetime(getattr(grade, "created_at", None)),
         "version": "1.0.0",
-        "payload": {
+        "payload": _compact({
             "studentExternalId": grade.student.student_id,
             "subject": grade.class_subject.subject.name,
             "score": float(grade.score),
             "maxScore": float(grade.max_score),
             "term": grade.term,
-        },
+        }),
     }
     _post_json("/api/integration/ingest/savanex/grades", payload)
 
@@ -242,12 +270,12 @@ def sync_attendance(attendance) -> None:
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
         "externalId": str(attendance.pk),
         "sourceApp": "SAVANEX",
-        "occurredAt": attendance.recorded_at.isoformat() if hasattr(attendance, "recorded_at") else None,
+        "occurredAt": _contract_datetime(getattr(attendance, "recorded_at", None)),
         "version": "1.0.0",
-        "payload": {
+        "payload": _compact({
             "studentExternalId": attendance.student.student_id,
-            "date": attendance.date.isoformat(),
+            "date": _contract_datetime(attendance.date),
             "status": attendance.status,
-        },
+        }),
     }
     _post_json("/api/integration/ingest/savanex/attendance", payload)

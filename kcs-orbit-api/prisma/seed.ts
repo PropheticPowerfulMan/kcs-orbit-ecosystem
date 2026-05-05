@@ -38,7 +38,7 @@ async function main() {
     create: {
       organizationId: organization.id,
       appSlug: AppSlug.KCS_NEXUS,
-      baseUrl: "http://localhost:4000"
+      baseUrl: "http://localhost:5000"
     }
   });
 

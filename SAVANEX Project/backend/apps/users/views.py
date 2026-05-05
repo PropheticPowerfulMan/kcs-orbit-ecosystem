@@ -2,6 +2,7 @@ from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
+from apps.integration.orbit import sync_parent
 from .models import User
 from .serializers import (
     CustomTokenObtainPairSerializer,
@@ -25,6 +26,11 @@ class UserMeView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    def perform_update(self, serializer):
+        user = serializer.save()
+        if user.role == User.ROLE_PARENT:
+            sync_parent(user)
+
 
 class UserListCreateView(generics.ListCreateAPIView):
     """Admin-only: list all users or create a new user."""
@@ -35,6 +41,11 @@ class UserListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'POST':
             return UserCreateSerializer
         return UserListSerializer
+
+    def perform_create(self, serializer):
+        user = serializer.save()
+        if user.role == User.ROLE_PARENT:
+            sync_parent(user)
 
     filterset_fields = ['role', 'is_active']
     search_fields = ['username', 'first_name', 'last_name', 'email']
@@ -49,6 +60,11 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in ['PUT', 'PATCH']:
             return UserCreateSerializer
         return UserListSerializer
+
+    def perform_update(self, serializer):
+        user = serializer.save()
+        if user.role == User.ROLE_PARENT:
+            sync_parent(user)
 
     def destroy(self, request, *args, **kwargs):
         user = self.get_object()
