@@ -32,8 +32,17 @@ class MessagingService:
         db.refresh(item)
         return item
 
-    def list_announcements(self, db: Session, limit: int = 50) -> list[Announcement]:
-        return db.query(Announcement).order_by(Announcement.created_at.desc()).limit(limit).all()
+    def list_announcements(self, db: Session, role: str, limit: int = 50) -> list[Announcement]:
+        query = db.query(Announcement)
+
+        if role != "admin":
+            allowed_channels = {"all"}
+            if role in {"teacher", "staff"}:
+                allowed_channels.update({"staff", "teachers"})
+
+            query = query.filter(Announcement.channel.in_(allowed_channels))
+
+        return query.order_by(Announcement.created_at.desc()).limit(limit).all()
 
 
 messaging_service = MessagingService()

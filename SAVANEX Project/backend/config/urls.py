@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/timetable/', include('apps.timetable.urls')),
     path('api/communication/', include('apps.communication.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
+    path('api/integration/', include('apps.integration.urls')),
 ]
 
 if settings.DEBUG:

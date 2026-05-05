@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { prisma } from "../db";
 import { eventBus } from "../events/eventBus";
+import { loadSharedDirectory } from "../services/shared-directory.service";
+
+const PRIVILEGED_DIRECTORY_ROLES = ["ADMIN", "STAFF", "TEACHER"];
+const PRIVILEGED_FINANCIAL_ROLES = ["ADMIN", "STAFF"];
 
 function getOrganizationId(req: Request) {
   return req.user?.organizationId ?? undefined;
@@ -9,6 +13,10 @@ function getOrganizationId(req: Request) {
 function organizationWhere(req: Request) {
   const organizationId = getOrganizationId(req);
   return organizationId ? { organizationId } : {};
+}
+
+function hasAnyRole(req: Request, ...roles: string[]) {
+  return !!req.user && roles.includes(req.user.role);
 }
 
 export async function listUsers(req: Request, res: Response) {
@@ -43,6 +51,11 @@ export async function createStudent(req: Request, res: Response) {
 }
 
 export async function listStudents(req: Request, res: Response) {
+  if (!hasAnyRole(req, ...PRIVILEGED_DIRECTORY_ROLES)) {
+    const directory = await loadSharedDirectory(getOrganizationId(req));
+    return res.json({ visibility: directory.visibility, students: directory.students });
+  }
+
   const students = await prisma.student.findMany({
     where: organizationWhere(req),
     include: { class: true, parent: true },
@@ -60,6 +73,11 @@ export async function createParent(req: Request, res: Response) {
 }
 
 export async function listParents(req: Request, res: Response) {
+  if (!hasAnyRole(req, ...PRIVILEGED_DIRECTORY_ROLES)) {
+    const directory = await loadSharedDirectory(getOrganizationId(req));
+    return res.json({ visibility: directory.visibility, parents: directory.parents });
+  }
+
   const parents = await prisma.parent.findMany({
     where: organizationWhere(req),
     include: { students: true }
@@ -76,6 +94,11 @@ export async function createTeacher(req: Request, res: Response) {
 }
 
 export async function listTeachers(req: Request, res: Response) {
+  if (!hasAnyRole(req, ...PRIVILEGED_DIRECTORY_ROLES)) {
+    const directory = await loadSharedDirectory(getOrganizationId(req));
+    return res.json({ visibility: directory.visibility, teachers: directory.teachers });
+  }
+
   const teachers = await prisma.teacher.findMany({ where: organizationWhere(req) });
   res.json(teachers);
 }
@@ -113,6 +136,12 @@ export async function createPayment(req: Request, res: Response) {
 }
 
 export async function listPayments(req: Request, res: Response) {
+  if (!hasAnyRole(req, ...PRIVILEGED_FINANCIAL_ROLES)) {
+    return res.status(403).json({
+      message: "Forbidden: payments are restricted to privileged roles"
+    });
+  }
+
   const payments = await prisma.payment.findMany({
     where: organizationWhere(req),
     include: { student: true },
@@ -138,6 +167,12 @@ export async function createGrade(req: Request, res: Response) {
 }
 
 export async function listGrades(req: Request, res: Response) {
+  if (!hasAnyRole(req, ...PRIVILEGED_DIRECTORY_ROLES)) {
+    return res.status(403).json({
+      message: "Forbidden: grades are restricted to privileged roles"
+    });
+  }
+
   const grades = await prisma.grade.findMany({
     where: organizationWhere(req),
     include: { student: true },
@@ -160,6 +195,12 @@ export async function createAttendance(req: Request, res: Response) {
 }
 
 export async function listAttendance(req: Request, res: Response) {
+  if (!hasAnyRole(req, ...PRIVILEGED_DIRECTORY_ROLES)) {
+    return res.status(403).json({
+      message: "Forbidden: attendance is restricted to privileged roles"
+    });
+  }
+
   const attendance = await prisma.attendance.findMany({
     where: organizationWhere(req),
     include: { student: true },
@@ -177,9 +218,24 @@ export async function createAnnouncement(req: Request, res: Response) {
 }
 
 export async function listAnnouncements(req: Request, res: Response) {
+  const audienceFilter = hasAnyRole(req, ...PRIVILEGED_DIRECTORY_ROLES)
+    ? organizationWhere(req)
+    : {
+        ...organizationWhere(req),
+        OR: [
+          { audience: req.user?.role || "" },
+          { audience: "ALL" }
+        ]
+      };
+
   const announcements = await prisma.announcement.findMany({
-    where: organizationWhere(req),
+    where: audienceFilter,
     orderBy: { createdAt: "desc" }
   });
   res.json(announcements);
+}
+
+export async function listSharedDirectory(req: Request, res: Response) {
+  const directory = await loadSharedDirectory(getOrganizationId(req));
+  res.json(directory);
 }

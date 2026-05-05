@@ -155,6 +155,25 @@ Evenements minimum a standardiser:
 - les erreurs d'integration doivent etre persistantes et rejouables
 - aucune application ne doit ecraser une entite hors de son domaine proprietaire
 
+## Politique de visibilite transverse
+
+Dans l'ecosysteme, les donnees metier completes ne doivent pas etre visibles par defaut pour tous les consommateurs.
+
+Regle appliquee:
+
+- les donnees de reference partagees par defaut sont limitees aux `parents`, `students` et `teachers`
+- cette vue partagee doit exposer uniquement l'identite minimale et les identifiants centralises ou externes
+- les domaines `payments`, `grades`, `attendance`, `classes` et autres details metier restent limites aux roles privilegies ou a l'application proprietaire
+- les annonces doivent etre filtrees par audience si le consommateur n'est pas un role privilegie
+
+Projection minimale recommandee pour l'annuaire partage:
+
+- `id`
+- `organizationId`
+- `fullName` ou `firstName` et `lastName`
+- `externalIds[]` avec `appSlug` et `externalId`
+- les identifiants relationnels strictement necessaires comme `parentId` ou `classId`
+
 ## Endpoints deja presents dans Orbit
 
 Les endpoints d'ingestion deja exposes dans [kcs-orbit-api/src/routes/integration.ingest.routes.ts](../kcs-orbit-api/src/routes/integration.ingest.routes.ts) couvrent deja un premier socle:
@@ -167,6 +186,27 @@ Les endpoints d'ingestion deja exposes dans [kcs-orbit-api/src/routes/integratio
 - `POST /api/integration/ingest/savanex/grades`
 - `POST /api/integration/ingest/savanex/attendance`
 - `POST /api/integration/ingest/edusyncai/announcements`
+
+Endpoint de lecture partage ajoute pour les applications consommatrices:
+
+- `GET /api/integration/read/shared-directory?organizationId=...`
+
+Endpoints d'ecriture partages ajoutes pour les applications autorisees de l'ecosysteme:
+
+- `POST /api/integration/registry/parent`
+- `POST /api/integration/registry/student`
+- `POST /api/integration/registry/teacher`
+- `DELETE /api/integration/registry/{entityType}/{identifier}?organizationId=...&identifierType=orbitId|externalId`
+
+Regles appliquees:
+
+- `KCS_NEXUS`, `EDUSYNCAI` et `SAVANEX` peuvent creer ou supprimer ces entites via Orbit
+- `EDUPAY` est explicitement exclu de ce mecanisme d'ecriture
+- l'`externalId` est genere automatiquement par Orbit pour l'application appelante
+- si une entite equivalente existe deja dans l'organisation, Orbit rejette la creation avec une reponse de conflit
+- si une entite est deja liee a plusieurs applications, Orbit rejette la suppression pour eviter une suppression transverse destructive
+
+Cet endpoint renvoie un annuaire transverse minimal et unifie pour `parents`, `students` et `teachers`, afin d'eviter aux frontends de recoller plusieurs endpoints metier distincts.
 
 ## Evolution recommandee du contrat
 

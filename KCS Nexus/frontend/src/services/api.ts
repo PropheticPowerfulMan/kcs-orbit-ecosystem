@@ -112,6 +112,9 @@ export const studentsAPI = {
 // --- Registry API ---
 export const registryAPI = {
   getFamilies: () => api.get('/registry/families'),
+  getDirectory: () => api.get('/registry/directory'),
+  createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
+  deleteEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.delete(`/registry/entities/${entityType}/${identifier}`, { params: { identifierType } }),
   registerFamily: (data: object) => api.post('/registry/families', data),
 }
 

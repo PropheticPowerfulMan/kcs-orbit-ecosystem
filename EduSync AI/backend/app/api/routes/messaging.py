@@ -46,6 +46,6 @@ def create_announcement(
 @router.get("/announcements", response_model=list[AnnouncementResponse])
 def list_announcements(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
-    return messaging_service.list_announcements(db)
+    return messaging_service.list_announcements(db, current_user.role.value)

@@ -3,6 +3,7 @@ import logging
 from datetime import timezone
 from pathlib import Path
 from threading import Lock
+from urllib.parse import quote
 from urllib import error, request
 from uuid import uuid4
 
@@ -95,6 +96,47 @@ def _send_json(path: str, payload: dict) -> tuple[bool, str | None]:
     return True, None
 
 
+def _get_json(path: str) -> dict:
+    if not orbit_sync_is_enabled():
+        raise RuntimeError("Missing Orbit configuration")
+
+    req = request.Request(
+        url=f"{settings.kcs_orbit_api_url.rstrip('/')}{path}",
+        headers={
+            "x-api-key": settings.kcs_orbit_api_key,
+            "x-app-slug": "EDUSYNCAI",
+        },
+        method="GET",
+    )
+
+    with request.urlopen(req, timeout=settings.kcs_orbit_timeout_seconds) as response:
+        if response.status not in (200, 201):
+            raise RuntimeError(f"Unexpected status {response.status}")
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _request_json(method: str, path: str, payload: dict | None = None) -> dict:
+    if not orbit_sync_is_enabled():
+        raise RuntimeError("Missing Orbit configuration")
+
+    req = request.Request(
+        url=f"{settings.kcs_orbit_api_url.rstrip('/')}{path}",
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": settings.kcs_orbit_api_key,
+            "x-app-slug": "EDUSYNCAI",
+        },
+        method=method,
+    )
+
+    with request.urlopen(req, timeout=settings.kcs_orbit_timeout_seconds) as response:
+        body = response.read().decode("utf-8")
+        if response.status not in (200, 201):
+            raise RuntimeError(f"Unexpected status {response.status}")
+        return json.loads(body) if body else {}
+
+
 def flush_outbox(max_items: int = OUTBOX_FLUSH_BATCH_SIZE) -> int:
     if not orbit_sync_is_enabled():
         return 0
@@ -184,3 +226,24 @@ def sync_announcement(announcement) -> None:
     }
 
     _post_json("/api/integration/ingest/edusyncai/announcements", payload)
+
+
+def fetch_shared_directory() -> dict:
+    return _get_json(
+        f"/api/integration/read/shared-directory?organizationId={quote(settings.kcs_orbit_organization_id)}"
+    )
+
+
+def create_registry_entity(entity_type: str, payload: dict) -> dict:
+    return _request_json(
+        "POST",
+        f"/api/integration/registry/{quote(entity_type)}",
+        {**payload, "organizationId": settings.kcs_orbit_organization_id},
+    )
+
+
+def delete_registry_entity(entity_type: str, identifier: str, identifier_type: str = "orbitId") -> dict:
+    return _request_json(
+        "DELETE",
+        f"/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(settings.kcs_orbit_organization_id)}&identifierType={quote(identifier_type)}",
+    )

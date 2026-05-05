@@ -97,7 +97,21 @@ function Ensure-EduPayWebDependencies {
 function Get-OrbitOrganizationId {
   Invoke-InDirectory -Path $orbitPath -Script {
     $env:DATABASE_URL = $orbitDatabaseUrl
-    $result = & node -e "const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.organization.findUnique({ where: { slug: 'kcs-core' } }).then((org) => { console.log(org ? org.id : ''); }).catch((error) => { console.error(error); process.exit(1); }).finally(() => prisma.\$disconnect());"
+    $nodeScript = @'
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
+prisma.organization.findUnique({ where: { slug: "kcs-core" } })
+  .then((org) => {
+    console.log(org ? org.id : "");
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(() => prisma.$disconnect());
+'@
+    $result = $nodeScript | & node
     return ($result | Select-Object -Last 1).Trim()
   }
 }
@@ -151,6 +165,7 @@ if (-not $SkipDatabasePreparation) {
     $env:DATABASE_URL = $orbitDatabaseUrl
     & npx prisma db push
     & npm run seed
+    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
   }
 
   Write-Step 'Preparing KCS Nexus database'
@@ -177,6 +192,10 @@ Start-ServiceWindow -Title 'KCS Orbit API' -Command (
   "Set-Location '$orbitPath'; " +
   "`$env:DATABASE_URL='$orbitDatabaseUrl'; " +
   "`$env:PORT='4500'; " +
+  "`$env:KCS_NEXUS_INTEGRATION_KEY='$($integrationKeys.KcsNexus)'; " +
+  "`$env:EDUPAY_INTEGRATION_KEY='$($integrationKeys.EduPay)'; " +
+  "`$env:EDUSYNCAI_INTEGRATION_KEY='$($integrationKeys.EduSyncAI)'; " +
+  "`$env:SAVANEX_INTEGRATION_KEY='$($integrationKeys.Savanex)'; " +
   "npm run dev"
 )
 
@@ -200,6 +219,7 @@ Start-ServiceWindow -Title 'EduPay API' -Command (
 
 Start-ServiceWindow -Title 'EduSync AI Backend' -Command (
   "Set-Location '$eduSyncBackendPath'; " +
+  "`$env:DATABASE_URL='sqlite:///./edusync.db'; " +
   "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduSyncAI)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +

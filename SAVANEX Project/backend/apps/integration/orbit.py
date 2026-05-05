@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
+from urllib.parse import quote
 from urllib import error, request
 from uuid import uuid4
 
@@ -94,6 +95,47 @@ def _send_json(path: str, payload: dict) -> tuple[bool, str | None]:
         return False, str(exc)
 
     return True, None
+
+
+def _get_json(path: str) -> dict:
+    if not orbit_sync_is_enabled():
+        raise RuntimeError("Missing Orbit configuration")
+
+    req = request.Request(
+        url=f"{KCS_ORBIT_API_URL}{path}",
+        headers={
+            "x-api-key": KCS_ORBIT_API_KEY,
+            "x-app-slug": "SAVANEX",
+        },
+        method="GET",
+    )
+
+    with request.urlopen(req, timeout=KCS_ORBIT_TIMEOUT_SECONDS) as response:
+        if response.status not in (200, 201):
+            raise RuntimeError(f"Unexpected status {response.status}")
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _request_json(method: str, path: str, payload: dict | None = None) -> dict:
+    if not orbit_sync_is_enabled():
+        raise RuntimeError("Missing Orbit configuration")
+
+    req = request.Request(
+        url=f"{KCS_ORBIT_API_URL}{path}",
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": KCS_ORBIT_API_KEY,
+            "x-app-slug": "SAVANEX",
+        },
+        method=method,
+    )
+
+    with request.urlopen(req, timeout=KCS_ORBIT_TIMEOUT_SECONDS) as response:
+        body = response.read().decode("utf-8")
+        if response.status not in (200, 201):
+            raise RuntimeError(f"Unexpected status {response.status}")
+        return json.loads(body) if body else {}
 
 
 def flush_outbox(max_items: int = OUTBOX_FLUSH_BATCH_SIZE) -> int:
@@ -279,3 +321,24 @@ def sync_attendance(attendance) -> None:
         }),
     }
     _post_json("/api/integration/ingest/savanex/attendance", payload)
+
+
+def fetch_shared_directory() -> dict:
+    return _get_json(
+        f"/api/integration/read/shared-directory?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}"
+    )
+
+
+def create_registry_entity(entity_type: str, payload: dict) -> dict:
+    return _request_json(
+        "POST",
+        f"/api/integration/registry/{quote(entity_type)}",
+        {**payload, "organizationId": KCS_ORBIT_ORGANIZATION_ID},
+    )
+
+
+def delete_registry_entity(entity_type: str, identifier: str, identifier_type: str = "orbitId") -> dict:
+    return _request_json(
+        "DELETE",
+        f"/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
+    )

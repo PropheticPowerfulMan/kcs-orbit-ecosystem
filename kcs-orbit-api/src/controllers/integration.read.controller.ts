@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../db";
+import { loadSharedDirectory } from "../services/shared-directory.service";
 
 function splitFullName(fullName: string) {
   const trimmed = fullName.trim();
@@ -136,4 +137,15 @@ export async function readKcsNexusFamilies(req: Request, res: Response) {
     .sort((left, right) => left.familyLabel.localeCompare(right.familyLabel));
 
   return res.json({ families, source: "orbit" });
+}
+
+export async function readSharedDirectory(req: Request, res: Response) {
+  const organizationId = String(req.query.organizationId || "").trim();
+
+  if (!organizationId) {
+    return res.status(400).json({ message: "organizationId is required" });
+  }
+
+  const directory = await loadSharedDirectory(organizationId);
+  return res.json(directory);
 }

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analytics, auth, chat, messaging, notifications, workflows
+from app.api.routes import analytics, auth, chat, directory, messaging, notifications, registry, workflows
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine, SessionLocal
@@ -64,7 +64,9 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(chat.router, prefix=settings.api_prefix)
+app.include_router(directory.router, prefix=settings.api_prefix)
 app.include_router(messaging.router, prefix=settings.api_prefix)
+app.include_router(registry.router, prefix=settings.api_prefix)
 app.include_router(notifications.router, prefix=settings.api_prefix)
 app.include_router(workflows.router, prefix=settings.api_prefix)
 app.include_router(analytics.router, prefix=settings.api_prefix)
