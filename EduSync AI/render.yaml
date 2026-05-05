@@ -1,0 +1,64 @@
+databases:
+  - name: edusync-ai-postgres
+    engine: postgres
+    majorVersion: "16"
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: edusync-ai-api
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+
+    buildCommand: >-
+      pip install --upgrade pip &&
+      pip install -r requirements.txt
+
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    envVars:
+      - key: APP_ENV
+        value: production
+
+      - key: APP_DEBUG
+        value: false
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: edusync-ai-postgres
+          property: connectionString
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: CORS_ORIGINS
+        value: '["https://edusync-ai-web.onrender.com"]'
+
+      - key: KCS_ORBIT_API_URL
+        value: https://kcs-orbit-api.onrender.com
+
+      - key: KCS_ORBIT_API_KEY
+        sync: false
+
+      - key: KCS_ORBIT_ORGANIZATION_ID
+        sync: false
+
+  - type: web
+    name: edusync-ai-web
+    env: node
+    region: oregon
+    plan: free
+    rootDir: frontend
+
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s dist -l $PORT
+
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: edusync-ai-api
+          type: web
+          property: url

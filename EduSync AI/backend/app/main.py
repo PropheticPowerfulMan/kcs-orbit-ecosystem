@@ -10,7 +10,7 @@ from app.db.session import engine, SessionLocal
 from app import models  # noqa: F401
 from app.models.user import Role, User
 from app.core.security import get_password_hash
-from app.workers.scheduler import scheduler
+from app.workers.scheduler import flush_orbit_outbox, scheduler
 
 
 @asynccontextmanager
@@ -18,6 +18,7 @@ async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     seed_default_admin()
     if settings.scheduler_enabled:
+        flush_orbit_outbox()
         scheduler.start()
     try:
         yield

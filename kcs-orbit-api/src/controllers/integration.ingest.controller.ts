@@ -97,17 +97,19 @@ async function upsertExternalLink(params: {
 async function recordInboundSyncEvent(params: {
   organizationId: string;
   appSlug: AppSlug;
+  sourceEventKey?: string;
   eventType: string;
   entityType: string;
   entityId: string;
   payload?: unknown;
 }) {
-  const { organizationId, appSlug, eventType, entityType, entityId, payload } = params;
+  const { organizationId, appSlug, sourceEventKey, eventType, entityType, entityId, payload } = params;
 
   return prisma.syncEvent.create({
     data: {
       organizationId,
       appSlug,
+      sourceEventKey,
       eventType,
       entityType,
       entityId,
@@ -117,6 +119,64 @@ async function recordInboundSyncEvent(params: {
       processedAt: new Date()
     }
   });
+}
+
+function buildSourceEventKey(params: {
+  entityType: string;
+  externalId: string;
+  occurredAt?: unknown;
+}) {
+  const occurredAt = typeof params.occurredAt === "string" && params.occurredAt.trim()
+    ? params.occurredAt.trim()
+    : "unknown";
+
+  return `${params.entityType}:${params.externalId}:${occurredAt}`;
+}
+
+async function findInboundReplay(params: {
+  organizationId: string;
+  appSlug: AppSlug;
+  sourceEventKey: string;
+}) {
+  const { organizationId, appSlug, sourceEventKey } = params;
+
+  return prisma.syncEvent.findUnique({
+    where: {
+      organizationId_appSlug_direction_sourceEventKey: {
+        organizationId,
+        appSlug,
+        direction: SyncDirection.INBOUND,
+        sourceEventKey,
+      }
+    },
+    select: {
+      entityId: true,
+      entityType: true,
+    }
+  });
+}
+
+async function loadEntityForReplay(entityType: string, entityId: string) {
+  switch (entityType) {
+    case "payment":
+      return prisma.payment.findUnique({ where: { id: entityId } });
+    case "student":
+      return prisma.student.findUnique({ where: { id: entityId } });
+    case "class":
+      return prisma.class.findUnique({ where: { id: entityId } });
+    case "parent":
+      return prisma.parent.findUnique({ where: { id: entityId } });
+    case "teacher":
+      return prisma.teacher.findUnique({ where: { id: entityId } });
+    case "grade":
+      return prisma.grade.findUnique({ where: { id: entityId } });
+    case "attendance":
+      return prisma.attendance.findUnique({ where: { id: entityId } });
+    case "announcement":
+      return prisma.announcement.findUnique({ where: { id: entityId } });
+    default:
+      return null;
+  }
 }
 
 async function recordAudit(params: {
@@ -361,13 +421,20 @@ export async function ingestEduPayPayment(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { studentExternalId, amount, motif, method, reference } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "payment", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug, sourceEventKey });
+  if (replayedSync) {
+    const payment = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ payment, replayed: true });
   }
 
   const studentId = await resolveLinkedEntityId(organizationId, AppSlug.SAVANEX, "student", studentExternalId)
@@ -424,6 +491,7 @@ export async function ingestEduPayPayment(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug,
+    sourceEventKey,
     eventType: existingLink ? "payment.updated" : "payment.created",
     entityType: "payment",
     entityId: payment.id,
@@ -463,13 +531,20 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { firstName, lastName, gender, classExternalId, parentExternalId } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "student", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
+  if (replayedSync) {
+    const student = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ student, replayed: true });
   }
 
   const classId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "class", classExternalId);
@@ -522,6 +597,7 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug: savanexAppSlug,
+    sourceEventKey,
     eventType: existingLink ? "student.updated" : "student.created",
     entityType: "student",
     entityId: student.id,
@@ -559,13 +635,20 @@ export async function ingestSavanexClass(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { name, gradeLevel, teacherExternalId } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "class", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
+  if (replayedSync) {
+    const klass = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ class: klass, replayed: true });
   }
 
   const teacherId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "teacher", teacherExternalId);
@@ -613,6 +696,7 @@ export async function ingestSavanexClass(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug: savanexAppSlug,
+    sourceEventKey,
     eventType: existingLink ? "class.updated" : "class.created",
     entityType: "class",
     entityId: klass.id,
@@ -650,13 +734,20 @@ export async function ingestSavanexParent(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { fullName, phone, email } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "parent", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
+  if (replayedSync) {
+    const parent = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ parent, replayed: true });
   }
 
   const existingLink = await prisma.externalLink.findUnique({
@@ -692,6 +783,7 @@ export async function ingestSavanexParent(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug: savanexAppSlug,
+    sourceEventKey,
     eventType: existingLink ? "parent.updated" : "parent.created",
     entityType: "parent",
     entityId: parent.id,
@@ -729,13 +821,20 @@ export async function ingestSavanexTeacher(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { fullName, phone, email, subject } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "teacher", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
+  if (replayedSync) {
+    const teacher = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ teacher, replayed: true });
   }
 
   const existingLink = await prisma.externalLink.findUnique({
@@ -771,6 +870,7 @@ export async function ingestSavanexTeacher(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug: savanexAppSlug,
+    sourceEventKey,
     eventType: existingLink ? "teacher.updated" : "teacher.created",
     entityType: "teacher",
     entityId: teacher.id,
@@ -808,13 +908,20 @@ export async function ingestSavanexGrade(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { studentExternalId, subject, score, maxScore, term } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "grade", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
+  if (replayedSync) {
+    const grade = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ grade, replayed: true });
   }
 
   const studentId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "student", studentExternalId);
@@ -855,6 +962,7 @@ export async function ingestSavanexGrade(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug: savanexAppSlug,
+    sourceEventKey,
     eventType: existingLink ? "grade.updated" : "grade.created",
     entityType: "grade",
     entityId: grade.id,
@@ -894,13 +1002,20 @@ export async function ingestSavanexAttendance(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const { studentExternalId, date, status } = payload;
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "attendance", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
+  if (replayedSync) {
+    const attendance = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ attendance, replayed: true });
   }
 
   const studentId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "student", studentExternalId);
@@ -941,6 +1056,7 @@ export async function ingestSavanexAttendance(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug: savanexAppSlug,
+    sourceEventKey,
     eventType: existingLink ? "attendance.updated" : "attendance.created",
     entityType: "attendance",
     entityId: attendance.id,
@@ -977,15 +1093,22 @@ export async function ingestEduSyncAiAnnouncement(req: Request, res: Response) {
     });
   }
 
-  const { organizationId, externalId, payload } = contract;
+  const { organizationId, externalId, occurredAt, payload } = contract;
   const title = payload.title;
   const message = payload.body;
   const audience = payload.audience.join(",");
   const metadata = rawBody.metadata;
+  const sourceEventKey = buildSourceEventKey({ entityType: "announcement", externalId, occurredAt });
 
   const organization = await ensureOrganizationExists(organizationId);
   if (!organization) {
     return res.status(404).json({ message: "Organization not found" });
+  }
+
+  const replayedSync = await findInboundReplay({ organizationId, appSlug, sourceEventKey });
+  if (replayedSync) {
+    const announcement = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
+    return res.status(200).json({ announcement, replayed: true });
   }
 
   const existingLink = await prisma.externalLink.findUnique({
@@ -1031,6 +1154,7 @@ export async function ingestEduSyncAiAnnouncement(req: Request, res: Response) {
   await recordInboundSyncEvent({
     organizationId,
     appSlug,
+    sourceEventKey,
     eventType: existingLink ? "announcement.updated" : "announcement.published",
     entityType: "announcement",
     entityId: announcement.id,

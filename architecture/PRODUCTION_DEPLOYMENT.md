@@ -158,6 +158,23 @@ Cette option est la plus rapide pour valider le fonctionnement reel.
 
 Cette option donne plus de controle, mais demande plus d'operations.
 
+## Descripteurs de deploiement disponibles dans le repo
+
+Des fichiers de deploiement Render existent maintenant pour accelerer la mise en ligne sans imposer de login global a l'ecosysteme:
+
+- `kcs-orbit-api/render.yaml`
+- `KCS Nexus/render.yaml`
+- `EduPay Smart System/render.yaml`
+- `EduSync AI/render.yaml`
+- `SAVANEX Project/render.yaml`
+
+Ces descripteurs gardent le modele voulu:
+
+- chaque application se deploie separement
+- chaque application garde son backend et son frontend
+- Orbit reste le backbone de synchronisation et de projection
+- aucun login global n'est impose pour ouvrir les applications
+
 ## Ordre de deploiement
 
 1. deployer PostgreSQL pour Orbit

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     transformer_model: str = "distilbert-base-uncased"
 
     scheduler_enabled: bool = True
+    orbit_outbox_retry_interval_seconds: int = 30
 
     kcs_orbit_api_url: str = ""
     kcs_orbit_api_key: str = ""

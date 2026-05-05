@@ -1,0 +1,73 @@
+databases:
+  - name: kcs-nexus-postgres
+    engine: postgres
+    majorVersion: "16"
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: kcs-nexus-api
+    env: node
+    region: oregon
+    plan: free
+    rootDir: backend
+
+    buildCommand: >-
+      npm install &&
+      npm run prisma:generate &&
+      npm run build
+
+    startCommand: >-
+      npx prisma migrate deploy &&
+      npm run start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kcs-nexus-postgres
+          property: connectionString
+
+      - key: PORT
+        value: 5000
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+
+      - key: FRONTEND_URL
+        fromService:
+          name: kcs-nexus-web
+          type: web
+          property: url
+
+      - key: KCS_ORBIT_API_URL
+        value: https://kcs-orbit-api.onrender.com
+
+      - key: KCS_ORBIT_API_KEY
+        sync: false
+
+      - key: KCS_ORBIT_ORGANIZATION_ID
+        sync: false
+
+  - type: web
+    name: kcs-nexus-web
+    env: node
+    region: oregon
+    plan: free
+    rootDir: frontend
+
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s dist -l $PORT
+
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: kcs-nexus-api
+          type: web
+          property: url

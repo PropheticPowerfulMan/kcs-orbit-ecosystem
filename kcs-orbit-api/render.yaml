@@ -1,0 +1,52 @@
+databases:
+  - name: kcs-orbit-postgres
+    engine: postgres
+    majorVersion: "16"
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: kcs-orbit-api
+    env: node
+    region: oregon
+    plan: free
+
+    buildCommand: >-
+      npm install &&
+      npm run prisma:generate &&
+      npm run build
+
+    startCommand: >-
+      npm run prisma:deploy &&
+      npm run start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 4500
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kcs-orbit-postgres
+          property: connectionString
+
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: CORS_ORIGIN
+        value: https://nexus.onrender.com,https://edupay-web.onrender.com
+
+      - key: KCS_NEXUS_INTEGRATION_KEY
+        generateValue: true
+
+      - key: EDUPAY_INTEGRATION_KEY
+        generateValue: true
+
+      - key: EDUSYNCAI_INTEGRATION_KEY
+        generateValue: true
+
+      - key: SAVANEX_INTEGRATION_KEY
+        generateValue: true

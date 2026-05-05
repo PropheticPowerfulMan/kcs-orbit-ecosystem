@@ -158,6 +158,7 @@ model SyncEvent {
   organizationId String
   organization   Organization  @relation(fields: [organizationId], references: [id])
   appSlug        AppSlug
+  sourceEventKey String?
   eventType      String
   entityType     String
   entityId       String
@@ -167,6 +168,8 @@ model SyncEvent {
   processedAt    DateTime?
   errorMessage   String?
   createdAt      DateTime      @default(now())
+
+  @@unique([organizationId, appSlug, direction, sourceEventKey])
 }
 
 model AuditLog {
