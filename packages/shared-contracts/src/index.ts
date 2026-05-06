@@ -59,12 +59,14 @@ export const StudentPayloadSchema = z.object({
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
   dateOfBirth: TrimmedStringSchema.optional(),
-  status: TrimmedStringSchema.optional()
+  status: TrimmedStringSchema.optional(),
+  mustChangePassword: z.boolean().optional()
 });
 
 export const ClassPayloadSchema = z.object({
   name: z.string().min(1),
   gradeLevel: z.string().min(1).optional(),
+  suffix: TrimmedStringSchema.optional(),
   teacherExternalId: z.string().min(1).optional()
 });
 
@@ -74,7 +76,8 @@ export const ParentPayloadSchema = z.object({
   lastName: TrimmedStringSchema.optional(),
   fullName: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
-  phone: TrimmedStringSchema.optional()
+  phone: TrimmedStringSchema.optional(),
+  mustChangePassword: z.boolean().optional()
 }).superRefine((value, ctx) => {
   if (value.fullName || (value.firstName && value.lastName)) {
     return;
@@ -94,7 +97,12 @@ export const TeacherPayloadSchema = z.object({
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
   subject: TrimmedStringSchema.optional(),
-  subjects: z.array(TrimmedStringSchema).optional()
+  subjects: z.array(TrimmedStringSchema).optional(),
+  employeeId: TrimmedStringSchema.optional(),
+  employeeType: TrimmedStringSchema.optional(),
+  department: TrimmedStringSchema.optional(),
+  jobTitle: TrimmedStringSchema.optional(),
+  mustChangePassword: z.boolean().optional()
 }).superRefine((value, ctx) => {
   if (value.fullName || (value.firstName && value.lastName)) {
     return;

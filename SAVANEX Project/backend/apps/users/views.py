@@ -3,7 +3,7 @@ from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student
+from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
 from .models import User
 from .serializers import (
     CustomTokenObtainPairSerializer,
@@ -123,5 +123,13 @@ def change_password(request):
     serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
     request.user.set_password(serializer.validated_data['new_password'])
-    request.user.save()
+    request.user.must_change_password = False
+    request.user.password_generated_by_system = False
+    request.user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
+    if request.user.role == User.ROLE_PARENT:
+        sync_parent(request.user)
+    elif request.user.role == User.ROLE_STUDENT and hasattr(request.user, 'student_profile'):
+        sync_student(request.user.student_profile)
+    elif request.user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(request.user, 'teacher_profile'):
+        sync_teacher(request.user.teacher_profile)
     return Response({'detail': 'Password changed successfully.'})

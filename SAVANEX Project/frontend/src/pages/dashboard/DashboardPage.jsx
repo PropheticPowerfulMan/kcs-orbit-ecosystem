@@ -197,7 +197,7 @@ const DashboardPage = () => {
     const ci95 = 1.96 * (gradeStd / Math.sqrt(Math.max(gradeValues.length, 1)));
     const interventionIndex = Math.round((riskStudents * 100 + mediumRisk * 45) / students.length);
     const coverageIndex = mean([advancedMetrics.curriculumCompletion, avgAttendance, advancedMetrics.parentEngagement]);
-    const financeRisk = financeSignals.find((signal) => signal.label === 'Overdue')?.value || 0;
+    const financeRisk = financeSignals.find((signal) => signal.label === 'En retard')?.value || 0;
     const passRate = (students.filter((student) => student.average >= 10).length / students.length) * 100;
     const absenteeismPressure = (students.filter((student) => student.attendance < 80).length / students.length) * 100;
     const riskEntropy = entropy([students.filter((student) => student.risk === 'Low').length, mediumRisk, riskStudents]);
@@ -279,9 +279,9 @@ const DashboardPage = () => {
 
     const statisticalHighlights = [
       {
-        label: 'Correlation presence / notes',
+        label: 'Corrélation présence / notes',
         value: gradeCorrelation.toFixed(2),
-        detail: `Chaque point de presence ajoute ~${gradeSlope.toFixed(2)} point de note`,
+        detail: `Chaque point de présence ajoute environ ${gradeSlope.toFixed(2)} point à la note`,
       },
       {
         label: 'Intervalle de confiance 95%',
@@ -301,7 +301,7 @@ const DashboardPage = () => {
       {
         label: 'Volatilite attendance',
         value: `${((attendanceStd / Math.max(avgAttendance, 1)) * 100).toFixed(1)}%`,
-        detail: `Mediane ${attendanceMedian.toFixed(1)}%`,
+        detail: `Médiane ${attendanceMedian.toFixed(1)}%`,
       },
       {
         label: 'Rendement enseignant',
@@ -379,7 +379,7 @@ const DashboardPage = () => {
 
   const scientificCards = [
     {
-      title: 'Mediane academique',
+      title: 'Médiane académique',
       value: `${science.gradeMedian.toFixed(2)}/20`,
       subtitle: `Q1 ${science.q1Grade.toFixed(1)} · Q3 ${science.q3Grade.toFixed(1)}`,
       accent: 'text-fuchsia-300',
@@ -387,13 +387,13 @@ const DashboardPage = () => {
     {
       title: 'Dispersion IQR',
       value: science.gradeIqr.toFixed(2),
-      subtitle: `Ecart-type ${science.gradeStd.toFixed(2)}`,
+      subtitle: `Écart-type ${science.gradeStd.toFixed(2)}`,
       accent: 'text-orange-300',
     },
     {
       title: 'Taux de reussite',
       value: `${science.passRate.toFixed(1)}%`,
-      subtitle: 'Eleves >= 10/20',
+      subtitle: 'Élèves >= 10/20',
       accent: 'text-emerald-300',
     },
     {
@@ -409,7 +409,7 @@ const DashboardPage = () => {
       accent: 'text-cyan-300',
     },
     {
-      title: 'Projection presence',
+      title: 'Projection de présence',
       value: `${science.forecastAttendance.toFixed(1)}%`,
       subtitle: `Pente ${formatSigned(science.monthlyAttendanceSlope, 2)} / mois`,
       accent: 'text-sky-300',
@@ -423,7 +423,7 @@ const DashboardPage = () => {
     {
       title: 'Indice de precision global',
       value: `${science.precisionIndex.toFixed(1)}%`,
-      subtitle: 'Synthese academique, sociale et financiere',
+      subtitle: 'Synthèse académique, sociale et financière',
       accent: 'text-teal-300',
     },
   ];
@@ -434,7 +434,7 @@ const DashboardPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">SAVANEX scientific command center</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('dashboard.overview')}</h2>
-          <p className="mt-1 text-sm text-slate-400">{t('dashboard.subtitle')} Analyse academique, statistique, operationnelle et financiere pour piloter KCS.</p>
+          <p className="mt-1 text-sm text-slate-400">{t('dashboard.subtitle')} Analyse académique, statistique, opérationnelle et financière pour piloter KCS.</p>
         </div>
         <div className="github-glass flex items-center gap-3 rounded-2xl px-4 py-3">
           <SchoolLogo size="sm" />
@@ -450,13 +450,13 @@ const DashboardPage = () => {
         <StatCard title={t('dashboard.teachers')} value={stats?.total_teachers ?? '-'} accent="text-teal-300" />
         <StatCard title={t('dashboard.classes')} value={stats?.total_classes ?? '-'} accent="text-emerald-300" />
         <StatCard title={t('dashboard.attendanceRate')} value={`${stats?.attendance_rate_30d ?? '-'}%`} accent="text-amber-300" />
-        <StatCard title="Indice intervention" value={`${science.interventionIndex}%`} subtitle="Priorite eleves" accent="text-rose-300" />
+        <StatCard title="Indice d'intervention" value={`${science.interventionIndex}%`} subtitle="Priorité élèves" accent="text-rose-300" />
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Moyenne academique" value={`${science.avgGrade.toFixed(1)}/20`} subtitle={`Ecart-type ${science.gradeStd.toFixed(2)}`} accent="text-orange-300" />
-        <StatCard title="Engagement parents" value={`${science.parentEngagement.toFixed(1)}%`} subtitle={`${science.averageMeetings.toFixed(1)} reunions en moyenne`} accent="text-emerald-300" />
-        <StatCard title="Couverture pedagogique" value={`${science.coverageIndex.toFixed(1)}%`} subtitle="Presence + programme + parents" accent="text-cyan-300" />
+        <StatCard title="Moyenne académique" value={`${science.avgGrade.toFixed(1)}/20`} subtitle={`Écart-type ${science.gradeStd.toFixed(2)}`} accent="text-orange-300" />
+        <StatCard title="Engagement parents" value={`${science.parentEngagement.toFixed(1)}%`} subtitle={`${science.averageMeetings.toFixed(1)} réunions en moyenne`} accent="text-emerald-300" />
+        <StatCard title="Couverture pédagogique" value={`${science.coverageIndex.toFixed(1)}%`} subtitle="Présence + programme + parents" accent="text-cyan-300" />
         <StatCard title="Risque financier" value={`${science.financeRisk}%`} subtitle="Paiements en retard" accent="text-amber-300" />
       </section>
 
@@ -500,7 +500,7 @@ const DashboardPage = () => {
 
         <article className="card p-5">
           <h3 className="font-display text-xl font-semibold text-slate-100">Radar institutionnel</h3>
-          <p className="mt-1 text-sm text-slate-400">Lecture rapide de la sante globale de l'ecole.</p>
+          <p className="mt-1 text-sm text-slate-400">Lecture rapide de la santé globale de l'école.</p>
           <div className="mt-4 h-80">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radarData}>
@@ -517,7 +517,7 @@ const DashboardPage = () => {
 
       <section className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
         <article className="card p-5">
-          <h3 className="font-display text-lg font-semibold text-slate-100">Dispersion presence / moyenne</h3>
+          <h3 className="font-display text-lg font-semibold text-slate-100">Dispersion présence / moyenne</h3>
           <div className="mt-4 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart>
@@ -664,16 +664,16 @@ const DashboardPage = () => {
           <h3 className="font-display text-lg font-semibold text-slate-100">Diagnostic rapide</h3>
           <div className="mt-4 space-y-3 text-sm text-slate-300">
             <p className="rounded-xl border border-github-border bg-slate-950/45 p-3">
-              La correlation presence / notes est <span className="font-metric text-cyan-200">{science.gradeCorrelation.toFixed(2)}</span>, ce qui confirme un lien mesurable entre assiduite et performance.
+              La corrélation présence / notes est <span className="font-metric text-cyan-200">{science.gradeCorrelation.toFixed(2)}</span>, ce qui confirme un lien mesurable entre assiduité et performance.
             </p>
             <p className="rounded-xl border border-github-border bg-slate-950/45 p-3">
-              La moyenne projetee au prochain cycle est <span className="font-metric text-emerald-200">{science.forecastGrade.toFixed(2)}/20</span>, avec une presence attendue de <span className="font-metric text-sky-200">{science.forecastAttendance.toFixed(1)}%</span>.
+              La moyenne projetée au prochain cycle est <span className="font-metric text-emerald-200">{science.forecastGrade.toFixed(2)}/20</span>, avec une présence attendue de <span className="font-metric text-sky-200">{science.forecastAttendance.toFixed(1)}%</span>.
             </p>
             <p className="rounded-xl border border-github-border bg-slate-950/45 p-3">
-              L'inegalite d'engagement parent est de <span className="font-metric text-fuchsia-200">{science.parentGini.toFixed(2)}</span>; il faut concentrer les relances sur les familles les moins presentes.
+              L'inégalité d'engagement des parents est de <span className="font-metric text-fuchsia-200">{science.parentGini.toFixed(2)}</span>; il faut concentrer les relances sur les familles les moins présentes.
             </p>
             <p className="rounded-xl border border-github-border bg-slate-950/45 p-3">
-              L'entropie du risque est de <span className="font-metric text-amber-200">{science.riskEntropy.toFixed(2)}</span>; plus elle baisse, plus le portefeuille d'eleves converge vers des profils stables.
+              L'entropie du risque est de <span className="font-metric text-amber-200">{science.riskEntropy.toFixed(2)}</span>; plus elle baisse, plus le portefeuille d'élèves converge vers des profils stables.
             </p>
           </div>
         </article>
@@ -689,7 +689,7 @@ const DashboardPage = () => {
                 <XAxis dataKey="name" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
                 <Tooltip contentStyle={chartTooltip} />
-                <Area type="monotone" dataKey="students" stroke="#22d3ee" fill="#22d3ee" fillOpacity={0.18} name="Eleves" />
+                <Area type="monotone" dataKey="students" stroke="#22d3ee" fill="#22d3ee" fillOpacity={0.18} name="Élèves" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -735,7 +735,7 @@ const DashboardPage = () => {
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
                   <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">z note {student.gradeZ.toFixed(2)}</p>
-                  <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">z presence {student.attendanceZ.toFixed(2)}</p>
+                  <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">z présence {student.attendanceZ.toFixed(2)}</p>
                   <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">score {student.anomalyScore.toFixed(2)}</p>
                 </div>
               </div>
@@ -747,12 +747,12 @@ const DashboardPage = () => {
           <h3 className="font-display text-lg font-semibold text-slate-100">Lecture mathematique et statistique</h3>
           <div className="mt-4 grid gap-3">
             {[
-              `r = ${science.gradeCorrelation.toFixed(2)} : force du lien lineaire entre presence et moyenne.`,
+              `r = ${science.gradeCorrelation.toFixed(2)} : force du lien linéaire entre présence et moyenne.`,
               `CI95 = moyenne ± ${science.ci95.toFixed(2)} : zone de confiance sur la moyenne observee.`,
-              `IQR = ${science.gradeIqr.toFixed(2)} : dispersion centrale des performances eleves.`,
-              `Slope = ${formatSigned(science.gradeSlope, 2)} : gain estime sur la note pour 1 point de presence.`,
+              `IQR = ${science.gradeIqr.toFixed(2)} : dispersion centrale des performances élèves.`,
+              `Slope = ${formatSigned(science.gradeSlope, 2)} : gain estimé sur la note pour 1 point de présence.`,
               `Gini = ${science.parentGini.toFixed(2)} : asymetrie de participation des familles.`,
-              `Entropy = ${science.riskEntropy.toFixed(2)} : niveau de heterogeneite des risques eleves.`,
+              `Entropy = ${science.riskEntropy.toFixed(2)} : niveau d'hétérogénéité des risques élèves.`,
             ].map((item) => (
               <p key={item} className="rounded-xl border border-github-border bg-slate-950/45 p-3 text-sm text-slate-300">{item}</p>
             ))}
@@ -762,9 +762,9 @@ const DashboardPage = () => {
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         {[
-          `Prioriser les eleves sous 75% de presence avec rendez-vous parent sous 72h. Impact estime: ${science.absenteeismPressure.toFixed(1)}% du portefeuille.`,
+          `Prioriser les élèves sous 75% de présence avec rendez-vous parent sous 72h. Impact estimé : ${science.absenteeismPressure.toFixed(1)}% du portefeuille.`,
           `Comparer la charge enseignant avec completion programme. Rendement actuel: ${science.teacherEfficiency.toFixed(2)} points de completion par heure.`,
-          `Croiser retards de paiement et baisse academique avant sanction administrative. Risque financier courant: ${science.financeRisk}%.`,
+          `Croiser retards de paiement et baisse académique avant sanction administrative. Risque financier courant : ${science.financeRisk}%.`,
           `Lancer une campagne parents pour les classes avec engagement sous 70%. Gini d'engagement: ${science.parentGini.toFixed(2)}.`,
         ].map((item, index) => (
           <article key={item} className="card p-5">

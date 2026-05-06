@@ -1,0 +1,24 @@
+ALTER TABLE "Parent"
+  ADD COLUMN IF NOT EXISTS "firstName" TEXT,
+  ADD COLUMN IF NOT EXISTS "middleName" TEXT,
+  ADD COLUMN IF NOT EXISTS "lastName" TEXT;
+
+ALTER TABLE "Teacher"
+  ADD COLUMN IF NOT EXISTS "firstName" TEXT,
+  ADD COLUMN IF NOT EXISTS "middleName" TEXT,
+  ADD COLUMN IF NOT EXISTS "lastName" TEXT,
+  ADD COLUMN IF NOT EXISTS "employeeId" TEXT,
+  ADD COLUMN IF NOT EXISTS "employeeType" TEXT,
+  ADD COLUMN IF NOT EXISTS "department" TEXT,
+  ADD COLUMN IF NOT EXISTS "jobTitle" TEXT;
+
+ALTER TABLE "Student"
+  ADD COLUMN IF NOT EXISTS "middleName" TEXT,
+  ADD COLUMN IF NOT EXISTS "studentNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "email" TEXT,
+  ADD COLUMN IF NOT EXISTS "phone" TEXT,
+  ADD COLUMN IF NOT EXISTS "dateOfBirth" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "status" TEXT,
+  ADD COLUMN IF NOT EXISTS "className" TEXT;
+
+CREATE INDEX IF NOT EXISTS "Student_organizationId_studentNumber_idx" ON "Student"("organizationId", "studentNumber");

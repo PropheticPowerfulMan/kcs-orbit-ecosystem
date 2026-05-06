@@ -8,7 +8,7 @@ from uuid import uuid4
 
 
 def generate_employee_id():
-    return f"EMP-{uuid4().hex[:10].upper()}"
+    return f"SAV-EMP-{uuid4().hex[:8].upper()}"
 
 
 class Teacher(models.Model):

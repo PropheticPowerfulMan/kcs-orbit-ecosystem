@@ -46,12 +46,14 @@ Pour les appels machine-to-machine:
 
 Pour reduire les divergences entre SAVANEX, EduPay, KCS Nexus, EduSync AI et Orbit, le noyau canonique adopte les regles suivantes:
 
-- `student` expose toujours `firstName`, `lastName`, `fullName`, `studentNumber`, `classId|className`, `parentId`, `organizationId`, `externalIds[]`
-- `parent` expose toujours `fullName`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
-- `teacher` expose toujours `fullName`, et idealement aussi `firstName`, `middleName`, `lastName`
+- `student` expose toujours `firstName`, `lastName`, `fullName`, `studentNumber`, `email`, `phone`, `dateOfBirth`, `status`, `mustChangePassword`, `classId|className`, `parentId`, `organizationId`, `externalIds[]`
+- `parent` expose toujours `fullName`, `phone`, `email`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
+- `teacher` expose toujours `fullName`, `phone`, `email`, `subject`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName`, `employeeId`, `employeeType`, `department`, `jobTitle`
 - `studentNumber` represente l'identifiant visible par les utilisateurs; Orbit privilegie l'`externalId` de l'application proprietaire quand il existe
 - `externalIds[]` reste la source de verite transverse pour les correspondances inter-applications
 - `className` peut etre derive localement si seule une reference `classId` existe, mais le contrat partage doit l'exposer quand il est connu
+- les classes canoniques vont de `K1` a `K5`, puis de `Grade 1` a `Grade 12`; le suffixe `A`, `B`, `C`, etc. est optionnel et ne doit jamais remplacer le niveau de base
+- un mot de passe genere par le systeme reste local a l'application qui le cree; l'ecosysteme partage seulement `mustChangePassword`
 
 Cette normalisation permet de garder les modeles locaux existants tout en rendant la lecture transverse coherente.
 
@@ -74,12 +76,13 @@ Destination: KCS Orbit API
     "gender": "F",
     "studentNumber": "STU-2026-001",
     "classExternalId": "sav_class_6A",
-    "className": "6A",
+    "className": "Grade 6 A",
     "parentExternalId": "sav_parent_033",
     "email": "grace@example.org",
     "phone": "+243000000000",
     "dateOfBirth": "2014-01-20",
-    "status": "ACTIVE"
+    "status": "ACTIVE",
+    "mustChangePassword": true
   }
 }
 ```
@@ -97,8 +100,9 @@ Destination: KCS Orbit API
   "occurredAt": "2026-05-04T10:00:00.000Z",
   "version": "1.0.0",
   "payload": {
-    "name": "6A",
-    "gradeLevel": "6",
+    "name": "Grade 6 A",
+    "gradeLevel": "Grade 6",
+    "suffix": "A",
     "teacherExternalId": "sav_teacher_011"
   }
 }
@@ -144,6 +148,11 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
       "middleName": "Mbuyi",
       "lastName": "Ilunga",
       "studentNumber": "STU-2026-001",
+      "email": "grace@example.org",
+      "phone": "+243000000000",
+      "dateOfBirth": "2014-01-20T00:00:00.000Z",
+      "status": "ACTIVE",
+      "mustChangePassword": true,
       "classId": "cls_6a",
       "className": "6A",
       "parentId": "par_033",
@@ -160,6 +169,9 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
       "firstName": "Jean",
       "middleName": "Pierre",
       "lastName": "Ilunga",
+      "phone": "+243000000001",
+      "email": "jean.ilunga@example.org",
+      "mustChangePassword": true,
       "organizationId": "org_123",
       "studentIds": ["std_001"],
       "externalIds": [
@@ -167,7 +179,27 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
       ]
     }
   ],
-  "teachers": []
+  "teachers": [
+    {
+      "id": "tea_011",
+      "fullName": "Aline Kabeya",
+      "firstName": "Aline",
+      "middleName": null,
+      "lastName": "Kabeya",
+      "phone": "+243000000002",
+      "email": "aline.kabeya@example.org",
+      "subject": "Mathematiques",
+      "employeeId": "SAV-EMP-00000001",
+      "employeeType": "TEACHER",
+      "department": "Academique",
+      "jobTitle": "Enseignante",
+      "mustChangePassword": true,
+      "organizationId": "org_123",
+      "externalIds": [
+        { "appSlug": "SAVANEX", "externalId": "sav_teacher_011" }
+      ]
+    }
+  ]
 }
 ```
 

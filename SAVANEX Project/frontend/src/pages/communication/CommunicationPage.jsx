@@ -11,6 +11,12 @@ const priorityClass = {
   Normal: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200',
 };
 
+const priorityLabel = {
+  High: 'Élevée',
+  Normal: 'Normale',
+  Urgent: 'Urgente',
+};
+
 const inputClass = 'rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue';
 
 const initialDraft = {
@@ -32,7 +38,7 @@ const CommunicationPage = () => {
     if (!draft.audience.trim()) {
       return 'Bonjour, nous souhaitons faire un point rapide avec vous afin de mieux accompagner votre enfant.';
     }
-    return `Bonjour ${draft.audience}, nous souhaitons faire un point rapide avec vous afin de mieux accompagner votre enfant. Merci de confirmer votre disponibilite.`;
+    return `Bonjour ${draft.audience}, nous souhaitons faire un point rapide avec vous afin de mieux accompagner votre enfant. Merci de confirmer votre disponibilité.`;
   }, [draft.audience]);
 
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
@@ -42,11 +48,11 @@ const CommunicationPage = () => {
     const nextMessage = {
       id: Date.now(),
       ...draft,
-      audience: draft.audience || 'Audience a preciser',
-      status: 'Draft ready',
+      audience: draft.audience || 'Audience à préciser',
+      status: 'Brouillon prêt',
     };
     setMessageList((current) => [nextMessage, ...current]);
-    setNotice('Message compose et ajoute au suivi.');
+    setNotice('Message composé et ajouté au suivi.');
     setComposerOpen(false);
     setDraft(initialDraft);
   };
@@ -54,10 +60,10 @@ const CommunicationPage = () => {
   const columns = [
     { key: 'channel', label: 'Canal' },
     { key: 'audience', label: 'Audience' },
-    { key: 'priority', label: 'Priorite', render: (v) => <span className={`rounded-full border px-2 py-1 text-xs ${priorityClass[v]}`}>{v}</span> },
+    { key: 'priority', label: 'Priorité', render: (v) => <span className={`rounded-full border px-2 py-1 text-xs ${priorityClass[v]}`}>{priorityLabel[v] || v}</span> },
     { key: 'status', label: 'Statut' },
     { key: 'owner', label: 'Responsable' },
-    { key: 'sentiment', label: 'Signal emotionnel' },
+    { key: 'sentiment', label: 'Signal émotionnel' },
   ];
 
   return (
@@ -66,7 +72,7 @@ const CommunicationPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Communication hub</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.communication')}</h2>
-          <p className="mt-2 text-sm text-slate-400">Messagerie parents-enseignants, relances intelligentes et suivi de reponse.</p>
+          <p className="mt-2 text-sm text-slate-400">Messagerie parents-enseignants, relances intelligentes et suivi des réponses.</p>
         </div>
         <button
           type="button"
@@ -81,18 +87,18 @@ const CommunicationPage = () => {
 
       {composerOpen ? (
         <section className="mb-6 card p-5">
-          <h3 className="font-display text-lg font-semibold text-slate-100">Nouveau message assiste</h3>
+          <h3 className="font-display text-lg font-semibold text-slate-100">Nouveau message assisté</h3>
           <form onSubmit={submitDraft} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <select value={draft.channel} onChange={(event) => updateDraft('channel', event.target.value)} className={inputClass}>
               <option value="Parent follow-up">Relance parent</option>
               <option value="Weekly bulletin">Bulletin hebdomadaire</option>
-              <option value="Exam reminder">Rappel examen</option>
-              <option value="Teacher meeting">Reunion enseignant</option>
+              <option value="Exam reminder">Rappel d'examen</option>
+              <option value="Teacher meeting">Réunion enseignant</option>
             </select>
             <input value={draft.audience} onChange={(event) => updateDraft('audience', event.target.value)} placeholder="Audience ou parent" className={inputClass} />
             <select value={draft.priority} onChange={(event) => updateDraft('priority', event.target.value)} className={inputClass}>
               <option value="Normal">Normal</option>
-              <option value="High">High</option>
+              <option value="High">Élevée</option>
               <option value="Urgent">Urgent</option>
             </select>
             <input value={draft.owner} onChange={(event) => updateDraft('owner', event.target.value)} placeholder="Responsable" className={inputClass} />
@@ -104,25 +110,25 @@ const CommunicationPage = () => {
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatCard title="Messages suivis" value={messageList.length} accent="text-cyan-300" />
-        <StatCard title="Prioritaires" value={urgentCount} subtitle="A traiter aujourd'hui" accent="text-rose-300" />
-        <StatCard title="Taux reponse" value="84%" subtitle="Parents + enseignants" accent="text-emerald-300" />
-        <StatCard title="Temps moyen" value="3h" subtitle="Pour premiere reponse" accent="text-amber-300" />
+        <StatCard title="Prioritaires" value={urgentCount} subtitle="À traiter aujourd'hui" accent="text-rose-300" />
+        <StatCard title="Taux de réponse" value="84%" subtitle="Parents + enseignants" accent="text-emerald-300" />
+        <StatCard title="Temps moyen" value="3h" subtitle="Avant la première réponse" accent="text-amber-300" />
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <article className="card p-5 lg:col-span-2">
-          <p className="font-display text-lg font-semibold text-slate-100">Campagne recommandee</p>
+          <p className="font-display text-lg font-semibold text-slate-100">Campagne recommandée</p>
           <p className="mt-2 text-sm text-slate-400">Relancer automatiquement les parents dont l'engagement est sous 60%, avec proposition de rendez-vous.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">5 familles ciblees</span>
+            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">5 familles ciblées</span>
             <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Mode SMS + email</span>
             <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Ton empathique</span>
           </div>
         </article>
         <article className="card p-5">
-          <p className="text-sm text-slate-400">Sante relationnelle</p>
+          <p className="text-sm text-slate-400">Santé relationnelle</p>
           <p className="mt-2 font-display text-4xl font-bold text-emerald-300">A-</p>
-          <p className="mt-2 text-xs text-slate-500">Analyse basee sur delais, sentiment et recurrence des conversations.</p>
+          <p className="mt-2 text-xs text-slate-500">Analyse basée sur les délais, le sentiment et la récurrence des conversations.</p>
         </article>
       </section>
 

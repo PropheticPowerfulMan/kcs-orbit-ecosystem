@@ -53,23 +53,33 @@ body {
 }
 
 @media print {
+  @page {
+    size: 85.6mm 54mm;
+    margin: 0;
+  }
+
   body * {
     visibility: hidden;
   }
 
-  .kcs-card,
-  .kcs-card * {
+  .kcs-print-sheet,
+  .kcs-print-sheet * {
     visibility: visible;
   }
 
-  .kcs-card {
+  .kcs-print-sheet {
     position: fixed;
-    left: 24px;
-    top: 24px;
-    width: 340px;
-    color: #0f172a;
-    background: #ffffff;
-    box-shadow: none;
+    inset: 0;
+    width: 85.6mm;
+    height: 54mm;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .kcs-biometric-card {
+    box-shadow: none !important;
+    transform: none !important;
   }
 }
 
@@ -104,6 +114,214 @@ body {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 16px 40px rgba(1, 4, 9, 0.28);
+}
+
+.kcs-print-sheet {
+  width: min(100%, 342px);
+}
+
+.kcs-biometric-card {
+  position: relative;
+  width: 342px;
+  aspect-ratio: 85.6 / 54;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(8, 47, 73, 0.22);
+  background:
+    linear-gradient(100deg, rgba(255, 255, 255, 0.92) 0%, rgba(236, 254, 255, 0.94) 48%, rgba(240, 253, 250, 0.96) 100%),
+    linear-gradient(135deg, #ffffff 0%, #dff7ff 100%);
+  box-shadow:
+    0 18px 38px rgba(1, 4, 9, 0.34),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  font-family: var(--font-body), system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+.kcs-biometric-card::before {
+  content: "";
+  position: absolute;
+  inset: -52% auto auto 52%;
+  width: 210px;
+  height: 210px;
+  border-radius: 999px;
+  background: rgba(14, 165, 216, 0.14);
+}
+
+.kcs-biometric-card::after {
+  content: "";
+  position: absolute;
+  right: -20px;
+  bottom: -24px;
+  width: 118px;
+  height: 118px;
+  border-radius: 999px;
+  border: 18px solid rgba(14, 165, 216, 0.14);
+}
+
+.kcs-card-header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 38px 1fr 20px;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px 6px;
+  background: linear-gradient(90deg, #ffffff 0%, rgba(14, 165, 216, 0.1) 100%);
+}
+
+.kcs-card-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(14, 165, 216, 0.45);
+  background: #ffffff;
+}
+
+.kcs-card-school {
+  margin: 0;
+  overflow: hidden;
+  color: #075985;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kcs-card-subtitle {
+  margin: 2px 0 0;
+  color: #334155;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.kcs-card-check {
+  width: 18px;
+  height: 18px;
+  color: #0284c7;
+}
+
+.kcs-card-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+  padding: 7px 12px 4px;
+}
+
+.kcs-card-photo {
+  width: 72px;
+  height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 7px;
+  border: 1px solid rgba(8, 47, 73, 0.3);
+  background: #e2e8f0;
+}
+
+.kcs-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.kcs-card-identity {
+  min-width: 0;
+}
+
+.kcs-card-name {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.kcs-card-role {
+  display: inline-flex;
+  margin: 4px 0 5px;
+  border-radius: 999px;
+  background: #075985;
+  padding: 2px 8px;
+  color: #ffffff;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.kcs-card-fields {
+  display: grid;
+  gap: 2px;
+  color: #1e293b;
+  font-family: var(--font-metric), ui-monospace, monospace;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.kcs-card-fields p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kcs-card-fields span {
+  color: #64748b;
+}
+
+.kcs-card-footer {
+  position: absolute;
+  z-index: 1;
+  right: 12px;
+  bottom: 9px;
+  left: 12px;
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.kcs-card-chip {
+  display: flex;
+  width: 28px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.75);
+  background: linear-gradient(135deg, #f8fafc, #cbd5e1);
+  color: #0f172a;
+}
+
+.kcs-card-barcode {
+  display: flex;
+  height: 22px;
+  align-items: end;
+  gap: 2px;
+}
+
+.kcs-card-barcode span {
+  width: 2px;
+  background: #0f172a;
+}
+
+.kcs-card-bio {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: #334155;
+  font-family: var(--font-metric), ui-monospace, monospace;
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.kcs-card-bio svg {
+  width: 11px;
+  height: 11px;
 }
 
 .page-enter {

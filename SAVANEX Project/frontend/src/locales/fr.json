@@ -3,13 +3,13 @@
     "title": "Gestion Scolaire SAVANEX"
   },
   "actions": {
-    "logout": "Se deconnecter"
+    "logout": "Se déconnecter"
   },
   "nav": {
     "dashboard": "Tableau de bord",
-    "students": "Eleves",
+    "students": "Élèves",
     "parents": "Parents",
-    "teachers": "Employes",
+    "teachers": "Employés",
     "timetable": "Emploi du temps",
     "communication": "Communication",
     "analytics": "Analytique"
@@ -19,23 +19,23 @@
     "password": "Mot de passe",
     "signIn": "Se connecter",
     "signingIn": "Connexion en cours...",
-    "signInSubtitle": "Utilisez vos identifiants scolaires pour acceder a votre tableau de bord.",
+    "signInSubtitle": "Utilisez vos identifiants scolaires pour accéder à votre tableau de bord.",
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide."
   },
   "dashboard": {
     "overview": "Vue d'ensemble de la plateforme",
-    "subtitle": "Surveillez les operations cles en temps reel.",
-    "students": "Eleves",
-    "teachers": "Employes",
+    "subtitle": "Suivez les opérations clés en temps réel.",
+    "students": "Élèves",
+    "teachers": "Employés",
     "classes": "Classes",
-    "attendanceRate": "Presence (30j)",
+    "attendanceRate": "Présence (30 j)",
     "avgGrade": "Moyenne"
   },
   "analytics": {
-    "title": "Intelligence d'alerte precoce",
-    "subtitle": "Identifiez les eleves en difficulte avant l'echec.",
-    "student": "Eleve",
-    "attendanceRate": "Presence",
+    "title": "Détection précoce",
+    "subtitle": "Identifiez les élèves en difficulté avant l'échec.",
+    "student": "Élève",
+    "attendanceRate": "Présence",
     "average": "Moyenne",
     "flags": "Signaux de risque"
   }

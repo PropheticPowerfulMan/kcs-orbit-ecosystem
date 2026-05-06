@@ -62,9 +62,10 @@ class FamilyRegistrationSerializerTests(TestCase):
         students = created["students"]
 
         self.assertEqual(parent.role, User.ROLE_PARENT)
+        self.assertTrue(parent.username.startswith("SAV-PAR-"))
         self.assertEqual(len(students), 2)
         self.assertEqual(Student.objects.filter(parent=parent).count(), 2)
-        self.assertTrue(all(student.student_id.startswith("STU-") for student in students))
+        self.assertTrue(all(student.student_id.startswith("SAV-STU-") for student in students))
         self.assertEqual({student.parent_id for student in students}, {parent.id})
         mock_sync_parent.assert_called_once_with(parent)
         self.assertEqual(mock_sync_student.call_count, 2)
@@ -74,7 +75,7 @@ class OrbitSyncPayloadTests(TestCase):
     @patch("apps.integration.orbit._post_json")
     def test_sync_parent_and_student_emit_contract_safe_payloads(self, mock_post_json):
         parent = User.objects.create_user(
-            username="parent-contract",
+            username="SAV-PAR-CONTRACT",
             email="parent.contract@example.com",
             password="ParentPass123!",
             first_name="Mireille",
@@ -113,7 +114,9 @@ class OrbitSyncPayloadTests(TestCase):
         self.assertTrue(student_payload["occurredAt"].endswith("Z"))
         self.assertNotIn("classExternalId", student_payload["payload"])
         self.assertNotIn("phone", student_payload["payload"])
-        self.assertEqual(student_payload["payload"]["parentExternalId"], str(parent.pk))
+        self.assertEqual(parent_payload["externalId"], "SAV-PAR-CONTRACT")
+        self.assertEqual(student_payload["payload"]["studentNumber"], "STU-CONTRACT-001")
+        self.assertEqual(student_payload["payload"]["parentExternalId"], "SAV-PAR-CONTRACT")
 
 
 class DeactivationSyncTests(TestCase):
@@ -157,7 +160,8 @@ class DeactivationSyncTests(TestCase):
 
         request = self.factory.delete(f"/api/students/{student.pk}/")
         force_authenticate(request, user=self.admin)
-        response = StudentDetailView.as_view()(request, pk=student.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = StudentDetailView.as_view()(request, pk=student.pk)
 
         self.assertEqual(response.status_code, 200)
         student.refresh_from_db()
@@ -196,7 +200,8 @@ class DeactivationSyncTests(TestCase):
 
         request = self.factory.delete(f"/api/users/{parent.pk}/")
         force_authenticate(request, user=self.admin)
-        response = UserDetailView.as_view()(request, pk=parent.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = UserDetailView.as_view()(request, pk=parent.pk)
 
         self.assertEqual(response.status_code, 200)
         parent.refresh_from_db()

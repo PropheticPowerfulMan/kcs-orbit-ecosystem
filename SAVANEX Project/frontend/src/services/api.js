@@ -152,7 +152,7 @@ export const studentsService = {
 
   async registerFamily(data) {
     if (isDemoSession()) {
-      throw new Error('Family registration is disabled in demo mode.');
+      throw new Error("L'enregistrement des familles est désactivé en mode démo.");
     }
 
     const res = await api.post('/students/family-registration/', data);
@@ -169,8 +169,8 @@ export const teachersService = {
         teacher_id: `DEMO-TCH-${teacher.id}`,
         full_name: teacher.name,
         employee_type: 'teacher',
-        employee_label: 'Teacher',
-        job_title: 'Teacher',
+        employee_label: 'Enseignant',
+        job_title: 'Enseignant',
         specialization: teacher.subject,
         department: teacher.classes,
         employment_status: 'active',
@@ -187,7 +187,7 @@ export const teachersService = {
 
   async create(data) {
     if (isDemoSession()) {
-      throw new Error('Teacher registration is disabled in demo mode.');
+      throw new Error("L'enregistrement des employés est désactivé en mode démo.");
     }
 
     const res = await api.post('/teachers/', data);

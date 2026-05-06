@@ -188,8 +188,12 @@ model AuditLog {
 model Parent {
   id             String        @id @default(cuid())
   fullName       String
+  firstName      String?
+  middleName     String?
+  lastName       String?
   phone          String?
   email          String?
+  mustChangePassword Boolean   @default(false)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   students       Student[]
@@ -202,9 +206,17 @@ model Parent {
 model Teacher {
   id             String        @id @default(cuid())
   fullName       String
+  firstName      String?
+  middleName     String?
+  lastName       String?
   phone          String?
   email          String?
   subject        String?
+  employeeId     String?
+  employeeType   String?
+  department     String?
+  jobTitle       String?
+  mustChangePassword Boolean   @default(false)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   classes        Class[]
@@ -218,6 +230,7 @@ model Class {
   id             String        @id @default(cuid())
   name           String
   gradeLevel     String?
+  suffix         String?
   teacherId      String?
   organizationId String?
   teacher        Teacher?      @relation(fields: [teacherId], references: [id])
@@ -232,8 +245,16 @@ model Class {
 model Student {
   id             String        @id @default(cuid())
   firstName      String
+  middleName     String?
   lastName       String
   gender         String
+  studentNumber  String?
+  email          String?
+  phone          String?
+  dateOfBirth    DateTime?
+  status         String?
+  mustChangePassword Boolean   @default(false)
+  className      String?
   classId        String?
   parentId       String?
   organizationId String?

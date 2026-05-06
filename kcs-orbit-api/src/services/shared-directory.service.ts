@@ -19,6 +19,11 @@ export type SharedDirectoryStudent = {
   middleName: string | null;
   lastName: string;
   studentNumber: string;
+  email: string | null;
+  phone: string | null;
+  dateOfBirth: string | null;
+  status: string | null;
+  mustChangePassword: boolean;
   classId: string | null;
   className: string | null;
   parentId: string | null;
@@ -34,6 +39,7 @@ export type SharedDirectoryParent = {
   lastName: string;
   phone: string | null;
   email: string | null;
+  mustChangePassword: boolean;
   organizationId: string | null;
   studentIds: string[];
   externalIds: ExternalIdEntry[];
@@ -45,6 +51,14 @@ export type SharedDirectoryTeacher = {
   firstName: string;
   middleName: string | null;
   lastName: string;
+  phone: string | null;
+  email: string | null;
+  subject: string | null;
+  employeeId: string | null;
+  employeeType: string | null;
+  department: string | null;
+  jobTitle: string | null;
+  mustChangePassword: boolean;
   organizationId: string | null;
   externalIds: ExternalIdEntry[];
 };
@@ -122,8 +136,16 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       select: {
         id: true,
         firstName: true,
+        middleName: true,
         lastName: true,
+        studentNumber: true,
+        email: true,
+        phone: true,
+        dateOfBirth: true,
+        status: true,
+        mustChangePassword: true,
         classId: true,
+        className: true,
         class: {
           select: {
             name: true,
@@ -139,8 +161,12 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       select: {
         id: true,
         fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
         phone: true,
         email: true,
+        mustChangePassword: true,
         organizationId: true,
         students: {
           select: { id: true },
@@ -154,6 +180,17 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       select: {
         id: true,
         fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        phone: true,
+        email: true,
+        subject: true,
+        employeeId: true,
+        employeeType: true,
+        department: true,
+        jobTitle: true,
+        mustChangePassword: true,
         organizationId: true,
       },
       orderBy: { fullName: "asc" },
@@ -187,11 +224,16 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         id: student.id,
         fullName: `${student.firstName} ${student.lastName}`.trim(),
         firstName: student.firstName,
-        middleName: null,
+        middleName: student.middleName,
         lastName: student.lastName,
-        studentNumber: pickPreferredStudentNumber(student.id, externalIds),
+        studentNumber: student.studentNumber || pickPreferredStudentNumber(student.id, externalIds),
+        email: student.email,
+        phone: student.phone,
+        dateOfBirth: student.dateOfBirth?.toISOString() ?? null,
+        status: student.status,
+        mustChangePassword: student.mustChangePassword,
         classId: student.classId,
-        className: student.class?.name || student.classId || null,
+        className: student.class?.name || student.className || student.classId || null,
         parentId: student.parentId,
         organizationId: student.organizationId,
         externalIds,
@@ -199,14 +241,18 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     }),
     parents: parents.map((parent) => {
       const parts = splitFullName(parent.fullName);
+      const firstName = parent.firstName || parts.firstName;
+      const middleName = parent.middleName || parts.middleName;
+      const lastName = parent.lastName || parts.lastName;
       return {
         id: parent.id,
-        fullName: parts.fullName,
-        firstName: parts.firstName,
-        middleName: parts.middleName,
-        lastName: parts.lastName,
+        fullName: parent.fullName || `${firstName} ${lastName}`.trim(),
+        firstName,
+        middleName,
+        lastName,
         phone: parent.phone,
         email: parent.email,
+        mustChangePassword: parent.mustChangePassword,
         organizationId: parent.organizationId,
         studentIds: parent.students.map((student) => student.id),
         externalIds: parentExternalIds.get(parent.id) || [],
@@ -214,12 +260,23 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     }),
     teachers: teachers.map((teacher) => {
       const parts = splitFullName(teacher.fullName);
+      const firstName = teacher.firstName || parts.firstName;
+      const middleName = teacher.middleName || parts.middleName;
+      const lastName = teacher.lastName || parts.lastName;
       return {
         id: teacher.id,
-        fullName: parts.fullName,
-        firstName: parts.firstName,
-        middleName: parts.middleName,
-        lastName: parts.lastName,
+        fullName: teacher.fullName || `${firstName} ${lastName}`.trim(),
+        firstName,
+        middleName,
+        lastName,
+        phone: teacher.phone,
+        email: teacher.email,
+        subject: teacher.subject,
+        employeeId: teacher.employeeId,
+        employeeType: teacher.employeeType,
+        department: teacher.department,
+        jobTitle: teacher.jobTitle,
+        mustChangePassword: teacher.mustChangePassword,
         organizationId: teacher.organizationId,
         externalIds: teacherExternalIds.get(teacher.id) || [],
       };

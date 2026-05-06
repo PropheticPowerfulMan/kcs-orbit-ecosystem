@@ -3,14 +3,31 @@ from uuid import uuid4
 from django.db import transaction
 from rest_framework import serializers
 
-from apps.integration.orbit import sync_parent, sync_student
+from apps.integration.orbit import sync_class, sync_parent, sync_student
+from apps.classes.utils import get_or_create_standard_class, normalize_class_level, normalize_class_suffix
 from apps.users.models import User
 from .models import Student
 from apps.users.serializers import UserCreateSerializer, UserListSerializer, UserMeSerializer
 
 
+def _generate_ecosystem_id(entity_prefix: str) -> str:
+    return f"SAV-{entity_prefix}-{uuid4().hex[:8].upper()}"
+
+
 def _generate_student_id() -> str:
-    return f"STU-{uuid4().hex[:10].upper()}"
+    for _ in range(5):
+        student_id = _generate_ecosystem_id("STU")
+        if not Student.objects.filter(student_id=student_id).exists():
+            return student_id
+    return _generate_ecosystem_id("STU")
+
+
+def _generate_parent_external_id() -> str:
+    for _ in range(5):
+        parent_id = _generate_ecosystem_id("PAR")
+        if not User.objects.filter(username=parent_id).exists():
+            return parent_id
+    return _generate_ecosystem_id("PAR")
 
 
 class StudentSerializer(serializers.ModelSerializer):
@@ -24,6 +41,8 @@ class StudentSerializer(serializers.ModelSerializer):
     right_fingerprint_data = serializers.CharField(source='user.right_fingerprint_data', read_only=True)
     has_photo = serializers.SerializerMethodField()
     has_biometrics = serializers.SerializerMethodField()
+    must_change_password = serializers.BooleanField(source='user.must_change_password', read_only=True)
+    password_generated_by_system = serializers.BooleanField(source='user.password_generated_by_system', read_only=True)
     class_name = serializers.SerializerMethodField()
     parent_name = serializers.SerializerMethodField()
     parent_kcs_card_id = serializers.SerializerMethodField()
@@ -38,6 +57,7 @@ class StudentSerializer(serializers.ModelSerializer):
             'kcs_card_id', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics',
+            'must_change_password', 'password_generated_by_system',
             'date_of_birth', 'gender', 'address',
             'current_class', 'class_name',
             'parent', 'parent_name', 'parent_kcs_card_id', 'parent_photo_data',
@@ -109,12 +129,14 @@ class FamilyParentSerializer(UserCreateSerializer):
 
 class FamilyStudentSerializer(serializers.ModelSerializer):
     user = UserCreateSerializer()
+    class_level = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    class_suffix = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
         model = Student
         fields = [
             'user', 'student_id', 'date_of_birth', 'gender',
-            'address', 'current_class', 'notes',
+            'address', 'current_class', 'class_level', 'class_suffix', 'notes',
         ]
         extra_kwargs = {
             'student_id': {'required': False, 'allow_blank': True},
@@ -122,6 +144,28 @@ class FamilyStudentSerializer(serializers.ModelSerializer):
             'notes': {'required': False, 'allow_blank': True},
             'current_class': {'required': False, 'allow_null': True},
         }
+
+    def validate(self, attrs):
+        class_level = attrs.get('class_level', '').strip()
+        class_suffix = attrs.get('class_suffix', '').strip()
+
+        if attrs.get('current_class') and (class_level or class_suffix):
+            raise serializers.ValidationError({
+                'current_class': 'Utilisez soit une classe existante, soit la classe normalisee et son suffixe.'
+            })
+
+        if class_level:
+            try:
+                normalize_class_level(class_level)
+                normalize_class_suffix(class_suffix)
+            except ValueError as error:
+                raise serializers.ValidationError({'class_level': str(error)})
+        elif class_suffix:
+            raise serializers.ValidationError({
+                'class_suffix': 'Le suffixe est optionnel, mais il doit accompagner une classe de base.'
+            })
+
+        return attrs
 
 
 class FamilyRegistrationSerializer(serializers.Serializer):
@@ -179,7 +223,11 @@ class FamilyRegistrationSerializer(serializers.Serializer):
         students_data = validated_data['students']
 
         with transaction.atomic():
-            parent_serializer = FamilyParentSerializer(data={**parent_data, 'role': User.ROLE_PARENT})
+            parent_serializer = FamilyParentSerializer(data={
+                **parent_data,
+                'role': User.ROLE_PARENT,
+                'username': parent_data.get('username') or _generate_parent_external_id(),
+            })
             parent_serializer.is_valid(raise_exception=True)
             parent = parent_serializer.save()
 
@@ -191,6 +239,11 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                 student_user = user_serializer.save()
 
                 student_id = (student_data.pop('student_id', '') or '').strip() or _generate_student_id()
+                class_level = student_data.pop('class_level', '').strip()
+                class_suffix = student_data.pop('class_suffix', '').strip()
+                if class_level:
+                    student_data['current_class'] = get_or_create_standard_class(class_level, class_suffix)
+
                 student = Student.objects.create(
                     user=student_user,
                     parent=parent,
@@ -201,7 +254,11 @@ class FamilyRegistrationSerializer(serializers.Serializer):
 
             def _sync_family() -> None:
                 sync_parent(parent)
+                synced_class_ids = set()
                 for student in created_students:
+                    if student.current_class_id and student.current_class_id not in synced_class_ids:
+                        sync_class(student.current_class)
+                        synced_class_ids.add(student.current_class_id)
                     sync_student(student)
 
             transaction.on_commit(_sync_family)
@@ -218,6 +275,22 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             'parent': UserListSerializer(parent).data,
             'students': StudentSerializer(students, many=True).data,
             'studentCount': len(students),
+            'temporaryCredentials': {
+                'parent': {
+                    'username': parent.username,
+                    'temporaryPassword': getattr(parent, '_generated_password', None),
+                    'mustChangePassword': parent.must_change_password,
+                },
+                'students': [
+                    {
+                        'studentId': student.student_id,
+                        'username': student.user.username,
+                        'temporaryPassword': getattr(student.user, '_generated_password', None),
+                        'mustChangePassword': student.user.must_change_password,
+                    }
+                    for student in students
+                ],
+            },
         }
 
 

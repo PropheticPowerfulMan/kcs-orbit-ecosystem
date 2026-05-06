@@ -15,12 +15,18 @@ const normalizeLabel = (value, fallback) => {
 };
 
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const standardClassLevels = [
+  'K1', 'K2', 'K3', 'K4', 'K5',
+  ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`),
+];
+const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];
 
 const createStudentDraft = () => ({
   firstName: '',
   lastName: '',
   email: '',
-  password: '',
+  classLevel: '',
+  classSuffix: '',
   dateOfBirth: '',
   gender: 'F',
   address: '',
@@ -38,6 +44,7 @@ const StudentsPage = () => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
+  const [familyFormVisible, setFamilyFormVisible] = useState(true);
   const [form, setForm] = useState({
     parentFirstName: '',
     parentLastName: '',
@@ -56,7 +63,7 @@ const StudentsPage = () => {
         const data = await studentsService.getAll();
         setStudents(data);
       } catch {
-        setError("Impossible de charger les eleves pour le moment.");
+        setError("Impossible de charger les élèves pour le moment.");
       } finally {
         setLoading(false);
       }
@@ -66,12 +73,12 @@ const StudentsPage = () => {
   }, []);
 
   const classOptions = useMemo(
-    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignee')))).sort((left, right) => left.localeCompare(right)),
+    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignée')))).sort((left, right) => left.localeCompare(right)),
     [students]
   );
 
   const familyOptions = useMemo(
-    () => Array.from(new Set(students.map((student) => normalizeLabel(student.parent_name, 'Aucun parent lie')))).sort((left, right) => left.localeCompare(right)),
+    () => Array.from(new Set(students.map((student) => normalizeLabel(student.parent_name, 'Aucun parent lié')))).sort((left, right) => left.localeCompare(right)),
     [students]
   );
 
@@ -79,8 +86,8 @@ const StudentsPage = () => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return students.filter((student) => {
-      const className = normalizeLabel(student.class_name, 'Non assignee');
-      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lie');
+      const className = normalizeLabel(student.class_name, 'Non assignée');
+      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lié');
       const haystack = `${student.full_name} ${student.student_id} ${className} ${familyName}`.toLowerCase();
 
       if (classFilter !== 'all' && className !== classFilter) {
@@ -103,11 +110,11 @@ const StudentsPage = () => {
     const groups = new Map();
 
     for (const student of filtered) {
-      const className = normalizeLabel(student.class_name, 'Non assignee');
+      const className = normalizeLabel(student.class_name, 'Non assignée');
       const current = groups.get(className) || { className, total: 0, families: new Set(), students: [] };
       current.total += 1;
       current.students.push(student);
-      current.families.add(normalizeLabel(student.parent_name, 'Aucun parent lie'));
+      current.families.add(normalizeLabel(student.parent_name, 'Aucun parent lié'));
       groups.set(className, current);
     }
 
@@ -124,11 +131,11 @@ const StudentsPage = () => {
     const groups = new Map();
 
     for (const student of filtered) {
-      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lie');
+      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lié');
       const current = groups.get(familyName) || { familyName, total: 0, classes: new Set(), students: [] };
       current.total += 1;
       current.students.push(student);
-      current.classes.add(normalizeLabel(student.class_name, 'Non assignee'));
+      current.classes.add(normalizeLabel(student.class_name, 'Non assignée'));
       groups.set(familyName, current);
     }
 
@@ -146,13 +153,13 @@ const StudentsPage = () => {
   const classesCovered = new Set(filtered.map((student) => student.class_name).filter(Boolean)).size;
 
   const columns = [
-    { key: 'full_name', label: 'Eleve' },
-    { key: 'student_id', label: 'ID eleve' },
-    { key: 'class_name', label: 'Classe', render: (value) => value || 'Non assignee' },
-    { key: 'parent_name', label: 'Parent responsable', render: (value) => value || 'Aucun parent lie' },
-    { key: 'email', label: 'Email', render: (value) => value || 'Non renseigne' },
-    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'A generer' },
-    { key: 'has_biometrics', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Pret' : 'A completer') },
+    { key: 'full_name', label: 'Élève' },
+    { key: 'student_id', label: 'ID élève' },
+    { key: 'class_name', label: 'Classe', render: (value) => value || 'Non assignée' },
+    { key: 'parent_name', label: 'Parent responsable', render: (value) => value || 'Aucun parent lié' },
+    { key: 'email', label: 'Email', render: (value) => value || 'Non renseigné' },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
+    { key: 'has_biometrics', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
     { key: 'is_active', label: 'Statut', render: (value) => value ? 'Actif' : 'Inactif' },
     { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, role: 'Eleve' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
@@ -192,7 +199,6 @@ const StudentsPage = () => {
           first_name: form.parentFirstName,
           last_name: form.parentLastName,
           email: form.parentEmail,
-          password: 'ParentPortal123!',
           phone: form.parentPhone,
           ...form.parentIdentity,
         },
@@ -201,11 +207,12 @@ const StudentsPage = () => {
             first_name: student.firstName,
             last_name: student.lastName,
             email: student.email,
-            password: student.password,
             ...student.identity,
           },
           date_of_birth: student.dateOfBirth,
           gender: student.gender,
+          class_level: student.classLevel,
+          class_suffix: student.classSuffix,
           address: student.address,
         })),
       };
@@ -213,7 +220,15 @@ const StudentsPage = () => {
       const response = await studentsService.registerFamily(payload);
       const data = await studentsService.getAll();
       setStudents(data);
-      setFeedback(`Famille enregistree avec ${response.studentCount || form.students.length} eleve(s).`);
+      const parentCredential = response.temporaryCredentials?.parent;
+      const studentCredentials = response.temporaryCredentials?.students || [];
+      const credentialSummary = [
+        parentCredential?.temporaryPassword ? `Parent: ${parentCredential.username} / ${parentCredential.temporaryPassword}` : null,
+        ...studentCredentials
+          .filter((credential) => credential.temporaryPassword)
+          .map((credential) => `${credential.studentId}: ${credential.username} / ${credential.temporaryPassword}`),
+      ].filter(Boolean).join(' | ');
+      setFeedback(`Famille enregistrée avec ${response.studentCount || form.students.length} élève(s). Mot de passe temporaire à changer: ${credentialSummary || 'déjà défini'}.`);
       setForm({
         parentFirstName: '',
         parentLastName: '',
@@ -235,7 +250,7 @@ const StudentsPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Student command center</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.students')}</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400">Enregistrement famille, generation des IDs eleves et suivi des liens parent-enfants depuis SAVANEX.</p>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">Enregistrement des familles, classes normalisées et génération automatique des accès temporaires depuis SAVANEX.</p>
         </div>
       </section>
 
@@ -243,17 +258,29 @@ const StudentsPage = () => {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-display text-xl font-semibold text-slate-100">Nouvelle famille</h3>
-            <p className="mt-1 text-sm text-slate-400">Un parent, un ou plusieurs eleves, tous lies dans la meme operation.</p>
+            <p className="mt-1 text-sm text-slate-400">Un parent, un ou plusieurs élèves, tous liés dans la même opération. Les mots de passe temporaires sont générés par le système.</p>
           </div>
-          <button type="button" onClick={addStudentDraft} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Ajouter un enfant</button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {familyFormVisible ? (
+              <button type="button" onClick={addStudentDraft} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Ajouter un enfant</button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setFamilyFormVisible((visible) => !visible)}
+              aria-expanded={familyFormVisible}
+              className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60"
+            >
+              {familyFormVisible ? 'Masquer' : 'Afficher'}
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={submitFamily} className="space-y-4">
+        {familyFormVisible ? <form onSubmit={submitFamily} className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prenom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+            <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
             <input value={form.parentLastName} onChange={(event) => setForm({ ...form, parentLastName: event.target.value })} placeholder="Nom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
             <input type="email" value={form.parentEmail} onChange={(event) => setForm({ ...form, parentEmail: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-            <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Telephone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+            <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
           </div>
 
           <IdentityCapturePanel
@@ -272,14 +299,20 @@ const StudentsPage = () => {
                   ) : null}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <input value={student.firstName} onChange={(event) => updateStudentDraft(index, 'firstName', event.target.value)} placeholder="Prenom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input value={student.firstName} onChange={(event) => updateStudentDraft(index, 'firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <input value={student.lastName} onChange={(event) => updateStudentDraft(index, 'lastName', event.target.value)} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-                  <input type="email" value={student.email} onChange={(event) => updateStudentDraft(index, 'email', event.target.value)} placeholder="Email eleve" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-                  <input type="password" value={student.password} onChange={(event) => updateStudentDraft(index, 'password', event.target.value)} placeholder="Mot de passe" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input type="email" value={student.email} onChange={(event) => updateStudentDraft(index, 'email', event.target.value)} placeholder="Email élève" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <select value={student.classLevel} onChange={(event) => updateStudentDraft(index, 'classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+                    <option value="">Classe non assignée</option>
+                    {standardClassLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+                  </select>
+                  <select value={student.classSuffix} onChange={(event) => updateStudentDraft(index, 'classSuffix', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" disabled={!student.classLevel}>
+                    {classSuffixes.map((suffix) => <option key={suffix || 'none'} value={suffix}>{suffix ? `Suffixe ${suffix}` : 'Sans suffixe'}</option>)}
+                  </select>
                   <input type="date" value={student.dateOfBirth} onChange={(event) => updateStudentDraft(index, 'dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <select value={student.gender} onChange={(event) => updateStudentDraft(index, 'gender', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
                     <option value="F">Fille</option>
-                    <option value="M">Garcon</option>
+                    <option value="M">Garçon</option>
                     <option value="O">Autre</option>
                   </select>
                   <input value={student.address} onChange={(event) => updateStudentDraft(index, 'address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2" />
@@ -302,13 +335,13 @@ const StudentsPage = () => {
           <button type="submit" disabled={submitting} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
             {submitting ? 'Enregistrement en cours...' : 'Enregistrer la famille'}
           </button>
-        </form>
+        </form> : null}
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard title="Effectif actif" value={activeStudents} subtitle="Eleves actuellement visibles" accent="text-cyan-300" />
-        <StatCard title="Familles liees" value={linkedFamilies} subtitle="Parents relies aux eleves" accent="text-emerald-300" />
-        <StatCard title="Classes couvertes" value={classesCovered} subtitle="Classes detectees dans SAVANEX" accent="text-amber-300" />
+        <StatCard title="Effectif actif" value={activeStudents} subtitle="Élèves actuellement visibles" accent="text-cyan-300" />
+        <StatCard title="Familles liées" value={linkedFamilies} subtitle="Parents reliés aux élèves" accent="text-emerald-300" />
+        <StatCard title="Classes couvertes" value={classesCovered} subtitle="Classes détectées dans SAVANEX" accent="text-amber-300" />
       </section>
 
       <div className="mb-4 card p-4">
@@ -316,7 +349,7 @@ const StudentsPage = () => {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher par eleve, classe ou famille..."
+            placeholder="Rechercher par élève, classe ou famille..."
             className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
           />
           <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
@@ -333,7 +366,7 @@ const StudentsPage = () => {
           </select>
         </div>
       </div>
-      {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des eleves...</p> : null}
+      {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des élèves...</p> : null}
       <DataTable columns={columns} data={filtered} />
 
       {selectedCard ? (
@@ -341,7 +374,7 @@ const StudentsPage = () => {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Apercu de la carte eleve</h3>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Aperçu de la carte élève</h3>
             </div>
             <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
           </div>
@@ -363,7 +396,7 @@ const StudentsPage = () => {
               <div key={slugify(group.className)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-100">{group.className}</p>
-                  <span className="text-xs text-slate-400">{group.total} eleve(s)</span>
+                  <span className="text-xs text-slate-400">{group.total} élève(s)</span>
                 </div>
                 <p className="mt-2 text-xs text-slate-400">Familles: {group.families.join(', ')}</p>
                 <p className="mt-3 text-sm text-slate-300">{group.students.map((student) => student.full_name).join(', ')}</p>
@@ -385,10 +418,10 @@ const StudentsPage = () => {
               <div key={slugify(group.familyName)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-100">{group.familyName}</p>
-                  <span className="text-xs text-slate-400">{group.total} eleve(s)</span>
+                  <span className="text-xs text-slate-400">{group.total} élève(s)</span>
                 </div>
                 <p className="mt-2 text-xs text-slate-400">Classes: {group.classes.join(', ')}</p>
-                <p className="mt-3 text-sm text-slate-300">{group.students.map((student) => `${student.full_name} (${normalizeLabel(student.class_name, 'Non assignee')})`).join(', ')}</p>
+                <p className="mt-3 text-sm text-slate-300">{group.students.map((student) => `${student.full_name} (${normalizeLabel(student.class_name, 'Non assignée')})`).join(', ')}</p>
               </div>
             )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
           </div>

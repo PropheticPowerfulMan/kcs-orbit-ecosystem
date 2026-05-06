@@ -13,7 +13,6 @@ const initialForm = {
   lastName: '',
   email: '',
   phone: '',
-  password: '',
   teacherId: '',
   employeeType: 'teacher',
   department: '',
@@ -37,11 +36,9 @@ const initialForm = {
   identity: { ...emptyIdentityCapture },
 };
 
-const generateTeacherId = () => `TCH-${Date.now().toString().slice(-8)}`;
-
 const formatApiError = (error) => {
   const data = error?.response?.data;
-  if (!data) return error?.message || "Impossible d'enregistrer cet employe.";
+  if (!data) return error?.message || "Impossible d'enregistrer cet employé.";
   if (typeof data === 'string') return data;
   if (data.detail) return data.detail;
 
@@ -65,6 +62,7 @@ const TeachersPage = () => {
   const [error, setError] = useState('');
   const [form, setForm] = useState(initialForm);
   const [selectedCard, setSelectedCard] = useState(null);
+  const [employeeFormVisible, setEmployeeFormVisible] = useState(true);
 
   const loadTeachers = async () => {
     setLoading(true);
@@ -74,7 +72,7 @@ const TeachersPage = () => {
       const data = await teachersService.getAll();
       setTeachers(data);
     } catch {
-      setError('Impossible de charger les enseignants pour le moment.');
+      setError('Impossible de charger les employés pour le moment.');
     } finally {
       setLoading(false);
     }
@@ -90,15 +88,15 @@ const TeachersPage = () => {
   const departments = useMemo(() => new Set(teachers.map((teacher) => teacher.department).filter(Boolean)).size, [teachers]);
 
   const columns = [
-    { key: 'full_name', label: 'Employe' },
-    { key: 'employee_id', label: 'ID employe', render: (value) => value || 'Auto' },
-    { key: 'employee_label', label: 'Type', render: (value, row) => value || row.employee_type || 'Employe' },
-    { key: 'job_title', label: 'Poste', render: (value) => value || 'Non renseigne' },
-    { key: 'department', label: 'Departement', render: (value) => value || 'Non assigne' },
+    { key: 'full_name', label: 'Employé' },
+    { key: 'employee_id', label: 'ID employé', render: (value) => value || 'Auto' },
+    { key: 'employee_label', label: 'Type', render: (value, row) => value || row.employee_type || 'Employé' },
+    { key: 'job_title', label: 'Poste', render: (value) => value || 'Non renseigné' },
+    { key: 'department', label: 'Département', render: (value) => value || 'Non assigné' },
     { key: 'employment_status', label: 'Statut', render: (value) => value || 'active' },
-    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'A generer' },
-    { key: 'bio', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Pret' : 'A completer') },
-    { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, role: row.employee_label || 'Employe' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
+    { key: 'bio', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
+    { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, role: row.employee_label || 'Employé' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
@@ -110,16 +108,15 @@ const TeachersPage = () => {
     setError('');
 
     try {
-      await teachersService.create({
+      const response = await teachersService.create({
         user: {
           first_name: form.firstName,
           last_name: form.lastName,
           ...(form.email ? { email: form.email } : {}),
           phone: form.phone,
-          ...(form.password ? { password: form.password } : {}),
           ...form.identity,
         },
-        teacher_id: form.teacherId || generateTeacherId(),
+        ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
         employee_type: form.employeeType,
         department: form.department,
         job_title: form.jobTitle,
@@ -141,7 +138,11 @@ const TeachersPage = () => {
         supervisor_name: form.supervisorName,
       });
 
-      setFeedback('Employe enregistre. La carte KCS est generee automatiquement et le dossier photo/empreintes reste completable.');
+      const credentials = response.temporaryCredentials;
+      const accessSummary = credentials?.temporaryPassword
+        ? ` Accès temporaire: ${credentials.username} / ${credentials.temporaryPassword}.`
+        : '';
+      setFeedback(`Employé enregistré. Mot de passe généré par le système et à changer à la première connexion.${accessSummary}`);
       setForm({ ...initialForm, hireDate: new Date().toISOString().slice(0, 10), identity: { ...emptyIdentityCapture } });
       await loadTeachers();
     } catch (submissionError) {
@@ -154,33 +155,43 @@ const TeachersPage = () => {
   return (
     <DashboardLayout>
       <section className="mb-6 page-enter">
-        <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Employee operations</p>
+        <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Gestion des employés</p>
         <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.teachers')}</h2>
-        <p className="mt-2 text-sm text-slate-400">Gestion globale des employes KCS: enseignants, administration, support, leadership et specialistes.</p>
+        <p className="mt-2 text-sm text-slate-400">Gestion globale des employés KCS : enseignants, administration, support, leadership et spécialistes.</p>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard title="Employes actifs" value={activeTeachers} accent="text-cyan-300" />
+        <StatCard title="Employés actifs" value={activeTeachers} accent="text-cyan-300" />
         <StatCard title="Dont enseignants" value={teachingEmployees} accent="text-sky-300" />
-        <StatCard title="Cartes pretes" value={biometricReady} subtitle="Photo ou biometrie presente" accent="text-emerald-300" />
-        <StatCard title="Departements" value={departments} accent="text-amber-300" />
+        <StatCard title="Cartes prêtes" value={biometricReady} subtitle="Photo ou biométrie présente" accent="text-emerald-300" />
+        <StatCard title="Départements" value={departments} accent="text-amber-300" />
       </section>
 
       <section className="mb-6 card p-5">
-        <div className="mb-4">
-          <h3 className="font-display text-xl font-semibold text-slate-100">Nouvel employe</h3>
-          <p className="mt-1 text-sm text-slate-400">Formulaire simplifie: les champs RH sensibles restent optionnels et la carte KCS est generee automatiquement.</p>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-display text-xl font-semibold text-slate-100">Nouvel employé</h3>
+            <p className="mt-1 text-sm text-slate-400">Formulaire simplifié : les champs RH sensibles restent optionnels, la carte KCS et l'accès temporaire sont générés automatiquement.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEmployeeFormVisible((visible) => !visible)}
+            aria-expanded={employeeFormVisible}
+            className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60"
+          >
+            {employeeFormVisible ? 'Masquer' : 'Afficher'}
+          </button>
         </div>
 
-        <form onSubmit={submitTeacher} className="space-y-4">
+        {employeeFormVisible ? <form onSubmit={submitTeacher} className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prenom" className={inputClass} required />
+            <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prénom" className={inputClass} required />
             <input value={form.lastName} onChange={(event) => updateForm('lastName', event.target.value)} placeholder="Nom" className={inputClass} required />
             <input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="Email personnel optionnel" className={inputClass} />
-            <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="Telephone" className={inputClass} />
-            <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Departement" className={inputClass} />
+            <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="Téléphone" className={inputClass} />
+            <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Département" className={inputClass} />
             <input value={form.jobTitle} onChange={(event) => updateForm('jobTitle', event.target.value)} placeholder="Titre du poste" className={inputClass} />
-            <input value={form.specialization} onChange={(event) => updateForm('specialization', event.target.value)} placeholder="Specialite / matiere si enseignant" className={inputClass} />
+            <input value={form.specialization} onChange={(event) => updateForm('specialization', event.target.value)} placeholder="Spécialité / matière si enseignant" className={inputClass} />
             <input type="date" value={form.hireDate} onChange={(event) => updateForm('hireDate', event.target.value)} className={inputClass} required />
             <select value={form.employeeType} onChange={(event) => updateForm('employeeType', event.target.value)} className={inputClass}>
               <option value="teacher">Teacher</option>
@@ -203,13 +214,12 @@ const TeachersPage = () => {
           <details className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
             <summary className="cursor-pointer text-sm font-semibold text-slate-100">Options avancees RH, paie et identifiants</summary>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <input type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} placeholder="Mot de passe optionnel" className={inputClass} />
-              <input value={form.teacherId} onChange={(event) => updateForm('teacherId', event.target.value)} placeholder="ID fonctionnel optionnel" className={inputClass} />
+              <input value={form.teacherId} onChange={(event) => updateForm('teacherId', event.target.value)} placeholder="ID employé optionnel" className={inputClass} />
               <input value={form.officePhoneExtension} onChange={(event) => updateForm('officePhoneExtension', event.target.value)} placeholder="Extension bureau" className={inputClass} />
               <input value={form.payrollReference} onChange={(event) => updateForm('payrollReference', event.target.value)} placeholder="Reference paie" className={inputClass} />
-              <input value={form.nationalIdNumber} onChange={(event) => updateForm('nationalIdNumber', event.target.value)} placeholder="Numero d'identite" className={inputClass} />
-              <input value={form.socialSecurityNumber} onChange={(event) => updateForm('socialSecurityNumber', event.target.value)} placeholder="Securite sociale" className={inputClass} />
-              <input value={form.taxNumber} onChange={(event) => updateForm('taxNumber', event.target.value)} placeholder="Numero fiscal" className={inputClass} />
+              <input value={form.nationalIdNumber} onChange={(event) => updateForm('nationalIdNumber', event.target.value)} placeholder="Numéro d'identité" className={inputClass} />
+              <input value={form.socialSecurityNumber} onChange={(event) => updateForm('socialSecurityNumber', event.target.value)} placeholder="Sécurité sociale" className={inputClass} />
+              <input value={form.taxNumber} onChange={(event) => updateForm('taxNumber', event.target.value)} placeholder="Numéro fiscal" className={inputClass} />
               <input value={form.bankName} onChange={(event) => updateForm('bankName', event.target.value)} placeholder="Banque" className={inputClass} />
               <input value={form.bankAccountNumber} onChange={(event) => updateForm('bankAccountNumber', event.target.value)} placeholder="Compte bancaire" className={inputClass} />
               <input value={form.salaryGrade} onChange={(event) => updateForm('salaryGrade', event.target.value)} placeholder="Grade salarial" className={inputClass} />
@@ -233,12 +243,12 @@ const TeachersPage = () => {
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
           <button type="submit" disabled={submitting} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
-            {submitting ? 'Enregistrement en cours...' : "Enregistrer l'employe"}
+            {submitting ? 'Enregistrement en cours...' : "Enregistrer l'employé"}
           </button>
-        </form>
+        </form> : null}
       </section>
 
-      {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employes...</p> : null}
+      {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employés...</p> : null}
       <DataTable columns={columns} data={teachers} />
 
       {selectedCard ? (
@@ -246,7 +256,7 @@ const TeachersPage = () => {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Apercu de la carte employe</h3>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Aperçu de la carte employé</h3>
             </div>
             <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
           </div>

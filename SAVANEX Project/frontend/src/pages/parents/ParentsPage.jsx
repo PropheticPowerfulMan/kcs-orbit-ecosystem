@@ -46,7 +46,7 @@ const ParentsPage = () => {
     const groups = new Map();
 
     for (const student of students) {
-      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lie');
+      const familyName = normalizeLabel(student.parent_name, 'Aucun parent lié');
       const current = groups.get(familyName) || {
         id: slugify(familyName),
         family_name: familyName,
@@ -60,7 +60,7 @@ const ParentsPage = () => {
       };
 
       current.students.push(student.full_name);
-      current.classes.add(normalizeLabel(student.class_name, 'Non assignee'));
+      current.classes.add(normalizeLabel(student.class_name, 'Non assignée'));
       if (student.is_active) {
         current.activeStudents += 1;
       }
@@ -85,7 +85,7 @@ const ParentsPage = () => {
   }, [students]);
 
   const classOptions = useMemo(
-    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignee')))).sort((left, right) => left.localeCompare(right)),
+    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignée')))).sort((left, right) => left.localeCompare(right)),
     [students]
   );
 
@@ -123,7 +123,7 @@ const ParentsPage = () => {
 
     for (const family of filtered) {
       const classLabels = family.classes_label.split(', ').filter(Boolean);
-      for (const className of classLabels.length ? classLabels : ['Non assignee']) {
+      for (const className of classLabels.length ? classLabels : ['Non assignée']) {
         const current = groups.get(className) || { className, families: [], students: 0 };
         current.families.push(family.family_name);
         current.students += family.student_count;
@@ -142,10 +142,10 @@ const ParentsPage = () => {
 
   const columns = [
     { key: 'family_name', label: 'Famille / Parent' },
-    { key: 'students_label', label: 'Eleves lies' },
+    { key: 'students_label', label: 'Élèves liés' },
     { key: 'classes_label', label: 'Classes' },
     { key: 'student_count', label: 'Effectif' },
-    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'Non generee' },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'Non générée' },
     { key: 'activeStudents', label: 'Actifs' },
     { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, full_name: row.family_name, role: 'Parent' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
@@ -156,15 +156,15 @@ const ParentsPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Parent relationship management</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">Classement des familles et parents</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400">Recherche et regroupement des foyers par famille et par classe a partir des eleves relies dans SAVANEX.</p>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">Recherche et regroupement des foyers par famille et par classe à partir des élèves reliés dans SAVANEX.</p>
         </div>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatCard title="Familles actives" value={activeFamilies} accent="text-cyan-300" />
-        <StatCard title="Eleves relies" value={totalStudents} subtitle="Visibles dans les familles" accent="text-emerald-300" />
-        <StatCard title="Classes couvertes" value={classesCovered} subtitle="Classes reliees aux familles" accent="text-amber-300" />
-        <StatCard title="Resultats filtres" value={filtered.length} subtitle="Familles correspondant a la recherche" accent="text-rose-300" />
+        <StatCard title="Élèves reliés" value={totalStudents} subtitle="Visibles dans les familles" accent="text-emerald-300" />
+        <StatCard title="Classes couvertes" value={classesCovered} subtitle="Classes reliées aux familles" accent="text-amber-300" />
+        <StatCard title="Résultats filtrés" value={filtered.length} subtitle="Familles correspondant à la recherche" accent="text-rose-300" />
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -175,7 +175,7 @@ const ParentsPage = () => {
               <div key={family.id} className="rounded-2xl border border-github-border bg-slate-950/40 p-4">
                 <p className="text-xs text-slate-500">Famille {index + 1}</p>
                 <p className="mt-1 font-semibold text-slate-100">{family.family_name}</p>
-                <p className="mt-2 text-xs text-slate-400">{family.student_count} eleve(s) - {family.classes_label || 'Non assignee'}</p>
+                <p className="mt-2 text-xs text-slate-400">{family.student_count} élève(s) - {family.classes_label || 'Non assignée'}</p>
               </div>
             ))}
           </div>
@@ -186,7 +186,7 @@ const ParentsPage = () => {
             {classGroups.slice(0, 4).map((group) => (
               <div key={group.className} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="font-semibold text-slate-100">{group.className}</p>
-                <p className="mt-1 text-xs text-slate-400">{group.students} eleve(s) - {group.families.length} famille(s)</p>
+                <p className="mt-1 text-xs text-slate-400">{group.students} élève(s) - {group.families.length} famille(s)</p>
               </div>
             ))}
           </div>
@@ -198,7 +198,7 @@ const ParentsPage = () => {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher parent, famille, eleve ou classe..."
+            placeholder="Rechercher parent, famille, élève ou classe..."
             className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
           />
           <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
@@ -225,7 +225,7 @@ const ParentsPage = () => {
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Apercu de la carte parent</h3>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Aperçu de la carte parent</h3>
             </div>
             <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
           </div>
@@ -236,15 +236,15 @@ const ParentsPage = () => {
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="card p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Recherche parents</p>
-          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement detaille par famille</h3>
+          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement détaillé par famille</h3>
           <div className="mt-4 space-y-3">
             {filtered.length ? filtered.map((family) => (
               <div key={family.id} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-100">{family.family_name}</p>
-                  <span className="text-xs text-slate-400">{family.student_count} eleve(s)</span>
+                  <span className="text-xs text-slate-400">{family.student_count} élève(s)</span>
                 </div>
-                <p className="mt-2 text-xs text-slate-400">Classes: {family.classes_label || 'Non assignee'}</p>
+                <p className="mt-2 text-xs text-slate-400">Classes : {family.classes_label || 'Non assignée'}</p>
                 <p className="mt-3 text-sm text-slate-300">{family.students_label}</p>
               </div>
             )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
@@ -253,13 +253,13 @@ const ParentsPage = () => {
 
         <article className="card p-5">
           <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Classement</p>
-          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Classes et familles associees</h3>
+          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Classes et familles associées</h3>
           <div className="mt-4 space-y-3">
             {classGroups.length ? classGroups.map((group) => (
               <div key={slugify(group.className)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-100">{group.className}</p>
-                  <span className="text-xs text-slate-400">{group.students} eleve(s)</span>
+                  <span className="text-xs text-slate-400">{group.students} élève(s)</span>
                 </div>
                 <p className="mt-3 text-sm text-slate-300">{group.families.join(', ')}</p>
               </div>

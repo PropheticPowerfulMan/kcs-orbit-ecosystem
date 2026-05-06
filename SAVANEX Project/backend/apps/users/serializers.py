@@ -21,6 +21,18 @@ def _generate_kcs_card_id(role: str) -> str:
     return f"KCS-{prefix}-{uuid4().hex[:8].upper()}"
 
 
+def generate_temporary_password(role: str) -> str:
+    prefix_map = {
+        User.ROLE_PARENT: 'Par',
+        User.ROLE_STUDENT: 'Stu',
+        User.ROLE_TEACHER: 'Emp',
+        User.ROLE_EMPLOYEE: 'Emp',
+        User.ROLE_ADMIN: 'Adm',
+    }
+    prefix = prefix_map.get(role, 'Usr')
+    return f"KCS-{prefix}@{uuid4().hex[:8].upper()}"
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """JWT token with user role and basic info embedded."""
 
@@ -29,11 +41,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['role'] = user.role
         token['full_name'] = user.get_full_name()
+        token['must_change_password'] = user.must_change_password
         return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
         data['user'] = UserMeSerializer(self.user).data
+        data['must_change_password'] = self.user.must_change_password
         return data
 
 
@@ -48,7 +62,8 @@ class UserMeSerializer(serializers.ModelSerializer):
                   'full_name', 'role', 'phone', 'avatar', 'kcs_card_id',
                   'photo_data', 'photo_source', 'has_photo',
                   'left_fingerprint_data', 'right_fingerprint_data', 'has_biometrics',
-                  'language', 'dark_mode']
+                  'language', 'dark_mode', 'must_change_password',
+                  'password_generated_by_system']
         read_only_fields = ['id', 'username', 'role']
 
     def get_full_name(self, obj):
@@ -63,13 +78,15 @@ class UserMeSerializer(serializers.ModelSerializer):
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8, required=False, allow_blank=True)
+    generated_password = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name',
                   'password', 'role', 'phone', 'kcs_card_id', 'photo_data',
                   'photo_source', 'left_fingerprint_data', 'right_fingerprint_data',
-                  'language']
+                  'language', 'must_change_password', 'password_generated_by_system',
+                  'generated_password']
         extra_kwargs = {
             'username': {'required': False, 'allow_blank': True},
             'role': {'required': False},
@@ -80,11 +97,21 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'photo_source': {'required': False, 'allow_blank': True},
             'left_fingerprint_data': {'required': False, 'allow_blank': True},
             'right_fingerprint_data': {'required': False, 'allow_blank': True},
+            'must_change_password': {'required': False},
+            'password_generated_by_system': {'required': False},
         }
 
+    def get_generated_password(self, obj):
+        return getattr(obj, '_generated_password', None)
+
     def create(self, validated_data):
-        password = validated_data.pop('password', '') or f"Kcs@{uuid4().hex[:8]}"
         role = validated_data.get('role', User.ROLE_STUDENT)
+        password = (validated_data.pop('password', '') or '').strip()
+        generated_by_system = not password
+        if generated_by_system:
+            password = generate_temporary_password(role)
+            validated_data['must_change_password'] = True
+            validated_data['password_generated_by_system'] = True
         username = (validated_data.get('username') or '').strip()
         if not username:
             prefix = 'par' if role == User.ROLE_PARENT else 'usr'
@@ -95,6 +122,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
         user = User(**validated_data)
         user.set_password(password)
         user.save()
+        if generated_by_system:
+            user._generated_password = password
         return user
 
 
@@ -110,6 +139,7 @@ class UserListSerializer(serializers.ModelSerializer):
             'kcs_card_id', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics', 'is_active',
+            'must_change_password', 'password_generated_by_system',
         ]
 
     def get_full_name(self, obj):

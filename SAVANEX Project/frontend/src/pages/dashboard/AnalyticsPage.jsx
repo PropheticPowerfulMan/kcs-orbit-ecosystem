@@ -37,7 +37,7 @@ const AnalyticsPage = () => {
       <section className="mb-6 page-enter">
         <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Advanced school intelligence</p>
         <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('analytics.title')}</h2>
-        <p className="mt-2 max-w-3xl text-sm text-slate-400">Tableau analytique avance : prediction de reussite, retention, engagement parents, performance academique et signaux financiers.</p>
+        <p className="mt-2 max-w-3xl text-sm text-slate-400">Tableau analytique avancé : prédiction de réussite, rétention, engagement des parents, performance académique et signaux financiers.</p>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -119,7 +119,7 @@ const AnalyticsPage = () => {
         <article className="card p-5">
           <h3 className="font-display text-lg font-semibold text-slate-100">Plan d'intervention recommande</h3>
           <div className="mt-4 space-y-3">
-            {['Prioriser les eleves cumulant presence < 75% et moyenne < 10/20.', 'Declencher une relance parent automatique si engagement < 60%.', 'Reequilibrer les enseignants au-dessus de 28h de charge hebdomadaire.', 'Comparer les classes a risque avec les retards de paiement pour detecter les contraintes familiales.'].map((item, index) => (
+            {['Prioriser les élèves cumulant présence < 75% et moyenne < 10/20.', 'Déclencher une relance parent automatique si engagement < 60%.', 'Rééquilibrer les enseignants au-dessus de 28h de charge hebdomadaire.', 'Comparer les classes à risque avec les retards de paiement pour détecter les contraintes familiales.'].map((item, index) => (
               <div key={item} className="flex gap-3 rounded-2xl border border-github-border bg-slate-950/40 p-4">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-kcs-blue/20 text-sm font-bold text-cyan-200">{index + 1}</span>
                 <p className="text-sm text-slate-300">{item}</p>

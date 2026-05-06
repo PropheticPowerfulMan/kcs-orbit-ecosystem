@@ -60,7 +60,7 @@ const TimetablePage = () => {
         balanceGain: '+12%',
         recommendations: [
           'Les conflits de capacite ont ete deplaces vers des salles specialisees.',
-          'La charge enseignant est redistribuee sur les creneaux libres de l apres-midi.',
+          "La charge des enseignants est redistribuée sur les créneaux libres de l'après-midi.",
           'Aucun chevauchement salle/enseignant ne reste dans la grille active.',
         ],
       });
@@ -121,12 +121,12 @@ const TimetablePage = () => {
           <article className="card p-5">
             <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Equilibrage</p>
             <p className="mt-2 font-display text-3xl font-bold text-slate-100">{optimizationReport.balanceGain}</p>
-            <p className="text-sm text-slate-400">gain estime sur la charge hebdomadaire</p>
+            <p className="text-sm text-slate-400">gain estimé sur la charge hebdomadaire</p>
           </article>
           <article className="card p-5">
             <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Validation</p>
             <p className="mt-2 font-display text-3xl font-bold text-slate-100">OK</p>
-            <p className="text-sm text-slate-400">salles, enseignants et capacites verifies</p>
+            <p className="text-sm text-slate-400">salles, enseignants et capacités vérifiés</p>
           </article>
           <article className="card p-5 lg:col-span-3">
             <h3 className="font-display text-lg font-semibold text-slate-100">Recommandations appliquees</h3>

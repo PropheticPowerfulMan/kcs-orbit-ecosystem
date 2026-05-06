@@ -3,6 +3,14 @@ from .models import Teacher
 from apps.users.serializers import UserCreateSerializer, UserMeSerializer
 
 
+def _generate_employee_id() -> str:
+    for _ in range(5):
+        employee_id = Teacher._meta.get_field('employee_id').default()
+        if not Teacher.objects.filter(employee_id=employee_id).exists() and not Teacher.objects.filter(teacher_id=employee_id).exists():
+            return employee_id
+    return Teacher._meta.get_field('employee_id').default()
+
+
 class TeacherSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
@@ -15,6 +23,8 @@ class TeacherSerializer(serializers.ModelSerializer):
     right_fingerprint_data = serializers.CharField(source='user.right_fingerprint_data', read_only=True)
     has_photo = serializers.SerializerMethodField()
     has_biometrics = serializers.SerializerMethodField()
+    must_change_password = serializers.BooleanField(source='user.must_change_password', read_only=True)
+    password_generated_by_system = serializers.BooleanField(source='user.password_generated_by_system', read_only=True)
     employee_label = serializers.CharField(read_only=True)
 
     class Meta:
@@ -30,6 +40,7 @@ class TeacherSerializer(serializers.ModelSerializer):
             'kcs_card_id', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics',
+            'must_change_password', 'password_generated_by_system',
             'qualification', 'specialization', 'hire_date', 'end_date', 'bio',
             'employment_notes', 'is_active',
         ]
@@ -57,6 +68,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             'emergency_contact_name', 'emergency_contact_phone', 'bio', 'employment_notes',
         ]
         extra_kwargs = {
+            'teacher_id': {'required': False, 'allow_blank': True},
             'employee_id': {'required': False, 'allow_blank': True},
             'employee_type': {'required': False},
             'department': {'required': False, 'allow_blank': True},
@@ -93,10 +105,30 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
         user_serializer.is_valid(raise_exception=True)
         user = user_serializer.save()
         validated_data.setdefault('employee_type', Teacher.EMPLOYEE_TYPE_TEACHER)
-        if not (validated_data.get('employee_id') or '').strip():
-            validated_data.pop('employee_id', None)
+        employee_id = (validated_data.get('employee_id') or '').strip()
+        teacher_id = (validated_data.get('teacher_id') or '').strip()
+        if not employee_id and not teacher_id:
+            employee_id = _generate_employee_id()
+            teacher_id = employee_id
+        elif employee_id and not teacher_id:
+            teacher_id = employee_id
+        elif teacher_id and not employee_id:
+            employee_id = teacher_id
+
+        validated_data['employee_id'] = employee_id
+        validated_data['teacher_id'] = teacher_id
         teacher = Teacher.objects.create(user=user, **validated_data)
         return teacher
+
+    def to_representation(self, instance):
+        return {
+            **TeacherSerializer(instance).data,
+            'temporaryCredentials': {
+                'username': instance.user.username,
+                'temporaryPassword': getattr(instance.user, '_generated_password', None),
+                'mustChangePassword': instance.user.must_change_password,
+            },
+        }
 
 
 class TeacherDetailSerializer(serializers.ModelSerializer):

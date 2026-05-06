@@ -16,6 +16,9 @@ type SharedDirectoryResponse = {
     firstName?: string
     middleName?: string | null
     lastName?: string
+    phone?: string | null
+    email?: string | null
+    mustChangePassword?: boolean
     organizationId?: string | null
     studentIds: string[]
     externalIds: Array<{ appSlug: string; externalId: string }>
@@ -27,6 +30,11 @@ type SharedDirectoryResponse = {
     middleName?: string | null
     lastName: string
     studentNumber?: string
+    email?: string | null
+    phone?: string | null
+    dateOfBirth?: string | null
+    status?: string | null
+    mustChangePassword?: boolean
     classId?: string | null
     className?: string | null
     parentId?: string | null
@@ -39,6 +47,14 @@ type SharedDirectoryResponse = {
     firstName?: string
     middleName?: string | null
     lastName?: string
+    phone?: string | null
+    email?: string | null
+    subject?: string | null
+    employeeId?: string | null
+    employeeType?: string | null
+    department?: string | null
+    jobTitle?: string | null
+    mustChangePassword?: boolean
     organizationId?: string | null
     externalIds: Array<{ appSlug: string; externalId: string }>
   }>
@@ -263,6 +279,12 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
         parentsMap.set(link.parent.id, {
           id: link.parent.id,
           fullName: `${link.parent.firstName} ${link.parent.lastName}`.trim(),
+          firstName: link.parent.firstName,
+          middleName: null,
+          lastName: link.parent.lastName,
+          phone: link.parent.phone,
+          email: link.parent.email,
+          mustChangePassword: false,
           organizationId: null,
           studentIds: [],
           externalIds: [],
@@ -287,6 +309,11 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
       middleName: null,
       lastName: student.user.lastName,
       studentNumber: student.studentNumber,
+      email: student.user.email,
+      phone: null,
+      dateOfBirth: null,
+      status: student.status,
+      mustChangePassword: false,
       classId: student.grade ? `${student.grade}-${student.section}` : null,
       className: student.grade ? `${student.grade} - Section ${student.section}` : null,
       parentId: student.parentLinks[0]?.parentId ?? null,
@@ -299,6 +326,14 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
       firstName: teacher.user.firstName,
       middleName: null,
       lastName: teacher.user.lastName,
+      phone: teacher.user.phone,
+      email: teacher.user.email,
+      subject: null,
+      employeeId: null,
+      employeeType: null,
+      department: null,
+      jobTitle: null,
+      mustChangePassword: false,
       organizationId: null,
       externalIds: [],
     })),

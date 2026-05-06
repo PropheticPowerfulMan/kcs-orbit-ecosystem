@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from threading import Lock
 from urllib.parse import quote
@@ -189,6 +189,8 @@ def _post_json(path: str, payload: dict) -> None:
 def _contract_datetime(value: datetime | None) -> str:
     if value is None:
         value = datetime.now(timezone.utc)
+    elif isinstance(value, date) and not isinstance(value, datetime):
+        value = datetime.combine(value, time.min, tzinfo=timezone.utc)
     elif value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     else:
@@ -200,11 +202,23 @@ def _compact(mapping: dict) -> dict:
     return {key: value for key, value in mapping.items() if value is not None}
 
 
+def _parent_external_id(parent) -> str:
+    username = (getattr(parent, "username", "") or "").strip()
+    if username.startswith("SAV-PAR-"):
+        return username
+
+    kcs_card_id = (getattr(parent, "kcs_card_id", "") or "").strip()
+    if kcs_card_id:
+        return kcs_card_id
+
+    return str(parent.pk)
+
+
 def sync_student(student) -> None:
     if student.parent_id:
         sync_parent(student.parent)
 
-    parent_external_id = str(student.parent_id) if student.parent_id else None
+    parent_external_id = _parent_external_id(student.parent) if student.parent_id else None
     metadata = {
         "parentExternalId": parent_external_id,
         "parentUsername": student.parent.username if student.parent_id else None,
@@ -221,11 +235,15 @@ def sync_student(student) -> None:
             "firstName": student.user.first_name,
             "lastName": student.user.last_name,
             "gender": student.gender,
+            "studentNumber": student.student_id,
             "classExternalId": str(student.current_class_id) if student.current_class_id else None,
+            "className": str(student.current_class) if student.current_class_id else None,
             "parentExternalId": parent_external_id,
             "email": student.user.email or None,
             "phone": student.user.phone or None,
+            "dateOfBirth": _contract_datetime(student.date_of_birth) if student.date_of_birth else None,
             "status": "ACTIVE" if student.is_active else "INACTIVE",
+            "mustChangePassword": student.user.must_change_password,
         }),
     }
     _post_json("/api/integration/ingest/savanex/students", payload)
@@ -239,15 +257,18 @@ def sync_parent(parent) -> None:
 
     payload = {
         "organizationId": KCS_ORBIT_ORGANIZATION_ID,
-        "externalId": str(parent.pk),
+        "externalId": _parent_external_id(parent),
         "sourceApp": "SAVANEX",
         "occurredAt": _contract_datetime(getattr(parent, "updated_at", None)),
         "version": "1.0.0",
         "metadata": metadata,
         "payload": _compact({
+            "firstName": parent.first_name or None,
+            "lastName": parent.last_name or None,
             "fullName": parent.get_full_name() or parent.username,
             "email": parent.email or None,
             "phone": parent.phone or None,
+            "mustChangePassword": parent.must_change_password,
         }),
     }
     _post_json("/api/integration/ingest/savanex/parents", payload)
@@ -262,6 +283,8 @@ def sync_teacher(teacher) -> None:
         "version": "1.0.0",
         "payload": _compact({
             "fullName": teacher.user.get_full_name(),
+            "firstName": teacher.user.first_name or None,
+            "lastName": teacher.user.last_name or None,
             "email": teacher.user.email or None,
             "phone": teacher.user.phone or None,
             "employeeId": teacher.employee_id,
@@ -276,6 +299,7 @@ def sync_teacher(teacher) -> None:
             "salaryGrade": teacher.salary_grade or None,
             "payFrequency": teacher.pay_frequency or None,
             "subject": teacher.specialization or None,
+            "mustChangePassword": teacher.user.must_change_password,
         }),
     }
     _post_json("/api/integration/ingest/savanex/teachers", payload)
@@ -294,6 +318,7 @@ def sync_class(class_instance) -> None:
         "payload": _compact({
             "name": class_instance.name,
             "gradeLevel": class_instance.level.name,
+            "suffix": class_instance.name.replace(class_instance.level.name, "", 1).strip() if class_instance.name.startswith(class_instance.level.name) else None,
             "teacherExternalId": class_instance.class_teacher.teacher_id if class_instance.class_teacher else None,
         }),
     }
@@ -364,6 +389,6 @@ def delete_student(student) -> None:
 
 def delete_parent(parent) -> None:
     try:
-        delete_registry_entity("parent", str(parent.pk), "externalId")
+        delete_registry_entity("parent", _parent_external_id(parent), "externalId")
     except Exception as exc:  # pragma: no cover - defensive integration boundary
         logger.warning("Orbit parent delete failed for %s: %s", parent.pk, exc)
