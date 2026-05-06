@@ -2,7 +2,7 @@
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
-import { emptyIdentityCapture, IdentityCapturePanel, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
+import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
 import { studentsService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -288,6 +288,19 @@ const StudentsPage = () => {
             subjectName={`${form.parentFirstName} ${form.parentLastName}`}
             onChange={(identity) => setForm({ ...form, parentIdentity: identity })}
           />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div>
+              <p className="text-sm font-semibold text-slate-100">Aperçu de la carte biométrique du parent</p>
+              <p className="mt-1 text-xs text-slate-400">La photo et les empreintes capturées ici alimentent la carte KCS officielle.</p>
+            </div>
+            <KcsIdCard entity={{
+              full_name: `${form.parentFirstName} ${form.parentLastName}`.trim() || 'Parent KCS',
+              role: 'Parent',
+              phone: form.parentPhone,
+              email: form.parentEmail,
+              ...form.parentIdentity,
+            }} />
+          </div>
 
           <div className="space-y-3">
             {form.students.map((student, index) => (
@@ -324,6 +337,19 @@ const StudentsPage = () => {
                     onChange={(identity) => updateStudentDraft(index, 'identity', identity)}
                     compact
                   />
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">Aperçu de la carte biométrique élève</p>
+                    <p className="mt-1 text-xs text-slate-400">La carte utilise l'identité visuelle KCS, la photo et les empreintes reliées au lecteur.</p>
+                  </div>
+                  <KcsIdCard entity={{
+                    full_name: `${student.firstName} ${student.lastName}`.trim() || `Élève ${index + 1}`,
+                    role: 'Élève',
+                    class_name: [student.classLevel, student.classSuffix].filter(Boolean).join(' '),
+                    email: student.email,
+                    ...student.identity,
+                  }} />
                 </div>
               </div>
             ))}

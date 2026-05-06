@@ -2,7 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 import { students as demoStudents } from '../data/demoSchoolData';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 const DEMO_ACCESS_TOKEN = 'demo-access-token';
 
 const demoUser = {
@@ -94,15 +94,8 @@ api.interceptors.response.use(
 
 export const authService = {
   async login(username, password) {
-    try {
-      const res = await api.post('/auth/login/', { username, password });
-      return res.data;
-    } catch (error) {
-      if (username.trim().toLowerCase() === 'admin' && password.trim() === 'admin123') {
-        return this.demoLogin();
-      }
-      throw error;
-    }
+    const res = await api.post('/auth/login/', { username, password });
+    return res.data;
   },
   async demoLogin() {
     return {
@@ -152,7 +145,8 @@ export const studentsService = {
 
   async registerFamily(data) {
     if (isDemoSession()) {
-      throw new Error("L'enregistrement des familles est désactivé en mode démo.");
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour enregistrer des familles.");
     }
 
     const res = await api.post('/students/family-registration/', data);
@@ -187,7 +181,8 @@ export const teachersService = {
 
   async create(data) {
     if (isDemoSession()) {
-      throw new Error("L'enregistrement des employés est désactivé en mode démo.");
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour enregistrer des employés.");
     }
 
     const res = await api.post('/teachers/', data);

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
-import { emptyIdentityCapture, IdentityCapturePanel, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
+import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
 import { teachersService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -238,6 +238,22 @@ const TeachersPage = () => {
             subjectName={`${form.firstName} ${form.lastName}`}
             onChange={(identity) => updateForm('identity', identity)}
           />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+            <div>
+              <p className="text-sm font-semibold text-slate-100">Aperçu de la carte biométrique employé</p>
+              <p className="mt-1 text-xs text-slate-400">La carte KCS reprend le logo de l'école, la photo, le poste et les empreintes liées au lecteur.</p>
+            </div>
+            <KcsIdCard entity={{
+              full_name: `${form.firstName} ${form.lastName}`.trim() || 'Employé KCS',
+              role: form.employeeType === 'teacher' ? 'Enseignant' : 'Employé',
+              employee_id: form.teacherId || 'Auto',
+              department: form.department,
+              job_title: form.jobTitle,
+              email: form.email || form.workEmail,
+              phone: form.phone,
+              ...form.identity,
+            }} />
+          </div>
 
           {feedback ? <p className="text-sm text-emerald-300">{feedback}</p> : null}
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}

@@ -53,7 +53,7 @@ const LoginPage = () => {
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
           <div className="rounded-xl border border-kcs-blue/25 bg-kcs-blue/10 px-3 py-2 text-left text-xs text-slate-300">
-            <p className="font-semibold text-sky-200">Mode demo</p>
+            <p className="font-semibold text-sky-200">Connexion réelle locale</p>
             <p className="mt-1">Identifiant: <span className="font-mono text-slate-100">admin</span></p>
             <p>Mot de passe: <span className="font-mono text-slate-100">admin123</span></p>
           </div>
@@ -95,7 +95,7 @@ const LoginPage = () => {
             disabled={loading}
             className="w-full rounded-xl border border-github-border bg-slate-900/55 px-4 py-2 font-semibold text-slate-100 transition hover:border-kcs-blue/50 hover:text-sky-200 disabled:opacity-50"
           >
-            Entrer en demo
+            Entrer en démo sans enregistrement
           </button>
         </form>
       </div>
