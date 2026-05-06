@@ -353,3 +353,17 @@ def delete_registry_entity(entity_type: str, identifier: str, identifier_type: s
         "DELETE",
         f"/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
     )
+
+
+def delete_student(student) -> None:
+    try:
+        delete_registry_entity("student", student.student_id, "externalId")
+    except Exception as exc:  # pragma: no cover - defensive integration boundary
+        logger.warning("Orbit student delete failed for %s: %s", student.student_id, exc)
+
+
+def delete_parent(parent) -> None:
+    try:
+        delete_registry_entity("parent", str(parent.pk), "externalId")
+    except Exception as exc:  # pragma: no cover - defensive integration boundary
+        logger.warning("Orbit parent delete failed for %s: %s", parent.pk, exc)

@@ -1,8 +1,9 @@
+from django.db import transaction
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
-from apps.integration.orbit import sync_parent
+from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student
 from .models import User
 from .serializers import (
     CustomTokenObtainPairSerializer,
@@ -68,8 +69,51 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         user = self.get_object()
+
+        if user.role == User.ROLE_PARENT:
+            children = list(user.children.select_related('user', 'parent'))
+            active_children = [child for child in children if child.is_active]
+
+            with transaction.atomic():
+                for child in children:
+                    if child.parent_id == user.pk:
+                        child.parent = None
+                        child.save(update_fields=['parent'])
+
+                user.is_active = False
+                user.save(update_fields=['is_active'])
+
+                def _sync_parent_deactivation():
+                    for child in active_children:
+                        sync_student(child)
+                    delete_parent(user)
+
+                transaction.on_commit(_sync_parent_deactivation)
+
+            return Response({'detail': 'User deactivated.'}, status=status.HTTP_200_OK)
+
+        if user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
+            student = user.student_profile
+            parent = student.parent
+
+            with transaction.atomic():
+                user.is_active = False
+                user.save(update_fields=['is_active'])
+
+                student.is_active = False
+                student.save(update_fields=['is_active'])
+
+                def _sync_student_deactivation():
+                    delete_student(student)
+                    if parent is not None:
+                        sync_parent(parent)
+
+                transaction.on_commit(_sync_student_deactivation)
+
+            return Response({'detail': 'User deactivated.'}, status=status.HTTP_200_OK)
+
         user.is_active = False
-        user.save()
+        user.save(update_fields=['is_active'])
         return Response({'detail': 'User deactivated.'}, status=status.HTTP_200_OK)
 
 

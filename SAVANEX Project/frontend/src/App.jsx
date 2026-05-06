@@ -1,4 +1,4 @@
-﻿import React from 'react';
+﻿import React, { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/auth/LoginPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
@@ -8,6 +8,7 @@ import ParentsPage from './pages/parents/ParentsPage';
 import TeachersPage from './pages/teachers/TeachersPage';
 import TimetablePage from './pages/timetable/TimetablePage';
 import CommunicationPage from './pages/communication/CommunicationPage';
+import { applyFontTheme, getStoredFontTheme } from './constants/fontThemes';
 import { useAuthStore } from './store/authStore';
 
 const ProtectedRoute = ({ children }) => {
@@ -18,6 +19,10 @@ const ProtectedRoute = ({ children }) => {
 
 const App = () => {
   const token = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    applyFontTheme(getStoredFontTheme());
+  }, []);
 
   return (
     <Routes>

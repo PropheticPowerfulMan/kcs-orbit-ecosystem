@@ -438,6 +438,7 @@ Write-Host "EduSync AI API:      http://localhost:$eduSyncApiPort" -ForegroundCo
 Write-Host 'EduSync AI frontend: http://localhost:5175/' -ForegroundColor Yellow
 Write-Host 'SAVANEX API:         http://localhost:8001/' -ForegroundColor Yellow
 Write-Host 'SAVANEX frontend:    http://localhost:3000/Syst-me-de-gestion-scolaire/' -ForegroundColor Yellow
+Write-Host "Orbit organizationId: $orbitOrganizationId" -ForegroundColor Yellow
 Write-Host ''
 Write-Host 'Useful switches:' -ForegroundColor Cyan
 Write-Host '  -SkipDatabasePreparation : relaunch services without Prisma setup' -ForegroundColor White

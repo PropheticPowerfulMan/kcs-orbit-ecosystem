@@ -38,6 +38,13 @@ export function createApp() {
     });
   });
 
+  app.get("/health", (_req, res) => {
+    res.json({
+      ok: true,
+      service: "kcs-orbit-api"
+    });
+  });
+
   app.use("/api/auth", authRoutes);
   app.use("/api", coreRoutes);
   app.use("/api/integration", integrationRoutes);

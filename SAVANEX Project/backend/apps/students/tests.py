@@ -2,11 +2,14 @@ from datetime import date
 from unittest.mock import patch
 
 from django.test import TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.integration.orbit import sync_parent, sync_student
 from apps.students.models import Student
 from apps.students.serializers import FamilyRegistrationSerializer
+from apps.students.views import StudentDetailView
 from apps.users.models import User
+from apps.users.views import UserDetailView
 
 
 class FamilyRegistrationSerializerTests(TestCase):
@@ -111,3 +114,94 @@ class OrbitSyncPayloadTests(TestCase):
         self.assertNotIn("classExternalId", student_payload["payload"])
         self.assertNotIn("phone", student_payload["payload"])
         self.assertEqual(student_payload["payload"]["parentExternalId"], str(parent.pk))
+
+
+class DeactivationSyncTests(TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.admin = User.objects.create_user(
+            username="admin-sync",
+            email="admin.sync@example.com",
+            password="AdminPass123!",
+            first_name="Admin",
+            last_name="Sync",
+            role=User.ROLE_ADMIN,
+        )
+
+    @patch("apps.students.views.sync_parent")
+    @patch("apps.students.views.delete_student")
+    def test_student_destroy_removes_orbit_student_and_refreshes_parent(self, mock_delete_student, mock_sync_parent):
+        parent = User.objects.create_user(
+            username="parent-destroy",
+            email="parent.destroy@example.com",
+            password="ParentPass123!",
+            first_name="Mireille",
+            last_name="Kasongo",
+            role=User.ROLE_PARENT,
+        )
+        student_user = User.objects.create_user(
+            username="student-destroy",
+            email="student.destroy@example.com",
+            password="StudentPass123!",
+            first_name="Nadia",
+            last_name="Kasongo",
+            role=User.ROLE_STUDENT,
+        )
+        student = Student.objects.create(
+            user=student_user,
+            student_id="STU-DELETE-001",
+            date_of_birth=date(2014, 5, 12),
+            gender="F",
+            parent=parent,
+        )
+
+        request = self.factory.delete(f"/api/students/{student.pk}/")
+        force_authenticate(request, user=self.admin)
+        response = StudentDetailView.as_view()(request, pk=student.pk)
+
+        self.assertEqual(response.status_code, 200)
+        student.refresh_from_db()
+        student_user.refresh_from_db()
+        self.assertFalse(student.is_active)
+        self.assertFalse(student_user.is_active)
+        mock_delete_student.assert_called_once_with(student)
+        mock_sync_parent.assert_called_once_with(parent)
+
+    @patch("apps.users.views.sync_student")
+    @patch("apps.users.views.delete_parent")
+    def test_parent_destroy_detaches_active_children_and_removes_orbit_parent(self, mock_delete_parent, mock_sync_student):
+        parent = User.objects.create_user(
+            username="parent-detach",
+            email="parent.detach@example.com",
+            password="ParentPass123!",
+            first_name="Patrick",
+            last_name="Kalonji",
+            role=User.ROLE_PARENT,
+        )
+        child_user = User.objects.create_user(
+            username="child-detach",
+            email="child.detach@example.com",
+            password="StudentPass123!",
+            first_name="Nathan",
+            last_name="Kalonji",
+            role=User.ROLE_STUDENT,
+        )
+        child = Student.objects.create(
+            user=child_user,
+            student_id="STU-DETACH-001",
+            date_of_birth=date(2013, 8, 4),
+            gender="M",
+            parent=parent,
+        )
+
+        request = self.factory.delete(f"/api/users/{parent.pk}/")
+        force_authenticate(request, user=self.admin)
+        response = UserDetailView.as_view()(request, pk=parent.pk)
+
+        self.assertEqual(response.status_code, 200)
+        parent.refresh_from_db()
+        child.refresh_from_db()
+        self.assertFalse(parent.is_active)
+        self.assertIsNone(child.parent)
+        mock_sync_student.assert_called_once_with(child)
+        mock_delete_parent.assert_called_once_with(parent)

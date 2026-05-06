@@ -138,6 +138,10 @@ export default function DashboardPanel() {
         setAnalytics(null);
       }
     } catch (err) {
+      if (err.status === 401) {
+        logout();
+        return;
+      }
       setError(err.message);
     }
   };
@@ -190,12 +194,18 @@ export default function DashboardPanel() {
       ]);
     } catch (err) {
       setError(err.message);
+      if (err.status === 401) {
+        logout();
+      }
       setChatMessages((current) => [
         ...current,
         {
           id: `error-${Date.now()}`,
           role: "assistant",
-          text: "I could not reach the AI service. Please make sure the backend is running.",
+          text:
+            err.status === 401
+              ? "Your session expired. Sign in again to continue using EduSync AI."
+              : err.message,
           intent: "error",
           confidence: 0,
           actions: [],

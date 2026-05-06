@@ -150,6 +150,16 @@ function demoResponse(path, method, body) {
     };
     const intents = [
       {
+        intent: "finance_query",
+        terms: ["paye", "payes", "payee", "paiement", "frais", "solde", "scolarite", "paid", "payment", "fees", "balance"],
+        response: isFrench
+          ? `Tu demandes une liste financiere: les eleves qui ont paye.\n\nCe n'est pas une annonce. Il faut interroger le module paiement/frais et retourner un tableau.\n\nColonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.\nFiltres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.\n\nAction suivante: ouvre EduPay ou Finance SAVANEX, filtre statut Paye, puis exporte la liste.`
+          : `You are asking for a finance list: students who have paid.\n\nThis is not an announcement. The assistant should query the payments/fees module and return a table.\n\nColumns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nUseful filters: academic year, term, class, status Paid/Partial/Unpaid.`,
+        actions: isFrench
+          ? ["ouvrir_module_finance", "filtrer_eleves_payes", "exporter_liste_paiements"]
+          : ["open_finance_module", "filter_paid_students", "export_payment_list"],
+      },
+      {
         intent: "announcement_request",
         terms: ["announce", "announcement", "annonce", "annoncer", "diffuser", "message", "teachers", "enseignants"],
         response: isFrench
@@ -242,14 +252,23 @@ export async function apiRequest(path, method = "GET", body, token) {
   }
 
   if (!response) {
-    throw new Error(
+    const error = new Error(
       "Unable to reach the API. Start the local backend or configure VITE_API_URL in production."
     );
+    error.status = 0;
+    throw error;
   }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API request failed on ${lastBase}`);
+    const isUnauthorized = response.status === 401;
+    const message = isUnauthorized
+      ? "Session expired. Please sign in again."
+      : errorData.detail || `API request failed on ${lastBase}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.detail = errorData.detail;
+    throw error;
   }
 
   return response.json();

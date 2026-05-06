@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bell, PanelLeft, PanelLeftClose, LogOut, Menu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import FontThemeSelector from '../ui/FontThemeSelector';
 import LanguageToggle from '../ui/LanguageToggle';
 import { useAuthStore } from '../../store/authStore';
 import SchoolLogo from '../ui/SchoolLogo';
@@ -38,6 +39,7 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
         >
           {isSidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
         </button>
+        <FontThemeSelector />
         <LanguageToggle />
         <button
           className="hidden rounded-xl border border-github-border bg-slate-900/45 p-2 text-slate-300 backdrop-blur hover:border-kcs-blue/50 hover:text-sky-300 sm:block"

@@ -24,12 +24,22 @@ class NLPEngine:
                 keywords=(
                     "announce", "announcement", "annonce", "annoncer", "communique",
                     "broadcast", "diffuser", "message", "inform", "informer",
-                    "notify", "notifier", "publier", "parents", "teachers",
-                    "enseignants", "professeurs", "staff", "personnel", "students",
-                    "eleves", "urgent",
+                    "notify", "notifier", "publier", "urgent",
                 ),
                 actions_en=("draft_announcement", "choose_audience", "set_priority", "schedule_message"),
                 actions_fr=("rediger_annonce", "choisir_audience", "definir_priorite", "programmer_message"),
+            ),
+            "finance_query": IntentDefinition(
+                keywords=(
+                    "payment", "payments", "paid", "unpaid", "fees", "fee", "balance",
+                    "invoice", "invoices", "receipt", "receipts", "tuition", "payer",
+                    "paye", "payes", "payee", "payees", "paiement", "paiements",
+                    "impaye", "impayes", "frais", "solde", "facture", "factures",
+                    "recu", "recus", "scolarite", "finance", "finances", "eleves",
+                    "students", "liste", "quels", "lesquels",
+                ),
+                actions_en=("open_finance_module", "filter_paid_students", "export_payment_list", "check_balances"),
+                actions_fr=("ouvrir_module_finance", "filtrer_eleves_payes", "exporter_liste_paiements", "verifier_soldes"),
             ),
             "leave_request": IntentDefinition(
                 keywords=(
@@ -101,6 +111,8 @@ class NLPEngine:
             for keyword in definition.keywords:
                 if self._contains_term(text, keyword):
                     score += 1.0 if " " not in keyword else 2.0
+            if intent == "finance_query" and self._is_payment_question(text):
+                score += 4.0
             if self._has_action_verb(text) and score:
                 score += 0.7
             scores[intent] = score
@@ -156,6 +168,20 @@ class NLPEngine:
                 "Informations a completer: date de debut, date de fin, motif, remplacant ou plan de passation, approbateur.",
                 "Proposition: statut initial Pending, priorite normale sauf urgence medicale, notification a l'administration.",
                 "Action suivante: ouvre Actions > Internal workflow avec type leave_request.",
+            ])
+
+        if intent == "finance_query":
+            paid_status = details.get("payment_status", "payes")
+            audience = self._localized_audience(details.get("audience", "students"), "fr")
+            return "\n".join([
+                f"Tu demandes une liste financiere: les {audience} qui ont ete {paid_status}.",
+                "",
+                "Reponse correcte: ce n'est pas une annonce a rediger. Il faut interroger le module paiement/frais, puis retourner un tableau.",
+                "",
+                "Colonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.",
+                "Filtres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.",
+                "",
+                "Action suivante: ouvre EduPay ou le module Finance SAVANEX, filtre le statut Paye, puis exporte la liste. Si tu me donnes la classe ou la periode, je prepare le filtre exact.",
             ])
 
         if intent == "report_request":
@@ -231,6 +257,20 @@ class NLPEngine:
                 "Next step: open Actions > Internal workflow with type leave_request.",
             ])
 
+        if intent == "finance_query":
+            paid_status = details.get("payment_status", "paid")
+            audience = details.get("audience", "students")
+            return "\n".join([
+                f"You are asking for a finance list: {audience} marked as {paid_status}.",
+                "",
+                "Correct handling: this is not an announcement. The assistant should query the payments/fees module and return a table.",
+                "",
+                "Columns to show: student name, class, parent, amount paid, remaining balance, last payment date, status.",
+                "Useful filters: academic year, term, class, status Paid/Partial/Unpaid.",
+                "",
+                "Next step: open EduPay or the SAVANEX Finance module, filter status Paid, then export the list. If you provide class or period, I can prepare the exact filter.",
+            ])
+
         if intent == "report_request":
             department = details.get("department", "the relevant department")
             period = details.get("date", "the requested period")
@@ -294,6 +334,22 @@ class NLPEngine:
         )
         return any(self._contains_term(text, verb) for verb in verbs)
 
+    def _is_payment_question(self, text: str) -> bool:
+        payment_terms = (
+            "paye", "payes", "payee", "payees", "paiement", "paiements",
+            "impaye", "impayes", "frais", "solde", "facture", "scolarite",
+            "paid", "unpaid", "payment", "payments", "fees", "balance", "tuition",
+        )
+        student_terms = ("eleve", "eleves", "student", "students", "parent", "parents")
+        question_terms = ("qui", "quels", "quelles", "liste", "voir", "affiche", "show", "list", "which", "who")
+        return (
+            any(self._contains_term(text, term) for term in payment_terms)
+            and (
+                any(self._contains_term(text, term) for term in student_terms)
+                or any(self._contains_term(text, term) for term in question_terms)
+            )
+        )
+
     def _detect_language(self, text: str) -> str:
         french_markers = (
             "je ", "tu ", "nous ", "vous ", "pour ", "avec ", "demande",
@@ -311,6 +367,13 @@ class NLPEngine:
             details["priority"] = "urgent"
         elif any(term in text for term in ("info", "information", "normal")):
             details["priority"] = "normal"
+
+        if any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid", "solde", "balance")):
+            details["payment_status"] = "impayes"
+        elif any(self._contains_term(text, term) for term in ("partiel", "partial")):
+            details["payment_status"] = "partiellement payes"
+        elif any(self._contains_term(text, term) for term in ("paye", "payes", "payee", "payees", "paid")):
+            details["payment_status"] = "payes"
 
         audience_terms = {
             "teachers": ("teachers", "teacher", "enseignants", "professeurs"),
@@ -339,6 +402,25 @@ class NLPEngine:
         cleaned = re.sub(r"\s+", " ", (message or "").strip())
         cleaned = cleaned.strip(" .")
         return cleaned[:1].lower() + cleaned[1:] if cleaned else "la demande doit etre precisee"
+
+    def _localized_audience(self, audience: str, language: str) -> str:
+        labels = {
+            "fr": {
+                "teachers": "enseignants",
+                "staff": "personnel",
+                "parents": "parents",
+                "students": "eleves",
+                "whole school": "toute l'ecole",
+            },
+            "en": {
+                "teachers": "teachers",
+                "staff": "staff",
+                "parents": "parents",
+                "students": "students",
+                "whole school": "the whole school",
+            },
+        }
+        return labels.get(language, labels["en"]).get(audience, audience)
 
     def _topic(self, message: str, fallback: str) -> str:
         cleaned = re.sub(r"\s+", " ", (message or "").strip(" ."))

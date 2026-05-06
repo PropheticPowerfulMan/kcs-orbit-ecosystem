@@ -1,6 +1,7 @@
+from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from apps.integration.orbit import sync_parent, sync_student
+from apps.integration.orbit import delete_student, sync_parent, sync_student
 from .models import Student
 from .serializers import FamilyRegistrationSerializer, StudentSerializer, StudentCreateSerializer, StudentDetailSerializer
 from apps.users.permissions import IsAdminUser, IsTeacherOrAdmin, IsOwnerOrAdmin
@@ -52,8 +53,20 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         student = self.get_object()
-        student.is_active = False
-        student.user.is_active = False
-        student.user.save()
-        student.save()
+        parent = student.parent
+
+        with transaction.atomic():
+            student.user.is_active = False
+            student.user.save(update_fields=['is_active'])
+
+            student.is_active = False
+            student.save(update_fields=['is_active'])
+
+            def _sync_deactivation():
+                delete_student(student)
+                if parent is not None:
+                    sync_parent(parent)
+
+            transaction.on_commit(_sync_deactivation)
+
         return Response({'detail': 'Student deactivated.'}, status=status.HTTP_200_OK)

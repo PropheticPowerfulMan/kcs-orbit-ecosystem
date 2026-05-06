@@ -128,6 +128,52 @@ class FamilyRegistrationSerializer(serializers.Serializer):
     parent = FamilyParentSerializer()
     students = FamilyStudentSerializer(many=True, allow_empty=False)
 
+    def validate(self, attrs):
+        parent_data = attrs['parent']
+        students_data = attrs['students']
+
+        parent_email = (parent_data.get('email') or '').strip().lower()
+        parent_phone = (parent_data.get('phone') or '').strip()
+
+        duplicate_student_emails = set()
+        seen_student_emails = set()
+
+        for student_data in students_data:
+            email = (student_data.get('user', {}).get('email') or '').strip().lower()
+            if not email:
+                continue
+            if email in seen_student_emails:
+                duplicate_student_emails.add(email)
+            seen_student_emails.add(email)
+
+        if duplicate_student_emails:
+            raise serializers.ValidationError({
+                'students': f"Duplicate student emails in request: {', '.join(sorted(duplicate_student_emails))}."
+            })
+
+        parent_conflict = None
+        if parent_email:
+            parent_conflict = User.objects.filter(role=User.ROLE_PARENT, email__iexact=parent_email).first()
+        if not parent_conflict and parent_phone:
+            parent_conflict = User.objects.filter(role=User.ROLE_PARENT, phone=parent_phone).first()
+
+        if parent_conflict:
+            raise serializers.ValidationError({
+                'parent': 'A parent with the same email or phone already exists.'
+            })
+
+        existing_student_emails = []
+        for student_email in sorted(seen_student_emails):
+            if User.objects.filter(role=User.ROLE_STUDENT, email__iexact=student_email).exists():
+                existing_student_emails.append(student_email)
+
+        if existing_student_emails:
+            raise serializers.ValidationError({
+                'students': f"Student accounts already exist for: {', '.join(existing_student_emails)}."
+            })
+
+        return attrs
+
     def create(self, validated_data):
         parent_data = validated_data['parent']
         students_data = validated_data['students']

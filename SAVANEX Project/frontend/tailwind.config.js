@@ -16,8 +16,9 @@ export default {
         'github-border': 'rgba(139, 148, 158, 0.24)',
       },
       fontFamily: {
-        display: ['Poppins', 'sans-serif'],
-        body: ['Manrope', 'sans-serif'],
+        display: ['var(--font-display)', 'sans-serif'],
+        body: ['var(--font-body)', 'sans-serif'],
+        metric: ['var(--font-metric)', 'monospace'],
       },
       boxShadow: {
         neon: '0 0 0 1px rgba(20,184,166,0.25), 0 12px 35px rgba(20,184,166,0.18)',
