@@ -382,6 +382,24 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
     return res.status(404).json({ message: "Entity not found for this application" });
   }
 
+  if (entityType === "parent") {
+    const childCount = await prisma.student.count({
+      where: {
+        organizationId: query.organizationId,
+        parentId: target.orbitId,
+      },
+    });
+
+    if (childCount > 0) {
+      return res.status(409).json({
+        message: "Parent cannot be deleted while students are still attached",
+        entityType,
+        orbitId: target.orbitId,
+        childCount,
+      });
+    }
+  }
+
   const links = await prisma.externalLink.findMany({
     where: {
       organizationId: query.organizationId,

@@ -567,6 +567,24 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
   const classId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "class", classExternalId);
   const parentId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "parent", parentExternalId);
 
+  if (parentExternalId && !parentId) {
+    return res.status(409).json({
+      message: "Student cannot be synced before its parent exists in Orbit",
+      entityType: "student",
+      externalId,
+      parentExternalId,
+    });
+  }
+
+  if (classExternalId && !classId) {
+    return res.status(409).json({
+      message: "Student cannot be linked to a class that does not exist in Orbit",
+      entityType: "student",
+      externalId,
+      classExternalId,
+    });
+  }
+
   const existingLink = await prisma.externalLink.findUnique({
     where: {
       organizationId_appSlug_entityType_externalId: {

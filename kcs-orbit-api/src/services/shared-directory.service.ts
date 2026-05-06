@@ -32,6 +32,8 @@ export type SharedDirectoryParent = {
   firstName: string;
   middleName: string | null;
   lastName: string;
+  phone: string | null;
+  email: string | null;
   organizationId: string | null;
   studentIds: string[];
   externalIds: ExternalIdEntry[];
@@ -137,6 +139,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       select: {
         id: true,
         fullName: true,
+        phone: true,
+        email: true,
         organizationId: true,
         students: {
           select: { id: true },
@@ -201,6 +205,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName: parts.firstName,
         middleName: parts.middleName,
         lastName: parts.lastName,
+        phone: parent.phone,
+        email: parent.email,
         organizationId: parent.organizationId,
         studentIds: parent.students.map((student) => student.id),
         externalIds: parentExternalIds.get(parent.id) || [],
