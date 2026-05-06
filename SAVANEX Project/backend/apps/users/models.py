@@ -4,19 +4,26 @@ Users app — Custom user model with role-based access control.
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from uuid import uuid4
+
+
+def generate_kcs_card_id():
+    return f"KCS-{uuid4().hex[:12].upper()}"
 
 
 class User(AbstractUser):
     """
-    Extended user model supporting Admin, Teacher, Student, and Parent roles.
+    Extended user model supporting Admin, Employee, Teacher, Student, and Parent roles.
     """
     ROLE_ADMIN = 'admin'
+    ROLE_EMPLOYEE = 'employee'
     ROLE_TEACHER = 'teacher'
     ROLE_STUDENT = 'student'
     ROLE_PARENT = 'parent'
 
     ROLE_CHOICES = [
         (ROLE_ADMIN, _('Admin')),
+        (ROLE_EMPLOYEE, _('Employee')),
         (ROLE_TEACHER, _('Teacher')),
         (ROLE_STUDENT, _('Student')),
         (ROLE_PARENT, _('Parent')),
@@ -39,6 +46,21 @@ class User(AbstractUser):
         blank=True,
         null=True,
         verbose_name=_('Avatar'),
+    )
+    photo_data = models.TextField(blank=True, verbose_name=_('Photo Data'))
+    photo_source = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=[('upload', _('Upload')), ('camera', _('Camera'))],
+        verbose_name=_('Photo Source'),
+    )
+    left_fingerprint_data = models.TextField(blank=True, verbose_name=_('Left Fingerprint Data'))
+    right_fingerprint_data = models.TextField(blank=True, verbose_name=_('Right Fingerprint Data'))
+    kcs_card_id = models.CharField(
+        max_length=24,
+        unique=True,
+        default=generate_kcs_card_id,
+        verbose_name=_('KCS Card ID'),
     )
     language = models.CharField(
         max_length=5,
@@ -65,6 +87,10 @@ class User(AbstractUser):
     @property
     def is_teacher(self):
         return self.role == self.ROLE_TEACHER
+
+    @property
+    def is_employee(self):
+        return self.role in (self.ROLE_EMPLOYEE, self.ROLE_TEACHER)
 
     @property
     def is_student(self):

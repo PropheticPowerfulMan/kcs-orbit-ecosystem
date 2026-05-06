@@ -5,12 +5,21 @@ import { loadSharedDirectory } from "../services/shared-directory.service";
 function splitFullName(fullName: string) {
   const trimmed = fullName.trim();
   if (!trimmed) {
-    return { firstName: "", lastName: "" };
+    return { firstName: "", middleName: null as string | null, lastName: "" };
   }
 
   const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], middleName: null as string | null, lastName: "" };
+  }
+
+  if (parts.length === 2) {
+    return { firstName: parts[0], middleName: null as string | null, lastName: parts[1] };
+  }
+
   return {
-    firstName: parts.slice(0, -1).join(" ") || trimmed,
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(" "),
     lastName: parts.slice(-1).join(" "),
   };
 }
@@ -72,7 +81,7 @@ export async function readKcsNexusFamilies(req: Request, res: Response) {
       id: string;
       externalId?: string;
       relation: string;
-      parent: { firstName: string; lastName: string; fullName: string; email?: string | null; phone?: string | null };
+      parent: { firstName: string; middleName?: string | null; lastName: string; fullName: string; email?: string | null; phone?: string | null };
     }>;
     children: Array<{
       id: string;
@@ -81,7 +90,7 @@ export async function readKcsNexusFamilies(req: Request, res: Response) {
       grade: string;
       section: string;
       status: string;
-      student: { firstName: string; lastName: string; fullName: string };
+      student: { firstName: string; middleName?: string | null; lastName: string; fullName: string };
     }>;
   }>();
 
@@ -103,6 +112,7 @@ export async function readKcsNexusFamilies(req: Request, res: Response) {
             relation: "Parent",
             parent: {
               firstName: splitParentName?.firstName || student.parent.fullName,
+              middleName: splitParentName?.middleName || null,
               lastName: splitParentName?.lastName || "",
               fullName: student.parent.fullName,
               email: student.parent.email,
@@ -123,6 +133,7 @@ export async function readKcsNexusFamilies(req: Request, res: Response) {
       status: "ACTIVE",
       student: {
         firstName: student.firstName,
+        middleName: null,
         lastName: student.lastName,
         fullName: `${student.firstName} ${student.lastName}`.trim(),
       },

@@ -15,5 +15,7 @@ build
 **/.pytest_cache
 **/__pycache__
 *.log
+var/logs/
+**/var/
 *.sqlite3
 *.sqlite3-*

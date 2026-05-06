@@ -9,7 +9,7 @@
     "dashboard": "Tableau de bord",
     "students": "Eleves",
     "parents": "Parents",
-    "teachers": "Enseignants",
+    "teachers": "Employes",
     "timetable": "Emploi du temps",
     "communication": "Communication",
     "analytics": "Analytique"
@@ -26,7 +26,7 @@
     "overview": "Vue d'ensemble de la plateforme",
     "subtitle": "Surveillez les operations cles en temps reel.",
     "students": "Eleves",
-    "teachers": "Enseignants",
+    "teachers": "Employes",
     "classes": "Classes",
     "attendanceRate": "Presence (30j)",
     "avgGrade": "Moyenne"

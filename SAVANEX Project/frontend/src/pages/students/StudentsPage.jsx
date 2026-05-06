@@ -2,6 +2,7 @@
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
+import { emptyIdentityCapture, IdentityCapturePanel, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
 import { studentsService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +16,17 @@ const normalizeLabel = (value, fallback) => {
 
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
+const createStudentDraft = () => ({
+  firstName: '',
+  lastName: '',
+  email: '',
+  password: '',
+  dateOfBirth: '',
+  gender: 'F',
+  address: '',
+  identity: { ...emptyIdentityCapture },
+});
+
 const StudentsPage = () => {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -25,22 +37,14 @@ const StudentsPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
+  const [selectedCard, setSelectedCard] = useState(null);
   const [form, setForm] = useState({
     parentFirstName: '',
     parentLastName: '',
     parentEmail: '',
     parentPhone: '',
-    students: [
-      {
-        firstName: '',
-        lastName: '',
-        email: '',
-        password: '',
-        dateOfBirth: '',
-        gender: 'F',
-        address: '',
-      },
-    ],
+    parentIdentity: { ...emptyIdentityCapture },
+    students: [createStudentDraft()],
   });
 
   useEffect(() => {
@@ -147,7 +151,10 @@ const StudentsPage = () => {
     { key: 'class_name', label: 'Classe', render: (value) => value || 'Non assignee' },
     { key: 'parent_name', label: 'Parent responsable', render: (value) => value || 'Aucun parent lie' },
     { key: 'email', label: 'Email', render: (value) => value || 'Non renseigne' },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'A generer' },
+    { key: 'has_biometrics', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Pret' : 'A completer') },
     { key: 'is_active', label: 'Statut', render: (value) => value ? 'Actif' : 'Inactif' },
+    { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, role: 'Eleve' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
 
   const updateStudentDraft = (index, field, value) => {
@@ -162,7 +169,7 @@ const StudentsPage = () => {
   const addStudentDraft = () => {
     setForm((current) => ({
       ...current,
-      students: [...current.students, { firstName: '', lastName: '', email: '', password: '', dateOfBirth: '', gender: 'F', address: '' }],
+      students: [...current.students, createStudentDraft()],
     }));
   };
 
@@ -187,6 +194,7 @@ const StudentsPage = () => {
           email: form.parentEmail,
           password: 'ParentPortal123!',
           phone: form.parentPhone,
+          ...form.parentIdentity,
         },
         students: form.students.map((student) => ({
           user: {
@@ -194,6 +202,7 @@ const StudentsPage = () => {
             last_name: student.lastName,
             email: student.email,
             password: student.password,
+            ...student.identity,
           },
           date_of_birth: student.dateOfBirth,
           gender: student.gender,
@@ -210,7 +219,8 @@ const StudentsPage = () => {
         parentLastName: '',
         parentEmail: '',
         parentPhone: '',
-        students: [{ firstName: '', lastName: '', email: '', password: '', dateOfBirth: '', gender: 'F', address: '' }],
+        parentIdentity: { ...emptyIdentityCapture },
+        students: [createStudentDraft()],
       });
     } catch (submissionError) {
       setError(submissionError?.response?.data?.detail || submissionError?.message || "Impossible d'enregistrer cette famille.");
@@ -246,6 +256,12 @@ const StudentsPage = () => {
             <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Telephone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
           </div>
 
+          <IdentityCapturePanel
+            value={form.parentIdentity}
+            subjectName={`${form.parentFirstName} ${form.parentLastName}`}
+            onChange={(identity) => setForm({ ...form, parentIdentity: identity })}
+          />
+
           <div className="space-y-3">
             {form.students.map((student, index) => (
               <div key={`student-draft-${index}`} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
@@ -267,6 +283,14 @@ const StudentsPage = () => {
                     <option value="O">Autre</option>
                   </select>
                   <input value={student.address} onChange={(event) => updateStudentDraft(index, 'address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2" />
+                </div>
+                <div className="mt-4">
+                  <IdentityCapturePanel
+                    value={student.identity}
+                    subjectName={`${student.firstName} ${student.lastName}`}
+                    onChange={(identity) => updateStudentDraft(index, 'identity', identity)}
+                    compact
+                  />
                 </div>
               </div>
             ))}
@@ -311,6 +335,19 @@ const StudentsPage = () => {
       </div>
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des eleves...</p> : null}
       <DataTable columns={columns} data={filtered} />
+
+      {selectedCard ? (
+        <section className="mt-6 card p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Apercu de la carte eleve</h3>
+            </div>
+            <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
+          </div>
+          <PrintableKcsCard entity={selectedCard} />
+        </section>
+      ) : null}
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="card p-5">

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const TrimmedStringSchema = z.string().trim().min(1);
+
 export const AppSlugSchema = z.enum([
   "KCS_NEXUS",
   "EDUPAY",
@@ -27,15 +29,37 @@ export const IntegrationEnvelopeSchema = z.object({
   payload: z.record(z.unknown())
 });
 
+export const CanonicalIdentitySchema = z.object({
+  firstName: TrimmedStringSchema.optional(),
+  middleName: TrimmedStringSchema.optional(),
+  lastName: TrimmedStringSchema.optional(),
+  fullName: TrimmedStringSchema.optional()
+}).superRefine((value, ctx) => {
+  if (value.fullName) {
+    return;
+  }
+
+  if (!value.firstName || !value.lastName) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Either fullName or both firstName and lastName are required",
+    });
+  }
+});
+
 export const StudentPayloadSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  gender: z.string().min(1),
-  classExternalId: z.string().min(1).optional(),
-  parentExternalId: z.string().min(1).optional(),
+  firstName: TrimmedStringSchema,
+  middleName: TrimmedStringSchema.optional(),
+  lastName: TrimmedStringSchema,
+  gender: TrimmedStringSchema,
+  studentNumber: TrimmedStringSchema.optional(),
+  classExternalId: TrimmedStringSchema.optional(),
+  className: TrimmedStringSchema.optional(),
+  parentExternalId: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
-  phone: z.string().min(1).optional(),
-  status: z.string().min(1).optional()
+  phone: TrimmedStringSchema.optional(),
+  dateOfBirth: TrimmedStringSchema.optional(),
+  status: TrimmedStringSchema.optional()
 });
 
 export const ClassPayloadSchema = z.object({
@@ -45,16 +69,41 @@ export const ClassPayloadSchema = z.object({
 });
 
 export const ParentPayloadSchema = z.object({
-  fullName: z.string().min(1),
+  firstName: TrimmedStringSchema.optional(),
+  middleName: TrimmedStringSchema.optional(),
+  lastName: TrimmedStringSchema.optional(),
+  fullName: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
-  phone: z.string().min(1).optional()
+  phone: TrimmedStringSchema.optional()
+}).superRefine((value, ctx) => {
+  if (value.fullName || (value.firstName && value.lastName)) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "Parent payload requires fullName or firstName and lastName",
+  });
 });
 
 export const TeacherPayloadSchema = z.object({
-  fullName: z.string().min(1),
+  firstName: TrimmedStringSchema.optional(),
+  middleName: TrimmedStringSchema.optional(),
+  lastName: TrimmedStringSchema.optional(),
+  fullName: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
-  phone: z.string().min(1).optional(),
-  subject: z.string().min(1).optional()
+  phone: TrimmedStringSchema.optional(),
+  subject: TrimmedStringSchema.optional(),
+  subjects: z.array(TrimmedStringSchema).optional()
+}).superRefine((value, ctx) => {
+  if (value.fullName || (value.firstName && value.lastName)) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "Teacher payload requires fullName or firstName and lastName",
+  });
 });
 
 export const PaymentPayloadSchema = z.object({
@@ -132,6 +181,7 @@ export const AttendanceUpsertSchema = IntegrationEnvelopeSchema.extend({
 export type AppSlug = z.infer<typeof AppSlugSchema>;
 export type RoleAudience = z.infer<typeof RoleAudienceSchema>;
 export type IntegrationEnvelope = z.infer<typeof IntegrationEnvelopeSchema>;
+export type CanonicalIdentity = z.infer<typeof CanonicalIdentitySchema>;
 export type StudentUpsert = z.infer<typeof StudentUpsertSchema>;
 export type ClassUpsert = z.infer<typeof ClassUpsertSchema>;
 export type ParentUpsert = z.infer<typeof ParentUpsertSchema>;

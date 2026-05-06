@@ -4,8 +4,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $windowTitlePrefix = 'Ecosystem | '
-$servicePorts = @(3000, 4000, 4500, 5000, 5173, 5174, 5175, 8000, 8001)
+$servicePorts = @(3000, 4000, 4500, 5000, 5173, 5174, 5175, 8000, 8001, 8010, 8011, 8012)
 $stoppedItems = New-Object System.Collections.Generic.List[string]
 
 function Write-Step {
@@ -26,6 +27,64 @@ function Stop-TrackedWindowProcesses {
     }
     else {
       Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
+    }
+    $stoppedItems.Add($label) | Out-Null
+  }
+}
+
+function Get-ProtectedProcessIds {
+  $protected = New-Object System.Collections.Generic.HashSet[int]
+  $currentId = $PID
+  $protected.Add($currentId) | Out-Null
+
+  try {
+    $processLookup = @{}
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+      $processLookup[[int]$_.ProcessId] = $_
+    }
+
+    $cursor = $processLookup[$currentId]
+    while ($cursor -and $cursor.ParentProcessId) {
+      $parentId = [int]$cursor.ParentProcessId
+      if (-not $protected.Add($parentId)) {
+        break
+      }
+      $cursor = $processLookup[$parentId]
+    }
+  }
+  catch {
+    # If CIM is restricted, protecting the current process is still enough for port cleanup.
+  }
+
+  return $protected
+}
+
+function Stop-WorkspaceProcesses {
+  $protected = Get-ProtectedProcessIds
+  $repoPattern = "*$repoRoot*"
+  $candidateNames = @('node.exe', 'python.exe', 'powershell.exe', 'cmd.exe')
+
+  try {
+    $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+      $_.CommandLine -and
+      $_.CommandLine -like $repoPattern -and
+      $_.Name -in $candidateNames -and
+      -not $protected.Contains([int]$_.ProcessId)
+    }
+  }
+  catch {
+    return
+  }
+
+  foreach ($processInfo in $processes) {
+    $processId = [int]$processInfo.ProcessId
+    $label = "$($processInfo.Name) pid=$processId workspace"
+
+    if ($Force) {
+      Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+    }
+    else {
+      Stop-Process -Id $processId -ErrorAction SilentlyContinue
     }
     $stoppedItems.Add($label) | Out-Null
   }
@@ -66,6 +125,11 @@ Stop-TrackedWindowProcesses
 
 Start-Sleep -Milliseconds 300
 
+Write-Step 'Stopping remaining workspace dev processes'
+Stop-WorkspaceProcesses
+
+Start-Sleep -Milliseconds 300
+
 Write-Step 'Stopping any remaining listeners on ecosystem ports'
 Stop-ProcessesByPort
 
@@ -81,4 +145,4 @@ else {
 }
 
 Write-Host ''
-Write-Host 'Ports checked: 3000, 4000, 4500, 5000, 5173, 5174, 5175, 8000, 8001' -ForegroundColor Cyan
+Write-Host 'Ports checked: 3000, 4000, 4500, 5000, 5173, 5174, 5175, 8000, 8001, 8010, 8011, 8012' -ForegroundColor Cyan

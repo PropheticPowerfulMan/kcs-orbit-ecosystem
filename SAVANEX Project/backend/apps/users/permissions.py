@@ -14,14 +14,14 @@ class IsAdminUser(BasePermission):
 
 
 class IsTeacherOrAdmin(BasePermission):
-    """Allow access to teachers and admins."""
-    message = 'Teacher or Admin access required.'
+    """Allow access to employees, teachers and admins."""
+    message = 'Employee, Teacher or Admin access required.'
 
     def has_permission(self, request, view):
         return bool(
             request.user and
             request.user.is_authenticated and
-            request.user.role in ('teacher', 'admin')
+            request.user.role in ('employee', 'teacher', 'admin')
         )
 
 

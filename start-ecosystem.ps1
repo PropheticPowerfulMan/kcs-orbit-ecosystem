@@ -2,7 +2,10 @@ param(
   [switch]$SkipDatabasePreparation,
   [switch]$SkipInstall,
   [switch]$NoFrontends,
-  [switch]$OpenBrowser
+  [switch]$OpenBrowser,
+  [switch]$AllowEduPayDataLoss,
+  [switch]$Restart,
+  [switch]$NoWait
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,16 +25,33 @@ $eduSyncPythonPath = Join-Path $repoRoot 'EduSync AI\.venv\Scripts\python.exe'
 $savanexBackendPath = Join-Path $repoRoot 'SAVANEX Project\backend'
 $savanexFrontendPath = Join-Path $repoRoot 'SAVANEX Project\frontend'
 $savanexPythonPath = Join-Path $savanexBackendPath '.venv311\Scripts\python.exe'
+$logRoot = Join-Path $repoRoot 'var\logs'
 
-$orbitDatabaseUrl = 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
-$eduPayDatabaseUrl = 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'
-$orbitUrl = 'http://localhost:4500'
+function Get-ConfigValue {
+  param(
+    [string]$Name,
+    [string]$DefaultValue
+  )
+
+  $value = [Environment]::GetEnvironmentVariable($Name)
+  if ([string]::IsNullOrWhiteSpace($value)) {
+    return $DefaultValue
+  }
+
+  return $value
+}
+
+$orbitDatabaseUrl = Get-ConfigValue -Name 'ORBIT_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
+$eduPayDatabaseUrl = Get-ConfigValue -Name 'EDUPAY_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'
+$orbitUrl = Get-ConfigValue -Name 'KCS_ORBIT_API_URL' -DefaultValue 'http://localhost:4500'
+$eduSyncPreferredApiPort = [int](Get-ConfigValue -Name 'EDUSYNC_AI_API_PORT' -DefaultValue '8000')
+$eduSyncApiPort = $eduSyncPreferredApiPort
 
 $integrationKeys = @{
-  KcsNexus = 'kcs-nexus-dev-key'
-  EduPay = 'edupay-dev-key'
-  EduSyncAI = 'edusyncai-dev-key'
-  Savanex = 'savanex-dev-key'
+  KcsNexus = Get-ConfigValue -Name 'KCS_NEXUS_INTEGRATION_KEY' -DefaultValue 'kcs-nexus-dev-key'
+  EduPay = Get-ConfigValue -Name 'EDUPAY_INTEGRATION_KEY' -DefaultValue 'edupay-dev-key'
+  EduSyncAI = Get-ConfigValue -Name 'EDUSYNCAI_INTEGRATION_KEY' -DefaultValue 'edusyncai-dev-key'
+  Savanex = Get-ConfigValue -Name 'SAVANEX_INTEGRATION_KEY' -DefaultValue 'savanex-dev-key'
 }
 
 $frontendUrls = @(
@@ -45,6 +65,68 @@ function Write-Step {
   param([string]$Message)
 
   Write-Host "==> $Message" -ForegroundColor Cyan
+}
+
+function Test-PortOpen {
+  param(
+    [string]$HostName,
+    [int]$Port,
+    [int]$TimeoutMs = 700
+  )
+
+  $client = [System.Net.Sockets.TcpClient]::new()
+  try {
+    $connectTask = $client.ConnectAsync($HostName, $Port)
+    return $connectTask.Wait($TimeoutMs) -and $client.Connected
+  }
+  catch {
+    return $false
+  }
+  finally {
+    $client.Dispose()
+  }
+}
+
+function Wait-PortOpen {
+  param(
+    [string]$Name,
+    [int]$Port,
+    [int]$TimeoutSeconds = 45
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-PortOpen -HostName '127.0.0.1' -Port $Port) {
+      Write-Host "Ready $Name on port $Port" -ForegroundColor Green
+      return $true
+    }
+
+    Start-Sleep -Milliseconds 700
+  }
+
+  Write-Host "Not ready yet: $Name on port $Port" -ForegroundColor Yellow
+  return $false
+}
+
+function Resolve-PreferredPort {
+  param(
+    [string]$Name,
+    [int]$PreferredPort,
+    [int[]]$FallbackPorts
+  )
+
+  if (-not (Test-PortOpen -HostName '127.0.0.1' -Port $PreferredPort)) {
+    return $PreferredPort
+  }
+
+  foreach ($fallbackPort in $FallbackPorts) {
+    if (-not (Test-PortOpen -HostName '127.0.0.1' -Port $fallbackPort)) {
+      Write-Host "$Name port $PreferredPort is busy; using port $fallbackPort for this launch" -ForegroundColor Yellow
+      return $fallbackPort
+    }
+  }
+
+  throw "$Name cannot start: ports $PreferredPort, $($FallbackPorts -join ', ') are all busy."
 }
 
 function Assert-Command {
@@ -119,11 +201,23 @@ prisma.organization.findUnique({ where: { slug: "kcs-core" } })
 function Start-ServiceWindow {
   param(
     [string]$Title,
-    [string]$Command
+    [string]$Command,
+    [int]$Port,
+    [string]$LogName
   )
 
+  if (Test-PortOpen -HostName '127.0.0.1' -Port $Port) {
+    Write-Host "Already running $Title on port $Port" -ForegroundColor Yellow
+    return
+  }
+
   $windowTitle = "Ecosystem | $Title"
-  $fullCommand = "$host.UI.RawUI.WindowTitle = '$windowTitle'; $Command"
+  $logPath = Join-Path $logRoot $LogName
+  $fullCommand = (
+    "`$host.UI.RawUI.WindowTitle = '$windowTitle'; " +
+    "`$ErrorActionPreference = 'Continue'; " +
+    "$Command 2>&1 | Tee-Object -FilePath '$logPath' -Append"
+  )
 
   Start-Process powershell -ArgumentList @(
     '-NoExit',
@@ -134,6 +228,40 @@ function Start-ServiceWindow {
 
   Write-Host "Started $Title" -ForegroundColor Green
 }
+
+function Start-EduSyncBackend {
+  if (Test-PortOpen -HostName '127.0.0.1' -Port $eduSyncApiPort) {
+    Write-Host "Already running EduSync AI Backend on port $eduSyncApiPort" -ForegroundColor Yellow
+    return
+  }
+
+  $windowTitle = 'Ecosystem | EduSync AI Backend'
+  $fullCommand = (
+    "`$host.UI.RawUI.WindowTitle = '$windowTitle'; " +
+    "`$env:DATABASE_URL='sqlite:///./edusync.db'; " +
+    "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
+    "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduSyncAI)'; " +
+    "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
+    "Set-Location '$eduSyncBackendPath'; " +
+    "& '$eduSyncPythonPath' -m uvicorn app.main:app --host 0.0.0.0 --port $eduSyncApiPort"
+  )
+
+  Start-Process powershell -ArgumentList @(
+    '-NoExit',
+    '-ExecutionPolicy', 'Bypass',
+    '-Command',
+    $fullCommand
+  ) -WorkingDirectory $repoRoot | Out-Null
+
+  Write-Host "Started EduSync AI Backend" -ForegroundColor Green
+}
+
+if ($Restart) {
+  Write-Step 'Stopping existing ecosystem services before restart'
+  & powershell -ExecutionPolicy Bypass -File (Join-Path $repoRoot 'stop-ecosystem.ps1') -Force
+}
+
+New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 
 Assert-Command -Name 'node'
 Assert-Command -Name 'npm'
@@ -152,8 +280,7 @@ Assert-Path -Path $eduSyncPythonPath -Label 'EduSync AI Python interpreter'
 Assert-Path -Path $savanexPythonPath -Label 'SAVANEX Python interpreter'
 
 Write-Step 'Checking local PostgreSQL availability'
-$postgresCheck = Test-NetConnection localhost -Port 5432
-if (-not $postgresCheck.TcpTestSucceeded) {
+if (-not (Test-PortOpen -HostName '127.0.0.1' -Port 5432 -TimeoutMs 1500)) {
   throw 'Local PostgreSQL is not reachable on localhost:5432.'
 }
 
@@ -177,7 +304,24 @@ if (-not $SkipDatabasePreparation) {
   Write-Step 'Preparing EduPay database'
   Invoke-InDirectory -Path $eduPayApiPath -Script {
     $env:DATABASE_URL = $eduPayDatabaseUrl
-    & pnpm exec prisma db push --accept-data-loss
+    if ($AllowEduPayDataLoss) {
+      & pnpm exec prisma db push --accept-data-loss
+    }
+    else {
+      & pnpm exec prisma db push
+    }
+  }
+
+  Write-Step 'Preparing SAVANEX database'
+  Invoke-InDirectory -Path $savanexBackendPath -Script {
+    $env:DB_ENGINE = 'django.db.backends.sqlite3'
+    Remove-Item Env:DB_NAME -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_USER -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_HOST -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PORT -ErrorAction SilentlyContinue
+    & $savanexPythonPath manage.py migrate
+    & $savanexPythonPath manage.py shell -c "from apps.users.models import User; user, created = User.objects.get_or_create(username='admin', defaults={'email':'admin@savanex.local','first_name':'KCS','last_name':'Admin','role':User.ROLE_ADMIN,'is_staff':True,'is_superuser':True}); user.role=User.ROLE_ADMIN; user.is_staff=True; user.is_superuser=True; user.email=user.email or 'admin@savanex.local'; user.set_password('admin123'); user.save(); print('SAVANEX admin ready')"
   }
 }
 
@@ -185,6 +329,9 @@ $orbitOrganizationId = Get-OrbitOrganizationId
 if ([string]::IsNullOrWhiteSpace($orbitOrganizationId)) {
   throw 'Could not resolve the Orbit organization ID.'
 }
+
+$eduSyncApiPort = Resolve-PreferredPort -Name 'EduSync AI API' -PreferredPort $eduSyncPreferredApiPort -FallbackPorts @(8010, 8011, 8012)
+$eduSyncApiUrl = "http://localhost:$eduSyncApiPort/api/v1"
 
 Write-Step 'Launching ecosystem services'
 
@@ -197,7 +344,7 @@ Start-ServiceWindow -Title 'KCS Orbit API' -Command (
   "`$env:EDUSYNCAI_INTEGRATION_KEY='$($integrationKeys.EduSyncAI)'; " +
   "`$env:SAVANEX_INTEGRATION_KEY='$($integrationKeys.Savanex)'; " +
   "npm run dev"
-)
+) -Port 4500 -LogName 'kcs-orbit-api.log'
 
 Start-ServiceWindow -Title 'KCS Nexus Backend' -Command (
   "Set-Location '$kcsNexusBackendPath'; " +
@@ -205,7 +352,7 @@ Start-ServiceWindow -Title 'KCS Nexus Backend' -Command (
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.KcsNexus)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "npm run dev"
-)
+) -Port 5000 -LogName 'kcs-nexus-backend.log'
 
 Start-ServiceWindow -Title 'EduPay API' -Command (
   "Set-Location '$eduPayApiPath'; " +
@@ -215,16 +362,9 @@ Start-ServiceWindow -Title 'EduPay API' -Command (
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduPay)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "pnpm dev"
-)
+) -Port 4000 -LogName 'edupay-api.log'
 
-Start-ServiceWindow -Title 'EduSync AI Backend' -Command (
-  "Set-Location '$eduSyncBackendPath'; " +
-  "`$env:DATABASE_URL='sqlite:///./edusync.db'; " +
-  "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
-  "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduSyncAI)'; " +
-  "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
-  "& '$eduSyncPythonPath' -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
-)
+Start-EduSyncBackend
 
 Start-ServiceWindow -Title 'SAVANEX Backend' -Command (
   "Set-Location '$savanexBackendPath'; " +
@@ -238,29 +378,46 @@ Start-ServiceWindow -Title 'SAVANEX Backend' -Command (
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.Savanex)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "& '$savanexPythonPath' manage.py runserver 0.0.0.0:8001"
-)
+) -Port 8001 -LogName 'savanex-backend.log'
 
 if (-not $NoFrontends) {
   Start-ServiceWindow -Title 'KCS Nexus Frontend' -Command (
     "Set-Location '$kcsNexusFrontendPath'; " +
     "npm run dev -- --host 0.0.0.0 --port 5173"
-  )
+  ) -Port 5173 -LogName 'kcs-nexus-frontend.log'
 
   Start-ServiceWindow -Title 'EduPay Web' -Command (
     "Set-Location '$eduPayWebPath'; " +
     "pnpm dev -- --host 0.0.0.0 --port 5174"
-  )
+  ) -Port 5174 -LogName 'edupay-web.log'
 
   Start-ServiceWindow -Title 'EduSync AI Frontend' -Command (
     "Set-Location '$eduSyncFrontendPath'; " +
+    "`$env:VITE_API_URL='$eduSyncApiUrl'; " +
     "npm run dev -- --host 0.0.0.0 --port 5175"
-  )
+  ) -Port 5175 -LogName 'edusync-ai-frontend.log'
 
   Start-ServiceWindow -Title 'SAVANEX Frontend' -Command (
     "Set-Location '$savanexFrontendPath'; " +
     "`$env:VITE_API_URL='http://localhost:8001/api'; " +
     "npm run dev -- --host 0.0.0.0 --port 3000"
-  )
+  ) -Port 3000 -LogName 'savanex-frontend.log'
+}
+
+if (-not $NoWait) {
+  Write-Step 'Waiting for local services'
+  Wait-PortOpen -Name 'Orbit API' -Port 4500 | Out-Null
+  Wait-PortOpen -Name 'KCS Nexus API' -Port 5000 | Out-Null
+  Wait-PortOpen -Name 'EduPay API' -Port 4000 | Out-Null
+  Wait-PortOpen -Name 'EduSync AI API' -Port $eduSyncApiPort | Out-Null
+  Wait-PortOpen -Name 'SAVANEX API' -Port 8001 | Out-Null
+
+  if (-not $NoFrontends) {
+    Wait-PortOpen -Name 'KCS Nexus frontend' -Port 5173 | Out-Null
+    Wait-PortOpen -Name 'EduPay web' -Port 5174 | Out-Null
+    Wait-PortOpen -Name 'EduSync AI frontend' -Port 5175 | Out-Null
+    Wait-PortOpen -Name 'SAVANEX frontend' -Port 3000 | Out-Null
+  }
 }
 
 if ($OpenBrowser -and -not $NoFrontends) {
@@ -277,7 +434,7 @@ Write-Host 'KCS Nexus API:       http://localhost:5000' -ForegroundColor Yellow
 Write-Host 'KCS Nexus frontend:  http://localhost:5173/' -ForegroundColor Yellow
 Write-Host 'EduPay API:          http://localhost:4000' -ForegroundColor Yellow
 Write-Host 'EduPay web:          http://localhost:5174/EduPay-Smart-System/' -ForegroundColor Yellow
-Write-Host 'EduSync AI API:      http://localhost:8000' -ForegroundColor Yellow
+Write-Host "EduSync AI API:      http://localhost:$eduSyncApiPort" -ForegroundColor Yellow
 Write-Host 'EduSync AI frontend: http://localhost:5175/' -ForegroundColor Yellow
 Write-Host 'SAVANEX API:         http://localhost:8001/' -ForegroundColor Yellow
 Write-Host 'SAVANEX frontend:    http://localhost:3000/Syst-me-de-gestion-scolaire/' -ForegroundColor Yellow
@@ -287,3 +444,7 @@ Write-Host '  -SkipDatabasePreparation : relaunch services without Prisma setup'
 Write-Host '  -SkipInstall              : skip the EduPay web dependency check' -ForegroundColor White
 Write-Host '  -NoFrontends              : launch only backend services' -ForegroundColor White
 Write-Host '  -OpenBrowser              : open frontend URLs automatically after launch' -ForegroundColor White
+Write-Host '  -AllowEduPayDataLoss      : allow Prisma db push --accept-data-loss for EduPay local reset' -ForegroundColor White
+Write-Host '  -Restart                  : stop existing ecosystem services before launch' -ForegroundColor White
+Write-Host '  -NoWait                   : do not wait for ports to become ready' -ForegroundColor White
+Write-Host "Logs: $logRoot" -ForegroundColor Cyan

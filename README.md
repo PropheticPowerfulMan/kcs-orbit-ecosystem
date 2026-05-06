@@ -27,27 +27,42 @@ Depuis la racine du repo:
 
 ```powershell
 Set-Location "c:\Users\user\Downloads\Aexams\Ecosystem"
-.\start-ecosystem.ps1
+.\start-ecosystem.cmd
 ```
 
 Pour ouvrir automatiquement les interfaces web dans le navigateur par defaut:
 
 ```powershell
-.\start-ecosystem.ps1 -OpenBrowser
+.\start-ecosystem.cmd -OpenBrowser
+```
+
+Pour relancer vite apres une premiere preparation des bases:
+
+```powershell
+.\start-ecosystem.cmd -SkipDatabasePreparation
+```
+
+Pour repartir proprement et eviter les doublons de processus:
+
+```powershell
+.\start-ecosystem.cmd -Restart -SkipDatabasePreparation
 ```
 
 Le script:
 
 - verifie PostgreSQL local
-- prepare les bases Orbit, KCS Nexus et EduPay
+- prepare les bases Orbit, KCS Nexus, EduPay et SAVANEX
 - recupere l'`organizationId` Orbit
+- evite de relancer un service si son port est deja en ecoute
 - ouvre une fenetre PowerShell par service avec les bons ports et variables d'integration
+- attend que les ports locaux soient prets avant d'afficher le recapitulatif
+- ecrit les logs dans `var/logs`
 
 ### Arreter tout l'ecosysteme
 
 ```powershell
 Set-Location "c:\Users\user\Downloads\Aexams\Ecosystem"
-.\stop-ecosystem.ps1
+.\stop-ecosystem.cmd
 ```
 
 Le script:
@@ -58,22 +73,26 @@ Le script:
 Option brutale si un process resiste:
 
 ```powershell
-.\stop-ecosystem.ps1 -Force
+.\stop-ecosystem.cmd -Force
 ```
 
 ## Options du lanceur
 
 ```powershell
-.\start-ecosystem.ps1 -SkipDatabasePreparation
-.\start-ecosystem.ps1 -SkipInstall
-.\start-ecosystem.ps1 -NoFrontends
-.\start-ecosystem.ps1 -OpenBrowser
+.\start-ecosystem.cmd -SkipDatabasePreparation
+.\start-ecosystem.cmd -SkipInstall
+.\start-ecosystem.cmd -NoFrontends
+.\start-ecosystem.cmd -OpenBrowser
+.\start-ecosystem.cmd -Restart
+.\start-ecosystem.cmd -NoWait
 ```
 
 - `-SkipDatabasePreparation` : relance sans refaire `db push` / migrations
 - `-SkipInstall` : saute le check d'installation pour `EduPay` web
 - `-NoFrontends` : demarre seulement les backends
 - `-OpenBrowser` : ouvre automatiquement les frontends locaux dans le navigateur par defaut
+- `-Restart` : arrete les services ecosysteme existants avant de relancer
+- `-NoWait` : n'attend pas l'ouverture des ports avant le recapitulatif
 
 ## URLs locales
 
@@ -82,7 +101,7 @@ Option brutale si un process resiste:
 - KCS Nexus frontend : `http://localhost:5173/`
 - EduPay API : `http://localhost:4000`
 - EduPay web : `http://localhost:5174/EduPay-Smart-System/`
-- EduSync AI API : `http://localhost:8000`
+- EduSync AI API : `http://localhost:8000` par defaut. Si ce port est bloque par Windows, le lanceur bascule sur `8010`, `8011` ou `8012` et connecte automatiquement le frontend.
 - EduSync AI frontend : `http://localhost:5175/`
 - SAVANEX API : `http://localhost:8001/`
 - SAVANEX frontend : `http://localhost:3000/Syst-me-de-gestion-scolaire/`
@@ -92,7 +111,9 @@ Option brutale si un process resiste:
 - `kcs-orbit-api` est le point central d'integration.
 - `KCS Nexus` consomme Orbit pour les vues consolidees quand les variables d'integration sont presentes.
 - `SAVANEX` est lance en local sur SQLite via le script racine pour simplifier le demarrage.
+- En local, `SAVANEX` garantit un compte admin de test: `admin` / `admin123`.
 - `EduPay` et `Orbit` utilisent PostgreSQL local dans la procedure racine actuelle.
+- `EduSync AI` utilise `EDUSYNC_AI_API_PORT` si tu veux forcer un port precis.
 
 ## Documentation d'architecture
 

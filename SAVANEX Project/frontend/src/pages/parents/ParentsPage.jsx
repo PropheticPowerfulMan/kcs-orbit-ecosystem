@@ -2,6 +2,7 @@
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
+import { PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
 import { studentsService } from '../../services/api';
 
 const normalizeLabel = (value, fallback) => {
@@ -21,6 +22,7 @@ const ParentsPage = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedCard, setSelectedCard] = useState(null);
 
   useEffect(() => {
     const loadStudents = async () => {
@@ -51,6 +53,10 @@ const ParentsPage = () => {
         students: [],
         classes: new Set(),
         activeStudents: 0,
+        kcs_card_id: student.parent_kcs_card_id,
+        photo_data: student.parent_photo_data,
+        left_fingerprint_data: student.parent_left_fingerprint_data,
+        right_fingerprint_data: student.parent_right_fingerprint_data,
       };
 
       current.students.push(student.full_name);
@@ -70,6 +76,10 @@ const ParentsPage = () => {
         classes_label: Array.from(group.classes).sort((left, right) => left.localeCompare(right)).join(', '),
         student_count: group.students.length,
         activeStudents: group.activeStudents,
+        kcs_card_id: group.kcs_card_id,
+        photo_data: group.photo_data,
+        left_fingerprint_data: group.left_fingerprint_data,
+        right_fingerprint_data: group.right_fingerprint_data,
       }))
       .sort((left, right) => right.student_count - left.student_count || left.family_name.localeCompare(right.family_name));
   }, [students]);
@@ -135,7 +145,9 @@ const ParentsPage = () => {
     { key: 'students_label', label: 'Eleves lies' },
     { key: 'classes_label', label: 'Classes' },
     { key: 'student_count', label: 'Effectif' },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'Non generee' },
     { key: 'activeStudents', label: 'Actifs' },
+    { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, full_name: row.family_name, role: 'Parent' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
 
   return (
@@ -207,6 +219,19 @@ const ParentsPage = () => {
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des familles...</p> : null}
       {error ? <p className="mb-4 text-sm text-rose-300">{error}</p> : null}
       <DataTable columns={columns} data={filtered} />
+
+      {selectedCard ? (
+        <section className="mt-6 card p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Apercu de la carte parent</h3>
+            </div>
+            <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
+          </div>
+          <PrintableKcsCard entity={selectedCard} />
+        </section>
+      ) : null}
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="card p-5">

@@ -1,53 +1,258 @@
-﻿import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
-import { teachers } from '../../data/demoSchoolData';
+import { emptyIdentityCapture, IdentityCapturePanel, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
+import { teachersService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+
+const inputClass = 'w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue';
+
+const initialForm = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  password: '',
+  teacherId: '',
+  employeeType: 'teacher',
+  department: '',
+  jobTitle: '',
+  specialization: '',
+  hireDate: new Date().toISOString().slice(0, 10),
+  contractType: 'permanent',
+  workLocation: '',
+  workEmail: '',
+  officePhoneExtension: '',
+  payrollReference: '',
+  nationalIdNumber: '',
+  socialSecurityNumber: '',
+  taxNumber: '',
+  bankName: '',
+  bankAccountNumber: '',
+  salaryGrade: '',
+  baseSalary: '',
+  payFrequency: 'monthly',
+  supervisorName: '',
+  identity: { ...emptyIdentityCapture },
+};
+
+const generateTeacherId = () => `TCH-${Date.now().toString().slice(-8)}`;
+
+const formatApiError = (error) => {
+  const data = error?.response?.data;
+  if (!data) return error?.message || "Impossible d'enregistrer cet employe.";
+  if (typeof data === 'string') return data;
+  if (data.detail) return data.detail;
+
+  const flatten = (value, prefix = '') => {
+    if (Array.isArray(value)) return [`${prefix}${value.join(', ')}`];
+    if (value && typeof value === 'object') {
+      return Object.entries(value).flatMap(([key, nested]) => flatten(nested, `${prefix}${key}: `));
+    }
+    return [`${prefix}${value}`];
+  };
+
+  return flatten(data).join(' | ');
+};
 
 const TeachersPage = () => {
   const { t } = useTranslation();
-  const avgSatisfaction = Math.round(teachers.reduce((sum, teacher) => sum + teacher.satisfaction, 0) / teachers.length);
-  const avgCompletion = Math.round(teachers.reduce((sum, teacher) => sum + teacher.completion, 0) / teachers.length);
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [error, setError] = useState('');
+  const [form, setForm] = useState(initialForm);
+  const [selectedCard, setSelectedCard] = useState(null);
+
+  const loadTeachers = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await teachersService.getAll();
+      setTeachers(data);
+    } catch {
+      setError('Impossible de charger les enseignants pour le moment.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadTeachers();
+  }, []);
+
+  const activeTeachers = teachers.filter((teacher) => teacher.is_active !== false).length;
+  const teachingEmployees = teachers.filter((teacher) => teacher.employee_type === 'teacher').length;
+  const biometricReady = teachers.filter((teacher) => teacher.has_photo || teacher.has_biometrics).length;
+  const departments = useMemo(() => new Set(teachers.map((teacher) => teacher.department).filter(Boolean)).size, [teachers]);
 
   const columns = [
-    { key: 'name', label: 'Enseignant' },
-    { key: 'subject', label: 'Matiere' },
-    { key: 'classes', label: 'Classes' },
-    { key: 'load', label: 'Charge' },
-    { key: 'satisfaction', label: 'Satisfaction', render: (v) => `${v}%` },
-    { key: 'completion', label: 'Programme', render: (v) => `${v}%` },
+    { key: 'full_name', label: 'Employe' },
+    { key: 'employee_id', label: 'ID employe', render: (value) => value || 'Auto' },
+    { key: 'employee_label', label: 'Type', render: (value, row) => value || row.employee_type || 'Employe' },
+    { key: 'job_title', label: 'Poste', render: (value) => value || 'Non renseigne' },
+    { key: 'department', label: 'Departement', render: (value) => value || 'Non assigne' },
+    { key: 'employment_status', label: 'Statut', render: (value) => value || 'active' },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'A generer' },
+    { key: 'bio', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Pret' : 'A completer') },
+    { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, role: row.employee_label || 'Employe' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
+
+  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  const submitTeacher = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setFeedback('');
+    setError('');
+
+    try {
+      await teachersService.create({
+        user: {
+          first_name: form.firstName,
+          last_name: form.lastName,
+          ...(form.email ? { email: form.email } : {}),
+          phone: form.phone,
+          ...(form.password ? { password: form.password } : {}),
+          ...form.identity,
+        },
+        teacher_id: form.teacherId || generateTeacherId(),
+        employee_type: form.employeeType,
+        department: form.department,
+        job_title: form.jobTitle,
+        specialization: form.specialization,
+        hire_date: form.hireDate,
+        contract_type: form.contractType,
+        work_location: form.workLocation,
+        work_email: form.workEmail,
+        office_phone_extension: form.officePhoneExtension,
+        payroll_reference: form.payrollReference,
+        national_id_number: form.nationalIdNumber,
+        social_security_number: form.socialSecurityNumber,
+        tax_number: form.taxNumber,
+        bank_name: form.bankName,
+        bank_account_number: form.bankAccountNumber,
+        salary_grade: form.salaryGrade,
+        base_salary: form.baseSalary || null,
+        pay_frequency: form.payFrequency,
+        supervisor_name: form.supervisorName,
+      });
+
+      setFeedback('Employe enregistre. La carte KCS est generee automatiquement et le dossier photo/empreintes reste completable.');
+      setForm({ ...initialForm, hireDate: new Date().toISOString().slice(0, 10), identity: { ...emptyIdentityCapture } });
+      await loadTeachers();
+    } catch (submissionError) {
+      setError(formatApiError(submissionError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <DashboardLayout>
       <section className="mb-6 page-enter">
-        <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Faculty operations</p>
+        <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Employee operations</p>
         <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.teachers')}</h2>
-        <p className="mt-2 text-sm text-slate-400">Pilotage des charges, progression des programmes et experience des classes.</p>
+        <p className="mt-2 text-sm text-slate-400">Gestion globale des employes KCS: enseignants, administration, support, leadership et specialistes.</p>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard title="Enseignants actifs" value={teachers.length} accent="text-cyan-300" />
-        <StatCard title="Satisfaction" value={`${avgSatisfaction}%`} subtitle="Feedback eleves" accent="text-emerald-300" />
-        <StatCard title="Programme couvert" value={`${avgCompletion}%`} subtitle="Moyenne globale" accent="text-amber-300" />
-        <StatCard title="Alertes charge" value="1" subtitle="A reequilibrer" accent="text-rose-300" />
+        <StatCard title="Employes actifs" value={activeTeachers} accent="text-cyan-300" />
+        <StatCard title="Dont enseignants" value={teachingEmployees} accent="text-sky-300" />
+        <StatCard title="Cartes pretes" value={biometricReady} subtitle="Photo ou biometrie presente" accent="text-emerald-300" />
+        <StatCard title="Departements" value={departments} accent="text-amber-300" />
       </section>
 
-      <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {teachers.slice(0, 3).map((teacher) => (
-          <article key={teacher.id} className="card p-5">
-            <p className="font-semibold text-slate-100">{teacher.name}</p>
-            <p className="mt-1 text-sm text-slate-400">{teacher.subject} · {teacher.load}</p>
-            <div className="mt-4 h-2 rounded-full bg-slate-800">
-              <div className="h-2 rounded-full bg-kcs-blue" style={{ width: `${teacher.completion}%` }} />
+      <section className="mb-6 card p-5">
+        <div className="mb-4">
+          <h3 className="font-display text-xl font-semibold text-slate-100">Nouvel employe</h3>
+          <p className="mt-1 text-sm text-slate-400">Formulaire simplifie: les champs RH sensibles restent optionnels et la carte KCS est generee automatiquement.</p>
+        </div>
+
+        <form onSubmit={submitTeacher} className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prenom" className={inputClass} required />
+            <input value={form.lastName} onChange={(event) => updateForm('lastName', event.target.value)} placeholder="Nom" className={inputClass} required />
+            <input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="Email personnel optionnel" className={inputClass} />
+            <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="Telephone" className={inputClass} />
+            <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Departement" className={inputClass} />
+            <input value={form.jobTitle} onChange={(event) => updateForm('jobTitle', event.target.value)} placeholder="Titre du poste" className={inputClass} />
+            <input value={form.specialization} onChange={(event) => updateForm('specialization', event.target.value)} placeholder="Specialite / matiere si enseignant" className={inputClass} />
+            <input type="date" value={form.hireDate} onChange={(event) => updateForm('hireDate', event.target.value)} className={inputClass} required />
+            <select value={form.employeeType} onChange={(event) => updateForm('employeeType', event.target.value)} className={inputClass}>
+              <option value="teacher">Teacher</option>
+              <option value="administrative">Administrative Staff</option>
+              <option value="support">Support Staff</option>
+              <option value="leadership">Leadership</option>
+              <option value="specialist">Specialist</option>
+            </select>
+            <select value={form.contractType} onChange={(event) => updateForm('contractType', event.target.value)} className={inputClass}>
+              <option value="permanent">Permanent</option>
+              <option value="temporary">Temporary</option>
+              <option value="part_time">Part Time</option>
+              <option value="consultant">Consultant</option>
+            </select>
+            <input value={form.workLocation} onChange={(event) => updateForm('workLocation', event.target.value)} placeholder="Lieu de travail" className={inputClass} />
+            <input type="email" value={form.workEmail} onChange={(event) => updateForm('workEmail', event.target.value)} placeholder="Email professionnel" className={inputClass} />
+            <input value={form.supervisorName} onChange={(event) => updateForm('supervisorName', event.target.value)} placeholder="Superviseur" className={inputClass} />
+          </div>
+
+          <details className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-100">Options avancees RH, paie et identifiants</summary>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <input type="password" value={form.password} onChange={(event) => updateForm('password', event.target.value)} placeholder="Mot de passe optionnel" className={inputClass} />
+              <input value={form.teacherId} onChange={(event) => updateForm('teacherId', event.target.value)} placeholder="ID fonctionnel optionnel" className={inputClass} />
+              <input value={form.officePhoneExtension} onChange={(event) => updateForm('officePhoneExtension', event.target.value)} placeholder="Extension bureau" className={inputClass} />
+              <input value={form.payrollReference} onChange={(event) => updateForm('payrollReference', event.target.value)} placeholder="Reference paie" className={inputClass} />
+              <input value={form.nationalIdNumber} onChange={(event) => updateForm('nationalIdNumber', event.target.value)} placeholder="Numero d'identite" className={inputClass} />
+              <input value={form.socialSecurityNumber} onChange={(event) => updateForm('socialSecurityNumber', event.target.value)} placeholder="Securite sociale" className={inputClass} />
+              <input value={form.taxNumber} onChange={(event) => updateForm('taxNumber', event.target.value)} placeholder="Numero fiscal" className={inputClass} />
+              <input value={form.bankName} onChange={(event) => updateForm('bankName', event.target.value)} placeholder="Banque" className={inputClass} />
+              <input value={form.bankAccountNumber} onChange={(event) => updateForm('bankAccountNumber', event.target.value)} placeholder="Compte bancaire" className={inputClass} />
+              <input value={form.salaryGrade} onChange={(event) => updateForm('salaryGrade', event.target.value)} placeholder="Grade salarial" className={inputClass} />
+              <input type="number" min="0" step="0.01" value={form.baseSalary} onChange={(event) => updateForm('baseSalary', event.target.value)} placeholder="Salaire de base" className={inputClass} />
+              <select value={form.payFrequency} onChange={(event) => updateForm('payFrequency', event.target.value)} className={inputClass}>
+                <option value="monthly">Mensuel</option>
+                <option value="weekly">Hebdomadaire</option>
+                <option value="daily">Journalier</option>
+                <option value="hourly">Horaire</option>
+              </select>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Programme complete a {teacher.completion}%</p>
-          </article>
-        ))}
+          </details>
+
+          <IdentityCapturePanel
+            value={form.identity}
+            subjectName={`${form.firstName} ${form.lastName}`}
+            onChange={(identity) => updateForm('identity', identity)}
+          />
+
+          {feedback ? <p className="text-sm text-emerald-300">{feedback}</p> : null}
+          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+
+          <button type="submit" disabled={submitting} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
+            {submitting ? 'Enregistrement en cours...' : "Enregistrer l'employe"}
+          </button>
+        </form>
       </section>
 
+      {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employes...</p> : null}
       <DataTable columns={columns} data={teachers} />
+
+      {selectedCard ? (
+        <section className="mt-6 card p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Apercu de la carte employe</h3>
+            </div>
+            <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
+          </div>
+          <PrintableKcsCard entity={selectedCard} />
+        </section>
+      ) : null}
     </DashboardLayout>
   );
 };

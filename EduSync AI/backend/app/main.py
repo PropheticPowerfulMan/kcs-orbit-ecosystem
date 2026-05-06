@@ -9,7 +9,7 @@ from app.db.base import Base
 from app.db.session import engine, SessionLocal
 from app import models  # noqa: F401
 from app.models.user import Role, User
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.workers.scheduler import flush_orbit_outbox, scheduler
 
 
@@ -41,12 +41,26 @@ def seed_default_admin() -> None:
                     department="Administration",
                 )
             )
-        else:
-            admin.full_name = "System Administrator"
+            db.commit()
+            return
+
+        changed = False
+        expected_values = {
+            "full_name": "System Administrator",
+            "role": Role.ADMIN,
+            "department": "Administration",
+        }
+        for field, expected_value in expected_values.items():
+            if getattr(admin, field) != expected_value:
+                setattr(admin, field, expected_value)
+                changed = True
+
+        if not verify_password("Admin@123", admin.hashed_password):
             admin.hashed_password = get_password_hash("Admin@123")
-            admin.role = Role.ADMIN
-            admin.department = "Administration"
-        db.commit()
+            changed = True
+
+        if changed:
+            db.commit()
     finally:
         db.close()
 

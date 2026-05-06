@@ -25,6 +25,27 @@ body {
   min-height: 100vh;
 }
 
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .kcs-card,
+  .kcs-card * {
+    visibility: visible;
+  }
+
+  .kcs-card {
+    position: fixed;
+    left: 24px;
+    top: 24px;
+    width: 340px;
+    color: #0f172a;
+    background: #ffffff;
+    box-shadow: none;
+  }
+}
+
 #root {
   min-height: 100vh;
 }

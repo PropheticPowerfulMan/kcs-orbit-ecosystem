@@ -9,7 +9,7 @@
     "dashboard": "Dashboard",
     "students": "Students",
     "parents": "Parents",
-    "teachers": "Teachers",
+    "teachers": "Employees",
     "timetable": "Timetable",
     "communication": "Communication",
     "analytics": "Analytics"
@@ -26,7 +26,7 @@
     "overview": "Platform Overview",
     "subtitle": "Monitor key operations in real-time.",
     "students": "Students",
-    "teachers": "Teachers",
+    "teachers": "Employees",
     "classes": "Classes",
     "attendanceRate": "Attendance (30d)",
     "avgGrade": "Average Grade"

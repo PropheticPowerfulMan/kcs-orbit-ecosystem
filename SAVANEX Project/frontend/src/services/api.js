@@ -94,12 +94,15 @@ api.interceptors.response.use(
 
 export const authService = {
   async login(username, password) {
-    if (username.trim().toLowerCase() === 'admin' && password.trim() === 'admin123') {
-      return this.demoLogin();
+    try {
+      const res = await api.post('/auth/login/', { username, password });
+      return res.data;
+    } catch (error) {
+      if (username.trim().toLowerCase() === 'admin' && password.trim() === 'admin123') {
+        return this.demoLogin();
+      }
+      throw error;
     }
-
-    const res = await api.post('/auth/login/', { username, password });
-    return res.data;
   },
   async demoLogin() {
     return {
@@ -153,6 +156,41 @@ export const studentsService = {
     }
 
     const res = await api.post('/students/family-registration/', data);
+    return res.data;
+  },
+};
+
+export const teachersService = {
+  async getAll() {
+    if (isDemoSession()) {
+      const { teachers } = await import('../data/demoSchoolData');
+      return teachers.map((teacher) => ({
+        id: teacher.id,
+        teacher_id: `DEMO-TCH-${teacher.id}`,
+        full_name: teacher.name,
+        employee_type: 'teacher',
+        employee_label: 'Teacher',
+        job_title: 'Teacher',
+        specialization: teacher.subject,
+        department: teacher.classes,
+        employment_status: 'active',
+        pay_frequency: 'monthly',
+        kcs_card_id: `KCS-TCH-DEMO${teacher.id}`,
+        has_photo: false,
+        has_biometrics: false,
+      }));
+    }
+
+    const res = await api.get('/teachers/');
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+
+  async create(data) {
+    if (isDemoSession()) {
+      throw new Error('Teacher registration is disabled in demo mode.');
+    }
+
+    const res = await api.post('/teachers/', data);
     return res.data;
   },
 };

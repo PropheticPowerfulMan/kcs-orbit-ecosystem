@@ -133,6 +133,23 @@ function buildSourceEventKey(params: {
   return `${params.entityType}:${params.externalId}:${occurredAt}`;
 }
 
+function buildCanonicalFullName(input: {
+  fullName?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+}) {
+  const explicitFullName = typeof input.fullName === "string" ? input.fullName.trim() : "";
+  if (explicitFullName) {
+    return explicitFullName;
+  }
+
+  return [input.firstName, input.middleName, input.lastName]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+}
+
 async function findInboundReplay(params: {
   organizationId: string;
   appSlug: AppSlug;
@@ -735,7 +752,8 @@ export async function ingestSavanexParent(req: Request, res: Response) {
   }
 
   const { organizationId, externalId, occurredAt, payload } = contract;
-  const { fullName, phone, email } = payload;
+  const fullName = buildCanonicalFullName(payload);
+  const { phone, email } = payload;
   const metadata = rawBody.metadata;
   const sourceEventKey = buildSourceEventKey({ entityType: "parent", externalId, occurredAt });
 
@@ -822,7 +840,9 @@ export async function ingestSavanexTeacher(req: Request, res: Response) {
   }
 
   const { organizationId, externalId, occurredAt, payload } = contract;
-  const { fullName, phone, email, subject } = payload;
+  const fullName = buildCanonicalFullName(payload);
+  const subject = payload.subject || payload.subjects?.[0];
+  const { phone, email } = payload;
   const metadata = rawBody.metadata;
   const sourceEventKey = buildSourceEventKey({ entityType: "teacher", externalId, occurredAt });
 

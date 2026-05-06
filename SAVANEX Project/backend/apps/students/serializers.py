@@ -17,16 +17,31 @@ class StudentSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
+    kcs_card_id = serializers.CharField(source='user.kcs_card_id', read_only=True)
+    photo_data = serializers.CharField(source='user.photo_data', read_only=True)
+    photo_source = serializers.CharField(source='user.photo_source', read_only=True)
+    left_fingerprint_data = serializers.CharField(source='user.left_fingerprint_data', read_only=True)
+    right_fingerprint_data = serializers.CharField(source='user.right_fingerprint_data', read_only=True)
+    has_photo = serializers.SerializerMethodField()
+    has_biometrics = serializers.SerializerMethodField()
     class_name = serializers.SerializerMethodField()
     parent_name = serializers.SerializerMethodField()
+    parent_kcs_card_id = serializers.SerializerMethodField()
+    parent_photo_data = serializers.SerializerMethodField()
+    parent_left_fingerprint_data = serializers.SerializerMethodField()
+    parent_right_fingerprint_data = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
         fields = [
             'id', 'student_id', 'full_name', 'email', 'avatar',
+            'kcs_card_id', 'photo_data', 'photo_source',
+            'left_fingerprint_data', 'right_fingerprint_data',
+            'has_photo', 'has_biometrics',
             'date_of_birth', 'gender', 'address',
             'current_class', 'class_name',
-            'parent', 'parent_name',
+            'parent', 'parent_name', 'parent_kcs_card_id', 'parent_photo_data',
+            'parent_left_fingerprint_data', 'parent_right_fingerprint_data',
             'enrollment_date', 'is_active', 'notes',
         ]
         read_only_fields = ['id', 'enrollment_date']
@@ -40,6 +55,24 @@ class StudentSerializer(serializers.ModelSerializer):
         if obj.current_class:
             return str(obj.current_class)
         return None
+
+    def get_has_photo(self, obj):
+        return bool(obj.user.photo_data or obj.user.avatar)
+
+    def get_has_biometrics(self, obj):
+        return bool(obj.user.left_fingerprint_data or obj.user.right_fingerprint_data)
+
+    def get_parent_kcs_card_id(self, obj):
+        return obj.parent.kcs_card_id if obj.parent else None
+
+    def get_parent_photo_data(self, obj):
+        return obj.parent.photo_data if obj.parent else ''
+
+    def get_parent_left_fingerprint_data(self, obj):
+        return obj.parent.left_fingerprint_data if obj.parent else ''
+
+    def get_parent_right_fingerprint_data(self, obj):
+        return obj.parent.right_fingerprint_data if obj.parent else ''
 
 
 class StudentCreateSerializer(serializers.ModelSerializer):

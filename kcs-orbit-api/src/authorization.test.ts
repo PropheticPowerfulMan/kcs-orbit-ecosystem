@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AddressInfo } from "node:net";
 import { createServer } from "node:http";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { createApp } from "./app";
 import { signToken } from "./utils/jwt";
@@ -39,6 +40,7 @@ const originalParentCreate = prisma.parent.create.bind(prisma.parent);
 const originalExternalLinkCreate = prisma.externalLink.create.bind(prisma.externalLink);
 const originalSyncEventCreate = prisma.syncEvent.create.bind(prisma.syncEvent);
 const originalAuditLogCreate = prisma.auditLog.create.bind(prisma.auditLog);
+const originalTransaction = prisma.$transaction.bind(prisma);
 
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const server = createServer(createApp());
@@ -111,6 +113,13 @@ function restorePrisma() {
   (prisma.externalLink.create as unknown as typeof prisma.externalLink.create) = originalExternalLinkCreate as never;
   (prisma.syncEvent.create as unknown as typeof prisma.syncEvent.create) = originalSyncEventCreate as never;
   (prisma.auditLog.create as unknown as typeof prisma.auditLog.create) = originalAuditLogCreate as never;
+  (prisma.$transaction as unknown as typeof prisma.$transaction) = originalTransaction as never;
+}
+
+function mockTransactionWithRootPrisma() {
+  (prisma.$transaction as unknown as typeof prisma.$transaction) = (async (
+    callback: (tx: Prisma.TransactionClient) => Promise<unknown>
+  ) => callback(prisma as unknown as Prisma.TransactionClient)) as never;
 }
 
 test("parent role receives only shared-directory data on /api/students", async () => {
@@ -203,6 +212,7 @@ test("registry creation rejects duplicate parents", async () => {
 test("registry creation generates an external id for a new parent", async () => {
   process.env.KCS_NEXUS_INTEGRATION_KEY = "test-kcs-key";
 
+  mockTransactionWithRootPrisma();
   (prisma.organization.findUnique as unknown as typeof prisma.organization.findUnique) = (async () => ({ id: "org-1" })) as never;
   (prisma.parent.findFirst as unknown as typeof prisma.parent.findFirst) = (async () => null) as never;
   (prisma.parent.create as unknown as typeof prisma.parent.create) = (async () => ({ id: "parent-2", fullName: "Parent Two" })) as never;
@@ -226,6 +236,38 @@ test("registry creation generates an external id for a new parent", async () => 
       const data = await response.json() as { externalId: string; orbitId: string };
       assert.equal(data.orbitId, "parent-2");
       assert.match(data.externalId, /^KCSNEX-PAR-/);
+    });
+  } finally {
+    restorePrisma();
+  }
+});
+
+test("registry creation accepts canonical split-name payloads for parents", async () => {
+  process.env.KCS_NEXUS_INTEGRATION_KEY = "test-kcs-key";
+
+  mockTransactionWithRootPrisma();
+  (prisma.organization.findUnique as unknown as typeof prisma.organization.findUnique) = (async () => ({ id: "org-1" })) as never;
+  (prisma.parent.findFirst as unknown as typeof prisma.parent.findFirst) = (async () => null) as never;
+  (prisma.parent.create as unknown as typeof prisma.parent.create) = (async ({ data }: { data: { fullName: string } }) => ({ id: "parent-3", fullName: data.fullName })) as never;
+  (prisma.externalLink.create as unknown as typeof prisma.externalLink.create) = (async () => ({ id: "link-2" })) as never;
+  (prisma.syncEvent.create as unknown as typeof prisma.syncEvent.create) = (async () => ({ id: "sync-2" })) as never;
+  (prisma.auditLog.create as unknown as typeof prisma.auditLog.create) = (async () => ({ id: "audit-2" })) as never;
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/integration/registry/parent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test-kcs-key",
+          "x-app-slug": "KCS_NEXUS",
+        },
+        body: JSON.stringify({ organizationId: "org-1", firstName: "Jean", middleName: "Pierre", lastName: "Ilunga", email: "jp@example.org" }),
+      });
+
+      assert.equal(response.status, 201);
+      const data = await response.json() as { entity: { fullName: string } };
+      assert.equal(data.entity.fullName, "Jean Pierre Ilunga");
     });
   } finally {
     restorePrisma();

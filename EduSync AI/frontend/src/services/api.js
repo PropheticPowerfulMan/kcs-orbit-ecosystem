@@ -1,8 +1,10 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const hasConfiguredApi = Boolean(import.meta.env.VITE_API_URL);
 const hostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
 const isLocalHost = ["localhost", "127.0.0.1", ""].includes(hostname);
 const IS_DEMO = import.meta.env.VITE_DEMO_MODE === "true" || (!hasConfiguredApi && !isLocalHost);
+const API_BASES = hasConfiguredApi
+  ? [import.meta.env.VITE_API_URL]
+  : ["http://localhost:8010/api/v1", "http://localhost:8000/api/v1"];
 
 const demoState = {
   users: [
@@ -135,13 +137,24 @@ function demoResponse(path, method, body) {
     const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe)\b/.test(
       normalized
     );
+    const details = {
+      audience: normalized.includes("parent")
+        ? "parents"
+        : normalized.includes("enseignant") || normalized.includes("teacher")
+          ? "teachers"
+          : normalized.includes("staff") || normalized.includes("personnel")
+            ? "staff"
+            : "public cible",
+      priority: normalized.includes("urgent") || normalized.includes("urgence") ? "urgent" : "normal",
+      timing: normalized.includes("demain") || normalized.includes("tomorrow") ? "demain" : "prochain creneau",
+    };
     const intents = [
       {
         intent: "announcement_request",
         terms: ["announce", "announcement", "annonce", "annoncer", "diffuser", "message", "teachers", "enseignants"],
         response: isFrench
-          ? "Je peux preparer l'annonce, choisir le public, regler la priorite et proposer un texte pret a envoyer."
-          : "I can draft the announcement, choose the audience, set priority, and prepare it for sending.",
+          ? `Oui. Je prepare une annonce pour ${details.audience}, priorite ${details.priority}, diffusion ${details.timing}.\n\nBrouillon pret a publier:\nObjet: Communication KCS\nMessage: Bonjour, nous vous informons que ${message}. Merci de prendre les dispositions necessaires et de confirmer reception si besoin.\n\nAvant envoi, verifie: public cible, heure, canal et responsable.`
+          : `Yes. I can prepare an announcement for ${details.audience}, priority ${details.priority}, delivery ${details.timing}.\n\nReady draft:\nSubject: KCS communication\nMessage: Hello, please note that ${message}. Kindly take the necessary steps and confirm receipt if required.\n\nBefore sending, confirm audience, channel, timing, and owner.`,
         actions: isFrench
           ? ["rediger_annonce", "choisir_audience", "definir_priorite"]
           : ["draft_announcement", "choose_audience", "set_priority"],
@@ -150,8 +163,8 @@ function demoResponse(path, method, body) {
         intent: "leave_request",
         terms: ["leave", "absence", "vacation", "conge", "repos", "permission", "malade"],
         response: isFrench
-          ? "Je peux lancer le workflow de conge avec dates, motif, remplacement et approbateur."
-          : "I can start a leave workflow with dates, reason, handover plan, and approver.",
+          ? `Je peux transformer cette demande en workflow de conge.\nResume: ${message}.\nChamps a completer: debut, fin, motif, remplacant, approbateur.\nProposition: statut Pending, notification a l'administration.`
+          : `I can convert this into a leave workflow.\nSummary: ${message}.\nMissing fields: start date, end date, reason, handover plan, approver.\nSuggested status: Pending, notify Administration.`,
         actions: isFrench
           ? ["lancer_workflow_conge", "collecter_dates", "notifier_approbateur"]
           : ["start_leave_workflow", "collect_dates", "notify_approver"],
@@ -160,8 +173,8 @@ function demoResponse(path, method, body) {
         intent: "report_request",
         terms: ["report", "summary", "rapport", "resume", "bilan", "analytics", "indicateurs"],
         response: isFrench
-          ? "Je peux construire un rapport avec resume, faits marquants, risques et indicateurs."
-          : "I can prepare a report with summary, highlights, risks, and metrics.",
+          ? "Je peux construire un rapport utile.\nStructure: resume executif, indicateurs, activites realisees, risques, decisions attendues.\nIndicateurs: annonces envoyees, workflows ouverts/fermes, notifications non lues, delai moyen."
+          : "I can prepare a useful report.\nStructure: executive summary, metrics, completed actions, risks, decisions needed.\nMetrics: announcements sent, workflows opened/closed, unread notifications, average latency.",
         actions: isFrench
           ? ["preparer_plan_rapport", "collecter_indicateurs", "exporter_rapport"]
           : ["prepare_report_outline", "collect_metrics", "export_report"],
@@ -170,8 +183,8 @@ function demoResponse(path, method, body) {
         intent: "meeting_query",
         terms: ["meeting", "reunion", "agenda", "invite", "invitation", "creneau", "rappel"],
         response: isFrench
-          ? "Je peux organiser la reunion: participants, creneau, ordre du jour, invitations et rappel."
-          : "I can organize the meeting: attendees, time window, agenda, invites, and reminder.",
+          ? "Je peux organiser la reunion.\nOrdre du jour: contexte, points urgents, decisions, responsables, echeances.\nA completer: participants, duree, salle ou lien, rappel souhaite."
+          : "I can organize the meeting.\nAgenda: context, urgent points, decisions, owners, deadlines.\nMissing fields: attendees, duration, room/link, reminder timing.",
         actions: isFrench
           ? ["creer_plan_reunion", "rediger_ordre_du_jour", "envoyer_invitations"]
           : ["create_meeting_plan", "draft_agenda", "send_invites"],
@@ -182,8 +195,8 @@ function demoResponse(path, method, body) {
       {
         intent: "general_query",
         response: isFrench
-          ? "Je peux transformer une demande scolaire en prochaines etapes claires: annonce, conge, reunion, rapport, planning ou notification."
-          : `I can coordinate this request: "${message}". I will identify the right school operations module and prepare the next step.`,
+          ? `J'ai compris la demande: ${message}.\nDis-moi si tu veux en faire une annonce, un workflow, un rapport, une reunion, un planning ou une notification. Je peux ensuite produire un brouillon pret a utiliser.`
+          : `I understand the request: "${message}". Tell me whether this should become an announcement, workflow, report, meeting, schedule task, or notification, and I will produce a usable draft.`,
         actions: isFrench
           ? ["clarifier_demande", "afficher_capacites", "suggerer_prompt"]
           : ["clarify_request", "show_capabilities", "suggest_prompt"],
@@ -206,16 +219,29 @@ export async function apiRequest(path, method = "GET", body, token) {
   }
 
   let response;
+  let lastBase = API_BASES[0];
   try {
-    response = await fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch (error) {
+    for (const baseUrl of API_BASES) {
+      lastBase = baseUrl;
+      try {
+        response = await fetch(`${baseUrl}${path}`, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        break;
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    response = null;
+  }
+
+  if (!response) {
     throw new Error(
       "Unable to reach the API. Start the local backend or configure VITE_API_URL in production."
     );
@@ -223,7 +249,7 @@ export async function apiRequest(path, method = "GET", body, token) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || "API request failed");
+    throw new Error(errorData.detail || `API request failed on ${lastBase}`);
   }
 
   return response.json();

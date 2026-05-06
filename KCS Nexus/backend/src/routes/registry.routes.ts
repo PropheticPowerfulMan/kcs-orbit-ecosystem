@@ -13,6 +13,9 @@ type SharedDirectoryResponse = {
   parents: Array<{
     id: string
     fullName: string
+    firstName?: string
+    middleName?: string | null
+    lastName?: string
     organizationId?: string | null
     studentIds: string[]
     externalIds: Array<{ appSlug: string; externalId: string }>
@@ -21,8 +24,11 @@ type SharedDirectoryResponse = {
     id: string
     fullName: string
     firstName: string
+    middleName?: string | null
     lastName: string
+    studentNumber?: string
     classId?: string | null
+    className?: string | null
     parentId?: string | null
     organizationId?: string | null
     externalIds: Array<{ appSlug: string; externalId: string }>
@@ -30,6 +36,9 @@ type SharedDirectoryResponse = {
   teachers: Array<{
     id: string
     fullName: string
+    firstName?: string
+    middleName?: string | null
+    lastName?: string
     organizationId?: string | null
     externalIds: Array<{ appSlug: string; externalId: string }>
   }>
@@ -163,8 +172,8 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
   const familiesMap = new Map<string, {
     id: string
     familyLabel: string
-    parents: Array<{ id: string; relation: string; parent: { firstName: string; lastName: string; fullName: string; email: string | null; phone: string | null } }>
-    children: Array<{ id: string; studentNumber: string; grade: string; section: string; status: string; student: { firstName: string; lastName: string; fullName: string; email: string | null } }>
+    parents: Array<{ id: string; relation: string; parent: { firstName: string; middleName?: string | null; lastName: string; fullName: string; email: string | null; phone: string | null } }>
+    children: Array<{ id: string; studentNumber: string; grade: string; section: string; status: string; student: { firstName: string; middleName?: string | null; lastName: string; fullName: string; email: string | null } }>
   }>()
 
   for (const student of students) {
@@ -190,6 +199,7 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
           relation: item.relation,
           parent: {
             firstName: item.parent.firstName,
+            middleName: null,
             lastName: item.parent.lastName,
             fullName: `${item.parent.firstName} ${item.parent.lastName}`.trim(),
             email: item.parent.email,
@@ -208,6 +218,7 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
       status: student.status,
       student: {
         firstName: student.user.firstName,
+        middleName: null,
         lastName: student.user.lastName,
         fullName: `${student.user.firstName} ${student.user.lastName}`.trim(),
         email: student.user.email,
@@ -273,8 +284,11 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
       id: student.id,
       fullName: `${student.user.firstName} ${student.user.lastName}`.trim(),
       firstName: student.user.firstName,
+      middleName: null,
       lastName: student.user.lastName,
+      studentNumber: student.studentNumber,
       classId: student.grade ? `${student.grade}-${student.section}` : null,
+      className: student.grade ? `${student.grade} - Section ${student.section}` : null,
       parentId: student.parentLinks[0]?.parentId ?? null,
       organizationId: null,
       externalIds: [],
@@ -282,6 +296,9 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
     teachers: teachers.map((teacher) => ({
       id: teacher.id,
       fullName: `${teacher.user.firstName} ${teacher.user.lastName}`.trim(),
+      firstName: teacher.user.firstName,
+      middleName: null,
+      lastName: teacher.user.lastName,
       organizationId: null,
       externalIds: [],
     })),

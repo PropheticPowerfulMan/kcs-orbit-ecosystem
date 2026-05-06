@@ -2,10 +2,10 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   BarChart3,
+  Briefcase,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
-  GraduationCap,
   LayoutDashboard,
   MessageSquare,
   UserRoundCheck,
@@ -22,7 +22,7 @@ const Sidebar = ({ role = 'admin', isOpen = false, isCollapsed = false, onClose 
     { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
     { to: '/students', icon: Users, label: t('nav.students') },
     { to: '/parents', icon: UserRoundCheck, label: t('nav.parents') },
-    { to: '/teachers', icon: GraduationCap, label: t('nav.teachers') },
+    { to: '/teachers', icon: Briefcase, label: t('nav.teachers') },
     { to: '/timetable', icon: CalendarClock, label: t('nav.timetable') },
     { to: '/communication', icon: MessageSquare, label: t('nav.communication') },
     { to: '/analytics', icon: BarChart3, label: t('nav.analytics') },

@@ -6,16 +6,16 @@ import { schoolLogo } from "../assets";
 
 const quickPrompts = [
   {
-    label: "Announcement",
-    text: "Prepare an urgent announcement for all teachers about a meeting tomorrow morning.",
+    label: "Annonce",
+    text: "Prepare une annonce urgente aux parents pour la reunion de demain matin.",
   },
   {
-    label: "Leave",
-    text: "I want to request leave for recovery after exam supervision.",
+    label: "Conge",
+    text: "Je veux demander un conge de recuperation apres la surveillance des examens.",
   },
   {
-    label: "Report",
-    text: "Help me prepare a weekly report for the Academics department.",
+    label: "Rapport",
+    text: "Aide-moi a preparer un rapport hebdomadaire pour le departement Academics.",
   },
 ];
 
@@ -75,7 +75,7 @@ export default function DashboardPanel() {
       id: "welcome",
       role: "assistant",
       text:
-        "Hello. I am EduSync AI. Ask me to create an announcement, start a workflow, explain a notification, or summarize school activity.",
+        "Bonjour. Je suis EduSync AI. Demande-moi de rediger une annonce, preparer un workflow de conge, structurer un rapport, organiser une reunion ou prioriser les notifications.",
       intent: "assistant",
       confidence: 1,
       actions: ["show_capabilities"],

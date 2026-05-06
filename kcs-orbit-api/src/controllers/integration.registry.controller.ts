@@ -1,20 +1,41 @@
-import { AppSlug } from "@prisma/client";
+import { AppSlug, Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
 
 const entityTypeSchema = z.enum(["parent", "student", "teacher"]);
 
-const createParentSchema = z.object({
+const canonicalNameShape = {
+  fullName: z.string().min(1).optional(),
+  firstName: z.string().min(1).optional(),
+  middleName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+};
+
+function withCanonicalNameValidation<T extends z.ZodRawShape>(shape: T) {
+  return z.object({
+    ...canonicalNameShape,
+    ...shape,
+  }).superRefine((value, ctx) => {
+  if (value.fullName || (value.firstName && value.lastName)) {
+    return;
+  }
+
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: "fullName or firstName and lastName are required",
+  });
+  });
+}
+
+const createParentSchema = withCanonicalNameValidation({
   organizationId: z.string().min(1),
-  fullName: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
 });
 
-const createTeacherSchema = z.object({
+const createTeacherSchema = withCanonicalNameValidation({
   organizationId: z.string().min(1),
-  fullName: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
   subject: z.string().min(1).optional(),
@@ -40,6 +61,14 @@ function getAppSlug(req: Request) {
 
 function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ");
+}
+
+function buildCanonicalFullName(input: { fullName?: string; firstName?: string; middleName?: string; lastName?: string }) {
+  if (input.fullName?.trim()) {
+    return normalizeText(input.fullName);
+  }
+
+  return normalizeText([input.firstName, input.middleName, input.lastName].filter(Boolean).join(" "));
 }
 
 function buildGeneratedExternalId(appSlug: AppSlug, entityType: z.infer<typeof entityTypeSchema>) {
@@ -69,26 +98,26 @@ async function ensureOrganizationExists(organizationId: string) {
   });
 }
 
-async function createExternalLink(params: {
+async function createExternalLink(db: Prisma.TransactionClient, params: {
   organizationId: string;
   appSlug: AppSlug;
   entityType: string;
   nexusEntityId: string;
   externalId: string;
 }) {
-  return prisma.externalLink.create({
+  return db.externalLink.create({
     data: params,
   });
 }
 
-async function createAuditLog(params: {
+async function createAuditLog(db: Prisma.TransactionClient, params: {
   organizationId: string;
   action: string;
   entityType: string;
   entityId: string;
   metadata?: Record<string, unknown>;
 }) {
-  return prisma.auditLog.create({
+  return db.auditLog.create({
     data: {
       organizationId: params.organizationId,
       action: params.action,
@@ -99,7 +128,7 @@ async function createAuditLog(params: {
   });
 }
 
-async function createSyncEvent(params: {
+async function createSyncEvent(db: Prisma.TransactionClient, params: {
   organizationId: string;
   appSlug: AppSlug;
   eventType: string;
@@ -107,7 +136,7 @@ async function createSyncEvent(params: {
   entityId: string;
   payload: unknown;
 }) {
-  return prisma.syncEvent.create({
+  return db.syncEvent.create({
     data: {
       organizationId: params.organizationId,
       appSlug: params.appSlug,
@@ -123,7 +152,7 @@ async function createSyncEvent(params: {
 }
 
 async function findDuplicateParent(organizationId: string, input: z.infer<typeof createParentSchema>) {
-  const fullName = normalizeText(input.fullName);
+  const fullName = buildCanonicalFullName(input);
 
   return prisma.parent.findFirst({
     where: {
@@ -138,7 +167,7 @@ async function findDuplicateParent(organizationId: string, input: z.infer<typeof
 }
 
 async function findDuplicateTeacher(organizationId: string, input: z.infer<typeof createTeacherSchema>) {
-  const fullName = normalizeText(input.fullName);
+  const fullName = buildCanonicalFullName(input);
 
   return prisma.teacher.findFirst({
     where: {
@@ -207,14 +236,14 @@ async function resolveEntityByIdentifier(params: {
   return { orbitId: link.nexusEntityId, externalLinkId: link.id };
 }
 
-async function deleteEntity(entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
+async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
   switch (entityType) {
     case "parent":
-      return prisma.parent.delete({ where: { id: orbitId } });
+      return db.parent.delete({ where: { id: orbitId } });
     case "student":
-      return prisma.student.delete({ where: { id: orbitId } });
+      return db.student.delete({ where: { id: orbitId } });
     case "teacher":
-      return prisma.teacher.delete({ where: { id: orbitId } });
+      return db.teacher.delete({ where: { id: orbitId } });
   }
 }
 
@@ -228,6 +257,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
 
   if (entityType === "parent") {
     const payload = createParentSchema.parse(req.body);
+    const fullName = buildCanonicalFullName(payload);
     const organization = await ensureOrganizationExists(payload.organizationId);
     if (!organization) return res.status(404).json({ message: "Organization not found" });
 
@@ -236,25 +266,30 @@ export async function createRegistryEntity(req: Request, res: Response) {
       return res.status(409).json({ message: "Parent already exists", entityType, orbitId: duplicate.id });
     }
 
-    const parent = await prisma.parent.create({
-      data: {
-        organizationId: payload.organizationId,
-        fullName: normalizeText(payload.fullName),
-        email: payload.email,
-        phone: payload.phone,
-      },
-    });
-
     const externalId = buildGeneratedExternalId(appSlug, entityType);
-    await createExternalLink({ organizationId: payload.organizationId, appSlug, entityType, nexusEntityId: parent.id, externalId });
-    await createSyncEvent({ organizationId: payload.organizationId, appSlug, eventType: "parent.created", entityType, entityId: parent.id, payload });
-    await createAuditLog({ organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.parent.created`, entityType, entityId: parent.id, metadata: { externalId } });
+    const parent = await prisma.$transaction(async (tx) => {
+      const createdParent = await tx.parent.create({
+        data: {
+          organizationId: payload.organizationId,
+          fullName,
+          email: payload.email,
+          phone: payload.phone,
+        },
+      });
+
+      await createExternalLink(tx, { organizationId: payload.organizationId, appSlug, entityType, nexusEntityId: createdParent.id, externalId });
+      await createSyncEvent(tx, { organizationId: payload.organizationId, appSlug, eventType: "parent.created", entityType, entityId: createdParent.id, payload });
+      await createAuditLog(tx, { organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.parent.created`, entityType, entityId: createdParent.id, metadata: { externalId } });
+
+      return createdParent;
+    });
 
     return res.status(201).json({ entityType, orbitId: parent.id, externalId, entity: parent });
   }
 
   if (entityType === "teacher") {
     const payload = createTeacherSchema.parse(req.body);
+    const fullName = buildCanonicalFullName(payload);
     const organization = await ensureOrganizationExists(payload.organizationId);
     if (!organization) return res.status(404).json({ message: "Organization not found" });
 
@@ -263,20 +298,24 @@ export async function createRegistryEntity(req: Request, res: Response) {
       return res.status(409).json({ message: "Teacher already exists", entityType, orbitId: duplicate.id });
     }
 
-    const teacher = await prisma.teacher.create({
-      data: {
-        organizationId: payload.organizationId,
-        fullName: normalizeText(payload.fullName),
-        email: payload.email,
-        phone: payload.phone,
-        subject: payload.subject,
-      },
-    });
-
     const externalId = buildGeneratedExternalId(appSlug, entityType);
-    await createExternalLink({ organizationId: payload.organizationId, appSlug, entityType, nexusEntityId: teacher.id, externalId });
-    await createSyncEvent({ organizationId: payload.organizationId, appSlug, eventType: "teacher.created", entityType, entityId: teacher.id, payload });
-    await createAuditLog({ organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.teacher.created`, entityType, entityId: teacher.id, metadata: { externalId } });
+    const teacher = await prisma.$transaction(async (tx) => {
+      const createdTeacher = await tx.teacher.create({
+        data: {
+          organizationId: payload.organizationId,
+          fullName,
+          email: payload.email,
+          phone: payload.phone,
+          subject: payload.subject,
+        },
+      });
+
+      await createExternalLink(tx, { organizationId: payload.organizationId, appSlug, entityType, nexusEntityId: createdTeacher.id, externalId });
+      await createSyncEvent(tx, { organizationId: payload.organizationId, appSlug, eventType: "teacher.created", entityType, entityId: createdTeacher.id, payload });
+      await createAuditLog(tx, { organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.teacher.created`, entityType, entityId: createdTeacher.id, metadata: { externalId } });
+
+      return createdTeacher;
+    });
 
     return res.status(201).json({ entityType, orbitId: teacher.id, externalId, entity: teacher });
   }
@@ -300,21 +339,25 @@ export async function createRegistryEntity(req: Request, res: Response) {
     return res.status(409).json({ message: "Student already exists", entityType, orbitId: duplicate.id });
   }
 
-  const student = await prisma.student.create({
-    data: {
-      organizationId: payload.organizationId,
-      firstName: normalizeText(payload.firstName),
-      lastName: normalizeText(payload.lastName),
-      gender: payload.gender,
-      parentId: payload.parentOrbitId,
-      classId: payload.classOrbitId,
-    },
-  });
-
   const externalId = buildGeneratedExternalId(appSlug, entityType);
-  await createExternalLink({ organizationId: payload.organizationId, appSlug, entityType, nexusEntityId: student.id, externalId });
-  await createSyncEvent({ organizationId: payload.organizationId, appSlug, eventType: "student.created", entityType, entityId: student.id, payload });
-  await createAuditLog({ organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.student.created`, entityType, entityId: student.id, metadata: { externalId } });
+  const student = await prisma.$transaction(async (tx) => {
+    const createdStudent = await tx.student.create({
+      data: {
+        organizationId: payload.organizationId,
+        firstName: normalizeText(payload.firstName),
+        lastName: normalizeText(payload.lastName),
+        gender: payload.gender,
+        parentId: payload.parentOrbitId,
+        classId: payload.classOrbitId,
+      },
+    });
+
+    await createExternalLink(tx, { organizationId: payload.organizationId, appSlug, entityType, nexusEntityId: createdStudent.id, externalId });
+    await createSyncEvent(tx, { organizationId: payload.organizationId, appSlug, eventType: "student.created", entityType, entityId: createdStudent.id, payload });
+    await createAuditLog(tx, { organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.student.created`, entityType, entityId: createdStudent.id, metadata: { externalId } });
+
+    return createdStudent;
+  });
 
   return res.status(201).json({ entityType, orbitId: student.id, externalId, entity: student });
 }
@@ -360,7 +403,7 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
   try {
     await prisma.$transaction(async (tx) => {
       await tx.externalLink.deleteMany({ where: { organizationId: query.organizationId, entityType, nexusEntityId: target.orbitId } });
-      await deleteEntity(entityType, target.orbitId);
+      await deleteEntity(tx, entityType, target.orbitId);
       await tx.syncEvent.create({
         data: {
           organizationId: query.organizationId,

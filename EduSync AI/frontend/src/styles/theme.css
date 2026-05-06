@@ -628,6 +628,7 @@ textarea {
   margin: 0;
   line-height: 1.45;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .message-meta,

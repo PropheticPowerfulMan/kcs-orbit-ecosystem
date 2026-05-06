@@ -42,6 +42,19 @@ Pour les appels machine-to-machine:
 
 ## Contrats par domaine
 
+## Noyau canonique d'identite
+
+Pour reduire les divergences entre SAVANEX, EduPay, KCS Nexus, EduSync AI et Orbit, le noyau canonique adopte les regles suivantes:
+
+- `student` expose toujours `firstName`, `lastName`, `fullName`, `studentNumber`, `classId|className`, `parentId`, `organizationId`, `externalIds[]`
+- `parent` expose toujours `fullName`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
+- `teacher` expose toujours `fullName`, et idealement aussi `firstName`, `middleName`, `lastName`
+- `studentNumber` represente l'identifiant visible par les utilisateurs; Orbit privilegie l'`externalId` de l'application proprietaire quand il existe
+- `externalIds[]` reste la source de verite transverse pour les correspondances inter-applications
+- `className` peut etre derive localement si seule une reference `classId` existe, mais le contrat partage doit l'exposer quand il est connu
+
+Cette normalisation permet de garder les modeles locaux existants tout en rendant la lecture transverse coherente.
+
 ### StudentUpsert
 
 Source: SAVANEX  
@@ -56,12 +69,16 @@ Destination: KCS Orbit API
   "version": "1.0.0",
   "payload": {
     "firstName": "Grace",
+    "middleName": "Mbuyi",
     "lastName": "Ilunga",
     "gender": "F",
+    "studentNumber": "STU-2026-001",
     "classExternalId": "sav_class_6A",
+    "className": "6A",
     "parentExternalId": "sav_parent_033",
     "email": "grace@example.org",
     "phone": "+243000000000",
+    "dateOfBirth": "2014-01-20",
     "status": "ACTIVE"
   }
 }
@@ -108,6 +125,49 @@ Destination: KCS Orbit API
     "reference": "MM-REF-7781",
     "status": "CONFIRMED"
   }
+}
+```
+
+### SharedDirectory
+
+Projection canonique recommandee pour `GET /api/integration/read/shared-directory`:
+
+```json
+{
+  "source": "orbit",
+  "visibility": "shared-directory",
+  "students": [
+    {
+      "id": "std_001",
+      "fullName": "Grace Mbuyi Ilunga",
+      "firstName": "Grace",
+      "middleName": "Mbuyi",
+      "lastName": "Ilunga",
+      "studentNumber": "STU-2026-001",
+      "classId": "cls_6a",
+      "className": "6A",
+      "parentId": "par_033",
+      "organizationId": "org_123",
+      "externalIds": [
+        { "appSlug": "SAVANEX", "externalId": "sav_student_001" }
+      ]
+    }
+  ],
+  "parents": [
+    {
+      "id": "par_033",
+      "fullName": "Jean Pierre Ilunga",
+      "firstName": "Jean",
+      "middleName": "Pierre",
+      "lastName": "Ilunga",
+      "organizationId": "org_123",
+      "studentIds": ["std_001"],
+      "externalIds": [
+        { "appSlug": "SAVANEX", "externalId": "sav_parent_033" }
+      ]
+    }
+  ],
+  "teachers": []
 }
 ```
 
@@ -170,7 +230,9 @@ Projection minimale recommandee pour l'annuaire partage:
 
 - `id`
 - `organizationId`
-- `fullName` ou `firstName` et `lastName`
+- `fullName`, et si possible `firstName`, `middleName`, `lastName`
+- `studentNumber` pour les eleves
+- `className` quand disponible
 - `externalIds[]` avec `appSlug` et `externalId`
 - les identifiants relationnels strictement necessaires comme `parentId` ou `classId`
 
