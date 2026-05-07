@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
+import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
 import StatCard from '../../components/ui/StatCard';
-import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard, PrintableKcsCard } from '../../components/ui/KcsIdentityTools';
+import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard } from '../../components/ui/KcsIdentityTools';
 import { teachersService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -61,7 +62,7 @@ const TeachersPage = () => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [form, setForm] = useState(initialForm);
-  const [selectedCard, setSelectedCard] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeFormVisible, setEmployeeFormVisible] = useState(true);
 
   const loadTeachers = async () => {
@@ -96,7 +97,7 @@ const TeachersPage = () => {
     { key: 'employment_status', label: 'Statut', render: (value) => value || 'active' },
     { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
     { key: 'bio', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
-    { key: 'card', label: 'Carte', render: (_value, row) => <button type="button" onClick={() => setSelectedCard({ ...row, role: row.employee_label || 'Employé' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
+    { key: 'details', label: 'Action', render: (_value, row) => <button type="button" onClick={() => setSelectedEmployee({ ...row, role: row.employee_label || 'Employé' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
   ];
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
@@ -267,18 +268,7 @@ const TeachersPage = () => {
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employés...</p> : null}
       <DataTable columns={columns} data={teachers} />
 
-      {selectedCard ? (
-        <section className="mt-6 card p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Carte KCS</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Aperçu de la carte employé</h3>
-            </div>
-            <button type="button" onClick={() => setSelectedCard(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200">Fermer</button>
-          </div>
-          <PrintableKcsCard entity={selectedCard} />
-        </section>
-      ) : null}
+      <EntityDetailPanel entity={selectedEmployee} type="employee" onClose={() => setSelectedEmployee(null)} />
     </DashboardLayout>
   );
 };
