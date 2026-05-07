@@ -260,10 +260,7 @@ const StudentsPage = () => {
             <h3 className="font-display text-xl font-semibold text-slate-100">Nouvelle famille</h3>
             <p className="mt-1 text-sm text-slate-400">Un parent, un ou plusieurs élèves, tous liés dans la même opération. Les mots de passe temporaires sont générés par le système.</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {familyFormVisible ? (
-              <button type="button" onClick={addStudentDraft} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Ajouter un enfant</button>
-            ) : null}
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
             <button
               type="button"
               onClick={() => setFamilyFormVisible((visible) => !visible)}
@@ -272,6 +269,9 @@ const StudentsPage = () => {
             >
               {familyFormVisible ? 'Masquer' : 'Afficher'}
             </button>
+            {familyFormVisible ? (
+              <button type="button" onClick={addStudentDraft} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Ajouter un enfant</button>
+            ) : null}
           </div>
         </div>
 

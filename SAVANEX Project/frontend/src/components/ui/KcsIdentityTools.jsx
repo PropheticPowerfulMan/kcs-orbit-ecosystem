@@ -233,9 +233,11 @@ export const KcsIdCard = ({ entity }) => {
 
   const fullName = entity.full_name || entity.fullName || entity.name || 'Identite KCS';
   const role = entity.role || entity.entityType || 'KCS';
-  const primaryId = entity.kcs_card_id || entity.student_id || entity.employee_id || entity.id || 'KCS-ID';
+  const primaryId = entity.kcs_card_id || entity.student_id || entity.employee_id || entity.teacher_id || entity.id || 'KCS-ID';
   const functionalId = entity.student_id || entity.employee_id || entity.teacher_id || entity.id || primaryId;
-  const secondary = entity.class_name || entity.department || entity.job_title || entity.phone || entity.email || 'Kinshasa Christian School';
+  const reference = entity.class_name || entity.department || entity.job_title || entity.specialization || 'Kinshasa Christian School';
+  const contact = entity.phone || entity.email || entity.work_email || '';
+  const status = entity.is_active === false ? 'Inactif' : entity.employment_status || entity.status || 'Actif';
   const hasLeft = Boolean(entity.left_fingerprint_data || entity.parent_left_fingerprint_data);
   const hasRight = Boolean(entity.right_fingerprint_data || entity.parent_right_fingerprint_data);
   const photo = entity.photo_data || entity.parent_photo_data;
@@ -262,7 +264,9 @@ export const KcsIdCard = ({ entity }) => {
           <div className="kcs-card-fields">
             <p><span>ID:</span> {functionalId}</p>
             <p><span>Carte:</span> {primaryId}</p>
-            <p><span>Ref:</span> {secondary}</p>
+            <p><span>Ref:</span> {reference}</p>
+            {contact ? <p><span>Contact:</span> {contact}</p> : null}
+            <p><span>Statut:</span> {status}</p>
           </div>
         </div>
       </div>
@@ -286,7 +290,27 @@ export const KcsIdCard = ({ entity }) => {
 
 export const PrintableKcsCard = ({ entity }) => {
   const printCard = () => {
+    const source = document.querySelector('.kcs-print-sheet');
+    if (!source) {
+      window.print();
+      return;
+    }
+
+    const portal = document.createElement('div');
+    portal.className = 'kcs-print-portal';
+    portal.appendChild(source.cloneNode(true));
+    document.body.appendChild(portal);
+    document.body.classList.add('kcs-card-print-mode');
+
+    const cleanup = () => {
+      document.body.classList.remove('kcs-card-print-mode');
+      portal.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    window.addEventListener('afterprint', cleanup);
     window.print();
+    window.setTimeout(cleanup, 800);
   };
 
   return (

@@ -151,13 +151,13 @@ function demoResponse(path, method, body) {
     const intents = [
       {
         intent: "finance_query",
-        terms: ["paye", "payes", "payee", "paiement", "frais", "solde", "scolarite", "paid", "payment", "fees", "balance"],
+        terms: ["paye", "payes", "payee", "paiement", "frais", "solde", "scolarite", "finance", "paid", "payment", "payments", "fees", "balance", "balances", "export"],
         response: isFrench
           ? `Tu demandes une liste financiere: les eleves qui ont paye.\n\nCe n'est pas une annonce. Il faut interroger le module paiement/frais et retourner un tableau.\n\nColonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.\nFiltres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.\n\nAction suivante: ouvre EduPay ou Finance SAVANEX, filtre statut Paye, puis exporte la liste.`
-          : `You are asking for a finance list: students who have paid.\n\nThis is not an announcement. The assistant should query the payments/fees module and return a table.\n\nColumns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nUseful filters: academic year, term, class, status Paid/Partial/Unpaid.`,
+          : `Finance command understood: list paid students, check balances, and prepare export.\n\nCorrect handling: open the finance/payment module, not announcements or messaging.\n\nApply filters: status = Paid, entity = Students. Add class, academic year, or term if provided.\nTable columns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nExport: generate CSV/XLSX with the visible filtered rows.\n\nNext step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.`,
         actions: isFrench
           ? ["ouvrir_module_finance", "filtrer_eleves_payes", "exporter_liste_paiements"]
-          : ["open_finance_module", "filter_paid_students", "export_payment_list"],
+          : ["open_finance_module", "filter_paid_students", "export_payment_list", "check_balances"],
       },
       {
         intent: "announcement_request",

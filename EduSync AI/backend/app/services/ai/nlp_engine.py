@@ -258,17 +258,25 @@ class NLPEngine:
             ])
 
         if intent == "finance_query":
-            paid_status = details.get("payment_status", "paid")
+            status_labels = {
+                "payes": "paid",
+                "impayes": "unpaid",
+                "partiellement payes": "partially paid",
+            }
+            paid_status = status_labels.get(details.get("payment_status", "payes"), "paid")
             audience = details.get("audience", "students")
+            requested_export = self._contains_term(self._normalize(original_message), "export")
+            export_line = "Export: generate CSV/XLSX with the visible filtered rows." if requested_export else "Export: available after the filter is confirmed."
             return "\n".join([
-                f"You are asking for a finance list: {audience} marked as {paid_status}.",
+                f"Finance command understood: list {audience} marked as {paid_status}, check balances, and prepare export.",
                 "",
-                "Correct handling: this is not an announcement. The assistant should query the payments/fees module and return a table.",
+                "Correct handling: open the finance/payment module, not announcements or messaging.",
                 "",
-                "Columns to show: student name, class, parent, amount paid, remaining balance, last payment date, status.",
-                "Useful filters: academic year, term, class, status Paid/Partial/Unpaid.",
+                "Apply filters: status = Paid, entity = Students. Add class, academic year, or term if provided.",
+                "Table columns: student name, class, parent, amount paid, remaining balance, last payment date, status.",
+                export_line,
                 "",
-                "Next step: open EduPay or the SAVANEX Finance module, filter status Paid, then export the list. If you provide class or period, I can prepare the exact filter.",
+                "Next step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.",
             ])
 
         if intent == "report_request":
@@ -329,7 +337,9 @@ class NLPEngine:
     def _has_action_verb(self, text: str) -> bool:
         verbs = (
             "prepare", "create", "send", "start", "draft", "schedule", "organize",
+            "open", "filter", "export", "check", "show", "list",
             "preparer", "creer", "envoyer", "lancer", "rediger", "planifier", "organiser",
+            "ouvrir", "filtrer", "exporter", "verifier", "afficher", "lister",
             "faire", "ecrire", "aider", "help",
         )
         return any(self._contains_term(text, verb) for verb in verbs)
@@ -368,11 +378,14 @@ class NLPEngine:
         elif any(term in text for term in ("info", "information", "normal")):
             details["priority"] = "normal"
 
-        if any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid", "solde", "balance")):
+        has_paid = any(self._contains_term(text, term) for term in ("paye", "payes", "payee", "payees", "paid"))
+        has_unpaid = any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid"))
+
+        if has_unpaid:
             details["payment_status"] = "impayes"
         elif any(self._contains_term(text, term) for term in ("partiel", "partial")):
             details["payment_status"] = "partiellement payes"
-        elif any(self._contains_term(text, term) for term in ("paye", "payes", "payee", "payees", "paid")):
+        elif has_paid:
             details["payment_status"] = "payes"
 
         audience_terms = {

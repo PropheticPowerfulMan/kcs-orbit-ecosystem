@@ -58,28 +58,44 @@ body {
     margin: 0;
   }
 
-  body * {
-    visibility: hidden;
-  }
-
-  .kcs-print-sheet,
-  .kcs-print-sheet * {
-    visibility: visible;
-  }
-
-  .kcs-print-sheet {
-    position: fixed;
-    inset: 0;
+  html,
+  body {
     width: 85.6mm;
     height: 54mm;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body.kcs-card-print-mode #root {
+    display: none !important;
+  }
+
+  body.kcs-card-print-mode .kcs-print-portal {
+    display: block !important;
+    width: 85.6mm !important;
+    height: 54mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body.kcs-card-print-mode .kcs-print-sheet {
+    position: fixed !important;
+    inset: 0;
+    width: 85.6mm !important;
+    height: 54mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 
   .kcs-biometric-card {
     box-shadow: none !important;
     transform: none !important;
+    width: 85.6mm !important;
+    height: 54mm !important;
+    border-radius: 0 !important;
   }
 }
 
@@ -118,6 +134,10 @@ body {
 
 .kcs-print-sheet {
   width: min(100%, 342px);
+}
+
+.kcs-print-portal {
+  display: none;
 }
 
 .kcs-biometric-card {
