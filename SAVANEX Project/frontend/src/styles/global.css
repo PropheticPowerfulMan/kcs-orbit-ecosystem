@@ -226,13 +226,13 @@ body {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 10px;
-  padding: 7px 12px 4px;
+  grid-template-columns: 68px 1fr;
+  gap: 9px;
+  padding: 6px 12px 4px;
 }
 
 .kcs-card-photo {
-  width: 72px;
+  width: 68px;
   height: 86px;
   display: flex;
   align-items: center;
@@ -256,7 +256,7 @@ body {
 .kcs-card-name {
   margin: 0;
   color: #0f172a;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1.05;
 }
@@ -275,10 +275,10 @@ body {
 
 .kcs-card-fields {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   color: #1e293b;
   font-family: var(--font-metric), ui-monospace, monospace;
-  font-size: 7px;
+  font-size: 6.7px;
   font-weight: 700;
 }
 

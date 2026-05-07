@@ -45,6 +45,9 @@ class StudentSerializer(serializers.ModelSerializer):
     password_generated_by_system = serializers.BooleanField(source='user.password_generated_by_system', read_only=True)
     class_name = serializers.SerializerMethodField()
     parent_name = serializers.SerializerMethodField()
+    parent_email = serializers.SerializerMethodField()
+    parent_phone = serializers.SerializerMethodField()
+    parent_external_id = serializers.SerializerMethodField()
     parent_kcs_card_id = serializers.SerializerMethodField()
     parent_photo_data = serializers.SerializerMethodField()
     parent_left_fingerprint_data = serializers.SerializerMethodField()
@@ -60,7 +63,8 @@ class StudentSerializer(serializers.ModelSerializer):
             'must_change_password', 'password_generated_by_system',
             'date_of_birth', 'gender', 'address',
             'current_class', 'class_name',
-            'parent', 'parent_name', 'parent_kcs_card_id', 'parent_photo_data',
+            'parent', 'parent_name', 'parent_email', 'parent_phone', 'parent_external_id',
+            'parent_kcs_card_id', 'parent_photo_data',
             'parent_left_fingerprint_data', 'parent_right_fingerprint_data',
             'enrollment_date', 'is_active', 'notes',
         ]
@@ -70,6 +74,15 @@ class StudentSerializer(serializers.ModelSerializer):
         if obj.parent:
             return obj.parent.get_full_name()
         return None
+
+    def get_parent_email(self, obj):
+        return obj.parent.email if obj.parent else ''
+
+    def get_parent_phone(self, obj):
+        return obj.parent.phone if obj.parent else ''
+
+    def get_parent_external_id(self, obj):
+        return obj.parent.username if obj.parent else ''
 
     def get_class_name(self, obj):
         if obj.current_class:

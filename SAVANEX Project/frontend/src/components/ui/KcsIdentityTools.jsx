@@ -231,17 +231,77 @@ export const KcsIdCard = ({ entity }) => {
     return null;
   }
 
+  const present = (value) => value !== null && value !== undefined && String(value).trim() !== '';
+  const compactValue = (value) => String(value).replace(/\s+/g, ' ').trim();
+  const addField = (fields, label, value) => {
+    if (!present(value)) {
+      return fields;
+    }
+
+    const normalized = compactValue(value);
+    if (fields.some((field) => field.label === label || field.value === normalized)) {
+      return fields;
+    }
+
+    return [...fields, { label, value: normalized }];
+  };
+
   const fullName = entity.full_name || entity.fullName || entity.name || 'Identite KCS';
   const role = entity.role || entity.entityType || 'KCS';
   const primaryId = entity.kcs_card_id || entity.student_id || entity.employee_id || entity.teacher_id || entity.id || 'KCS-ID';
   const functionalId = entity.student_id || entity.employee_id || entity.teacher_id || entity.id || primaryId;
-  const reference = entity.class_name || entity.department || entity.job_title || entity.specialization || 'Kinshasa Christian School';
+  const roleKey = String(role).toLowerCase();
+  const isStudent = Boolean(entity.student_id || roleKey.includes('eleve') || roleKey.includes('élève'));
+  const isParent = Boolean(entity.parent_external_id || roleKey.includes('parent'));
+  const isEmployee = Boolean(entity.employee_id || entity.teacher_id || roleKey.includes('employ') || roleKey.includes('enseign'));
   const contact = entity.phone || entity.email || entity.work_email || '';
   const status = entity.is_active === false ? 'Inactif' : entity.employment_status || entity.status || 'Actif';
   const hasLeft = Boolean(entity.left_fingerprint_data || entity.parent_left_fingerprint_data);
   const hasRight = Boolean(entity.right_fingerprint_data || entity.parent_right_fingerprint_data);
   const photo = entity.photo_data || entity.parent_photo_data;
   const issuedAt = new Date().getFullYear();
+  const cardFields = (() => {
+    let fields = [];
+
+    if (isStudent) {
+      fields = addField(fields, 'ID', entity.student_id || functionalId);
+      fields = addField(fields, 'Classe', entity.class_name);
+      fields = addField(fields, 'Parent', entity.parent_name);
+      fields = addField(fields, 'Naiss.', entity.date_of_birth);
+      fields = addField(fields, 'Sexe', entity.gender);
+      fields = addField(fields, 'Email', entity.email);
+      fields = addField(fields, 'Carte', entity.kcs_card_id || primaryId);
+      return fields.slice(0, 7);
+    }
+
+    if (isParent) {
+      fields = addField(fields, 'ID', entity.parent_external_id || functionalId);
+      fields = addField(fields, 'Nom', entity.family_name || fullName);
+      fields = addField(fields, 'Enfants', entity.students_label);
+      fields = addField(fields, 'Classes', entity.classes_label);
+      fields = addField(fields, 'Tel', entity.phone);
+      fields = addField(fields, 'Email', entity.email);
+      fields = addField(fields, 'Carte', entity.kcs_card_id || primaryId);
+      return fields.slice(0, 7);
+    }
+
+    if (isEmployee) {
+      fields = addField(fields, 'ID', entity.employee_id || entity.teacher_id || functionalId);
+      fields = addField(fields, 'Type', entity.employee_label || entity.employee_type);
+      fields = addField(fields, 'Poste', entity.job_title);
+      fields = addField(fields, 'Dept.', entity.department);
+      fields = addField(fields, 'Tel', entity.phone);
+      fields = addField(fields, 'Email', entity.work_email || entity.email);
+      fields = addField(fields, 'Carte', entity.kcs_card_id || primaryId);
+      return fields.slice(0, 7);
+    }
+
+    fields = addField(fields, 'ID', functionalId);
+    fields = addField(fields, 'Contact', contact);
+    fields = addField(fields, 'Carte', primaryId);
+    fields = addField(fields, 'Statut', status);
+    return fields.slice(0, 7);
+  })();
 
   return (
     <div className="kcs-card kcs-biometric-card text-slate-950">
@@ -262,10 +322,9 @@ export const KcsIdCard = ({ entity }) => {
           <p className="kcs-card-name">{fullName}</p>
           <p className="kcs-card-role">{role}</p>
           <div className="kcs-card-fields">
-            <p><span>ID:</span> {functionalId}</p>
-            <p><span>Carte:</span> {primaryId}</p>
-            <p><span>Ref:</span> {reference}</p>
-            {contact ? <p><span>Contact:</span> {contact}</p> : null}
+            {cardFields.map((field) => (
+              <p key={`${field.label}-${field.value}`}><span>{field.label}:</span> {field.value}</p>
+            ))}
             <p><span>Statut:</span> {status}</p>
           </div>
         </div>
@@ -289,8 +348,10 @@ export const KcsIdCard = ({ entity }) => {
 };
 
 export const PrintableKcsCard = ({ entity }) => {
+  const sheetRef = useRef(null);
+
   const printCard = () => {
-    const source = document.querySelector('.kcs-print-sheet');
+    const source = sheetRef.current;
     if (!source) {
       window.print();
       return;
@@ -315,7 +376,7 @@ export const PrintableKcsCard = ({ entity }) => {
 
   return (
     <div className="space-y-3">
-      <div className="kcs-print-sheet">
+      <div ref={sheetRef} className="kcs-print-sheet">
         <KcsIdCard entity={entity} />
       </div>
       <button type="button" onClick={printCard} className="inline-flex items-center gap-2 rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200 hover:bg-slate-800/60">
