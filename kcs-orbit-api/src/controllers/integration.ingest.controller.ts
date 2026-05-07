@@ -105,8 +105,7 @@ async function recordInboundSyncEvent(params: {
 }) {
   const { organizationId, appSlug, sourceEventKey, eventType, entityType, entityId, payload } = params;
 
-  return prisma.syncEvent.create({
-    data: {
+  const data = {
       organizationId,
       appSlug,
       sourceEventKey,
@@ -117,7 +116,31 @@ async function recordInboundSyncEvent(params: {
       status: SyncStatus.PROCESSED,
       payload: parseJsonInput(payload),
       processedAt: new Date()
-    }
+  };
+
+  if (!sourceEventKey) {
+    return prisma.syncEvent.create({ data });
+  }
+
+  return prisma.syncEvent.upsert({
+    where: {
+      organizationId_appSlug_direction_sourceEventKey: {
+        organizationId,
+        appSlug,
+        direction: SyncDirection.INBOUND,
+        sourceEventKey
+      }
+    },
+    update: {
+      eventType,
+      entityType,
+      entityId,
+      status: SyncStatus.PROCESSED,
+      payload: parseJsonInput(payload),
+      processedAt: new Date(),
+      errorMessage: null
+    },
+    create: data
   });
 }
 

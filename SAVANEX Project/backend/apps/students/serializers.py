@@ -33,6 +33,11 @@ def _generate_parent_external_id() -> str:
 class StudentSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    last_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    user_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    class_level = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    class_suffix = serializers.CharField(write_only=True, required=False, allow_blank=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
     kcs_card_id = serializers.CharField(source='user.kcs_card_id', read_only=True)
     photo_data = serializers.CharField(source='user.photo_data', read_only=True)
@@ -57,18 +62,54 @@ class StudentSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'id', 'student_id', 'full_name', 'email', 'avatar',
+            'first_name', 'last_name', 'user_email',
             'kcs_card_id', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics',
             'must_change_password', 'password_generated_by_system',
             'date_of_birth', 'gender', 'address',
-            'current_class', 'class_name',
+            'current_class', 'class_name', 'class_level', 'class_suffix',
             'parent', 'parent_name', 'parent_email', 'parent_phone', 'parent_external_id',
             'parent_kcs_card_id', 'parent_photo_data',
             'parent_left_fingerprint_data', 'parent_right_fingerprint_data',
             'enrollment_date', 'is_active', 'notes',
         ]
-        read_only_fields = ['id', 'enrollment_date']
+        read_only_fields = ['id', 'student_id', 'enrollment_date']
+
+    def update(self, instance, validated_data):
+        first_name = validated_data.pop('first_name', None)
+        last_name = validated_data.pop('last_name', None)
+        user_email = validated_data.pop('user_email', None)
+        class_level = validated_data.pop('class_level', None)
+        class_suffix = validated_data.pop('class_suffix', None)
+
+        if class_level is not None or class_suffix is not None:
+            normalized_level = (class_level or '').strip()
+            normalized_suffix = (class_suffix or '').strip()
+            if normalized_level:
+                instance.current_class = get_or_create_standard_class(normalized_level, normalized_suffix)
+            else:
+                instance.current_class = None
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        user_update_fields = []
+        if first_name is not None:
+            instance.user.first_name = first_name
+            user_update_fields.append('first_name')
+        if last_name is not None:
+            instance.user.last_name = last_name
+            user_update_fields.append('last_name')
+        if user_email is not None:
+            instance.user.email = user_email
+            user_update_fields.append('email')
+
+        if user_update_fields:
+            instance.user.save(update_fields=user_update_fields)
+
+        instance.save()
+        return instance
 
     def get_parent_name(self, obj):
         if obj.parent:

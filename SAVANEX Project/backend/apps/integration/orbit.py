@@ -237,7 +237,7 @@ def sync_student(student) -> None:
             "gender": student.gender,
             "studentNumber": student.student_id,
             "classExternalId": str(student.current_class_id) if student.current_class_id else None,
-            "className": str(student.current_class) if student.current_class_id else None,
+            "className": student.current_class.name if student.current_class_id else None,
             "parentExternalId": parent_external_id,
             "email": student.user.email or None,
             "phone": student.user.phone or None,

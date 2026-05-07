@@ -3,6 +3,7 @@ import { BadgeCheck, Camera, Cpu, Fingerprint, Printer, Upload, Usb, X } from 'l
 
 const inputClass = 'w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue';
 const schoolLogo = `${import.meta.env.BASE_URL}kcs.jpg`;
+const ownerSignatureName = 'JEAN SENGA';
 
 const encodeBiometricTemplate = (payload) => {
   const encoded = window.btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
@@ -260,6 +261,12 @@ export const KcsIdCard = ({ entity }) => {
   const hasRight = Boolean(entity.right_fingerprint_data || entity.parent_right_fingerprint_data);
   const photo = entity.photo_data || entity.parent_photo_data;
   const issuedAt = new Date().getFullYear();
+  const FlagPair = () => (
+    <div className="kcs-card-flags" aria-label="Drapeaux USA et RDC">
+      <span className="kcs-flag kcs-flag-usa" title="USA" />
+      <span className="kcs-flag kcs-flag-rdc" title="RDC" />
+    </div>
+  );
   const cardFields = (() => {
     let fields = [];
 
@@ -304,14 +311,19 @@ export const KcsIdCard = ({ entity }) => {
   })();
 
   return (
-    <div className="kcs-card kcs-biometric-card text-slate-950">
+    <div className="kcs-card-set text-slate-950">
+      <div className="kcs-card kcs-biometric-card kcs-card-front">
+      <img src={schoolLogo} alt="" className="kcs-card-watermark" aria-hidden="true" />
       <div className="kcs-card-header">
         <img src={schoolLogo} alt="Kinshasa Christian School" className="kcs-card-logo" />
         <div className="min-w-0">
           <p className="kcs-card-school">KINSHASA CHRISTIAN SCHOOL</p>
           <p className="kcs-card-subtitle">Carte biométrique officielle</p>
         </div>
-        <BadgeCheck className="kcs-card-check" />
+        <div className="kcs-card-header-side">
+          <FlagPair />
+          <BadgeCheck className="kcs-card-check" />
+        </div>
       </div>
 
       <div className="kcs-card-body">
@@ -320,12 +332,14 @@ export const KcsIdCard = ({ entity }) => {
         </div>
         <div className="kcs-card-identity">
           <p className="kcs-card-name">{fullName}</p>
-          <p className="kcs-card-role">{role}</p>
+          <div className="kcs-card-role-row">
+            <p className="kcs-card-role">{role}</p>
+            <p className="kcs-card-status">Statut: {status}</p>
+          </div>
           <div className="kcs-card-fields">
             {cardFields.map((field) => (
               <p key={`${field.label}-${field.value}`}><span>{field.label}:</span> {field.value}</p>
             ))}
-            <p><span>Statut:</span> {status}</p>
           </div>
         </div>
       </div>
@@ -343,6 +357,29 @@ export const KcsIdCard = ({ entity }) => {
           <span>{issuedAt}</span>
         </div>
       </div>
+      <div className="kcs-card-signature">
+        <p className="kcs-card-signature-mark">J. Senga</p>
+        <p className="kcs-card-signature-name">{ownerSignatureName}</p>
+      </div>
+    </div>
+
+      <div className="kcs-card kcs-biometric-card kcs-card-back">
+      <img src={schoolLogo} alt="" className="kcs-card-back-logo" aria-hidden="true" />
+      <div className="kcs-card-back-top">
+        <FlagPair />
+        <p>Carte biométrique KCS</p>
+        <FlagPair />
+      </div>
+      <div className="kcs-card-back-content">
+        <p className="kcs-card-back-school">KINSHASA CHRISTIAN SCHOOL</p>
+        <p className="kcs-card-back-id">{primaryId}</p>
+        <p className="kcs-card-back-owner">{fullName}</p>
+      </div>
+      <div className="kcs-card-back-footer">
+        <span>USA - RDC</span>
+        <span>{issuedAt}</span>
+      </div>
+    </div>
     </div>
   );
 };

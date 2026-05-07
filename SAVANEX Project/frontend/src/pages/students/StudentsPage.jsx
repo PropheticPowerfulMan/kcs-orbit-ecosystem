@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
@@ -16,11 +17,29 @@ const normalizeLabel = (value, fallback) => {
 };
 
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const modalBackdropClass = 'savanex-modal-backdrop fixed inset-0 z-[999] grid place-items-center overflow-y-auto px-4 py-8';
+const modalPanelClass = 'savanex-modal-panel w-full max-w-5xl overflow-y-auto p-5 sm:p-6';
 const standardClassLevels = [
   'K1', 'K2', 'K3', 'K4', 'K5',
   ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`),
 ];
 const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];
+
+const splitClassName = (value) => {
+  const className = normalizeLabel(value, 'Non assignée');
+  const match = className.match(/^(K[1-5]|Grade\s+(?:[1-9]|1[0-2]))(?:\s+([A-Z]))?$/i);
+
+  if (!match) {
+    return { level: className, suffix: '' };
+  }
+
+  const rawLevel = match[1].replace(/\s+/g, ' ');
+  const level = rawLevel.toLowerCase().startsWith('grade')
+    ? `Grade ${rawLevel.match(/\d+/)?.[0] || ''}`.trim()
+    : rawLevel.toUpperCase();
+
+  return { level, suffix: (match[2] || '').toUpperCase() };
+};
 
 const createStudentDraft = () => ({
   firstName: '',
@@ -34,10 +53,28 @@ const createStudentDraft = () => ({
   identity: { ...emptyIdentityCapture },
 });
 
+const createEditForm = (student) => {
+  const nameParts = normalizeLabel(student?.full_name, '').split(/\s+/).filter(Boolean);
+  const classParts = splitClassName(student?.class_name || '');
+
+  return {
+    firstName: nameParts[0] || '',
+    lastName: nameParts.slice(1).join(' '),
+    email: student?.email || '',
+    classLevel: standardClassLevels.includes(classParts.level) ? classParts.level : '',
+    classSuffix: classParts.suffix || '',
+    dateOfBirth: student?.date_of_birth || '',
+    gender: student?.gender || 'F',
+    address: student?.address || '',
+    notes: student?.notes || '',
+  };
+};
+
 const StudentsPage = () => {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [classFilter, setClassFilter] = useState('all');
+  const [classLevelFilter, setClassLevelFilter] = useState('all');
+  const [classSuffixFilter, setClassSuffixFilter] = useState('all');
   const [familyFilter, setFamilyFilter] = useState('all');
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +82,12 @@ const StudentsPage = () => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [familyFormVisible, setFamilyFormVisible] = useState(true);
+  const [familyDialogOpen, setFamilyDialogOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editForm, setEditForm] = useState(createEditForm(null));
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
   const [form, setForm] = useState({
     parentFirstName: '',
     parentLastName: '',
@@ -73,11 +115,6 @@ const StudentsPage = () => {
     void loadStudents();
   }, []);
 
-  const classOptions = useMemo(
-    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignée')))).sort((left, right) => left.localeCompare(right)),
-    [students]
-  );
-
   const familyOptions = useMemo(
     () => Array.from(new Set(students.map((student) => normalizeLabel(student.parent_name, 'Aucun parent lié')))).sort((left, right) => left.localeCompare(right)),
     [students]
@@ -88,10 +125,15 @@ const StudentsPage = () => {
 
     return students.filter((student) => {
       const className = normalizeLabel(student.class_name, 'Non assignée');
+      const classParts = splitClassName(className);
       const familyName = normalizeLabel(student.parent_name, 'Aucun parent lié');
       const haystack = `${student.full_name} ${student.student_id} ${className} ${familyName}`.toLowerCase();
 
-      if (classFilter !== 'all' && className !== classFilter) {
+      if (classLevelFilter !== 'all' && classParts.level !== classLevelFilter) {
+        return false;
+      }
+
+      if (classSuffixFilter !== 'all' && classParts.suffix !== classSuffixFilter) {
         return false;
       }
 
@@ -105,7 +147,7 @@ const StudentsPage = () => {
 
       return true;
     });
-  }, [classFilter, familyFilter, query, students]);
+  }, [classLevelFilter, classSuffixFilter, familyFilter, query, students]);
 
   const groupedByClass = useMemo(() => {
     const groups = new Map();
@@ -153,18 +195,6 @@ const StudentsPage = () => {
   const activeStudents = filtered.filter((student) => student.is_active).length;
   const classesCovered = new Set(filtered.map((student) => student.class_name).filter(Boolean)).size;
 
-  const columns = [
-    { key: 'full_name', label: 'Élève' },
-    { key: 'student_id', label: 'ID élève' },
-    { key: 'class_name', label: 'Classe', render: (value) => value || 'Non assignée' },
-    { key: 'parent_name', label: 'Parent responsable', render: (value) => value || 'Aucun parent lié' },
-    { key: 'email', label: 'Email', render: (value) => value || 'Non renseigné' },
-    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
-    { key: 'has_biometrics', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
-    { key: 'is_active', label: 'Statut', render: (value) => value ? 'Actif' : 'Inactif' },
-    { key: 'details', label: 'Action', render: (_value, row) => <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
-  ];
-
   const updateStudentDraft = (index, field, value) => {
     setForm((current) => ({
       ...current,
@@ -188,13 +218,120 @@ const StudentsPage = () => {
     }));
   };
 
+  const openEditDialog = (student) => {
+    setEditingStudent(student);
+    setEditForm(createEditForm(student));
+    setError('');
+    setFeedback('');
+  };
+
+  const setEditField = (field, value) => {
+    setEditForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const refreshStudents = async () => {
+    const data = await studentsService.getAll();
+    setStudents(data);
+  };
+
+  const saveEditedStudent = async () => {
+    if (!editingStudent) return;
+    setSavingEdit(true);
+    setError('');
+    setFeedback('');
+
+    try {
+      const payload = {
+        first_name: editForm.firstName,
+        last_name: editForm.lastName,
+        user_email: editForm.email,
+        gender: editForm.gender,
+        address: editForm.address,
+        class_level: editForm.classLevel,
+        class_suffix: editForm.classSuffix,
+        notes: editForm.notes,
+      };
+      if (editForm.dateOfBirth) {
+        payload.date_of_birth = editForm.dateOfBirth;
+      }
+      await studentsService.update(editingStudent.id, payload);
+      await refreshStudents();
+      setFeedback('Entité mise à jour. ID élève et carte KCS conservés.');
+      setEditingStudent(null);
+    } catch (editError) {
+      setError(editError?.response?.data?.detail || editError?.message || "Impossible de modifier cette entité.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteStudentEntity = async (student) => {
+    if (!window.confirm(`Supprimer ${student.full_name} ? Cette action désactive l'entité sans modifier son ID ni sa carte KCS.`)) {
+      return;
+    }
+
+    setDeletingId(student.id);
+    setError('');
+    setFeedback('');
+
+    try {
+      await studentsService.remove(student.id);
+      await refreshStudents();
+      setSelectedStudent(null);
+      setFeedback('Entité supprimée/désactivée.');
+    } catch (deleteError) {
+      setError(deleteError?.response?.data?.detail || deleteError?.message || "Impossible de supprimer cette entité.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const columns = [
+    { key: 'full_name', label: 'Élève' },
+    { key: 'student_id', label: 'ID élève' },
+    { key: 'class_name', label: 'Classe', render: (value) => value || 'Non assignée' },
+    { key: 'parent_name', label: 'Parent responsable', render: (value) => value || 'Aucun parent lié' },
+    { key: 'email', label: 'Email', render: (value) => value || 'Non renseigné' },
+    { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
+    { key: 'has_biometrics', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
+    { key: 'is_active', label: 'Statut', render: (value) => value ? 'Actif' : 'Inactif' },
+    {
+      key: 'details',
+      label: 'Action',
+      render: (_value, row) => (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
+          <button type="button" onClick={() => openEditDialog(row)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-300/20">Modifier</button>
+          <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="rounded-lg border border-rose-300/40 bg-rose-300/10 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-300/20 disabled:opacity-50">
+            {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   const submitFamily = async (event) => {
-    event.preventDefault();
+    event?.preventDefault();
     setSubmitting(true);
     setError('');
     setFeedback('');
 
     try {
+      const parentReady = form.parentFirstName.trim() && form.parentLastName.trim() && form.parentEmail.trim();
+      const studentsReady = form.students.every((student) => (
+        student.firstName.trim() && student.lastName.trim() && student.email.trim() && student.dateOfBirth
+      ));
+
+      if (!parentReady) {
+        setFamilyDialogOpen(true);
+        throw new Error('Complétez d’abord la boîte de dialogue Nouvelle famille.');
+      }
+
+      if (!studentsReady) {
+        setFamilyDialogOpen(true);
+        throw new Error('Complétez d’abord la boîte de dialogue Enfants.');
+      }
+
       const payload = {
         parent: {
           first_name: form.parentFirstName,
@@ -229,6 +366,10 @@ const StudentsPage = () => {
           .filter((credential) => credential.temporaryPassword)
           .map((credential) => `${credential.studentId}: ${credential.username} / ${credential.temporaryPassword}`),
       ].filter(Boolean).join(' | ');
+      setLastTemporaryCredentials({
+        parent: parentCredential || null,
+        students: studentCredentials,
+      });
       setFeedback(`Famille enregistrée avec ${response.studentCount || form.students.length} élève(s). Mot de passe temporaire à changer: ${credentialSummary || 'déjà défini'}.`);
       setForm({
         parentFirstName: '',
@@ -238,6 +379,7 @@ const StudentsPage = () => {
         parentIdentity: { ...emptyIdentityCapture },
         students: [createStudentDraft()],
       });
+      setFamilyDialogOpen(false);
     } catch (submissionError) {
       setError(submissionError?.response?.data?.detail || submissionError?.message || "Impossible d'enregistrer cette famille.");
     } finally {
@@ -261,51 +403,93 @@ const StudentsPage = () => {
             <h3 className="font-display text-xl font-semibold text-slate-100">Nouvelle famille</h3>
             <p className="mt-1 text-sm text-slate-400">Un parent, un ou plusieurs élèves, tous liés dans la même opération. Les mots de passe temporaires sont générés par le système.</p>
           </div>
-          <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            <button
-              type="button"
-              onClick={() => setFamilyFormVisible((visible) => !visible)}
-              aria-expanded={familyFormVisible}
-              className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60"
-            >
-              {familyFormVisible ? 'Masquer' : 'Afficher'}
-            </button>
-            {familyFormVisible ? (
-              <button type="button" onClick={addStudentDraft} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Ajouter un enfant</button>
-            ) : null}
-          </div>
         </div>
 
-        {familyFormVisible ? <form onSubmit={submitFamily} className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-            <input value={form.parentLastName} onChange={(event) => setForm({ ...form, parentLastName: event.target.value })} placeholder="Nom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-            <input type="email" value={form.parentEmail} onChange={(event) => setForm({ ...form, parentEmail: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-            <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+        <form onSubmit={submitFamily} className="space-y-4">
+          {lastTemporaryCredentials ? (
+            <section className="rounded-2xl border border-emerald-400/35 bg-emerald-400/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Accès temporaires générés</p>
+                  <h4 className="mt-1 font-display text-lg font-semibold text-slate-100">Mots de passe à remettre à la famille</h4>
+                </div>
+                <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {lastTemporaryCredentials.parent ? (
+                  <div className="rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">Parent</p>
+                    <p className="mt-2 text-sm text-slate-200">Utilisateur: <span className="font-metric font-bold text-white">{lastTemporaryCredentials.parent.username}</span></p>
+                    <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{lastTemporaryCredentials.parent.temporaryPassword || 'Déjà défini'}</span></p>
+                  </div>
+                ) : null}
+                {lastTemporaryCredentials.students.map((credential) => (
+                  <div key={`${credential.studentId}-${credential.username}`} className="rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">Élève {credential.studentId}</p>
+                    <p className="mt-2 text-sm text-slate-200">Utilisateur: <span className="font-metric font-bold text-white">{credential.username}</span></p>
+                    <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{credential.temporaryPassword || 'Déjà défini'}</span></p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-github-border bg-github-panel/80 p-4 shadow-glass backdrop-blur-xl">
+            <p className="max-w-2xl text-sm text-slate-300">Tout l'enregistrement se fait maintenant dans une seule fenêtre dédiée : parent, enfants, biométrie et validation finale.</p>
+            <button type="button" onClick={() => setFamilyDialogOpen(true)} className="savanex-primary-family-button">
+              Ajouter une nouvelle famille
+            </button>
           </div>
 
-          <IdentityCapturePanel
-            value={form.parentIdentity}
-            subjectName={`${form.parentFirstName} ${form.parentLastName}`}
-            onChange={(identity) => setForm({ ...form, parentIdentity: identity })}
-          />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-            <div>
-              <p className="text-sm font-semibold text-slate-100">Aperçu de la carte biométrique du parent</p>
-              <p className="mt-1 text-xs text-slate-400">La photo et les empreintes capturées ici alimentent la carte KCS officielle.</p>
-            </div>
-            <KcsIdCard entity={{
-              full_name: `${form.parentFirstName} ${form.parentLastName}`.trim() || 'Parent KCS',
-              role: 'Parent',
-              phone: form.parentPhone,
-              email: form.parentEmail,
-              ...form.parentIdentity,
-            }} />
-          </div>
+          {familyDialogOpen ? createPortal((
+            <div className={modalBackdropClass}>
+              <section role="dialog" aria-modal="true" aria-label="Nouvelle famille" className={modalPanelClass}>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Famille complète</p>
+                    <h4 className="mt-1 font-display text-xl font-semibold text-slate-100">Nouvelle famille</h4>
+                  </div>
+                  <button type="button" onClick={() => setFamilyDialogOpen(false)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input value={form.parentLastName} onChange={(event) => setForm({ ...form, parentLastName: event.target.value })} placeholder="Nom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input type="email" value={form.parentEmail} onChange={(event) => setForm({ ...form, parentEmail: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                </div>
 
-          <div className="space-y-3">
-            {form.students.map((student, index) => (
-              <div key={`student-draft-${index}`} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <div className="mt-4">
+                  <IdentityCapturePanel
+                    value={form.parentIdentity}
+                    subjectName={`${form.parentFirstName} ${form.parentLastName}`}
+                    onChange={(identity) => setForm({ ...form, parentIdentity: identity })}
+                  />
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">Aperçu de la carte biométrique du parent</p>
+                    <p className="mt-1 text-xs text-slate-400">La photo et les empreintes capturées ici alimentent la carte KCS officielle.</p>
+                  </div>
+                  <KcsIdCard entity={{
+                    full_name: `${form.parentFirstName} ${form.parentLastName}`.trim() || 'Parent KCS',
+                    role: 'Parent',
+                    phone: form.parentPhone,
+                    email: form.parentEmail,
+                    ...form.parentIdentity,
+                  }} />
+                </div>
+
+                <div className="mt-6 border-t border-github-border pt-5">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Enfants liés</p>
+                      <h4 className="mt-1 font-display text-xl font-semibold text-slate-100">Ajouter / gérer les enfants</h4>
+                    </div>
+                    <button type="button" onClick={addStudentDraft} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Ajouter un enfant</button>
+                  </div>
+                <div className="space-y-3">
+                  {form.students.map((student, index) => (
+                    <div key={`student-draft-${index}`} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-slate-100">Enfant {index + 1}</p>
                   {form.students.length > 1 ? (
@@ -354,15 +538,79 @@ const StudentsPage = () => {
                 </div>
               </div>
             ))}
-          </div>
+                </div>
+                </div>
+
+                {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
+                <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-github-border pt-4">
+                  <button type="button" onClick={() => setFamilyDialogOpen(false)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
+                  <button type="button" onClick={() => void submitFamily()} disabled={submitting} className="rounded-xl bg-kcs-blue px-5 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                    {submitting ? 'Enregistrement en cours...' : 'Enregistrer la famille'}
+                  </button>
+                </div>
+              </section>
+            </div>
+          ), document.body) : null}
+
+          {editingStudent ? createPortal((
+            <div className={modalBackdropClass}>
+              <section role="dialog" aria-modal="true" aria-label="Modifier une entité" className={modalPanelClass}>
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Modification autorisée</p>
+                    <h4 className="mt-1 font-display text-xl font-semibold text-slate-100">Modifier l'entité élève</h4>
+                    <p className="mt-1 text-xs text-slate-400">ID élève et carte KCS restent verrouillés.</p>
+                  </div>
+                  <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
+                </div>
+
+                <div className="mb-5 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl border border-github-border bg-slate-950/45 p-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">ID élève verrouillé</p>
+                    <p className="mt-1 font-metric text-sm font-bold text-slate-200">{editingStudent.student_id || 'Non renseigné'}</p>
+                  </div>
+                  <div className="rounded-xl border border-github-border bg-slate-950/45 p-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Carte KCS verrouillée</p>
+                    <p className="mt-1 font-metric text-sm font-bold text-slate-200">{editingStudent.kcs_card_id || 'À générer'}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <input value={editForm.firstName} onChange={(event) => setEditField('firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <input value={editForm.lastName} onChange={(event) => setEditField('lastName', event.target.value)} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <input type="email" value={editForm.email} onChange={(event) => setEditField('email', event.target.value)} placeholder="Email" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <input type="date" value={editForm.dateOfBirth || ''} onChange={(event) => setEditField('dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <select value={editForm.classLevel} onChange={(event) => setEditField('classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+                    <option value="">Classe non assignée</option>
+                    {standardClassLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+                  </select>
+                  <select value={editForm.classSuffix} onChange={(event) => setEditField('classSuffix', event.target.value)} disabled={!editForm.classLevel} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue disabled:opacity-60">
+                    {classSuffixes.map((suffix) => <option key={suffix || 'none'} value={suffix}>{suffix ? `Suffixe ${suffix}` : 'Sans suffixe'}</option>)}
+                  </select>
+                  <select value={editForm.gender} onChange={(event) => setEditField('gender', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+                    <option value="F">Fille</option>
+                    <option value="M">Garçon</option>
+                    <option value="O">Autre</option>
+                  </select>
+                  <input value={editForm.address} onChange={(event) => setEditField('address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <textarea value={editForm.notes} onChange={(event) => setEditField('notes', event.target.value)} placeholder="Notes" className="min-h-24 w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2 xl:col-span-4" />
+                </div>
+
+                {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
+                <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-github-border pt-4">
+                  <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Annuler</button>
+                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/20 disabled:opacity-60">
+                    {savingEdit ? 'Modification...' : 'Enregistrer les modifications'}
+                  </button>
+                </div>
+              </section>
+            </div>
+          ), document.body) : null}
 
           {feedback ? <p className="text-sm text-emerald-300">{feedback}</p> : null}
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
-          <button type="submit" disabled={submitting} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
-            {submitting ? 'Enregistrement en cours...' : 'Enregistrer la famille'}
-          </button>
-        </form> : null}
+        </form>
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -372,17 +620,24 @@ const StudentsPage = () => {
       </section>
 
       <div className="mb-4 card p-4">
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-4">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Rechercher par élève, classe ou famille..."
             className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
           />
-          <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
-            <option value="all">Toutes les classes</option>
-            {classOptions.map((className) => (
-              <option key={className} value={className}>{className}</option>
+          <select value={classLevelFilter} onChange={(event) => setClassLevelFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+            <option value="all">Tous les niveaux</option>
+            {standardClassLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+          <select value={classSuffixFilter} onChange={(event) => setClassSuffixFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+            <option value="all">Tous les suffixes</option>
+            <option value="">Sans suffixe</option>
+            {classSuffixes.filter(Boolean).map((suffix) => (
+              <option key={suffix} value={suffix}>Suffixe {suffix}</option>
             ))}
           </select>
           <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">

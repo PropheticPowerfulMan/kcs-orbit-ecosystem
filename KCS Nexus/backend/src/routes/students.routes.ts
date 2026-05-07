@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
+import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
@@ -12,6 +13,131 @@ const schoolLevels = [
   'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
   'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12',
 ] as const
+
+type OrbitPerson = {
+  id: string
+  fullName: string
+  firstName?: string | null
+  lastName?: string | null
+  email?: string | null
+  phone?: string | null
+  studentIds?: string[]
+}
+
+type OrbitStudent = {
+  id: string
+  fullName: string
+  firstName?: string | null
+  lastName?: string | null
+  studentNumber?: string | null
+  email?: string | null
+  phone?: string | null
+  status?: string | null
+  className?: string | null
+  parentId?: string | null
+  externalIds?: Array<{ appSlug: string; externalId: string }>
+}
+
+type OrbitSharedDirectory = {
+  parents: OrbitPerson[]
+  students: OrbitStudent[]
+}
+
+function orbitRegistryIsEnabled() {
+  return Boolean(env.KCS_ORBIT_API_URL && env.KCS_ORBIT_API_KEY && env.KCS_ORBIT_ORGANIZATION_ID)
+}
+
+async function getSharedDirectoryFromOrbit() {
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
+    {
+      headers: {
+        'x-api-key': env.KCS_ORBIT_API_KEY!,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+    }
+  )
+
+  if (!response.ok) {
+    throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
+  }
+
+  return response.json() as Promise<OrbitSharedDirectory>
+}
+
+function splitName(person: { fullName?: string | null; firstName?: string | null; lastName?: string | null }) {
+  const cleanFullName = (person.fullName ?? '').trim()
+  const parts = cleanFullName.split(/\s+/).filter(Boolean)
+  return {
+    firstName: person.firstName || parts[0] || '',
+    lastName: person.lastName || parts.slice(1).join(' ') || '',
+  }
+}
+
+function splitClassName(className?: string | null) {
+  const cleanClassName = (className ?? '').trim()
+  if (!cleanClassName) {
+    return { grade: 'Grade 1', section: '' }
+  }
+
+  const match = cleanClassName.match(/^(.*?)(?:\s+([A-Z]))?$/)
+  return {
+    grade: match?.[1]?.trim() || cleanClassName,
+    section: match?.[2] || '',
+  }
+}
+
+function orbitExternalId(student: OrbitStudent) {
+  const savanexId = student.externalIds?.find((item) => item.appSlug === 'SAVANEX')?.externalId
+  return student.studentNumber || savanexId || student.id
+}
+
+function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
+  const parentsById = new Map(directory.parents.map((parent) => [parent.id, parent]))
+
+  return directory.students.map((student) => {
+    const studentName = splitName(student)
+    const parent = student.parentId ? parentsById.get(student.parentId) : undefined
+    const parentName = parent ? splitName(parent) : { firstName: '', lastName: '' }
+    const classParts = splitClassName(student.className)
+
+    return {
+      id: student.id,
+      userId: student.id,
+      studentNumber: orbitExternalId(student),
+      grade: classParts.grade,
+      section: classParts.section,
+      status: (student.status ?? 'active').toLowerCase(),
+      gpa: 0,
+      attendanceRate: 100,
+      enrollmentDate: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      user: {
+        id: student.id,
+        email: student.email ?? '',
+        firstName: studentName.firstName,
+        lastName: studentName.lastName,
+        phone: student.phone ?? null,
+        role: 'STUDENT',
+      },
+      parentLinks: parent ? [{
+        id: `${student.id}:${parent.id}`,
+        studentId: student.id,
+        parentId: parent.id,
+        relation: 'Parent',
+        parent: {
+          id: parent.id,
+          email: parent.email ?? null,
+          firstName: parentName.firstName,
+          lastName: parentName.lastName,
+          phone: parent.phone ?? null,
+          role: 'PARENT',
+        },
+      }] : [],
+    }
+  })
+}
 
 const createStudentSchema = z.object({
   parent: z.object({
@@ -32,6 +158,11 @@ const createStudentSchema = z.object({
 })
 
 studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent'), asyncHandler(async (_req, res) => {
+  if (orbitRegistryIsEnabled()) {
+    const directory = await getSharedDirectoryFromOrbit()
+    return success(res, orbitStudentsToProfiles(directory), 'Students loaded from Orbit')
+  }
+
   const students = await prisma.studentProfile.findMany({
     include: {
       user: true,

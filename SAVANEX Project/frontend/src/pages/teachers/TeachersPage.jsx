@@ -64,6 +64,7 @@ const TeachersPage = () => {
   const [form, setForm] = useState(initialForm);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [employeeFormVisible, setEmployeeFormVisible] = useState(true);
+  const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
 
   const loadTeachers = async () => {
     setLoading(true);
@@ -143,6 +144,7 @@ const TeachersPage = () => {
       const accessSummary = credentials?.temporaryPassword
         ? ` Accès temporaire: ${credentials.username} / ${credentials.temporaryPassword}.`
         : '';
+      setLastTemporaryCredentials(credentials || null);
       setFeedback(`Employé enregistré. Mot de passe généré par le système et à changer à la première connexion.${accessSummary}`);
       setForm({ ...initialForm, hireDate: new Date().toISOString().slice(0, 10), identity: { ...emptyIdentityCapture } });
       await loadTeachers();
@@ -185,6 +187,22 @@ const TeachersPage = () => {
         </div>
 
         {employeeFormVisible ? <form onSubmit={submitTeacher} className="space-y-4">
+          {lastTemporaryCredentials ? (
+            <section className="rounded-2xl border border-emerald-400/35 bg-emerald-400/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Accès temporaire généré</p>
+                  <h4 className="mt-1 font-display text-lg font-semibold text-slate-100">Mot de passe à remettre à l'employé</h4>
+                </div>
+                <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
+              </div>
+              <div className="mt-4 rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
+                <p className="text-sm text-slate-200">Utilisateur: <span className="font-metric font-bold text-white">{lastTemporaryCredentials.username}</span></p>
+                <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{lastTemporaryCredentials.temporaryPassword || 'Déjà défini'}</span></p>
+              </div>
+            </section>
+          ) : null}
+
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prénom" className={inputClass} required />
             <input value={form.lastName} onChange={(event) => updateForm('lastName', event.target.value)} placeholder="Nom" className={inputClass} required />

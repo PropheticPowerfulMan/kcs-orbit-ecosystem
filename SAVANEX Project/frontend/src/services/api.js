@@ -152,6 +152,26 @@ export const studentsService = {
     const res = await api.post('/students/family-registration/', data);
     return res.data;
   },
+
+  async update(id, data) {
+    if (isDemoSession()) {
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour modifier des entités.");
+    }
+
+    const res = await api.patch(`/students/${id}/`, data);
+    return res.data;
+  },
+
+  async remove(id) {
+    if (isDemoSession()) {
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour supprimer des entités.");
+    }
+
+    const res = await api.delete(`/students/${id}/`);
+    return res.data;
+  },
 };
 
 export const teachersService = {

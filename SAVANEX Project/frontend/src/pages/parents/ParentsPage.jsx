@@ -14,10 +14,32 @@ const normalizeLabel = (value, fallback) => {
 };
 
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const standardClassLevels = [
+  'K1', 'K2', 'K3', 'K4', 'K5',
+  ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`),
+];
+const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];
+
+const splitClassName = (value) => {
+  const className = normalizeLabel(value, 'Non assignée');
+  const match = className.match(/^(K[1-5]|Grade\s+(?:[1-9]|1[0-2]))(?:\s+([A-Z]))?$/i);
+
+  if (!match) {
+    return { level: className, suffix: '' };
+  }
+
+  const rawLevel = match[1].replace(/\s+/g, ' ');
+  const level = rawLevel.toLowerCase().startsWith('grade')
+    ? `Grade ${rawLevel.match(/\d+/)?.[0] || ''}`.trim()
+    : rawLevel.toUpperCase();
+
+  return { level, suffix: (match[2] || '').toUpperCase() };
+};
 
 const ParentsPage = () => {
   const [query, setQuery] = useState('');
-  const [classFilter, setClassFilter] = useState('all');
+  const [classLevelFilter, setClassLevelFilter] = useState('all');
+  const [classSuffixFilter, setClassSuffixFilter] = useState('all');
   const [familyFilter, setFamilyFilter] = useState('all');
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +74,7 @@ const ParentsPage = () => {
         family_name: familyName,
         students: [],
         classes: new Set(),
+        classParts: [],
         activeStudents: 0,
         kcs_card_id: student.parent_kcs_card_id,
         parent_external_id: student.parent_external_id,
@@ -63,7 +86,9 @@ const ParentsPage = () => {
       };
 
       current.students.push(student.full_name);
-      current.classes.add(normalizeLabel(student.class_name, 'Non assignée'));
+      const className = normalizeLabel(student.class_name, 'Non assignée');
+      current.classes.add(className);
+      current.classParts.push(splitClassName(className));
       if (student.is_active) {
         current.activeStudents += 1;
       }
@@ -77,6 +102,7 @@ const ParentsPage = () => {
         family_name: group.family_name,
         students_label: group.students.join(', '),
         classes_label: Array.from(group.classes).sort((left, right) => left.localeCompare(right)).join(', '),
+        class_parts: group.classParts,
         student_count: group.students.length,
         activeStudents: group.activeStudents,
         kcs_card_id: group.kcs_card_id,
@@ -90,11 +116,6 @@ const ParentsPage = () => {
       .sort((left, right) => right.student_count - left.student_count || left.family_name.localeCompare(right.family_name));
   }, [students]);
 
-  const classOptions = useMemo(
-    () => Array.from(new Set(students.map((student) => normalizeLabel(student.class_name, 'Non assignée')))).sort((left, right) => left.localeCompare(right)),
-    [students]
-  );
-
   const familyOptions = useMemo(
     () => familyRows.map((row) => row.family_name),
     [familyRows]
@@ -104,11 +125,12 @@ const ParentsPage = () => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return familyRows.filter((family) => {
-      if (classFilter !== 'all') {
-        const classLabels = family.classes_label.split(', ').filter(Boolean);
-        if (!classLabels.includes(classFilter)) {
-          return false;
-        }
+      if (classLevelFilter !== 'all' && !family.class_parts.some((classPart) => classPart.level === classLevelFilter)) {
+        return false;
+      }
+
+      if (classSuffixFilter !== 'all' && !family.class_parts.some((classPart) => classPart.suffix === classSuffixFilter)) {
+        return false;
       }
 
       if (familyFilter !== 'all' && family.family_name !== familyFilter) {
@@ -122,7 +144,7 @@ const ParentsPage = () => {
 
       return true;
     });
-  }, [classFilter, familyFilter, familyRows, query]);
+  }, [classLevelFilter, classSuffixFilter, familyFilter, familyRows, query]);
 
   const classGroups = useMemo(() => {
     const groups = new Map();
@@ -200,17 +222,24 @@ const ParentsPage = () => {
       </section>
 
       <div className="mb-4 card p-4">
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-4">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Rechercher parent, famille, élève ou classe..."
             className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
           />
-          <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
-            <option value="all">Toutes les classes</option>
-            {classOptions.map((className) => (
-              <option key={className} value={className}>{className}</option>
+          <select value={classLevelFilter} onChange={(event) => setClassLevelFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+            <option value="all">Tous les niveaux</option>
+            {standardClassLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+          <select value={classSuffixFilter} onChange={(event) => setClassSuffixFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+            <option value="all">Tous les suffixes</option>
+            <option value="">Sans suffixe</option>
+            {classSuffixes.filter(Boolean).map((suffix) => (
+              <option key={suffix} value={suffix}>Suffixe {suffix}</option>
             ))}
           </select>
           <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">

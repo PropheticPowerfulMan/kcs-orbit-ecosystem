@@ -418,6 +418,20 @@ if (-not $NoWait) {
     Wait-PortOpen -Name 'EduSync AI frontend' -Port 5175 | Out-Null
     Wait-PortOpen -Name 'SAVANEX frontend' -Port 3000 | Out-Null
   }
+
+  Write-Step 'Synchronizing SAVANEX directory into Orbit'
+  Invoke-InDirectory -Path $savanexBackendPath -Script {
+    $env:DB_ENGINE = 'django.db.backends.sqlite3'
+    Remove-Item Env:DB_NAME -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_USER -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_HOST -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PORT -ErrorAction SilentlyContinue
+    $env:KCS_ORBIT_API_URL = $orbitUrl
+    $env:KCS_ORBIT_API_KEY = $integrationKeys.Savanex
+    $env:KCS_ORBIT_ORGANIZATION_ID = $orbitOrganizationId
+    & $savanexPythonPath manage.py sync_orbit_directory
+  }
 }
 
 if ($OpenBrowser -and -not $NoFrontends) {
