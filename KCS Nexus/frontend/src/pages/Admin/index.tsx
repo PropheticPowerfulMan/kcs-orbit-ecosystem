@@ -137,6 +137,18 @@ type AdminStudentRecord = {
   isDeletable?: boolean
 }
 
+type AdminParentRecord = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  students: AdminStudentRecord[]
+  studentCount: number
+  classes: string[]
+  syncSource: 'local' | 'orbit' | 'mixed'
+  status: string
+}
+
 type AdminStudentEditForm = {
   name: string
   studentNumber: string
@@ -201,14 +213,6 @@ const SEARCH_CLASS_SUFFIXES = ['All', '', 'A', 'B', 'C', 'D'] as const
 
 const formatClassName = (grade: string, section?: string) => [grade, section].filter(Boolean).join(' ')
 
-const splitClassName = (className: string) => {
-  const match = className.match(/^(.*?)(?:\s([A-D]))?$/)
-  return {
-    grade: match?.[1] || className,
-    section: match?.[2] || '',
-  }
-}
-
 const sectionLabel = (section?: string) => section || 'No section'
 const searchSuffixLabel = (section: typeof SEARCH_CLASS_SUFFIXES[number]) => {
   if (section === 'All') return 'Tous les suffixes'
@@ -242,6 +246,14 @@ const extractStudentApiMessage = (error: unknown, fallback: string) => {
   return responseData?.message || responseData?.error || responseData?.details || (error as { message?: string })?.message || fallback
 }
 
+const adminRosterSegments = new Set(['students', 'parents', 'transcripts', 'reports'])
+
+const getAdminRoster = () => studentsAPI.getAll(undefined, {
+  headers: {
+    'x-skip-auth-logout': 'true',
+  },
+})
+
 const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
   const parentLink = profile.parentLinks?.[0]
   const parent = parentLink?.parent
@@ -267,7 +279,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     discipline: 'Clear',
     syncSource: profile.syncSource === 'orbit' ? 'orbit' : 'local',
     managingApp,
-    isEditable: typeof profile.isEditable === 'boolean' ? profile.isEditable : true,
+    isEditable: true,
     isDeletable: typeof profile.isDeletable === 'boolean' ? profile.isDeletable : true,
   }
 }
@@ -414,7 +426,10 @@ const staffSeed = [
 
 const getAdminSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
-  return !segment || segment === 'admin' || segment === 'dashboard' ? 'dashboard' : segment
+  if (!segment || segment === 'admin' || segment === 'dashboard') return 'dashboard'
+  if (segment === 'student') return 'students'
+  if (segment === 'parent') return 'parents'
+  return segment
 }
 
 const pillTone = (value: string) => {
@@ -533,6 +548,36 @@ const buildReportRows = (
 const buildAuthenticityCode = (value: string) => {
   const checksum = Array.from(value).reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) >>> 0, 2166136261)
   return checksum.toString(36).toUpperCase().padStart(7, '0').slice(0, 7)
+}
+
+const buildAdminParentRecords = (roster: AdminStudentRecord[]): AdminParentRecord[] => {
+  const groups = new Map<string, AdminStudentRecord[]>()
+
+  for (const student of roster) {
+    const keySource = student.parentEmail || student.parentPhone || student.parent || 'Parent record pending'
+    const key = keySource.trim().toLowerCase()
+    groups.set(key, [...(groups.get(key) ?? []), student])
+  }
+
+  return Array.from(groups.entries()).map(([key, familyStudents]) => {
+    const firstStudent = familyStudents[0]
+    const classes = Array.from(new Set(familyStudents.map((student) => formatClassName(student.grade, student.section)).filter(Boolean))).sort()
+    const sources = new Set(familyStudents.map((student) => student.syncSource ?? 'local'))
+    const syncSource = sources.size > 1 ? 'mixed' : (sources.values().next().value ?? 'local') as AdminParentRecord['syncSource']
+    const needsAction = familyStudents.some((student) => getStudentRisk(student) !== 'On track')
+
+    return {
+      id: key,
+      name: firstStudent.parent || 'Parent record pending',
+      email: firstStudent.parentEmail || 'Email non renseigne',
+      phone: firstStudent.parentPhone || 'Telephone non renseigne',
+      students: familyStudents.sort((left, right) => left.name.localeCompare(right.name)),
+      studentCount: familyStudents.length,
+      classes,
+      syncSource,
+      status: needsAction ? 'Suivi requis' : 'Actif',
+    }
+  }).sort((left, right) => left.name.localeCompare(right.name))
 }
 
 const buildAdminReportDocument = (
@@ -970,11 +1015,12 @@ const AdminSectionView = ({
   const [selectedStudent, setSelectedStudent] = useState(officialRoster[0] ?? adminRosterSeed[0])
   const [viewingStudent, setViewingStudent] = useState<AdminStudentRecord | null>(null)
   const [selectedStaff, setSelectedStaff] = useState(staffSeed[0])
+  const [selectedParent, setSelectedParent] = useState<AdminParentRecord | null>(null)
   const [sentNotice, setSentNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
+  const [parentQuery, setParentQuery] = useState('')
   const [divisionFilter, setDivisionFilter] = useState('All')
   const [gradeFilter, setGradeFilter] = useState('All')
-  const [classFilter, setClassFilter] = useState('All')
   const [classSuffixFilter, setClassSuffixFilter] = useState<typeof SEARCH_CLASS_SUFFIXES[number]>('All')
   const [familyFilter, setFamilyFilter] = useState('All')
   const [studentNotice, setStudentNotice] = useState('')
@@ -994,8 +1040,10 @@ const AdminSectionView = ({
     students: [createAdminStudentDraft()],
   })
 
+  const shouldLoadRoster = adminRosterSegments.has(segment)
+
   const refreshOfficialRoster = async () => {
-    const response = await studentsAPI.getAll()
+    const response = await getAdminRoster()
     const profiles = response.data?.data
     if (!Array.isArray(profiles)) {
       const fallbackRoster = readStoredRoster()
@@ -1016,8 +1064,13 @@ const AdminSectionView = ({
   }
 
   useEffect(() => {
+    if (!shouldLoadRoster) {
+      setStudentNotice('')
+      return
+    }
+
     let mounted = true
-    studentsAPI.getAll()
+    getAdminRoster()
       .then((response) => {
         const profiles = response.data?.data
         if (!mounted) return
@@ -1048,7 +1101,7 @@ const AdminSectionView = ({
     return () => {
       mounted = false
     }
-  }, [setOfficialRoster])
+  }, [setOfficialRoster, shouldLoadRoster])
 
   const registerOfficialStudent = async () => {
     const readyStudents = newFamily.students.filter((student) => student.name.trim())
@@ -1132,7 +1185,7 @@ const AdminSectionView = ({
           .filter((credential: { temporaryPassword?: string }) => credential.temporaryPassword)
           .map((credential: { studentId: string; username: string; temporaryPassword: string }) => `${credential.studentId}: ${credential.username} / ${credential.temporaryPassword}`),
       ].filter(Boolean).join(' | ')
-      setStudentNotice(`Famille enregistrée avec ${finalRecords.length} élève(s). Accès temporaires: ${credentialSummary || 'déjà définis'}.`)
+      setStudentNotice(`Famille enregistrée avec ${finalRecords.length} élève(s). Accès temporaires: ${credentialSummary || 'déjà définis'}. Format: KCS-ROLE-CODE-CODE, PAR = parent, STU = élève, à changer à la première connexion.`)
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cette famille pour le moment.'))
       return
@@ -1142,16 +1195,11 @@ const AdminSectionView = ({
     setSelectedStudent(focusStudent)
     setDivisionFilter(getDivisionForGrade(focusStudent.grade).id)
     setGradeFilter(focusStudent.grade)
-    setClassFilter(formatClassName(focusStudent.grade, focusStudent.section))
+    setClassSuffixFilter(focusStudent.section as typeof SEARCH_CLASS_SUFFIXES[number] || 'All')
     setNewFamily({ parent: '', parentEmail: '', parentPhone: '', advisor: '', students: [createAdminStudentDraft()] })
   }
 
   const openEditStudent = (student: AdminStudentRecord) => {
-    if (!student.isEditable) {
-      setStudentNotice(`L’élève ${student.name} est géré par ${student.managingApp || 'une autre application'} et doit être modifié dans son système source.`)
-      return
-    }
-
     setViewingStudent(null)
     setEditingStudent(student)
     setStudentEditForm(createAdminStudentEditForm(student))
@@ -1227,10 +1275,7 @@ const AdminSectionView = ({
       }))
     }
 
-    if (classFilter !== 'All') {
-      const { grade, section } = splitClassName(classFilter)
-      updateDraftClass(grade, section)
-    } else if (gradeFilter !== 'All') {
+    if (gradeFilter !== 'All') {
       updateDraftClass(gradeFilter)
     } else if (divisionFilter !== 'All') {
       const division = SCHOOL_DIVISIONS.find((item) => item.id === divisionFilter)
@@ -1262,7 +1307,7 @@ const AdminSectionView = ({
     [officialRoster]
   )
 
-  const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0]
+  const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0] ?? adminRosterSeed[0]
   const officialTranscript = buildOfficialTranscript(transcriptStudent)
 
   const filteredRoster = useMemo(() => {
@@ -1270,7 +1315,6 @@ const AdminSectionView = ({
     return officialRoster
       .filter((student) => divisionFilter === 'All' || getDivisionForGrade(student.grade).id === divisionFilter)
       .filter((student) => gradeFilter === 'All' || student.grade === gradeFilter)
-      .filter((student) => classFilter === 'All' || formatClassName(student.grade, student.section) === classFilter)
       .filter((student) => classSuffixFilter === 'All' || student.section === classSuffixFilter)
       .filter((student) => familyFilter === 'All' || student.parent === familyFilter)
       .filter((student) => {
@@ -1284,19 +1328,7 @@ const AdminSectionView = ({
           .includes(query)
       })
       .sort((a, b) => SCHOOL_LEVELS.indexOf(a.grade as any) - SCHOOL_LEVELS.indexOf(b.grade as any) || a.section.localeCompare(b.section) || a.name.localeCompare(b.name))
-  }, [classFilter, classSuffixFilter, divisionFilter, familyFilter, gradeFilter, officialRoster, studentQuery])
-
-  const classDirectory = useMemo(() => {
-    const classes = officialRoster
-      .filter((student) => divisionFilter === 'All' || getDivisionForGrade(student.grade).id === divisionFilter)
-      .filter((student) => gradeFilter === 'All' || student.grade === gradeFilter)
-      .map((student) => formatClassName(student.grade, student.section))
-    return Array.from(new Set(classes)).sort((a, b) => {
-      const { grade: gradeA, section: sectionA } = splitClassName(a)
-      const { grade: gradeB, section: sectionB } = splitClassName(b)
-      return SCHOOL_LEVELS.indexOf(gradeA as any) - SCHOOL_LEVELS.indexOf(gradeB as any) || sectionA.localeCompare(sectionB)
-    })
-  }, [divisionFilter, gradeFilter, officialRoster])
+  }, [classSuffixFilter, divisionFilter, familyFilter, gradeFilter, officialRoster, studentQuery])
 
   const familyDirectory = useMemo(() => {
     return Array.from(new Set(officialRoster.map((student) => student.parent).filter(Boolean))).sort((left, right) => left.localeCompare(right))
@@ -1317,6 +1349,22 @@ const AdminSectionView = ({
       return groups
     }, {})
   }, [filteredRoster])
+
+  const parentRecords = useMemo(() => buildAdminParentRecords(officialRoster), [officialRoster])
+
+  const filteredParents = useMemo(() => {
+    const query = parentQuery.trim().toLowerCase()
+    if (!query) return parentRecords
+    return parentRecords.filter((parent) => [
+      parent.name,
+      parent.email,
+      parent.phone,
+      parent.status,
+      parent.syncSource,
+      parent.classes.join(' '),
+      parent.students.map((student) => `${student.name} ${student.studentNumber ?? ''}`).join(' '),
+    ].join(' ').toLowerCase().includes(query))
+  }, [parentQuery, parentRecords])
 
   const divisionSummary = useMemo(() => {
     return SCHOOL_DIVISIONS.map((division) => {
@@ -1343,6 +1391,151 @@ const AdminSectionView = ({
   const selectedAttendanceEvents = attendance.filter((item) => item.studentId === selectedStudent.id || selectedStudent.name.includes('Elise') && item.studentId === 'stu-elise' || selectedStudent.name.includes('David') && item.studentId === 'stu-david')
   const selectedDiscipline = disciplineReports.find((item) => item.studentId === selectedStudent.id || item.student === selectedStudent.name)
   const selectedInsight = students.find((item) => item.id === selectedStudent.id || item.name === selectedStudent.name)
+
+  if (segment === 'parents') {
+    const totalLinkedStudents = parentRecords.reduce((sum, parent) => sum + parent.studentCount, 0)
+    const parentsWithAlerts = parentRecords.filter((parent) => parent.status === 'Suivi requis').length
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">SAVANEX shared registry</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Parents</h2>
+              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Annuaire des parents responsables, construit depuis les familles et les eleves synchronises dans KCS Nexus.</p>
+            </div>
+            <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{apiSynced ? 'Synchronise Orbit' : 'Mode local'}</span>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4">
+          {[
+            { label: 'Parents visibles', value: filteredParents.length, detail: `${parentRecords.length} au total`, icon: Users },
+            { label: 'Enfants lies', value: totalLinkedStudents, detail: 'dans le registre officiel', icon: GraduationCap },
+            { label: 'Classes couvertes', value: Array.from(new Set(parentRecords.flatMap((parent) => parent.classes))).length, detail: 'via les familles', icon: BookOpen },
+            { label: 'Suivi requis', value: parentsWithAlerts, detail: 'au moins un enfant a surveiller', icon: AlertTriangle },
+          ].map(({ label, value, detail, icon: Icon }) => (
+            <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+              <Icon size={18} className="mb-3 text-kcs-blue-600 dark:text-kcs-blue-300" />
+              <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+            <Search size={16} className="text-gray-400" />
+            <input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher parent, email, telephone, enfant ou classe..." />
+          </label>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="border-b border-gray-100 px-5 py-4 dark:border-kcs-blue-800">
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Liste officielle des parents</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Vue semblable a SAVANEX : responsable, contacts, enfants rattaches, classes et statut de suivi.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[900px] w-full text-sm">
+              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-kcs-blue-950 dark:text-gray-400">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Parent</th>
+                  <th className="px-5 py-3 font-semibold">Contact</th>
+                  <th className="px-5 py-3 font-semibold">Enfants</th>
+                  <th className="px-5 py-3 font-semibold">Classes</th>
+                  <th className="px-5 py-3 font-semibold">Source</th>
+                  <th className="px-5 py-3 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800/70">
+                {filteredParents.map((parent) => (
+                  <tr key={parent.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20">
+                    <td className="px-5 py-4">
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{parent.status}</p>
+                    </td>
+                    <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
+                      <p>{parent.email}</p>
+                      <p className="mt-1">{parent.phone}</p>
+                    </td>
+                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.studentCount} enfant(s)</td>
+                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.classes.join(', ') || 'Non assignee'}</td>
+                    <td className="px-5 py-4"><span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{parent.syncSource}</span></td>
+                    <td className="px-5 py-4 text-right">
+                      <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>Voir</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredParents.length === 0 && (
+              <div className="p-5 text-sm font-semibold text-yellow-800 dark:text-yellow-300">Aucun parent ne correspond aux filtres en cours.</div>
+            )}
+          </div>
+        </div>
+
+        {selectedParent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche parent">
+            <section className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche parent</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Contact familial, enfants rattaches et classes synchronisees.</p>
+                </div>
+                <button type="button" onClick={() => setSelectedParent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                  <X size={16} />
+                  Fermer
+                </button>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+                <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Responsable</p>
+                  <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedParent.name}</h4>
+                  <div className="mt-5 space-y-3">
+                    {[
+                      ['Email', selectedParent.email],
+                      ['Telephone', selectedParent.phone],
+                      ['Enfants', String(selectedParent.studentCount)],
+                      ['Classes', selectedParent.classes.join(', ') || 'Non assignee'],
+                      ['Statut', selectedParent.status],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+                        <p className="mt-2 break-words text-sm font-semibold text-kcs-blue-900 dark:text-white">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </aside>
+
+                <div className="space-y-3">
+                  {selectedParent.students.map((student) => (
+                    <div key={student.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{student.studentNumber ?? 'ID non renseigne'} - {formatClassName(student.grade, student.section) || 'Non assignee'}</p>
+                        </div>
+                        <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">Presence</p><p className={`font-bold ${scoreTone(student.attendance, 'attendance')}`}>{student.attendance}%</p></div>
+                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">GPA</p><p className={`font-bold ${scoreTone(student.gpa, 'gpa')}`}>{student.gpa}</p></div>
+                        <div className="rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70"><p className="text-xs text-gray-400">Discipline</p><p className="font-bold text-kcs-blue-900 dark:text-white">{student.discipline}</p></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (segment === 'students') {
     const activeStudents = filteredRoster.filter((student) => student.status.toLowerCase() === 'active').length
@@ -1389,14 +1582,17 @@ const AdminSectionView = ({
             </label>
             <select value={gradeFilter} onChange={(event) => {
               setGradeFilter(event.target.value)
-              setClassFilter('All')
+              setClassSuffixFilter('All')
             }} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
               <option>All</option>
               {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
             </select>
-            <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>All</option>
-              {classDirectory.map((className) => <option key={className}>{className}</option>)}
+            <select value={classSuffixFilter} onChange={(event) => {
+              setClassSuffixFilter(event.target.value as typeof SEARCH_CLASS_SUFFIXES[number])
+            }} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="All">Tous les suffixes</option>
+              <option value="">Sans suffixe</option>
+              {CLASS_SECTIONS.filter(Boolean).map((section) => <option key={section} value={section}>Suffixe {section}</option>)}
             </select>
             <select value={familyFilter} onChange={(event) => setFamilyFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
               <option>All</option>

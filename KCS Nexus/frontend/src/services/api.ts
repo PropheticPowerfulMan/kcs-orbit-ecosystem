@@ -32,6 +32,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+    const skipAuthLogout = originalRequest?.headers?.['x-skip-auth-logout'] === 'true'
+
+    if (error.response?.status === 401 && skipAuthLogout) {
+      return Promise.reject(error)
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
@@ -98,7 +103,7 @@ export const eventsAPI = {
 
 // --- Students API ---
 export const studentsAPI = {
-  getAll: (params?: object) => api.get('/students', { params }),
+  getAll: (params?: object, config?: object) => api.get('/students', { params, ...config }),
   getById: (id: string) => api.get(`/students/${id}`),
   create: (data: object) => api.post('/students', data),
   getGrades: (id: string) => api.get(`/students/${id}/grades`),

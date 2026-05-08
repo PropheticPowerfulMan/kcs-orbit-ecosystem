@@ -74,6 +74,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
       return [
         ...base,
         { to: '/admin/students', label: 'Students', icon: GraduationCap },
+        { to: '/admin/parents', label: 'Parents', icon: Users },
         { to: '/admin/transcripts', label: 'Transcripts', icon: FileSpreadsheet },
         { to: '/admin/communications', label: 'Communications', icon: Megaphone },
         { to: '/admin/staff-attendance', label: 'Staff Attendance', icon: ClipboardCheck },
@@ -168,7 +169,12 @@ const PortalSidebar = () => {
             key={to}
             to={to}
             end={to === (user.role === 'admin' ? '/admin' : `/portal/${user.role}`)}
-            onClick={() => isMobile && setSidebarOpen(false)}
+            onClick={(event) => {
+              event.preventDefault()
+              setSidebarOpen(false)
+              document.body.style.overflow = ''
+              navigate(to)
+            }}
             className={({ isActive }) =>
               `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`
             }

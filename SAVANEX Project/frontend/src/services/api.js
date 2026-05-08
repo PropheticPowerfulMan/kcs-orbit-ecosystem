@@ -189,13 +189,7 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
         .filter(Boolean)
       : []
   );
-  const centralDirectoryIsAuthoritative = sharedDirectory?.source === 'orbit' && Array.isArray(sharedDirectory?.students);
-  const visibleLocalStudents = centralDirectoryIsAuthoritative
-    ? safeLocalStudents.filter((student) => {
-      const localStudentId = typeof student?.student_id === 'string' ? student.student_id.trim().toLowerCase() : '';
-      return localStudentId && centralSavanexStudentIds.has(localStudentId);
-    })
-    : safeLocalStudents;
+  const visibleLocalStudents = safeLocalStudents;
 
   const localStudentIds = new Set(
     visibleLocalStudents

@@ -23,14 +23,14 @@ def _generate_kcs_card_id(role: str) -> str:
 
 def generate_temporary_password(role: str) -> str:
     prefix_map = {
-        User.ROLE_PARENT: 'Par',
-        User.ROLE_STUDENT: 'Stu',
-        User.ROLE_TEACHER: 'Emp',
-        User.ROLE_EMPLOYEE: 'Emp',
-        User.ROLE_ADMIN: 'Adm',
+        User.ROLE_PARENT: 'PAR',
+        User.ROLE_STUDENT: 'STU',
+        User.ROLE_TEACHER: 'EMP',
+        User.ROLE_EMPLOYEE: 'EMP',
+        User.ROLE_ADMIN: 'ADM',
     }
-    prefix = prefix_map.get(role, 'Usr')
-    return f"KCS-{prefix}@{uuid4().hex[:8].upper()}"
+    prefix = prefix_map.get(role, 'USR')
+    return f"KCS-{prefix}-{uuid4().hex[:4].upper()}-{uuid4().hex[:4].upper()}"
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

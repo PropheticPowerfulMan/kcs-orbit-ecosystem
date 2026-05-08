@@ -86,6 +86,7 @@ export default function DashboardPanel() {
   const [workflows, setWorkflows] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [sharedDirectory, setSharedDirectory] = useState({ parents: [], students: [], teachers: [] });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busyChat, setBusyChat] = useState(false);
@@ -122,14 +123,16 @@ export default function DashboardPanel() {
   const loadData = async () => {
     setError("");
     try {
-      const [a, w, n] = await Promise.all([
+      const [a, w, n, directory] = await Promise.all([
         apiRequest("/messaging/announcements", "GET", null, token),
         apiRequest("/workflows", "GET", null, token),
         apiRequest("/notifications", "GET", null, token),
+        apiRequest("/directory/shared", "GET", null, token).catch(() => ({ parents: [], students: [], teachers: [] })),
       ]);
       setAnnouncements(a);
       setWorkflows(w);
       setNotifications(n);
+      setSharedDirectory(directory);
 
       try {
         const metrics = await apiRequest("/analytics/dashboard", "GET", null, token);
@@ -375,8 +378,8 @@ export default function DashboardPanel() {
             <p>Workflows</p>
           </article>
           <article className="status-story">
-            <span>{unreadCount}</span>
-            <p>Unread</p>
+            <span>{sharedDirectory.students?.length ?? 0}</span>
+            <p>Students</p>
           </article>
         </section>
 

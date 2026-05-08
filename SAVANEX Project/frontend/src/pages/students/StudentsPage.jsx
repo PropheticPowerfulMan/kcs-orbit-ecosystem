@@ -456,6 +456,7 @@ const StudentsPage = () => {
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Accès temporaires générés</p>
                   <h4 className="mt-1 font-display text-lg font-semibold text-slate-100">Mots de passe à remettre à la famille</h4>
+                  <p className="mt-1 text-xs text-slate-300">Format: KCS-ROLE-CODE-CODE. PAR = parent, STU = élève. Ce mot de passe sert seulement à la première connexion.</p>
                 </div>
                 <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
               </div>

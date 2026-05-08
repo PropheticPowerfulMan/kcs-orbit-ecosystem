@@ -1,5 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
@@ -8,6 +10,7 @@ import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 
 export const studentsRouter = Router()
+const hiddenStudentsPath = path.resolve(process.cwd(), '..', 'var', 'kcs-nexus-hidden-students.json')
 
 const schoolLevels = [
   'K1', 'K2', 'K3', 'K4', 'K5',
@@ -44,6 +47,10 @@ type OrbitSharedDirectory = {
   students: OrbitStudent[]
 }
 
+type HiddenStudentRegistry = {
+  keys: string[]
+}
+
 const studentUpdateSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
@@ -58,6 +65,29 @@ const studentUpdateSchema = z.object({
 
 function orbitRegistryIsEnabled() {
   return Boolean(env.KCS_ORBIT_API_URL && env.KCS_ORBIT_API_KEY && env.KCS_ORBIT_ORGANIZATION_ID)
+}
+
+async function readHiddenStudentKeys() {
+  try {
+    const raw = await fs.readFile(hiddenStudentsPath, 'utf8')
+    const parsed = JSON.parse(raw) as HiddenStudentRegistry
+    return new Set(Array.isArray(parsed.keys) ? parsed.keys.filter((key) => typeof key === 'string') : [])
+  } catch {
+    return new Set<string>()
+  }
+}
+
+async function writeHiddenStudentKeys(keys: Set<string>) {
+  await fs.mkdir(path.dirname(hiddenStudentsPath), { recursive: true })
+  await fs.writeFile(hiddenStudentsPath, JSON.stringify({ keys: Array.from(keys).sort() }, null, 2))
+}
+
+function orbitStudentKeys(student: OrbitStudent) {
+  return [
+    student.id,
+    student.studentNumber,
+    ...(student.externalIds?.map((item) => item.externalId) ?? []),
+  ].filter((key): key is string => Boolean(key))
 }
 
 async function getSharedDirectoryFromOrbit() {
@@ -135,6 +165,35 @@ async function updateRegistryEntityInOrbit(identifier: string, organizationId: s
   return data
 }
 
+async function createRegistryEntityInOrbit(entityType: 'parent' | 'student', payload: object) {
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${entityType}`,
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.KCS_ORBIT_API_KEY!,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+      body: JSON.stringify({
+        organizationId: env.KCS_ORBIT_ORGANIZATION_ID!,
+        ...payload,
+      }),
+    }
+  )
+
+  const data = await response.json().catch(() => ({}))
+  if (response.status === 409 && typeof data?.orbitId === 'string') {
+    return data as { orbitId?: string; externalId?: string; entity?: unknown }
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, typeof data?.message === 'string' ? data.message : `Orbit registry create failed with status ${response.status}`)
+  }
+
+  return data as { orbitId?: string; externalId?: string; entity?: unknown }
+}
+
 async function deleteRegistryEntityInOrbit(entityType: 'student', identifier: string, organizationId: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') {
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${entityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
@@ -155,10 +214,13 @@ async function deleteRegistryEntityInOrbit(entityType: 'student', identifier: st
   return data
 }
 
-function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
+function orbitStudentsToProfiles(directory: OrbitSharedDirectory, hiddenStudentKeys = new Set<string>()) {
   const parentsById = new Map(directory.parents.map((parent) => [parent.id, parent]))
 
-  return directory.students.map((student) => {
+  return directory.students.filter((student) => {
+    const keys = orbitStudentKeys(student)
+    return !keys.some((key) => hiddenStudentKeys.has(key))
+  }).map((student) => {
     const studentName = splitName(student)
     const parent = student.parentId ? parentsById.get(student.parentId) : undefined
     const parentName = parent ? splitName(parent) : { firstName: '', lastName: '' }
@@ -202,7 +264,7 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
       externalIds: student.externalIds ?? [],
       managingApp,
       syncSource: 'orbit',
-      isEditable: managingApp === 'KCS_NEXUS',
+      isEditable: true,
       isDeletable: true,
     }
   })
@@ -231,8 +293,8 @@ const createFamilySchema = z.object({
   students: z.array(createStudentSchema.shape.student).min(1),
 })
 
-function generateTemporaryPassword() {
-  return `KCS-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+function generateTemporaryPassword(role: 'PAR' | 'STU' = 'STU') {
+  return `KCS-${role}-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
 }
 
 function normalizeCreateStudentPayload(payload: unknown) {
@@ -248,8 +310,11 @@ function normalizeCreateStudentPayload(payload: unknown) {
 
 studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent'), asyncHandler(async (_req, res) => {
   if (orbitRegistryIsEnabled()) {
-    const directory = await getSharedDirectoryFromOrbit()
-    return success(res, orbitStudentsToProfiles(directory), 'Students loaded from Orbit')
+    const [directory, hiddenStudentKeys] = await Promise.all([
+      getSharedDirectoryFromOrbit(),
+      readHiddenStudentKeys(),
+    ])
+    return success(res, orbitStudentsToProfiles(directory, hiddenStudentKeys), 'Students loaded from Orbit')
   }
 
   const students = await prisma.studentProfile.findMany({
@@ -268,6 +333,73 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
   const studentNumbers = students.map((student) => student.studentNumber)
   if (new Set(studentNumbers).size !== studentNumbers.length) {
     throw new ApiError(409, 'Duplicate student numbers in request')
+  }
+
+  if (orbitRegistryIsEnabled()) {
+    const directoryBeforeCreate = await getSharedDirectoryFromOrbit()
+    const duplicateOrbitStudents = directoryBeforeCreate.students.filter((student) => {
+      const keys = orbitStudentKeys(student).map((key) => key.toLowerCase())
+      return studentNumbers.some((studentNumber) => keys.includes(studentNumber.toLowerCase()))
+    })
+    if (duplicateOrbitStudents.length > 0) {
+      throw new ApiError(409, `Student number already exists: ${duplicateOrbitStudents.map((student) => orbitExternalId(student)).join(', ')}`)
+    }
+
+    const parentTemporaryPassword = generateTemporaryPassword('PAR')
+    const parentResult = await createRegistryEntityInOrbit('parent', {
+      firstName: parent.firstName,
+      lastName: parent.lastName,
+      email: parent.email,
+      phone: parent.phone || undefined,
+    })
+    const parentOrbitId = parentResult.orbitId
+    if (!parentOrbitId) {
+      throw new ApiError(502, 'Orbit parent creation did not return an id')
+    }
+
+    const temporaryCredentials: {
+      parent: { username: string; temporaryPassword: string } | null
+      students: Array<{ studentId: string; username: string; temporaryPassword: string }>
+    } = {
+      parent: {
+        username: parent.email,
+        temporaryPassword: parentTemporaryPassword,
+      },
+      students: [],
+    }
+
+    for (const student of students) {
+      const studentTemporaryPassword = generateTemporaryPassword('STU')
+      const studentEmail = student.email ?? `${student.studentNumber.toLowerCase()}@students.kcs.local`
+      await createRegistryEntityInOrbit('student', {
+        firstName: student.firstName,
+        lastName: student.lastName,
+        gender: 'O',
+        studentNumber: student.studentNumber,
+        email: studentEmail,
+        status: 'ACTIVE',
+        mustChangePassword: true,
+        className: `${student.grade} ${student.section || ''}`.trim(),
+        parentOrbitId,
+      })
+      temporaryCredentials.students.push({
+        studentId: student.studentNumber,
+        username: studentEmail,
+        temporaryPassword: studentTemporaryPassword,
+      })
+    }
+
+    const directory = await getSharedDirectoryFromOrbit()
+    const createdStudents = orbitStudentsToProfiles(directory).filter((student) => studentNumbers.includes(student.studentNumber))
+
+    return success(res, {
+      parent: parentResult.entity ?? { id: parentOrbitId, email: parent.email, firstName: parent.firstName, lastName: parent.lastName },
+      students: createdStudents,
+      student: createdStudents[0] ?? null,
+      studentCount: createdStudents.length,
+      temporaryCredentials,
+      syncTarget: 'orbit',
+    }, students.length === 1 ? 'Student created through Orbit' : 'Family registered through Orbit', 201)
   }
 
   const existingStudents = await prisma.studentProfile.findMany({
@@ -300,7 +432,7 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
 
   const family = await prisma.$transaction(async (tx) => {
     const existingParent = await tx.user.findUnique({ where: { email: parent.email } })
-    const parentTemporaryPassword = existingParent?.passwordHash ? null : generateTemporaryPassword()
+    const parentTemporaryPassword = existingParent?.passwordHash ? null : generateTemporaryPassword('PAR')
     const parentPasswordHash = parentTemporaryPassword ? await bcrypt.hash(parentTemporaryPassword, 10) : undefined
     const parentUser = await tx.user.upsert({
       where: { email: parent.email },
@@ -331,7 +463,7 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
     const createdStudents = []
     for (const [index, student] of students.entries()) {
       const studentEmail = studentEmails[index]
-      const studentTemporaryPassword = generateTemporaryPassword()
+      const studentTemporaryPassword = generateTemporaryPassword('STU')
       const studentUser = await tx.user.create({
         data: {
           email: studentEmail,
@@ -475,10 +607,6 @@ studentsRouter.put('/:id', authenticate, requireRoles('admin', 'teacher'), async
     const target = directory.students.find((student) => student.id === studentId)
     if (!target) throw new ApiError(404, 'Student not found')
 
-    if (orbitManagingApp(target) !== 'KCS_NEXUS') {
-      throw new ApiError(409, 'This student is managed by another application. Update it in its source system.')
-    }
-
     const currentClass = splitClassName(target.className)
     const updated = await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, {
       ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
@@ -567,8 +695,20 @@ studentsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(
     const target = directory.students.find((student) => student.id === studentId)
     if (!target) throw new ApiError(404, 'Student not found')
 
-    await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
-    return success(res, { id: studentId }, 'Student deleted through Orbit')
+    const hiddenStudentKeys = await readHiddenStudentKeys()
+    orbitStudentKeys(target).forEach((key) => hiddenStudentKeys.add(key))
+    await writeHiddenStudentKeys(hiddenStudentKeys)
+
+    try {
+      await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
+      return success(res, { id: studentId, hidden: true }, 'Student deleted through Orbit and hidden from KCS Nexus')
+    } catch (error) {
+      return success(res, {
+        id: studentId,
+        hidden: true,
+        orbitDeleteWarning: error instanceof Error ? error.message : 'Orbit delete failed',
+      }, 'Student hidden from KCS Nexus. Source system may still own this record.')
+    }
   }
 
   const student = await prisma.studentProfile.findUnique({ where: { id: studentId } })
