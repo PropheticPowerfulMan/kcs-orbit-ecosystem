@@ -226,20 +226,12 @@ async function resolveEntityByIdentifier(params: {
   identifierType: "orbitId" | "externalId";
 }) {
   if (params.identifierType === "orbitId") {
-    const link = await prisma.externalLink.findFirst({
-      where: {
-        organizationId: params.organizationId,
-        appSlug: params.appSlug,
-        entityType: params.entityType,
-        nexusEntityId: params.identifier,
-      },
-    });
-
-    if (!link) {
+    const entity = await findEntityByOrbitId(params.organizationId, params.entityType, params.identifier);
+    if (!entity) {
       return null;
     }
 
-    return { orbitId: params.identifier, externalLinkId: link.id };
+    return { orbitId: params.identifier, externalLinkId: null };
   }
 
   const link = await prisma.externalLink.findUnique({
@@ -260,13 +252,29 @@ async function resolveEntityByIdentifier(params: {
   return { orbitId: link.nexusEntityId, externalLinkId: link.id };
 }
 
+async function findEntityByOrbitId(organizationId: string, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
+  switch (entityType) {
+    case "parent":
+      return prisma.parent.findFirst({ where: { id: orbitId, organizationId }, select: { id: true } });
+    case "student":
+      return prisma.student.findFirst({ where: { id: orbitId, organizationId }, select: { id: true } });
+    case "teacher":
+      return prisma.teacher.findFirst({ where: { id: orbitId, organizationId }, select: { id: true } });
+  }
+}
+
 async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
   switch (entityType) {
     case "parent":
+      await db.student.updateMany({ where: { parentId: orbitId }, data: { parentId: null } });
       return db.parent.delete({ where: { id: orbitId } });
     case "student":
+      await db.payment.deleteMany({ where: { studentId: orbitId } });
+      await db.grade.deleteMany({ where: { studentId: orbitId } });
+      await db.attendance.deleteMany({ where: { studentId: orbitId } });
       return db.student.delete({ where: { id: orbitId } });
     case "teacher":
+      await db.class.updateMany({ where: { teacherId: orbitId }, data: { teacherId: null } });
       return db.teacher.delete({ where: { id: orbitId } });
   }
 }
@@ -505,24 +513,6 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
     return res.status(404).json({ message: "Entity not found for this application" });
   }
 
-  if (entityType === "parent") {
-    const childCount = await prisma.student.count({
-      where: {
-        organizationId: query.organizationId,
-        parentId: target.orbitId,
-      },
-    });
-
-    if (childCount > 0) {
-      return res.status(409).json({
-        message: "Parent cannot be deleted while students are still attached",
-        entityType,
-        orbitId: target.orbitId,
-        childCount,
-      });
-    }
-  }
-
   const links = await prisma.externalLink.findMany({
     where: {
       organizationId: query.organizationId,
@@ -531,15 +521,6 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
     },
     select: { id: true, appSlug: true, externalId: true },
   });
-
-  if (links.length > 1) {
-    return res.status(409).json({
-      message: "Entity is already linked to other applications and cannot be deleted here",
-      entityType,
-      orbitId: target.orbitId,
-      linkedApps: links.map((link) => link.appSlug),
-    });
-  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -564,7 +545,11 @@ export async function deleteRegistryEntity(req: Request, res: Response) {
           action: `${appSlug.toLowerCase()}.${entityType}.deleted`,
           entityType,
           entityId: target.orbitId,
-          metadata: { identifier: req.params.identifier, identifierType: query.identifierType } as never,
+          metadata: {
+            identifier: req.params.identifier,
+            identifierType: query.identifierType,
+            removedExternalLinks: links,
+          } as never,
         },
       });
     });

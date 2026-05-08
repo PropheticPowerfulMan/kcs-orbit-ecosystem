@@ -180,9 +180,25 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
   const sharedStudents = Array.isArray(sharedDirectory?.students)
     ? sharedDirectory.students.map((student) => mapSharedStudentToSavanexStudent(student, parentMap))
     : [];
+  const centralSavanexStudentIds = new Set(
+    Array.isArray(sharedDirectory?.students)
+      ? sharedDirectory.students
+        .flatMap((student) => normalizeDirectoryExternalIds(student?.externalIds))
+        .filter((entry) => entry.appSlug.toUpperCase() === 'SAVANEX')
+        .map((entry) => entry.externalId.trim().toLowerCase())
+        .filter(Boolean)
+      : []
+  );
+  const centralDirectoryIsAuthoritative = sharedDirectory?.source === 'orbit' && Array.isArray(sharedDirectory?.students);
+  const visibleLocalStudents = centralDirectoryIsAuthoritative
+    ? safeLocalStudents.filter((student) => {
+      const localStudentId = typeof student?.student_id === 'string' ? student.student_id.trim().toLowerCase() : '';
+      return localStudentId && centralSavanexStudentIds.has(localStudentId);
+    })
+    : safeLocalStudents;
 
   const localStudentIds = new Set(
-    safeLocalStudents
+    visibleLocalStudents
       .map((student) => typeof student?.student_id === 'string' ? student.student_id.trim().toLowerCase() : '')
       .filter(Boolean)
   );
@@ -194,7 +210,7 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
   });
 
   return [
-    ...safeLocalStudents.map((student) => ({
+    ...visibleLocalStudents.map((student) => ({
       ...student,
       source: student?.source || 'local',
       source_label: student?.source_label || 'SAVANEX',

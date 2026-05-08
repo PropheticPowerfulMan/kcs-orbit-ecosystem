@@ -997,7 +997,7 @@ const AdminSectionView = ({
   const refreshOfficialRoster = async () => {
     const response = await studentsAPI.getAll()
     const profiles = response.data?.data
-    if (!Array.isArray(profiles) || profiles.length === 0) {
+    if (!Array.isArray(profiles)) {
       const fallbackRoster = readStoredRoster()
       const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
       setOfficialRoster(roster)
@@ -1021,7 +1021,7 @@ const AdminSectionView = ({
       .then((response) => {
         const profiles = response.data?.data
         if (!mounted) return
-        if (!Array.isArray(profiles) || profiles.length === 0) {
+        if (!Array.isArray(profiles)) {
           const fallbackRoster = readStoredRoster()
           const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
           setOfficialRoster(roster)

@@ -203,7 +203,7 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
       managingApp,
       syncSource: 'orbit',
       isEditable: managingApp === 'KCS_NEXUS',
-      isDeletable: managingApp === 'KCS_NEXUS',
+      isDeletable: true,
     }
   })
 }
@@ -566,10 +566,6 @@ studentsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(
     const directory = await getSharedDirectoryFromOrbit()
     const target = directory.students.find((student) => student.id === studentId)
     if (!target) throw new ApiError(404, 'Student not found')
-
-    if (orbitManagingApp(target) !== 'KCS_NEXUS') {
-      throw new ApiError(409, 'This student is managed by another application. Delete it in its source system.')
-    }
 
     await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
     return success(res, { id: studentId }, 'Student deleted through Orbit')
