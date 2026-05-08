@@ -80,14 +80,6 @@ const sectionMap: Record<string, SectionConfig> = {
     secondaryAction: 'View audit log',
     items: ['Super Admin - full access', 'Staff - records and communication permissions', 'Sensitive updates require approval'],
   },
-  registry: {
-    title: 'Family Registry',
-    description: 'Link parents to children, verify documents, and maintain household communication records.',
-    icon: Users,
-    primaryAction: 'Link family',
-    secondaryAction: 'Export registry',
-    items: ['Kabongo family - 2 children linked', 'Mwamba family - documents verified', 'Admissions family - pending link'],
-  },
   'forum-insights': {
     title: 'Parent AI Report',
     description: 'AI summary of parent forum sentiment, urgent issues, duties, policy questions, and response needs.',

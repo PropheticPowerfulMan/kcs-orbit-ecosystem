@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
+import jwt, { type SignOptions } from 'jsonwebtoken'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
+import { env } from '../config/env.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
@@ -18,6 +20,60 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
 })
+
+const configuredSuperAdmin = {
+  id: 'configured-superadmin',
+  email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com',
+  password: process.env.SUPERADMIN_PASSWORD || 'SuperAdmin123!',
+  firstName: process.env.SUPERADMIN_FIRSTNAME || 'Super',
+  lastName: process.env.SUPERADMIN_LASTNAME || 'Admin',
+  role: 'admin' as const,
+}
+
+function loginConfiguredSuperAdmin(payload: z.infer<typeof loginSchema>) {
+  if (
+    payload.email.trim().toLowerCase() !== configuredSuperAdmin.email.toLowerCase() ||
+    payload.password !== configuredSuperAdmin.password
+  ) {
+    return null
+  }
+
+  const user = {
+    id: configuredSuperAdmin.id,
+    email: configuredSuperAdmin.email,
+    firstName: configuredSuperAdmin.firstName,
+    lastName: configuredSuperAdmin.lastName,
+    role: configuredSuperAdmin.role,
+    avatar: null,
+    phone: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+
+  return {
+    user,
+    token: jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] }),
+    refreshToken: jwt.sign({ sub: user.id, role: user.role }, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'] }),
+  }
+}
+
+function isConfiguredSuperAdminUser(userId?: string) {
+  return userId === configuredSuperAdmin.id
+}
+
+function buildConfiguredSuperAdminUser() {
+  return {
+    id: configuredSuperAdmin.id,
+    email: configuredSuperAdmin.email,
+    firstName: configuredSuperAdmin.firstName,
+    lastName: configuredSuperAdmin.lastName,
+    role: configuredSuperAdmin.role,
+    avatar: null,
+    phone: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+}
 
 export const authRouter = Router()
 
@@ -56,6 +112,10 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
   const payload = loginSchema.parse(req.body)
+  const configuredLogin = loginConfiguredSuperAdmin(payload)
+  if (configuredLogin) {
+    return success(res, configuredLogin, 'Login successful')
+  }
 
   const user = await prisma.user.findUnique({ where: { email: payload.email } })
   if (!user?.passwordHash) {
@@ -92,6 +152,17 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   const refreshSchema = z.object({ refreshToken: z.string().min(1) })
   const { refreshToken } = refreshSchema.parse(req.body)
 
+  try {
+    const payload = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as { sub?: string; role?: string }
+    if (isConfiguredSuperAdminUser(payload.sub)) {
+      const user = buildConfiguredSuperAdminUser()
+      const token = jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] })
+      return success(res, { token, user }, 'Token refreshed')
+    }
+  } catch {
+    // Database-backed refresh tokens are handled below.
+  }
+
   const storedToken = await prisma.refreshToken.findUnique({
     where: { token: refreshToken },
     include: { user: true },
@@ -118,6 +189,10 @@ authRouter.post('/reset-password', asyncHandler(async (req, res) => {
 }))
 
 authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (isConfiguredSuperAdminUser(req.user!.sub)) {
+    return success(res, buildConfiguredSuperAdminUser())
+  }
+
   const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
   if (!user) {
     throw new ApiError(404, 'User not found')

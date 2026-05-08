@@ -46,6 +46,13 @@ const createStudentSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   gender: z.string().min(1),
+  studentNumber: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().min(6).optional(),
+  dateOfBirth: z.coerce.date().optional(),
+  status: z.string().min(1).optional(),
+  mustChangePassword: z.boolean().optional(),
+  className: z.string().min(1).optional(),
   parentOrbitId: z.string().optional(),
   classOrbitId: z.string().optional(),
 });
@@ -53,6 +60,23 @@ const createStudentSchema = z.object({
 const deleteQuerySchema = z.object({
   organizationId: z.string().min(1),
   identifierType: z.enum(["orbitId", "externalId"]).default("orbitId"),
+});
+
+const updateStudentSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  gender: z.string().min(1).optional(),
+  studentNumber: z.string().min(1).optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().min(6).nullable().optional(),
+  dateOfBirth: z.coerce.date().nullable().optional(),
+  status: z.string().min(1).optional(),
+  mustChangePassword: z.boolean().optional(),
+  className: z.string().min(1).nullable().optional(),
+  parentOrbitId: z.string().nullable().optional(),
+  classOrbitId: z.string().nullable().optional(),
+}).refine((value) => Object.values(value).some((item) => item !== undefined), {
+  message: "At least one field must be provided",
 });
 
 function getAppSlug(req: Request) {
@@ -247,6 +271,98 @@ async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<ty
   }
 }
 
+export async function updateRegistryEntity(req: Request, res: Response) {
+  const appSlug = getAppSlug(req);
+  if (!appSlug) {
+    return res.status(401).json({ message: "Unauthorized integration request" });
+  }
+
+  const entityType = entityTypeSchema.parse(req.params.entityType);
+  if (entityType !== "student") {
+    return res.status(400).json({ message: "Only student updates are supported through this endpoint" });
+  }
+
+  const query = deleteQuerySchema.parse(req.query);
+  const payload = updateStudentSchema.parse(req.body);
+  const target = await resolveEntityByIdentifier({
+    organizationId: query.organizationId,
+    appSlug,
+    entityType,
+    identifier: String(req.params.identifier),
+    identifierType: query.identifierType,
+  });
+
+  if (!target) {
+    return res.status(404).json({ message: "Entity not found for this application" });
+  }
+
+  if (payload.parentOrbitId) {
+    const parent = await prisma.parent.findFirst({ where: { id: payload.parentOrbitId, organizationId: query.organizationId } });
+    if (!parent) return res.status(404).json({ message: "Parent not found" });
+  }
+
+  if (payload.classOrbitId) {
+    const klass = await prisma.class.findFirst({ where: { id: payload.classOrbitId, organizationId: query.organizationId } });
+    if (!klass) return res.status(404).json({ message: "Class not found" });
+  }
+
+  const duplicateFilters: Prisma.StudentWhereInput[] = [];
+  if (payload.studentNumber) {
+    duplicateFilters.push({ studentNumber: { equals: payload.studentNumber, mode: "insensitive" } });
+  }
+  if (payload.email) {
+    duplicateFilters.push({ email: { equals: payload.email, mode: "insensitive" } });
+  }
+
+  if (duplicateFilters.length > 0) {
+    const duplicate = await prisma.student.findFirst({
+      where: {
+        organizationId: query.organizationId,
+        id: { not: target.orbitId },
+        OR: duplicateFilters,
+      },
+      select: { studentNumber: true, email: true },
+    });
+
+    if (duplicate) {
+      if (payload.studentNumber && duplicate.studentNumber?.toLowerCase() === payload.studentNumber.toLowerCase()) {
+        return res.status(409).json({ message: `Student number already exists: ${payload.studentNumber}` });
+      }
+
+      if (payload.email && duplicate.email?.toLowerCase() === payload.email.toLowerCase()) {
+        return res.status(409).json({ message: `Student email already exists: ${payload.email}` });
+      }
+    }
+  }
+
+  const student = await prisma.$transaction(async (tx) => {
+    const updatedStudent = await tx.student.update({
+      where: { id: target.orbitId },
+      data: {
+        ...(payload.firstName !== undefined ? { firstName: normalizeText(payload.firstName) } : {}),
+        ...(payload.lastName !== undefined ? { lastName: normalizeText(payload.lastName) } : {}),
+        ...(payload.gender !== undefined ? { gender: payload.gender } : {}),
+        ...(payload.studentNumber !== undefined ? { studentNumber: payload.studentNumber } : {}),
+        ...(payload.email !== undefined ? { email: payload.email } : {}),
+        ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
+        ...(payload.dateOfBirth !== undefined ? { dateOfBirth: payload.dateOfBirth } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.mustChangePassword !== undefined ? { mustChangePassword: payload.mustChangePassword } : {}),
+        ...(payload.className !== undefined ? { className: payload.className } : {}),
+        ...(payload.parentOrbitId !== undefined ? { parentId: payload.parentOrbitId } : {}),
+        ...(payload.classOrbitId !== undefined ? { classId: payload.classOrbitId } : {}),
+      },
+    });
+
+    await createSyncEvent(tx, { organizationId: query.organizationId, appSlug, eventType: "student.updated", entityType, entityId: target.orbitId, payload });
+    await createAuditLog(tx, { organizationId: query.organizationId, action: `${appSlug.toLowerCase()}.student.updated`, entityType, entityId: target.orbitId, metadata: { identifier: req.params.identifier, identifierType: query.identifierType } });
+
+    return updatedStudent;
+  });
+
+  return res.json({ entityType, orbitId: student.id, updated: true, entity: student });
+}
+
 export async function createRegistryEntity(req: Request, res: Response) {
   const appSlug = getAppSlug(req);
   if (!appSlug) {
@@ -347,6 +463,13 @@ export async function createRegistryEntity(req: Request, res: Response) {
         firstName: normalizeText(payload.firstName),
         lastName: normalizeText(payload.lastName),
         gender: payload.gender,
+        studentNumber: payload.studentNumber,
+        email: payload.email,
+        phone: payload.phone,
+        dateOfBirth: payload.dateOfBirth,
+        status: payload.status,
+        mustChangePassword: payload.mustChangePassword,
+        className: payload.className,
         parentId: payload.parentOrbitId,
         classId: payload.classOrbitId,
       },

@@ -249,16 +249,21 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                 'students': f"Duplicate student emails in request: {', '.join(sorted(duplicate_student_emails))}."
             })
 
-        parent_conflict = None
+        parent_by_email = None
+        parent_by_phone = None
         if parent_email:
-            parent_conflict = User.objects.filter(role=User.ROLE_PARENT, email__iexact=parent_email).first()
-        if not parent_conflict and parent_phone:
-            parent_conflict = User.objects.filter(role=User.ROLE_PARENT, phone=parent_phone).first()
+            parent_by_email = User.objects.filter(role=User.ROLE_PARENT, email__iexact=parent_email).first()
+        if parent_phone:
+            parent_by_phone = User.objects.filter(role=User.ROLE_PARENT, phone=parent_phone).first()
 
-        if parent_conflict:
+        if parent_by_email and parent_by_phone and parent_by_email.pk != parent_by_phone.pk:
             raise serializers.ValidationError({
-                'parent': 'A parent with the same email or phone already exists.'
+                'parent': 'The provided email and phone belong to different parent accounts.'
             })
+
+        parent_conflict = parent_by_email or parent_by_phone
+        if parent_conflict:
+            attrs['existing_parent'] = parent_conflict
 
         existing_student_emails = []
         for student_email in sorted(seen_student_emails):
@@ -275,15 +280,38 @@ class FamilyRegistrationSerializer(serializers.Serializer):
     def create(self, validated_data):
         parent_data = validated_data['parent']
         students_data = validated_data['students']
+        existing_parent = validated_data.get('existing_parent')
 
         with transaction.atomic():
-            parent_serializer = FamilyParentSerializer(data={
-                **parent_data,
-                'role': User.ROLE_PARENT,
-                'username': parent_data.get('username') or _generate_parent_external_id(),
-            })
-            parent_serializer.is_valid(raise_exception=True)
-            parent = parent_serializer.save()
+            if existing_parent is not None:
+                parent = existing_parent
+                parent_update_fields = []
+                for field in ('first_name', 'last_name', 'email', 'phone'):
+                    if field not in parent_data:
+                        continue
+
+                    next_value = parent_data.get(field)
+                    if isinstance(next_value, str):
+                        next_value = next_value.strip()
+
+                    if getattr(parent, field) != next_value:
+                        setattr(parent, field, next_value)
+                        parent_update_fields.append(field)
+
+                if parent.role != User.ROLE_PARENT:
+                    parent.role = User.ROLE_PARENT
+                    parent_update_fields.append('role')
+
+                if parent_update_fields:
+                    parent.save(update_fields=parent_update_fields)
+            else:
+                parent_serializer = FamilyParentSerializer(data={
+                    **parent_data,
+                    'role': User.ROLE_PARENT,
+                    'username': parent_data.get('username') or _generate_parent_external_id(),
+                })
+                parent_serializer.is_valid(raise_exception=True)
+                parent = parent_serializer.save()
 
             created_students = []
             for student_data in students_data:

@@ -79,15 +79,33 @@ const LoginPage = () => {
     return role === 'admin' ? '/admin' : `/portal/${role}`
   }
 
-  const handleSuccessfulLogin = (user: User) => {
+  const handleDemoLogin = (user: User) => {
     logout()
     login(user, 'demo-access-token', 'demo-refresh-token')
     navigate(resolveDestination(user.role), { replace: true })
   }
 
-  const enterSuperAdmin = () => {
+  const handleApiLogin = async (values: LoginFormValues) => {
+    const response = await authAPI.login(values.email.trim(), values.password)
+    const data = response.data?.data
+    if (!data?.user || !data?.token || !data?.refreshToken) {
+      throw new Error('Invalid authentication response')
+    }
+    logout()
+    login(data.user, data.token, data.refreshToken)
+    navigate(resolveDestination(data.user.role), { replace: true })
+  }
+
+  const enterSuperAdmin = async () => {
+    setLoading(true)
     setErrorMessage('')
-    handleSuccessfulLogin(buildDemoUser(superAdminAccount))
+    try {
+      await handleApiLogin({ email: superAdminAccount.email, password: superAdminAccount.password })
+    } catch {
+      handleDemoLogin(buildDemoUser(superAdminAccount))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const onSubmit = async (values: LoginFormValues) => {
@@ -95,23 +113,11 @@ const LoginPage = () => {
     setErrorMessage('')
 
     try {
-      const demoAccount = findDemoAccount(values)
-      if (demoAccount) {
-        handleSuccessfulLogin(buildDemoUser(demoAccount))
-        return
-      }
-
-      const response = await authAPI.login(values.email.trim(), values.password)
-      const data = response.data?.data
-      if (!data?.user || !data?.token || !data?.refreshToken) {
-        throw new Error('Invalid authentication response')
-      }
-      login(data.user, data.token, data.refreshToken)
-      navigate(resolveDestination(data.user.role), { replace: true })
+      await handleApiLogin(values)
     } catch (err: any) {
       const demoAccount = findDemoAccount(values)
       if (demoAccount) {
-        handleSuccessfulLogin(buildDemoUser(demoAccount))
+        handleDemoLogin(buildDemoUser(demoAccount))
       } else {
         // Afficher l’erreur réelle du backend si disponible
         let message = 'Login failed. Use one of the demo accounts or connect the backend auth service.'

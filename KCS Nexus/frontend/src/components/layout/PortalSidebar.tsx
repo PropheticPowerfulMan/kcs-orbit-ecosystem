@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
   GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, ClipboardList, Image, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle
+  Shield, Home, UserCheck, ClipboardList, Image, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -74,7 +74,6 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
       return [
         ...base,
         { to: '/admin/students', label: 'Students', icon: GraduationCap },
-        { to: '/admin/registry', label: 'Family Registry', icon: LibraryBig },
         { to: '/admin/transcripts', label: 'Transcripts', icon: FileSpreadsheet },
         { to: '/admin/communications', label: 'Communications', icon: Megaphone },
         { to: '/admin/staff-attendance', label: 'Staff Attendance', icon: ClipboardCheck },
@@ -104,6 +103,8 @@ const PortalSidebar = () => {
   const {
     sidebarCollapsed,
     sidebarOpen,
+    theme,
+    toggleTheme,
     toggleSidebar,
     toggleSidebarCollapse,
     setSidebarOpen,
@@ -187,6 +188,15 @@ const PortalSidebar = () => {
       </nav>
 
       <div className={`${isMobile ? 'mx-3 mb-3 rounded-[22px] border border-gray-100 bg-gray-50/70 p-2 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}`}>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className={`sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} w-full ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`}
+          title={!isMobile && sidebarCollapsed ? (theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : undefined}
+        >
+          {theme === 'dark' ? <Sun size={18} className="flex-shrink-0" /> : <Moon size={18} className="flex-shrink-0" />}
+          {(isMobile || !sidebarCollapsed) && <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>}
+        </button>
         <Link
           to="/"
           onClick={() => isMobile && setSidebarOpen(false)}
@@ -229,13 +239,24 @@ const PortalSidebar = () => {
             </p>
           </div>
         </Link>
-        <button
-          onClick={toggleSidebar}
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
-          aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-        >
-          {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
+            aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
+            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button
+            onClick={toggleSidebar}
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
+            aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
         </div>
       </div>
 
@@ -315,6 +336,15 @@ const PortalSidebar = () => {
             )}
           </AnimatePresence>
         </Link>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
+          aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
+          title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
         </div>
       </div>
 

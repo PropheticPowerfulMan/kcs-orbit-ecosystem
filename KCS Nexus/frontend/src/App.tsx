@@ -21,7 +21,6 @@ const ParentForumPage = lazy(() => import('@/pages/ParentForum'))
 const TeacherPortal = lazy(() => import('@/pages/TeacherPortal'))
 const StaffPortal = lazy(() => import('@/pages/StaffPortal'))
 const AdminDashboard = lazy(() => import('@/pages/Admin'))
-const SchoolRegistryPage = lazy(() => import('@/pages/Admin/SchoolRegistry'))
 const ForumInsightsPage = lazy(() => import('@/pages/Admin/ForumInsights'))
 const StudentForumInsightsPage = lazy(() => import('@/pages/Admin/StudentForumInsights'))
 
@@ -222,14 +221,6 @@ const App = () => {
             />
             <Route path="/portal/admin" element={<Navigate to="/admin" replace />} />
             <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
-            <Route
-              path="/admin/registry"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <SchoolRegistryPage />
-                </ProtectedRoute>
-              }
-            />
             <Route
               path="/admin/forum-insights"
               element={

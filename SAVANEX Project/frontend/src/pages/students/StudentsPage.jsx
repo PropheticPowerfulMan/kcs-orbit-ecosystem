@@ -16,6 +16,29 @@ const normalizeLabel = (value, fallback) => {
   return fallback;
 };
 
+const formatApiError = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => formatApiError(item)).filter(Boolean).join(' | ');
+  }
+
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .map(([key, item]) => `${key}: ${formatApiError(item)}`)
+      .filter(Boolean)
+      .join(' | ');
+  }
+
+  return '';
+};
+
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const modalBackdropClass = 'savanex-modal-backdrop fixed inset-0 z-[999] grid place-items-center overflow-y-auto px-4 py-8';
 const modalPanelClass = 'savanex-modal-panel w-full max-w-5xl overflow-y-auto p-5 sm:p-6';
@@ -291,6 +314,15 @@ const StudentsPage = () => {
     { key: 'student_id', label: 'ID élève' },
     { key: 'class_name', label: 'Classe', render: (value) => value || 'Non assignée' },
     { key: 'parent_name', label: 'Parent responsable', render: (value) => value || 'Aucun parent lié' },
+    {
+      key: 'source_label',
+      label: 'Source',
+      render: (value, row) => (
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${row.source === 'orbit' ? 'border border-cyan-400/30 bg-cyan-400/10 text-cyan-200' : 'border border-emerald-400/30 bg-emerald-400/10 text-emerald-200'}`}>
+          {value || (row.source === 'orbit' ? 'Orbit' : 'SAVANEX')}
+        </span>
+      ),
+    },
     { key: 'email', label: 'Email', render: (value) => value || 'Non renseigné' },
     { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
     { key: 'has_biometrics', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
@@ -301,10 +333,16 @@ const StudentsPage = () => {
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
-          <button type="button" onClick={() => openEditDialog(row)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-300/20">Modifier</button>
-          <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="rounded-lg border border-rose-300/40 bg-rose-300/10 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-300/20 disabled:opacity-50">
-            {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
-          </button>
+          {row.is_read_only ? (
+            <span className="rounded-lg border border-slate-600/60 bg-slate-900/70 px-3 py-1 text-xs font-semibold text-slate-300">Lecture seule</span>
+          ) : (
+            <>
+              <button type="button" onClick={() => openEditDialog(row)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-300/20">Modifier</button>
+              <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="rounded-lg border border-rose-300/40 bg-rose-300/10 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-300/20 disabled:opacity-50">
+                {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
+              </button>
+            </>
+          )}
         </div>
       ),
     },
@@ -381,7 +419,13 @@ const StudentsPage = () => {
       });
       setFamilyDialogOpen(false);
     } catch (submissionError) {
-      setError(submissionError?.response?.data?.detail || submissionError?.message || "Impossible d'enregistrer cette famille.");
+      const responseData = submissionError?.response?.data;
+      setError(
+        responseData?.detail
+        || formatApiError(responseData)
+        || submissionError?.message
+        || "Impossible d'enregistrer cette famille."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -393,7 +437,7 @@ const StudentsPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Student command center</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.students')}</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400">Enregistrement des familles, classes normalisées et génération automatique des accès temporaires depuis SAVANEX.</p>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">Enregistrement des familles, classes normalisées et vue fusionnée SAVANEX + Orbit avec entrées externes en lecture seule.</p>
         </div>
       </section>
 

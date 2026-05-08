@@ -92,6 +92,118 @@ api.interceptors.response.use(
   }
 );
 
+const normalizeDirectoryExternalIds = (externalIds) => {
+  if (!Array.isArray(externalIds)) {
+    return [];
+  }
+
+  return externalIds
+    .map((entry) => {
+      if (!entry) {
+        return null;
+      }
+
+      if (typeof entry === 'string') {
+        return { appSlug: '', externalId: entry };
+      }
+
+      return {
+        appSlug: typeof entry.appSlug === 'string' ? entry.appSlug : '',
+        externalId: typeof entry.externalId === 'string' ? entry.externalId : '',
+      };
+    })
+    .filter((entry) => entry?.externalId);
+};
+
+const buildSharedParentMap = (parents) => {
+  if (!Array.isArray(parents)) {
+    return new Map();
+  }
+
+  return new Map(
+    parents.map((parent) => [parent.id, parent])
+  );
+};
+
+const mapSharedStudentToSavanexStudent = (student, parentMap) => {
+  const externalIds = normalizeDirectoryExternalIds(student?.externalIds);
+  const parent = parentMap.get(student?.parentId) || null;
+  const parentExternalIds = normalizeDirectoryExternalIds(parent?.externalIds);
+  const preferredStudentId =
+    (typeof student?.studentNumber === 'string' && student.studentNumber.trim())
+    || externalIds[0]?.externalId
+    || `ORBIT-${student?.id}`;
+
+  return {
+    id: `orbit:${student.id}`,
+    student_id: preferredStudentId,
+    full_name: student?.fullName || 'Élève Orbit',
+    email: student?.email || '',
+    avatar: null,
+    kcs_card_id: null,
+    photo_data: '',
+    photo_source: 'orbit',
+    left_fingerprint_data: '',
+    right_fingerprint_data: '',
+    has_photo: false,
+    has_biometrics: false,
+    must_change_password: Boolean(student?.mustChangePassword),
+    password_generated_by_system: false,
+    date_of_birth: student?.dateOfBirth || null,
+    gender: student?.gender || '',
+    address: '',
+    current_class: student?.classId || null,
+    class_name: student?.className || null,
+    parent: parent?.id || null,
+    parent_name: parent?.fullName || '',
+    parent_email: parent?.email || '',
+    parent_phone: parent?.phone || '',
+    parent_external_id: parentExternalIds[0]?.externalId || '',
+    parent_kcs_card_id: null,
+    parent_photo_data: '',
+    parent_left_fingerprint_data: '',
+    parent_right_fingerprint_data: '',
+    enrollment_date: null,
+    is_active: (student?.status || 'ACTIVE') !== 'INACTIVE',
+    notes: '',
+    source: 'orbit',
+    source_label: 'Orbit',
+    is_read_only: true,
+    orbit_id: student?.id || null,
+    external_ids: externalIds,
+  };
+};
+
+const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
+  const safeLocalStudents = Array.isArray(localStudents) ? localStudents : [];
+  const parentMap = buildSharedParentMap(sharedDirectory?.parents);
+  const sharedStudents = Array.isArray(sharedDirectory?.students)
+    ? sharedDirectory.students.map((student) => mapSharedStudentToSavanexStudent(student, parentMap))
+    : [];
+
+  const localStudentIds = new Set(
+    safeLocalStudents
+      .map((student) => typeof student?.student_id === 'string' ? student.student_id.trim().toLowerCase() : '')
+      .filter(Boolean)
+  );
+
+  const dedupedSharedStudents = sharedStudents.filter((student) => {
+    const savanexExternalId = student.external_ids.find((entry) => entry.appSlug.toUpperCase() === 'SAVANEX')?.externalId;
+    const comparableId = (savanexExternalId || student.student_id || '').trim().toLowerCase();
+    return comparableId ? !localStudentIds.has(comparableId) : true;
+  });
+
+  return [
+    ...safeLocalStudents.map((student) => ({
+      ...student,
+      source: student?.source || 'local',
+      source_label: student?.source_label || 'SAVANEX',
+      is_read_only: Boolean(student?.is_read_only),
+    })),
+    ...dedupedSharedStudents,
+  ];
+};
+
 export const authService = {
   async login(username, password) {
     const res = await api.post('/auth/login/', { username, password });
@@ -136,11 +248,27 @@ export const studentsService = {
         class_name: student.className,
         parent_name: student.parent,
         is_active: true,
+        source: 'demo',
+        source_label: 'Démo',
+        is_read_only: false,
       }));
     }
 
-    const res = await api.get('/students/');
-    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+    const [localResult, sharedResult] = await Promise.allSettled([
+      api.get('/students/'),
+      api.get('/integration/shared-directory/'),
+    ]);
+
+    const localStudents = localResult.status === 'fulfilled'
+      ? (Array.isArray(localResult.value.data) ? localResult.value.data : (localResult.value.data.results || []))
+      : [];
+    const sharedDirectory = sharedResult.status === 'fulfilled' ? sharedResult.value.data : null;
+
+    if (localResult.status === 'rejected' && sharedResult.status === 'rejected') {
+      throw localResult.reason;
+    }
+
+    return mergeLocalAndSharedStudents(localStudents, sharedDirectory);
   },
 
   async registerFamily(data) {

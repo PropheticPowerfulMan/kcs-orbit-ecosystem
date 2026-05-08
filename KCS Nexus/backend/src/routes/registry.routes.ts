@@ -105,7 +105,7 @@ async function getSharedDirectoryFromOrbit() {
   return response.json() as Promise<SharedDirectoryResponse>
 }
 
-async function createRegistryEntityInOrbit(entityType: RegistryEntityType, payload: object) {
+async function sendRegistryEntityToOrbit(entityType: RegistryEntityType, payload: object) {
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${entityType}`,
     {
@@ -120,6 +120,11 @@ async function createRegistryEntityInOrbit(entityType: RegistryEntityType, paylo
   )
 
   const data = await response.json().catch(() => ({}))
+  return { response, data }
+}
+
+async function createRegistryEntityInOrbit(entityType: RegistryEntityType, payload: object) {
+  const { response, data } = await sendRegistryEntityToOrbit(entityType, payload)
   if (!response.ok) {
     throw new ApiError(response.status, typeof data?.message === 'string' ? data.message : `Orbit registry create failed with status ${response.status}`)
   }
@@ -168,6 +173,7 @@ const registerFamilySchema = z.object({
     studentNumber: z.string().min(2),
     grade: z.enum(schoolLevels),
     section: z.string().default('A'),
+    gender: z.enum(['M', 'F', 'O']).default('O'),
   }),
 })
 
@@ -364,7 +370,51 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
 
 registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
   if (orbitRegistryIsEnabled()) {
-    throw new ApiError(409, 'Family creation is disabled in KCS Nexus while Orbit registry mode is enabled. Create the family in the owning source system.')
+    const { parent, student } = registerFamilySchema.parse(req.body)
+    const organizationId = env.KCS_ORBIT_ORGANIZATION_ID!
+
+    const parentResult = await sendRegistryEntityToOrbit('parent', {
+      organizationId,
+      firstName: parent.firstName,
+      lastName: parent.lastName,
+      email: parent.email,
+      phone: parent.phone,
+    })
+
+    if (!parentResult.response.ok && parentResult.response.status !== 409) {
+      throw new ApiError(
+        parentResult.response.status,
+        typeof parentResult.data?.message === 'string'
+          ? parentResult.data.message
+          : `Orbit parent create failed with status ${parentResult.response.status}`
+      )
+    }
+
+    const parentOrbitId = typeof parentResult.data?.orbitId === 'string' ? parentResult.data.orbitId : null
+    if (!parentOrbitId) {
+      throw new ApiError(502, 'Orbit did not return a parent identifier for this family.')
+    }
+
+    const createdStudent = await createRegistryEntityInOrbit('student', {
+      organizationId,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      email: student.email,
+      gender: student.gender,
+      studentNumber: student.studentNumber,
+      className: `${student.grade} ${student.section}`.trim(),
+      parentOrbitId,
+      status: 'ACTIVE',
+    })
+
+    return success(res, {
+      source: 'orbit',
+      parent: {
+        orbitId: parentOrbitId,
+        ...(typeof parentResult.data?.externalId === 'string' ? { externalId: parentResult.data.externalId } : {}),
+      },
+      student: createdStudent,
+    }, 'Family registered through Orbit', 201)
   }
 
   const { parent, student } = registerFamilySchema.parse(req.body)
