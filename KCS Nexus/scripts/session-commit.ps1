@@ -2,7 +2,8 @@ param(
   [string]$Message = "",
   [switch]$Push,
   [switch]$SkipPush,
-  [switch]$SkipDeploy
+  [switch]$SkipDeploy,
+  [switch]$Verify
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,15 +47,34 @@ if (-not $stagedChanges) {
   exit 0
 }
 
+$frontendPaths = @(
+  "KCS Nexus/frontend/*",
+  "KCS Nexus/src/*",
+  "SAVANEX Project/frontend/*",
+  "EduSync AI/frontend/*",
+  "EduPay Smart System/apps/web/*"
+)
+
 $frontendChanged = $false
 foreach ($file in $stagedChanges) {
-  if ($file -like "frontend/*" -or $file -eq "package-lock.json") {
-    $frontendChanged = $true
+  foreach ($path in $frontendPaths) {
+    if ($file -like $path) {
+      $frontendChanged = $true
+      break
+    }
+  }
+
+  if ($frontendChanged) {
     break
   }
 }
 
-Run-Git commit -m $Message
+$commitArgs = @("commit", "-m", $Message)
+if (-not $Verify) {
+  $commitArgs += "--no-verify"
+}
+
+Run-Git @commitArgs
 
 if (-not $SkipPush) {
   Run-Git push
@@ -63,10 +83,23 @@ if (-not $SkipPush) {
 Write-Host "Session committed: $Message"
 
 if ($frontendChanged -and -not $SkipDeploy) {
-  $deployMessage = "Deploy session $timestamp"
-  & "$PSScriptRoot\deploy-gh-pages.ps1" -Message $deployMessage
-  if ($LASTEXITCODE -ne 0) {
-    throw "GitHub Pages deployment failed with exit code $LASTEXITCODE"
+  $kcsFrontendChanged = $false
+  foreach ($file in $stagedChanges) {
+    if ($file -like "KCS Nexus/frontend/*" -or $file -like "KCS Nexus/src/*") {
+      $kcsFrontendChanged = $true
+      break
+    }
+  }
+
+  if ($kcsFrontendChanged) {
+    $deployMessage = "Deploy session $timestamp"
+    & "$PSScriptRoot\deploy-gh-pages.ps1" -Message $deployMessage
+    if ($LASTEXITCODE -ne 0) {
+      throw "GitHub Pages deployment failed with exit code $LASTEXITCODE"
+    }
+  }
+  else {
+    Write-Host "Live deployment skipped: frontend changes are outside KCS Nexus GitHub Pages."
   }
 }
 elseif (-not $frontendChanged) {
