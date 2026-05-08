@@ -10,18 +10,18 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sessionScript = Join-Path $scriptRoot "KCS Nexus\scripts\session-commit.ps1"
 
-$argsList = @()
+$sessionParams = @{}
 if (-not [string]::IsNullOrWhiteSpace($Message)) {
-  $argsList += @("-Message", $Message)
+  $sessionParams["Message"] = $Message
 }
 if ($SkipPush) {
-  $argsList += "-SkipPush"
+  $sessionParams["SkipPush"] = $true
 }
 if ($SkipDeploy) {
-  $argsList += "-SkipDeploy"
+  $sessionParams["SkipDeploy"] = $true
 }
 if ($Verify) {
-  $argsList += "-Verify"
+  $sessionParams["Verify"] = $true
 }
 
-& $sessionScript @argsList
+& $sessionScript @sessionParams
