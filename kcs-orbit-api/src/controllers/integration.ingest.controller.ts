@@ -635,9 +635,26 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
     select: { nexusEntityId: true }
   });
 
-  const student = existingLink
+  const matchingStudent = existingLink ? null : await prisma.student.findFirst({
+    where: {
+      organizationId,
+      OR: [
+        ...(studentNumber ? [{ studentNumber: { equals: studentNumber, mode: "insensitive" as const } }] : []),
+        ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : []),
+        {
+          firstName: { equals: firstName, mode: "insensitive" as const },
+          lastName: { equals: lastName, mode: "insensitive" as const },
+          ...(parentId ? { parentId } : {}),
+        },
+      ],
+    },
+    select: { id: true },
+  });
+
+  const targetStudentId = existingLink?.nexusEntityId || matchingStudent?.id;
+  const student = targetStudentId
     ? await prisma.student.update({
-      where: { id: existingLink.nexusEntityId },
+      where: { id: targetStudentId },
       data: {
         firstName,
         middleName,
@@ -687,7 +704,7 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
     organizationId,
     appSlug: savanexAppSlug,
     sourceEventKey,
-    eventType: existingLink ? "student.updated" : "student.created",
+    eventType: targetStudentId ? "student.updated" : "student.created",
     entityType: "student",
     entityId: student.id,
     payload: req.body
@@ -695,13 +712,13 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
 
   await recordAudit({
     organizationId,
-    action: existingLink ? "savanex.student.updated" : "savanex.student.created",
+    action: targetStudentId ? "savanex.student.updated" : "savanex.student.created",
     entityType: "student",
     entityId: student.id,
     metadata: { externalId, classExternalId, parentExternalId }
   });
 
-  return res.status(existingLink ? 200 : 201).json({ student });
+  return res.status(targetStudentId ? 200 : 201).json({ student });
 }
 
 export async function ingestSavanexClass(req: Request, res: Response) {
@@ -854,9 +871,22 @@ export async function ingestSavanexParent(req: Request, res: Response) {
     select: { nexusEntityId: true }
   });
 
-  const parent = existingLink
+  const matchingParent = existingLink ? null : await prisma.parent.findFirst({
+    where: {
+      organizationId,
+      OR: [
+        ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : []),
+        ...(phone ? [{ phone }] : []),
+        { fullName: { equals: fullName, mode: "insensitive" as const } },
+      ],
+    },
+    select: { id: true },
+  });
+
+  const targetParentId = existingLink?.nexusEntityId || matchingParent?.id;
+  const parent = targetParentId
     ? await prisma.parent.update({
-      where: { id: existingLink.nexusEntityId },
+      where: { id: targetParentId },
       data: { fullName, firstName, middleName, lastName, phone, email, mustChangePassword: mustChangePassword ?? false, organizationId }
     })
     : await prisma.parent.create({
@@ -876,7 +906,7 @@ export async function ingestSavanexParent(req: Request, res: Response) {
     organizationId,
     appSlug: savanexAppSlug,
     sourceEventKey,
-    eventType: existingLink ? "parent.updated" : "parent.created",
+    eventType: targetParentId ? "parent.updated" : "parent.created",
     entityType: "parent",
     entityId: parent.id,
     payload: req.body
@@ -884,13 +914,13 @@ export async function ingestSavanexParent(req: Request, res: Response) {
 
   await recordAudit({
     organizationId,
-    action: existingLink ? "savanex.parent.updated" : "savanex.parent.created",
+    action: targetParentId ? "savanex.parent.updated" : "savanex.parent.created",
     entityType: "parent",
     entityId: parent.id,
     metadata: { externalId, email }
   });
 
-  return res.status(existingLink ? 200 : 201).json({ parent });
+  return res.status(targetParentId ? 200 : 201).json({ parent });
 }
 
 export async function ingestSavanexTeacher(req: Request, res: Response) {

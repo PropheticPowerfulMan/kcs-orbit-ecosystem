@@ -40,107 +40,53 @@ export async function readKcsNexusFamilies(req: Request, res: Response) {
     return res.status(400).json({ message: "organizationId is required" });
   }
 
-  const [students, externalLinks] = await Promise.all([
-    prisma.student.findMany({
-      where: { organizationId },
-      include: {
-        class: true,
-        parent: true,
-      },
-      orderBy: [
-        { class: { gradeLevel: "asc" } },
-        { lastName: "asc" },
-        { firstName: "asc" },
-      ],
-    }),
-    prisma.externalLink.findMany({
-      where: {
-        organizationId,
-        appSlug: "SAVANEX",
-        entityType: { in: ["student", "parent"] },
-      },
-    }),
-  ]);
+  const directory = await loadSharedDirectory(organizationId);
+  const parentsById = new Map(directory.parents.map((parent) => [parent.id, parent]));
+  const studentsById = new Map(directory.students.map((student) => [student.id, student]));
 
-  const studentExternalIds = new Map(
-    externalLinks
-      .filter((link) => link.entityType === "student")
-      .map((link) => [link.nexusEntityId, link.externalId])
-  );
+  const families = directory.families.map((family) => {
+    const parents = family.parentIds
+      .map((parentId) => parentsById.get(parentId))
+      .filter((parent): parent is NonNullable<typeof parent> => Boolean(parent))
+      .map((parent) => ({
+        id: parent.id,
+        externalId: parent.displayId,
+        relation: "Parent",
+        parent: {
+          firstName: parent.firstName,
+          middleName: parent.middleName,
+          lastName: parent.lastName,
+          fullName: parent.fullName,
+          email: parent.email,
+          phone: parent.phone,
+        },
+      }));
 
-  const parentExternalIds = new Map(
-    externalLinks
-      .filter((link) => link.entityType === "parent")
-      .map((link) => [link.nexusEntityId, link.externalId])
-  );
+    const children = family.studentIds
+      .map((studentId) => studentsById.get(studentId))
+      .filter((student): student is NonNullable<typeof student> => Boolean(student))
+      .map((student) => ({
+        id: student.id,
+        externalId: student.displayId,
+        studentNumber: student.studentNumber || student.displayId,
+        grade: student.className || "Unassigned",
+        section: student.className || "-",
+        status: student.status || "ACTIVE",
+        student: {
+          firstName: student.firstName,
+          middleName: student.middleName,
+          lastName: student.lastName,
+          fullName: student.fullName,
+        },
+      }));
 
-  const familiesMap = new Map<string, {
-    id: string;
-    familyLabel: string;
-    parents: Array<{
-      id: string;
-      externalId?: string;
-      relation: string;
-      parent: { firstName: string; middleName?: string | null; lastName: string; fullName: string; email?: string | null; phone?: string | null };
-    }>;
-    children: Array<{
-      id: string;
-      externalId?: string;
-      studentNumber: string;
-      grade: string;
-      section: string;
-      status: string;
-      student: { firstName: string; middleName?: string | null; lastName: string; fullName: string };
-    }>;
-  }>();
-
-  for (const student of students) {
-    const familyKey = student.parentId || `student:${student.id}`;
-    const existingFamily = familiesMap.get(familyKey);
-
-    if (!existingFamily) {
-      const parentName = student.parent?.fullName;
-      const splitParentName = parentName ? splitFullName(parentName) : null;
-
-      familiesMap.set(familyKey, {
-        id: student.parentId || student.id,
-        familyLabel: buildFamilyLabel(parentName, student.lastName),
-        parents: student.parent
-          ? [{
-            id: student.parent.id,
-            externalId: parentExternalIds.get(student.parent.id),
-            relation: "Parent",
-            parent: {
-              firstName: splitParentName?.firstName || student.parent.fullName,
-              middleName: splitParentName?.middleName || null,
-              lastName: splitParentName?.lastName || "",
-              fullName: student.parent.fullName,
-              email: student.parent.email,
-              phone: student.parent.phone,
-            },
-          }]
-          : [],
-        children: [],
-      });
-    }
-
-    familiesMap.get(familyKey)!.children.push({
-      id: student.id,
-      externalId: studentExternalIds.get(student.id),
-      studentNumber: studentExternalIds.get(student.id) || student.id,
-      grade: student.class?.gradeLevel || "Unassigned",
-      section: student.class?.name || "-",
-      status: "ACTIVE",
-      student: {
-        firstName: student.firstName,
-        middleName: null,
-        lastName: student.lastName,
-        fullName: `${student.firstName} ${student.lastName}`.trim(),
-      },
-    });
-  }
-
-  const families = Array.from(familiesMap.values())
+    return {
+      id: family.id,
+      familyLabel: family.familyLabel,
+      parents,
+      children,
+    };
+  })
     .map((family) => ({
       ...family,
       studentCount: family.children.length,

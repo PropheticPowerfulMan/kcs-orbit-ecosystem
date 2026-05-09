@@ -77,6 +77,23 @@ async function readHiddenStudentKeys() {
   }
 }
 
+async function removeHiddenStudentKeys(keysToRemove: string[]) {
+  if (keysToRemove.length === 0) return
+
+  const hiddenStudentKeys = await readHiddenStudentKeys()
+  let changed = false
+
+  for (const key of keysToRemove) {
+    if (hiddenStudentKeys.delete(key)) {
+      changed = true
+    }
+  }
+
+  if (changed) {
+    await writeHiddenStudentKeys(hiddenStudentKeys)
+  }
+}
+
 async function writeHiddenStudentKeys(keys: Set<string>) {
   await fs.mkdir(path.dirname(hiddenStudentsPath), { recursive: true })
   await fs.writeFile(hiddenStudentsPath, JSON.stringify({ keys: Array.from(keys).sort() }, null, 2))
@@ -695,14 +712,14 @@ studentsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(
     const target = directory.students.find((student) => student.id === studentId)
     if (!target) throw new ApiError(404, 'Student not found')
 
-    const hiddenStudentKeys = await readHiddenStudentKeys()
-    orbitStudentKeys(target).forEach((key) => hiddenStudentKeys.add(key))
-    await writeHiddenStudentKeys(hiddenStudentKeys)
-
     try {
       await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
+      await removeHiddenStudentKeys(orbitStudentKeys(target))
       return success(res, { id: studentId, hidden: true }, 'Student deleted through Orbit and hidden from KCS Nexus')
     } catch (error) {
+      const hiddenStudentKeys = await readHiddenStudentKeys()
+      orbitStudentKeys(target).forEach((key) => hiddenStudentKeys.add(key))
+      await writeHiddenStudentKeys(hiddenStudentKeys)
       return success(res, {
         id: studentId,
         hidden: true,

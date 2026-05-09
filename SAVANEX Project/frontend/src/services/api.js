@@ -168,9 +168,27 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     notes: '',
     source: 'orbit',
     source_label: 'Orbit',
-    is_read_only: true,
+    is_read_only: false,
     orbit_id: student?.id || null,
     external_ids: externalIds,
+  };
+};
+
+const isOrbitStudentId = (id) => typeof id === 'string' && id.startsWith('orbit:');
+
+const toOrbitStudentId = (id) => String(id || '').replace(/^orbit:/, '');
+
+const mapSavanexStudentPatchToOrbit = (data) => {
+  const className = [data?.class_level, data?.class_suffix].filter(Boolean).join(' ').trim();
+
+  return {
+    ...(data?.first_name !== undefined ? { firstName: data.first_name } : {}),
+    ...(data?.last_name !== undefined ? { lastName: data.last_name } : {}),
+    ...(data?.user_email !== undefined ? { email: data.user_email || null } : {}),
+    ...(data?.gender !== undefined ? { gender: data.gender } : {}),
+    ...(data?.date_of_birth !== undefined ? { dateOfBirth: data.date_of_birth || null } : {}),
+    ...(className ? { className } : {}),
+    ...(data?.notes !== undefined ? { notes: data.notes } : {}),
   };
 };
 
@@ -297,6 +315,13 @@ export const studentsService = {
       throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour modifier des entités.");
     }
 
+    if (isOrbitStudentId(id)) {
+      const res = await api.patch(`/integration/entities/student/${toOrbitStudentId(id)}/`, mapSavanexStudentPatchToOrbit(data), {
+        params: { identifierType: 'orbitId' },
+      });
+      return res.data;
+    }
+
     const res = await api.patch(`/students/${id}/`, data);
     return res.data;
   },
@@ -307,7 +332,62 @@ export const studentsService = {
       throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour supprimer des entités.");
     }
 
+    if (isOrbitStudentId(id)) {
+      const res = await api.delete(`/integration/entities/student/${toOrbitStudentId(id)}/`, {
+        params: { identifierType: 'orbitId' },
+      });
+      return res.data;
+    }
+
     const res = await api.delete(`/students/${id}/`);
+    return res.data;
+  },
+};
+
+export const sharedDirectoryService = {
+  async get() {
+    const res = await api.get('/integration/shared-directory/');
+    return res.data;
+  },
+};
+
+export const parentsService = {
+  async update(id, data, options = {}) {
+    if (isDemoSession()) {
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour modifier des parents.");
+    }
+
+    if (options.source === 'orbit') {
+      const res = await api.patch(`/integration/entities/parent/${id}/`, {
+        ...(data?.first_name !== undefined ? { firstName: data.first_name } : {}),
+        ...(data?.last_name !== undefined ? { lastName: data.last_name } : {}),
+        ...(data?.email !== undefined ? { email: data.email || null } : {}),
+        ...(data?.phone !== undefined ? { phone: data.phone || null } : {}),
+      }, {
+        params: { identifierType: options.identifierType || 'orbitId' },
+      });
+      return res.data;
+    }
+
+    const res = await api.patch(`/users/${id}/`, data);
+    return res.data;
+  },
+
+  async remove(id, options = {}) {
+    if (isDemoSession()) {
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour supprimer des parents.");
+    }
+
+    if (options.source === 'orbit') {
+      const res = await api.delete(`/integration/entities/parent/${id}/`, {
+        params: { identifierType: options.identifierType || 'orbitId' },
+      });
+      return res.data;
+    }
+
+    const res = await api.delete(`/users/${id}/`);
     return res.data;
   },
 };

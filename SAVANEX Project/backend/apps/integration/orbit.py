@@ -70,13 +70,27 @@ def _write_outbox(records: list[dict]) -> None:
                 stream.write(json.dumps(record, ensure_ascii=True) + "\n")
 
 
+def _strip_empty_values(value):
+    if isinstance(value, dict):
+        return {
+            key: cleaned
+            for key, item in value.items()
+            if (cleaned := _strip_empty_values(item)) is not None and cleaned != ""
+        }
+
+    if isinstance(value, list):
+        return [_strip_empty_values(item) for item in value]
+
+    return value
+
+
 def _send_json(path: str, payload: dict) -> tuple[bool, str | None]:
     if not orbit_sync_is_enabled():
         return False, "Missing Orbit configuration"
 
     req = request.Request(
         url=f"{KCS_ORBIT_API_URL}{path}",
-        data=json.dumps(payload).encode("utf-8"),
+        data=json.dumps(_strip_empty_values(payload)).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "x-api-key": KCS_ORBIT_API_KEY,
@@ -199,7 +213,7 @@ def _contract_datetime(value: datetime | None) -> str:
 
 
 def _compact(mapping: dict) -> dict:
-    return {key: value for key, value in mapping.items() if value is not None}
+    return {key: value for key, value in mapping.items() if value is not None and value != ""}
 
 
 def _parent_external_id(parent) -> str:
@@ -370,6 +384,14 @@ def create_registry_entity(entity_type: str, payload: dict) -> dict:
         "POST",
         f"/api/integration/registry/{quote(entity_type)}",
         {**payload, "organizationId": KCS_ORBIT_ORGANIZATION_ID},
+    )
+
+
+def update_registry_entity(entity_type: str, identifier: str, payload: dict, identifier_type: str = "orbitId") -> dict:
+    return _request_json(
+        "PUT",
+        f"/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
+        _strip_empty_values(payload),
     )
 
 

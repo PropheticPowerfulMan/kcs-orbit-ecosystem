@@ -9,6 +9,65 @@ export const AppSlugSchema = z.enum([
   "SAVANEX"
 ]);
 
+export const RegistryEntityTypeSchema = z.enum([
+  "family",
+  "parent",
+  "student",
+  "teacher"
+]);
+
+export const CanonicalIdAppPrefix = {
+  KCS_NEXUS: "KCSNEX",
+  EDUPAY: "EDUPAY",
+  EDUSYNCAI: "EDUSAI",
+  SAVANEX: "SAV"
+} as const;
+
+export const CanonicalIdEntityPrefix = {
+  family: "FAM",
+  parent: "PAR",
+  student: "STU",
+  teacher: "TEA"
+} as const;
+
+export function buildCanonicalExternalId(input: {
+  appSlug: z.infer<typeof AppSlugSchema>;
+  entityType: z.infer<typeof RegistryEntityTypeSchema>;
+  seed?: string;
+  now?: Date;
+}) {
+  const appPrefix = CanonicalIdAppPrefix[input.appSlug];
+  const entityPrefix = CanonicalIdEntityPrefix[input.entityType];
+  const now = input.now || new Date();
+  const datePart = [
+    now.getUTCFullYear(),
+    String(now.getUTCMonth() + 1).padStart(2, "0"),
+    String(now.getUTCDate()).padStart(2, "0")
+  ].join("");
+  const entropy = (input.seed || Math.random().toString(36).slice(2))
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .padEnd(6, "0")
+    .slice(0, 6);
+
+  return `${appPrefix}-${entityPrefix}-${datePart}-${entropy}`;
+}
+
+export function pickPreferredExternalId(
+  externalIds: Array<{ appSlug: string; externalId: string }>,
+  fallback: string,
+  priority = ["SAVANEX", "KCS_NEXUS", "EDUPAY", "EDUSYNCAI"]
+) {
+  for (const appSlug of priority) {
+    const match = externalIds.find((entry) => entry.appSlug === appSlug && entry.externalId.trim());
+    if (match) {
+      return match.externalId.trim();
+    }
+  }
+
+  return externalIds.find((entry) => entry.externalId.trim())?.externalId.trim() || fallback;
+}
+
 export const RoleAudienceSchema = z.enum([
   "ADMIN",
   "STAFF",

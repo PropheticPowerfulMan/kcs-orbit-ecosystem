@@ -3,7 +3,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
 import StatCard from '../../components/ui/StatCard';
-import { studentsService } from '../../services/api';
+import { parentsService, sharedDirectoryService, studentsService } from '../../services/api';
 
 const normalizeLabel = (value, fallback) => {
   if (typeof value === 'string' && value.trim()) {
@@ -36,42 +36,103 @@ const splitClassName = (value) => {
   return { level, suffix: (match[2] || '').toUpperCase() };
 };
 
+const splitFullName = (value) => {
+  const parts = normalizeLabel(value, '').split(/\s+/).filter(Boolean);
+  return {
+    first_name: parts[0] || '',
+    last_name: parts.slice(1).join(' ') || '',
+  };
+};
+
 const ParentsPage = () => {
   const [query, setQuery] = useState('');
   const [classLevelFilter, setClassLevelFilter] = useState('all');
   const [classSuffixFilter, setClassSuffixFilter] = useState('all');
   const [familyFilter, setFamilyFilter] = useState('all');
   const [students, setStudents] = useState([]);
+  const [directory, setDirectory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedParent, setSelectedParent] = useState(null);
+  const [editingParent, setEditingParent] = useState(null);
+  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadStudents = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const [studentData, directoryData] = await Promise.all([
+        studentsService.getAll(),
+        sharedDirectoryService.get().catch(() => null),
+      ]);
+      setStudents(studentData);
+      setDirectory(directoryData);
+    } catch {
+      setError('Impossible de charger les familles pour le moment.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadStudents = async () => {
-      setLoading(true);
-      setError('');
-
-      try {
-        const data = await studentsService.getAll();
-        setStudents(data);
-      } catch {
-        setError('Impossible de charger les familles pour le moment.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     void loadStudents();
   }, []);
 
   const familyRows = useMemo(() => {
+    if (Array.isArray(directory?.parents)) {
+      const studentsByParent = new Map();
+      for (const student of Array.isArray(directory?.students) ? directory.students : []) {
+        const parentId = student.parentId || '';
+        const current = studentsByParent.get(parentId) || [];
+        current.push(student);
+        studentsByParent.set(parentId, current);
+      }
+
+      return directory.parents
+        .map((parent) => {
+          const linkedStudents = studentsByParent.get(parent.id) || [];
+          const classes = new Set(linkedStudents.map((student) => normalizeLabel(student.className, 'Non assignée')));
+          const classParts = linkedStudents.map((student) => splitClassName(student.className || ''));
+          return {
+            id: parent.id,
+            family_name: parent.fullName || parent.displayId || 'Parent Orbit',
+            full_name: parent.fullName || parent.displayId || 'Parent Orbit',
+            first_name: parent.firstName || splitFullName(parent.fullName || '').first_name,
+            last_name: parent.lastName || splitFullName(parent.fullName || '').last_name,
+            students_label: linkedStudents.length
+              ? linkedStudents.map((student) => student.fullName || student.displayId).join(', ')
+              : 'Aucun élève lié',
+            classes_label: Array.from(classes).sort((left, right) => left.localeCompare(right)).join(', '),
+            class_parts: classParts,
+            student_count: linkedStudents.length,
+            activeStudents: linkedStudents.filter((student) => (student.status || 'ACTIVE') !== 'INACTIVE').length,
+            kcs_card_id: parent.displayId,
+            parent_external_id: parent.displayId,
+            email: parent.email || '',
+            phone: parent.phone || '',
+            photo_data: '',
+            left_fingerprint_data: '',
+            right_fingerprint_data: '',
+            management_id: parent.id,
+            management_source: 'orbit',
+            identifier_type: 'orbitId',
+          };
+        })
+        .sort((left, right) => right.student_count - left.student_count || left.family_name.localeCompare(right.family_name));
+    }
+
     const groups = new Map();
 
     for (const student of students) {
       const familyName = normalizeLabel(student.parent_name, 'Aucun parent lié');
       const current = groups.get(familyName) || {
-        id: slugify(familyName),
+        id: student.parent || slugify(familyName),
         family_name: familyName,
+        full_name: familyName,
+        first_name: splitFullName(familyName).first_name,
+        last_name: splitFullName(familyName).last_name,
         students: [],
         classes: new Set(),
         classParts: [],
@@ -83,6 +144,9 @@ const ParentsPage = () => {
         photo_data: student.parent_photo_data,
         left_fingerprint_data: student.parent_left_fingerprint_data,
         right_fingerprint_data: student.parent_right_fingerprint_data,
+        management_id: student.parent || null,
+        management_source: 'local',
+        identifier_type: 'local',
       };
 
       current.students.push(student.full_name);
@@ -100,6 +164,9 @@ const ParentsPage = () => {
       .map((group) => ({
         id: group.id,
         family_name: group.family_name,
+        full_name: group.full_name,
+        first_name: group.first_name,
+        last_name: group.last_name,
         students_label: group.students.join(', '),
         classes_label: Array.from(group.classes).sort((left, right) => left.localeCompare(right)).join(', '),
         class_parts: group.classParts,
@@ -112,9 +179,12 @@ const ParentsPage = () => {
         photo_data: group.photo_data,
         left_fingerprint_data: group.left_fingerprint_data,
         right_fingerprint_data: group.right_fingerprint_data,
+        management_id: group.management_id,
+        management_source: group.management_source,
+        identifier_type: group.identifier_type,
       }))
       .sort((left, right) => right.student_count - left.student_count || left.family_name.localeCompare(right.family_name));
-  }, [students]);
+  }, [directory, students]);
 
   const familyOptions = useMemo(
     () => familyRows.map((row) => row.family_name),
@@ -168,6 +238,62 @@ const ParentsPage = () => {
   const totalStudents = filtered.reduce((sum, family) => sum + family.student_count, 0);
   const classesCovered = classGroups.length;
 
+  const openEdit = (row) => {
+    setEditingParent(row);
+    setEditForm({
+      first_name: row.first_name || '',
+      last_name: row.last_name || '',
+      email: row.email || '',
+      phone: row.phone || '',
+    });
+  };
+
+  const handleSave = async () => {
+    if (!editingParent?.management_id) {
+      setError('Ce parent ne peut pas être modifié depuis cette vue.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError('');
+    try {
+      await parentsService.update(editingParent.management_id, editForm, {
+        source: editingParent.management_source,
+        identifierType: editingParent.identifier_type,
+      });
+      setEditingParent(null);
+      await loadStudents();
+    } catch (saveError) {
+      setError(saveError?.response?.data?.message || saveError?.message || 'Impossible de modifier ce parent.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (row) => {
+    if (!row.management_id) {
+      setError('Ce parent ne peut pas être supprimé depuis cette vue.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Supprimer ${row.family_name} ?`);
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    setError('');
+    try {
+      await parentsService.remove(row.management_id, {
+        source: row.management_source,
+        identifierType: row.identifier_type,
+      });
+      await loadStudents();
+    } catch (deleteError) {
+      setError(deleteError?.response?.data?.message || deleteError?.message || 'Impossible de supprimer ce parent.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const columns = [
     { key: 'family_name', label: 'Famille / Parent' },
     { key: 'students_label', label: 'Élèves liés' },
@@ -175,7 +301,17 @@ const ParentsPage = () => {
     { key: 'student_count', label: 'Effectif' },
     { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'Non générée' },
     { key: 'activeStudents', label: 'Actifs' },
-    { key: 'details', label: 'Action', render: (_value, row) => <button type="button" onClick={() => setSelectedParent({ ...row, full_name: row.family_name, role: 'Parent' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
+    {
+      key: 'details',
+      label: 'Action',
+      render: (_value, row) => (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setSelectedParent({ ...row, full_name: row.family_name, role: 'Parent' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
+          <button type="button" onClick={() => openEdit(row)} className="rounded-lg border border-amber-400/30 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10">Modifier</button>
+          <button type="button" onClick={() => void handleDelete(row)} className="rounded-lg border border-rose-400/30 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Supprimer</button>
+        </div>
+      )
+    },
   ];
 
   return (
@@ -256,6 +392,34 @@ const ParentsPage = () => {
       <DataTable columns={columns} data={filtered} />
 
       <EntityDetailPanel entity={selectedParent} type="parent" onClose={() => setSelectedParent(null)} />
+
+      {editingParent ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-github-border bg-slate-950 p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Gestion parent</p>
+                <h3 className="mt-2 font-display text-2xl font-semibold text-slate-100">Modifier {editingParent.family_name}</h3>
+              </div>
+              <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Fermer</button>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <input value={editForm.first_name} onChange={(event) => setEditForm({ ...editForm, first_name: event.target.value })} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+              <input value={editForm.last_name} onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+              <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} placeholder="Email" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue sm:col-span-2" />
+              <input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} placeholder="Téléphone" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue sm:col-span-2" />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border border-github-border px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/70">Annuler</button>
+              <button type="button" onClick={() => void handleSave()} disabled={submitting} className="rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                {submitting ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="card p-5">

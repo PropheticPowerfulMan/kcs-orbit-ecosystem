@@ -1,4 +1,5 @@
 import { prisma } from "../db";
+import { pickPreferredExternalId } from "@ecosystem/shared-contracts";
 
 type ExternalIdEntry = {
   appSlug: string;
@@ -14,6 +15,7 @@ type CanonicalNameParts = {
 
 export type SharedDirectoryStudent = {
   id: string;
+  displayId: string;
   fullName: string;
   firstName: string;
   middleName: string | null;
@@ -33,6 +35,7 @@ export type SharedDirectoryStudent = {
 
 export type SharedDirectoryParent = {
   id: string;
+  displayId: string;
   fullName: string;
   firstName: string;
   middleName: string | null;
@@ -47,6 +50,7 @@ export type SharedDirectoryParent = {
 
 export type SharedDirectoryTeacher = {
   id: string;
+  displayId: string;
   fullName: string;
   firstName: string;
   middleName: string | null;
@@ -63,9 +67,26 @@ export type SharedDirectoryTeacher = {
   externalIds: ExternalIdEntry[];
 };
 
+export type SharedDirectoryFamily = {
+  id: string;
+  displayId: string;
+  familyLabel: string;
+  parentIds: string[];
+  studentIds: string[];
+  organizationId: string | null;
+  externalIds: ExternalIdEntry[];
+};
+
 export type SharedDirectoryPayload = {
   source: "orbit";
   visibility: "shared-directory";
+  counts: {
+    families: number;
+    parents: number;
+    students: number;
+    teachers: number;
+  };
+  families: SharedDirectoryFamily[];
   students: SharedDirectoryStudent[];
   parents: SharedDirectoryParent[];
   teachers: SharedDirectoryTeacher[];
@@ -98,19 +119,6 @@ function splitFullName(fullName: string): CanonicalNameParts {
   };
 }
 
-function pickPreferredStudentNumber(entityId: string, externalIds: ExternalIdEntry[]) {
-  const priority = ["SAVANEX", "KCS_NEXUS", "EDUPAY", "EDUSYNCAI"];
-
-  for (const appSlug of priority) {
-    const match = externalIds.find((entry) => entry.appSlug === appSlug);
-    if (match) {
-      return match.externalId;
-    }
-  }
-
-  return externalIds[0]?.externalId || entityId;
-}
-
 function mapExternalIds(entityIds: string[], links: Array<{ nexusEntityId: string; appSlug: string; externalId: string }>) {
   const lookup = new Map<string, ExternalIdEntry[]>();
 
@@ -125,6 +133,20 @@ function mapExternalIds(entityIds: string[], links: Array<{ nexusEntityId: strin
   }
 
   return lookup;
+}
+
+function pickEntityDisplayId(
+  externalIds: ExternalIdEntry[],
+  entityType: "family" | "parent" | "student" | "teacher",
+  fallback: string,
+) {
+  const entityCode = entityType === "family" ? "FAM" : entityType === "parent" ? "PAR" : entityType === "student" ? "STU" : "TEA";
+  const roleBasedId = externalIds.find((entry) => new RegExp(`(^|-)${entityCode}(-|$)`, "i").test(entry.externalId.trim()));
+  if (roleBasedId) {
+    return roleBasedId.externalId.trim();
+  }
+
+  return pickPreferredExternalId(externalIds, fallback);
 }
 
 export async function loadSharedDirectory(organizationId?: string): Promise<SharedDirectoryPayload> {
@@ -198,7 +220,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     prisma.externalLink.findMany({
       where: {
         ...where,
-        entityType: { in: ["student", "parent", "teacher"] },
+        entityType: { in: ["family", "student", "parent", "teacher"] },
       },
       select: {
         nexusEntityId: true,
@@ -214,19 +236,44 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
   const studentExternalIds = mapExternalIds(students.map((student) => student.id), typedLinks.filter((link) => link.entityType === "student"));
   const parentExternalIds = mapExternalIds(parents.map((parent) => parent.id), typedLinks.filter((link) => link.entityType === "parent"));
   const teacherExternalIds = mapExternalIds(teachers.map((teacher) => teacher.id), typedLinks.filter((link) => link.entityType === "teacher"));
+  const familyExternalIds = mapExternalIds(parents.map((parent) => parent.id), typedLinks.filter((link) => link.entityType === "family"));
+
+  const families = parents.map((parent) => {
+    const externalIds = familyExternalIds.get(parent.id) || [];
+    const parts = splitFullName(parent.fullName);
+    const familyName = parts.lastName || parent.lastName || parent.fullName;
+    return {
+      id: parent.id,
+      displayId: pickEntityDisplayId(externalIds, "family", parent.id),
+      familyLabel: `${familyName} Family`,
+      parentIds: [parent.id],
+      studentIds: parent.students.map((student) => student.id),
+      organizationId: parent.organizationId,
+      externalIds,
+    };
+  });
 
   return {
     source: "orbit",
     visibility: "shared-directory",
+    counts: {
+      families: families.length,
+      parents: parents.length,
+      students: students.length,
+      teachers: teachers.length,
+    },
+    families,
     students: students.map((student) => {
       const externalIds = studentExternalIds.get(student.id) || [];
+      const displayId = pickEntityDisplayId(externalIds, "student", student.studentNumber || student.id);
       return {
         id: student.id,
+        displayId,
         fullName: `${student.firstName} ${student.lastName}`.trim(),
         firstName: student.firstName,
         middleName: student.middleName,
         lastName: student.lastName,
-        studentNumber: student.studentNumber || pickPreferredStudentNumber(student.id, externalIds),
+        studentNumber: student.studentNumber || displayId,
         email: student.email,
         phone: student.phone,
         dateOfBirth: student.dateOfBirth?.toISOString() ?? null,
@@ -240,12 +287,14 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       };
     }),
     parents: parents.map((parent) => {
+      const externalIds = parentExternalIds.get(parent.id) || [];
       const parts = splitFullName(parent.fullName);
       const firstName = parent.firstName || parts.firstName;
       const middleName = parent.middleName || parts.middleName;
       const lastName = parent.lastName || parts.lastName;
       return {
         id: parent.id,
+        displayId: pickEntityDisplayId(externalIds, "parent", parent.id),
         fullName: parent.fullName || `${firstName} ${lastName}`.trim(),
         firstName,
         middleName,
@@ -255,16 +304,18 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         mustChangePassword: parent.mustChangePassword,
         organizationId: parent.organizationId,
         studentIds: parent.students.map((student) => student.id),
-        externalIds: parentExternalIds.get(parent.id) || [],
+        externalIds,
       };
     }),
     teachers: teachers.map((teacher) => {
+      const externalIds = teacherExternalIds.get(teacher.id) || [];
       const parts = splitFullName(teacher.fullName);
       const firstName = teacher.firstName || parts.firstName;
       const middleName = teacher.middleName || parts.middleName;
       const lastName = teacher.lastName || parts.lastName;
       return {
         id: teacher.id,
+        displayId: pickEntityDisplayId(externalIds, "teacher", teacher.employeeId || teacher.id),
         fullName: teacher.fullName || `${firstName} ${lastName}`.trim(),
         firstName,
         middleName,
@@ -278,7 +329,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         jobTitle: teacher.jobTitle,
         mustChangePassword: teacher.mustChangePassword,
         organizationId: teacher.organizationId,
-        externalIds: teacherExternalIds.get(teacher.id) || [],
+        externalIds,
       };
     }),
   };

@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "dev": "vite --config vite.config.mjs",
+    "build": "tsc -p tsconfig.build.json && vite build --config vite.config.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
+    "preview": "vite preview --config vite.config.mjs",
     "session:commit": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/session-commit.ps1",
     "deploy:pages": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/deploy-gh-pages.ps1"
   },

@@ -12,7 +12,7 @@ import {
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import { useAuthStore } from '@/store/authStore'
-import { studentsAPI } from '@/services/api'
+import { registryAPI, studentsAPI } from '@/services/api'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -139,6 +139,7 @@ type AdminStudentRecord = {
 
 type AdminParentRecord = {
   id: string
+  displayId?: string
   name: string
   email: string
   phone: string
@@ -147,6 +148,28 @@ type AdminParentRecord = {
   classes: string[]
   syncSource: 'local' | 'orbit' | 'mixed'
   status: string
+  identifierType: 'orbitId' | 'externalId'
+}
+
+type SharedDirectoryParent = {
+  id: string
+  displayId?: string
+  fullName: string
+  email?: string | null
+  phone?: string | null
+  studentIds?: string[]
+  externalIds?: Array<{ appSlug?: string; externalId?: string }>
+}
+
+type SharedDirectoryPayload = {
+  source?: 'local' | 'orbit'
+  counts?: {
+    parents?: number
+    students?: number
+    families?: number
+    teachers?: number
+  }
+  parents?: SharedDirectoryParent[]
 }
 
 type AdminStudentEditForm = {
@@ -565,9 +588,11 @@ const buildAdminParentRecords = (roster: AdminStudentRecord[]): AdminParentRecor
     const sources = new Set(familyStudents.map((student) => student.syncSource ?? 'local'))
     const syncSource = sources.size > 1 ? 'mixed' : (sources.values().next().value ?? 'local') as AdminParentRecord['syncSource']
     const needsAction = familyStudents.some((student) => getStudentRisk(student) !== 'On track')
+    const identifierType: AdminParentRecord['identifierType'] = 'orbitId'
 
     return {
       id: key,
+      displayId: undefined,
       name: firstStudent.parent || 'Parent record pending',
       email: firstStudent.parentEmail || 'Email non renseigne',
       phone: firstStudent.parentPhone || 'Telephone non renseigne',
@@ -576,6 +601,41 @@ const buildAdminParentRecords = (roster: AdminStudentRecord[]): AdminParentRecor
       classes,
       syncSource,
       status: needsAction ? 'Suivi requis' : 'Actif',
+      identifierType,
+    }
+  }).sort((left, right) => left.name.localeCompare(right.name))
+}
+
+const buildAdminParentRecordsFromDirectory = (
+  directory: SharedDirectoryPayload | null,
+  roster: AdminStudentRecord[],
+): AdminParentRecord[] => {
+  if (!directory?.parents?.length) return buildAdminParentRecords(roster)
+
+  const studentsById = new Map(roster.map((student) => [student.id, student]))
+
+  return directory.parents.map((parent) => {
+    const linkedStudents = (parent.studentIds ?? [])
+      .map((studentId) => studentsById.get(studentId))
+      .filter((student): student is AdminStudentRecord => Boolean(student))
+      .sort((left, right) => left.name.localeCompare(right.name))
+    const classes = Array.from(new Set(linkedStudents.map((student) => formatClassName(student.grade, student.section)).filter(Boolean))).sort()
+    const needsAction = linkedStudents.some((student) => getStudentRisk(student) !== 'On track')
+    const displayId = parent.displayId || parent.externalIds?.find((item) => item.externalId)?.externalId || parent.id
+    const identifierType: AdminParentRecord['identifierType'] = 'orbitId'
+
+    return {
+      id: parent.id,
+      displayId,
+      name: parent.fullName || 'Parent record pending',
+      email: parent.email || 'Email non renseigne',
+      phone: parent.phone || 'Telephone non renseigne',
+      students: linkedStudents,
+      studentCount: linkedStudents.length,
+      classes,
+      syncSource: (directory.source === 'orbit' ? 'orbit' : 'local') as AdminParentRecord['syncSource'],
+      status: linkedStudents.length === 0 ? 'Sans enfant rattache' : needsAction ? 'Suivi requis' : 'Actif',
+      identifierType,
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -1016,6 +1076,9 @@ const AdminSectionView = ({
   const [viewingStudent, setViewingStudent] = useState<AdminStudentRecord | null>(null)
   const [selectedStaff, setSelectedStaff] = useState(staffSeed[0])
   const [selectedParent, setSelectedParent] = useState<AdminParentRecord | null>(null)
+  const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
+  const [parentEditForm, setParentEditForm] = useState({ name: '', email: '', phone: '' })
+  const [savingParentEdit, setSavingParentEdit] = useState(false)
   const [sentNotice, setSentNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
   const [parentQuery, setParentQuery] = useState('')
@@ -1024,7 +1087,9 @@ const AdminSectionView = ({
   const [classSuffixFilter, setClassSuffixFilter] = useState<typeof SEARCH_CLASS_SUFFIXES[number]>('All')
   const [familyFilter, setFamilyFilter] = useState('All')
   const [studentNotice, setStudentNotice] = useState('')
+  const [parentNotice, setParentNotice] = useState('')
   const [apiSynced, setApiSynced] = useState(false)
+  const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
   const [showCreateStudent, setShowCreateStudent] = useState(false)
   const [selectedTranscriptId, setSelectedTranscriptId] = useState('')
   const [reportCadence, setReportCadence] = useState<AdminReportCadence>('weekly')
@@ -1043,7 +1108,14 @@ const AdminSectionView = ({
   const shouldLoadRoster = adminRosterSegments.has(segment)
 
   const refreshOfficialRoster = async () => {
-    const response = await getAdminRoster()
+    const [response, directoryResponse] = await Promise.all([
+      getAdminRoster(),
+      registryAPI.getDirectory().catch(() => null),
+    ])
+    const directory = directoryResponse?.data?.data
+    if (directory?.parents) {
+      setSharedDirectory(directory)
+    }
     const profiles = response.data?.data
     if (!Array.isArray(profiles)) {
       const fallbackRoster = readStoredRoster()
@@ -1070,10 +1142,17 @@ const AdminSectionView = ({
     }
 
     let mounted = true
-    getAdminRoster()
-      .then((response) => {
+    Promise.all([
+      getAdminRoster(),
+      registryAPI.getDirectory().catch(() => null),
+    ])
+      .then(([response, directoryResponse]) => {
         const profiles = response.data?.data
         if (!mounted) return
+        const directory = directoryResponse?.data?.data
+        if (directory?.parents) {
+          setSharedDirectory(directory)
+        }
         if (!Array.isArray(profiles)) {
           const fallbackRoster = readStoredRoster()
           const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
@@ -1095,6 +1174,7 @@ const AdminSectionView = ({
         setOfficialRoster(roster)
         setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? adminRosterSeed[0])
         setViewingStudent(null)
+        setSharedDirectory(null)
         setApiSynced(false)
         setStudentNotice('La synchronisation du registre est indisponible. Verifiez que KCS Orbit API est bien lance pour voir les eleves provenant des autres applications.')
       })
@@ -1267,6 +1347,65 @@ const AdminSectionView = ({
     }
   }
 
+  const openEditParent = (parent: AdminParentRecord) => {
+    setSelectedParent(null)
+    setEditingParent(parent)
+    setParentEditForm({
+      name: parent.name,
+      email: parent.email === 'Email non renseigne' ? '' : parent.email,
+      phone: parent.phone === 'Telephone non renseigne' ? '' : parent.phone,
+    })
+    setParentNotice('')
+  }
+
+  const saveEditedParent = async () => {
+    if (!editingParent) return
+
+    const normalizedName = parentEditForm.name.trim()
+    if (!normalizedName) {
+      setParentNotice('Le nom du parent est obligatoire pour enregistrer les modifications.')
+      return
+    }
+
+    const [firstName, ...lastNameParts] = normalizedName.split(/\s+/)
+    setSavingParentEdit(true)
+    try {
+      const response = await registryAPI.updateEntity('parent', editingParent.id, {
+        firstName,
+        lastName: lastNameParts.join(' ') || 'Parent',
+        email: parentEditForm.email.trim() || undefined,
+        phone: parentEditForm.phone.trim() || null,
+      }, editingParent.identifierType)
+      const roster = await refreshOfficialRoster()
+      const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
+      const updatedParent = refreshedParents.find((parent) => parent.id === editingParent.id) ?? null
+      setEditingParent(null)
+      if (updatedParent) {
+        setSelectedParent(updatedParent)
+      }
+      setParentNotice(response.data?.message || `${normalizedName} a ete mis a jour avec succes.`)
+    } catch (error) {
+      setParentNotice(extractStudentApiMessage(error, 'Impossible de modifier ce parent pour le moment.'))
+    } finally {
+      setSavingParentEdit(false)
+    }
+  }
+
+  const deleteParentRecord = async (parent: AdminParentRecord) => {
+    const confirmed = window.confirm(`Supprimer ${parent.name} du registre parent ?`)
+    if (!confirmed) return
+
+    try {
+      const response = await registryAPI.deleteEntity('parent', parent.id, parent.identifierType)
+      await refreshOfficialRoster()
+      setSelectedParent((current) => current?.id === parent.id ? null : current)
+      setEditingParent((current) => current?.id === parent.id ? null : current)
+      setParentNotice(response.data?.message || `${parent.name} a ete supprime du registre parent.`)
+    } catch (error) {
+      setParentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${parent.name} pour le moment.`))
+    }
+  }
+
   const openCreateStudentForm = () => {
     const updateDraftClass = (grade: string, section = '') => {
       setNewFamily((item) => ({
@@ -1350,12 +1489,13 @@ const AdminSectionView = ({
     }, {})
   }, [filteredRoster])
 
-  const parentRecords = useMemo(() => buildAdminParentRecords(officialRoster), [officialRoster])
+  const parentRecords = useMemo(() => buildAdminParentRecordsFromDirectory(sharedDirectory, officialRoster), [officialRoster, sharedDirectory])
 
   const filteredParents = useMemo(() => {
     const query = parentQuery.trim().toLowerCase()
     if (!query) return parentRecords
     return parentRecords.filter((parent) => [
+      parent.displayId,
       parent.name,
       parent.email,
       parent.phone,
@@ -1411,7 +1551,7 @@ const AdminSectionView = ({
 
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { label: 'Parents visibles', value: filteredParents.length, detail: `${parentRecords.length} au total`, icon: Users },
+            { label: 'Parents visibles', value: filteredParents.length, detail: `${sharedDirectory?.counts?.parents ?? parentRecords.length} au total partage`, icon: Users },
             { label: 'Enfants lies', value: totalLinkedStudents, detail: 'dans le registre officiel', icon: GraduationCap },
             { label: 'Classes couvertes', value: Array.from(new Set(parentRecords.flatMap((parent) => parent.classes))).length, detail: 'via les familles', icon: BookOpen },
             { label: 'Suivi requis', value: parentsWithAlerts, detail: 'au moins un enfant a surveiller', icon: AlertTriangle },
@@ -1430,6 +1570,7 @@ const AdminSectionView = ({
             <Search size={16} className="text-gray-400" />
             <input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher parent, email, telephone, enfant ou classe..." />
           </label>
+          {parentNotice ? <p className="mt-3 rounded-xl bg-kcs-blue-50 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{parentNotice}</p> : null}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -1442,6 +1583,7 @@ const AdminSectionView = ({
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-kcs-blue-950 dark:text-gray-400">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Parent</th>
+                  <th className="px-5 py-3 font-semibold">ID parent</th>
                   <th className="px-5 py-3 font-semibold">Contact</th>
                   <th className="px-5 py-3 font-semibold">Enfants</th>
                   <th className="px-5 py-3 font-semibold">Classes</th>
@@ -1456,6 +1598,7 @@ const AdminSectionView = ({
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{parent.status}</p>
                     </td>
+                    <td className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{parent.displayId || parent.id}</td>
                     <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
                       <p>{parent.email}</p>
                       <p className="mt-1">{parent.phone}</p>
@@ -1464,7 +1607,11 @@ const AdminSectionView = ({
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.classes.join(', ') || 'Non assignee'}</td>
                     <td className="px-5 py-4"><span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{parent.syncSource}</span></td>
                     <td className="px-5 py-4 text-right">
-                      <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>Voir</button>
+                      <div className="flex justify-end gap-2">
+                        <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>Voir</button>
+                        <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)}>Modifier</button>
+                        <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteParentRecord(parent)} aria-label={`Delete ${parent.name}`}><Trash2 size={15} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1491,12 +1638,18 @@ const AdminSectionView = ({
                 </button>
               </div>
 
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button type="button" onClick={() => openEditParent(selectedParent)} className="rounded-xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20">Modifier</button>
+                <button type="button" onClick={() => deleteParentRecord(selectedParent)} className="rounded-xl border border-red-100 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20">Supprimer</button>
+              </div>
+
               <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
                 <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Responsable</p>
                   <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedParent.name}</h4>
                   <div className="mt-5 space-y-3">
                     {[
+                      ['ID parent', selectedParent.displayId || selectedParent.id],
                       ['Email', selectedParent.email],
                       ['Telephone', selectedParent.phone],
                       ['Enfants', String(selectedParent.studentCount)],
@@ -1529,6 +1682,35 @@ const AdminSectionView = ({
                     </div>
                   ))}
                 </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {editingParent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Modifier parent">
+            <section className="w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier le parent</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Mettre a jour le nom et les contacts du responsable familial.</p>
+                </div>
+                <button type="button" onClick={() => setEditingParent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                  <X size={16} />
+                  Fermer
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-3">
+                <input value={parentEditForm.name} onChange={(event) => setParentEditForm((current) => ({ ...current, name: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom complet du parent" />
+                <input value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email" />
+                <input value={parentEditForm.phone} onChange={(event) => setParentEditForm((current) => ({ ...current, phone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Telephone" />
+              </div>
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 dark:border-kcs-blue-700 dark:text-gray-300 dark:hover:bg-kcs-blue-800">Annuler</button>
+                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-60">{savingParentEdit ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>
             </section>
           </div>

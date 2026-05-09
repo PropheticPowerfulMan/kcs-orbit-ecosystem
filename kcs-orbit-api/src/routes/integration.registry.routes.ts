@@ -5,8 +5,8 @@ import { requireAnyIntegrationAccess } from "../middleware/auth";
 
 const router = Router();
 
-router.post("/:entityType", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), createRegistryEntity);
-router.put("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), updateRegistryEntity);
-router.delete("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), deleteRegistryEntity);
+router.post("/:entityType", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), createRegistryEntity);
+router.put("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), updateRegistryEntity);
+router.delete("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), deleteRegistryEntity);
 
 export default router;

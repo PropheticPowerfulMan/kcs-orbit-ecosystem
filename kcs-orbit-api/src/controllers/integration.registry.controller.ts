@@ -1,9 +1,10 @@
 import { AppSlug, Prisma } from "@prisma/client";
+import { buildCanonicalExternalId, RegistryEntityTypeSchema } from "@ecosystem/shared-contracts";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
 
-const entityTypeSchema = z.enum(["parent", "student", "teacher"]);
+const entityTypeSchema = RegistryEntityTypeSchema;
 
 const canonicalNameShape = {
   fullName: z.string().min(1).optional(),
@@ -32,6 +33,7 @@ const createParentSchema = withCanonicalNameValidation({
   organizationId: z.string().min(1),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
+  mustChangePassword: z.boolean().optional(),
 });
 
 const createTeacherSchema = withCanonicalNameValidation({
@@ -57,13 +59,36 @@ const createStudentSchema = z.object({
   classOrbitId: z.string().optional(),
 });
 
+const createFamilySchema = z.object({
+  organizationId: z.string().min(1),
+  parent: withCanonicalNameValidation({
+    email: z.string().email().optional(),
+    phone: z.string().min(6).optional(),
+    mustChangePassword: z.boolean().optional(),
+  }),
+  students: z.array(createStudentSchema.omit({ organizationId: true, parentOrbitId: true })).min(1),
+});
+
 const deleteQuerySchema = z.object({
   organizationId: z.string().min(1),
   identifierType: z.enum(["orbitId", "externalId"]).default("orbitId"),
 });
 
+const updateParentSchema = z.object({
+  fullName: z.string().min(1).optional(),
+  firstName: z.string().min(1).nullable().optional(),
+  middleName: z.string().min(1).nullable().optional(),
+  lastName: z.string().min(1).nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().min(6).nullable().optional(),
+  mustChangePassword: z.boolean().optional(),
+}).refine((value) => Object.values(value).some((item) => item !== undefined), {
+  message: "At least one field must be provided",
+});
+
 const updateStudentSchema = z.object({
   firstName: z.string().min(1).optional(),
+  middleName: z.string().min(1).nullable().optional(),
   lastName: z.string().min(1).optional(),
   gender: z.string().min(1).optional(),
   studentNumber: z.string().min(1).optional(),
@@ -87,7 +112,7 @@ function normalizeText(value: string) {
   return value.trim().replace(/\s+/g, " ");
 }
 
-function buildCanonicalFullName(input: { fullName?: string; firstName?: string; middleName?: string; lastName?: string }) {
+function buildCanonicalFullName(input: { fullName?: string | null; firstName?: string | null; middleName?: string | null; lastName?: string | null }) {
   if (input.fullName?.trim()) {
     return normalizeText(input.fullName);
   }
@@ -96,23 +121,7 @@ function buildCanonicalFullName(input: { fullName?: string; firstName?: string; 
 }
 
 function buildGeneratedExternalId(appSlug: AppSlug, entityType: z.infer<typeof entityTypeSchema>) {
-  const appPrefix = {
-    [AppSlug.KCS_NEXUS]: "KCSNEX",
-    [AppSlug.EDUSYNCAI]: "EDUSAI",
-    [AppSlug.SAVANEX]: "SAV",
-    [AppSlug.EDUPAY]: "EDUPAY",
-  }[appSlug];
-
-  const entityPrefix = {
-    parent: "PAR",
-    student: "STU",
-    teacher: "TEA",
-  }[entityType];
-
-  const stamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
-
-  return `${appPrefix}-${entityPrefix}-${stamp}-${random}`;
+  return buildCanonicalExternalId({ appSlug, entityType });
 }
 
 async function ensureOrganizationExists(organizationId: string) {
@@ -206,14 +215,28 @@ async function findDuplicateTeacher(organizationId: string, input: z.infer<typeo
 }
 
 async function findDuplicateStudent(organizationId: string, input: z.infer<typeof createStudentSchema>) {
-  return prisma.student.findFirst({
-    where: {
-      organizationId,
+  const duplicateFilters: Prisma.StudentWhereInput[] = [
+    {
       firstName: { equals: normalizeText(input.firstName), mode: "insensitive" },
       lastName: { equals: normalizeText(input.lastName), mode: "insensitive" },
       gender: { equals: input.gender, mode: "insensitive" },
       ...(input.parentOrbitId ? { parentId: input.parentOrbitId } : {}),
       ...(input.classOrbitId ? { classId: input.classOrbitId } : {}),
+    },
+  ];
+
+  if (input.studentNumber) {
+    duplicateFilters.push({ studentNumber: { equals: input.studentNumber, mode: "insensitive" } });
+  }
+
+  if (input.email) {
+    duplicateFilters.push({ email: { equals: input.email, mode: "insensitive" } });
+  }
+
+  return prisma.student.findFirst({
+    where: {
+      organizationId,
+      OR: duplicateFilters,
     },
   });
 }
@@ -254,6 +277,8 @@ async function resolveEntityByIdentifier(params: {
 
 async function findEntityByOrbitId(organizationId: string, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
   switch (entityType) {
+    case "family":
+      return prisma.parent.findFirst({ where: { id: orbitId, organizationId }, select: { id: true } });
     case "parent":
       return prisma.parent.findFirst({ where: { id: orbitId, organizationId }, select: { id: true } });
     case "student":
@@ -265,6 +290,19 @@ async function findEntityByOrbitId(organizationId: string, entityType: z.infer<t
 
 async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
   switch (entityType) {
+    case "family": {
+      const children = await db.student.findMany({ where: { parentId: orbitId }, select: { id: true } });
+      const childIds = children.map((student) => student.id);
+      if (childIds.length > 0) {
+        await db.payment.deleteMany({ where: { studentId: { in: childIds } } });
+        await db.grade.deleteMany({ where: { studentId: { in: childIds } } });
+        await db.attendance.deleteMany({ where: { studentId: { in: childIds } } });
+        await db.externalLink.deleteMany({ where: { entityType: "student", nexusEntityId: { in: childIds } } });
+        await db.student.deleteMany({ where: { id: { in: childIds } } });
+      }
+      await db.externalLink.deleteMany({ where: { entityType: "parent", nexusEntityId: orbitId } });
+      return db.parent.delete({ where: { id: orbitId } });
+    }
     case "parent":
       await db.student.updateMany({ where: { parentId: orbitId }, data: { parentId: null } });
       return db.parent.delete({ where: { id: orbitId } });
@@ -286,12 +324,17 @@ export async function updateRegistryEntity(req: Request, res: Response) {
   }
 
   const entityType = entityTypeSchema.parse(req.params.entityType);
-  if (entityType !== "student") {
-    return res.status(400).json({ message: "Only student updates are supported through this endpoint" });
+  const query = deleteQuerySchema.parse(req.query);
+  const payload = entityType === "parent"
+    ? updateParentSchema.parse(req.body)
+    : entityType === "student"
+      ? updateStudentSchema.parse(req.body)
+      : null;
+
+  if (!payload) {
+    return res.status(400).json({ message: "Only parent and student updates are supported through this endpoint" });
   }
 
-  const query = deleteQuerySchema.parse(req.query);
-  const payload = updateStudentSchema.parse(req.body);
   const target = await resolveEntityByIdentifier({
     organizationId: query.organizationId,
     appSlug,
@@ -304,22 +347,80 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     return res.status(404).json({ message: "Entity not found for this application" });
   }
 
-  if (payload.parentOrbitId) {
-    const parent = await prisma.parent.findFirst({ where: { id: payload.parentOrbitId, organizationId: query.organizationId } });
+  if (entityType === "parent") {
+    const parentPayload = payload as z.infer<typeof updateParentSchema>;
+    const duplicateFilters: Prisma.ParentWhereInput[] = [];
+    if (parentPayload.email) {
+      duplicateFilters.push({ email: { equals: parentPayload.email, mode: "insensitive" } });
+    }
+    if (parentPayload.phone) {
+      duplicateFilters.push({ phone: parentPayload.phone });
+    }
+
+    if (duplicateFilters.length > 0) {
+      const duplicate = await prisma.parent.findFirst({
+        where: {
+          organizationId: query.organizationId,
+          id: { not: target.orbitId },
+          OR: duplicateFilters,
+        },
+        select: { email: true, phone: true },
+      });
+
+      if (duplicate) {
+        if (parentPayload.email && duplicate.email?.toLowerCase() === parentPayload.email.toLowerCase()) {
+          return res.status(409).json({ message: `Parent email already exists: ${parentPayload.email}` });
+        }
+
+        if (parentPayload.phone && duplicate.phone === parentPayload.phone) {
+          return res.status(409).json({ message: `Parent phone already exists: ${parentPayload.phone}` });
+        }
+      }
+    }
+
+    const parent = await prisma.$transaction(async (tx) => {
+      const fullName = parentPayload.fullName || parentPayload.firstName || parentPayload.lastName
+        ? buildCanonicalFullName(parentPayload)
+        : undefined;
+      const updatedParent = await tx.parent.update({
+        where: { id: target.orbitId },
+        data: {
+          ...(fullName !== undefined ? { fullName } : {}),
+          ...(parentPayload.firstName !== undefined ? { firstName: parentPayload.firstName ? normalizeText(parentPayload.firstName) : null } : {}),
+          ...(parentPayload.middleName !== undefined ? { middleName: parentPayload.middleName ? normalizeText(parentPayload.middleName) : null } : {}),
+          ...(parentPayload.lastName !== undefined ? { lastName: parentPayload.lastName ? normalizeText(parentPayload.lastName) : null } : {}),
+          ...(parentPayload.email !== undefined ? { email: parentPayload.email } : {}),
+          ...(parentPayload.phone !== undefined ? { phone: parentPayload.phone } : {}),
+          ...(parentPayload.mustChangePassword !== undefined ? { mustChangePassword: parentPayload.mustChangePassword } : {}),
+        },
+      });
+
+      await createSyncEvent(tx, { organizationId: query.organizationId, appSlug, eventType: "parent.updated", entityType, entityId: target.orbitId, payload });
+      await createAuditLog(tx, { organizationId: query.organizationId, action: `${appSlug.toLowerCase()}.parent.updated`, entityType, entityId: target.orbitId, metadata: { identifier: req.params.identifier, identifierType: query.identifierType } });
+
+      return updatedParent;
+    });
+
+    return res.json({ entityType, orbitId: parent.id, updated: true, entity: parent });
+  }
+
+  const studentPayload = payload as z.infer<typeof updateStudentSchema>;
+  if (studentPayload.parentOrbitId) {
+    const parent = await prisma.parent.findFirst({ where: { id: studentPayload.parentOrbitId, organizationId: query.organizationId } });
     if (!parent) return res.status(404).json({ message: "Parent not found" });
   }
 
-  if (payload.classOrbitId) {
-    const klass = await prisma.class.findFirst({ where: { id: payload.classOrbitId, organizationId: query.organizationId } });
+  if (studentPayload.classOrbitId) {
+    const klass = await prisma.class.findFirst({ where: { id: studentPayload.classOrbitId, organizationId: query.organizationId } });
     if (!klass) return res.status(404).json({ message: "Class not found" });
   }
 
   const duplicateFilters: Prisma.StudentWhereInput[] = [];
-  if (payload.studentNumber) {
-    duplicateFilters.push({ studentNumber: { equals: payload.studentNumber, mode: "insensitive" } });
+  if (studentPayload.studentNumber) {
+    duplicateFilters.push({ studentNumber: { equals: studentPayload.studentNumber, mode: "insensitive" } });
   }
-  if (payload.email) {
-    duplicateFilters.push({ email: { equals: payload.email, mode: "insensitive" } });
+  if (studentPayload.email) {
+    duplicateFilters.push({ email: { equals: studentPayload.email, mode: "insensitive" } });
   }
 
   if (duplicateFilters.length > 0) {
@@ -333,12 +434,12 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     });
 
     if (duplicate) {
-      if (payload.studentNumber && duplicate.studentNumber?.toLowerCase() === payload.studentNumber.toLowerCase()) {
-        return res.status(409).json({ message: `Student number already exists: ${payload.studentNumber}` });
+      if (studentPayload.studentNumber && duplicate.studentNumber?.toLowerCase() === studentPayload.studentNumber.toLowerCase()) {
+        return res.status(409).json({ message: `Student number already exists: ${studentPayload.studentNumber}` });
       }
 
-      if (payload.email && duplicate.email?.toLowerCase() === payload.email.toLowerCase()) {
-        return res.status(409).json({ message: `Student email already exists: ${payload.email}` });
+      if (studentPayload.email && duplicate.email?.toLowerCase() === studentPayload.email.toLowerCase()) {
+        return res.status(409).json({ message: `Student email already exists: ${studentPayload.email}` });
       }
     }
   }
@@ -347,18 +448,19 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     const updatedStudent = await tx.student.update({
       where: { id: target.orbitId },
       data: {
-        ...(payload.firstName !== undefined ? { firstName: normalizeText(payload.firstName) } : {}),
-        ...(payload.lastName !== undefined ? { lastName: normalizeText(payload.lastName) } : {}),
-        ...(payload.gender !== undefined ? { gender: payload.gender } : {}),
-        ...(payload.studentNumber !== undefined ? { studentNumber: payload.studentNumber } : {}),
-        ...(payload.email !== undefined ? { email: payload.email } : {}),
-        ...(payload.phone !== undefined ? { phone: payload.phone } : {}),
-        ...(payload.dateOfBirth !== undefined ? { dateOfBirth: payload.dateOfBirth } : {}),
-        ...(payload.status !== undefined ? { status: payload.status } : {}),
-        ...(payload.mustChangePassword !== undefined ? { mustChangePassword: payload.mustChangePassword } : {}),
-        ...(payload.className !== undefined ? { className: payload.className } : {}),
-        ...(payload.parentOrbitId !== undefined ? { parentId: payload.parentOrbitId } : {}),
-        ...(payload.classOrbitId !== undefined ? { classId: payload.classOrbitId } : {}),
+        ...(studentPayload.firstName !== undefined ? { firstName: normalizeText(studentPayload.firstName) } : {}),
+        ...(studentPayload.middleName !== undefined ? { middleName: studentPayload.middleName ? normalizeText(studentPayload.middleName) : null } : {}),
+        ...(studentPayload.lastName !== undefined ? { lastName: normalizeText(studentPayload.lastName) } : {}),
+        ...(studentPayload.gender !== undefined ? { gender: studentPayload.gender } : {}),
+        ...(studentPayload.studentNumber !== undefined ? { studentNumber: studentPayload.studentNumber } : {}),
+        ...(studentPayload.email !== undefined ? { email: studentPayload.email } : {}),
+        ...(studentPayload.phone !== undefined ? { phone: studentPayload.phone } : {}),
+        ...(studentPayload.dateOfBirth !== undefined ? { dateOfBirth: studentPayload.dateOfBirth } : {}),
+        ...(studentPayload.status !== undefined ? { status: studentPayload.status } : {}),
+        ...(studentPayload.mustChangePassword !== undefined ? { mustChangePassword: studentPayload.mustChangePassword } : {}),
+        ...(studentPayload.className !== undefined ? { className: studentPayload.className } : {}),
+        ...(studentPayload.parentOrbitId !== undefined ? { parentId: studentPayload.parentOrbitId } : {}),
+        ...(studentPayload.classOrbitId !== undefined ? { classId: studentPayload.classOrbitId } : {}),
       },
     });
 
@@ -379,6 +481,89 @@ export async function createRegistryEntity(req: Request, res: Response) {
 
   const entityType = entityTypeSchema.parse(req.params.entityType);
 
+  if (entityType === "family") {
+    const payload = createFamilySchema.parse(req.body);
+    const organization = await ensureOrganizationExists(payload.organizationId);
+    if (!organization) return res.status(404).json({ message: "Organization not found" });
+
+    const duplicateParent = await findDuplicateParent(payload.organizationId, { ...payload.parent, organizationId: payload.organizationId });
+    if (duplicateParent) {
+      return res.status(409).json({ message: "Family parent already exists", entityType, orbitId: duplicateParent.id });
+    }
+
+    for (const student of payload.students) {
+      const duplicateStudent = await findDuplicateStudent(payload.organizationId, { ...student, organizationId: payload.organizationId });
+      if (duplicateStudent) {
+        return res.status(409).json({ message: "Family student already exists", entityType: "student", orbitId: duplicateStudent.id });
+      }
+
+      if (student.classOrbitId) {
+        const klass = await prisma.class.findFirst({ where: { id: student.classOrbitId, organizationId: payload.organizationId } });
+        if (!klass) return res.status(404).json({ message: "Class not found", classOrbitId: student.classOrbitId });
+      }
+    }
+
+    const familyExternalId = buildGeneratedExternalId(appSlug, "family");
+    const parentExternalId = buildGeneratedExternalId(appSlug, "parent");
+    const studentExternalIds = payload.students.map(() => buildGeneratedExternalId(appSlug, "student"));
+    const family = await prisma.$transaction(async (tx) => {
+      const parent = await tx.parent.create({
+        data: {
+          organizationId: payload.organizationId,
+          fullName: buildCanonicalFullName(payload.parent),
+          firstName: payload.parent.firstName ? normalizeText(payload.parent.firstName) : undefined,
+          middleName: payload.parent.middleName ? normalizeText(payload.parent.middleName) : undefined,
+          lastName: payload.parent.lastName ? normalizeText(payload.parent.lastName) : undefined,
+          email: payload.parent.email,
+          phone: payload.parent.phone,
+          mustChangePassword: payload.parent.mustChangePassword,
+        },
+      });
+
+      const students = [];
+      for (const [index, studentPayload] of payload.students.entries()) {
+        const createdStudent = await tx.student.create({
+          data: {
+            organizationId: payload.organizationId,
+            firstName: normalizeText(studentPayload.firstName),
+            lastName: normalizeText(studentPayload.lastName),
+            gender: studentPayload.gender,
+            studentNumber: studentPayload.studentNumber || studentExternalIds[index],
+            email: studentPayload.email,
+            phone: studentPayload.phone,
+            dateOfBirth: studentPayload.dateOfBirth,
+            status: studentPayload.status,
+            mustChangePassword: studentPayload.mustChangePassword,
+            className: studentPayload.className,
+            parentId: parent.id,
+            classId: studentPayload.classOrbitId,
+          },
+        });
+        students.push(createdStudent);
+      }
+
+      await createExternalLink(tx, { organizationId: payload.organizationId, appSlug, entityType: "family", nexusEntityId: parent.id, externalId: familyExternalId });
+      await createExternalLink(tx, { organizationId: payload.organizationId, appSlug, entityType: "parent", nexusEntityId: parent.id, externalId: parentExternalId });
+      for (const [index, student] of students.entries()) {
+        await createExternalLink(tx, { organizationId: payload.organizationId, appSlug, entityType: "student", nexusEntityId: student.id, externalId: studentExternalIds[index] });
+      }
+      await createSyncEvent(tx, { organizationId: payload.organizationId, appSlug, eventType: "family.created", entityType, entityId: parent.id, payload });
+      await createAuditLog(tx, { organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.family.created`, entityType, entityId: parent.id, metadata: { familyExternalId, parentExternalId, studentExternalIds } });
+
+      return { parent, students };
+    });
+
+    return res.status(201).json({
+      entityType,
+      orbitId: family.parent.id,
+      externalId: familyExternalId,
+      parentExternalId,
+      studentExternalIds,
+      counts: { parents: 1, students: family.students.length, families: 1 },
+      entity: family,
+    });
+  }
+
   if (entityType === "parent") {
     const payload = createParentSchema.parse(req.body);
     const fullName = buildCanonicalFullName(payload);
@@ -396,8 +581,12 @@ export async function createRegistryEntity(req: Request, res: Response) {
         data: {
           organizationId: payload.organizationId,
           fullName,
+          firstName: payload.firstName ? normalizeText(payload.firstName) : undefined,
+          middleName: payload.middleName ? normalizeText(payload.middleName) : undefined,
+          lastName: payload.lastName ? normalizeText(payload.lastName) : undefined,
           email: payload.email,
           phone: payload.phone,
+          mustChangePassword: payload.mustChangePassword,
         },
       });
 

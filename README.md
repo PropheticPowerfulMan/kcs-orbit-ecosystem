@@ -48,10 +48,22 @@ Pour repartir proprement et eviter les doublons de processus:
 .\start-ecosystem.cmd -Restart -SkipDatabasePreparation
 ```
 
+Commande courte recommandee pour lancer vite tout l'ecosysteme:
+
+```powershell
+.\launch-ecosystem.cmd
+```
+
+`launch-ecosystem.cmd` redemarre proprement les services et utilise la preparation mise en cache. La premiere execution de `start-ecosystem.cmd` prepare les bases; les executions suivantes sautent automatiquement cette etape pour gagner du temps. Si les schemas ou seeds changent, force une preparation complete:
+
+```powershell
+.\start-ecosystem.cmd -Restart -FullPreparation
+```
+
 Le script:
 
 - verifie PostgreSQL local
-- prepare les bases Orbit, KCS Nexus, EduPay et SAVANEX
+- prepare les bases Orbit, KCS Nexus, EduPay et SAVANEX seulement quand c'est necessaire
 - recupere l'`organizationId` Orbit
 - evite de relancer un service si son port est deja en ecoute
 - ouvre une fenetre PowerShell par service avec les bons ports et variables d'integration
@@ -85,9 +97,11 @@ Option brutale si un process resiste:
 .\start-ecosystem.cmd -OpenBrowser
 .\start-ecosystem.cmd -Restart
 .\start-ecosystem.cmd -NoWait
+.\start-ecosystem.cmd -FullPreparation
 ```
 
 - `-SkipDatabasePreparation` : relance sans refaire `db push` / migrations
+- `-FullPreparation` : force `db push`, migrations et seed meme si la preparation est deja en cache
 - `-SkipInstall` : saute le check d'installation pour `EduPay` web
 - `-NoFrontends` : demarre seulement les backends
 - `-OpenBrowser` : ouvre automatiquement les frontends locaux dans le navigateur par defaut

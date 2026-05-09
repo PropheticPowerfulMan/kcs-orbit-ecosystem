@@ -152,6 +152,78 @@ async function deleteRegistryEntityInOrbit(entityType: RegistryEntityType, ident
   return data
 }
 
+async function updateRegistryEntityInOrbit(entityType: RegistryEntityType, identifier: string, organizationId: string, payload: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') {
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${entityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.KCS_ORBIT_API_KEY!,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new ApiError(response.status, typeof data?.message === 'string' ? data.message : `Orbit registry update failed with status ${response.status}`)
+  }
+
+  return data
+}
+
+async function updateLocalParentEntity(identifier: string, payload: { firstName?: string; lastName?: string; email?: string; phone?: string | null }) {
+  const parent = await prisma.user.findFirst({
+    where: { id: identifier, role: 'PARENT' },
+    select: { id: true },
+  })
+
+  if (!parent) {
+    throw new ApiError(404, 'Parent not found in the local registry.')
+  }
+
+  return prisma.user.update({
+    where: { id: identifier },
+    data: {
+      ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
+      ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
+      ...(payload.email !== undefined && payload.email !== null ? { email: payload.email } : {}),
+      ...(payload.phone !== undefined ? { phone: payload.phone || null } : {}),
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      role: true,
+    },
+  })
+}
+
+async function deleteLocalParentEntity(identifier: string) {
+  const parent = await prisma.user.findFirst({
+    where: { id: identifier, role: 'PARENT' },
+    include: { parentLinks: { select: { id: true } } },
+  })
+
+  if (!parent) {
+    throw new ApiError(404, 'Parent not found in the local registry.')
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.parentStudentLink.deleteMany({ where: { parentId: identifier } })
+    await tx.user.delete({ where: { id: identifier } })
+  })
+
+  return {
+    id: identifier,
+    deletedLinks: parent.parentLinks.length,
+  }
+}
+
 const schoolLevels = [
   'K1', 'K2', 'K3', 'K4', 'K5',
   'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
@@ -357,13 +429,43 @@ registryRouter.post('/entities/:entityType', authenticate, requireRoles('admin')
   return success(res, created, 'Shared entity created through Orbit', 201)
 }))
 
-registryRouter.delete('/entities/:entityType/:identifier', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
-  if (!orbitRegistryIsEnabled()) {
-    throw new ApiError(409, 'Orbit registry mode must be enabled to delete shared entities from KCS Nexus.')
-  }
-
+registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
+
+  if (orbitRegistryIsEnabled()) {
+    const updated = await updateRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
+    return success(res, updated, 'Shared entity updated through Orbit')
+  }
+
+  if (entityType !== 'parent') {
+    throw new ApiError(409, 'Local registry editing is currently enabled for parent entities only.')
+  }
+
+  const payload = z.object({
+    firstName: z.string().min(1).optional(),
+    lastName: z.string().min(1).optional(),
+    email: z.string().email().optional(),
+    phone: z.string().nullable().optional(),
+  }).parse(req.body ?? {})
+
+  const updated = await updateLocalParentEntity(String(req.params.identifier), payload)
+  return success(res, updated, 'Parent updated in local registry')
+}))
+
+registryRouter.delete('/entities/:entityType/:identifier', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+  const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
+  const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
+
+  if (!orbitRegistryIsEnabled()) {
+    if (entityType !== 'parent') {
+      throw new ApiError(409, 'Local registry deletion is currently enabled for parent entities only.')
+    }
+
+    const deletedLocalParent = await deleteLocalParentEntity(String(req.params.identifier))
+    return success(res, deletedLocalParent, 'Parent deleted from local registry')
+  }
+
   const deleted = await deleteRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, identifierType)
   return success(res, deleted, 'Shared entity deleted through Orbit')
 }))
