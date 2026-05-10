@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
-import { Calendar, ArrowRight, Search, Clock, Eye, PlayCircle, Radio, Video } from 'lucide-react'
+import { Calendar, ArrowRight, Clock, Eye, PlayCircle, Radio, Search, Video } from 'lucide-react'
+import SearchField from '@/components/shared/SearchField'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -285,16 +286,7 @@ const NewsPage = () => {
 
           {/* Search & Filters */}
           <div className="flex flex-col sm:flex-row gap-4 mb-10">
-            <div className="relative flex-1 max-w-md">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search news & events..."
-                className="input-kcs pl-11"
-              />
-            </div>
+            <SearchField wrapperClassName="flex-1 max-w-md" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search news & events..." />
             <div className="flex gap-2 flex-wrap">
               {categories.map((cat) => (
                 <button

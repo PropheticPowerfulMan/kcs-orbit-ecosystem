@@ -111,6 +111,7 @@ export const StudentPayloadSchema = z.object({
   middleName: TrimmedStringSchema.optional(),
   lastName: TrimmedStringSchema,
   gender: TrimmedStringSchema,
+  accessCode: TrimmedStringSchema.optional(),
   studentNumber: TrimmedStringSchema.optional(),
   classExternalId: TrimmedStringSchema.optional(),
   className: TrimmedStringSchema.optional(),
@@ -134,6 +135,7 @@ export const ParentPayloadSchema = z.object({
   middleName: TrimmedStringSchema.optional(),
   lastName: TrimmedStringSchema.optional(),
   fullName: TrimmedStringSchema.optional(),
+  accessCode: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
   mustChangePassword: z.boolean().optional()
@@ -153,6 +155,7 @@ export const TeacherPayloadSchema = z.object({
   middleName: TrimmedStringSchema.optional(),
   lastName: TrimmedStringSchema.optional(),
   fullName: TrimmedStringSchema.optional(),
+  accessCode: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
   subject: TrimmedStringSchema.optional(),

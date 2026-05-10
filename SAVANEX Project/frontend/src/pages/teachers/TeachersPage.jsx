@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
+import SearchField from '../../components/ui/SearchField';
 import StatCard from '../../components/ui/StatCard';
 import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard } from '../../components/ui/KcsIdentityTools';
 import { teachersService } from '../../services/api';
@@ -431,11 +432,11 @@ const TeachersPage = () => {
       </section>
 
       <div className="mb-4 card p-4">
-        <input
+        <SearchField
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Rechercher employé, département, poste ou ID..."
-          className={inputClass}
+          inputClassName="pr-4"
         />
       </div>
 

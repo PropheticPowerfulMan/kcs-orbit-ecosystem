@@ -28,6 +28,7 @@ export type SharedDirectoryStudent = {
   firstName: string;
   middleName: string | null;
   lastName: string;
+  accessCode: string | null;
   studentNumber: string;
   email: string | null;
   phone: string | null;
@@ -48,6 +49,7 @@ export type SharedDirectoryParent = {
   firstName: string;
   middleName: string | null;
   lastName: string;
+  accessCode: string | null;
   phone: string | null;
   email: string | null;
   mustChangePassword: boolean;
@@ -63,6 +65,7 @@ export type SharedDirectoryTeacher = {
   firstName: string;
   middleName: string | null;
   lastName: string;
+  accessCode: string | null;
   phone: string | null;
   email: string | null;
   subject: string | null;
@@ -173,6 +176,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName: true,
         middleName: true,
         lastName: true,
+        accessCode: true,
         studentNumber: true,
         email: true,
         phone: true,
@@ -199,6 +203,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName: true,
         middleName: true,
         lastName: true,
+        accessCode: true,
         phone: true,
         email: true,
         mustChangePassword: true,
@@ -218,6 +223,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName: true,
         middleName: true,
         lastName: true,
+        accessCode: true,
         phone: true,
         email: true,
         subject: true,
@@ -287,6 +293,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName: normalizeText(student.firstName),
         middleName: student.middleName,
         lastName: normalizeText(student.lastName),
+        accessCode: student.accessCode,
         studentNumber: student.studentNumber || displayId,
         email: student.email,
         phone: student.phone,
@@ -313,6 +320,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName,
         middleName,
         lastName,
+        accessCode: parent.accessCode,
         phone: parent.phone,
         email: parent.email,
         mustChangePassword: parent.mustChangePassword,
@@ -334,6 +342,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         firstName,
         middleName,
         lastName,
+        accessCode: teacher.accessCode,
         phone: teacher.phone,
         email: teacher.email,
         subject: teacher.subject,

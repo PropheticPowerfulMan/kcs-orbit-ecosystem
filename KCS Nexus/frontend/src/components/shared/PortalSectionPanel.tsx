@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
   Bell, BookOpen, Brain, Calendar, CheckCircle2, ClipboardList,
-  Download, FileText, MessageSquare, Search, Settings, Shield,
+  Download, FileText, MessageSquare, Settings, Shield,
   UserCheck, Users
 } from 'lucide-react'
+import SearchField from '@/components/shared/SearchField'
 
 type SectionConfig = {
   title: string
@@ -236,10 +237,7 @@ const PortalSectionPanel = () => {
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <label className="relative block">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input className="input-kcs pl-10" placeholder={`Search ${section.title.toLowerCase()}`} />
-        </label>
+        <SearchField placeholder={`Search ${section.title.toLowerCase()}`} inputClassName="text-sm" />
         <div className="grid gap-2 sm:grid-cols-3">
           {['Loading state ready', 'Error handling ready', 'Audit trail ready'].map((status) => (
             <div key={status} className="rounded-xl bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 dark:bg-kcs-blue-800/30 dark:text-gray-300">

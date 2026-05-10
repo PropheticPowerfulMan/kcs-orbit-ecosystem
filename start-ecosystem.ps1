@@ -265,6 +265,21 @@ function Sync-EduPayApiRuntime {
   }
 }
 
+function Sync-OrbitRuntime {
+  if (Test-PortOpen -HostName '127.0.0.1' -Port 4500) {
+    Write-Host 'Orbit API already running; skipping Prisma runtime sync' -ForegroundColor Yellow
+    return
+  }
+
+  Write-Step 'Syncing Orbit schema and Prisma client'
+  Invoke-InDirectory -Path $orbitPath -Script {
+    $env:DATABASE_URL = $orbitDatabaseUrl
+    & pnpm exec prisma db push
+    & pnpm exec prisma generate
+    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+  }
+}
+
 function Sync-SavanexDatabase {
   Write-Step 'Syncing SAVANEX database migrations'
   Invoke-InDirectory -Path $savanexBackendPath -Script {
@@ -454,6 +469,7 @@ if ($databasePreparationMode -eq 'skipped-by-user') {
 }
 
 if ($databasePreparationMode -ne 'full') {
+  Sync-OrbitRuntime
   Sync-EduPayApiRuntime
   Sync-SavanexDatabase
 

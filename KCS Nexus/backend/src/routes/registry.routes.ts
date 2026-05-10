@@ -530,8 +530,13 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
       parent: {
         orbitId: parentOrbitId,
         ...(typeof parentResult.data?.externalId === 'string' ? { externalId: parentResult.data.externalId } : {}),
+          ...(typeof parentResult.data?.entity?.accessCode === 'string' ? { accessCode: parentResult.data.entity.accessCode } : {}),
       },
-      student: createdStudent,
+        student: {
+          orbitId: typeof createdStudent?.orbitId === 'string' ? createdStudent.orbitId : undefined,
+          ...(typeof createdStudent?.externalId === 'string' ? { externalId: createdStudent.externalId } : {}),
+          ...(typeof createdStudent?.entity?.accessCode === 'string' ? { accessCode: createdStudent.entity.accessCode } : {}),
+        },
     }, 'Family registered through Orbit', 201)
   }
 

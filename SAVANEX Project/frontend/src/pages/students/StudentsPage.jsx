@@ -5,6 +5,7 @@ import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
 import StatCard from '../../components/ui/StatCard';
 import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard } from '../../components/ui/KcsIdentityTools';
+import SearchField from '../../components/ui/SearchField';
 import { studentsService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -668,11 +669,11 @@ const StudentsPage = () => {
 
       <div className="mb-4 card p-4">
         <div className="grid gap-3 lg:grid-cols-4">
-          <input
+          <SearchField
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Rechercher par élève, classe ou famille..."
-            className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
+            inputClassName="pr-4"
           />
           <select value={classLevelFilter} onChange={(event) => setClassLevelFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
             <option value="all">Tous les niveaux</option>

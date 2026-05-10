@@ -31,6 +31,7 @@ function withCanonicalNameValidation<T extends z.ZodRawShape>(shape: T) {
 
 const createParentSchema = withCanonicalNameValidation({
   organizationId: z.string().min(1),
+  accessCode: z.string().min(6).max(24).optional(),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
   mustChangePassword: z.boolean().optional(),
@@ -38,6 +39,7 @@ const createParentSchema = withCanonicalNameValidation({
 
 const createTeacherSchema = withCanonicalNameValidation({
   organizationId: z.string().min(1),
+  accessCode: z.string().min(6).max(24).optional(),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
   subject: z.string().min(1).optional(),
@@ -48,6 +50,7 @@ const createStudentSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   gender: z.string().min(1),
+  accessCode: z.string().min(6).max(24).optional(),
   studentNumber: z.string().min(1).optional(),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
@@ -62,6 +65,7 @@ const createStudentSchema = z.object({
 const createFamilySchema = z.object({
   organizationId: z.string().min(1),
   parent: withCanonicalNameValidation({
+    accessCode: z.string().min(6).max(24).optional(),
     email: z.string().email().optional(),
     phone: z.string().min(6).optional(),
     mustChangePassword: z.boolean().optional(),
@@ -79,6 +83,7 @@ const updateParentSchema = z.object({
   firstName: z.string().min(1).nullable().optional(),
   middleName: z.string().min(1).nullable().optional(),
   lastName: z.string().min(1).nullable().optional(),
+  accessCode: z.string().min(6).max(24).nullable().optional(),
   email: z.string().email().nullable().optional(),
   phone: z.string().min(6).nullable().optional(),
   mustChangePassword: z.boolean().optional(),
@@ -91,6 +96,7 @@ const updateStudentSchema = z.object({
   middleName: z.string().min(1).nullable().optional(),
   lastName: z.string().min(1).optional(),
   gender: z.string().min(1).optional(),
+  accessCode: z.string().min(6).max(24).nullable().optional(),
   studentNumber: z.string().min(1).optional(),
   email: z.string().email().nullable().optional(),
   phone: z.string().min(6).nullable().optional(),
@@ -122,6 +128,69 @@ function buildCanonicalFullName(input: { fullName?: string | null; firstName?: s
 
 function buildGeneratedExternalId(appSlug: AppSlug, entityType: z.infer<typeof entityTypeSchema>) {
   return buildCanonicalExternalId({ appSlug, entityType });
+}
+
+type RegistryDbClient = Prisma.TransactionClient | typeof prisma;
+type AccessCodeEntityType = Exclude<z.infer<typeof entityTypeSchema>, "family">;
+
+const accessCodePrefixByEntityType: Record<AccessCodeEntityType, string> = {
+  parent: "PAR",
+  student: "STU",
+  teacher: "TCH",
+};
+
+function normalizeAccessCode(value: string) {
+  return normalizeText(value).toUpperCase();
+}
+
+function generateAccessCode(entityType: AccessCodeEntityType) {
+  return `ACC-${accessCodePrefixByEntityType[entityType]}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
+async function findAccessCodeConflict(db: RegistryDbClient, accessCode: string) {
+  const normalizedAccessCode = normalizeAccessCode(accessCode);
+  const [parent, student, teacher] = await Promise.all([
+    db.parent.findFirst({ where: { accessCode: normalizedAccessCode }, select: { id: true } }),
+    db.student.findFirst({ where: { accessCode: normalizedAccessCode }, select: { id: true } }),
+    db.teacher.findFirst({ where: { accessCode: normalizedAccessCode }, select: { id: true } }),
+  ]);
+
+  if (parent) {
+    return { entityType: "parent" as const, id: parent.id };
+  }
+
+  if (student) {
+    return { entityType: "student" as const, id: student.id };
+  }
+
+  if (teacher) {
+    return { entityType: "teacher" as const, id: teacher.id };
+  }
+
+  return null;
+}
+
+async function ensureAccessCode(db: RegistryDbClient, entityType: AccessCodeEntityType, requestedAccessCode?: string | null, currentEntityId?: string) {
+  const normalizedRequested = requestedAccessCode ? normalizeAccessCode(requestedAccessCode) : "";
+
+  if (normalizedRequested) {
+    const conflict = await findAccessCodeConflict(db, normalizedRequested);
+    if (conflict && (conflict.entityType !== entityType || conflict.id !== currentEntityId)) {
+      throw new Error(`Access code already exists: ${normalizedRequested}`);
+    }
+
+    return normalizedRequested;
+  }
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const generated = generateAccessCode(entityType);
+    const conflict = await findAccessCodeConflict(db, generated);
+    if (!conflict) {
+      return generated;
+    }
+  }
+
+  return `ACC-${accessCodePrefixByEntityType[entityType]}-${Date.now().toString(36).toUpperCase()}`;
 }
 
 async function ensureOrganizationExists(organizationId: string) {
@@ -349,6 +418,13 @@ export async function updateRegistryEntity(req: Request, res: Response) {
 
   if (entityType === "parent") {
     const parentPayload = payload as z.infer<typeof updateParentSchema>;
+    const normalizedAccessCode = parentPayload.accessCode ? normalizeAccessCode(parentPayload.accessCode) : null;
+    if (normalizedAccessCode) {
+      const conflict = await findAccessCodeConflict(prisma, normalizedAccessCode);
+      if (conflict && (conflict.entityType !== "parent" || conflict.id !== target.orbitId)) {
+        return res.status(409).json({ message: `Access code already exists: ${normalizedAccessCode}` });
+      }
+    }
     const duplicateFilters: Prisma.ParentWhereInput[] = [];
     if (parentPayload.email) {
       duplicateFilters.push({ email: { equals: parentPayload.email, mode: "insensitive" } });
@@ -389,6 +465,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(parentPayload.firstName !== undefined ? { firstName: parentPayload.firstName ? normalizeText(parentPayload.firstName) : null } : {}),
           ...(parentPayload.middleName !== undefined ? { middleName: parentPayload.middleName ? normalizeText(parentPayload.middleName) : null } : {}),
           ...(parentPayload.lastName !== undefined ? { lastName: parentPayload.lastName ? normalizeText(parentPayload.lastName) : null } : {}),
+          ...(parentPayload.accessCode !== undefined ? { accessCode: normalizedAccessCode } : {}),
           ...(parentPayload.email !== undefined ? { email: parentPayload.email } : {}),
           ...(parentPayload.phone !== undefined ? { phone: parentPayload.phone } : {}),
           ...(parentPayload.mustChangePassword !== undefined ? { mustChangePassword: parentPayload.mustChangePassword } : {}),
@@ -405,6 +482,13 @@ export async function updateRegistryEntity(req: Request, res: Response) {
   }
 
   const studentPayload = payload as z.infer<typeof updateStudentSchema>;
+  const normalizedAccessCode = studentPayload.accessCode ? normalizeAccessCode(studentPayload.accessCode) : null;
+  if (normalizedAccessCode) {
+    const conflict = await findAccessCodeConflict(prisma, normalizedAccessCode);
+    if (conflict && (conflict.entityType !== "student" || conflict.id !== target.orbitId)) {
+      return res.status(409).json({ message: `Access code already exists: ${normalizedAccessCode}` });
+    }
+  }
   if (studentPayload.parentOrbitId) {
     const parent = await prisma.parent.findFirst({ where: { id: studentPayload.parentOrbitId, organizationId: query.organizationId } });
     if (!parent) return res.status(404).json({ message: "Parent not found" });
@@ -452,6 +536,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
         ...(studentPayload.middleName !== undefined ? { middleName: studentPayload.middleName ? normalizeText(studentPayload.middleName) : null } : {}),
         ...(studentPayload.lastName !== undefined ? { lastName: normalizeText(studentPayload.lastName) } : {}),
         ...(studentPayload.gender !== undefined ? { gender: studentPayload.gender } : {}),
+        ...(studentPayload.accessCode !== undefined ? { accessCode: normalizedAccessCode } : {}),
         ...(studentPayload.studentNumber !== undefined ? { studentNumber: studentPayload.studentNumber } : {}),
         ...(studentPayload.email !== undefined ? { email: studentPayload.email } : {}),
         ...(studentPayload.phone !== undefined ? { phone: studentPayload.phone } : {}),
@@ -507,6 +592,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
     const parentExternalId = buildGeneratedExternalId(appSlug, "parent");
     const studentExternalIds = payload.students.map(() => buildGeneratedExternalId(appSlug, "student"));
     const family = await prisma.$transaction(async (tx) => {
+      const parentAccessCode = await ensureAccessCode(tx, "parent", payload.parent.accessCode);
       const parent = await tx.parent.create({
         data: {
           organizationId: payload.organizationId,
@@ -514,6 +600,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           firstName: payload.parent.firstName ? normalizeText(payload.parent.firstName) : undefined,
           middleName: payload.parent.middleName ? normalizeText(payload.parent.middleName) : undefined,
           lastName: payload.parent.lastName ? normalizeText(payload.parent.lastName) : undefined,
+          accessCode: parentAccessCode,
           email: payload.parent.email,
           phone: payload.parent.phone,
           mustChangePassword: payload.parent.mustChangePassword,
@@ -522,12 +609,14 @@ export async function createRegistryEntity(req: Request, res: Response) {
 
       const students = [];
       for (const [index, studentPayload] of payload.students.entries()) {
+        const studentAccessCode = await ensureAccessCode(tx, "student", studentPayload.accessCode);
         const createdStudent = await tx.student.create({
           data: {
             organizationId: payload.organizationId,
             firstName: normalizeText(studentPayload.firstName),
             lastName: normalizeText(studentPayload.lastName),
             gender: studentPayload.gender,
+            accessCode: studentAccessCode,
             studentNumber: studentPayload.studentNumber || studentExternalIds[index],
             email: studentPayload.email,
             phone: studentPayload.phone,
@@ -577,6 +666,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
 
     const externalId = buildGeneratedExternalId(appSlug, entityType);
     const parent = await prisma.$transaction(async (tx) => {
+      const accessCode = await ensureAccessCode(tx, "parent", payload.accessCode);
       const createdParent = await tx.parent.create({
         data: {
           organizationId: payload.organizationId,
@@ -584,6 +674,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           firstName: payload.firstName ? normalizeText(payload.firstName) : undefined,
           middleName: payload.middleName ? normalizeText(payload.middleName) : undefined,
           lastName: payload.lastName ? normalizeText(payload.lastName) : undefined,
+          accessCode,
           email: payload.email,
           phone: payload.phone,
           mustChangePassword: payload.mustChangePassword,
@@ -613,10 +704,15 @@ export async function createRegistryEntity(req: Request, res: Response) {
 
     const externalId = buildGeneratedExternalId(appSlug, entityType);
     const teacher = await prisma.$transaction(async (tx) => {
+      const accessCode = await ensureAccessCode(tx, "teacher", payload.accessCode);
       const createdTeacher = await tx.teacher.create({
         data: {
           organizationId: payload.organizationId,
           fullName,
+          firstName: payload.firstName ? normalizeText(payload.firstName) : undefined,
+          middleName: payload.middleName ? normalizeText(payload.middleName) : undefined,
+          lastName: payload.lastName ? normalizeText(payload.lastName) : undefined,
+          accessCode,
           email: payload.email,
           phone: payload.phone,
           subject: payload.subject,
@@ -654,12 +750,14 @@ export async function createRegistryEntity(req: Request, res: Response) {
 
   const externalId = buildGeneratedExternalId(appSlug, entityType);
   const student = await prisma.$transaction(async (tx) => {
+    const accessCode = await ensureAccessCode(tx, "student", payload.accessCode);
     const createdStudent = await tx.student.create({
       data: {
         organizationId: payload.organizationId,
         firstName: normalizeText(payload.firstName),
         lastName: normalizeText(payload.lastName),
         gender: payload.gender,
+        accessCode,
         studentNumber: payload.studentNumber,
         email: payload.email,
         phone: payload.phone,

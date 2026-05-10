@@ -2,6 +2,7 @@
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
+import SearchField from '../../components/ui/SearchField';
 import StatCard from '../../components/ui/StatCard';
 import { parentsService, sharedDirectoryService, studentsService } from '../../services/api';
 
@@ -111,6 +112,7 @@ const ParentsPage = () => {
             full_name: parent.fullName || parent.displayId || 'Parent Orbit',
             first_name: parent.firstName || splitFullName(parent.fullName || '').first_name,
             last_name: parent.lastName || splitFullName(parent.fullName || '').last_name,
+            access_code: parent.accessCode || '',
             students_label: linkedStudents.length
               ? linkedStudents.map((student) => student.fullName || student.displayId).join(', ')
               : 'Aucun élève lié',
@@ -144,6 +146,7 @@ const ParentsPage = () => {
         full_name: familyName,
         first_name: splitFullName(familyName).first_name,
         last_name: splitFullName(familyName).last_name,
+        access_code: '',
         students: [],
         classes: new Set(),
         classParts: [],
@@ -180,6 +183,7 @@ const ParentsPage = () => {
         full_name: group.full_name,
         first_name: group.first_name,
         last_name: group.last_name,
+        access_code: group.access_code,
         students_label: group.students.join(', '),
         linked_student_ids: group.student_ids.filter(Boolean).join(', '),
         classes_label: Array.from(group.classes).sort((left, right) => left.localeCompare(right)).join(', '),
@@ -221,7 +225,7 @@ const ParentsPage = () => {
         return false;
       }
 
-      const haystack = `${family.family_name} ${family.students_label} ${family.linked_student_ids || ''} ${family.classes_label} ${family.parent_external_id || ''} ${family.management_id || ''} ${family.kcs_card_id || ''} ${family.email || ''} ${family.phone || ''}`.toLowerCase();
+      const haystack = `${family.id || ''} ${family.family_name} ${family.access_code || ''} ${family.students_label} ${family.linked_student_ids || ''} ${family.classes_label} ${family.parent_external_id || ''} ${family.management_id || ''} ${family.kcs_card_id || ''} ${family.email || ''} ${family.phone || ''}`.toLowerCase();
       if (normalizedQuery && !haystack.includes(normalizedQuery)) {
         return false;
       }
@@ -326,6 +330,7 @@ const ParentsPage = () => {
 
   const columns = [
     { key: 'family_name', label: 'Famille / Parent' },
+    { key: 'access_code', label: 'Code d\'accès', render: (value) => value || 'Non défini' },
     { key: 'students_label', label: 'Élèves liés' },
     { key: 'classes_label', label: 'Classes' },
     { key: 'student_count', label: 'Effectif' },
@@ -389,11 +394,11 @@ const ParentsPage = () => {
 
       <div className="mb-4 card p-4">
         <div className="grid gap-3 lg:grid-cols-4">
-          <input
+          <SearchField
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher parent, famille, élève, classe ou ID..."
-            className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
+            placeholder="Rechercher parent, code d'accès, famille, élève, classe ou ID..."
+            inputClassName="pr-4"
           />
           <select value={classLevelFilter} onChange={(event) => setClassLevelFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
             <option value="all">Tous les niveaux</option>

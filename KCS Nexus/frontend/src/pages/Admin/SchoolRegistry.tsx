@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { AlertCircle, BookOpen, Mail, Phone, Plus, Search, ShieldAlert, UserRound, Users } from 'lucide-react'
+import { AlertCircle, BookOpen, Mail, Phone, Plus, ShieldAlert, UserRound, Users } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
+import SearchField from '@/components/shared/SearchField'
 import { SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { registryAPI } from '@/services/api'
 
@@ -18,6 +19,7 @@ const SchoolRegistryPage = () => {
   const [source, setSource] = useState<'orbit' | 'local'>('local')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [registrationNotice, setRegistrationNotice] = useState('')
   const [query, setQuery] = useState('')
   const [form, setForm] = useState({
     studentFirst: '',
@@ -72,9 +74,11 @@ const SchoolRegistryPage = () => {
   const registerFamily = async (event: FormEvent) => {
     event.preventDefault()
     if (!form.studentFirst || !form.studentLast || !form.studentNumber || !form.parentEmail) return
+    setError('')
+    setRegistrationNotice('')
 
     try {
-      await registryAPI.registerFamily({
+      const registration = await registryAPI.registerFamily({
         parent: {
           firstName: form.parentFirst,
           lastName: form.parentLast,
@@ -90,6 +94,16 @@ const SchoolRegistryPage = () => {
           section: form.section,
         },
       })
+
+      const registrationData = registration.data?.data
+      const parentAccessCode = typeof registrationData?.parent?.accessCode === 'string' ? registrationData.parent.accessCode : ''
+      const studentAccessCode = typeof registrationData?.student?.accessCode === 'string' ? registrationData.student.accessCode : ''
+      if (parentAccessCode || studentAccessCode) {
+        setRegistrationNotice([
+          parentAccessCode ? `Parent access code: ${parentAccessCode}` : '',
+          studentAccessCode ? `Student access code: ${studentAccessCode}` : '',
+        ].filter(Boolean).join(' | '))
+      }
 
       const response = await registryAPI.getFamilies()
       setFamilies(response.data.data.families)
@@ -160,6 +174,11 @@ const SchoolRegistryPage = () => {
                   <option>Guardian</option>
                 </select>
               </div>
+              {registrationNotice ? (
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+                  {registrationNotice}
+                </div>
+              ) : null}
               <button type="submit" className="btn-primary mt-5 inline-flex w-full items-center justify-center gap-2">
                 <Plus size={18} /> Register Family
               </button>
@@ -203,10 +222,7 @@ const SchoolRegistryPage = () => {
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="mb-4 flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2 dark:bg-kcs-blue-800/40">
-                <Search size={18} className="text-gray-400" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search student, parent, class, grade, or any ID" className="w-full bg-transparent text-sm outline-none dark:text-white" />
-              </div>
+              <SearchField wrapperClassName="mb-4" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search student, parent, class, grade, or any ID" inputClassName="border-gray-200 bg-gray-50 text-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-800/40 dark:text-white" />
 
               <div className="space-y-3">
                 {filteredFamilies.map((family, index) => (
