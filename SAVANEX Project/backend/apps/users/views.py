@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
+from apps.teachers.services import deactivate_teacher
 from .models import User
 from .serializers import (
     CustomTokenObtainPairSerializer,
@@ -49,7 +50,7 @@ class UserListCreateView(generics.ListCreateAPIView):
             sync_parent(user)
 
     filterset_fields = ['role', 'is_active']
-    search_fields = ['username', 'first_name', 'last_name', 'email']
+    search_fields = ['username', 'access_code', 'first_name', 'last_name', 'email', 'kcs_card_id']
 
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -110,6 +111,10 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
                 transaction.on_commit(_sync_student_deactivation)
 
+            return Response({'detail': 'User deactivated.'}, status=status.HTTP_200_OK)
+
+        if hasattr(user, 'teacher_profile'):
+            deactivate_teacher(user.teacher_profile)
             return Response({'detail': 'User deactivated.'}, status=status.HTTP_200_OK)
 
         user.is_active = False

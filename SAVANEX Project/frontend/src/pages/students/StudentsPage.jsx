@@ -399,10 +399,10 @@ const StudentsPage = () => {
       const parentCredential = response.temporaryCredentials?.parent;
       const studentCredentials = response.temporaryCredentials?.students || [];
       const credentialSummary = [
-        parentCredential?.temporaryPassword ? `Parent: ${parentCredential.username} / ${parentCredential.temporaryPassword}` : null,
+        parentCredential?.temporaryPassword ? `Parent: ${parentCredential.username} (${parentCredential.accessCode || 'sans code'}) / ${parentCredential.temporaryPassword}` : null,
         ...studentCredentials
           .filter((credential) => credential.temporaryPassword)
-          .map((credential) => `${credential.studentId}: ${credential.username} / ${credential.temporaryPassword}`),
+          .map((credential) => `${credential.studentId}: ${credential.username} (${credential.accessCode || 'sans code'}) / ${credential.temporaryPassword}`),
       ].filter(Boolean).join(' | ');
       setLastTemporaryCredentials({
         parent: parentCredential || null,
@@ -465,6 +465,7 @@ const StudentsPage = () => {
                   <div className="rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">Parent</p>
                     <p className="mt-2 text-sm text-slate-200">Utilisateur: <span className="font-metric font-bold text-white">{lastTemporaryCredentials.parent.username}</span></p>
+                    <p className="mt-1 text-sm text-slate-200">Code d'accès: <span className="font-metric font-bold text-sky-200">{lastTemporaryCredentials.parent.accessCode || 'Non défini'}</span></p>
                     <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{lastTemporaryCredentials.parent.temporaryPassword || 'Déjà défini'}</span></p>
                   </div>
                 ) : null}
@@ -472,6 +473,7 @@ const StudentsPage = () => {
                   <div key={`${credential.studentId}-${credential.username}`} className="rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-200">Élève {credential.studentId}</p>
                     <p className="mt-2 text-sm text-slate-200">Utilisateur: <span className="font-metric font-bold text-white">{credential.username}</span></p>
+                    <p className="mt-1 text-sm text-slate-200">Code d'accès: <span className="font-metric font-bold text-sky-200">{credential.accessCode || 'Non défini'}</span></p>
                     <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{credential.temporaryPassword || 'Déjà défini'}</span></p>
                   </div>
                 ))}

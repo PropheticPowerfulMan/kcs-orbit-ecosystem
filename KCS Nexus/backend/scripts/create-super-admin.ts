@@ -31,6 +31,7 @@ async function main() {
   const user = await prisma.user.create({
     data: {
       email,
+      accessCode: 'ACC-ADM-SUPER1',
       passwordHash,
       firstName,
       lastName,

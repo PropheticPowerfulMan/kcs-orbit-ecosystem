@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Teacher
+from .services import apply_teacher_status
 from apps.users.serializers import UserCreateSerializer, UserMeSerializer
 
 
@@ -14,9 +15,14 @@ def _generate_employee_id() -> str:
 class TeacherSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    last_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    user_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
-    phone = serializers.CharField(source='user.phone', read_only=True)
+    contact_phone = serializers.CharField(source='user.phone', read_only=True)
     kcs_card_id = serializers.CharField(source='user.kcs_card_id', read_only=True)
+    access_code = serializers.CharField(source='user.access_code', read_only=True)
     photo_data = serializers.CharField(source='user.photo_data', read_only=True)
     photo_source = serializers.CharField(source='user.photo_source', read_only=True)
     left_fingerprint_data = serializers.CharField(source='user.left_fingerprint_data', read_only=True)
@@ -36,8 +42,9 @@ class TeacherSerializer(serializers.ModelSerializer):
             'payroll_reference', 'national_id_number', 'social_security_number',
             'tax_number', 'bank_name', 'bank_account_number', 'salary_grade',
             'base_salary', 'pay_frequency', 'supervisor_name', 'emergency_contact_name',
-            'emergency_contact_phone', 'full_name', 'email', 'avatar', 'phone',
-            'kcs_card_id', 'photo_data', 'photo_source',
+            'emergency_contact_phone', 'full_name', 'email', 'first_name', 'last_name',
+            'user_email', 'phone', 'avatar', 'contact_phone',
+            'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics',
             'must_change_password', 'password_generated_by_system',
@@ -45,6 +52,48 @@ class TeacherSerializer(serializers.ModelSerializer):
             'employment_notes', 'is_active',
         ]
         read_only_fields = ['id']
+
+    def update(self, instance, validated_data):
+        first_name = validated_data.pop('first_name', None)
+        last_name = validated_data.pop('last_name', None)
+        user_email = validated_data.pop('user_email', None)
+        phone = validated_data.pop('phone', None)
+
+        has_is_active = 'is_active' in validated_data
+        has_employment_status = 'employment_status' in validated_data
+
+        if has_is_active and not has_employment_status:
+            apply_teacher_status(instance, is_active=validated_data['is_active'])
+            validated_data['employment_status'] = instance.employment_status
+        elif has_employment_status and not has_is_active:
+            apply_teacher_status(instance, is_active=validated_data['employment_status'] != Teacher.STATUS_INACTIVE)
+            validated_data['is_active'] = instance.is_active
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        user_update_fields = []
+        if first_name is not None:
+            instance.user.first_name = first_name
+            user_update_fields.append('first_name')
+        if last_name is not None:
+            instance.user.last_name = last_name
+            user_update_fields.append('last_name')
+        if user_email is not None:
+            instance.user.email = user_email
+            user_update_fields.append('email')
+        if phone is not None:
+            instance.user.phone = phone
+            user_update_fields.append('phone')
+
+        if has_is_active or has_employment_status:
+            user_update_fields.append('is_active')
+
+        if user_update_fields:
+            instance.user.save(update_fields=list(dict.fromkeys(user_update_fields)))
+
+        instance.save()
+        return instance
 
     def get_has_photo(self, obj):
         return bool(obj.user.photo_data or obj.user.avatar)
@@ -125,6 +174,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             **TeacherSerializer(instance).data,
             'temporaryCredentials': {
                 'username': instance.user.username,
+                'accessCode': instance.user.access_code,
                 'temporaryPassword': getattr(instance.user, '_generated_password', None),
                 'mustChangePassword': instance.user.must_change_password,
             },

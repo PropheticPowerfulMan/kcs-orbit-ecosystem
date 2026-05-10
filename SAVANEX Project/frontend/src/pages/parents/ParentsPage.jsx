@@ -62,18 +62,28 @@ const ParentsPage = () => {
     setLoading(true);
     setError('');
 
-    try {
-      const [studentData, directoryData] = await Promise.all([
+    const [studentResult, directoryResult] = await Promise.allSettled([
         studentsService.getAll(),
-        sharedDirectoryService.get().catch(() => null),
+        sharedDirectoryService.get(),
       ]);
-      setStudents(studentData);
-      setDirectory(directoryData);
-    } catch {
-      setError('Impossible de charger les familles pour le moment.');
-    } finally {
-      setLoading(false);
+
+    if (studentResult.status === 'fulfilled') {
+      setStudents(Array.isArray(studentResult.value) ? studentResult.value : []);
+    } else {
+      setStudents([]);
     }
+
+    if (directoryResult.status === 'fulfilled') {
+      setDirectory(directoryResult.value || null);
+    } else {
+      setDirectory(null);
+    }
+
+    if (studentResult.status === 'rejected' && directoryResult.status === 'rejected') {
+      setError('Impossible de charger les familles pour le moment.');
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -104,6 +114,7 @@ const ParentsPage = () => {
             students_label: linkedStudents.length
               ? linkedStudents.map((student) => student.fullName || student.displayId).join(', ')
               : 'Aucun élève lié',
+            linked_student_ids: linkedStudents.map((student) => student.studentNumber || student.displayId || student.id).filter(Boolean).join(', '),
             classes_label: Array.from(classes).sort((left, right) => left.localeCompare(right)).join(', '),
             class_parts: classParts,
             student_count: linkedStudents.length,
@@ -147,9 +158,11 @@ const ParentsPage = () => {
         management_id: student.parent || null,
         management_source: 'local',
         identifier_type: 'local',
+        student_ids: [],
       };
 
       current.students.push(student.full_name);
+      current.student_ids.push(student.student_id);
       const className = normalizeLabel(student.class_name, 'Non assignée');
       current.classes.add(className);
       current.classParts.push(splitClassName(className));
@@ -168,6 +181,7 @@ const ParentsPage = () => {
         first_name: group.first_name,
         last_name: group.last_name,
         students_label: group.students.join(', '),
+        linked_student_ids: group.student_ids.filter(Boolean).join(', '),
         classes_label: Array.from(group.classes).sort((left, right) => left.localeCompare(right)).join(', '),
         class_parts: group.classParts,
         student_count: group.students.length,
@@ -207,7 +221,7 @@ const ParentsPage = () => {
         return false;
       }
 
-      const haystack = `${family.family_name} ${family.students_label} ${family.classes_label}`.toLowerCase();
+      const haystack = `${family.family_name} ${family.students_label} ${family.linked_student_ids || ''} ${family.classes_label} ${family.parent_external_id || ''} ${family.management_id || ''} ${family.kcs_card_id || ''} ${family.email || ''} ${family.phone || ''}`.toLowerCase();
       if (normalizedQuery && !haystack.includes(normalizedQuery)) {
         return false;
       }
@@ -215,6 +229,16 @@ const ParentsPage = () => {
       return true;
     });
   }, [classLevelFilter, classSuffixFilter, familyFilter, familyRows, query]);
+
+  useEffect(() => {
+    if (selectedParent && !familyRows.some((row) => row.id === selectedParent.id)) {
+      setSelectedParent(null);
+    }
+
+    if (editingParent && !familyRows.some((row) => row.id === editingParent.id)) {
+      setEditingParent(null);
+    }
+  }, [editingParent, familyRows, selectedParent]);
 
   const classGroups = useMemo(() => {
     const groups = new Map();
@@ -286,6 +310,12 @@ const ParentsPage = () => {
         source: row.management_source,
         identifierType: row.identifier_type,
       });
+      if (selectedParent?.id === row.id) {
+        setSelectedParent(null);
+      }
+      if (editingParent?.id === row.id) {
+        setEditingParent(null);
+      }
       await loadStudents();
     } catch (deleteError) {
       setError(deleteError?.response?.data?.message || deleteError?.message || 'Impossible de supprimer ce parent.');
@@ -362,7 +392,7 @@ const ParentsPage = () => {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Rechercher parent, famille, élève ou classe..."
+            placeholder="Rechercher parent, famille, élève, classe ou ID..."
             className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
           />
           <select value={classLevelFilter} onChange={(event) => setClassLevelFilter(event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">

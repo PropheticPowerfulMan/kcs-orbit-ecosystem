@@ -8,6 +8,7 @@ import integrationIngestRoutes from "./routes/integration.ingest.routes";
 import integrationRegistryRoutes from "./routes/integration.registry.routes";
 import integrationReadRoutes from "./routes/integration.read.routes";
 import integrationRoutes from "./routes/integration.routes";
+import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 
 export function createApp() {
   const app = express();
@@ -18,7 +19,7 @@ export function createApp() {
     .filter(Boolean);
 
   app.use(helmet());
-  app.use(express.json());
+  app.use(express.json({ limit: "2mb" }));
   app.use(morgan("dev"));
   app.use(cors({
     origin: (origin, callback) => {
@@ -51,6 +52,9 @@ export function createApp() {
   app.use("/api/integration/read", integrationReadRoutes);
   app.use("/api/integration/registry", integrationRegistryRoutes);
   app.use("/api/integration/ingest", integrationIngestRoutes);
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }

@@ -90,6 +90,7 @@ enum FeeStatus {
 model User {
   id                 String               @id @default(cuid())
   email              String               @unique
+  accessCode         String               @unique
   passwordHash       String?
   firstName          String
   lastName           String

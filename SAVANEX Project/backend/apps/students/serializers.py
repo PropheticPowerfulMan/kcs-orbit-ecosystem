@@ -40,6 +40,7 @@ class StudentSerializer(serializers.ModelSerializer):
     class_suffix = serializers.CharField(write_only=True, required=False, allow_blank=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
     kcs_card_id = serializers.CharField(source='user.kcs_card_id', read_only=True)
+    access_code = serializers.CharField(source='user.access_code', read_only=True)
     photo_data = serializers.CharField(source='user.photo_data', read_only=True)
     photo_source = serializers.CharField(source='user.photo_source', read_only=True)
     left_fingerprint_data = serializers.CharField(source='user.left_fingerprint_data', read_only=True)
@@ -54,6 +55,7 @@ class StudentSerializer(serializers.ModelSerializer):
     parent_phone = serializers.SerializerMethodField()
     parent_external_id = serializers.SerializerMethodField()
     parent_kcs_card_id = serializers.SerializerMethodField()
+    parent_access_code = serializers.SerializerMethodField()
     parent_photo_data = serializers.SerializerMethodField()
     parent_left_fingerprint_data = serializers.SerializerMethodField()
     parent_right_fingerprint_data = serializers.SerializerMethodField()
@@ -63,14 +65,14 @@ class StudentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'student_id', 'full_name', 'email', 'avatar',
             'first_name', 'last_name', 'user_email',
-            'kcs_card_id', 'photo_data', 'photo_source',
+            'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics',
             'must_change_password', 'password_generated_by_system',
             'date_of_birth', 'gender', 'address',
             'current_class', 'class_name', 'class_level', 'class_suffix',
             'parent', 'parent_name', 'parent_email', 'parent_phone', 'parent_external_id',
-            'parent_kcs_card_id', 'parent_photo_data',
+            'parent_kcs_card_id', 'parent_access_code', 'parent_photo_data',
             'parent_left_fingerprint_data', 'parent_right_fingerprint_data',
             'enrollment_date', 'is_active', 'notes',
         ]
@@ -138,6 +140,9 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_parent_kcs_card_id(self, obj):
         return obj.parent.kcs_card_id if obj.parent else None
+
+    def get_parent_access_code(self, obj):
+        return obj.parent.access_code if obj.parent else None
 
     def get_parent_photo_data(self, obj):
         return obj.parent.photo_data if obj.parent else ''
@@ -360,6 +365,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             'temporaryCredentials': {
                 'parent': {
                     'username': parent.username,
+                    'accessCode': parent.access_code,
                     'temporaryPassword': getattr(parent, '_generated_password', None),
                     'mustChangePassword': parent.must_change_password,
                 },
@@ -367,6 +373,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                     {
                         'studentId': student.student_id,
                         'username': student.user.username,
+                        'accessCode': student.user.access_code,
                         'temporaryPassword': getattr(student.user, '_generated_password', None),
                         'mustChangePassword': student.user.must_change_password,
                     }

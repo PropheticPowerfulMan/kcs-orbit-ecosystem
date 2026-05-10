@@ -8,6 +8,7 @@ export type UserRole = 'admin' | 'staff' | 'teacher' | 'student' | 'parent';
 export interface User {
   id: string;
   email: string;
+  accessCode?: string;
   firstName: string;
   lastName: string;
   role: UserRole;

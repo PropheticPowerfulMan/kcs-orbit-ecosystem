@@ -7,6 +7,7 @@ const toJwtDuration = (value: string): SignOptions['expiresIn'] => value as Sign
 export const buildSafeUser = (user: User) => ({
   id: user.id,
   email: user.email,
+  accessCode: user.accessCode,
   firstName: user.firstName,
   lastName: user.lastName,
   role: user.role.toLowerCase(),

@@ -248,6 +248,7 @@ def sync_student(student) -> None:
         "payload": _compact({
             "firstName": student.user.first_name,
             "lastName": student.user.last_name,
+            "accessCode": student.user.access_code,
             "gender": student.gender,
             "studentNumber": student.student_id,
             "classExternalId": str(student.current_class_id) if student.current_class_id else None,
@@ -280,6 +281,7 @@ def sync_parent(parent) -> None:
             "firstName": parent.first_name or None,
             "lastName": parent.last_name or None,
             "fullName": parent.get_full_name() or parent.username,
+            "accessCode": parent.access_code,
             "email": parent.email or None,
             "phone": parent.phone or None,
             "mustChangePassword": parent.must_change_password,
@@ -299,6 +301,7 @@ def sync_teacher(teacher) -> None:
             "fullName": teacher.user.get_full_name(),
             "firstName": teacher.user.first_name or None,
             "lastName": teacher.user.last_name or None,
+            "accessCode": teacher.user.access_code,
             "email": teacher.user.email or None,
             "phone": teacher.user.phone or None,
             "employeeId": teacher.employee_id,

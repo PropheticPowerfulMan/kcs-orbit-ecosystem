@@ -11,6 +11,10 @@ def generate_kcs_card_id():
     return f"KCS-{uuid4().hex[:12].upper()}"
 
 
+def generate_access_code():
+    return f"ACC-{uuid4().hex[:10].upper()}"
+
+
 class User(AbstractUser):
     """
     Extended user model supporting Admin, Employee, Teacher, Student, and Parent roles.
@@ -61,6 +65,12 @@ class User(AbstractUser):
         unique=True,
         default=generate_kcs_card_id,
         verbose_name=_('KCS Card ID'),
+    )
+    access_code = models.CharField(
+        max_length=24,
+        unique=True,
+        default=generate_access_code,
+        verbose_name=_('Access Code'),
     )
     language = models.CharField(
         max_length=5,

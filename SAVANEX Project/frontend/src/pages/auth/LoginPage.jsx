@@ -59,11 +59,12 @@ const LoginPage = () => {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">{t('auth.username')}</label>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Identifiant ou code d'accès</label>
             <input
               value={form.username}
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               className="w-full rounded-xl border border-github-border bg-slate-950/55 px-3 py-2 text-sm text-slate-100 backdrop-blur focus:border-kcs-blue focus:outline-none focus:ring-2 focus:ring-kcs-blue/20"
+              placeholder="Nom d'utilisateur, email ou code d'accès"
               required
             />
           </div>

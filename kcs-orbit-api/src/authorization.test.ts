@@ -184,6 +184,115 @@ test("shared-directory endpoint returns the unified directory", async () => {
   }
 });
 
+test("shared-directory endpoint returns 500 on async load failures instead of crashing the server", async () => {
+  const token = signToken({ userId: "teacher-user", role: "TEACHER", organizationId: "org-1" });
+
+  (prisma.student.findMany as unknown as typeof prisma.student.findMany) = (async () => {
+    throw new Error("database offline");
+  }) as never;
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/shared-directory`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      assert.equal(response.status, 500);
+      const data = await response.json() as { message: string; details?: string };
+      assert.equal(data.message, "Internal server error.");
+      assert.equal(data.details, "database offline");
+    });
+  } finally {
+    restorePrisma();
+  }
+});
+
+test("shared-directory endpoint tolerates partial names and empty external ids", async () => {
+  const token = signToken({ userId: "teacher-user", role: "TEACHER", organizationId: "org-1" });
+
+  (prisma.student.findMany as unknown as typeof prisma.student.findMany) = (async () => [
+    {
+      id: "student-1",
+      firstName: "",
+      lastName: "",
+      studentNumber: "",
+      email: null,
+      phone: null,
+      dateOfBirth: null,
+      status: null,
+      mustChangePassword: false,
+      classId: null,
+      className: null,
+      class: null,
+      parentId: "parent-1",
+      organizationId: "org-1",
+    },
+  ]) as never;
+
+  (prisma.parent.findMany as unknown as typeof prisma.parent.findMany) = (async () => [
+    {
+      id: "parent-1",
+      fullName: null,
+      firstName: null,
+      middleName: null,
+      lastName: null,
+      phone: null,
+      email: null,
+      mustChangePassword: false,
+      organizationId: "org-1",
+      students: [{ id: "student-1" }],
+    },
+  ]) as never;
+
+  (prisma.teacher.findMany as unknown as typeof prisma.teacher.findMany) = (async () => [
+    {
+      id: "teacher-1",
+      fullName: null,
+      firstName: null,
+      middleName: null,
+      lastName: null,
+      phone: null,
+      email: null,
+      subject: null,
+      employeeId: null,
+      employeeType: null,
+      department: null,
+      jobTitle: null,
+      mustChangePassword: false,
+      organizationId: "org-1",
+    },
+  ]) as never;
+
+  (prisma.externalLink.findMany as unknown as typeof prisma.externalLink.findMany) = (async () => [
+    {
+      nexusEntityId: "student-1",
+      entityType: "student",
+      appSlug: "SAVANEX",
+      externalId: "   ",
+    },
+  ]) as never;
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/shared-directory`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      assert.equal(response.status, 200);
+      const data = await response.json() as {
+        parents: Array<{ fullName: string; displayId: string }>;
+        students: Array<{ fullName: string; displayId: string }>;
+        teachers: Array<{ fullName: string; displayId: string }>;
+      };
+      assert.equal(data.parents[0]?.fullName, "parent-1");
+      assert.equal(data.students[0]?.fullName, "student-1");
+      assert.equal(data.teachers[0]?.fullName, "teacher-1");
+    });
+  } finally {
+    restorePrisma();
+  }
+});
+
 test("registry creation rejects duplicate parents", async () => {
   process.env.KCS_NEXUS_INTEGRATION_KEY = "test-kcs-key";
 
@@ -274,7 +383,7 @@ test("registry creation accepts canonical split-name payloads for parents", asyn
   }
 });
 
-test("registry route rejects EduPay integration clients", async () => {
+test("registry route rejects unknown integration clients", async () => {
   process.env.EDUPAY_INTEGRATION_KEY = "test-edupay-key";
 
   await withServer(async (baseUrl) => {
@@ -283,7 +392,7 @@ test("registry route rejects EduPay integration clients", async () => {
       headers: {
         "Content-Type": "application/json",
         "x-api-key": "test-edupay-key",
-        "x-app-slug": "EDUPAY",
+        "x-app-slug": "UNKNOWN_APP",
       },
       body: JSON.stringify({ organizationId: "org-1", fullName: "Blocked Parent" }),
     });

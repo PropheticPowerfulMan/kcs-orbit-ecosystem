@@ -5,6 +5,22 @@ import { env } from '../config/env.js'
 import { authenticate, requireRoles } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 
+function generateAccessCode(role: string) {
+  return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+}
+
+async function generateUniqueAccessCode(tx: typeof prisma, role: string) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const accessCode = generateAccessCode(role)
+    const existing = await tx.user.findFirst({ where: { accessCode } as any })
+    if (!existing) {
+      return accessCode
+    }
+  }
+
+  return `ACC-${role.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
+}
+
 export const registryRouter = Router()
 
 type SharedDirectoryResponse = {
@@ -156,7 +172,7 @@ async function updateRegistryEntityInOrbit(entityType: RegistryEntityType, ident
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${entityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
     {
-      method: 'PATCH',
+      method: 'PUT',
       headers: {
         'content-type': 'application/json',
         'x-api-key': env.KCS_ORBIT_API_KEY!,
@@ -535,6 +551,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
       },
       create: {
         email: parent.email,
+        accessCode: await generateUniqueAccessCode(tx as typeof prisma, 'parent'),
         firstName: parent.firstName,
         lastName: parent.lastName,
         phone: parent.phone,
@@ -545,6 +562,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
     const studentUser = await tx.user.create({
       data: {
         email: student.email ?? `${student.studentNumber.toLowerCase()}@students.kcs.local`,
+        accessCode: await generateUniqueAccessCode(tx as typeof prisma, 'student'),
         firstName: student.firstName,
         lastName: student.lastName,
         role: 'STUDENT',

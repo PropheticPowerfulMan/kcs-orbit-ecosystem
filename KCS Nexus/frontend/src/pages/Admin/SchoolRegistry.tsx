@@ -52,8 +52,21 @@ const SchoolRegistryPage = () => {
   }, [])
 
   const filteredFamilies = families.filter((family) => {
-    const haystack = `${family.familyLabel} ${family.parents.map((item) => item.parent.fullName).join(' ')} ${family.children.map((child) => `${child.student.fullName} ${child.studentNumber} ${child.grade}`).join(' ')}`.toLowerCase()
-    return haystack.includes(query.toLowerCase())
+    const normalizedQuery = query.trim().toLowerCase()
+    if (!normalizedQuery) return true
+
+    const parentHaystack = family.parents
+      .flatMap((item) => [item.id, item.externalId, item.parent.fullName, item.parent.email, item.parent.phone, item.relation])
+      .filter(Boolean)
+      .join(' ')
+
+    const childHaystack = family.children
+      .flatMap((child) => [child.id, child.externalId, child.student.fullName, child.studentNumber, child.grade, child.section, child.status])
+      .filter(Boolean)
+      .join(' ')
+
+    const haystack = `${family.id} ${family.familyLabel} ${parentHaystack} ${childHaystack}`.toLowerCase()
+    return haystack.includes(normalizedQuery)
   })
 
   const registerFamily = async (event: FormEvent) => {
@@ -192,7 +205,7 @@ const SchoolRegistryPage = () => {
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-4 flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2 dark:bg-kcs-blue-800/40">
                 <Search size={18} className="text-gray-400" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search student, parent, grade, or number" className="w-full bg-transparent text-sm outline-none dark:text-white" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search student, parent, class, grade, or any ID" className="w-full bg-transparent text-sm outline-none dark:text-white" />
               </div>
 
               <div className="space-y-3">

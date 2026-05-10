@@ -7,6 +7,22 @@ import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+
+function generateAccessCode(role: string) {
+  return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+}
+
+async function generateUniqueAccessCode(tx: typeof prisma, role: string) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const accessCode = generateAccessCode(role)
+    const existing = await tx.user.findFirst({ where: { accessCode } })
+    if (!existing) {
+      return accessCode
+    }
+  }
+
+  return `ACC-${role.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
+}
 import { getRouteParam } from '../utils/request.js'
 
 export const studentsRouter = Router()
@@ -462,6 +478,7 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
       },
       create: {
         email: parent.email,
+        accessCode: await generateUniqueAccessCode(tx as typeof prisma, 'parent'),
         firstName: parent.firstName,
         lastName: parent.lastName,
         phone: parent.phone,
@@ -484,6 +501,7 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
       const studentUser = await tx.user.create({
         data: {
           email: studentEmail,
+          accessCode: await generateUniqueAccessCode(tx as typeof prisma, 'student'),
           firstName: student.firstName,
           lastName: student.lastName,
           passwordHash: await bcrypt.hash(studentTemporaryPassword, 10),

@@ -9,6 +9,96 @@ import { useTranslation } from 'react-i18next';
 
 const inputClass = 'w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue';
 
+const buildTeacherPayload = (form) => ({
+  ...(form.firstName ? { first_name: form.firstName } : {}),
+  ...(form.lastName ? { last_name: form.lastName } : {}),
+  ...(form.email ? { user_email: form.email } : { user_email: '' }),
+  ...(form.phone !== undefined ? { phone: form.phone } : {}),
+  ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
+  employee_type: form.employeeType,
+  department: form.department,
+  job_title: form.jobTitle,
+  specialization: form.specialization,
+  hire_date: form.hireDate,
+  contract_type: form.contractType,
+  work_location: form.workLocation,
+  work_email: form.workEmail,
+  office_phone_extension: form.officePhoneExtension,
+  payroll_reference: form.payrollReference,
+  national_id_number: form.nationalIdNumber,
+  social_security_number: form.socialSecurityNumber,
+  tax_number: form.taxNumber,
+  bank_name: form.bankName,
+  bank_account_number: form.bankAccountNumber,
+  salary_grade: form.salaryGrade,
+  base_salary: form.baseSalary || null,
+  pay_frequency: form.payFrequency,
+  supervisor_name: form.supervisorName,
+});
+
+const buildTeacherCreatePayload = (form) => ({
+  user: {
+    first_name: form.firstName,
+    last_name: form.lastName,
+    ...(form.email ? { email: form.email } : {}),
+    phone: form.phone,
+    ...form.identity,
+  },
+  ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
+  employee_type: form.employeeType,
+  department: form.department,
+  job_title: form.jobTitle,
+  specialization: form.specialization,
+  hire_date: form.hireDate,
+  contract_type: form.contractType,
+  work_location: form.workLocation,
+  work_email: form.workEmail,
+  office_phone_extension: form.officePhoneExtension,
+  payroll_reference: form.payrollReference,
+  national_id_number: form.nationalIdNumber,
+  social_security_number: form.socialSecurityNumber,
+  tax_number: form.taxNumber,
+  bank_name: form.bankName,
+  bank_account_number: form.bankAccountNumber,
+  salary_grade: form.salaryGrade,
+  base_salary: form.baseSalary || null,
+  pay_frequency: form.payFrequency,
+  supervisor_name: form.supervisorName,
+});
+
+const mapTeacherToForm = (teacher) => ({
+  firstName: teacher?.full_name?.split(' ')?.[0] || '',
+  lastName: teacher?.full_name?.split(' ')?.slice(1).join(' ') || '',
+  email: teacher?.email || '',
+  phone: teacher?.contact_phone || teacher?.phone || '',
+  teacherId: teacher?.teacher_id || teacher?.employee_id || '',
+  employeeType: teacher?.employee_type || 'teacher',
+  department: teacher?.department || '',
+  jobTitle: teacher?.job_title || '',
+  specialization: teacher?.specialization || '',
+  hireDate: teacher?.hire_date || new Date().toISOString().slice(0, 10),
+  contractType: teacher?.contract_type || 'permanent',
+  workLocation: teacher?.work_location || '',
+  workEmail: teacher?.work_email || '',
+  officePhoneExtension: teacher?.office_phone_extension || '',
+  payrollReference: teacher?.payroll_reference || '',
+  nationalIdNumber: teacher?.national_id_number || '',
+  socialSecurityNumber: teacher?.social_security_number || '',
+  taxNumber: teacher?.tax_number || '',
+  bankName: teacher?.bank_name || '',
+  bankAccountNumber: teacher?.bank_account_number || '',
+  salaryGrade: teacher?.salary_grade || '',
+  baseSalary: teacher?.base_salary || '',
+  payFrequency: teacher?.pay_frequency || 'monthly',
+  supervisorName: teacher?.supervisor_name || '',
+  identity: {
+    photo_data: teacher?.photo_data || '',
+    photo_source: teacher?.photo_source || '',
+    left_fingerprint_data: teacher?.left_fingerprint_data || '',
+    right_fingerprint_data: teacher?.right_fingerprint_data || '',
+  },
+});
+
 const initialForm = {
   firstName: '',
   lastName: '',
@@ -61,8 +151,10 @@ const TeachersPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
   const [form, setForm] = useState(initialForm);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [editingEmployee, setEditingEmployee] = useState(null);
   const [employeeFormVisible, setEmployeeFormVisible] = useState(true);
   const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
 
@@ -88,6 +180,91 @@ const TeachersPage = () => {
   const teachingEmployees = teachers.filter((teacher) => teacher.employee_type === 'teacher').length;
   const biometricReady = teachers.filter((teacher) => teacher.has_photo || teacher.has_biometrics).length;
   const departments = useMemo(() => new Set(teachers.map((teacher) => teacher.department).filter(Boolean)).size, [teachers]);
+  const filteredTeachers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return teachers;
+
+    return teachers.filter((teacher) => {
+      const haystack = [
+        teacher.full_name,
+        teacher.teacher_id,
+        teacher.employee_id,
+        teacher.kcs_card_id,
+        teacher.employee_label,
+        teacher.employee_type,
+        teacher.job_title,
+        teacher.department,
+        teacher.specialization,
+        teacher.email,
+        teacher.contact_phone || teacher.phone,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+  }, [query, teachers]);
+
+  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  const resetTeacherForm = () => {
+    setForm({ ...initialForm, hireDate: new Date().toISOString().slice(0, 10), identity: { ...emptyIdentityCapture } });
+    setEditingEmployee(null);
+  };
+
+  const submitTeacher = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setFeedback('');
+    setError('');
+
+    try {
+      if (editingEmployee) {
+        await teachersService.update(editingEmployee.id, buildTeacherPayload(form));
+        setLastTemporaryCredentials(null);
+        setFeedback('Employé modifié avec succès.');
+      } else {
+        const response = await teachersService.create(buildTeacherCreatePayload(form));
+
+        const credentials = response.temporaryCredentials;
+        const accessSummary = credentials?.temporaryPassword
+          ? ` Accès temporaire: ${credentials.username} (${credentials.accessCode || 'sans code'}) / ${credentials.temporaryPassword}.`
+          : '';
+        setLastTemporaryCredentials(credentials || null);
+        setFeedback(`Employé enregistré. Mot de passe généré par le système et à changer à la première connexion.${accessSummary}`);
+      }
+
+      resetTeacherForm();
+      await loadTeachers();
+    } catch (submissionError) {
+      setError(formatApiError(submissionError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  async function handleDelete(teacher) {
+    const confirmed = window.confirm(`Supprimer ${teacher.full_name || teacher.employee_id} ?`);
+    if (!confirmed) return;
+
+    setSubmitting(true);
+    setFeedback('');
+    setError('');
+    try {
+      await teachersService.remove(teacher.id);
+      if (selectedEmployee?.id === teacher.id) {
+        setSelectedEmployee(null);
+      }
+      if (editingEmployee?.id === teacher.id) {
+        resetTeacherForm();
+      }
+      setLastTemporaryCredentials(null);
+      setFeedback('Employé désactivé avec succès.');
+      await loadTeachers();
+    } catch (deleteError) {
+      setError(formatApiError(deleteError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const columns = [
     { key: 'full_name', label: 'Employé' },
@@ -98,62 +275,24 @@ const TeachersPage = () => {
     { key: 'employment_status', label: 'Statut', render: (value) => value || 'active' },
     { key: 'kcs_card_id', label: 'Carte KCS', render: (value) => value || 'À générer' },
     { key: 'bio', label: 'Bio', render: (_value, row) => (row.has_photo || row.has_biometrics ? 'Prêt' : 'À compléter') },
-    { key: 'details', label: 'Action', render: (_value, row) => <button type="button" onClick={() => setSelectedEmployee({ ...row, role: row.employee_label || 'Employé' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button> },
+    {
+      key: 'details',
+      label: 'Action',
+      render: (_value, row) => (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setSelectedEmployee({ ...row, role: row.employee_label || 'Employé' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
+          <button type="button" onClick={() => {
+            setEditingEmployee(row);
+            setForm(mapTeacherToForm(row));
+            setEmployeeFormVisible(true);
+            setFeedback('');
+            setError('');
+          }} className="rounded-lg border border-amber-400/30 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10">Modifier</button>
+          <button type="button" onClick={() => void handleDelete(row)} className="rounded-lg border border-rose-400/30 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Supprimer</button>
+        </div>
+      )
+    },
   ];
-
-  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
-
-  const submitTeacher = async (event) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setFeedback('');
-    setError('');
-
-    try {
-      const response = await teachersService.create({
-        user: {
-          first_name: form.firstName,
-          last_name: form.lastName,
-          ...(form.email ? { email: form.email } : {}),
-          phone: form.phone,
-          ...form.identity,
-        },
-        ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
-        employee_type: form.employeeType,
-        department: form.department,
-        job_title: form.jobTitle,
-        specialization: form.specialization,
-        hire_date: form.hireDate,
-        contract_type: form.contractType,
-        work_location: form.workLocation,
-        work_email: form.workEmail,
-        office_phone_extension: form.officePhoneExtension,
-        payroll_reference: form.payrollReference,
-        national_id_number: form.nationalIdNumber,
-        social_security_number: form.socialSecurityNumber,
-        tax_number: form.taxNumber,
-        bank_name: form.bankName,
-        bank_account_number: form.bankAccountNumber,
-        salary_grade: form.salaryGrade,
-        base_salary: form.baseSalary || null,
-        pay_frequency: form.payFrequency,
-        supervisor_name: form.supervisorName,
-      });
-
-      const credentials = response.temporaryCredentials;
-      const accessSummary = credentials?.temporaryPassword
-        ? ` Accès temporaire: ${credentials.username} / ${credentials.temporaryPassword}.`
-        : '';
-      setLastTemporaryCredentials(credentials || null);
-      setFeedback(`Employé enregistré. Mot de passe généré par le système et à changer à la première connexion.${accessSummary}`);
-      setForm({ ...initialForm, hireDate: new Date().toISOString().slice(0, 10), identity: { ...emptyIdentityCapture } });
-      await loadTeachers();
-    } catch (submissionError) {
-      setError(formatApiError(submissionError));
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <DashboardLayout>
@@ -173,7 +312,7 @@ const TeachersPage = () => {
       <section className="mb-6 card p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-display text-xl font-semibold text-slate-100">Nouvel employé</h3>
+            <h3 className="font-display text-xl font-semibold text-slate-100">{editingEmployee ? 'Modifier un employé' : 'Nouvel employé'}</h3>
             <p className="mt-1 text-sm text-slate-400">Formulaire simplifié : les champs RH sensibles restent optionnels, la carte KCS et l'accès temporaire sont générés automatiquement.</p>
           </div>
           <button
@@ -187,7 +326,7 @@ const TeachersPage = () => {
         </div>
 
         {employeeFormVisible ? <form onSubmit={submitTeacher} className="space-y-4">
-          {lastTemporaryCredentials ? (
+          {lastTemporaryCredentials && !editingEmployee ? (
             <section className="rounded-2xl border border-emerald-400/35 bg-emerald-400/10 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -198,6 +337,7 @@ const TeachersPage = () => {
               </div>
               <div className="mt-4 rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
                 <p className="text-sm text-slate-200">Utilisateur: <span className="font-metric font-bold text-white">{lastTemporaryCredentials.username}</span></p>
+                <p className="mt-1 text-sm text-slate-200">Code d'accès: <span className="font-metric font-bold text-sky-200">{lastTemporaryCredentials.accessCode || 'Non défini'}</span></p>
                 <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{lastTemporaryCredentials.temporaryPassword || 'Déjà défini'}</span></p>
               </div>
             </section>
@@ -277,14 +417,30 @@ const TeachersPage = () => {
           {feedback ? <p className="text-sm text-emerald-300">{feedback}</p> : null}
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
-          <button type="submit" disabled={submitting} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
-            {submitting ? 'Enregistrement en cours...' : "Enregistrer l'employé"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button type="submit" disabled={submitting} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
+              {submitting ? 'Enregistrement en cours...' : editingEmployee ? "Enregistrer les modifications" : "Enregistrer l'employé"}
+            </button>
+            {editingEmployee ? (
+              <button type="button" onClick={resetTeacherForm} className="rounded-xl border border-github-border px-4 py-3 text-sm text-slate-300 hover:bg-slate-800/70">
+                Annuler
+              </button>
+            ) : null}
+          </div>
         </form> : null}
       </section>
 
+      <div className="mb-4 card p-4">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Rechercher employé, département, poste ou ID..."
+          className={inputClass}
+        />
+      </div>
+
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employés...</p> : null}
-      <DataTable columns={columns} data={teachers} />
+      <DataTable columns={columns} data={filteredTeachers} />
 
       <EntityDetailPanel entity={selectedEmployee} type="employee" onClose={() => setSelectedEmployee(null)} />
     </DashboardLayout>

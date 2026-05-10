@@ -4,6 +4,7 @@ import { students as demoStudents } from '../data/demoSchoolData';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 const DEMO_ACCESS_TOKEN = 'demo-access-token';
+const DIRECTORY_REQUEST_TIMEOUT_MS = 10000;
 
 const demoUser = {
   id: 1,
@@ -284,7 +285,7 @@ export const studentsService = {
 
     const [localResult, sharedResult] = await Promise.allSettled([
       api.get('/students/'),
-      api.get('/integration/shared-directory/'),
+      api.get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS }),
     ]);
 
     const localStudents = localResult.status === 'fulfilled'
@@ -346,7 +347,7 @@ export const studentsService = {
 
 export const sharedDirectoryService = {
   async get() {
-    const res = await api.get('/integration/shared-directory/');
+    const res = await api.get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS });
     return res.data;
   },
 };
@@ -424,6 +425,26 @@ export const teachersService = {
     }
 
     const res = await api.post('/teachers/', data);
+    return res.data;
+  },
+
+  async update(id, data) {
+    if (isDemoSession()) {
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour modifier des employés.");
+    }
+
+    const res = await api.patch(`/teachers/${id}/`, data);
+    return res.data;
+  },
+
+  async remove(id) {
+    if (isDemoSession()) {
+      useAuthStore.getState().clearAuth();
+      throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour supprimer des employés.");
+    }
+
+    const res = await api.delete(`/teachers/${id}/`);
     return res.data;
   },
 };

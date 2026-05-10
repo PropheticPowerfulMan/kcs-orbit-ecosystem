@@ -8,6 +8,22 @@ import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
 
+function generateAccessCode(role: string) {
+  return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+}
+
+async function generateUniqueAccessCode(role: string) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const accessCode = generateAccessCode(role)
+    const existing = await prisma.user.findUnique({ where: { accessCode } })
+    if (!existing) {
+      return accessCode
+    }
+  }
+
+  return `ACC-${role.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
+}
+
 const registerSchema = z.object({
   firstName: z.string().min(2),
   lastName: z.string().min(2),
@@ -17,7 +33,7 @@ const registerSchema = z.object({
 })
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1),
   password: z.string().min(6),
 })
 
@@ -41,6 +57,7 @@ function loginConfiguredSuperAdmin(payload: z.infer<typeof loginSchema>) {
   const user = {
     id: configuredSuperAdmin.id,
     email: configuredSuperAdmin.email,
+    accessCode: 'ACC-ADM-SUPER1',
     firstName: configuredSuperAdmin.firstName,
     lastName: configuredSuperAdmin.lastName,
     role: configuredSuperAdmin.role,
@@ -65,6 +82,7 @@ function buildConfiguredSuperAdminUser() {
   return {
     id: configuredSuperAdmin.id,
     email: configuredSuperAdmin.email,
+    accessCode: 'ACC-ADM-SUPER1',
     firstName: configuredSuperAdmin.firstName,
     lastName: configuredSuperAdmin.lastName,
     role: configuredSuperAdmin.role,
@@ -91,6 +109,7 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
       firstName: payload.firstName,
       lastName: payload.lastName,
       email: payload.email,
+      accessCode: await generateUniqueAccessCode(payload.role),
       passwordHash,
       role: payload.role.toUpperCase() as never,
     },
@@ -117,7 +136,16 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     return success(res, configuredLogin, 'Login successful')
   }
 
-  const user = await prisma.user.findUnique({ where: { email: payload.email } })
+  const identifier = payload.email.trim()
+  const normalizedIdentifier = identifier.toLowerCase()
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: normalizedIdentifier },
+        { accessCode: identifier.toUpperCase() },
+      ],
+    },
+  })
   if (!user?.passwordHash) {
     throw new ApiError(401, 'Invalid email or password')
   }
@@ -199,4 +227,33 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
   }
 
   return success(res, buildSafeUser(user))
+}))
+
+authRouter.put('/access-code', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (isConfiguredSuperAdminUser(req.user!.sub)) {
+    throw new ApiError(403, 'Configured super admin access code cannot be modified from the API')
+  }
+
+  const schema = z.object({ accessCode: z.string().min(6).max(24) })
+  const { accessCode } = schema.parse(req.body)
+  const normalizedAccessCode = accessCode.trim().toUpperCase()
+
+  const duplicate = await prisma.user.findFirst({
+    where: {
+      accessCode: normalizedAccessCode,
+      NOT: { id: req.user!.sub },
+    } as any,
+    select: { id: true },
+  })
+
+  if (duplicate) {
+    throw new ApiError(409, 'This access code is already in use')
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.user!.sub },
+    data: { accessCode: normalizedAccessCode } as any,
+  })
+
+  return success(res, buildSafeUser(updated), 'Access code updated')
 }))

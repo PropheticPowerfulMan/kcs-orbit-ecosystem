@@ -1,6 +1,7 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from apps.integration.orbit import sync_teacher
+from .services import deactivate_teacher
 from .models import Teacher
 from .serializers import TeacherSerializer, TeacherCreateSerializer, TeacherDetailSerializer
 from apps.users.permissions import IsAdminUser, IsTeacherOrAdmin, IsOwnerOrAdmin
@@ -46,8 +47,5 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def destroy(self, request, *args, **kwargs):
         teacher = self.get_object()
-        teacher.is_active = False
-        teacher.user.is_active = False
-        teacher.user.save()
-        teacher.save()
+        deactivate_teacher(teacher)
         return Response({'detail': 'Teacher deactivated.'}, status=status.HTTP_200_OK)

@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore'
 import type { User, UserRole } from '@/types'
 
 const loginSchema = z.object({
-  email: z.string().email('Valid email required'),
+  email: z.string().min(1, 'Email ou code d\'accès requis'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 })
 
@@ -54,6 +54,7 @@ const findDemoAccount = (values: LoginFormValues) => {
 const buildDemoUser = (account: DemoAccount): User => ({
   id: account.role + '-demo',
   email: account.email,
+  accessCode: `ACC-${account.role.slice(0, 3).toUpperCase()}-DEMO`,
   firstName: account.firstName,
   lastName: account.lastName,
   role: account.role,
@@ -191,7 +192,7 @@ const LoginPage = () => {
               <div className="mt-10 mb-8">
                 <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white">Sign In</h2>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Use your KCS credentials or one of the demo accounts.
+                  Use your email, access code, or one of the demo accounts.
                 </p>
               </div>
 
@@ -209,10 +210,10 @@ const LoginPage = () => {
 
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">Email</label>
+                  <label className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">Email ou code d'accès</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input {...form.register('email')} className="input-kcs pl-11" placeholder="name@kcsnexus.edu" />
+                    <input {...form.register('email')} className="input-kcs pl-11" placeholder="name@kcsnexus.edu ou ACC-ADM-SUPER1" />
                   </div>
                   {form.formState.errors.email && <p className="mt-1 text-xs text-red-500">{form.formState.errors.email.message}</p>}
                 </div>

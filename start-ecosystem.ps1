@@ -29,6 +29,8 @@ $savanexPythonPath = Join-Path $savanexBackendPath '.venv311\Scripts\python.exe'
 $logRoot = Join-Path $repoRoot 'var\logs'
 $stateRoot = Join-Path $repoRoot 'var'
 $preparationMarkerPath = Join-Path $stateRoot 'ecosystem-prepared.json'
+$eduSyncFallbackApiPorts = @(8010, 8011, 8012)
+$eduPayAccessCodeMigrationPath = Join-Path $eduPayApiPath 'prisma\migrations\20260510053000_add_user_access_code\migration.sql'
 
 function Get-ConfigValue {
   param(
@@ -132,6 +134,34 @@ function Resolve-PreferredPort {
   throw "$Name cannot start: ports $PreferredPort, $($FallbackPorts -join ', ') are all busy."
 }
 
+function Resolve-EduSyncApiPort {
+  param(
+    [int]$PreferredPort,
+    [int[]]$FallbackPorts
+  )
+
+  $candidatePorts = @($PreferredPort) + ($FallbackPorts | Where-Object { $_ -ne $PreferredPort })
+  $runningBackends = Get-EduSyncBackendListeners -Ports $candidatePorts
+
+  if ($runningBackends.Count -gt 0) {
+    $selected = $runningBackends | Where-Object { $_.Port -eq $PreferredPort } | Select-Object -First 1
+    if (-not $selected) {
+      $selected = $runningBackends | Select-Object -First 1
+    }
+
+    $duplicates = @($runningBackends | Where-Object { $_.ProcessId -ne $selected.ProcessId })
+    foreach ($duplicate in $duplicates) {
+      Stop-Process -Id $duplicate.ProcessId -Force -ErrorAction SilentlyContinue
+      Write-Host "Stopped duplicate EduSync AI Backend on port $($duplicate.Port)" -ForegroundColor Yellow
+    }
+
+    Write-Host "Reusing EduSync AI Backend on port $($selected.Port)" -ForegroundColor Yellow
+    return [int]$selected.Port
+  }
+
+  return Resolve-PreferredPort -Name 'EduSync AI API' -PreferredPort $PreferredPort -FallbackPorts $FallbackPorts
+}
+
 function Assert-Command {
   param([string]$Name)
 
@@ -163,6 +193,46 @@ function Invoke-InDirectory {
   }
 }
 
+function Get-ListeningProcessInfo {
+  param([int[]]$Ports)
+
+  $listeners = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {
+    $_.LocalPort -in $Ports
+  }
+
+  foreach ($listener in $listeners) {
+    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    if (-not $processInfo) {
+      continue
+    }
+
+    [pscustomobject]@{
+      Port = [int]$listener.LocalPort
+      ProcessId = [int]$listener.OwningProcess
+      Name = $processInfo.Name
+      CommandLine = $processInfo.CommandLine
+    }
+  }
+}
+
+function Get-EduSyncBackendListeners {
+  param([int[]]$Ports)
+
+  return @(Get-ListeningProcessInfo -Ports $Ports | Where-Object {
+    $_.Name -eq 'python.exe' -and
+    $_.CommandLine -like "*$eduSyncPythonPath*" -and
+    $_.CommandLine -like '*app.main:app*'
+  } | Sort-Object Port -Unique)
+}
+
+function Invoke-EduPayAccessCodeMigration {
+  if (-not (Test-Path $eduPayAccessCodeMigrationPath)) {
+    throw "EduPay accessCode migration not found: $eduPayAccessCodeMigrationPath"
+  }
+
+  & pnpm exec prisma db execute --file $eduPayAccessCodeMigrationPath --schema prisma/schema.prisma
+}
+
 function Ensure-EduPayWebDependencies {
   if ($SkipInstall) {
     return
@@ -176,6 +246,35 @@ function Ensure-EduPayWebDependencies {
   Write-Step 'Installing missing EduPay web dependencies'
   Invoke-InDirectory -Path $eduPayWebPath -Script {
     & pnpm install
+  }
+}
+
+function Sync-EduPayApiRuntime {
+  if (Test-PortOpen -HostName '127.0.0.1' -Port 4000) {
+    Write-Host 'EduPay API already running; skipping Prisma runtime sync' -ForegroundColor Yellow
+    return
+  }
+
+  Write-Step 'Syncing EduPay API schema and Prisma client'
+  Invoke-InDirectory -Path $eduPayApiPath -Script {
+    $env:DATABASE_URL = $eduPayDatabaseUrl
+    Invoke-EduPayAccessCodeMigration
+    & pnpm exec prisma db push
+    & pnpm exec prisma generate
+    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+  }
+}
+
+function Sync-SavanexDatabase {
+  Write-Step 'Syncing SAVANEX database migrations'
+  Invoke-InDirectory -Path $savanexBackendPath -Script {
+    $env:DB_ENGINE = 'django.db.backends.sqlite3'
+    Remove-Item Env:DB_NAME -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_USER -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PASSWORD -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_HOST -ErrorAction SilentlyContinue
+    Remove-Item Env:DB_PORT -ErrorAction SilentlyContinue
+    & $savanexPythonPath manage.py migrate --noinput
   }
 }
 
@@ -194,12 +293,14 @@ const prisma = new PrismaClient();
     create: { id: "kcs-school", name: "Kinshasa Christian School" },
   });
   const passwordHash = await bcrypt.hash("password123", 10);
+  const accessCode = "ACC-ADM-KCS001";
   await prisma.user.upsert({
     where: { email: "admin@school.com" },
     update: {
       schoolId: school.id,
       fullName: "Admin User",
       role: "ADMIN",
+      accessCode,
       passwordHash,
     },
     create: {
@@ -207,6 +308,7 @@ const prisma = new PrismaClient();
       fullName: "Admin User",
       email: "admin@school.com",
       role: "ADMIN",
+      accessCode,
       passwordHash,
     },
   });
@@ -352,6 +454,9 @@ if ($databasePreparationMode -eq 'skipped-by-user') {
 }
 
 if ($databasePreparationMode -ne 'full') {
+  Sync-EduPayApiRuntime
+  Sync-SavanexDatabase
+
   Write-Step 'Checking EduPay school/admin seed'
   Ensure-EduPaySchoolAdmin
 }
@@ -374,6 +479,7 @@ if ($databasePreparationMode -eq 'full') {
   Write-Step 'Preparing EduPay database'
   Invoke-InDirectory -Path $eduPayApiPath -Script {
     $env:DATABASE_URL = $eduPayDatabaseUrl
+    Invoke-EduPayAccessCodeMigration
     if ($AllowEduPayDataLoss) {
       & pnpm exec prisma db push --accept-data-loss
     }
@@ -392,12 +498,14 @@ const prisma = new PrismaClient();
     create: { id: "kcs-school", name: "Kinshasa Christian School" },
   });
   const passwordHash = await bcrypt.hash("password123", 10);
+  const accessCode = "ACC-ADM-KCS001";
   await prisma.user.upsert({
     where: { email: "admin@school.com" },
     update: {
       schoolId: school.id,
       fullName: "Admin User",
       role: "ADMIN",
+      accessCode,
       passwordHash,
     },
     create: {
@@ -405,6 +513,7 @@ const prisma = new PrismaClient();
       fullName: "Admin User",
       email: "admin@school.com",
       role: "ADMIN",
+      accessCode,
       passwordHash,
     },
   });
@@ -440,7 +549,7 @@ if ([string]::IsNullOrWhiteSpace($orbitOrganizationId)) {
   throw 'Could not resolve the Orbit organization ID.'
 }
 
-$eduSyncApiPort = Resolve-PreferredPort -Name 'EduSync AI API' -PreferredPort $eduSyncPreferredApiPort -FallbackPorts @(8010, 8011, 8012)
+$eduSyncApiPort = Resolve-EduSyncApiPort -PreferredPort $eduSyncPreferredApiPort -FallbackPorts $eduSyncFallbackApiPorts
 $eduSyncApiUrl = "http://localhost:$eduSyncApiPort/api/v1"
 
 Write-Step 'Launching ecosystem services'
