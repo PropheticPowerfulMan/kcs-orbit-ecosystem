@@ -17,6 +17,8 @@ Set-Location $repoRoot
 $orbitPath = Join-Path $repoRoot 'kcs-orbit-api'
 $kcsNexusBackendPath = Join-Path $repoRoot 'KCS Nexus\backend'
 $kcsNexusFrontendPath = Join-Path $repoRoot 'KCS Nexus\frontend'
+$kcsSentinelBackendPath = Join-Path $repoRoot 'KCS Sentinel\backend'
+$kcsSentinelFrontendPath = Join-Path $repoRoot 'KCS Sentinel\frontend'
 $eduPayRootPath = Join-Path $repoRoot 'EduPay Smart System'
 $eduPayApiPath = Join-Path $eduPayRootPath 'apps\api'
 $eduPayWebPath = Join-Path $eduPayRootPath 'apps\web'
@@ -49,22 +51,28 @@ function Get-ConfigValue {
 $orbitDatabaseUrl = Get-ConfigValue -Name 'ORBIT_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
 $eduPayDatabaseUrl = Get-ConfigValue -Name 'EDUPAY_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'
 $orbitUrl = Get-ConfigValue -Name 'KCS_ORBIT_API_URL' -DefaultValue 'http://localhost:4500'
+$kcsNexusApiPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_API_PORT' -DefaultValue '5000')
+$kcsNexusFrontendPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_FRONTEND_PORT' -DefaultValue '5173')
+$kcsSentinelApiPort = [int](Get-ConfigValue -Name 'KCS_SENTINEL_API_PORT' -DefaultValue '5001')
+$kcsSentinelFrontendPort = [int](Get-ConfigValue -Name 'KCS_SENTINEL_FRONTEND_PORT' -DefaultValue '5176')
 $eduSyncPreferredApiPort = [int](Get-ConfigValue -Name 'EDUSYNC_AI_API_PORT' -DefaultValue '8000')
 $eduSyncApiPort = $eduSyncPreferredApiPort
 
 $integrationKeys = @{
   KcsNexus = Get-ConfigValue -Name 'KCS_NEXUS_INTEGRATION_KEY' -DefaultValue 'kcs-nexus-dev-key'
+  KcsSentinel = Get-ConfigValue -Name 'KCS_SENTINEL_INTEGRATION_KEY' -DefaultValue 'kcs-sentinel-dev-key'
   EduPay = Get-ConfigValue -Name 'EDUPAY_INTEGRATION_KEY' -DefaultValue 'edupay-dev-key'
   EduSyncAI = Get-ConfigValue -Name 'EDUSYNCAI_INTEGRATION_KEY' -DefaultValue 'edusyncai-dev-key'
   Savanex = Get-ConfigValue -Name 'SAVANEX_INTEGRATION_KEY' -DefaultValue 'savanex-dev-key'
 }
 
 $frontendUrls = @(
-  'http://localhost:5173/',
+  "http://localhost:$kcsNexusFrontendPort/",
   'http://localhost:5174/EduPay-Smart-System/',
   'http://localhost:5175/',
   'http://localhost:3000/Syst-me-de-gestion-scolaire/'
 )
+$kcsSentinelFrontendUrl = "http://localhost:$kcsSentinelFrontendPort/"
 
 function Write-Step {
   param([string]$Message)
@@ -176,6 +184,12 @@ function Assert-Path {
   if (-not (Test-Path $Path)) {
     throw "$Label not found: $Path"
   }
+}
+
+function Test-ProjectPath {
+  param([string]$Path)
+
+  return (Test-Path $Path) -and (Test-Path (Join-Path $Path 'package.json'))
 }
 
 function Invoke-InDirectory {
@@ -415,6 +429,38 @@ function Start-EduSyncBackend {
   Write-Host "Started EduSync AI Backend" -ForegroundColor Green
 }
 
+function Start-OptionalKcsSentinel {
+  $hasBackend = Test-ProjectPath -Path $kcsSentinelBackendPath
+  $hasFrontend = Test-ProjectPath -Path $kcsSentinelFrontendPath
+
+  if (-not $hasBackend -and -not $hasFrontend) {
+    Write-Host "KCS Sentinel not present; reserved future local ports API=$kcsSentinelApiPort, frontend=$kcsSentinelFrontendPort" -ForegroundColor DarkGray
+    return
+  }
+
+  Write-Step 'Launching optional KCS Sentinel services'
+  if ($hasBackend) {
+    Start-ServiceWindow -Title 'KCS Sentinel Backend' -Command (
+      "Set-Location '$kcsSentinelBackendPath'; " +
+      "`$env:PORT='$kcsSentinelApiPort'; " +
+      "`$env:FRONTEND_URL='http://localhost:$kcsSentinelFrontendPort'; " +
+      "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
+      "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.KcsSentinel)'; " +
+      "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
+      "npm run dev"
+    ) -Port $kcsSentinelApiPort -LogName 'kcs-sentinel-backend.log'
+  }
+
+  if ($hasFrontend -and -not $NoFrontends) {
+    Start-ServiceWindow -Title 'KCS Sentinel Frontend' -Command (
+      "Set-Location '$kcsSentinelFrontendPath'; " +
+      "`$env:VITE_API_URL='http://localhost:$kcsSentinelApiPort/api'; " +
+      "`$env:VITE_DEV_API_PROXY_TARGET='http://localhost:$kcsSentinelApiPort'; " +
+      "npm run dev -- --host 0.0.0.0 --port $kcsSentinelFrontendPort"
+    ) -Port $kcsSentinelFrontendPort -LogName 'kcs-sentinel-frontend.log'
+  }
+}
+
 if ($Restart) {
   Write-Step 'Stopping existing ecosystem services before restart'
   & powershell -ExecutionPolicy Bypass -File (Join-Path $repoRoot 'stop-ecosystem.ps1') -Force
@@ -583,11 +629,13 @@ Start-ServiceWindow -Title 'KCS Orbit API' -Command (
 
 Start-ServiceWindow -Title 'KCS Nexus Backend' -Command (
   "Set-Location '$kcsNexusBackendPath'; " +
+  "`$env:PORT='$kcsNexusApiPort'; " +
+  "`$env:FRONTEND_URL='http://localhost:$kcsNexusFrontendPort'; " +
   "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.KcsNexus)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "npm run dev"
-) -Port 5000 -LogName 'kcs-nexus-backend.log'
+) -Port $kcsNexusApiPort -LogName 'kcs-nexus-backend.log'
 
 Start-ServiceWindow -Title 'EduPay API' -Command (
   "Set-Location '$eduPayApiPath'; " +
@@ -619,8 +667,10 @@ Start-ServiceWindow -Title 'SAVANEX Backend' -Command (
 if (-not $NoFrontends) {
   Start-ServiceWindow -Title 'KCS Nexus Frontend' -Command (
     "Set-Location '$kcsNexusFrontendPath'; " +
-    "npm run dev -- --host 0.0.0.0 --port 5173"
-  ) -Port 5173 -LogName 'kcs-nexus-frontend.log'
+    "`$env:VITE_API_URL='http://localhost:$kcsNexusApiPort/api'; " +
+    "`$env:VITE_DEV_API_PROXY_TARGET='http://localhost:$kcsNexusApiPort'; " +
+    "npm run dev -- --host 0.0.0.0 --port $kcsNexusFrontendPort"
+  ) -Port $kcsNexusFrontendPort -LogName 'kcs-nexus-frontend.log'
 
   Start-ServiceWindow -Title 'EduPay Web' -Command (
     "Set-Location '$eduPayWebPath'; " +
@@ -641,19 +691,29 @@ if (-not $NoFrontends) {
   ) -Port 3000 -LogName 'savanex-frontend.log'
 }
 
+Start-OptionalKcsSentinel
+
 if (-not $NoWait) {
   Write-Step 'Waiting for local services'
   Wait-PortOpen -Name 'Orbit API' -Port 4500 | Out-Null
-  Wait-PortOpen -Name 'KCS Nexus API' -Port 5000 | Out-Null
+  Wait-PortOpen -Name 'KCS Nexus API' -Port $kcsNexusApiPort | Out-Null
   Wait-PortOpen -Name 'EduPay API' -Port 4000 | Out-Null
   Wait-PortOpen -Name 'EduSync AI API' -Port $eduSyncApiPort | Out-Null
   Wait-PortOpen -Name 'SAVANEX API' -Port 8001 | Out-Null
 
   if (-not $NoFrontends) {
-    Wait-PortOpen -Name 'KCS Nexus frontend' -Port 5173 | Out-Null
+    Wait-PortOpen -Name 'KCS Nexus frontend' -Port $kcsNexusFrontendPort | Out-Null
     Wait-PortOpen -Name 'EduPay web' -Port 5174 | Out-Null
     Wait-PortOpen -Name 'EduSync AI frontend' -Port 5175 | Out-Null
     Wait-PortOpen -Name 'SAVANEX frontend' -Port 3000 | Out-Null
+  }
+
+  if (Test-ProjectPath -Path $kcsSentinelBackendPath) {
+    Wait-PortOpen -Name 'KCS Sentinel API' -Port $kcsSentinelApiPort | Out-Null
+  }
+
+  if ((Test-ProjectPath -Path $kcsSentinelFrontendPath) -and -not $NoFrontends) {
+    Wait-PortOpen -Name 'KCS Sentinel frontend' -Port $kcsSentinelFrontendPort | Out-Null
   }
 
   Write-Step 'Synchronizing SAVANEX directory into Orbit'
@@ -681,8 +741,15 @@ if ($OpenBrowser -and -not $NoFrontends) {
 Write-Host ''
 Write-Host 'Ecosystem startup launched.' -ForegroundColor Green
 Write-Host 'Orbit API:           http://localhost:4500' -ForegroundColor Yellow
-Write-Host 'KCS Nexus API:       http://localhost:5000' -ForegroundColor Yellow
-Write-Host 'KCS Nexus frontend:  http://localhost:5173/' -ForegroundColor Yellow
+Write-Host "KCS Nexus API:       http://localhost:$kcsNexusApiPort" -ForegroundColor Yellow
+Write-Host "KCS Nexus frontend:  http://localhost:$kcsNexusFrontendPort/" -ForegroundColor Yellow
+if ((Test-ProjectPath -Path $kcsSentinelBackendPath) -or (Test-ProjectPath -Path $kcsSentinelFrontendPath)) {
+  Write-Host "KCS Sentinel API:    http://localhost:$kcsSentinelApiPort" -ForegroundColor Yellow
+  Write-Host "KCS Sentinel front:  $kcsSentinelFrontendUrl" -ForegroundColor Yellow
+}
+else {
+  Write-Host "KCS Sentinel:        not present yet; reserved API=$kcsSentinelApiPort, frontend=$kcsSentinelFrontendPort" -ForegroundColor DarkGray
+}
 Write-Host 'EduPay API:          http://localhost:4000' -ForegroundColor Yellow
 Write-Host 'EduPay web:          http://localhost:5174/EduPay-Smart-System/' -ForegroundColor Yellow
 Write-Host "EduSync AI API:      http://localhost:$eduSyncApiPort" -ForegroundColor Yellow

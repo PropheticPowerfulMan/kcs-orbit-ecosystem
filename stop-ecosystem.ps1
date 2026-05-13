@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $windowTitlePrefix = 'Ecosystem | '
-$servicePorts = @(3000, 4000, 4500, 5000, 5173, 5174, 5175, 8000, 8001, 8010, 8011, 8012)
+$servicePorts = @(3000, 4000, 4500, 5000, 5001, 5173, 5174, 5175, 5176, 8000, 8001, 8010, 8011, 8012)
 $stoppedItems = New-Object System.Collections.Generic.List[string]
 
 function Write-Step {
@@ -145,4 +145,4 @@ else {
 }
 
 Write-Host ''
-Write-Host 'Ports checked: 3000, 4000, 4500, 5000, 5173, 5174, 5175, 8000, 8001, 8010, 8011, 8012' -ForegroundColor Cyan
+Write-Host 'Ports checked: 3000, 4000, 4500, 5000, 5001, 5173, 5174, 5175, 5176, 8000, 8001, 8010, 8011, 8012' -ForegroundColor Cyan

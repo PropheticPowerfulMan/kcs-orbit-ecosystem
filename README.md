@@ -119,6 +119,9 @@ Option brutale si un process resiste:
 - EduSync AI frontend : `http://localhost:5175/`
 - SAVANEX API : `http://localhost:8001/`
 - SAVANEX frontend : `http://localhost:3000/Syst-me-de-gestion-scolaire/`
+- KCS Sentinel : pas encore present dans ce workspace. Les ports locaux sont reserves pour eviter un conflit avec KCS Nexus si le module est ajoute plus tard:
+  - API : `http://localhost:5001`
+  - frontend : `http://localhost:5176/`
 
 ## Notes pratiques
 
@@ -128,6 +131,8 @@ Option brutale si un process resiste:
 - En local, `SAVANEX` garantit un compte admin de test: `admin` / `admin123`.
 - `EduPay` et `Orbit` utilisent PostgreSQL local dans la procedure racine actuelle.
 - `EduSync AI` utilise `EDUSYNC_AI_API_PORT` si tu veux forcer un port precis.
+- `KCS Nexus` garde `KCS_NEXUS_API_PORT=5000` et `KCS_NEXUS_FRONTEND_PORT=5173` par defaut.
+- `KCS Sentinel`, lorsqu'il sera ajoute sous `KCS Sentinel/backend` et/ou `KCS Sentinel/frontend`, sera detecte automatiquement par le lanceur et utilisera `KCS_SENTINEL_API_PORT=5001` et `KCS_SENTINEL_FRONTEND_PORT=5176` par defaut.
 
 ## Documentation d'architecture
 

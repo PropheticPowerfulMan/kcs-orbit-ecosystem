@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const devApiProxyTarget = process.env.VITE_DEV_API_PROXY_TARGET || 'http://localhost:5000'
 
 const getBasePath = () => {
   if (process.env.VITE_BASE_PATH) {
@@ -35,7 +36,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: devApiProxyTarget,
         changeOrigin: true,
       },
     },
