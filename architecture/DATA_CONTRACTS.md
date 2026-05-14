@@ -47,13 +47,13 @@ Pour les appels machine-to-machine:
 Pour reduire les divergences entre SAVANEX, EduPay, KCS Nexus, EduSync AI et Orbit, le noyau canonique adopte les regles suivantes:
 
 - `student` expose toujours `firstName`, `lastName`, `fullName`, `studentNumber`, `email`, `phone`, `dateOfBirth`, `status`, `mustChangePassword`, `classId|className`, `parentId`, `organizationId`, `externalIds[]`
-- `parent` expose toujours `fullName`, `phone`, `email`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
+- `parent` expose toujours `fullName`, `phone`, `email`, `accessCode`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
 - `teacher` expose toujours `fullName`, `phone`, `email`, `subject`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName`, `employeeId`, `employeeType`, `department`, `jobTitle`
 - `studentNumber` represente l'identifiant visible par les utilisateurs; Orbit privilegie l'`externalId` de l'application proprietaire quand il existe
 - `externalIds[]` reste la source de verite transverse pour les correspondances inter-applications
 - `className` peut etre derive localement si seule une reference `classId` existe, mais le contrat partage doit l'exposer quand il est connu
-- les classes canoniques vont de `K1` a `K5`, puis de `Grade 1` a `Grade 12`; le suffixe `A`, `B`, `C`, etc. est optionnel et ne doit jamais remplacer le niveau de base
-- un mot de passe genere par le systeme reste local a l'application qui le cree; l'ecosysteme partage seulement `mustChangePassword`
+- les classes canoniques vont de `K3` a `K5`, puis de `Grade 1` a `Grade 12`; le suffixe `A`, `B`, `C`, etc. est optionnel et ne doit jamais remplacer le niveau de base
+- un mot de passe genere par le systeme reste local a l'application qui le cree; l'ecosysteme partage `accessCode` et `mustChangePassword` pour que chaque application puisse ouvrir l'espace concerne et demander ensuite un changement volontaire du mot de passe
 
 Cette normalisation permet de garder les modeles locaux existants tout en rendant la lecture transverse coherente.
 
@@ -294,8 +294,8 @@ Endpoints d'ecriture partages ajoutes pour les applications autorisees de l'ecos
 
 Regles appliquees:
 
-- `KCS_NEXUS`, `EDUSYNCAI` et `SAVANEX` peuvent creer ou supprimer ces entites via Orbit
-- `EDUPAY` est explicitement exclu de ce mecanisme d'ecriture
+- `KCS_NEXUS`, `EDUSYNCAI`, `SAVANEX` et `EDUPAY` peuvent creer ou supprimer ces entites via Orbit
+- quand `EDUPAY` cree une famille, le parent et les eleves sont d'abord inscrits dans Orbit puis synchronises dans le miroir local EduPay avec le code d'acces et l'etat `mustChangePassword`
 - l'`externalId` est genere automatiquement par Orbit pour l'application appelante
 - si une entite equivalente existe deja dans l'organisation, Orbit rejette la creation avec une reponse de conflit
 - si une entite est deja liee a plusieurs applications, Orbit rejette la suppression pour eviter une suppression transverse destructive

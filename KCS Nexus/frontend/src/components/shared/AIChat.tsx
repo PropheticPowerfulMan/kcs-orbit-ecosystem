@@ -115,7 +115,7 @@ const AIChat = () => {
       return "For tuition and fee information, please contact the school:\n• Email: kinshasachristianschool@gmail.com\n• Phone: +243 895 326 011"
     }
     if (q.includes('program') || q.includes('curriculum') || q.includes('grade')) {
-      return "KCS offers:\n• Kindergarten K1-K5: faith, readiness, and early learning\n• Elementary Grade 1-Grade 5: strong academic foundations and spiritual growth\n• Middle School Grade 6-Grade 8: academic growth, biblical principles, and character\n• High School Grade 9-Grade 12: rigorous academics and Christ-centered leadership preparation."
+      return "KCS offers:\n• Kindergarten K3-K5: faith, readiness, and early learning\n• Elementary Grade 1-Grade 5: strong academic foundations and spiritual growth\n• Middle School Grade 6-Grade 8: academic growth, biblical principles, and character\n• High School Grade 9-Grade 12: rigorous academics and Christ-centered leadership preparation."
     }
     return "Thank you for reaching out! For personalized assistance:\n• Visit our Contact page\n• Call: +243 895 326 011\n• Email: kinshasachristianschool@gmail.com\n• Address: Avenue de la Republique n° 1, Macampagne, Ngaliema, Kinshasa."
   }

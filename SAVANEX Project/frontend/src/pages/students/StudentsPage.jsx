@@ -44,7 +44,7 @@ const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').repla
 const modalBackdropClass = 'savanex-modal-backdrop fixed inset-0 z-[999] grid place-items-center overflow-y-auto px-4 py-8';
 const modalPanelClass = 'savanex-modal-panel w-full max-w-5xl overflow-y-auto p-5 sm:p-6';
 const standardClassLevels = [
-  'K1', 'K2', 'K3', 'K4', 'K5',
+  'K3', 'K4', 'K5',
   ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`),
 ];
 const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];

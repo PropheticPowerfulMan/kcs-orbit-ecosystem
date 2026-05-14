@@ -34,7 +34,7 @@ const programs = [
     image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=600&q=80',
     description: SCHOOL_DIVISIONS[0].description,
     subjects: ['Early Literacy', 'Early Numeracy', 'Bible & Chapel', 'Creative Play', 'Music & Movement', 'French Exposure'],
-    highlights: ['K1 through K5 progression', 'Play-based learning', 'Faith and character formation', 'Readiness for Grade 1', 'Close parent communication', 'Safe early-years routines'],
+    highlights: ['K3 through K5 progression', 'Play-based learning', 'Faith and character formation', 'Readiness for Grade 1', 'Close parent communication', 'Safe early-years routines'],
   },
   {
     id: 'elementary',
@@ -287,7 +287,7 @@ const AcademicsPage = () => {
                 Start Your Academic Journey at KCS
               </h2>
               <p className="text-kcs-blue-100 mb-8 max-w-xl mx-auto">
-                Applications are open from K1 through Grade 12. Join a community of learners who dare to excel.
+                Applications are open from K3 through Grade 12. Join a community of learners who dare to excel.
               </p>
               <Link to="/admissions" className="btn-gold inline-flex items-center gap-2 text-base px-8 py-4 rounded-2xl">
                 Apply Now <ArrowRight size={20} />

@@ -1,4 +1,4 @@
-export const KINDERGARTEN_LEVELS = ['K1', 'K2', 'K3', 'K4', 'K5'] as const
+export const KINDERGARTEN_LEVELS = ['K3', 'K4', 'K5'] as const
 
 export const GRADE_LEVELS = [
   'Grade 1',
@@ -21,8 +21,8 @@ export const SCHOOL_DIVISIONS = [
   {
     id: 'kindergarten',
     title: 'Kindergarten',
-    levels: 'K1-K5',
-    description: 'Early learning from K1 through K5 with faith, play, literacy, numeracy, and character formation.',
+    levels: 'K3-K5',
+    description: 'Early learning from K3 through K5 with faith, play, literacy, numeracy, and character formation.',
   },
   {
     id: 'elementary',

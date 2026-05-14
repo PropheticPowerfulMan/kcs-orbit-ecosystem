@@ -44,7 +44,7 @@ const AnimatedSection = ({ children, className = '' }: { children: React.ReactNo
 
 // ─── Stats Data ───────────────────────────────────────────────────────────────
 const stats = [
-  { value: 'K1-G12', label: 'Christian Education', icon: Users },
+  { value: 'K3-G12', label: 'Christian Education', icon: Users },
   { value: '17', label: 'Levels Offered', icon: Award },
   { value: '2', label: 'Official Phones', icon: Star },
   { value: 'DRC', label: 'Kinshasa Campus', icon: Globe },
@@ -270,7 +270,7 @@ const HomePage = () => {
                 <span className="text-gradient-blue">Programs</span>
               </h2>
               <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl mx-auto">
-                A comprehensive Christian education from K1 through Grade 12,
+                A comprehensive Christian education from K3 through Grade 12,
                 designed for academic growth, spiritual maturity, and strong moral character.
               </p>
             </motion.div>

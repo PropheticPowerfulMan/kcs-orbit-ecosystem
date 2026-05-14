@@ -17,8 +17,8 @@ export const globalFrenchText: PhraseMap = {
   'Academic Excellence': 'Excellence académique',
   'World-Class Academic': 'Programmes académiques',
   Programs: 'Programmes',
-  'A comprehensive Christian education from K1 through Grade 12, designed for academic growth, spiritual maturity, and strong moral character.':
-    'Une éducation chrétienne complète de K1 à la terminale, conçue pour la croissance académique, la maturité spirituelle et un caractère solide.',
+  'A comprehensive Christian education from K3 through Grade 12, designed for academic growth, spiritual maturity, and strong moral character.':
+    'Une éducation chrétienne complète de K3 à la terminale, conçue pour la croissance académique, la maturité spirituelle et un caractère solide.',
   Kindergarten: 'Maternelle',
   Elementary: 'Primaire',
   'Middle & High School': 'Collège et lycée',
@@ -150,8 +150,8 @@ export const globalFrenchText: PhraseMap = {
   'KCS offers 10+ College Board AP courses, giving high school students the opportunity to earn college credit while building the academic rigor needed for top universities.':
     'KCS propose plus de 10 cours AP du College Board, donnant aux lycéens l’occasion d’obtenir des crédits universitaires tout en développant la rigueur académique attendue par les meilleures universités.',
   'Start Your Academic Journey at KCS': 'Commencez votre parcours académique à KCS',
-  'Applications are open from K1 through Grade 12. Join a community of learners who dare to excel.':
-    'Les candidatures sont ouvertes de K1 à la terminale. Rejoignez une communauté d’apprenants qui osent viser l’excellence.',
+  'Applications are open from K3 through Grade 12. Join a community of learners who dare to excel.':
+    'Les candidatures sont ouvertes de K3 à la terminale. Rejoignez une communauté d’apprenants qui osent viser l’excellence.',
 
   'Contact KCS': 'Contacter KCS',
   "Let's Start A Conversation": 'Commençons une conversation',

@@ -244,7 +244,7 @@ const searchSuffixLabel = (section: typeof SEARCH_CLASS_SUFFIXES[number]) => {
 
 const getDivisionForGrade = (grade: string) => {
   return SCHOOL_DIVISIONS.find((division) => {
-    if (division.id === 'kindergarten') return ['K1', 'K2', 'K3', 'K4', 'K5', 'Kindergarten'].includes(grade)
+    if (division.id === 'kindergarten') return ['K3', 'K4', 'K5', 'Kindergarten'].includes(grade)
     if (division.id === 'elementary') return ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'].includes(grade)
     if (division.id === 'middle') return ['Grade 6', 'Grade 7', 'Grade 8'].includes(grade)
     return ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].includes(grade)
@@ -1418,7 +1418,7 @@ const AdminSectionView = ({
       updateDraftClass(gradeFilter)
     } else if (divisionFilter !== 'All') {
       const division = SCHOOL_DIVISIONS.find((item) => item.id === divisionFilter)
-      const firstGrade = division?.id === 'kindergarten' ? 'K1' : division?.id === 'elementary' ? 'Grade 1' : division?.id === 'middle' ? 'Grade 6' : division?.id === 'high' ? 'Grade 9' : 'Grade 1'
+      const firstGrade = division?.id === 'kindergarten' ? 'K3' : division?.id === 'elementary' ? 'Grade 1' : division?.id === 'middle' ? 'Grade 6' : division?.id === 'high' ? 'Grade 9' : 'Grade 1'
       updateDraftClass(firstGrade)
     }
     setShowCreateStudent((value) => !value)

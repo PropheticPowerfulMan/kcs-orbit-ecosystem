@@ -21,7 +21,7 @@ const Footer = () => {
   ]
 
   const programs = [
-    { to: '/academics#kindergarten', label: 'K1-K5' },
+    { to: '/academics#kindergarten', label: 'K3-K5' },
     { to: '/academics#elementary', label: 'Elementary' },
     { to: '/academics#middle', label: 'Middle School' },
     { to: '/academics#high', label: 'High School' },
@@ -192,7 +192,7 @@ const Footer = () => {
                   Accredited By
                 </p>
                 <p className="text-kcs-blue-200 text-sm font-medium">
-                  K1-K5, Grade 1-Grade 5, Grade 6-Grade 8, and Grade 9-Grade 12
+                  K3-K5, Grade 1-Grade 5, Grade 6-Grade 8, and Grade 9-Grade 12
                 </p>
                 <p className="text-kcs-blue-300 text-xs mt-1">
                   Faith-based learning with a biblical worldview

@@ -4,7 +4,7 @@ from datetime import date
 from .models import AcademicYear, Class, Level
 
 
-KINDERGARTEN_LEVELS = [f"K{number}" for number in range(1, 6)]
+KINDERGARTEN_LEVELS = [f"K{number}" for number in range(3, 6)]
 GRADE_LEVELS = [f"Grade {number}" for number in range(1, 13)]
 STANDARD_CLASS_LEVELS = KINDERGARTEN_LEVELS + GRADE_LEVELS
 SECTION_SUFFIXES = [chr(code) for code in range(ord("A"), ord("Z") + 1)]
@@ -14,7 +14,7 @@ def normalize_class_level(value: str) -> str:
     raw = (value or "").strip()
     compact = re.sub(r"\s+", " ", raw).upper()
 
-    kindergarten = re.fullmatch(r"K\s*([1-5])", compact)
+    kindergarten = re.fullmatch(r"K\s*([3-5])", compact)
     if kindergarten:
         return f"K{kindergarten.group(1)}"
 
@@ -22,7 +22,7 @@ def normalize_class_level(value: str) -> str:
     if grade:
         return f"Grade {int(grade.group(1))}"
 
-    raise ValueError("La classe doit etre comprise entre K1-K5 ou Grade 1-Grade 12.")
+    raise ValueError("La classe doit etre comprise entre K3-K5 ou Grade 1-Grade 12.")
 
 
 def normalize_class_suffix(value: str | None) -> str:

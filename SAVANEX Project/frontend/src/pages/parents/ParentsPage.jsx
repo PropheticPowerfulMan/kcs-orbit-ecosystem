@@ -16,7 +16,7 @@ const normalizeLabel = (value, fallback) => {
 
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const standardClassLevels = [
-  'K1', 'K2', 'K3', 'K4', 'K5',
+  'K3', 'K4', 'K5',
   ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`),
 ];
 const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];

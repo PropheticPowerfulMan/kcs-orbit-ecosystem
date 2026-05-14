@@ -59,7 +59,7 @@ const fr = {
     programs: {
       elementary: {
         title: 'Maternelle et primaire',
-        grades: 'K1-K5',
+        grades: 'K3-K5',
         desc: "Construire une base solide grâce à un apprentissage engageant, intégré à la foi.",
       },
       middle: {

@@ -62,7 +62,7 @@ const en = {
     programs: {
       elementary: {
         title: 'Elementary School',
-        grades: 'K1-K5',
+        grades: 'K3-K5',
         desc: 'Building a strong foundation through engaging, faith-integrated learning.',
       },
       middle: {
