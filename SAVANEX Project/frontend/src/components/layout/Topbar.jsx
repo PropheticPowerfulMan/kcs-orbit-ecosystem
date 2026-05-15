@@ -12,7 +12,7 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between border-b border-github-border bg-github-canvas/72 px-4 py-3 backdrop-blur-xl lg:px-8">
+    <header className="savanex-topbar sticky top-0 z-20 flex items-center justify-between border-b border-github-border bg-github-canvas/72 px-4 py-3 backdrop-blur-xl lg:px-8">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"

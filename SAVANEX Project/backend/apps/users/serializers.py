@@ -2,6 +2,7 @@ from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from secrets import randbelow
 from uuid import uuid4
 
 from .models import User
@@ -44,15 +45,7 @@ def _generate_unique_access_code(role: str) -> str:
 
 
 def generate_temporary_password(role: str) -> str:
-    prefix_map = {
-        User.ROLE_PARENT: 'PAR',
-        User.ROLE_STUDENT: 'STU',
-        User.ROLE_TEACHER: 'EMP',
-        User.ROLE_EMPLOYEE: 'EMP',
-        User.ROLE_ADMIN: 'ADM',
-    }
-    prefix = prefix_map.get(role, 'USR')
-    return f"KCS-{prefix}-{uuid4().hex[:4].upper()}-{uuid4().hex[:4].upper()}"
+    return f"KCS-{randbelow(1_000_000):06d}"
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

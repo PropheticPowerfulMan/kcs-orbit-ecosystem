@@ -85,7 +85,7 @@ const Sidebar = ({ role = 'admin', isOpen = false, isCollapsed = false, onClose 
   return (
     <>
       <aside className={`hidden shrink-0 lg:block ${isCollapsed ? 'w-24' : 'w-72'}`}>
-        <div className="flex h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-[1.75rem] border border-github-border bg-github-canvas/78 shadow-glass backdrop-blur-xl">
+        <div className="savanex-sidebar-panel flex h-[calc(100vh-2.5rem)] flex-col overflow-hidden rounded-[1.75rem] border border-github-border bg-github-canvas/78 shadow-glass backdrop-blur-xl">
           {navigation}
         </div>
       </aside>
@@ -99,7 +99,7 @@ const Sidebar = ({ role = 'admin', isOpen = false, isCollapsed = false, onClose 
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col border-r border-github-border bg-github-canvas/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:hidden ${
+        className={`savanex-sidebar-panel fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col border-r border-github-border bg-github-canvas/95 shadow-2xl backdrop-blur-xl transition-transform duration-300 lg:hidden ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Menu principal"

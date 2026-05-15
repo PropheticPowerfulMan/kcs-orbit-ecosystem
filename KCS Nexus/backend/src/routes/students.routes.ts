@@ -2,6 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomInt } from 'node:crypto'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
@@ -327,7 +328,7 @@ const createFamilySchema = z.object({
 })
 
 function generateTemporaryPassword(role: 'PAR' | 'STU' = 'STU') {
-  return `KCS-${role}-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+  return `KCS-${randomInt(0, 1_000_000).toString().padStart(6, '0')}`
 }
 
 function normalizeCreateStudentPayload(payload: unknown) {

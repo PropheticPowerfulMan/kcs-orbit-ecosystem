@@ -457,7 +457,7 @@ const StudentsPage = () => {
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Accès temporaires générés</p>
                   <h4 className="mt-1 font-display text-lg font-semibold text-slate-100">Mots de passe à remettre à la famille</h4>
-                  <p className="mt-1 text-xs text-slate-300">Format: KCS-ROLE-CODE-CODE. PAR = parent, STU = élève. Ce mot de passe sert seulement à la première connexion.</p>
+                  <p className="mt-1 text-xs text-slate-300">Format commun de l'écosystème: KCS-123456. Ce mot de passe sert seulement à la première connexion.</p>
                 </div>
                 <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
               </div>
@@ -623,25 +623,79 @@ const StudentsPage = () => {
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <input value={editForm.firstName} onChange={(event) => setEditField('firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                  <input value={editForm.lastName} onChange={(event) => setEditField('lastName', event.target.value)} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                  <input type="email" value={editForm.email} onChange={(event) => setEditField('email', event.target.value)} placeholder="Email" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                  <input type="date" value={editForm.dateOfBirth || ''} onChange={(event) => setEditField('dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                  <select value={editForm.classLevel} onChange={(event) => setEditField('classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
-                    <option value="">Classe non assignée</option>
-                    {standardClassLevels.map((level) => <option key={level} value={level}>{level}</option>)}
-                  </select>
-                  <select value={editForm.classSuffix} onChange={(event) => setEditField('classSuffix', event.target.value)} disabled={!editForm.classLevel} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue disabled:opacity-60">
-                    {classSuffixes.map((suffix) => <option key={suffix || 'none'} value={suffix}>{suffix ? `Suffixe ${suffix}` : 'Sans suffixe'}</option>)}
-                  </select>
-                  <select value={editForm.gender} onChange={(event) => setEditField('gender', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
-                    <option value="F">Fille</option>
-                    <option value="M">Garçon</option>
-                    <option value="O">Autre</option>
-                  </select>
-                  <input value={editForm.address} onChange={(event) => setEditField('address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                  <textarea value={editForm.notes} onChange={(event) => setEditField('notes', event.target.value)} placeholder="Notes" className="min-h-24 w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2 xl:col-span-4" />
+                <div className="space-y-4">
+                  <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Identité de l'élève</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Prénom
+                        <input value={editForm.firstName} onChange={(event) => setEditField('firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Nom / postnom
+                        <input value={editForm.lastName} onChange={(event) => setEditField('lastName', event.target.value)} placeholder="Nom ou postnom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Email élève
+                        <input type="email" value={editForm.email} onChange={(event) => setEditField('email', event.target.value)} placeholder="Email élève" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Date de naissance
+                        <input type="date" value={editForm.dateOfBirth || ''} onChange={(event) => setEditField('dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
+                    </div>
+                  </section>
+                  <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Classe et profil</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Niveau
+                        <select value={editForm.classLevel} onChange={(event) => setEditField('classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+                          <option value="">Classe non assignée</option>
+                          {standardClassLevels.map((level) => <option key={level} value={level}>{level}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Suffixe
+                        <select value={editForm.classSuffix} onChange={(event) => setEditField('classSuffix', event.target.value)} disabled={!editForm.classLevel} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue disabled:opacity-60">
+                          {classSuffixes.map((suffix) => <option key={suffix || 'none'} value={suffix}>{suffix ? `Suffixe ${suffix}` : 'Sans suffixe'}</option>)}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Genre
+                        <select value={editForm.gender} onChange={(event) => setEditField('gender', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
+                          <option value="F">Fille</option>
+                          <option value="M">Garçon</option>
+                          <option value="O">Autre</option>
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Adresse
+                        <input value={editForm.address} onChange={(event) => setEditField('address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
+                    </div>
+                  </section>
+                  <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Famille liée</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-xl bg-slate-950/55 p-3">
+                        <p className="text-xs text-slate-500">Parent responsable</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-100">{editingStudent.parent_name || 'Aucun parent lié'}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-950/55 p-3">
+                        <p className="text-xs text-slate-500">Téléphone</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-100">{editingStudent.parent_phone || 'Non renseigné'}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-950/55 p-3">
+                        <p className="text-xs text-slate-500">Email</p>
+                        <p className="mt-1 break-words text-sm font-semibold text-slate-100">{editingStudent.parent_email || 'Non renseigné'}</p>
+                      </div>
+                    </div>
+                  </section>
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Notes administratives
+                    <textarea value={editForm.notes} onChange={(event) => setEditField('notes', event.target.value)} placeholder="Notes" className="min-h-24 w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
                 </div>
 
                 {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}

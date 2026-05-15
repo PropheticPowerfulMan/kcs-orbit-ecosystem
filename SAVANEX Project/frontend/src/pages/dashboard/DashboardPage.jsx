@@ -27,7 +27,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { analyticsService } from '../../services/api';
+import { analyticsService, studentsService, teachersService } from '../../services/api';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import StatCard from '../../components/ui/StatCard';
 import SchoolLogo from '../../components/ui/SchoolLogo';
@@ -144,24 +144,54 @@ const entropy = (counts) => {
 
 const formatSigned = (value, digits = 2) => `${value > 0 ? '+' : ''}${value.toFixed(digits)}`;
 
+const normalizeLabel = (value, fallback) => {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim();
+  }
+
+  return fallback;
+};
+
+const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) => {
+  const visibleStudents = Array.isArray(studentRows) ? studentRows : [];
+  const visibleTeachers = Array.isArray(teacherRows) ? teacherRows : [];
+  const activeStudents = visibleStudents.filter((student) => student.is_active !== false);
+  const activeTeachers = visibleTeachers.filter((teacher) => teacher.is_active !== false && teacher.employment_status !== 'inactive');
+  const classes = new Set(
+    visibleStudents
+      .map((student) => normalizeLabel(student.class_name, ''))
+      .filter(Boolean)
+  );
+
+  return {
+    total_students: sources.students ? activeStudents.length : (overview?.total_students || 0),
+    total_teachers: sources.teachers ? activeTeachers.length : (overview?.total_teachers || 0),
+    total_classes: sources.students ? classes.size : (overview?.total_classes || 0),
+    attendance_rate_30d: overview?.attendance_rate_30d ?? 0,
+    average_grade: overview?.average_grade ?? 0,
+  };
+};
+
 const DashboardPage = () => {
   const { t } = useTranslation();
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const data = await analyticsService.getOverview();
-        setStats(data);
-      } catch {
-        setStats({
-          total_students: 0,
-          total_teachers: 0,
-          total_classes: 0,
-          attendance_rate_30d: 0,
-          average_grade: 0,
-        });
-      }
+      const [overviewResult, studentsResult, teachersResult] = await Promise.allSettled([
+        analyticsService.getOverview(),
+        studentsService.getAll(),
+        teachersService.getAll(),
+      ]);
+
+      const overview = overviewResult.status === 'fulfilled' ? overviewResult.value : null;
+      const studentRows = studentsResult.status === 'fulfilled' ? studentsResult.value : [];
+      const teacherRows = teachersResult.status === 'fulfilled' ? teachersResult.value : [];
+
+      setStats(buildDashboardStats(overview, studentRows, teacherRows, {
+        students: studentsResult.status === 'fulfilled',
+        teachers: teachersResult.status === 'fulfilled',
+      }));
     };
     load();
   }, []);

@@ -439,11 +439,46 @@ const ParentsPage = () => {
               <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border border-github-border px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/70">Fermer</button>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <input value={editForm.first_name} onChange={(event) => setEditForm({ ...editForm, first_name: event.target.value })} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-              <input value={editForm.last_name} onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-              <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} placeholder="Email" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue sm:col-span-2" />
-              <input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} placeholder="Téléphone" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue sm:col-span-2" />
+            <div className="mt-6 space-y-4">
+              <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Identité du parent</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Prénom
+                    <input value={editForm.first_name} onChange={(event) => setEditForm({ ...editForm, first_name: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Nom / postnom
+                    <input value={editForm.last_name} onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })} placeholder="Nom ou postnom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
+                </div>
+              </section>
+              <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Coordonnées</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Email
+                    <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Téléphone
+                    <input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
+                </div>
+              </section>
+              <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Enfants liés</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-slate-950/55 p-3">
+                    <p className="text-xs text-slate-500">Élèves</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">{editingParent.students_label || 'Aucun élève lié'}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-950/55 p-3">
+                    <p className="text-xs text-slate-500">Classes</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">{editingParent.classes_label || 'Non assignée'}</p>
+                  </div>
+                </div>
+              </section>
             </div>
 
             <div className="mt-6 flex justify-end gap-3">

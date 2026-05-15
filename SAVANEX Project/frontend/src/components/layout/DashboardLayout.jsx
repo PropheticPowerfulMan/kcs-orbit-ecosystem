@@ -21,7 +21,7 @@ const DashboardLayout = ({ children }) => {
   }, [isSidebarCollapsed]);
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-transparent lg:h-screen lg:overflow-hidden lg:gap-6 lg:px-5 lg:py-5 xl:px-6">
+    <div className="savanex-shell flex min-h-screen overflow-x-hidden bg-transparent lg:h-screen lg:overflow-hidden lg:gap-6 lg:px-5 lg:py-5 xl:px-6">
       <Sidebar
         role={role}
         isOpen={isSidebarOpen}
@@ -29,7 +29,7 @@ const DashboardLayout = ({ children }) => {
         onClose={() => setIsSidebarOpen(false)}
         onToggleCollapse={() => setIsSidebarCollapsed((current) => !current)}
       />
-      <div className="flex min-h-screen flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-github-border bg-github-panel/45 shadow-glass backdrop-blur-xl lg:h-[calc(100vh-2.5rem)] lg:min-h-0">
+      <div className="savanex-workspace flex min-h-screen flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-github-border bg-github-panel/45 shadow-glass backdrop-blur-xl lg:h-[calc(100vh-2.5rem)] lg:min-h-0">
         <Topbar
           onMenuClick={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}

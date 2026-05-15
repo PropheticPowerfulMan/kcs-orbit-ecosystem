@@ -173,12 +173,20 @@ type SharedDirectoryPayload = {
 }
 
 type AdminStudentEditForm = {
-  name: string
+  firstName: string
+  lastName: string
   studentNumber: string
   email: string
   grade: string
   section: string
   status: string
+}
+
+type AdminParentEditForm = {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
 }
 
 type AdminStudentDraft = {
@@ -197,13 +205,29 @@ const createAdminStudentDraft = (grade = 'Grade 1', section = ''): AdminStudentD
   email: '',
 })
 
+const splitPersonName = (value = '') => {
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' '),
+  }
+}
+
 const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminStudentEditForm => ({
-  name: student?.name ?? '',
+  firstName: splitPersonName(student?.name).firstName,
+  lastName: splitPersonName(student?.name).lastName,
   studentNumber: student?.studentNumber ?? '',
   email: student?.email ?? '',
   grade: student?.grade ?? 'Grade 1',
   section: student?.section ?? '',
   status: student?.status ?? 'Active',
+})
+
+const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
+  firstName: splitPersonName(parent?.name).firstName,
+  lastName: splitPersonName(parent?.name).lastName,
+  email: parent?.email === 'Email non renseigne' ? '' : (parent?.email ?? ''),
+  phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
 })
 
 type AdminAdmissionRequest = {
@@ -1077,7 +1101,7 @@ const AdminSectionView = ({
   const [selectedStaff, setSelectedStaff] = useState(staffSeed[0])
   const [selectedParent, setSelectedParent] = useState<AdminParentRecord | null>(null)
   const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
-  const [parentEditForm, setParentEditForm] = useState({ name: '', email: '', phone: '' })
+  const [parentEditForm, setParentEditForm] = useState<AdminParentEditForm>(() => createAdminParentEditForm(null))
   const [savingParentEdit, setSavingParentEdit] = useState(false)
   const [sentNotice, setSentNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
@@ -1265,7 +1289,7 @@ const AdminSectionView = ({
           .filter((credential: { temporaryPassword?: string }) => credential.temporaryPassword)
           .map((credential: { studentId: string; username: string; temporaryPassword: string }) => `${credential.studentId}: ${credential.username} / ${credential.temporaryPassword}`),
       ].filter(Boolean).join(' | ')
-      setStudentNotice(`Famille enregistrée avec ${finalRecords.length} élève(s). Accès temporaires: ${credentialSummary || 'déjà définis'}. Format: KCS-ROLE-CODE-CODE, PAR = parent, STU = élève, à changer à la première connexion.`)
+      setStudentNotice(`Famille enregistrée avec ${finalRecords.length} élève(s). Accès temporaires: ${credentialSummary || 'déjà définis'}. Format commun: KCS-123456, à changer à la première connexion.`)
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cette famille pour le moment.'))
       return
@@ -1289,9 +1313,9 @@ const AdminSectionView = ({
   const saveEditedStudent = async () => {
     if (!editingStudent) return
 
-    const normalizedName = studentEditForm.name.trim()
+    const normalizedName = `${studentEditForm.firstName} ${studentEditForm.lastName}`.trim()
     if (!normalizedName) {
-      setStudentNotice('Le nom complet est obligatoire pour enregistrer les modifications.')
+      setStudentNotice('Le prénom et le nom de l’élève sont obligatoires pour enregistrer les modifications.')
       return
     }
 
@@ -1302,10 +1326,9 @@ const AdminSectionView = ({
 
     setSavingStudentEdit(true)
     try {
-      const [firstName, ...lastNameParts] = normalizedName.split(/\s+/)
       const response = await studentsAPI.update(editingStudent.id, {
-        firstName,
-        lastName: lastNameParts.join(' ') || 'Student',
+        firstName: studentEditForm.firstName.trim(),
+        lastName: studentEditForm.lastName.trim() || 'Student',
         email: studentEditForm.email.trim() || undefined,
         studentNumber: studentEditForm.studentNumber.trim(),
         grade: studentEditForm.grade,
@@ -1350,29 +1373,24 @@ const AdminSectionView = ({
   const openEditParent = (parent: AdminParentRecord) => {
     setSelectedParent(null)
     setEditingParent(parent)
-    setParentEditForm({
-      name: parent.name,
-      email: parent.email === 'Email non renseigne' ? '' : parent.email,
-      phone: parent.phone === 'Telephone non renseigne' ? '' : parent.phone,
-    })
+    setParentEditForm(createAdminParentEditForm(parent))
     setParentNotice('')
   }
 
   const saveEditedParent = async () => {
     if (!editingParent) return
 
-    const normalizedName = parentEditForm.name.trim()
+    const normalizedName = `${parentEditForm.firstName} ${parentEditForm.lastName}`.trim()
     if (!normalizedName) {
-      setParentNotice('Le nom du parent est obligatoire pour enregistrer les modifications.')
+      setParentNotice('Le prénom et le nom du parent sont obligatoires pour enregistrer les modifications.')
       return
     }
 
-    const [firstName, ...lastNameParts] = normalizedName.split(/\s+/)
     setSavingParentEdit(true)
     try {
       const response = await registryAPI.updateEntity('parent', editingParent.id, {
-        firstName,
-        lastName: lastNameParts.join(' ') || 'Parent',
+        firstName: parentEditForm.firstName.trim(),
+        lastName: parentEditForm.lastName.trim() || 'Parent',
         email: parentEditForm.email.trim() || undefined,
         phone: parentEditForm.phone.trim() || null,
       }, editingParent.identifierType)
@@ -1702,10 +1720,33 @@ const AdminSectionView = ({
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-3">
-                <input value={parentEditForm.name} onChange={(event) => setParentEditForm((current) => ({ ...current, name: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom complet du parent" />
-                <input value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email" />
-                <input value={parentEditForm.phone} onChange={(event) => setParentEditForm((current) => ({ ...current, phone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Telephone" />
+              <div className="mt-5 space-y-4">
+                <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Prénom
+                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Nom / postnom
+                      <input value={parentEditForm.lastName} onChange={(event) => setParentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom ou postnom du parent" />
+                    </label>
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Coordonnées</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Email
+                      <input value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email du parent" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Téléphone
+                      <input value={parentEditForm.phone} onChange={(event) => setParentEditForm((current) => ({ ...current, phone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Téléphone du parent" />
+                    </label>
+                  </div>
+                </section>
               </div>
 
               <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -2038,19 +2079,68 @@ const AdminSectionView = ({
                 <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">Fermer</button>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <input value={studentEditForm.name} onChange={(event) => setStudentEditForm((current) => ({ ...current, name: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom complet" />
-                <input value={studentEditForm.studentNumber} onChange={(event) => setStudentEditForm((current) => ({ ...current, studentNumber: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Numéro d’élève" />
-                <input value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email" />
-                <select value={studentEditForm.grade} onChange={(event) => setStudentEditForm((current) => ({ ...current, grade: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                  {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
-                </select>
-                <select value={studentEditForm.section} onChange={(event) => setStudentEditForm((current) => ({ ...current, section: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                  {CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}
-                </select>
-                <select value={studentEditForm.status} onChange={(event) => setStudentEditForm((current) => ({ ...current, status: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                  {['Active', 'Inactive', 'Suspended'].map((status) => <option key={status}>{status}</option>)}
-                </select>
+              <div className="space-y-4">
+                <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Prénom
+                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Nom / postnom
+                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom ou postnom de l’élève" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
+                      Email élève
+                      <input value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email élève, optionnel" />
+                    </label>
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Classe et dossier</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Numéro d’élève
+                      <input value={studentEditForm.studentNumber} onChange={(event) => setStudentEditForm((current) => ({ ...current, studentNumber: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Numéro d’élève" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Statut
+                      <select value={studentEditForm.status} onChange={(event) => setStudentEditForm((current) => ({ ...current, status: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                        {['Active', 'Inactive', 'Suspended'].map((status) => <option key={status}>{status}</option>)}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Niveau
+                      <select value={studentEditForm.grade} onChange={(event) => setStudentEditForm((current) => ({ ...current, grade: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                        {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Suffixe / section
+                      <select value={studentEditForm.section} onChange={(event) => setStudentEditForm((current) => ({ ...current, section: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                        {CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liée</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
+                      <p className="text-xs text-gray-400">Parent responsable</p>
+                      <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parent || 'Aucun parent lié'}</p>
+                    </div>
+                    <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
+                      <p className="text-xs text-gray-400">Téléphone</p>
+                      <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentPhone || 'Non renseigné'}</p>
+                    </div>
+                    <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
+                      <p className="text-xs text-gray-400">Email</p>
+                      <p className="mt-1 break-words font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentEmail || 'Non renseigné'}</p>
+                    </div>
+                  </div>
+                </section>
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
