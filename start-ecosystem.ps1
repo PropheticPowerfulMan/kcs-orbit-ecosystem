@@ -50,6 +50,7 @@ function Get-ConfigValue {
 
 $orbitDatabaseUrl = Get-ConfigValue -Name 'ORBIT_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
 $eduPayDatabaseUrl = Get-ConfigValue -Name 'EDUPAY_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'
+$eduPayReceiptVerificationUrl = Get-ConfigValue -Name 'EDUPAY_RECEIPT_VERIFICATION_URL' -DefaultValue 'https://edupay-web.onrender.com/EduPay-Smart-System/'
 $orbitUrl = Get-ConfigValue -Name 'KCS_ORBIT_API_URL' -DefaultValue 'http://localhost:4500'
 $kcsNexusApiPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_API_PORT' -DefaultValue '5000')
 $kcsNexusFrontendPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_FRONTEND_PORT' -DefaultValue '5173')
@@ -675,6 +676,7 @@ if (-not $NoFrontends) {
   Start-ServiceWindow -Title 'EduPay Web' -Command (
     "Set-Location '$eduPayWebPath'; " +
     "`$env:VITE_API_BASE_URL='http://localhost:4000'; " +
+    "`$env:VITE_RECEIPT_VERIFICATION_BASE_URL='$eduPayReceiptVerificationUrl'; " +
     "pnpm dev -- --host 0.0.0.0 --port 5174"
   ) -Port 5174 -LogName 'edupay-web.log'
 
