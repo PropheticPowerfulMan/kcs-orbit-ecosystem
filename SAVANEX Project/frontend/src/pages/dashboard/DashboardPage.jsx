@@ -143,6 +143,7 @@ const entropy = (counts) => {
 };
 
 const formatSigned = (value, digits = 2) => `${value > 0 ? '+' : ''}${value.toFixed(digits)}`;
+const formatNullable = (value, suffix = '') => value === null || value === undefined ? 'N/A' : `${value}${suffix}`;
 
 const normalizeLabel = (value, fallback) => {
   if (typeof value === 'string' && value.trim()) {
@@ -168,7 +169,8 @@ const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) =
     total_teachers: sources.teachers ? activeTeachers.length : (overview?.total_teachers || 0),
     total_classes: sources.students ? classes.size : (overview?.total_classes || 0),
     attendance_rate_30d: overview?.attendance_rate_30d ?? 0,
-    average_grade: overview?.average_grade ?? 0,
+    average_grade: overview?.average_grade ?? null,
+    data_quality: overview?.data_quality || null,
   };
 };
 
@@ -197,14 +199,14 @@ const DashboardPage = () => {
   }, []);
 
   const science = useMemo(() => {
-    const gradeValues = students.map((student) => student.average);
+    const gradeValues = students.map((student) => student.average * 5);
     const attendanceValues = students.map((student) => student.attendance);
     const parentEngagementValues = parents.map((parent) => parent.engagement);
     const parentMeetingValues = parents.map((parent) => parent.meetings);
     const teacherCompletionValues = teachers.map((teacher) => teacher.completion);
     const teacherSatisfactionValues = teachers.map((teacher) => teacher.satisfaction);
     const teacherLoadValues = teachers.map((teacher) => Number.parseInt(teacher.load, 10));
-    const monthlyGradeValues = monthlyPerformance.map((item) => item.grades);
+    const monthlyGradeValues = monthlyPerformance.map((item) => item.grades * 5);
     const monthlyAttendanceValues = monthlyPerformance.map((item) => item.attendance);
     const monthIndexes = monthlyPerformance.map((_, index) => index + 1);
     const riskStudents = students.filter((student) => student.risk === 'High').length;
@@ -228,7 +230,7 @@ const DashboardPage = () => {
     const interventionIndex = Math.round((riskStudents * 100 + mediumRisk * 45) / students.length);
     const coverageIndex = mean([advancedMetrics.curriculumCompletion, avgAttendance, advancedMetrics.parentEngagement]);
     const financeRisk = financeSignals.find((signal) => signal.label === 'En retard')?.value || 0;
-    const passRate = (students.filter((student) => student.average >= 10).length / students.length) * 100;
+    const passRate = (students.filter((student) => (student.average * 5) >= 75).length / students.length) * 100;
     const absenteeismPressure = (students.filter((student) => student.attendance < 80).length / students.length) * 100;
     const riskEntropy = entropy([students.filter((student) => student.risk === 'Low').length, mediumRisk, riskStudents]);
     const parentGini = giniCoefficient(parentEngagementValues);
@@ -253,7 +255,7 @@ const DashboardPage = () => {
 
     const anomalyStudents = students
       .map((student) => {
-        const gradeZ = gradeStd ? (student.average - avgGrade) / gradeStd : 0;
+        const gradeZ = gradeStd ? ((student.average * 5) - avgGrade) / gradeStd : 0;
         const attendanceZ = attendanceStd ? (student.attendance - avgAttendance) / attendanceStd : 0;
         const anomalyScore = Math.abs(Math.min(attendanceZ, 0)) + Math.abs(Math.min(gradeZ, 0));
 
@@ -278,7 +280,7 @@ const DashboardPage = () => {
         };
 
         current.students.push(student);
-        current.grades.push(student.average);
+        current.grades.push(student.average * 5);
         current.attendance.push(student.attendance);
         current.trend.push(Number.parseFloat(student.trend));
         current.riskLoad += riskWeights[student.risk];
@@ -316,7 +318,7 @@ const DashboardPage = () => {
       {
         label: 'Intervalle de confiance 95%',
         value: `±${ci95.toFixed(2)}`,
-        detail: `Autour d'une moyenne de ${avgGrade.toFixed(2)}/20`,
+        detail: `Autour d'une moyenne excellence de ${avgGrade.toFixed(2)}%`,
       },
       {
         label: 'Entropie du risque',
@@ -387,7 +389,7 @@ const DashboardPage = () => {
   const academicScatter = students.map((student) => ({
     name: student.name,
     attendance: student.attendance,
-    average: student.average,
+    average: student.average * 5,
     risk: student.risk,
   }));
 
@@ -410,7 +412,7 @@ const DashboardPage = () => {
   const scientificCards = [
     {
       title: 'Médiane académique',
-      value: `${science.gradeMedian.toFixed(2)}/20`,
+      value: `${science.gradeMedian.toFixed(2)}%`,
       subtitle: `Q1 ${science.q1Grade.toFixed(1)} · Q3 ${science.q3Grade.toFixed(1)}`,
       accent: 'text-fuchsia-300',
     },
@@ -423,7 +425,7 @@ const DashboardPage = () => {
     {
       title: 'Taux de reussite',
       value: `${science.passRate.toFixed(1)}%`,
-      subtitle: 'Élèves >= 10/20',
+      subtitle: 'Élèves >= 75% excellence',
       accent: 'text-emerald-300',
     },
     {
@@ -434,7 +436,7 @@ const DashboardPage = () => {
     },
     {
       title: 'Projection prochaine periode',
-      value: `${science.forecastGrade.toFixed(2)}/20`,
+      value: `${science.forecastGrade.toFixed(2)}%`,
       subtitle: `Pente ${formatSigned(science.monthlyGradeSlope, 2)} / mois`,
       accent: 'text-cyan-300',
     },
@@ -457,6 +459,7 @@ const DashboardPage = () => {
       accent: 'text-teal-300',
     },
   ];
+  const dataQuality = stats?.data_quality;
 
   return (
     <DashboardLayout>
@@ -479,12 +482,36 @@ const DashboardPage = () => {
         <StatCard title={t('dashboard.students')} value={stats?.total_students ?? '-'} accent="text-cyan-300" />
         <StatCard title={t('dashboard.teachers')} value={stats?.total_teachers ?? '-'} accent="text-teal-300" />
         <StatCard title={t('dashboard.classes')} value={stats?.total_classes ?? '-'} accent="text-emerald-300" />
-        <StatCard title={t('dashboard.attendanceRate')} value={`${stats?.attendance_rate_30d ?? '-'}%`} accent="text-amber-300" />
-        <StatCard title="Indice d'intervention" value={`${science.interventionIndex}%`} subtitle="Priorité élèves" accent="text-rose-300" />
+        <StatCard title={t('dashboard.attendanceRate')} value={formatNullable(stats?.attendance_rate_30d, '%')} accent="text-amber-300" />
+        <StatCard title="Moyenne excellence" value={formatNullable(stats?.average_grade, '%')} subtitle={stats?.average_classical_equivalent_percentage === null || stats?.average_classical_equivalent_percentage === undefined ? `${dataQuality?.grade_records || 0} note(s) vérifiée(s)` : `Équiv. classique ${stats.average_classical_equivalent_percentage}%`} accent="text-rose-300" />
       </section>
 
+      {dataQuality ? (
+        <>
+          <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Données de présence" value={dataQuality.attendance_records_30d} subtitle="Enregistrements des 30 derniers jours" accent="text-cyan-300" />
+            <StatCard title="Données de notes" value={dataQuality.grade_records} subtitle="Notes réelles sur 100% d'excellence" accent="text-orange-300" />
+            <StatCard title="Présence calculable" value={dataQuality.attendance_rate_is_available ? 'Oui' : 'Non'} subtitle="Aucune valeur artificielle si vide" accent="text-emerald-300" />
+            <StatCard title="Moyenne calculable" value={dataQuality.average_grade_is_available ? 'Oui' : 'Non'} subtitle="Basée uniquement sur les vraies notes" accent="text-teal-300" />
+          </section>
+
+          <section className="card p-5">
+            <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Cohérence scientifique</p>
+            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Statistiques basées sur les données réelles de l'écosystème</h3>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {(dataQuality.notes || []).map((note) => (
+                <p key={note} className="rounded-xl border border-github-border bg-slate-950/45 p-3 text-sm text-slate-300">{note}</p>
+              ))}
+              <p className="rounded-xl border border-github-border bg-slate-950/45 p-3 text-sm text-slate-300">
+                Les graphiques scientifiques de démonstration sont masqués en mode données réelles tant que les séries historiques complètes ne sont pas disponibles.
+              </p>
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Moyenne académique" value={`${science.avgGrade.toFixed(1)}/20`} subtitle={`Écart-type ${science.gradeStd.toFixed(2)}`} accent="text-orange-300" />
+        <StatCard title="Moyenne excellence" value={`${science.avgGrade.toFixed(1)}%`} subtitle={`Écart-type ${science.gradeStd.toFixed(2)}`} accent="text-orange-300" />
         <StatCard title="Engagement parents" value={`${science.parentEngagement.toFixed(1)}%`} subtitle={`${science.averageMeetings.toFixed(1)} réunions en moyenne`} accent="text-emerald-300" />
         <StatCard title="Couverture pédagogique" value={`${science.coverageIndex.toFixed(1)}%`} subtitle="Présence + programme + parents" accent="text-cyan-300" />
         <StatCard title="Risque financier" value={`${science.financeRisk}%`} subtitle="Paiements en retard" accent="text-amber-300" />
@@ -553,7 +580,7 @@ const DashboardPage = () => {
               <ScatterChart>
                 <CartesianGrid stroke="rgba(148,163,184,0.14)" />
                 <XAxis dataKey="attendance" name="Presence" unit="%" stroke="#94a3b8" />
-                <YAxis dataKey="average" name="Moyenne" unit="/20" stroke="#94a3b8" />
+                <YAxis dataKey="average" name="Moyenne excellence" unit="%" stroke="#94a3b8" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={chartTooltip} />
                 <Scatter data={academicScatter} fill="#22d3ee">
                   {academicScatter.map((entry) => (
@@ -634,7 +661,7 @@ const DashboardPage = () => {
               <LineChart data={science.controlChartData}>
                 <CartesianGrid stroke="rgba(148,163,184,0.14)" />
                 <XAxis dataKey="month" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" domain={[12, 17]} />
+                <YAxis stroke="#94a3b8" domain={[50, 100]} />
                 <Tooltip contentStyle={chartTooltip} />
                 <Legend />
                 <ReferenceLine y={science.monthlyGradeMean} stroke="#94a3b8" strokeDasharray="4 4" />
@@ -697,7 +724,7 @@ const DashboardPage = () => {
               La corrélation présence / notes est <span className="font-metric text-cyan-200">{science.gradeCorrelation.toFixed(2)}</span>, ce qui confirme un lien mesurable entre assiduité et performance.
             </p>
             <p className="rounded-xl border border-github-border bg-slate-950/45 p-3">
-              La moyenne projetée au prochain cycle est <span className="font-metric text-emerald-200">{science.forecastGrade.toFixed(2)}/20</span>, avec une présence attendue de <span className="font-metric text-sky-200">{science.forecastAttendance.toFixed(1)}%</span>.
+              La moyenne excellence projetée au prochain cycle est <span className="font-metric text-emerald-200">{science.forecastGrade.toFixed(2)}%</span>, avec une présence attendue de <span className="font-metric text-sky-200">{science.forecastAttendance.toFixed(1)}%</span>.
             </p>
             <p className="rounded-xl border border-github-border bg-slate-950/45 p-3">
               L'inégalité d'engagement des parents est de <span className="font-metric text-fuchsia-200">{science.parentGini.toFixed(2)}</span>; il faut concentrer les relances sur les familles les moins présentes.
@@ -741,7 +768,7 @@ const DashboardPage = () => {
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
                     <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">Presence {student.attendance}%</p>
-                    <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">Moy. {student.average}/20</p>
+                    <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">Moy. {(student.average * 5).toFixed(0)}%</p>
                     <p className="rounded-xl bg-slate-900/80 p-2 text-slate-300">Trend {student.trend}</p>
                   </div>
                 </div>
@@ -803,6 +830,8 @@ const DashboardPage = () => {
           </article>
         ))}
       </section>
+        </>
+      )}
     </DashboardLayout>
   );
 };

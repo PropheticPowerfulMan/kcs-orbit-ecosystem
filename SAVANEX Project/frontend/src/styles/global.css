@@ -119,6 +119,40 @@ body {
   min-height: 100vh;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.48) rgba(2, 6, 23, 0.34);
+}
+
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+*::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(2, 6, 23, 0.38)),
+    rgba(2, 6, 23, 0.28);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid rgba(2, 6, 23, 0.38);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(125, 211, 252, 0.9), rgba(34, 211, 238, 0.56) 48%, rgba(52, 211, 153, 0.64)),
+    rgba(34, 211, 238, 0.54);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    0 0 18px rgba(34, 211, 238, 0.16);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(180deg, rgba(186, 230, 253, 0.96), rgba(56, 189, 248, 0.72) 48%, rgba(110, 231, 183, 0.78)),
+    rgba(34, 211, 238, 0.7);
+}
+
 .card {
   @apply rounded-2xl border border-github-border bg-github-panel/70 shadow-glass backdrop-blur-xl;
   position: relative;
@@ -255,6 +289,65 @@ body {
     0 0 0 1px rgba(88, 166, 255, 0.06);
   backdrop-filter: blur(24px) saturate(1.22);
   -webkit-backdrop-filter: blur(24px) saturate(1.22);
+}
+
+.savanex-family-launcher {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(186, 230, 253, 0.26) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(15, 23, 42, 0.5) 46%, rgba(14, 165, 216, 0.12)),
+    rgba(2, 6, 23, 0.42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(125, 211, 252, 0.08),
+    0 22px 54px rgba(1, 4, 9, 0.42),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
+}
+
+.savanex-family-modal {
+  border-color: rgba(186, 230, 253, 0.28);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.16), rgba(15, 23, 42, 0.48) 40%, rgba(14, 165, 216, 0.13)),
+    rgba(2, 6, 23, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 30px 90px rgba(1, 4, 9, 0.68),
+    0 0 0 1px rgba(34, 211, 238, 0.1),
+    0 0 52px rgba(14, 165, 216, 0.08);
+  backdrop-filter: blur(36px) saturate(1.42);
+  -webkit-backdrop-filter: blur(36px) saturate(1.42);
+}
+
+.savanex-family-modal input,
+.savanex-family-modal select,
+.savanex-family-modal textarea {
+  border-color: rgba(186, 230, 253, 0.18) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(2, 6, 23, 0.42)),
+    rgba(2, 6, 23, 0.42) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 28px rgba(1, 4, 9, 0.18);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+
+.savanex-family-modal input:focus,
+.savanex-family-modal select:focus,
+.savanex-family-modal textarea:focus {
+  border-color: rgba(34, 211, 238, 0.72) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 0 3px rgba(34, 211, 238, 0.14),
+    0 14px 34px rgba(14, 165, 216, 0.14);
+}
+
+.savanex-family-modal section,
+.savanex-family-modal .rounded-2xl,
+.savanex-family-modal .rounded-xl {
+  border-color: rgba(186, 230, 253, 0.16);
 }
 
 .savanex-modal-panel::before {

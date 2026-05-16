@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.users.models import User
 from .models import Message, Notification
 
 
@@ -24,6 +25,13 @@ class MessageCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['receiver', 'subject', 'body', 'parent_message']
+
+    def validate_receiver(self, receiver):
+        if receiver.role != User.ROLE_PARENT:
+            raise serializers.ValidationError('External communications must be addressed to a parent account.')
+        if not receiver.email and not receiver.phone:
+            raise serializers.ValidationError('This parent has no email or phone number.')
+        return receiver
 
     def create(self, validated_data):
         validated_data['sender'] = self.context['request'].user

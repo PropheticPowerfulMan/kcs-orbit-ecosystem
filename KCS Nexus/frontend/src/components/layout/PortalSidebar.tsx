@@ -231,7 +231,7 @@ const PortalSidebar = () => {
   return (
     <>
       <div className="fixed inset-x-0 top-0 z-50 px-3 pt-3 lg:hidden">
-        <div className="flex h-14 items-center justify-between rounded-[28px] border border-white/70 bg-white/95 px-3 shadow-lg shadow-kcs-blue-950/5 backdrop-blur-md dark:border-kcs-blue-800/80 dark:bg-kcs-blue-950/95">
+        <div className="nexus-glass-rail flex h-14 items-center justify-between rounded-[28px] border px-3">
         <Link to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full kcs-gradient shadow-kcs ring-4 ring-white dark:ring-kcs-blue-900">
             <span className="font-display text-sm font-bold text-white">KCS</span>
@@ -277,7 +277,7 @@ const PortalSidebar = () => {
             onClick={() => setSidebarOpen(false)}
           >
             <motion.aside
-              className="flex max-h-[calc(100dvh-88px)] w-[min(88vw,360px)] flex-col overflow-hidden rounded-[30px] border border-white/80 bg-white shadow-2xl shadow-kcs-blue-950/20 dark:border-kcs-blue-800/80 dark:bg-kcs-blue-950"
+              className="nexus-glass-rail flex max-h-[calc(100dvh-88px)] w-[min(88vw,360px)] flex-col overflow-hidden rounded-[30px] border"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -285,7 +285,7 @@ const PortalSidebar = () => {
               onClick={(event) => event.stopPropagation()}
             >
               <div className="border-b border-gray-100 p-3 dark:border-kcs-blue-800">
-                <div className="rounded-[24px] bg-gray-50 p-3 dark:bg-kcs-blue-900/35">
+                <div className="rounded-[24px] border border-white/70 bg-white/60 p-3 shadow-inner shadow-white/40 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/40 dark:shadow-none">
                 <div className="flex items-center gap-3">
                   <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${roleColor} text-sm font-bold text-white ring-4 ring-white dark:ring-kcs-blue-950`}>
                     {user.firstName?.[0]}{user.lastName?.[0]}
@@ -314,7 +314,7 @@ const PortalSidebar = () => {
       initial={{ width: 0, opacity: 0 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="sticky top-0 z-30 hidden h-screen flex-col overflow-hidden border-r border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-950 lg:flex"
+      className="nexus-glass-rail sticky top-0 z-30 hidden h-screen flex-col overflow-hidden border-r lg:flex"
     >
       {/* Logo */}
       <div className="p-4 border-b border-gray-100 dark:border-kcs-blue-800">
@@ -355,8 +355,8 @@ const PortalSidebar = () => {
       </div>
 
       {/* User Profile */}
-      <div className={`p-4 border-b border-gray-100 dark:border-kcs-blue-800 ${sidebarCollapsed ? 'items-center' : ''}`}>
-        <div className={`flex items-center gap-3 ${sidebarCollapsed ? 'justify-center' : ''}`}>
+      <div className={`border-b border-white/60 p-4 dark:border-white/10 ${sidebarCollapsed ? 'items-center' : ''}`}>
+        <div className={`flex items-center gap-3 rounded-[22px] border border-white/60 bg-white/50 p-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/30 ${sidebarCollapsed ? 'justify-center' : ''}`}>
           <div className={`w-10 h-10 rounded-xl ${roleColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
             {user.firstName?.[0]}{user.lastName?.[0]}
           </div>

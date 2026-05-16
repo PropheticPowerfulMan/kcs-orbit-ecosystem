@@ -9,6 +9,7 @@ from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.analytics_service import analytics_service
 from app.services.chatbot_service import chatbot_service
+from app.services.ecosystem_context_service import ecosystem_context_service
 
 
 router = APIRouter(prefix="/chat", tags=["AI Chatbot"])
@@ -23,6 +24,7 @@ def query_bot(
     started = time.perf_counter()
     context = payload.context or {}
     context.setdefault("department", current_user.department)
+    context["ecosystem_context"] = ecosystem_context_service.build(db, current_user)
 
     response = chatbot_service.process_message(payload.message, context)
 

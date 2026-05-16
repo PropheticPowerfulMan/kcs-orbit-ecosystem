@@ -1,10 +1,9 @@
-from django.db.models import Avg, F, FloatField, Sum
-from django.db.models.functions import Cast
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from apps.integration.orbit import sync_grade
+from apps.intelligence.services import observe_grade, observe_report_card
 from .models import Grade, ReportCard
 from .serializers import GradeSerializer, ReportCardSerializer
 from apps.users.permissions import IsTeacherOrAdmin
@@ -22,6 +21,7 @@ class GradeListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         grade = serializer.save(entered_by=self.request.user)
         sync_grade(grade)
+        observe_grade(grade, actor=self.request.user)
 
 
 class GradeDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -34,6 +34,7 @@ class GradeDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         grade = serializer.save()
         sync_grade(grade)
+        observe_grade(grade, actor=self.request.user)
 
 
 class ReportCardListCreateView(generics.ListCreateAPIView):
@@ -62,16 +63,18 @@ def generate_report_card(request):
     total_weights = 0.0
 
     for grade in grades:
-        normalized = grade.normalized_score
+        excellence = grade.excellence_percentage
         weight = float(grade.weight) * float(grade.class_subject.subject.coefficient)
-        weighted_sum += normalized * weight
+        weighted_sum += excellence * weight
         total_weights += weight
 
         subject_summaries.append({
             'subject': grade.class_subject.subject.name,
             'score': float(grade.score),
             'max_score': float(grade.max_score),
-            'normalized_score': normalized,
+            'excellence_percentage': excellence,
+            'classical_equivalent_percentage': grade.classical_equivalent_percentage,
+            'normalized_score': grade.normalized_score,
             'weight': float(grade.weight),
         })
 
@@ -86,5 +89,6 @@ def generate_report_card(request):
             'data': {'subjects': subject_summaries},
         },
     )
+    observe_report_card(report)
 
     return Response(ReportCardSerializer(report).data, status=status.HTTP_201_CREATED)

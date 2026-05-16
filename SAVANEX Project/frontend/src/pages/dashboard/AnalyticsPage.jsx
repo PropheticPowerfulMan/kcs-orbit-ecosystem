@@ -28,7 +28,7 @@ const AnalyticsPage = () => {
   const columns = [
     { key: 'student_name', label: t('analytics.student') },
     { key: 'attendance_rate', label: t('analytics.attendanceRate'), render: (v) => `${v}%` },
-    { key: 'average_normalized', label: t('analytics.average'), render: (v) => `${v}/20` },
+    { key: 'average_excellence_percentage', label: t('analytics.average'), render: (v, row) => v === null || v === undefined ? 'N/A' : `${v}% excellence` },
     { key: 'risk_flags', label: t('analytics.flags'), render: (v) => v.join(', ') },
   ];
 
@@ -119,7 +119,7 @@ const AnalyticsPage = () => {
         <article className="card p-5">
           <h3 className="font-display text-lg font-semibold text-slate-100">Plan d'intervention recommande</h3>
           <div className="mt-4 space-y-3">
-            {['Prioriser les élèves cumulant présence < 75% et moyenne < 10/20.', 'Déclencher une relance parent automatique si engagement < 60%.', 'Rééquilibrer les enseignants au-dessus de 28h de charge hebdomadaire.', 'Comparer les classes à risque avec les retards de paiement pour détecter les contraintes familiales.'].map((item, index) => (
+            {['Prioriser les élèves cumulant présence < 75% et moyenne excellence < 75%.', 'Déclencher une relance parent automatique si engagement < 60%.', 'Rééquilibrer les enseignants au-dessus de 28h de charge hebdomadaire.', 'Comparer les classes à risque avec les retards de paiement pour détecter les contraintes familiales.'].map((item, index) => (
               <div key={item} className="flex gap-3 rounded-2xl border border-github-border bg-slate-950/40 p-4">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-kcs-blue/20 text-sm font-bold text-cyan-200">{index + 1}</span>
                 <p className="text-sm text-slate-300">{item}</p>

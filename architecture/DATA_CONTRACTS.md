@@ -225,6 +225,42 @@ Destination: KCS Orbit API
 }
 ```
 
+### NexusAcademicSignal
+
+Source: KCS Nexus / Nexus AI  
+Destination: SAVANEX Intelligence
+
+Ce contrat couvre les notes, evaluations, devoirs, competences, observations pedagogiques et recommandations IA. SAVANEX les transforme en evenements d'evolution afin que les rapports de periode incluent aussi la partie science, pedagogie et academique geree dans Nexus.
+
+```json
+{
+  "organizationId": "org_123",
+  "externalId": "nexus_grade_001",
+  "sourceApp": "KCS_NEXUS",
+  "occurredAt": "2026-05-15T10:00:00.000Z",
+  "version": "1.0.0",
+  "payload": {
+    "eventType": "grade",
+    "studentExternalId": "STU-2026-001",
+    "studentNumber": "STU-2026-001",
+    "studentName": "Grace Mbuyi Ilunga",
+    "subject": "Mathematiques",
+    "title": "Quiz fractions",
+    "score": 12,
+    "maxScore": 100,
+    "percentage": 60,
+    "excellenceScale": {
+      "passThreshold": 75,
+      "classicalEquivalentAtPass": 50
+    },
+    "term": "T1",
+    "teacherName": "Aline Kabeya",
+    "riskLevel": "medium",
+    "recommendation": "Prevoir une remediation ciblee sur les fractions."
+  }
+}
+```
+
 ## Evenements de reference
 
 Evenements minimum a standardiser:
@@ -239,6 +275,10 @@ Evenements minimum a standardiser:
 - `payment.created`
 - `payment.confirmed`
 - `announcement.published`
+- `nexus.academic.signal`
+- `nexus.grade.published`
+- `nexus.pedagogy.observed`
+- `nexus.ai.recommendation`
 
 ## Regles de synchronisation
 

@@ -354,6 +354,8 @@ def sync_grade(grade) -> None:
             "subject": grade.class_subject.subject.name,
             "score": float(grade.score),
             "maxScore": float(grade.max_score),
+            "excellencePercentage": grade.excellence_percentage,
+            "classicalEquivalentPercentage": grade.classical_equivalent_percentage,
             "term": grade.term,
         }),
     }

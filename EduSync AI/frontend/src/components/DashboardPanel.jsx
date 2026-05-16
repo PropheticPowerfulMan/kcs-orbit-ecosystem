@@ -75,7 +75,7 @@ export default function DashboardPanel() {
       id: "welcome",
       role: "assistant",
       text:
-        "Bonjour. Je suis EduSync AI. Demande-moi de rediger une annonce, preparer un workflow de conge, structurer un rapport, organiser une reunion ou prioriser les notifications.",
+        "Bonjour. Je suis EduSync AI, la voix operationnelle de l'ecosysteme. Je peux parler au nom du systeme, resumer son etat reel, alerter les personnes concernees, preparer des annonces, workflows et rapports, et signaler les donnees manquantes au lieu d'inventer.",
       intent: "assistant",
       confidence: 1,
       actions: ["show_capabilities"],

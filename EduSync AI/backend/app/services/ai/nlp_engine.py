@@ -20,6 +20,16 @@ class NLPEngine:
 
     def __init__(self):
         self.intent_definitions: dict[str, IntentDefinition] = {
+            "ecosystem_status_query": IntentDefinition(
+                keywords=(
+                    "ecosystem", "ecosysteme", "system", "systeme", "etat", "status",
+                    "porte parole", "porte-parole", "spokesperson", "parle au nom",
+                    "savanex", "edupay", "nexus", "orbit", "edusync", "vie de l ecole",
+                    "resume ecosysteme", "situation generale", "tout le systeme",
+                ),
+                actions_en=("summarize_ecosystem_state", "verify_data_sources", "prioritize_alerts", "prepare_official_reply"),
+                actions_fr=("resumer_etat_ecosysteme", "verifier_sources", "prioriser_alertes", "preparer_reponse_officielle"),
+            ),
             "announcement_request": IntentDefinition(
                 keywords=(
                     "announce", "announcement", "annonce", "annoncer", "communique",
@@ -137,14 +147,19 @@ class NLPEngine:
 
         if language == "fr":
             response = self._compose_french_response(intent, message, details)
+            response = self._apply_spokesperson_frame(response, context, "fr")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_fr)
         else:
             response = self._compose_english_response(intent, message, details)
+            response = self._apply_spokesperson_frame(response, context, "en")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_en)
 
         return response, actions
 
     def _compose_french_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
+        if intent == "ecosystem_status_query":
+            return self._compose_ecosystem_status("fr", details)
+
         if intent == "announcement_request":
             audience = details.get("audience", "le public concerne")
             priority = details.get("priority", "normale")
@@ -220,9 +235,9 @@ class NLPEngine:
 
         if intent == "capability_query":
             return (
-                "Je peux faire beaucoup plus que repondre vaguement: rediger des annonces, preparer des workflows de conge, "
-                "structurer des rapports, organiser des reunions, aider sur les plannings et prioriser les notifications. "
-                "Donne-moi une demande concrete, par exemple: 'Prepare une annonce urgente aux parents pour la reunion de demain'."
+                "Je suis le porte-parole operationnel de l'ecosysteme: je transforme l'etat reel de SAVANEX, EduPay, Nexus, Orbit et EduSync en messages clairs. "
+                "Je peux annoncer, alerter, resumer, expliquer les donnees disponibles, preparer des workflows, organiser des reunions et produire des rapports. "
+                "Je signale aussi les donnees manquantes au lieu d'inventer."
             )
 
         return "\n".join([
@@ -232,6 +247,9 @@ class NLPEngine:
         ])
 
     def _compose_english_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
+        if intent == "ecosystem_status_query":
+            return self._compose_ecosystem_status("en", details)
+
         if intent == "announcement_request":
             audience = details.get("audience", "the target audience")
             priority = details.get("priority", "normal")
@@ -313,9 +331,9 @@ class NLPEngine:
 
         if intent == "capability_query":
             return (
-                "I can draft announcements, prepare leave workflows, structure reports, organize meetings, "
-                "help with schedules, prioritize notifications, and summarize admin activity. Try: "
-                "'Prepare an urgent announcement to parents about tomorrow's meeting.'"
+                "I am the ecosystem's operational spokesperson: I turn the real state of SAVANEX, EduPay, Nexus, Orbit, and EduSync into clear official messages. "
+                "I can announce, alert, summarize, explain available data, prepare workflows, organize meetings, and produce reports. "
+                "I also flag missing data instead of inventing figures."
             )
 
         return (
@@ -365,6 +383,7 @@ class NLPEngine:
             "je ", "tu ", "nous ", "vous ", "pour ", "avec ", "demande",
             "annonce", "conge", "reunion", "rapport", "enseignant", "ecole",
             "classe", "eleves", "parents", "peux", "faire", "aide",
+            "etat", "ecosysteme", "donne", "general",
         )
         return "fr" if any(marker in text for marker in french_markers) else "en"
 
@@ -372,6 +391,8 @@ class NLPEngine:
         details: dict[str, str] = {}
         if context.get("department"):
             details["department"] = str(context["department"])
+        if context.get("ecosystem_context"):
+            details["ecosystem_context"] = context["ecosystem_context"]
 
         if any(term in text for term in ("urgent", "urgence", "important", "prioritaire", "immediately")):
             details["priority"] = "urgent"
@@ -410,6 +431,108 @@ class NLPEngine:
             details["date"] = date_match.group(1)
 
         return details
+
+    def _apply_spokesperson_frame(self, response: str, context: dict, language: str) -> str:
+        ecosystem = context.get("ecosystem_context")
+        if not ecosystem:
+            return response
+
+        metrics = ecosystem.get("metrics", {})
+        shared_directory = ecosystem.get("shared_directory", {})
+        orbit_connected = ecosystem.get("ecosystem", {}).get("orbit_connected", False)
+
+        if language == "fr":
+            header = (
+                "Voix officielle EduSync AI: je reponds au nom de l'ecosysteme et je me base uniquement sur les donnees disponibles."
+            )
+            facts = (
+                f"Etat verifie: {metrics.get('announcements_total', 0)} annonces, "
+                f"{metrics.get('pending_workflows', 0)} workflows en attente, "
+                f"{metrics.get('unread_notifications_for_user', 0)} notifications non lues pour toi, "
+                f"{metrics.get('activity_events_last_24h', 0)} actions journalisees sur 24h."
+            )
+            source = (
+                "Source: EduSync local + KCS Orbit connecte."
+                if orbit_connected and shared_directory.get("available")
+                else f"Source: EduSync local. KCS Orbit non confirme ({shared_directory.get('reason', 'configuration ou reponse indisponible')})."
+            )
+        else:
+            header = (
+                "Official EduSync AI voice: I speak for the ecosystem and use only available data."
+            )
+            facts = (
+                f"Verified state: {metrics.get('announcements_total', 0)} announcements, "
+                f"{metrics.get('pending_workflows', 0)} pending workflows, "
+                f"{metrics.get('unread_notifications_for_user', 0)} unread notifications for you, "
+                f"{metrics.get('activity_events_last_24h', 0)} logged actions in 24h."
+            )
+            source = (
+                "Source: local EduSync + connected KCS Orbit."
+                if orbit_connected and shared_directory.get("available")
+                else f"Source: local EduSync. KCS Orbit not confirmed ({shared_directory.get('reason', 'configuration or response unavailable')})."
+            )
+
+        return "\n".join([header, facts, source, "", response])
+
+    def _compose_ecosystem_status(self, language: str, details: dict[str, str]) -> str:
+        ecosystem = details.get("ecosystem_context", {})
+        metrics = ecosystem.get("metrics", {})
+        directory = ecosystem.get("shared_directory", {})
+        latest_announcements = ecosystem.get("latest_announcements", [])
+        latest_alerts = ecosystem.get("latest_alerts", [])
+
+        if language == "fr":
+            lines = [
+                "Synthese generale:",
+                f"- Communication: {metrics.get('announcements_total', 0)} annonces dont {metrics.get('urgent_announcements', 0)} urgentes.",
+                f"- Operations: {metrics.get('pending_workflows', 0)} workflows attendent une decision.",
+                f"- Alertes: {metrics.get('unread_notifications_for_user', 0)} notifications non lues pour l'utilisateur connecte.",
+                f"- Activite: {metrics.get('activity_events_total', 0)} evenements journalises, {metrics.get('activity_events_last_24h', 0)} sur 24h.",
+            ]
+            if directory.get("available"):
+                lines.append(
+                    f"- Repertoire Orbit: {directory.get('students_count')} eleves, {directory.get('parents_count')} parents, {directory.get('teachers_count')} enseignants visibles."
+                )
+            else:
+                lines.append(f"- Repertoire Orbit: non disponible; raison: {directory.get('reason', 'non precisee')}.")
+
+            if latest_announcements:
+                lines.append("Dernieres annonces: " + "; ".join(item["title"] for item in latest_announcements))
+            if latest_alerts:
+                lines.append("Dernieres alertes: " + "; ".join(item["title"] for item in latest_alerts))
+
+            lines.extend([
+                "",
+                "Decision recommandee: traiter d'abord les workflows en attente et les notifications non lues, puis publier une annonce officielle si une information doit atteindre parents, eleves, enseignants ou staff.",
+                "Limite de verite: je ne peux pas confirmer les notes, paiements ou statistiques SAVANEX/EduPay/Nexus si ces donnees ne sont pas exposees par Orbit ou injectees dans cette requete.",
+            ])
+            return "\n".join(lines)
+
+        lines = [
+            "General summary:",
+            f"- Communication: {metrics.get('announcements_total', 0)} announcements including {metrics.get('urgent_announcements', 0)} urgent.",
+            f"- Operations: {metrics.get('pending_workflows', 0)} workflows awaiting decision.",
+            f"- Alerts: {metrics.get('unread_notifications_for_user', 0)} unread notifications for the signed-in user.",
+            f"- Activity: {metrics.get('activity_events_total', 0)} logged events, {metrics.get('activity_events_last_24h', 0)} in 24h.",
+        ]
+        if directory.get("available"):
+            lines.append(
+                f"- Orbit directory: {directory.get('students_count')} students, {directory.get('parents_count')} parents, {directory.get('teachers_count')} teachers visible."
+            )
+        else:
+            lines.append(f"- Orbit directory: unavailable; reason: {directory.get('reason', 'not specified')}.")
+
+        if latest_announcements:
+            lines.append("Latest announcements: " + "; ".join(item["title"] for item in latest_announcements))
+        if latest_alerts:
+            lines.append("Latest alerts: " + "; ".join(item["title"] for item in latest_alerts))
+
+        lines.extend([
+            "",
+            "Recommended decision: handle pending workflows and unread notifications first, then publish an official announcement if information must reach parents, students, teachers, or staff.",
+            "Truth limit: I cannot confirm SAVANEX, EduPay, or Nexus grades/payments/statistics unless those data are exposed by Orbit or included in this request.",
+        ])
+        return "\n".join(lines)
 
     def _clean_sentence(self, message: str) -> str:
         cleaned = re.sub(r"\s+", " ", (message or "").strip())

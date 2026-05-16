@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from apps.integration.orbit import sync_attendance
+from apps.intelligence.services import observe_attendance
 from .models import Attendance
 from .serializers import AttendanceSerializer, BulkAttendanceSerializer
 from apps.users.permissions import IsTeacherOrAdmin
@@ -19,6 +20,7 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         attendance = serializer.save(recorded_by=self.request.user)
         sync_attendance(attendance)
+        observe_attendance(attendance, actor=self.request.user)
 
 
 class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -29,6 +31,7 @@ class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         attendance = serializer.save()
         sync_attendance(attendance)
+        observe_attendance(attendance, actor=self.request.user)
 
 
 @api_view(['POST'])
@@ -54,6 +57,7 @@ def bulk_attendance(request):
             },
         )
         sync_attendance(attendance)
+        observe_attendance(attendance, actor=request.user)
         results.append(attendance.id)
 
     return Response({'detail': 'Bulk attendance saved.', 'records': results}, status=status.HTTP_200_OK)

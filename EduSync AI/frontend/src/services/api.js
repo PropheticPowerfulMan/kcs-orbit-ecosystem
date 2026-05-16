@@ -134,9 +134,18 @@ function demoResponse(path, method, body) {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
-    const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe)\b/.test(
+    const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe|systeme|ecosysteme|etat)\b/.test(
       normalized
     );
+    const ecosystemFacts = {
+      announcements: demoState.announcements.length,
+      workflows: demoState.workflows.filter((item) => item.status === "pending").length,
+      unread: demoState.notifications.filter((item) => !(item.is_read ?? item.read)).length,
+      urgent: demoState.announcements.filter((item) => item.priority === "urgent").length,
+    };
+    const spokespersonPrefix = isFrench
+      ? `Voix officielle EduSync AI: je parle au nom de l'ecosysteme et je me base uniquement sur les donnees disponibles.\nEtat verifie: ${ecosystemFacts.announcements} annonces, ${ecosystemFacts.workflows} workflows en attente, ${ecosystemFacts.unread} notifications non lues. Source: donnees demo EduSync; Orbit/SAVANEX/EduPay/Nexus non confirmes dans ce mode.\n\n`
+      : `Official EduSync AI voice: I speak for the ecosystem and use only available data.\nVerified state: ${ecosystemFacts.announcements} announcements, ${ecosystemFacts.workflows} pending workflows, ${ecosystemFacts.unread} unread notifications. Source: EduSync demo data; Orbit/SAVANEX/EduPay/Nexus not confirmed in this mode.\n\n`;
     const details = {
       audience: normalized.includes("parent")
         ? "parents"
@@ -149,6 +158,16 @@ function demoResponse(path, method, body) {
       timing: normalized.includes("demain") || normalized.includes("tomorrow") ? "demain" : "prochain creneau",
     };
     const intents = [
+      {
+        intent: "ecosystem_status_query",
+        terms: ["ecosystem", "ecosysteme", "systeme", "system", "etat", "status", "porte parole", "porte-parole", "savanex", "edupay", "nexus", "orbit"],
+        response: isFrench
+          ? `Synthese generale:\n- Communication: ${ecosystemFacts.announcements} annonces dont ${ecosystemFacts.urgent} urgentes.\n- Operations: ${ecosystemFacts.workflows} workflows attendent une decision.\n- Alertes: ${ecosystemFacts.unread} notifications non lues.\n\nDecision recommandee: traiter les notifications et workflows en attente, puis publier une annonce officielle si l'information doit atteindre parents, eleves, enseignants ou staff.\nLimite de verite: en mode demo, je ne confirme pas les notes, paiements ou statistiques SAVANEX/EduPay/Nexus sans connexion Orbit.`
+          : `General summary:\n- Communication: ${ecosystemFacts.announcements} announcements including ${ecosystemFacts.urgent} urgent.\n- Operations: ${ecosystemFacts.workflows} workflows awaiting decision.\n- Alerts: ${ecosystemFacts.unread} unread notifications.\n\nRecommended decision: handle pending notifications and workflows, then publish an official announcement if information must reach parents, students, teachers, or staff.\nTruth limit: in demo mode, I do not confirm SAVANEX/EduPay/Nexus grades, payments, or statistics without Orbit connection.`,
+        actions: isFrench
+          ? ["resumer_etat_ecosysteme", "verifier_sources", "prioriser_alertes", "preparer_reponse_officielle"]
+          : ["summarize_ecosystem_state", "verify_data_sources", "prioritize_alerts", "prepare_official_reply"],
+      },
       {
         intent: "finance_query",
         terms: ["paye", "payes", "payee", "paiement", "frais", "solde", "scolarite", "finance", "paid", "payment", "payments", "fees", "balance", "balances", "export"],
@@ -205,8 +224,8 @@ function demoResponse(path, method, body) {
       {
         intent: "general_query",
         response: isFrench
-          ? `J'ai compris la demande: ${message}.\nDis-moi si tu veux en faire une annonce, un workflow, un rapport, une reunion, un planning ou une notification. Je peux ensuite produire un brouillon pret a utiliser.`
-          : `I understand the request: "${message}". Tell me whether this should become an announcement, workflow, report, meeting, schedule task, or notification, and I will produce a usable draft.`,
+          ? `J'ai compris la demande: ${message}.\nJe peux parler officiellement pour l'ecosysteme, mais je dois rester fidele aux donnees disponibles. Dis-moi si tu veux une annonce, une alerte, un rapport, une reunion, un workflow ou un etat general.`
+          : `I understand the request: "${message}". I can speak officially for the ecosystem, but I must stay faithful to available data. Tell me whether this should become an announcement, alert, report, meeting, workflow, or general status.`,
         actions: isFrench
           ? ["clarifier_demande", "afficher_capacites", "suggerer_prompt"]
           : ["clarify_request", "show_capabilities", "suggest_prompt"],
@@ -214,7 +233,7 @@ function demoResponse(path, method, body) {
     return {
       intent: match.intent,
       confidence: match.intent === "general_query" ? 0.48 : 0.9,
-      response: match.response,
+      response: `${spokespersonPrefix}${match.response}`,
       actions: match.actions,
     };
   }

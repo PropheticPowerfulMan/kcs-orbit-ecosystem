@@ -7,6 +7,10 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Grade(models.Model):
+    EXCELLENCE_PASS_PERCENT = 75.0
+    EXCELLENCE_CRITICAL_PERCENT = 60.0
+    EXCELLENCE_STRONG_PERCENT = 90.0
+
     TYPE_EXAM = 'exam'
     TYPE_QUIZ = 'quiz'
     TYPE_ASSIGNMENT = 'assignment'
@@ -63,7 +67,7 @@ class Grade(models.Model):
     max_score = models.DecimalField(
         max_digits=6,
         decimal_places=2,
-        default=20.00,
+        default=100.00,
         verbose_name=_('Max Score'),
     )
     weight = models.DecimalField(
@@ -94,9 +98,24 @@ class Grade(models.Model):
 
     @property
     def percentage(self):
+        return self.excellence_percentage
+
+    @property
+    def excellence_percentage(self):
         if self.max_score > 0:
             return round(float(self.score) / float(self.max_score) * 100, 2)
         return 0.0
+
+    @property
+    def classical_equivalent_percentage(self):
+        """
+        Excellence scale used by the school:
+        75% excellence equals 50% in a classical grading scale.
+        """
+        excellence = self.excellence_percentage
+        if excellence <= self.EXCELLENCE_PASS_PERCENT:
+            return round(excellence * (50 / self.EXCELLENCE_PASS_PERCENT), 2)
+        return round(50 + ((excellence - self.EXCELLENCE_PASS_PERCENT) * 2), 2)
 
     @property
     def normalized_score(self):

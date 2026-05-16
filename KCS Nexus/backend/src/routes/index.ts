@@ -14,6 +14,7 @@ import { teachersRouter } from './teachers.routes.js'
 import { registryRouter } from './registry.routes.js'
 import { forumRouter } from './forum.routes.js'
 import { studentForumRouter } from './student-forum.routes.js'
+import { intelligenceRouter } from './intelligence.routes.js'
 
 export const router = Router()
 
@@ -32,3 +33,4 @@ router.use('/admin', adminRouter)
 router.use('/registry', registryRouter)
 router.use('/forum', forumRouter)
 router.use('/student-forum', studentForumRouter)
+router.use('/intelligence', intelligenceRouter)

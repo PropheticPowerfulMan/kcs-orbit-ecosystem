@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from .models import Message, Notification
 from .serializers import MessageSerializer, MessageCreateSerializer, NotificationSerializer
+from .services import deliver_parent_communication
 
 
 class MessageListCreateView(generics.ListCreateAPIView):
@@ -19,6 +20,22 @@ class MessageListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'POST':
             return MessageCreateSerializer
         return MessageSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        message = serializer.save()
+        delivery = deliver_parent_communication(
+            message.receiver,
+            message.subject,
+            message.body,
+            notif_type=Notification.TYPE_MESSAGE,
+            link='/communication',
+        )
+        output = MessageSerializer(message, context=self.get_serializer_context()).data
+        output['delivery'] = [result.__dict__ for result in delivery]
+        headers = self.get_success_headers(serializer.data)
+        return Response(output, status=status.HTTP_201_CREATED, headers=headers)
 
 
 class MessageDetailView(generics.RetrieveAPIView):

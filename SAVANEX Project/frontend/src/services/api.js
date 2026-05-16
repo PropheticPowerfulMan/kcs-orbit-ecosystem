@@ -22,7 +22,7 @@ const demoOverview = {
   total_teachers: 34,
   total_classes: 18,
   attendance_rate_30d: 92,
-  average_grade: 14.8,
+  average_grade: 74,
 };
 
 const demoWarnings = {
@@ -30,20 +30,23 @@ const demoWarnings = {
     {
       student_name: 'Amina K.',
       attendance_rate: 71,
-      average_normalized: 10.5,
+      average_normalized: 72,
+      average_excellence_percentage: 72,
       risk_flags: ['Attendance below 75%'],
     },
     {
       student_name: 'David M.',
       attendance_rate: 83,
-      average_normalized: 8.7,
-      risk_flags: ['Average below 10/20'],
+      average_normalized: 64,
+      average_excellence_percentage: 64,
+      risk_flags: ['Average excellence below 75%'],
     },
     {
       student_name: 'Sarah N.',
       attendance_rate: 68,
-      average_normalized: 9.2,
-      risk_flags: ['Attendance below 75%', 'Average below 10/20'],
+      average_normalized: 68,
+      average_excellence_percentage: 68,
+      risk_flags: ['Attendance below 75%', 'Average excellence below 75%'],
     },
   ],
 };
@@ -266,6 +269,43 @@ export const analyticsService = {
   },
 };
 
+export const intelligenceService = {
+  async getEvents(params = {}) {
+    if (isDemoSession()) {
+      return [];
+    }
+
+    const res = await api.get('/intelligence/events/', { params });
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+
+  async getStudentLivingProfile(studentId) {
+    if (isDemoSession()) {
+      return null;
+    }
+
+    const res = await api.get(`/intelligence/students/${studentId}/living-profile/`);
+    return res.data;
+  },
+
+  getEvolutionReportUrl(params = {}) {
+    const query = new URLSearchParams(params).toString();
+    return `${API_BASE_URL}/intelligence/reports/evolution/${query ? `?${query}` : ''}`;
+  },
+
+  async exportEvolutionReport(params = {}) {
+    if (isDemoSession()) {
+      return null;
+    }
+
+    const res = await api.get('/intelligence/reports/evolution/', {
+      params,
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+};
+
 export const studentsService = {
   async getAll() {
     if (isDemoSession()) {
@@ -390,6 +430,58 @@ export const parentsService = {
 
     const res = await api.delete(`/users/${id}/`);
     return res.data;
+  },
+};
+
+export const communicationService = {
+  async getMessages(box = 'sent') {
+    if (isDemoSession()) {
+      const { messages } = await import('../data/demoSchoolData');
+      return messages.map((message) => ({
+        id: message.id,
+        subject: message.channel,
+        body: message.status,
+        receiver_name: message.audience,
+        sent_at: new Date().toISOString(),
+        priority: message.priority,
+        delivery: [
+          { channel: 'email', status: 'simulated', detail: 'demo' },
+          { channel: 'sms', status: 'simulated', detail: 'demo' },
+        ],
+      }));
+    }
+
+    const res = await api.get('/communication/messages/', { params: { box } });
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+
+  async sendParentMessage({ receiver, subject, body }) {
+    if (isDemoSession()) {
+      return {
+        id: Date.now(),
+        receiver,
+        receiver_name: 'Parent demo',
+        subject,
+        body,
+        sent_at: new Date().toISOString(),
+        delivery: [
+          { channel: 'email', status: 'simulated', detail: 'demo' },
+          { channel: 'sms', status: 'simulated', detail: 'demo' },
+        ],
+      };
+    }
+
+    const res = await api.post('/communication/messages/', { receiver, subject, body });
+    return res.data;
+  },
+
+  async getNotifications() {
+    if (isDemoSession()) {
+      return [];
+    }
+
+    const res = await api.get('/communication/notifications/');
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
   },
 };
 

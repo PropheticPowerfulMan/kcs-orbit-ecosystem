@@ -482,7 +482,7 @@ const StudentsPage = () => {
             </section>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-github-border bg-github-panel/80 p-4 shadow-glass backdrop-blur-xl">
+          <div className="savanex-family-launcher flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-github-border bg-github-panel/80 p-4 shadow-glass backdrop-blur-xl">
             <p className="max-w-2xl text-sm text-slate-300">Tout l'enregistrement se fait maintenant dans une seule fenêtre dédiée : parent, enfants, biométrie et validation finale.</p>
             <button type="button" onClick={() => setFamilyDialogOpen(true)} className="savanex-primary-family-button">
               Ajouter une nouvelle famille
@@ -491,7 +491,7 @@ const StudentsPage = () => {
 
           {familyDialogOpen ? createPortal((
             <div className={modalBackdropClass}>
-              <section role="dialog" aria-modal="true" aria-label="Nouvelle famille" className={modalPanelClass}>
+              <section role="dialog" aria-modal="true" aria-label="Nouvelle famille" className={`${modalPanelClass} savanex-family-modal`}>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Famille complète</p>

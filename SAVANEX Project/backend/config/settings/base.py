@@ -41,6 +41,7 @@ LOCAL_APPS = [
     'apps.timetable.apps.TimetableConfig',
     'apps.communication.apps.CommunicationConfig',
     'apps.analytics.apps.AnalyticsConfig',
+    'apps.intelligence.apps.IntelligenceConfig',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -173,4 +174,12 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@savanex.school')
+SCHOOL_NAME = config('SCHOOL_NAME', default='SAVANEX School')
+SMS_ENABLED = config('SMS_ENABLED', default=True, cast=bool)
+SMS_WEBHOOK_URL = config('SMS_WEBHOOK_URL', default='')
+SMS_WEBHOOK_TOKEN = config('SMS_WEBHOOK_TOKEN', default='')
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
+TWILIO_FROM_NUMBER = config('TWILIO_FROM_NUMBER', default='')
+INTELLIGENCE_INGEST_API_KEY = config('INTELLIGENCE_INGEST_API_KEY', default='')
 SAVANEX_ORBIT_OUTBOX_RETRY_INTERVAL_SECONDS = config('SAVANEX_ORBIT_OUTBOX_RETRY_INTERVAL_SECONDS', default=30, cast=int)

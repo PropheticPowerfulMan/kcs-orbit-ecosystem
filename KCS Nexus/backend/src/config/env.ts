@@ -31,6 +31,8 @@ const envSchema = z.object({
   KCS_ORBIT_API_URL: z.string().optional(),
   KCS_ORBIT_API_KEY: z.string().optional(),
   KCS_ORBIT_ORGANIZATION_ID: z.string().optional(),
+  SAVANEX_API_URL: z.string().optional(),
+  SAVANEX_INTELLIGENCE_API_KEY: z.string().optional(),
 })
 
 export const env = envSchema.parse(process.env)
