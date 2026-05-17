@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
 
 from app.models.user import Role
 
@@ -9,11 +9,21 @@ class RegisterRequest(BaseModel):
     password: str
     role: Role
     department: str
+    access_code: str | None = None
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str | None = None
+    identifier: str | None = None
     password: str
+
+    @model_validator(mode="after")
+    def ensure_identifier(self):
+        candidate = (self.identifier or self.email or "").strip()
+        if not candidate:
+            raise ValueError("identifier is required")
+        self.identifier = candidate
+        return self
 
 
 class TokenResponse(BaseModel):
@@ -25,6 +35,7 @@ class UserResponse(BaseModel):
     id: int
     full_name: str
     email: EmailStr
+    access_code: str | None = None
     role: Role
     department: str
 

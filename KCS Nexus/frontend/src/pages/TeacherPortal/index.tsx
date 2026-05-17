@@ -1737,17 +1737,17 @@ const TeacherPortal = () => {
       <PortalSidebar />
 
       <main>
-        <div className="sticky top-0 z-20 border-b border-gray-100 bg-white/85 px-6 py-4 backdrop-blur-md dark:border-kcs-blue-800 dark:bg-kcs-blue-950/85">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">
+        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
                 Faculty Dashboard, {user?.firstName}
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
                 Today&apos;s overview for teaching, assessment, and student support.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Link to="/portal/teacher/messages" className="btn-primary text-sm py-2">
                 Inbox
               </Link>

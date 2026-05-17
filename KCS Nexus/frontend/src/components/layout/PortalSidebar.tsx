@@ -317,10 +317,14 @@ const PortalSidebar = () => {
       className="nexus-glass-rail sticky top-0 z-30 hidden h-screen flex-col overflow-hidden border-r lg:flex"
     >
       {/* Logo */}
-      <div className="p-4 border-b border-gray-100 dark:border-kcs-blue-800">
-        <div className="flex items-center gap-2">
-        <Link to="/" className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="w-10 h-10 rounded-xl kcs-gradient flex items-center justify-center flex-shrink-0 shadow-kcs">
+      <div className={`${sidebarCollapsed ? 'px-3 py-4' : 'p-4'} border-b border-gray-100 dark:border-kcs-blue-800`}>
+        <div className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center gap-2'}`}>
+        <Link
+          to="/"
+          className={`flex min-w-0 items-center gap-3 ${sidebarCollapsed ? 'flex-none justify-center' : 'flex-1'}`}
+          title={sidebarCollapsed ? 'KCS Nexus' : undefined}
+        >
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl kcs-gradient shadow-kcs">
             <span className="text-white font-bold text-sm font-display">KCS</span>
           </div>
           <AnimatePresence>
@@ -345,7 +349,7 @@ const PortalSidebar = () => {
         <button
           type="button"
           onClick={toggleTheme}
-          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
+          className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/60 bg-white/70 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
           aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
           title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
         >

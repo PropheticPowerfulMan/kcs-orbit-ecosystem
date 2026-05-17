@@ -12,6 +12,33 @@ function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 }
 
+function normalizeAccessCode(value: string | undefined) {
+  return (value || '').trim().toUpperCase()
+}
+
+function splitFullName(fullName: string) {
+  const normalized = fullName.trim()
+  const [firstName, ...lastNameParts] = normalized.split(/\s+/).filter(Boolean)
+  return {
+    firstName: firstName || 'Shared',
+    lastName: lastNameParts.join(' ') || 'User',
+  }
+}
+
+function mapSavanexRole(role: string | undefined) {
+  const normalized = (role || '').trim().toLowerCase()
+  if (normalized === 'admin') return 'ADMIN' as const
+  if (normalized === 'employee') return 'STAFF' as const
+  if (normalized === 'teacher') return 'TEACHER' as const
+  if (normalized === 'student') return 'STUDENT' as const
+  if (normalized === 'parent') return 'PARENT' as const
+  return null
+}
+
+function savanexAuthIsEnabled() {
+  return Boolean(env.SAVANEX_API_URL)
+}
+
 async function generateUniqueAccessCode(role: string) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const accessCode = generateAccessCode(role)
@@ -33,8 +60,12 @@ const registerSchema = z.object({
 })
 
 const loginSchema = z.object({
-  email: z.string().min(1),
+  identifier: z.string().min(1).optional(),
+  email: z.string().min(1).optional(),
   password: z.string().min(6),
+}).refine((value) => Boolean(value.identifier?.trim() || value.email?.trim()), {
+  message: 'Email or access code is required',
+  path: ['identifier'],
 })
 
 const configuredSuperAdmin = {
@@ -47,8 +78,9 @@ const configuredSuperAdmin = {
 }
 
 function loginConfiguredSuperAdmin(payload: z.infer<typeof loginSchema>) {
+  const identifier = (payload.identifier ?? payload.email ?? '').trim().toLowerCase()
   if (
-    payload.email.trim().toLowerCase() !== configuredSuperAdmin.email.toLowerCase() ||
+    identifier !== configuredSuperAdmin.email.toLowerCase() ||
     payload.password !== configuredSuperAdmin.password
   ) {
     return null
@@ -91,6 +123,100 @@ function buildConfiguredSuperAdminUser() {
     createdAt: new Date(),
     updatedAt: new Date(),
   }
+}
+
+async function authenticateWithSavanex(identifier: string, password: string) {
+  if (!savanexAuthIsEnabled()) {
+    return null
+  }
+
+  const loginUrl = `${env.SAVANEX_API_URL!.replace(/\/$/, '')}${env.SAVANEX_LOGIN_PATH}`
+  let response: Response
+  try {
+    response = await fetch(loginUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: identifier, password }),
+      signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
+    })
+  } catch (error) {
+    throw new ApiError(503, 'Shared authentication is temporarily unavailable')
+  }
+
+  if ([400, 401, 403, 404].includes(response.status)) {
+    return null
+  }
+
+  if (!response.ok) {
+    throw new ApiError(503, 'Shared authentication is temporarily unavailable')
+  }
+
+  const payload = await response.json().catch(() => ({} as Record<string, unknown>))
+  const externalUser = (payload as { user?: Record<string, unknown> }).user || {}
+  const mappedRole = mapSavanexRole(typeof externalUser.role === 'string' ? externalUser.role : undefined)
+  if (!mappedRole) {
+    return null
+  }
+
+  const fullName = typeof externalUser.full_name === 'string' && externalUser.full_name.trim()
+    ? externalUser.full_name.trim()
+    : 'Shared User'
+  const name = splitFullName(fullName)
+  const accessCode = normalizeAccessCode(
+    typeof externalUser.access_code === 'string' ? externalUser.access_code : identifier,
+  )
+  const email = typeof externalUser.email === 'string' && externalUser.email.trim()
+    ? externalUser.email.trim().toLowerCase()
+    : `${accessCode.toLowerCase()}@savanex.local`
+
+  return {
+    email,
+    accessCode,
+    role: mappedRole,
+    firstName: name.firstName,
+    lastName: name.lastName,
+  }
+}
+
+async function upsertExternalUser(externalUser: Awaited<ReturnType<typeof authenticateWithSavanex>>, password: string) {
+  if (!externalUser) {
+    return null
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10)
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: externalUser.email },
+        { accessCode: externalUser.accessCode },
+      ],
+    },
+  })
+
+  if (user) {
+    return prisma.user.update({
+      where: { id: user.id },
+      data: {
+        email: externalUser.email,
+        accessCode: externalUser.accessCode,
+        role: externalUser.role,
+        firstName: externalUser.firstName,
+        lastName: externalUser.lastName,
+        passwordHash,
+      },
+    })
+  }
+
+  return prisma.user.create({
+    data: {
+      email: externalUser.email,
+      accessCode: externalUser.accessCode,
+      role: externalUser.role,
+      firstName: externalUser.firstName,
+      lastName: externalUser.lastName,
+      passwordHash,
+    },
+  })
 }
 
 export const authRouter = Router()
@@ -136,7 +262,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     return success(res, configuredLogin, 'Login successful')
   }
 
-  const identifier = payload.email.trim()
+  const identifier = (payload.identifier ?? payload.email ?? '').trim()
   const normalizedIdentifier = identifier.toLowerCase()
   const user = await prisma.user.findFirst({
     where: {
@@ -146,27 +272,46 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
       ],
     },
   })
-  if (!user?.passwordHash) {
+  if (user?.passwordHash) {
+    const isValid = await bcrypt.compare(payload.password, user.passwordHash)
+    if (isValid) {
+      const token = signAccessToken(user)
+      const refreshToken = signRefreshToken(user)
+
+      await prisma.refreshToken.create({
+        data: {
+          token: refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      })
+
+      return success(res, { user: buildSafeUser(user), token, refreshToken }, 'Login successful')
+    }
+  }
+
+  const externalUser = await authenticateWithSavanex(identifier, payload.password)
+  if (!externalUser) {
     throw new ApiError(401, 'Invalid email or password')
   }
 
-  const isValid = await bcrypt.compare(payload.password, user.passwordHash)
-  if (!isValid) {
+  const resolvedUser = await upsertExternalUser(externalUser, payload.password)
+  if (!resolvedUser) {
     throw new ApiError(401, 'Invalid email or password')
   }
 
-  const token = signAccessToken(user)
-  const refreshToken = signRefreshToken(user)
+  const token = signAccessToken(resolvedUser)
+  const refreshToken = signRefreshToken(resolvedUser)
 
   await prisma.refreshToken.create({
     data: {
       token: refreshToken,
-      userId: user.id,
+      userId: resolvedUser.id,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   })
 
-  return success(res, { user: buildSafeUser(user), token, refreshToken }, 'Login successful')
+  return success(res, { user: buildSafeUser(resolvedUser), token, refreshToken }, 'Login successful')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {

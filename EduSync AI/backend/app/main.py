@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.api.routes import analytics, auth, chat, directory, messaging, notifications, registry, workflows
 from app.core.config import settings
@@ -16,6 +17,7 @@ from app.workers.scheduler import flush_orbit_outbox, scheduler
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_user_identity_columns()
     seed_default_admin()
     if settings.scheduler_enabled:
         flush_orbit_outbox()
@@ -27,6 +29,27 @@ async def lifespan(_: FastAPI):
             scheduler.shutdown(wait=False)
 
 
+def ensure_user_identity_columns() -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    statements: list[str] = []
+    if "access_code" not in columns:
+        statements.append("ALTER TABLE users ADD COLUMN access_code VARCHAR(32)")
+
+    if not statements:
+        with engine.begin() as connection:
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_access_code_unique ON users (access_code) WHERE access_code IS NOT NULL"))
+        return
+
+    with engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_access_code_unique ON users (access_code) WHERE access_code IS NOT NULL"))
+
+
 def seed_default_admin() -> None:
     db = SessionLocal()
     try:
@@ -36,6 +59,7 @@ def seed_default_admin() -> None:
                 User(
                     full_name="System Administrator",
                     email="admin@school.edu",
+                    access_code="ACC-ADM-EDUSYNC",
                     hashed_password=get_password_hash("Admin@123"),
                     role=Role.ADMIN,
                     department="Administration",
@@ -49,6 +73,7 @@ def seed_default_admin() -> None:
             "full_name": "System Administrator",
             "role": Role.ADMIN,
             "department": "Administration",
+            "access_code": "ACC-ADM-EDUSYNC",
         }
         for field, expected_value in expected_values.items():
             if getattr(admin, field) != expected_value:

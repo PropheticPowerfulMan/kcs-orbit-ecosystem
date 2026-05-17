@@ -319,13 +319,13 @@ const ParentPortal = () => {
 
       <main className="min-w-0 flex-1">
         {/* Top Bar */}
-        <div className="sticky top-0 z-20 border-b border-gray-100 bg-white/90 px-4 py-3 backdrop-blur-md dark:border-kcs-blue-800 dark:bg-kcs-blue-950/90 sm:px-6 sm:py-4">
+        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <h1 className="truncate font-display text-lg font-bold text-kcs-blue-900 dark:text-white sm:text-xl">
-                Welcome, {user?.firstName}! 👨‍👩‍👧‍👦
+              <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
+                Welcome, {user?.firstName}!
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>

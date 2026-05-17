@@ -6,8 +6,8 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem("edusync_token") || "");
 
-  const login = useCallback(async (email, password) => {
-    const data = await apiRequest("/auth/login", "POST", { email, password });
+  const login = useCallback(async (identifier, password) => {
+    const data = await apiRequest("/auth/login", "POST", { identifier, password });
     setToken(data.access_token);
     localStorage.setItem("edusync_token", data.access_token);
   }, []);

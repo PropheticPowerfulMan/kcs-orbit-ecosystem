@@ -72,7 +72,7 @@ export default function AuthPanel() {
             <h2>{mode === "login" ? "Open the portal" : "Create access"}</h2>
           </div>
         </div>
-        <p className="subtle">Use your KCS credentials to open the dashboard.</p>
+        <p className="subtle">Use your school email or shared access code to open the dashboard.</p>
 
         {mode === "login" && (
           <button type="button" className="credential-chip" onClick={fillDemoCredentials}>
@@ -90,8 +90,8 @@ export default function AuthPanel() {
         )}
 
         <input
-          type="email"
-          placeholder="School email"
+          type="text"
+          placeholder="School email or access code"
           value={form.email}
           onChange={(e) => updateField("email", e.target.value)}
           required

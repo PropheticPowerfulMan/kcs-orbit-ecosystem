@@ -32,6 +32,8 @@ const envSchema = z.object({
   KCS_ORBIT_API_KEY: z.string().optional(),
   KCS_ORBIT_ORGANIZATION_ID: z.string().optional(),
   SAVANEX_API_URL: z.string().optional(),
+  SAVANEX_LOGIN_PATH: z.string().default('/api/auth/login/'),
+  SAVANEX_TIMEOUT_SECONDS: z.coerce.number().default(5),
   SAVANEX_INTELLIGENCE_API_KEY: z.string().optional(),
 })
 

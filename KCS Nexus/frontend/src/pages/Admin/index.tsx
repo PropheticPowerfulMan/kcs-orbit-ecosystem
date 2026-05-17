@@ -2756,17 +2756,17 @@ const AdminDashboard = () => {
       <PortalSidebar />
 
       <main>
-        <div className="sticky top-0 z-20 border-b border-gray-100 bg-white/85 px-6 py-4 backdrop-blur-md dark:border-kcs-blue-800 dark:bg-kcs-blue-950/85">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">
+        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
                 Executive Dashboard, {user?.firstName}
               </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
                 A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
               </p>
             </div>
-            <div className="rounded-2xl bg-kcs-blue-50 px-4 py-2 text-sm font-medium text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">
+            <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">
               Live snapshot • 2025/26 cycle
             </div>
           </div>

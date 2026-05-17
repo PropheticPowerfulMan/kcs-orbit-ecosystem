@@ -132,6 +132,7 @@ const Header = () => {
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             {/* Language Toggle */}
             <button
+              type="button"
               onClick={toggleLanguage}
               className={`flex h-10 items-center gap-1.5 rounded-full px-2.5 text-sm font-semibold transition-all duration-200 sm:px-3 ${
                 scrolled || !isHomePage
@@ -146,6 +147,7 @@ const Header = () => {
 
             {/* Theme Toggle */}
             <button
+              type="button"
               onClick={toggleTheme}
               className={`flex h-10 w-10 items-center justify-center rounded-full transition-all duration-200 ${
                 scrolled || !isHomePage
@@ -205,6 +207,7 @@ const Header = () => {
 
             {/* Mobile Menu Toggle */}
             <button
+              type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
               className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 lg:hidden ${
                 scrolled || !isHomePage
@@ -231,6 +234,26 @@ const Header = () => {
           >
             <div className="container-custom py-3">
               <div ref={mobileMenuRef} className="github-glass dark:github-glass-dark max-h-[calc(100dvh-96px)] space-y-1 overflow-y-auto rounded-[30px] p-2.5 shadow-2xl shadow-kcs-blue-950/15 sm:rounded-[34px] sm:p-3">
+              <div className="mb-2 grid grid-cols-2 gap-2 border-b border-gray-100 pb-3 dark:border-kcs-blue-800">
+                <button
+                  type="button"
+                  onClick={toggleLanguage}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-kcs-blue-100 bg-white/70 px-3 py-2 text-sm font-bold text-kcs-blue-800 shadow-sm transition hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-white/10"
+                  aria-label={t('common.language')}
+                >
+                  <Globe size={17} />
+                  {currentLanguage.toUpperCase()}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-kcs-blue-100 bg-white/70 px-3 py-2 text-sm font-bold text-kcs-blue-800 shadow-sm transition hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-white/10"
+                  aria-label={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
+                >
+                  {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+                  {theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
+                </button>
+              </div>
               {navItems.map(({ to, label, icon: Icon }) => (
                 <NavLink
                   key={to}

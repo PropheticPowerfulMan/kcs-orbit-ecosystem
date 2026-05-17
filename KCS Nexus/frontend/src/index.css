@@ -314,6 +314,44 @@
       0 20px 58px rgba(0, 27, 54, 0.12);
   }
 
+  .portal-dashboard-topbar {
+    background:
+      linear-gradient(135deg, rgba(0, 64, 128, 0.86), rgba(0, 45, 90, 0.78) 48%, rgba(18, 174, 232, 0.26)),
+      rgba(0, 27, 54, 0.74);
+    border-color: rgba(126, 226, 255, 0.22);
+    backdrop-filter: blur(34px) saturate(1.48) contrast(1.05);
+    -webkit-backdrop-filter: blur(34px) saturate(1.48) contrast(1.05);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 0 rgba(18, 174, 232, 0.14),
+      0 20px 58px rgba(0, 27, 54, 0.24);
+  }
+
+  .dark .portal-dashboard-topbar {
+    background:
+      linear-gradient(135deg, rgba(0, 64, 128, 0.62), rgba(0, 27, 54, 0.82) 52%, rgba(18, 174, 232, 0.16)),
+      rgba(0, 27, 54, 0.78);
+    border-color: rgba(136, 197, 255, 0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      0 20px 58px rgba(0, 0, 0, 0.34);
+  }
+
+  .portal-dashboard-title {
+    color: #ffffff;
+    text-shadow: 0 2px 16px rgba(18, 174, 232, 0.28);
+    overflow-wrap: anywhere;
+  }
+
+  .portal-dashboard-topbar p {
+    color: #d7ecff;
+  }
+
+  .dark .portal-dashboard-title {
+    color: #ffffff;
+    text-shadow: 0 2px 14px rgba(18, 174, 232, 0.24);
+  }
+
   .portal-shell :is(section, div).rounded-2xl:is(.bg-white, .dark\:bg-kcs-blue-900\/50),
   .portal-shell :is(section, div).rounded-2xl:is(.bg-gray-50, .dark\:bg-kcs-blue-800\/30) {
     backdrop-filter: blur(32px) saturate(1.42) contrast(1.04);

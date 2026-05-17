@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     kcs_orbit_organization_id: str = ""
     kcs_orbit_timeout_seconds: int = 5
 
+    savanex_api_url: str = ""
+    savanex_login_path: str = "/api/auth/login/"
+    savanex_timeout_seconds: int = 5
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

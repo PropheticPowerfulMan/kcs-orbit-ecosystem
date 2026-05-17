@@ -63,7 +63,10 @@ Open http://localhost:5173.
 
 Default seeded admin:
 - Email: admin@school.edu
+- Access code: ACC-ADM-EDUSYNC
 - Password: Admin@123
+
+If you want EduSync AI to accept employee or teacher credentials created in SAVANEX, set `SAVANEX_API_URL` in `backend/.env`. EduSync AI will then accept the same email or shared access code and provision the local shadow account on first successful login.
 
 ## API Highlights
 

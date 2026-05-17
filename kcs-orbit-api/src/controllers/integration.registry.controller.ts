@@ -91,6 +91,24 @@ const updateParentSchema = z.object({
   message: "At least one field must be provided",
 });
 
+const updateTeacherSchema = z.object({
+  fullName: z.string().min(1).optional(),
+  firstName: z.string().min(1).nullable().optional(),
+  middleName: z.string().min(1).nullable().optional(),
+  lastName: z.string().min(1).nullable().optional(),
+  accessCode: z.string().min(6).max(24).nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().min(6).nullable().optional(),
+  subject: z.string().min(1).nullable().optional(),
+  employeeId: z.string().min(1).nullable().optional(),
+  employeeType: z.string().min(1).nullable().optional(),
+  department: z.string().min(1).nullable().optional(),
+  jobTitle: z.string().min(1).nullable().optional(),
+  mustChangePassword: z.boolean().optional(),
+}).refine((value) => Object.values(value).some((item) => item !== undefined), {
+  message: "At least one field must be provided",
+});
+
 const updateStudentSchema = z.object({
   firstName: z.string().min(1).optional(),
   middleName: z.string().min(1).nullable().optional(),
@@ -396,12 +414,14 @@ export async function updateRegistryEntity(req: Request, res: Response) {
   const query = deleteQuerySchema.parse(req.query);
   const payload = entityType === "parent"
     ? updateParentSchema.parse(req.body)
+    : entityType === "teacher"
+      ? updateTeacherSchema.parse(req.body)
     : entityType === "student"
       ? updateStudentSchema.parse(req.body)
       : null;
 
   if (!payload) {
-    return res.status(400).json({ message: "Only parent and student updates are supported through this endpoint" });
+    return res.status(400).json({ message: "Only parent, teacher and student updates are supported through this endpoint" });
   }
 
   const target = await resolveEntityByIdentifier({
@@ -479,6 +499,84 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     });
 
     return res.json({ entityType, orbitId: parent.id, updated: true, entity: parent });
+  }
+
+  if (entityType === "teacher") {
+    const teacherPayload = payload as z.infer<typeof updateTeacherSchema>;
+    const normalizedAccessCode = teacherPayload.accessCode ? normalizeAccessCode(teacherPayload.accessCode) : null;
+    if (normalizedAccessCode) {
+      const conflict = await findAccessCodeConflict(prisma, normalizedAccessCode);
+      if (conflict && (conflict.entityType !== "teacher" || conflict.id !== target.orbitId)) {
+        return res.status(409).json({ message: `Access code already exists: ${normalizedAccessCode}` });
+      }
+    }
+
+    const duplicateFilters: Prisma.TeacherWhereInput[] = [];
+    if (teacherPayload.email) {
+      duplicateFilters.push({ email: { equals: teacherPayload.email, mode: "insensitive" } });
+    }
+    if (teacherPayload.phone) {
+      duplicateFilters.push({ phone: teacherPayload.phone });
+    }
+    if (teacherPayload.employeeId) {
+      duplicateFilters.push({ employeeId: { equals: teacherPayload.employeeId, mode: "insensitive" } });
+    }
+
+    if (duplicateFilters.length > 0) {
+      const duplicate = await prisma.teacher.findFirst({
+        where: {
+          organizationId: query.organizationId,
+          id: { not: target.orbitId },
+          OR: duplicateFilters,
+        },
+        select: { email: true, phone: true, employeeId: true },
+      });
+
+      if (duplicate) {
+        if (teacherPayload.email && duplicate.email?.toLowerCase() === teacherPayload.email.toLowerCase()) {
+          return res.status(409).json({ message: `Teacher email already exists: ${teacherPayload.email}` });
+        }
+
+        if (teacherPayload.phone && duplicate.phone === teacherPayload.phone) {
+          return res.status(409).json({ message: `Teacher phone already exists: ${teacherPayload.phone}` });
+        }
+
+        if (teacherPayload.employeeId && duplicate.employeeId?.toLowerCase() === teacherPayload.employeeId.toLowerCase()) {
+          return res.status(409).json({ message: `Teacher employee ID already exists: ${teacherPayload.employeeId}` });
+        }
+      }
+    }
+
+    const teacher = await prisma.$transaction(async (tx) => {
+      const fullName = teacherPayload.fullName || teacherPayload.firstName || teacherPayload.lastName || teacherPayload.middleName
+        ? buildCanonicalFullName(teacherPayload)
+        : undefined;
+      const updatedTeacher = await tx.teacher.update({
+        where: { id: target.orbitId },
+        data: {
+          ...(fullName !== undefined ? { fullName } : {}),
+          ...(teacherPayload.firstName !== undefined ? { firstName: teacherPayload.firstName ? normalizeText(teacherPayload.firstName) : null } : {}),
+          ...(teacherPayload.middleName !== undefined ? { middleName: teacherPayload.middleName ? normalizeText(teacherPayload.middleName) : null } : {}),
+          ...(teacherPayload.lastName !== undefined ? { lastName: teacherPayload.lastName ? normalizeText(teacherPayload.lastName) : null } : {}),
+          ...(teacherPayload.accessCode !== undefined ? { accessCode: normalizedAccessCode } : {}),
+          ...(teacherPayload.email !== undefined ? { email: teacherPayload.email } : {}),
+          ...(teacherPayload.phone !== undefined ? { phone: teacherPayload.phone } : {}),
+          ...(teacherPayload.subject !== undefined ? { subject: teacherPayload.subject ? normalizeText(teacherPayload.subject) : null } : {}),
+          ...(teacherPayload.employeeId !== undefined ? { employeeId: teacherPayload.employeeId ? normalizeText(teacherPayload.employeeId) : null } : {}),
+          ...(teacherPayload.employeeType !== undefined ? { employeeType: teacherPayload.employeeType ? normalizeText(teacherPayload.employeeType) : null } : {}),
+          ...(teacherPayload.department !== undefined ? { department: teacherPayload.department ? normalizeText(teacherPayload.department) : null } : {}),
+          ...(teacherPayload.jobTitle !== undefined ? { jobTitle: teacherPayload.jobTitle ? normalizeText(teacherPayload.jobTitle) : null } : {}),
+          ...(teacherPayload.mustChangePassword !== undefined ? { mustChangePassword: teacherPayload.mustChangePassword } : {}),
+        },
+      });
+
+      await createSyncEvent(tx, { organizationId: query.organizationId, appSlug, eventType: "teacher.updated", entityType, entityId: target.orbitId, payload });
+      await createAuditLog(tx, { organizationId: query.organizationId, action: `${appSlug.toLowerCase()}.teacher.updated`, entityType, entityId: target.orbitId, metadata: { identifier: req.params.identifier, identifierType: query.identifierType } });
+
+      return updatedTeacher;
+    });
+
+    return res.json({ entityType, orbitId: teacher.id, updated: true, entity: teacher });
   }
 
   const studentPayload = payload as z.infer<typeof updateStudentSchema>;
