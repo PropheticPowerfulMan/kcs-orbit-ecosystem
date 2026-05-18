@@ -100,7 +100,6 @@ const updateTeacherSchema = z.object({
   email: z.string().email().nullable().optional(),
   phone: z.string().min(6).nullable().optional(),
   subject: z.string().min(1).nullable().optional(),
-  employeeId: z.string().min(1).nullable().optional(),
   employeeType: z.string().min(1).nullable().optional(),
   department: z.string().min(1).nullable().optional(),
   jobTitle: z.string().min(1).nullable().optional(),
@@ -518,9 +517,6 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     if (teacherPayload.phone) {
       duplicateFilters.push({ phone: teacherPayload.phone });
     }
-    if (teacherPayload.employeeId) {
-      duplicateFilters.push({ employeeId: { equals: teacherPayload.employeeId, mode: "insensitive" } });
-    }
 
     if (duplicateFilters.length > 0) {
       const duplicate = await prisma.teacher.findFirst({
@@ -529,7 +525,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           id: { not: target.orbitId },
           OR: duplicateFilters,
         },
-        select: { email: true, phone: true, employeeId: true },
+        select: { email: true, phone: true },
       });
 
       if (duplicate) {
@@ -541,9 +537,6 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           return res.status(409).json({ message: `Teacher phone already exists: ${teacherPayload.phone}` });
         }
 
-        if (teacherPayload.employeeId && duplicate.employeeId?.toLowerCase() === teacherPayload.employeeId.toLowerCase()) {
-          return res.status(409).json({ message: `Teacher employee ID already exists: ${teacherPayload.employeeId}` });
-        }
       }
     }
 
@@ -562,7 +555,6 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(teacherPayload.email !== undefined ? { email: teacherPayload.email } : {}),
           ...(teacherPayload.phone !== undefined ? { phone: teacherPayload.phone } : {}),
           ...(teacherPayload.subject !== undefined ? { subject: teacherPayload.subject ? normalizeText(teacherPayload.subject) : null } : {}),
-          ...(teacherPayload.employeeId !== undefined ? { employeeId: teacherPayload.employeeId ? normalizeText(teacherPayload.employeeId) : null } : {}),
           ...(teacherPayload.employeeType !== undefined ? { employeeType: teacherPayload.employeeType ? normalizeText(teacherPayload.employeeType) : null } : {}),
           ...(teacherPayload.department !== undefined ? { department: teacherPayload.department ? normalizeText(teacherPayload.department) : null } : {}),
           ...(teacherPayload.jobTitle !== undefined ? { jobTitle: teacherPayload.jobTitle ? normalizeText(teacherPayload.jobTitle) : null } : {}),
