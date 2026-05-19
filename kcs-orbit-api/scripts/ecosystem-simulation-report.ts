@@ -282,6 +282,25 @@ type SyncEvent = {
   warning?: string;
 };
 
+type LiveProbeResult = {
+  service: string;
+  url: string;
+  requests: number;
+  reachableResponses: number;
+  healthyResponses: number;
+  networkFailures: number;
+  averageLatencyMs: number;
+  maxLatencyMs: number;
+  lastStatus: number | null;
+};
+
+type LiveProbeOptions = {
+  profile: "standard" | "intense";
+  requestsPerService: number;
+  timeoutMs: number;
+  concurrency: number;
+};
+
 type ValidationCounter = {
   parents: number;
   teachers: number;
@@ -1469,6 +1488,118 @@ function buildMessageThreads(parents: Parent[], teachers: Teacher[], risks: Risk
   ];
 }
 
+function parseLiveProbeOptions(argv: string[]): LiveProbeOptions {
+  const intenseRequested = argv.includes("--stress-intense") || argv.includes("--stress-profile=intense");
+  const profile: LiveProbeOptions["profile"] = intenseRequested ? "intense" : "standard";
+  const defaults: LiveProbeOptions = intenseRequested
+    ? { profile, requestsPerService: 20, timeoutMs: 7000, concurrency: 4 }
+    : { profile, requestsPerService: 8, timeoutMs: 5000, concurrency: 1 };
+
+  const findNumericArg = (prefix: string) => {
+    const raw = argv.find((entry) => entry.startsWith(prefix));
+    if (!raw) return undefined;
+    const parsed = Number(raw.slice(prefix.length));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  return {
+    profile,
+    requestsPerService: Math.max(1, Math.round(findNumericArg("--stress-requests=") ?? defaults.requestsPerService)),
+    timeoutMs: Math.max(1000, Math.round(findNumericArg("--stress-timeout=") ?? defaults.timeoutMs)),
+    concurrency: Math.max(1, Math.round(findNumericArg("--stress-concurrency=") ?? defaults.concurrency)),
+  };
+}
+
+async function probeLiveServices(options: LiveProbeOptions) {
+  const targets = [
+    { service: "KCS Orbit API", url: "http://localhost:4500/health", fallbackUrl: "http://127.0.0.1:4500/health", healthyStatuses: [200] },
+    { service: "KCS Nexus API", url: "http://localhost:5000/health", fallbackUrl: "http://127.0.0.1:5000/health", healthyStatuses: [200] },
+    { service: "KCS Nexus Frontend", url: "http://localhost:5173/", fallbackUrl: "http://127.0.0.1:5173/", healthyStatuses: [200] },
+    { service: "EduPay API", url: "http://localhost:4000/health", fallbackUrl: "http://127.0.0.1:4000/health", healthyStatuses: [200] },
+    { service: "EduPay Web", url: "http://localhost:5174/EduPay-Smart-System/", fallbackUrl: "http://127.0.0.1:5174/EduPay-Smart-System/", healthyStatuses: [200] },
+    { service: "EduSync AI API", url: "http://localhost:8000/", fallbackUrl: "http://127.0.0.1:8000/", healthyStatuses: [200] },
+    { service: "EduSync AI Frontend", url: "http://localhost:5175/", fallbackUrl: "http://127.0.0.1:5175/", healthyStatuses: [200] },
+    { service: "SAVANEX API", url: "http://localhost:8001/api/auth/login/", fallbackUrl: "http://127.0.0.1:8001/api/auth/login/", healthyStatuses: [405] },
+    { service: "SAVANEX Frontend", url: "http://localhost:3000/Syst-me-de-gestion-scolaire/", fallbackUrl: "http://127.0.0.1:3000/Syst-me-de-gestion-scolaire/", healthyStatuses: [200] },
+  ] as const;
+
+  const requestOnce = async (url: string, signal: AbortSignal) => fetch(url, {
+    method: "GET",
+    signal,
+    headers: {
+      Accept: "application/json,text/html;q=0.9,*/*;q=0.8",
+    },
+  });
+
+  const results = await Promise.all(
+    targets.map(async (target) => {
+      const latencies: number[] = [];
+      let reachableResponses = 0;
+      let healthyResponses = 0;
+      let networkFailures = 0;
+      let lastStatus: number | null = null;
+
+      for (let startIndex = 0; startIndex < options.requestsPerService; startIndex += options.concurrency) {
+        const batchSize = Math.min(options.concurrency, options.requestsPerService - startIndex);
+        await Promise.all(
+          Array.from({ length: batchSize }, async () => {
+            const startedAt = Date.now();
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
+            try {
+              let response: Response;
+              try {
+                response = await requestOnce(target.url, controller.signal);
+              } catch {
+                response = await requestOnce(target.fallbackUrl, controller.signal);
+              }
+              const duration = Date.now() - startedAt;
+              latencies.push(duration);
+              reachableResponses += 1;
+              lastStatus = response.status;
+              if (target.healthyStatuses.includes(response.status)) {
+                healthyResponses += 1;
+              }
+            } catch {
+              networkFailures += 1;
+            } finally {
+              clearTimeout(timeout);
+            }
+          })
+        );
+      }
+
+      return {
+        service: target.service,
+        url: target.url,
+        requests: options.requestsPerService,
+        reachableResponses,
+        healthyResponses,
+        networkFailures,
+        averageLatencyMs: latencies.length > 0 ? roundCurrency(mean(latencies)) : 0,
+        maxLatencyMs: latencies.length > 0 ? Math.max(...latencies) : 0,
+        lastStatus,
+      } satisfies LiveProbeResult;
+    })
+  );
+
+  const summary = {
+    profile: options.profile,
+    requestsPerService: options.requestsPerService,
+    timeoutMs: options.timeoutMs,
+    concurrency: options.concurrency,
+    services: results.length,
+    totalRequests: sum(results.map((result) => result.requests)),
+    reachableResponses: sum(results.map((result) => result.reachableResponses)),
+    healthyResponses: sum(results.map((result) => result.healthyResponses)),
+    networkFailures: sum(results.map((result) => result.networkFailures)),
+    averageLatencyMs: roundCurrency(mean(results.filter((result) => result.averageLatencyMs > 0).map((result) => result.averageLatencyMs))),
+    maxLatencyMs: Math.max(...results.map((result) => result.maxLatencyMs), 0),
+  };
+
+  return { results, summary };
+}
+
 function buildTables(headers: string[], rows: Array<Array<string | number>>) {
   const header = `| ${headers.join(" | ")} |`;
   const divider = `| ${headers.map(() => "---").join(" | ")} |`;
@@ -1505,6 +1636,7 @@ function renderReport(data: {
   aiInsights: ReturnType<typeof buildAiInsights>;
   syncEvents: SyncEvent[];
   counters: ValidationCounter;
+  liveProbe: Awaited<ReturnType<typeof probeLiveServices>>;
 }) {
   const parentRows = data.parents.map((parent) => {
     const plans = parent.children.map((child) => data.plansByStudentId.get(child.id)!);
@@ -1561,6 +1693,7 @@ function renderReport(data: {
   const contractValidated = data.syncEvents.filter((event) => event.contractValidated).length;
   const highRiskStudents = data.risks.filter((risk) => risk.overallRisk === "HIGH");
   const mediumRiskStudents = data.risks.filter((risk) => risk.overallRisk === "MEDIUM");
+  const liveHealthyServices = data.liveProbe.results.filter((result) => result.healthyResponses === result.requests).length;
 
   const lines = [
     `# KCS Orbit Ecosystem Simulation Report`,
@@ -1589,6 +1722,9 @@ function renderReport(data: {
         ["Outstanding balances", formatCurrency(totalDebt)],
         ["Discounts applied", formatCurrency(totalDiscount)],
         ["Contract-validated sync events", contractValidated],
+        ["Live stress profile", data.liveProbe.summary.profile],
+        ["Live stress requests", data.liveProbe.summary.totalRequests],
+        ["Live healthy responses", data.liveProbe.summary.healthyResponses],
       ]
     ),
     "",
@@ -1685,6 +1821,26 @@ function renderReport(data: {
       ).map(([type, count]) => [type, count])
     ),
     "",
+    "## Live Runtime Stress Probe",
+    "",
+    buildTables(
+      ["Profile", "Requests/service", "Concurrency", "Timeout"],
+      [[data.liveProbe.summary.profile, data.liveProbe.summary.requestsPerService, data.liveProbe.summary.concurrency, `${data.liveProbe.summary.timeoutMs} ms`]]
+    ),
+    "",
+    buildTables(
+      ["Service", "Healthy", "Reachable", "Network failures", "Avg latency", "Max latency", "Last status"],
+      data.liveProbe.results.map((result) => [
+        result.service,
+        `${result.healthyResponses}/${result.requests}`,
+        `${result.reachableResponses}/${result.requests}`,
+        result.networkFailures,
+        `${result.averageLatencyMs} ms`,
+        `${result.maxLatencyMs} ms`,
+        result.lastStatus ?? "N/A",
+      ])
+    ),
+    "",
     "## System Health Summary",
     "",
     buildTables(
@@ -1694,6 +1850,10 @@ function renderReport(data: {
         ["Warnings", syncWarnings],
         ["Errors", syncFailures],
         ["Orbit contract coverage", `${contractValidated} events validated through shared-contracts`],
+        ["Live runtime healthy services", `${liveHealthyServices}/${data.liveProbe.results.length}`],
+        ["Live runtime network failures", data.liveProbe.summary.networkFailures],
+        ["Average live latency", `${data.liveProbe.summary.averageLatencyMs} ms`],
+        ["Peak live latency", `${data.liveProbe.summary.maxLatencyMs} ms`],
         ["Notifications triggered", data.notifications.length],
         ["Forum activity", `${data.forums.length} threads / ${sum(data.forums.map((forum) => forum.messages.length))} messages`],
         ["High-risk students", highRiskStudents.length],
@@ -1706,8 +1866,9 @@ function renderReport(data: {
     `1. Payment allocation logic handled exact, underpayment, overpayment, multi-child, and negotiated-plan cases without negative balances or orphaned allocations.`,
     `2. Academic analytics identified ${highRiskStudents.length} high-risk learners and ${mediumRiskStudents.length} medium-risk learners using attendance, grade, homework, and finance signals.`,
     `3. Dashboard propagation was simulated successfully for grade, attendance, payment, and forum activity flows; supported Orbit contracts were validated with Zod for parents, teachers, students, classes, grades, attendance, payments, and announcements.`,
-    `4. The repo does not expose a shared Orbit contract for forum posts, assignment submissions, or notification envelopes; those flows were simulated from documented frontend/backend surfaces and flagged as coverage warnings rather than hard failures.`,
-    `5. KCS Academics is treated as the SAVANEX academic domain in this workspace; academic behavior in this report is exercised through SAVANEX + Orbit + Nexus.`,
+    `4. Live runtime probing executed ${data.liveProbe.summary.totalRequests} HTTP requests across ${data.liveProbe.results.length} services with ${data.liveProbe.summary.healthyResponses} healthy responses, ${data.liveProbe.summary.reachableResponses} reachable responses, and ${data.liveProbe.summary.networkFailures} network failures.`,
+    `5. The repo does not expose a shared Orbit contract for forum posts, assignment submissions, or notification envelopes; those flows were simulated from documented frontend/backend surfaces and flagged as coverage warnings rather than hard failures.`,
+    `6. KCS Academics is treated as the SAVANEX academic domain in this workspace; academic behavior in this report is exercised through SAVANEX + Orbit + Nexus.`,
     "",
     "### Recommendations",
     "",
@@ -1720,7 +1881,8 @@ function renderReport(data: {
   return lines.join("\n");
 }
 
-function main() {
+async function main() {
+  const liveProbeOptions = parseLiveProbeOptions(process.argv.slice(2));
   const { parents, students, teachers, staff } = buildEntities();
   const plansByStudentId = new Map<string, TuitionPlan>();
 
@@ -1799,6 +1961,7 @@ function main() {
   const aiInsights = buildAiInsights(parents, students, risks, gradebook, plansByStudentId);
   const messageThreads = buildMessageThreads(parents, teachers, risks);
   const { syncEvents, counters } = buildSyncEvents(parents, students, teachers, gradebook, attendance, paymentInstructions, receipts, forums, notifications);
+  const liveProbe = await probeLiveServices(liveProbeOptions);
 
   const report = renderReport({
     parents,
@@ -1818,6 +1981,7 @@ function main() {
     aiInsights,
     syncEvents,
     counters,
+    liveProbe,
   });
 
   const jsonPayload = {
@@ -1840,6 +2004,7 @@ function main() {
     aiInsights,
     syncEvents,
     counters,
+    liveProbe,
   };
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -1852,4 +2017,7 @@ function main() {
   console.log(`Sync events: ${syncEvents.length}`);
 }
 
-main();
+main().catch((error) => {
+  console.error("Simulation failed", error);
+  process.exitCode = 1;
+});
