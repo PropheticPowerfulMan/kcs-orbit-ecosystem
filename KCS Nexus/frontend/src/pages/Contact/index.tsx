@@ -32,8 +32,22 @@ const contactSchema = z.object({
 
 type ContactFormValues = z.infer<typeof contactSchema>
 
+const SCHOOL_CONTACT_EMAIL = 'kinshasachristianschool@gmail.com'
+
+const buildContactMailtoHref = (values: ContactFormValues) => {
+  const body = [
+    `Name: ${values.name}`,
+    `Email: ${values.email}`,
+    `Phone: ${values.phone || 'Not provided'}`,
+    '',
+    values.message,
+  ].join('\n')
+  return `mailto:${SCHOOL_CONTACT_EMAIL}?subject=${encodeURIComponent(values.subject)}&body=${encodeURIComponent(body)}`
+}
+
 const ContactPage = () => {
   const [submitted, setSubmitted] = useState(false)
+  const [manualEmailHref, setManualEmailHref] = useState('')
   const [sending, setSending] = useState(false)
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
@@ -48,11 +62,16 @@ const ContactPage = () => {
 
   const onSubmit = async (values: ContactFormValues) => {
     setSending(true)
+    setManualEmailHref('')
     try {
-      await contactAPI.send(values)
+      const response = await contactAPI.send(values)
+      if (!response.data?.data?.emailDelivery?.sent) {
+        setManualEmailHref(buildContactMailtoHref(values))
+      }
       setSubmitted(true)
       form.reset()
     } catch {
+      setManualEmailHref(buildContactMailtoHref(values))
       setSubmitted(true)
       form.reset()
     } finally {
@@ -132,6 +151,11 @@ const ContactPage = () => {
                   <div>
                     <p className="font-semibold">Message sent</p>
                     <p className="text-sm">Our team will get back to you shortly.</p>
+                    {manualEmailHref && (
+                      <a href={manualEmailHref} className="mt-2 inline-flex text-sm font-bold underline">
+                        Open email backup
+                      </a>
+                    )}
                   </div>
                 </div>
               )}

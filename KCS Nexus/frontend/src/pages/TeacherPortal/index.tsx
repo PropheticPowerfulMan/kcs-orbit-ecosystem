@@ -7,9 +7,12 @@ import {
 } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
+import SuggestionBox from '@/components/shared/SuggestionBox'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import { studentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import {
   aiSignals,
   aiRecommendations,
@@ -1728,6 +1731,7 @@ const TeacherDashboardHome = () => {
 
 const TeacherPortal = () => {
   const { user } = useAuthStore()
+  const { language } = useUIStore()
   const location = useLocation()
   const activeSegment = getTeacherSegment(location.pathname)
   const isDashboard = activeSegment === 'dashboard'
@@ -1741,10 +1745,10 @@ const TeacherPortal = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                Faculty Dashboard, {user?.firstName}
+                {getLocalizedGreeting(language)}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                Today&apos;s overview for teaching, assessment, and student support.
+                {getLocalizedPortalDate(language)} - Today&apos;s overview for teaching, assessment, and student support.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -1760,6 +1764,7 @@ const TeacherPortal = () => {
 
         <div className="space-y-6 p-6">
           {isDashboard && <PortalSectionPanel />}
+          {isDashboard && <SuggestionBox />}
 
           {!isDashboard && <TeacherSectionView segment={activeSegment} />}
 

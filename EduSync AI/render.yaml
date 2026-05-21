@@ -46,6 +46,15 @@ services:
       - key: KCS_ORBIT_ORGANIZATION_ID
         sync: false
 
+      - key: EDUPAY_API_URL
+        sync: false
+
+      - key: EDUPAY_LOGIN_PATH
+        value: /api/auth/login
+
+      - key: EDUPAY_TIMEOUT_SECONDS
+        value: "5"
+
   - type: web
     name: edusync-ai-web
     env: node

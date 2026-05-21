@@ -184,7 +184,7 @@ const AIChat = () => {
             animate={{ opacity: 1, scale: 1, y: 0, height: minimized ? 'auto' : 540 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.3, type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed bottom-6 right-6 z-50 flex w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-kcs-lg dark:border-kcs-blue-800 dark:bg-kcs-blue-950"
+            className="nexus-glass-card fixed bottom-6 right-6 z-50 flex w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl"
             style={{ maxHeight: minimized ? undefined : 540 }}
           >
             <div className="flex flex-shrink-0 items-center justify-between p-4 kcs-gradient">
@@ -246,7 +246,7 @@ const AIChat = () => {
                         className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                           message.role === 'user'
                             ? 'rounded-tr-sm bg-kcs-blue-600 text-white'
-                            : 'rounded-tl-sm bg-gray-100 text-gray-800 dark:bg-kcs-blue-800/50 dark:text-gray-200'
+                            : 'rounded-tl-sm border border-white/55 bg-white/55 text-gray-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-gray-200'
                         }`}
                         style={{ whiteSpace: 'pre-line' }}
                       >
@@ -260,7 +260,7 @@ const AIChat = () => {
                       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-kcs-blue-100 dark:bg-kcs-blue-800">
                         <Bot size={14} className="text-kcs-blue-600 dark:text-kcs-blue-300" />
                       </div>
-                      <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3 dark:bg-kcs-blue-800/50">
+                      <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-white/55 bg-white/55 px-4 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45">
                         <Loader2 size={14} className="animate-spin text-kcs-blue-600 dark:text-kcs-blue-400" />
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           {chatLanguage === 'fr' ? 'Recherche de la meilleure reponse...' : 'Finding the best answer...'}
@@ -286,7 +286,7 @@ const AIChat = () => {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 border-t border-gray-100 p-3 dark:border-kcs-blue-800">
+                <div className="flex items-center gap-2 border-t border-white/40 bg-white/20 p-3 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-950/30">
                   <input
                     ref={inputRef}
                     value={input}

@@ -17,6 +17,7 @@ const buildTeacherPayload = (form) => ({
   ...(form.phone !== undefined ? { phone: form.phone } : {}),
   ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
   employee_type: form.employeeType,
+  gender: form.gender,
   department: form.department,
   job_title: form.jobTitle,
   specialization: form.specialization,
@@ -47,6 +48,7 @@ const buildTeacherCreatePayload = (form) => ({
   },
   ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
   employee_type: form.employeeType,
+  gender: form.gender,
   department: form.department,
   job_title: form.jobTitle,
   specialization: form.specialization,
@@ -74,6 +76,7 @@ const mapTeacherToForm = (teacher) => ({
   phone: teacher?.contact_phone || teacher?.phone || '',
   teacherId: teacher?.teacher_id || teacher?.employee_id || '',
   employeeType: teacher?.employee_type || 'teacher',
+  gender: teacher?.gender || '',
   department: teacher?.department || '',
   jobTitle: teacher?.job_title || '',
   specialization: teacher?.specialization || '',
@@ -107,6 +110,7 @@ const initialForm = {
   phone: '',
   teacherId: '',
   employeeType: 'teacher',
+  gender: '',
   department: '',
   jobTitle: '',
   specialization: '',
@@ -153,6 +157,7 @@ const TeachersPage = () => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [form, setForm] = useState(initialForm);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -181,11 +186,42 @@ const TeachersPage = () => {
   const teachingEmployees = teachers.filter((teacher) => teacher.employee_type === 'teacher').length;
   const biometricReady = teachers.filter((teacher) => teacher.has_photo || teacher.has_biometrics).length;
   const departments = useMemo(() => new Set(teachers.map((teacher) => teacher.department).filter(Boolean)).size, [teachers]);
+  const employeeCategories = useMemo(() => {
+    const options = new Map([
+      ['all', 'Tous les employés'],
+      ['teacher', 'Professeurs'],
+      ['administrative', 'Administration'],
+      ['support', 'Support'],
+      ['leadership', 'Leadership'],
+      ['specialist', 'Spécialistes'],
+    ]);
+
+    teachers.forEach((teacher) => {
+      const job = String(teacher.job_title || '').trim();
+      const department = String(teacher.department || '').trim();
+      if (job) options.set(`job:${job.toLowerCase()}`, `Poste: ${job}`);
+      if (department) options.set(`department:${department.toLowerCase()}`, `Département: ${department}`);
+    });
+
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [teachers]);
   const filteredTeachers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) return teachers;
-
     return teachers.filter((teacher) => {
+      if (categoryFilter !== 'all') {
+        if (categoryFilter.startsWith('job:') && String(teacher.job_title || '').trim().toLowerCase() !== categoryFilter.slice(4)) {
+          return false;
+        }
+        if (categoryFilter.startsWith('department:') && String(teacher.department || '').trim().toLowerCase() !== categoryFilter.slice(11)) {
+          return false;
+        }
+        if (!categoryFilter.includes(':') && teacher.employee_type !== categoryFilter) {
+          return false;
+        }
+      }
+
+      if (!normalizedQuery) return true;
+
       const haystack = [
         teacher.full_name,
         teacher.teacher_id,
@@ -193,6 +229,7 @@ const TeachersPage = () => {
         teacher.kcs_card_id,
         teacher.employee_label,
         teacher.employee_type,
+        teacher.gender,
         teacher.job_title,
         teacher.department,
         teacher.specialization,
@@ -202,7 +239,7 @@ const TeachersPage = () => {
 
       return haystack.includes(normalizedQuery);
     });
-  }, [query, teachers]);
+  }, [categoryFilter, query, teachers]);
 
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -271,6 +308,7 @@ const TeachersPage = () => {
     { key: 'full_name', label: 'Employé' },
     { key: 'employee_id', label: 'ID employé', render: (value) => value || 'Auto' },
     { key: 'employee_label', label: 'Type', render: (value, row) => value || row.employee_type || 'Employé' },
+    { key: 'gender', label: 'Sexe', render: (value) => ({ F: 'Feminin', M: 'Masculin', O: 'Autre' }[value] || 'Non renseigne') },
     { key: 'job_title', label: 'Poste', render: (value) => value || 'Non renseigné' },
     { key: 'department', label: 'Département', render: (value) => value || 'Non assigné' },
     { key: 'employment_status', label: 'Statut', render: (value) => value || 'active' },
@@ -352,13 +390,22 @@ const TeachersPage = () => {
             <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Département" className={inputClass} />
             <input value={form.jobTitle} onChange={(event) => updateForm('jobTitle', event.target.value)} placeholder="Titre du poste" className={inputClass} />
             <input value={form.specialization} onChange={(event) => updateForm('specialization', event.target.value)} placeholder="Spécialité / matière si enseignant" className={inputClass} />
-            <input type="date" value={form.hireDate} onChange={(event) => updateForm('hireDate', event.target.value)} className={inputClass} required />
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Date d'engagement / debut du contrat</span>
+              <input type="date" value={form.hireDate} onChange={(event) => updateForm('hireDate', event.target.value)} className={inputClass} required />
+            </label>
             <select value={form.employeeType} onChange={(event) => updateForm('employeeType', event.target.value)} className={inputClass}>
               <option value="teacher">Teacher</option>
               <option value="administrative">Administrative Staff</option>
               <option value="support">Support Staff</option>
               <option value="leadership">Leadership</option>
               <option value="specialist">Specialist</option>
+            </select>
+            <select value={form.gender} onChange={(event) => updateForm('gender', event.target.value)} className={inputClass}>
+              <option value="">Sexe de l'employe</option>
+              <option value="F">Feminin</option>
+              <option value="M">Masculin</option>
+              <option value="O">Autre</option>
             </select>
             <select value={form.contractType} onChange={(event) => updateForm('contractType', event.target.value)} className={inputClass}>
               <option value="permanent">Permanent</option>
@@ -407,6 +454,7 @@ const TeachersPage = () => {
               full_name: `${form.firstName} ${form.lastName}`.trim() || 'Employé KCS',
               role: form.employeeType === 'teacher' ? 'Enseignant' : 'Employé',
               employee_id: form.teacherId || 'Auto',
+              gender: form.gender,
               department: form.department,
               job_title: form.jobTitle,
               email: form.email || form.workEmail,
@@ -432,12 +480,23 @@ const TeachersPage = () => {
       </section>
 
       <div className="mb-4 card p-4">
-        <SearchField
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Rechercher employé, département, poste ou ID..."
-          inputClassName="pr-4"
-        />
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.45fr)]">
+          <SearchField
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Rechercher employé, département, poste, chauffeur, professeur ou ID..."
+            inputClassName="pr-4"
+          />
+          <select
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+            className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue"
+          >
+            {employeeCategories.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employés...</p> : null}

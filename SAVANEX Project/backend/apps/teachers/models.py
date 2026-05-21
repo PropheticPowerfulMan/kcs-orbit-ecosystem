@@ -12,6 +12,12 @@ def generate_employee_id():
 
 
 class Teacher(models.Model):
+    GENDER_CHOICES = [
+        ('M', _('Male')),
+        ('F', _('Female')),
+        ('O', _('Other')),
+    ]
+
     EMPLOYEE_TYPE_TEACHER = 'teacher'
     EMPLOYEE_TYPE_ADMINISTRATIVE = 'administrative'
     EMPLOYEE_TYPE_SUPPORT = 'support'
@@ -84,6 +90,12 @@ class Teacher(models.Model):
         choices=EMPLOYEE_TYPE_CHOICES,
         default=EMPLOYEE_TYPE_TEACHER,
         verbose_name=_('Employee Type'),
+    )
+    gender = models.CharField(
+        max_length=1,
+        blank=True,
+        choices=GENDER_CHOICES,
+        verbose_name=_('Gender'),
     )
     department = models.CharField(
         max_length=120,
@@ -204,6 +216,8 @@ class Teacher(models.Model):
     bio = models.TextField(blank=True, verbose_name=_('Biography'))
     employment_notes = models.TextField(blank=True, verbose_name=_('Employment Notes'))
     is_active = models.BooleanField(default=True, verbose_name=_('Active'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('System Entry Date'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Last Update Date'))
 
     class Meta:
         db_table = 'teachers'

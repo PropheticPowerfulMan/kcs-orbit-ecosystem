@@ -7,6 +7,7 @@ import { env } from '../config/env.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
+import { ensureUserAccessCodeColumn, isMissingAccessCodeColumnError } from '../utils/userAccessCode.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -35,8 +36,31 @@ function mapSavanexRole(role: string | undefined) {
   return null
 }
 
+function mapEduPayRole(role: string | undefined) {
+  const normalized = (role || '').trim().toUpperCase()
+  if (!normalized) return null
+  if (['SUPER_ADMIN', 'OWNER', 'ADMIN'].includes(normalized)) return 'ADMIN' as const
+  if (['FINANCIAL_MANAGER', 'ACCOUNTANT', 'CASHIER', 'HR_MANAGER', 'AUDITOR'].includes(normalized)) return 'STAFF' as const
+  if (normalized === 'PARENT') return 'PARENT' as const
+  return null
+}
+
+function mapEduPayStaffFunction(role: string | undefined) {
+  const normalized = (role || '').trim().toUpperCase()
+  if (normalized === 'ACCOUNTANT') return 'accountant'
+  if (normalized === 'HR_MANAGER') return 'office'
+  if (normalized === 'FINANCIAL_MANAGER') return 'principal'
+  if (normalized === 'CASHIER') return 'office'
+  if (normalized === 'AUDITOR') return 'discipline'
+  return null
+}
+
 function savanexAuthIsEnabled() {
   return Boolean(env.SAVANEX_API_URL)
+}
+
+function edupayAuthIsEnabled() {
+  return Boolean(env.EDUPAY_API_URL)
 }
 
 async function generateUniqueAccessCode(role: string) {
@@ -49,6 +73,16 @@ async function generateUniqueAccessCode(role: string) {
   }
 
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
+}
+
+type ExternalUserProfile = {
+  email: string
+  accessCode: string
+  role: 'ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT'
+  firstName: string
+  lastName: string
+  permissions?: string[]
+  staffFunction?: string | null
 }
 
 const registerSchema = z.object({
@@ -175,10 +209,74 @@ async function authenticateWithSavanex(identifier: string, password: string) {
     role: mappedRole,
     firstName: name.firstName,
     lastName: name.lastName,
+    permissions: ['ecosystem:savanex', `savanex:${mappedRole.toLowerCase()}`],
+    staffFunction: mappedRole === 'STAFF' ? 'office' : null,
   }
 }
 
-async function upsertExternalUser(externalUser: Awaited<ReturnType<typeof authenticateWithSavanex>>, password: string) {
+async function authenticateWithEduPay(identifier: string, password: string): Promise<ExternalUserProfile | null> {
+  if (!edupayAuthIsEnabled()) {
+    return null
+  }
+
+  const loginUrl = `${env.EDUPAY_API_URL!.replace(/\/$/, '')}${env.EDUPAY_LOGIN_PATH}`
+  let response: Response
+  try {
+    response = await fetch(loginUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password }),
+      signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
+    })
+  } catch {
+    throw new ApiError(503, 'EduPay shared authentication is temporarily unavailable')
+  }
+
+  if ([400, 401, 403, 404].includes(response.status)) {
+    return null
+  }
+
+  if (!response.ok) {
+    throw new ApiError(503, 'EduPay shared authentication is temporarily unavailable')
+  }
+
+  const payload = await response.json().catch(() => ({} as Record<string, unknown>)) as Record<string, unknown>
+  const mappedRole = mapEduPayRole(typeof payload.role === 'string' ? payload.role : undefined)
+  if (!mappedRole) {
+    return null
+  }
+
+  const fullName = typeof payload.fullName === 'string' && payload.fullName.trim()
+    ? payload.fullName.trim()
+    : 'EduPay User'
+  const name = splitFullName(fullName)
+  const accessCode = normalizeAccessCode(typeof payload.accessCode === 'string' ? payload.accessCode : identifier)
+  const email = identifier.includes('@')
+    ? identifier.trim().toLowerCase()
+    : `${accessCode.toLowerCase()}@edupay.local`
+  const sourceRole = typeof payload.role === 'string' ? payload.role.trim().toUpperCase() : mappedRole
+
+  return {
+    email,
+    accessCode,
+    role: mappedRole,
+    firstName: name.firstName,
+    lastName: name.lastName,
+    permissions: ['ecosystem:edupay', `edupay:${sourceRole.toLowerCase()}`],
+    staffFunction: mappedRole === 'STAFF' ? mapEduPayStaffFunction(sourceRole) : null,
+  }
+}
+
+async function authenticateWithSharedProviders(identifier: string, password: string) {
+  const edupayUser = await authenticateWithEduPay(identifier, password)
+  if (edupayUser) {
+    return edupayUser
+  }
+
+  return authenticateWithSavanex(identifier, password)
+}
+
+async function upsertExternalUser(externalUser: ExternalUserProfile | null, password: string) {
   if (!externalUser) {
     return null
   }
@@ -202,6 +300,8 @@ async function upsertExternalUser(externalUser: Awaited<ReturnType<typeof authen
         role: externalUser.role,
         firstName: externalUser.firstName,
         lastName: externalUser.lastName,
+        permissions: externalUser.permissions ?? [],
+        staffFunction: externalUser.staffFunction ?? null,
         passwordHash,
       },
     })
@@ -214,9 +314,43 @@ async function upsertExternalUser(externalUser: Awaited<ReturnType<typeof authen
       role: externalUser.role,
       firstName: externalUser.firstName,
       lastName: externalUser.lastName,
+      permissions: externalUser.permissions ?? [],
+      staffFunction: externalUser.staffFunction ?? null,
       passwordHash,
     },
   })
+}
+
+async function findLocalUserByIdentifier(identifier: string) {
+  const normalizedIdentifier = identifier.toLowerCase()
+  const query = () => prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: normalizedIdentifier },
+        { accessCode: identifier.toUpperCase() },
+      ],
+    },
+  })
+
+  try {
+    return await query()
+  } catch (error) {
+    if (!isMissingAccessCodeColumnError(error)) {
+      throw error
+    }
+
+    await ensureUserAccessCodeColumn(prisma, true)
+
+    try {
+      return await query()
+    } catch (retryError) {
+      if (!isMissingAccessCodeColumnError(retryError)) {
+        throw retryError
+      }
+
+      return prisma.user.findFirst({ where: { email: normalizedIdentifier } })
+    }
+  }
 }
 
 export const authRouter = Router()
@@ -263,15 +397,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   const identifier = (payload.identifier ?? payload.email ?? '').trim()
-  const normalizedIdentifier = identifier.toLowerCase()
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: normalizedIdentifier },
-        { accessCode: identifier.toUpperCase() },
-      ],
-    },
-  })
+  const user = await findLocalUserByIdentifier(identifier)
   if (user?.passwordHash) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
@@ -290,7 +416,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     }
   }
 
-  const externalUser = await authenticateWithSavanex(identifier, payload.password)
+  const externalUser = await authenticateWithSharedProviders(identifier, payload.password)
   if (!externalUser) {
     throw new ApiError(401, 'Invalid email or password')
   }

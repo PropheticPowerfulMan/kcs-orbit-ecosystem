@@ -1,5 +1,7 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
+from apps.communication.models import Notification
+from apps.communication.services import deliver_user_communication
 from apps.integration.orbit import sync_teacher
 from .services import deactivate_teacher
 from .models import Teacher
@@ -26,6 +28,20 @@ class TeacherListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         teacher = serializer.save()
         sync_teacher(teacher)
+        subject = 'Acces SAVANEX employe active'
+        body = (
+            f"Bonjour {teacher.full_name or teacher.user.username}, votre profil employe SAVANEX est active. "
+            f"Matricule: {teacher.employee_id}. Identifiant: {teacher.user.username}. "
+            f"Code d'acces: {teacher.user.access_code}. "
+            "Le mot de passe temporaire doit etre change a la premiere connexion."
+        )
+        deliver_user_communication(
+            teacher.user,
+            subject,
+            body,
+            notif_type=Notification.TYPE_ANNOUNCEMENT,
+            link='/teachers',
+        )
 
 
 class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
+from sqlalchemy.engine import Connection
 
 from app.api.routes import analytics, auth, chat, directory, messaging, notifications, registry, workflows
 from app.core.config import settings
@@ -39,12 +40,21 @@ def ensure_user_identity_columns() -> None:
     if "access_code" not in columns:
         statements.append("ALTER TABLE users ADD COLUMN access_code VARCHAR(32)")
 
+    def ensure_role_values(connection: Connection) -> None:
+        if connection.dialect.name != "postgresql":
+            return
+
+        for role_value in (Role.PARENT.value, Role.STUDENT.value):
+            connection.execute(text(f"ALTER TYPE role ADD VALUE IF NOT EXISTS '{role_value}'"))
+
     if not statements:
         with engine.begin() as connection:
+            ensure_role_values(connection)
             connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_access_code_unique ON users (access_code) WHERE access_code IS NOT NULL"))
         return
 
     with engine.begin() as connection:
+        ensure_role_values(connection)
         for statement in statements:
             connection.execute(text(statement))
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_access_code_unique ON users (access_code) WHERE access_code IS NOT NULL"))

@@ -11,6 +11,8 @@ class Role(str, enum.Enum):
     ADMIN = "admin"
     TEACHER = "teacher"
     STAFF = "staff"
+    PARENT = "parent"
+    STUDENT = "student"
 
 
 class User(Base):

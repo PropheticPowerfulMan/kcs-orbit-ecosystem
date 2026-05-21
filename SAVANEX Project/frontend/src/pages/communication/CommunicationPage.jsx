@@ -23,21 +23,24 @@ const initialDraft = {
 const buildParentOptions = (students) => {
   const parents = new Map();
   students.forEach((student) => {
-    if (!student.parent || String(student.parent).startsWith('orbit:')) {
+    const parentId = student.parent || student.parent_external_id;
+    if (!parentId) {
       return;
     }
-    if (!parents.has(student.parent)) {
-      parents.set(student.parent, {
-        id: student.parent,
+    if (!parents.has(parentId)) {
+      parents.set(parentId, {
+        id: parentId,
         name: student.parent_name || 'Parent',
         email: student.parent_email || '',
         phone: student.parent_phone || '',
         students: [],
       });
     }
-    parents.get(student.parent).students.push(student.full_name);
+    parents.get(parentId).students.push(student.full_name);
   });
-  return Array.from(parents.values()).sort((left, right) => left.name.localeCompare(right.name));
+  return Array.from(parents.values())
+    .filter((parent) => parent.email || parent.phone || parent.students.length)
+    .sort((left, right) => left.name.localeCompare(right.name));
 };
 
 const formatDelivery = (delivery = []) => {
@@ -61,20 +64,31 @@ const CommunicationPage = () => {
     async function loadCommunication() {
       setLoading(true);
       setError('');
-      try {
-        const [messages, loadedStudents] = await Promise.all([
-          communicationService.getMessages('sent'),
-          studentsService.getAll(),
-        ]);
-        if (!alive) return;
-        setMessageList(messages);
-        setStudents(loadedStudents);
-      } catch (loadError) {
-        if (!alive) return;
-        setError(loadError?.response?.data?.detail || loadError?.message || 'Impossible de charger la communication.');
-      } finally {
-        if (alive) setLoading(false);
+      const [messagesResult, studentsResult] = await Promise.allSettled([
+        communicationService.getMessages('sent'),
+        studentsService.getAll(),
+      ]);
+      if (!alive) return;
+
+      if (messagesResult.status === 'fulfilled') {
+        setMessageList(messagesResult.value);
+      } else {
+        setMessageList([]);
+        setNotice("Historique des messages momentanement indisponible. La selection des parents reste chargee.");
       }
+
+      if (studentsResult.status === 'fulfilled') {
+        setStudents(studentsResult.value);
+      } else {
+        setStudents([]);
+      }
+
+      if (studentsResult.status === 'rejected') {
+        const failed = studentsResult.reason;
+        setError(failed?.response?.data?.detail || failed?.message || 'Impossible de charger les parents joignables.');
+      }
+
+      setLoading(false);
     }
     loadCommunication();
     return () => {

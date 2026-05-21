@@ -635,6 +635,9 @@ Start-ServiceWindow -Title 'KCS Nexus Backend' -Command (
   "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.KcsNexus)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
+  "`$env:EDUPAY_API_URL='http://localhost:4000'; " +
+  "`$env:EDUPAY_LOGIN_PATH='/api/auth/login'; " +
+  "`$env:EDUPAY_TIMEOUT_SECONDS='15'; " +
   "npm run dev"
 ) -Port $kcsNexusApiPort -LogName 'kcs-nexus-backend.log'
 

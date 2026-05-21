@@ -47,6 +47,28 @@ const demoState = {
       is_read: false,
     },
   ],
+  directory: {
+    parents: [
+      {
+        id: "demo-parent-1",
+        displayId: "PAR-DEMO-001",
+        fullName: "Parent Demo Alpha",
+        email: "parent.alpha@school.demo",
+        phone: "+243000001",
+        studentIds: ["STU-DEMO-001"],
+      },
+      {
+        id: "demo-parent-2",
+        displayId: "PAR-DEMO-002",
+        fullName: "Parent Demo Beta",
+        email: "parent.beta@school.demo",
+        phone: "+243000002",
+        studentIds: ["STU-DEMO-002"],
+      },
+    ],
+    students: [],
+    teachers: [],
+  },
 };
 
 function demoResponse(path, method, body) {
@@ -105,6 +127,14 @@ function demoResponse(path, method, body) {
     return demoState.notifications;
   }
 
+  if (path === "/directory/shared" && method === "GET") {
+    return {
+      source: "demo",
+      visibility: "shared-directory",
+      ...demoState.directory,
+    };
+  }
+
   if (path.startsWith("/notifications/") && path.endsWith("/read") && method === "PATCH") {
     const id = Number(path.split("/")[2]);
     const notification = demoState.notifications.find((item) => item.id === id);
@@ -157,7 +187,28 @@ function demoResponse(path, method, body) {
       priority: normalized.includes("urgent") || normalized.includes("urgence") ? "urgent" : "normal",
       timing: normalized.includes("demain") || normalized.includes("tomorrow") ? "demain" : "prochain creneau",
     };
+    const isDirectoryList =
+      /\b(liste|lister|affiche|afficher|donne|voir|show|list|display|all)\b/.test(normalized) &&
+      /\b(parent|parents|eleve|eleves|student|students|enseignant|enseignants|teacher|teachers)\b/.test(normalized) &&
+      !/\b(paye|payes|payee|paiement|frais|solde|scolarite|finance|paid|payment|fees|balance)\b/.test(normalized);
+    const directoryResponse = () => {
+      const rows = demoState.directory.parents;
+      const table = rows
+        .map((parent) => `- ${parent.fullName} | ${parent.displayId} | ${parent.email} | ${parent.phone} | ${parent.studentIds.join(", ")}`)
+        .join("\n");
+      return isFrench
+        ? `Liste des parents de l'ecole (${rows.length} visible(s) dans le contexte demo):\n\nNom | Identifiant | Email | Telephone | Eleves lies\n${table}\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
+        : `School parent list (${rows.length} visible in demo context):\n\nName | ID | Email | Phone | Linked students\n${table}\n\nSource: EduSync demo data. I did not invent names.`;
+    };
     const intents = [
+      {
+        intent: "directory_query",
+        terms: ["liste des parents", "tous les parents", "parents de l ecole", "list parents", "all parents"],
+        response: directoryResponse(),
+        actions: isFrench
+          ? ["lire_repertoire_partage", "retourner_tableau_repertoire", "verifier_source_orbit"]
+          : ["read_shared_directory", "return_directory_table", "verify_orbit_source"],
+      },
       {
         intent: "ecosystem_status_query",
         terms: ["ecosystem", "ecosysteme", "systeme", "system", "etat", "status", "porte parole", "porte-parole", "savanex", "edupay", "nexus", "orbit"],
@@ -220,6 +271,7 @@ function demoResponse(path, method, body) {
       },
     ];
     const match =
+      (isDirectoryList ? intents.find((item) => item.intent === "directory_query") : null) ||
       intents.find((item) => item.terms.some((term) => normalized.includes(term))) ||
       {
         intent: "general_query",

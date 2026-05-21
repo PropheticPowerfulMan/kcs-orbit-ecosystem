@@ -12,6 +12,9 @@ import {
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
+import SuggestionBox from '@/components/shared/SuggestionBox'
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { registryAPI, studentsAPI } from '@/services/api'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
@@ -2745,6 +2748,7 @@ const AdminSectionView = ({
 
 const AdminDashboard = () => {
   const { user } = useAuthStore()
+  const { language } = useUIStore()
   const location = useLocation()
   const activeSegment = getAdminSegment(location.pathname)
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
@@ -2760,10 +2764,10 @@ const AdminDashboard = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                Executive Dashboard, {user?.firstName}
+                {getLocalizedGreeting(language)}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
+                {getLocalizedPortalDate(language)} - A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
               </p>
             </div>
             <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">
@@ -2784,6 +2788,7 @@ const AdminDashboard = () => {
           ) : (
             <>
           <PortalSectionPanel />
+          <SuggestionBox />
 
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
             {[

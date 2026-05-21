@@ -495,6 +495,7 @@ export const teachersService = {
         full_name: teacher.name,
         employee_type: 'teacher',
         employee_label: 'Enseignant',
+        gender: '',
         job_title: 'Enseignant',
         specialization: teacher.subject,
         department: teacher.classes,

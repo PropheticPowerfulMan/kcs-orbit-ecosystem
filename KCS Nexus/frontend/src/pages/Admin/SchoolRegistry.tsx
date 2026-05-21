@@ -25,6 +25,7 @@ const SchoolRegistryPage = () => {
     studentFirst: '',
     studentLast: '',
     studentNumber: '',
+    studentGender: 'O',
     grade: '',
     section: 'A',
     parentFirst: '',
@@ -90,6 +91,7 @@ const SchoolRegistryPage = () => {
           firstName: form.studentFirst,
           lastName: form.studentLast,
           studentNumber: form.studentNumber,
+          gender: form.studentGender,
           grade: form.grade,
           section: form.section,
         },
@@ -113,7 +115,7 @@ const SchoolRegistryPage = () => {
       return
     }
 
-    setForm({ studentFirst: '', studentLast: '', studentNumber: '', grade: '', section: 'A', parentFirst: '', parentLast: '', parentEmail: '', parentPhone: '', relation: 'Parent' })
+    setForm({ studentFirst: '', studentLast: '', studentNumber: '', studentGender: 'O', grade: '', section: 'A', parentFirst: '', parentLast: '', parentEmail: '', parentPhone: '', relation: 'Parent' })
   }
 
   return (
@@ -161,6 +163,11 @@ const SchoolRegistryPage = () => {
                   {SCHOOL_LEVELS.map((level) => (
                     <option key={level} value={level}>{level}</option>
                   ))}
+                </select>
+                <select value={form.studentGender} onChange={(event) => setForm({ ...form, studentGender: event.target.value })} className="input-kcs">
+                  <option value="O">Gender not specified</option>
+                  <option value="F">Female</option>
+                  <option value="M">Male</option>
                 </select>
                 <select value={form.section} onChange={(event) => setForm({ ...form, section: event.target.value })} className="input-kcs">
                   <option>A</option>

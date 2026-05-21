@@ -22,6 +22,10 @@ def normalize_access_code(value: str | None) -> str:
     return (value or "").strip().upper()
 
 
+def edupay_auth_is_enabled() -> bool:
+    return bool(settings.edupay_api_url.strip())
+
+
 def savanex_auth_is_enabled() -> bool:
     return bool(settings.savanex_api_url.strip())
 
@@ -31,6 +35,8 @@ def generate_access_code(role: Role) -> str:
         Role.ADMIN: "ADM",
         Role.TEACHER: "TCH",
         Role.STAFF: "STF",
+        Role.PARENT: "PAR",
+        Role.STUDENT: "STU",
     }[role]
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f"ACC-{prefix}-{suffix}"
@@ -53,6 +59,21 @@ def map_savanex_role(role: str | None) -> Role | None:
         return Role.TEACHER
     if normalized == "employee":
         return Role.STAFF
+    if normalized == "parent":
+        return Role.PARENT
+    if normalized == "student":
+        return Role.STUDENT
+    return None
+
+
+def map_edupay_role(role: str | None) -> Role | None:
+    normalized = (role or "").strip().upper()
+    if normalized in {"SUPER_ADMIN", "OWNER", "ADMIN"}:
+        return Role.ADMIN
+    if normalized in {"FINANCIAL_MANAGER", "ACCOUNTANT", "CASHIER", "HR_MANAGER", "AUDITOR"}:
+        return Role.STAFF
+    if normalized == "PARENT":
+        return Role.PARENT
     return None
 
 
@@ -61,7 +82,52 @@ def default_department_for_role(role: Role) -> str:
         return "Academics"
     if role == Role.ADMIN:
         return "Administration"
+    if role == Role.PARENT:
+        return "Family Relations"
+    if role == Role.STUDENT:
+        return "Student Life"
     return "Operations"
+
+
+def authenticate_with_edupay(identifier: str, password: str) -> dict | None:
+    if not edupay_auth_is_enabled():
+        return None
+
+    base_url = settings.edupay_api_url.rstrip("/")
+    login_url = f"{base_url}{settings.edupay_login_path}"
+    body = json.dumps({"identifier": identifier, "password": password}).encode("utf-8")
+    req = request.Request(login_url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+
+    try:
+        with request.urlopen(req, timeout=settings.edupay_timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        if exc.code in (400, 401, 403, 404):
+            return None
+        raise HTTPException(status_code=503, detail="EduPay authentication is temporarily unavailable") from exc
+    except Exception as exc:  # pragma: no cover - integration boundary
+        raise HTTPException(status_code=503, detail="EduPay authentication is temporarily unavailable") from exc
+
+    mapped_role = map_edupay_role(payload.get("role"))
+    if mapped_role is None:
+        return None
+
+    access_code = normalize_access_code(payload.get("accessCode")) or normalize_access_code(identifier)
+    full_name = (payload.get("fullName") or "").strip() or "EduPay User"
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        if "@" in identifier:
+            email = identifier.strip().lower()
+        else:
+            email = f"{access_code.lower()}@edupay.local"
+
+    return {
+        "full_name": full_name,
+        "email": email,
+        "access_code": access_code or None,
+        "role": mapped_role,
+        "department": default_department_for_role(mapped_role),
+    }
 
 
 def authenticate_with_savanex(identifier: str, password: str) -> dict | None:
@@ -79,9 +145,9 @@ def authenticate_with_savanex(identifier: str, password: str) -> dict | None:
     except error.HTTPError as exc:
         if exc.code in (400, 401, 403, 404):
             return None
-        raise HTTPException(status_code=503, detail="External staff authentication is temporarily unavailable") from exc
+        raise HTTPException(status_code=503, detail="External shared authentication is temporarily unavailable") from exc
     except Exception as exc:  # pragma: no cover - integration boundary
-        raise HTTPException(status_code=503, detail="External staff authentication is temporarily unavailable") from exc
+        raise HTTPException(status_code=503, detail="External shared authentication is temporarily unavailable") from exc
 
     external_user = payload.get("user") or {}
     mapped_role = map_savanex_role(external_user.get("role"))
@@ -177,7 +243,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         db.commit()
         return TokenResponse(access_token=token)
 
-    external_user = authenticate_with_savanex(identifier, payload.password)
+    external_user = authenticate_with_edupay(identifier, payload.password)
+    if external_user is None:
+        external_user = authenticate_with_savanex(identifier, payload.password)
+
     if external_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

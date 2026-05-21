@@ -55,6 +55,9 @@ services:
       - key: KCS_ORBIT_ORGANIZATION_ID
         sync: false
 
+      - key: EDUPAY_API_URL
+        sync: false
+
   - type: web
     name: kcs-nexus-web
     env: node

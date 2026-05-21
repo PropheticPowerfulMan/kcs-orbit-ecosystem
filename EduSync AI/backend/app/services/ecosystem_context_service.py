@@ -120,12 +120,19 @@ class EcosystemContextService:
                 "teachers_count": None,
             }
 
+        parents = payload.get("parents", []) if isinstance(payload.get("parents"), list) else []
+        students = payload.get("students", []) if isinstance(payload.get("students"), list) else []
+        teachers = payload.get("teachers", []) if isinstance(payload.get("teachers"), list) else []
+
         return {
             "available": True,
             "source": "KCS Orbit",
-            "parents_count": len(payload.get("parents", [])),
-            "students_count": len(payload.get("students", [])),
-            "teachers_count": len(payload.get("teachers", [])),
+            "parents_count": len(parents),
+            "students_count": len(students),
+            "teachers_count": len(teachers),
+            "parents": parents[:100],
+            "students": students[:100],
+            "teachers": teachers[:100],
         }
 
 

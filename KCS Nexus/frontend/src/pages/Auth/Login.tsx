@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Eye, EyeOff, Lock, LogIn, Mail, ShieldCheck } from 'lucide-react'
-import { authAPI } from '@/services/api'
+import { API_BASE, authAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import type { User, UserRole } from '@/types'
 
@@ -61,6 +61,26 @@ const buildDemoUser = (account: DemoAccount): User => ({
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 })
+
+const getLoginErrorMessage = (err: any) => {
+  if (err?.response?.data?.message) {
+    return `Erreur API: ${err.response.data.message}. Pour le Super Admin demo, utilisez superadmin@kcsnexus.com / SuperAdmin123!.`
+  }
+
+  if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+    return `Erreur reseau: KCS Nexus n'arrive pas a joindre son API (${API_BASE}). Verifiez que le backend KCS Nexus est demarre et que EDUPAY_API_URL pointe vers EduPay API pour accepter les identifiants crees dans EduPay.`
+  }
+
+  if (err?.code === 'ECONNABORTED') {
+    return `Erreur reseau: la connexion a l'API KCS Nexus (${API_BASE}) a expire. Verifiez que KCS Nexus Backend et EduPay API sont demarres.`
+  }
+
+  if (err?.message) {
+    return `Erreur: ${err.message}. Pour le Super Admin demo, utilisez superadmin@kcsnexus.com / SuperAdmin123!.`
+  }
+
+  return 'Login failed. Use one of the demo accounts or connect the backend auth service.'
+}
 
 const LoginPage = () => {
   const navigate = useNavigate()
@@ -120,14 +140,7 @@ const LoginPage = () => {
       if (demoAccount) {
         handleDemoLogin(buildDemoUser(demoAccount))
       } else {
-        // Afficher l’erreur réelle du backend si disponible
-        let message = 'Login failed. Use one of the demo accounts or connect the backend auth service.'
-        if (err?.response?.data?.message) {
-          message = `Erreur API: ${err.response.data.message}. Pour le Super Admin demo, utilisez superadmin@kcsnexus.com / SuperAdmin123!.`
-        } else if (err?.message) {
-          message = `Erreur: ${err.message}. Pour le Super Admin demo, utilisez superadmin@kcsnexus.com / SuperAdmin123!.`
-        }
-        setErrorMessage(message)
+        setErrorMessage(getLoginErrorMessage(err))
       }
     } finally {
       setLoading(false)

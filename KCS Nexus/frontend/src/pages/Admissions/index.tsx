@@ -68,6 +68,7 @@ const DOCUMENT_FIELDS = [
 const studentSchema = z.object({
   firstName:      z.string().min(2, 'Required'),
   lastName:       z.string().min(2, 'Required'),
+  gender:         z.enum(['female', 'male'], { required_error: 'Select gender' }),
   dateOfBirth:    z.string().min(1, 'Required'),
   nationality:    z.string().min(2, 'Required'),
   applyingGrade:  z.string().min(1, 'Select a grade'),
@@ -105,6 +106,7 @@ const buildAdmissionEmailBody = (
     'STUDENT INFORMATION',
     `First name: ${studentData.firstName}`,
     `Last name: ${studentData.lastName}`,
+    `Gender: ${studentData.gender}`,
     `Date of birth: ${studentData.dateOfBirth}`,
     `Nationality: ${studentData.nationality}`,
     `Grade applying: ${studentData.applyingGrade}`,
@@ -156,6 +158,7 @@ const saveApplicationForAdmin = (
     lastName: studentData.lastName,
     studentName: `${studentData.firstName} ${studentData.lastName}`,
     dateOfBirth: studentData.dateOfBirth,
+    gender: studentData.gender,
     nationality: studentData.nationality,
     gradeApplying: studentData.applyingGrade,
     previousSchool: studentData.currentSchool,
@@ -192,6 +195,7 @@ const sendAdmissionFallbackEmail = async (
   fallbackData.append('Application number', applicationNumber)
   fallbackData.append('Student first name', studentData.firstName)
   fallbackData.append('Student last name', studentData.lastName)
+  fallbackData.append('Student gender', studentData.gender)
   fallbackData.append('Date of birth', studentData.dateOfBirth)
   fallbackData.append('Nationality', studentData.nationality)
   fallbackData.append('Grade applying', studentData.applyingGrade)
@@ -274,7 +278,7 @@ const AdmissionsPage = () => {
       formData.append('firstName', studentData.firstName)
       formData.append('lastName', studentData.lastName)
       formData.append('dateOfBirth', studentData.dateOfBirth)
-      formData.append('gender', 'Not specified')
+      formData.append('gender', studentData.gender)
       formData.append('nationality', studentData.nationality)
       formData.append('gradeApplying', studentData.applyingGrade)
       formData.append('previousSchool', studentData.currentSchool)
@@ -532,6 +536,15 @@ const AdmissionsPage = () => {
                             {studentForm.formState.errors.dateOfBirth && <p className="text-xs text-red-500 mt-1">{studentForm.formState.errors.dateOfBirth.message}</p>}
                           </div>
                           <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Gender *</label>
+                            <select {...studentForm.register('gender')} className="input-kcs">
+                              <option value="">Select...</option>
+                              <option value="female">Female</option>
+                              <option value="male">Male</option>
+                            </select>
+                            {studentForm.formState.errors.gender && <p className="text-xs text-red-500 mt-1">{studentForm.formState.errors.gender.message}</p>}
+                          </div>
+                          <div>
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Nationality *</label>
                             <input {...studentForm.register('nationality')} className="input-kcs" placeholder="e.g. Congolese" />
                           </div>
@@ -675,6 +688,7 @@ const AdmissionsPage = () => {
                             <h4 className="font-semibold text-sm text-kcs-blue-900 dark:text-white mb-3 flex items-center gap-2"><User size={14} /> Student</h4>
                             {[
                               ['Name', `${studentData.firstName} ${studentData.lastName}`],
+                              ['Gender', studentData.gender],
                               ['DOB', studentData.dateOfBirth],
                               ['Nationality', studentData.nationality],
                               ['Applying For', studentData.applyingGrade],

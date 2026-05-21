@@ -32,23 +32,27 @@ def _normalize_phone(phone):
     return ''.join(char for char in (phone or '').strip() if char == '+' or char.isdigit())
 
 
-def _send_parent_email(parent, subject, body):
-    if not parent.email:
-        return DeliveryResult('email', 'skipped', 'Parent email is missing.')
+def _send_user_email(user, subject, body, label='User'):
+    if not user.email:
+        return DeliveryResult('email', 'skipped', f'{label} email is missing.')
 
     try:
         sent_count = send_mail(
             subject=subject,
             message=body,
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-            recipient_list=[parent.email],
+            recipient_list=[user.email],
             fail_silently=False,
         )
     except Exception as exc:
-        logger.exception('Unable to send parent email to %s', parent.email)
+        logger.exception('Unable to send %s email to %s', label.lower(), user.email)
         return DeliveryResult('email', 'failed', str(exc))
 
-    return DeliveryResult('email', 'sent' if sent_count else 'failed', parent.email)
+    return DeliveryResult('email', 'sent' if sent_count else 'failed', user.email)
+
+
+def _send_parent_email(parent, subject, body):
+    return _send_user_email(parent, subject, body, 'Parent')
 
 
 def _post_json(url, payload, headers=None, timeout=10):
@@ -104,10 +108,10 @@ def _send_sms_with_twilio(phone, body):
         return DeliveryResult('sms', 'failed', f'Twilio returned {response.status}: {response_body[:160]}')
 
 
-def _send_parent_sms(parent, body):
-    phone = _normalize_phone(parent.phone)
+def _send_user_sms(user, body, label='User'):
+    phone = _normalize_phone(user.phone)
     if not phone:
-        return DeliveryResult('sms', 'skipped', 'Parent phone is missing.')
+        return DeliveryResult('sms', 'skipped', f'{label} phone is missing.')
 
     if not getattr(settings, 'SMS_ENABLED', True):
         return DeliveryResult('sms', 'skipped', 'SMS delivery is disabled.')
@@ -115,13 +119,17 @@ def _send_parent_sms(parent, body):
     try:
         result = _send_sms_with_webhook(phone, body) or _send_sms_with_twilio(phone, body)
     except Exception as exc:
-        logger.exception('Unable to send parent SMS to %s', phone)
+        logger.exception('Unable to send %s SMS to %s', label.lower(), phone)
         return DeliveryResult('sms', 'failed', str(exc))
 
     if result:
         return result
     logger.info('[sms simulated] to=%s body=%s', phone, body)
     return DeliveryResult('sms', 'simulated', 'Configure SMS_WEBHOOK_URL or Twilio settings for live SMS.')
+
+
+def _send_parent_sms(parent, body):
+    return _send_user_sms(parent, body, 'Parent')
 
 
 def _short_sms(subject, body):
@@ -144,6 +152,24 @@ def deliver_parent_communication(parent, subject, body, notif_type=Notification.
     return [
         _send_parent_email(parent, subject, body),
         _send_parent_sms(parent, _short_sms(subject, body)),
+    ]
+
+
+def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE_MESSAGE, link=''):
+    if not user:
+        return []
+
+    Notification.objects.create(
+        user=user,
+        title=subject[:200],
+        body=body,
+        notif_type=notif_type,
+        link=link,
+    )
+
+    return [
+        _send_user_email(user, subject, body),
+        _send_user_sms(user, _short_sms(subject, body)),
     ]
 
 

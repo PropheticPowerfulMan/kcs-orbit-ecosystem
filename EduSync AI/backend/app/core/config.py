@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     kcs_orbit_organization_id: str = ""
     kcs_orbit_timeout_seconds: int = 5
 
+    edupay_api_url: str = ""
+    edupay_login_path: str = "/api/auth/login"
+    edupay_timeout_seconds: int = 5
+
     savanex_api_url: str = ""
     savanex_login_path: str = "/api/auth/login/"
     savanex_timeout_seconds: int = 5

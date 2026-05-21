@@ -37,7 +37,7 @@ class TeacherSerializer(serializers.ModelSerializer):
         model = Teacher
         fields = [
             'id', 'teacher_id', 'employee_id', 'employee_type', 'employee_label',
-            'department', 'job_title', 'contract_type', 'employment_status',
+            'gender', 'department', 'job_title', 'contract_type', 'employment_status',
             'work_location', 'work_email', 'office_phone_extension',
             'payroll_reference', 'national_id_number', 'social_security_number',
             'tax_number', 'bank_name', 'bank_account_number', 'salary_grade',
@@ -49,9 +49,9 @@ class TeacherSerializer(serializers.ModelSerializer):
             'has_photo', 'has_biometrics',
             'must_change_password', 'password_generated_by_system',
             'qualification', 'specialization', 'hire_date', 'end_date', 'bio',
-            'employment_notes', 'is_active',
+            'employment_notes', 'is_active', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def update(self, instance, validated_data):
         first_name = validated_data.pop('first_name', None)
@@ -108,7 +108,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Teacher
         fields = [
-            'user', 'teacher_id', 'employee_id', 'employee_type', 'department',
+            'user', 'teacher_id', 'employee_id', 'employee_type', 'gender', 'department',
             'job_title', 'qualification', 'specialization', 'hire_date', 'end_date',
             'contract_type', 'employment_status', 'work_location', 'work_email',
             'office_phone_extension', 'payroll_reference', 'national_id_number',
@@ -120,6 +120,7 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             'teacher_id': {'required': False, 'allow_blank': True},
             'employee_id': {'required': False, 'allow_blank': True},
             'employee_type': {'required': False},
+            'gender': {'required': False, 'allow_blank': True},
             'department': {'required': False, 'allow_blank': True},
             'job_title': {'required': False, 'allow_blank': True},
             'qualification': {'required': False, 'allow_blank': True},

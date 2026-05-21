@@ -43,6 +43,7 @@ const baseFieldsByType = {
     ['ID employé', 'employee_id'],
     ['Nom complet', 'full_name'],
     ['Type', 'employee_label'],
+    ['Sexe', 'gender'],
     ['Poste', 'job_title'],
     ['Département', 'department'],
     ['Email', 'email'],
@@ -50,6 +51,8 @@ const baseFieldsByType = {
     ['Email professionnel', 'work_email'],
     ['Lieu de travail', 'work_location'],
     ['Date embauche', 'hire_date'],
+    ['Entree systeme', 'created_at'],
+    ['Derniere mise a jour', 'updated_at'],
     ['Superviseur', 'supervisor_name'],
     ['Statut', 'employment_status'],
     ['Carte KCS', 'kcs_card_id'],
@@ -99,8 +102,13 @@ const EntityDetailPanel = ({ entity, type, onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <section className="card max-h-[92vh] w-full max-w-5xl overflow-y-auto p-5 shadow-2xl">
+    <div
+      className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-slate-950/78 p-4 backdrop-blur-md sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <section className="card my-4 max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-y-auto p-5 shadow-2xl sm:my-6" onClick={(event) => event.stopPropagation()}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Consultation</p>

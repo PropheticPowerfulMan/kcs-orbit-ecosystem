@@ -11,6 +11,9 @@ import {
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
+import SuggestionBox from '@/components/shared/SuggestionBox'
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import {
   academicContext, aiSignals, announcements, auditLogs,
   attendance, communicationFlows, disciplineReports, feeAccounts, financeReadiness, messages,
@@ -282,6 +285,7 @@ const StaffSectionView = ({ segment }: { segment: string }) => {
 
 const StaffPortal = () => {
   const { user } = useAuthStore()
+  const { language } = useUIStore()
   const location = useLocation()
   const activeSegment = getStaffSegment(location.pathname)
   const staffMessages = messages.filter((message) => message.toRole === 'staff')
@@ -296,10 +300,10 @@ const StaffPortal = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                Staff Operations, {user?.firstName}
+                {getLocalizedGreeting(language)}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {academicContext.year} • {academicContext.term} • records, communication, admissions, discipline, and reports.
+                {getLocalizedPortalDate(language)} - {academicContext.year} - {academicContext.term} - records, communication, admissions, discipline, and reports.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -319,6 +323,7 @@ const StaffPortal = () => {
           ) : (
             <>
           <PortalSectionPanel />
+          <SuggestionBox />
 
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             {[

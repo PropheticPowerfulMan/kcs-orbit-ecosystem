@@ -45,11 +45,21 @@ class NLPEngine:
                     "invoice", "invoices", "receipt", "receipts", "tuition", "payer",
                     "paye", "payes", "payee", "payees", "paiement", "paiements",
                     "impaye", "impayes", "frais", "solde", "facture", "factures",
-                    "recu", "recus", "scolarite", "finance", "finances", "eleves",
-                    "students", "liste", "quels", "lesquels",
+                    "recu", "recus", "scolarite", "finance", "finances",
                 ),
                 actions_en=("open_finance_module", "filter_paid_students", "export_payment_list", "check_balances"),
                 actions_fr=("ouvrir_module_finance", "filtrer_eleves_payes", "exporter_liste_paiements", "verifier_soldes"),
+            ),
+            "directory_query": IntentDefinition(
+                keywords=(
+                    "liste parents", "liste des parents", "tous les parents", "parents de l ecole",
+                    "liste eleves", "liste des eleves", "tous les eleves", "eleves de l ecole",
+                    "liste enseignants", "liste des enseignants", "tous les enseignants",
+                    "repertoire", "annuaire", "directory", "list parents", "all parents",
+                    "list students", "all students", "list teachers", "all teachers",
+                ),
+                actions_en=("read_shared_directory", "return_directory_table", "verify_orbit_source"),
+                actions_fr=("lire_repertoire_partage", "retourner_tableau_repertoire", "verifier_source_orbit"),
             ),
             "leave_request": IntentDefinition(
                 keywords=(
@@ -121,6 +131,8 @@ class NLPEngine:
             for keyword in definition.keywords:
                 if self._contains_term(text, keyword):
                     score += 1.0 if " " not in keyword else 2.0
+            if intent == "directory_query" and self._is_directory_list_question(text):
+                score += 5.0
             if intent == "finance_query" and self._is_payment_question(text):
                 score += 4.0
             if self._has_action_verb(text) and score:
@@ -198,6 +210,9 @@ class NLPEngine:
                 "",
                 "Action suivante: ouvre EduPay ou le module Finance SAVANEX, filtre le statut Paye, puis exporte la liste. Si tu me donnes la classe ou la periode, je prepare le filtre exact.",
             ])
+
+        if intent == "directory_query":
+            return self._compose_directory_response("fr", details)
 
         if intent == "report_request":
             period = details.get("date", "la periode demandee")
@@ -297,6 +312,9 @@ class NLPEngine:
                 "Next step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.",
             ])
 
+        if intent == "directory_query":
+            return self._compose_directory_response("en", details)
+
         if intent == "report_request":
             department = details.get("department", "the relevant department")
             period = details.get("date", "the requested period")
@@ -378,6 +396,18 @@ class NLPEngine:
             )
         )
 
+    def _is_directory_list_question(self, text: str) -> bool:
+        list_terms = ("liste", "lister", "affiche", "afficher", "donne", "voir", "show", "list", "display", "all")
+        directory_terms = (
+            "parent", "parents", "eleve", "eleves", "student", "students",
+            "enseignant", "enseignants", "teacher", "teachers", "employe", "employes",
+        )
+        return (
+            any(self._contains_term(text, term) for term in list_terms)
+            and any(self._contains_term(text, term) for term in directory_terms)
+            and not self._is_payment_question(text)
+        )
+
     def _detect_language(self, text: str) -> str:
         french_markers = (
             "je ", "tu ", "nous ", "vous ", "pour ", "avec ", "demande",
@@ -421,6 +451,14 @@ class NLPEngine:
                 details["audience"] = audience
                 break
 
+        if self._is_directory_list_question(text):
+            if any(self._contains_term(text, term) for term in ("parent", "parents")):
+                details["directory_entity"] = "parents"
+            elif any(self._contains_term(text, term) for term in ("enseignant", "enseignants", "teacher", "teachers")):
+                details["directory_entity"] = "teachers"
+            elif any(self._contains_term(text, term) for term in ("eleve", "eleves", "student", "students")):
+                details["directory_entity"] = "students"
+
         date_match = re.search(
             r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
             r"demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|"
@@ -431,6 +469,85 @@ class NLPEngine:
             details["date"] = date_match.group(1)
 
         return details
+
+    def _compose_directory_response(self, language: str, details: dict[str, str]) -> str:
+        ecosystem = details.get("ecosystem_context", {})
+        directory = ecosystem.get("shared_directory", {})
+        entity = details.get("directory_entity", "parents")
+        rows = directory.get(entity, []) if directory.get("available") else []
+
+        if not directory.get("available"):
+            if language == "fr":
+                return (
+                    "Tu demandes une liste du repertoire, pas une requete finance.\n\n"
+                    f"Je ne peux pas afficher cette liste maintenant parce que KCS Orbit n'est pas disponible: {directory.get('reason', 'raison non precisee')}.\n"
+                    "Action correcte: connecter Orbit ou exposer le repertoire partage, puis je retournerai le tableau directement."
+                )
+            return (
+                "You are asking for a directory list, not a finance workflow.\n\n"
+                f"I cannot display it right now because KCS Orbit is unavailable: {directory.get('reason', 'reason not specified')}.\n"
+                "Correct action: connect Orbit or expose the shared directory, then I will return the table directly."
+            )
+
+        if not rows:
+            label = self._localized_audience(entity, language)
+            return (
+                f"Repertoire Orbit disponible, mais aucun enregistrement {label} n'est visible."
+                if language == "fr"
+                else f"Orbit directory is available, but no {label} record is visible."
+            )
+
+        if language == "fr":
+            title = {
+                "parents": "Liste des parents de l'ecole",
+                "students": "Liste des eleves de l'ecole",
+                "teachers": "Liste des enseignants/employes de l'ecole",
+            }.get(entity, "Liste du repertoire")
+            lines = [
+                f"{title} ({len(rows)} visible(s) dans le contexte charge):",
+                "",
+                "Nom | Identifiant | Email | Telephone | Eleves lies",
+            ]
+            for item in rows[:30]:
+                lines.append(self._format_directory_row(item, entity))
+            if len(rows) > 30:
+                lines.append(f"... {len(rows) - 30} autre(s) entree(s) non affichee(s) ici.")
+            lines.append("")
+            lines.append("Source: KCS Orbit / repertoire partage. Je n'ai pas invente de noms.")
+            return "\n".join(lines)
+
+        title = {
+            "parents": "School parent list",
+            "students": "School student list",
+            "teachers": "School teacher/employee list",
+        }.get(entity, "Directory list")
+        lines = [
+            f"{title} ({len(rows)} visible in the loaded context):",
+            "",
+            "Name | ID | Email | Phone | Linked students",
+        ]
+        for item in rows[:30]:
+            lines.append(self._format_directory_row(item, entity))
+        if len(rows) > 30:
+            lines.append(f"... {len(rows) - 30} more entries not shown here.")
+        lines.append("")
+        lines.append("Source: KCS Orbit shared directory. I did not invent names.")
+        return "\n".join(lines)
+
+    def _format_directory_row(self, item: dict, entity: str) -> str:
+        name = item.get("fullName") or item.get("name") or item.get("familyLabel") or item.get("displayName") or "-"
+        identifier = item.get("displayId") or item.get("studentNumber") or item.get("employeeId") or item.get("id") or "-"
+        email = item.get("email") or item.get("parentEmail") or "-"
+        phone = item.get("phone") or item.get("parentPhone") or "-"
+        linked = item.get("studentIds") or item.get("childrenExternalIds") or []
+        if entity == "students":
+            linked = item.get("parentId") or item.get("parentExternalId") or "-"
+        elif entity == "teachers":
+            linked = item.get("department") or item.get("jobTitle") or "-"
+        linked_label = ", ".join(str(value) for value in linked[:4]) if isinstance(linked, list) else str(linked)
+        if isinstance(linked, list) and len(linked) > 4:
+            linked_label += f", +{len(linked) - 4}"
+        return f"- {name} | {identifier} | {email} | {phone} | {linked_label or '-'}"
 
     def _apply_spokesperson_frame(self, response: str, context: dict, language: str) -> str:
         ecosystem = context.get("ecosystem_context")
