@@ -149,8 +149,9 @@ async function createRegistryEntityInOrbit(entityType: RegistryEntityType, paylo
 }
 
 async function deleteRegistryEntityInOrbit(entityType: RegistryEntityType, identifier: string, organizationId: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') {
+  const registryEntityType = entityType === 'parent' ? 'family' : entityType
   const response = await fetch(
-    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${entityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
+    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/${registryEntityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
     {
       method: 'DELETE',
       headers: {

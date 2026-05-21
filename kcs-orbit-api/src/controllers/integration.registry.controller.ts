@@ -376,7 +376,8 @@ async function findEntityByOrbitId(organizationId: string, entityType: z.infer<t
 
 async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<typeof entityTypeSchema>, orbitId: string) {
   switch (entityType) {
-    case "family": {
+    case "family":
+    case "parent": {
       const children = await db.student.findMany({ where: { parentId: orbitId }, select: { id: true } });
       const childIds = children.map((student) => student.id);
       if (childIds.length > 0) {
@@ -389,9 +390,6 @@ async function deleteEntity(db: Prisma.TransactionClient, entityType: z.infer<ty
       await db.externalLink.deleteMany({ where: { entityType: "parent", nexusEntityId: orbitId } });
       return db.parent.delete({ where: { id: orbitId } });
     }
-    case "parent":
-      await db.student.updateMany({ where: { parentId: orbitId }, data: { parentId: null } });
-      return db.parent.delete({ where: { id: orbitId } });
     case "student":
       await db.payment.deleteMany({ where: { studentId: orbitId } });
       await db.grade.deleteMany({ where: { studentId: orbitId } });

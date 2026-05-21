@@ -404,9 +404,10 @@ def update_registry_entity(entity_type: str, identifier: str, payload: dict, ide
 
 
 def delete_registry_entity(entity_type: str, identifier: str, identifier_type: str = "orbitId") -> dict:
+    registry_entity_type = "family" if entity_type == "parent" else entity_type
     return _request_json(
         "DELETE",
-        f"/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
+        f"/api/integration/registry/{quote(registry_entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
     )
 
 
@@ -419,6 +420,6 @@ def delete_student(student) -> None:
 
 def delete_parent(parent) -> None:
     try:
-        delete_registry_entity("parent", _parent_external_id(parent), "externalId")
+        delete_registry_entity("family", _parent_external_id(parent), "externalId")
     except Exception as exc:  # pragma: no cover - defensive integration boundary
         logger.warning("Orbit parent delete failed for %s: %s", parent.pk, exc)
