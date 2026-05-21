@@ -6,6 +6,7 @@ import App from '@/App'
 import '@/index.css'
 import '@/i18n'
 import { getBasePath } from '@/utils/assets'
+import { registerPwa } from '@/registerPwa'
 
 const queryClient = new QueryClient()
 const routerBasePath = getBasePath()
@@ -19,6 +20,8 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator && window.location.hostn
     })
     .catch(() => undefined)
 }
+
+registerPwa()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
