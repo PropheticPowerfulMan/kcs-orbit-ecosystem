@@ -268,12 +268,21 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
 }
 
 async function authenticateWithSharedProviders(identifier: string, password: string) {
-  const edupayUser = await authenticateWithEduPay(identifier, password)
-  if (edupayUser) {
-    return edupayUser
+  try {
+    const edupayUser = await authenticateWithEduPay(identifier, password)
+    if (edupayUser) {
+      return edupayUser
+    }
+  } catch (error) {
+    console.warn('[auth] EduPay shared authentication unavailable; trying other ecosystem providers.', error)
   }
 
-  return authenticateWithSavanex(identifier, password)
+  try {
+    return await authenticateWithSavanex(identifier, password)
+  } catch (error) {
+    console.warn('[auth] SAVANEX shared authentication unavailable.', error)
+    throw new ApiError(503, 'Shared ecosystem authentication is temporarily unavailable. Verify KCS Nexus, EduPay, SAVANEX, and KCS Orbit services.')
+  }
 }
 
 async function upsertExternalUser(externalUser: ExternalUserProfile | null, password: string) {
