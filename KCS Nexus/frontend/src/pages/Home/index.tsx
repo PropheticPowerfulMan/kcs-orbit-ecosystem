@@ -8,6 +8,7 @@ import {
   Zap, Shield, TrendingUp, Calendar
 } from 'lucide-react'
 import { SCHOOL_DIVISIONS } from '@/constants/schoolLevels'
+import { kcsPublicImages } from '@/data/kcsPublicImages'
 
 // ─── Animation Variants ───────────────────────────────────────────────────────
 const fadeUp = {
@@ -116,21 +117,21 @@ const latestNews = [
     category: 'Event',
     title: 'USA Trip',
     date: 'KCS Event',
-    image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&h=250&fit=crop',
+    image: kcsPublicImages.usaTripCopy,
     excerpt: 'Staff and students explored cultural exchange, educational growth, and renowned academic institutions in the USA.',
   },
   {
     category: 'Event',
     title: 'Brazzaville Trip',
     date: 'KCS Event',
-    image: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=400&h=250&fit=crop',
+    image: kcsPublicImages.brazzavilleTrip,
     excerpt: 'KCS students proudly brought home the trophy at the sports and arts festival in Brazzaville.',
   },
   {
     category: 'Community',
     title: 'Legacy Day',
     date: 'KCS Service',
-    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=250&fit=crop',
+    image: kcsPublicImages.community,
     excerpt: 'Students serve the community through street clean-up initiatives and visits to orphanages.',
   },
 ]
@@ -147,7 +148,7 @@ const HomePage = () => {
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&q=80')`,
+            backgroundImage: `url('${kcsPublicImages.assembly}')`,
           }}
         />
         <div className="absolute inset-0 hero-overlay" />
@@ -326,7 +327,7 @@ const HomePage = () => {
               <motion.div variants={slideIn('left')} className="relative">
                 <div className="relative rounded-3xl overflow-hidden shadow-kcs-lg">
                   <img
-                    src="https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600&q=80"
+                    src={kcsPublicImages.qualityEducation}
                     alt="KCS Students"
                     className="w-full h-[480px] object-cover"
                   />

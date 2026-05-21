@@ -13,6 +13,7 @@ import {
   Shield,
   Users,
 } from 'lucide-react'
+import { kcsPublicImages } from '@/data/kcsPublicImages'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -40,28 +41,28 @@ const leadership = [
     name: 'Dr. Samuel Watkins',
     title: 'Head of School',
     bio: '25+ years in international education. Passionate about transforming African education through Christian values.',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
+    image: kcsPublicImages.founder,
     initials: 'SW',
   },
   {
     name: 'Dr. Grace Mwamba',
     title: 'Academic Director',
     bio: 'Former professor at University of Kinshasa. Leads our curriculum development and academic excellence initiatives.',
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face',
+    image: kcsPublicImages.teachers,
     initials: 'GM',
   },
   {
     name: 'Mr. David Okonkwo',
     title: 'Dean of Students',
     bio: 'Dedicated to student wellbeing and leadership development. Champion of student government and extracurriculars.',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+    image: kcsPublicImages.campusGlory,
     initials: 'DO',
   },
   {
     name: 'Mrs. Amelia Chen',
     title: 'Admissions Director',
     bio: 'Guides families through the KCS admissions journey with warmth and expertise across three continents.',
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
+    image: kcsPublicImages.about,
     initials: 'AC',
   },
 ]
@@ -172,7 +173,7 @@ const AboutPage = () => {
             <AnimSection>
               <motion.div variants={fadeUp} className="relative">
                 <img
-                  src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600&q=80"
+                  src={kcsPublicImages.spiritualLife}
                   alt="KCS Campus"
                   className="h-[500px] w-full rounded-3xl object-cover shadow-kcs-lg"
                   loading="lazy"

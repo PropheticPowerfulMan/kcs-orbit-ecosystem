@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
 import { ArrowRight, BookOpen, Microscope, Palette, Trophy, Calculator, Globe, Music, Code } from 'lucide-react'
 import { SCHOOL_DIVISIONS } from '@/constants/schoolLevels'
+import { kcsPublicImages } from '@/data/kcsPublicImages'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 40 },
@@ -31,7 +32,7 @@ const programs = [
     color: 'from-green-500 to-emerald-600',
     textColor: 'text-green-700 dark:text-green-400',
     bg: 'bg-green-50 dark:bg-green-900/20',
-    image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=600&q=80',
+    image: kcsPublicImages.kindergarten,
     description: SCHOOL_DIVISIONS[0].description,
     subjects: ['Early Literacy', 'Early Numeracy', 'Bible & Chapel', 'Creative Play', 'Music & Movement', 'French Exposure'],
     highlights: ['K3 through K5 progression', 'Play-based learning', 'Faith and character formation', 'Readiness for Grade 1', 'Close parent communication', 'Safe early-years routines'],
@@ -45,7 +46,7 @@ const programs = [
     color: 'from-kcs-blue-500 to-blue-700',
     textColor: 'text-kcs-blue-600 dark:text-kcs-blue-400',
     bg: 'bg-kcs-blue-50 dark:bg-kcs-blue-900/20',
-    image: 'https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?w=600&q=80',
+    image: kcsPublicImages.elementary,
     description: SCHOOL_DIVISIONS[1].description,
     subjects: ['English Language Arts', 'Mathematics', 'Science', 'Social Studies', 'Bible & Chapel', 'Art & Music', 'Physical Education', 'French Language'],
     highlights: ['Grade 1 through Grade 5', 'Strong literacy and numeracy', 'Daily Bible curriculum', 'STEAM integration', 'Character education', 'After-school programs'],
@@ -59,7 +60,7 @@ const programs = [
     color: 'from-cyan-500 to-kcs-blue-700',
     textColor: 'text-kcs-blue-600 dark:text-kcs-blue-400',
     bg: 'bg-kcs-blue-50 dark:bg-kcs-blue-900/20',
-    image: 'https://images.unsplash.com/photo-1427504494785-3a9ca7044f45?w=600&q=80',
+    image: kcsPublicImages.middleSchool,
     description: SCHOOL_DIVISIONS[2].description,
     subjects: ['Advanced English', 'Pre-Algebra & Algebra', 'Life & Earth Science', 'World History', 'Bible Studies', 'Visual Arts', 'Band & Orchestra', 'Computer Science'],
     highlights: ['Pre-AP coursework', 'Student government', 'Service learning projects', 'Sports teams', 'Annual science fair', 'Leadership retreats'],
@@ -73,7 +74,7 @@ const programs = [
     color: 'from-kcs-blue-800 to-kcs-blue-950',
     textColor: 'text-kcs-blue-800 dark:text-kcs-blue-300',
     bg: 'bg-kcs-blue-100 dark:bg-kcs-blue-900/30',
-    image: 'https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=600&q=80',
+    image: kcsPublicImages.highSchool,
     description: SCHOOL_DIVISIONS[3].description,
     subjects: ['AP English & Literature', 'AP Calculus & Statistics', 'AP Biology & Chemistry', 'AP World & US History', 'AP Economics', 'Senior Bible & Ethics', 'Journalism & Media', 'Coding & AI Fundamentals'],
     highlights: ['10+ AP courses offered', 'Dedicated college counselor', '98% college acceptance rate', 'SAT/ACT preparation', 'Internship programs', 'National Honor Society'],

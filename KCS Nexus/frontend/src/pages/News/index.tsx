@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
 import { Calendar, ArrowRight, Clock, Eye, PlayCircle, Radio, Search, Video } from 'lucide-react'
 import SearchField from '@/components/shared/SearchField'
+import { kcsPublicImages } from '@/data/kcsPublicImages'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -29,7 +30,7 @@ const allPosts = [
     excerpt: 'Our talented science team brought home gold at the DRC National Science Olympiad, defeating 35 schools from across the country.',
     date: 'April 15, 2026',
     author: 'KCS Communications',
-    image: 'https://images.unsplash.com/photo-1532094349884-543559c06671?w=600&q=80',
+    image: kcsPublicImages.qualityEducation,
     readTime: '3 min read',
     views: 1240,
   },
@@ -40,7 +41,7 @@ const allPosts = [
     excerpt: 'Join us for an unforgettable evening celebrating student creativity in music, visual arts, dance, and theater performances.',
     date: 'April 10, 2026',
     author: 'Arts Department',
-    image: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=600&q=80',
+    image: kcsPublicImages.springConcert,
     readTime: '2 min read',
     views: 890,
   },
@@ -51,7 +52,7 @@ const allPosts = [
     excerpt: 'We are proud to unveil KCS Nexus — our revolutionary AI-powered school management and learning platform, the first of its kind in Central Africa.',
     date: 'April 5, 2026',
     author: 'IT Department',
-    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&q=80',
+    image: kcsPublicImages.assembly,
     readTime: '5 min read',
     views: 2100,
   },
@@ -62,7 +63,7 @@ const allPosts = [
     excerpt: 'Applications for the upcoming academic year are now being accepted. Early applications receive priority placement.',
     date: 'March 28, 2026',
     author: 'Admissions Office',
-    image: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&q=80',
+    image: kcsPublicImages.campusGlory,
     readTime: '2 min read',
     views: 3200,
   },
@@ -73,7 +74,7 @@ const allPosts = [
     excerpt: '100% of our graduating seniors received college acceptances, with 28 students admitted to universities in the US, UK, Canada, and South Africa.',
     date: 'March 20, 2026',
     author: 'College Counseling',
-    image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=600&q=80',
+    image: kcsPublicImages.graduation,
     readTime: '4 min read',
     views: 4500,
   },
@@ -84,7 +85,7 @@ const allPosts = [
     excerpt: 'Get ready for a full day of athletics, teamwork, and school spirit at our annual Sports Day on the main KCS field.',
     date: 'March 15, 2026',
     author: 'Athletics Department',
-    image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=600&q=80',
+    image: kcsPublicImages.brazzavilleTrip,
     readTime: '2 min read',
     views: 720,
   },
@@ -101,7 +102,7 @@ const upcomingEvents = [
     liveStreamStatus: 'live',
     liveStreamPlatform: 'YouTube Live',
     liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool',
-    coverImage: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=900&q=80',
+    coverImage: kcsPublicImages.springConcert,
   },
   { date: 'May 2', title: 'AP Exams Begin', time: '8:00 AM', location: 'Testing Center', type: 'academic', liveStreamEnabled: false },
   {
@@ -114,7 +115,7 @@ const upcomingEvents = [
     liveStreamStatus: 'scheduled',
     liveStreamPlatform: 'KCS Live',
     liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool',
-    coverImage: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=900&q=80',
+    coverImage: kcsPublicImages.brazzavilleTrip,
   },
   { date: 'May 20', title: 'Parent-Teacher Conference', time: '1:00 PM', location: 'Classrooms', type: 'academic', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'Zoom Webinar', liveStreamUrl: 'https://zoom.us/' },
   { date: 'Jun 5', title: 'Baccalaureate Service', time: '10:00 AM', location: 'School Chapel', type: 'spiritual', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool' },

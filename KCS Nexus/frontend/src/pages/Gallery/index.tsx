@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Play, X, Camera, Film, ChevronRight } from 'lucide-react'
+import { kcsPublicImages } from '@/data/kcsPublicImages'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -43,7 +44,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Morning Assembly in the Courtyard',
     category: 'Faith',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1513258496099-48168024aec0?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.assembly,
     subtitle: 'Students gather for prayer, worship, and announcements every morning.',
     featured: true,
   },
@@ -52,7 +53,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Robotics and Innovation Lab',
     category: 'Academics',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1581092921461-eab62e97a780?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.qualityEducation,
     subtitle: 'Hands-on STEM learning with coding, robotics, and prototyping.',
   },
   {
@@ -60,7 +61,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Varsity Basketball Tournament',
     category: 'Sports',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.brazzavilleTrip,
     subtitle: 'Competition, discipline, and school spirit in action.',
   },
   {
@@ -68,7 +69,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Elementary Art Showcase',
     category: 'Arts',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.springConcert,
     subtitle: 'Creative expression across painting, sculpture, and mixed media.',
   },
   {
@@ -76,7 +77,7 @@ const galleryItems: GalleryItem[] = [
     title: 'International Day Celebration',
     category: 'Events',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.thanksgiving,
     subtitle: 'A vibrant celebration of the cultures represented at KCS.',
     featured: true,
   },
@@ -85,7 +86,7 @@ const galleryItems: GalleryItem[] = [
     title: 'High School Science Fair',
     category: 'Academics',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.middleSchool,
     subtitle: 'Student-led experiments, inquiry, and presentation excellence.',
   },
   {
@@ -93,7 +94,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Choir Rehearsal Before Concert Night',
     category: 'Arts',
     type: 'video',
-    image: 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.springConcert,
     subtitle: 'Preparing harmonies for the annual spring performance.',
   },
   {
@@ -101,7 +102,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Library Research Session',
     category: 'Campus Life',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.elementaryHome,
     subtitle: 'Quiet focus, collaboration, and deep reading across grade levels.',
   },
   {
@@ -109,7 +110,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Student Leadership Retreat',
     category: 'Faith',
     type: 'video',
-    image: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.annualRetreat,
     subtitle: 'Formation, mentorship, and servant leadership development.',
   },
   {
@@ -117,7 +118,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Football Training Session',
     category: 'Sports',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.brazzavilleTrip,
     subtitle: 'Teamwork and athletic excellence on the KCS field.',
   },
   {
@@ -125,7 +126,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Campus Green Spaces',
     category: 'Campus Life',
     type: 'image',
-    image: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.campusGlory,
     subtitle: 'Safe, beautiful environments designed for growth and connection.',
   },
   {
@@ -133,7 +134,7 @@ const galleryItems: GalleryItem[] = [
     title: 'Graduation Ceremony Highlights',
     category: 'Events',
     type: 'video',
-    image: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80',
+    image: kcsPublicImages.graduation,
     subtitle: 'A milestone celebration for students and families.',
     featured: true,
   },
