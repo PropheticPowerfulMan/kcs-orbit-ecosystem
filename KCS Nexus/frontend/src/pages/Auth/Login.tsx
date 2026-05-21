@@ -68,11 +68,11 @@ const getLoginErrorMessage = (err: any) => {
   }
 
   if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
-    return `Erreur reseau: KCS Nexus n'arrive pas a joindre son API (${API_BASE}). Verifiez que le backend KCS Nexus est demarre et que EDUPAY_API_URL pointe vers EduPay API pour accepter les identifiants crees dans EduPay.`
+    return `Erreur réseau : KCS Nexus n'arrive pas à joindre son API (${API_BASE}). Vérifiez que le backend KCS Nexus est démarré et que EDUPAY_API_URL pointe vers EduPay API pour accepter les identifiants créés dans EduPay.`
   }
 
   if (err?.code === 'ECONNABORTED') {
-    return `Erreur reseau: la connexion a l'API KCS Nexus (${API_BASE}) a expire. Verifiez que KCS Nexus Backend et EduPay API sont demarres.`
+    return `Erreur réseau : la connexion à l'API KCS Nexus (${API_BASE}) a expiré. Vérifiez que KCS Nexus Backend et EduPay API sont démarrés.`
   }
 
   if (err?.message) {

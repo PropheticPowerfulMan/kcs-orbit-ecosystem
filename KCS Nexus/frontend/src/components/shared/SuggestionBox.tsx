@@ -44,14 +44,14 @@ export default function SuggestionBox() {
   const isAdmin = user?.role === 'admin'
 
   const labels = useMemo(() => ({
-    title: language === 'fr' ? 'Boite a suggestions' : 'Suggestion box',
+    title: language === 'fr' ? 'Boîte à suggestions' : 'Suggestion box',
     subtitle: language === 'fr'
       ? 'Le message reste anonyme pour le suivi normal; seul le super admin peut lever le secret en cas de besoin.'
       : 'The normal view stays anonymous; only the super admin can reveal identity when needed.',
     send: language === 'fr' ? 'Envoyer en anonymat' : 'Send anonymously',
-    sent: language === 'fr' ? 'Suggestion enregistree dans le canal confidentiel.' : 'Suggestion saved in the confidential channel.',
+    sent: language === 'fr' ? 'Suggestion enregistrée dans le canal confidentiel.' : 'Suggestion saved in the confidential channel.',
     audit: language === 'fr' ? 'Audit super admin' : 'Super admin audit',
-    reveal: language === 'fr' ? 'Voir identite' : 'Reveal identity',
+    reveal: language === 'fr' ? 'Voir identité' : 'Reveal identity',
   }), [language])
 
   const submit = () => {
@@ -106,7 +106,7 @@ export default function SuggestionBox() {
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             className="min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:text-kcs-blue-200"
-            placeholder={language === 'fr' ? 'Ecrivez librement votre suggestion...' : 'Write your suggestion freely...'}
+            placeholder={language === 'fr' ? 'Écrivez librement votre suggestion...' : 'Write your suggestion freely...'}
           />
           <button type="button" onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-3 text-sm font-black text-kcs-blue-950 transition-colors hover:bg-kcs-gold-300">
             <Send size={16} /> {labels.send}

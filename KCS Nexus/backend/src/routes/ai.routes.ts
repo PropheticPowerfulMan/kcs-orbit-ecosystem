@@ -16,7 +16,7 @@ type ChatLanguage = 'en' | 'fr'
 const schoolFacts = {
   name: 'Kinshasa Christian School',
   shortName: 'KCS',
-  address: 'Avenue de la Republique No. 1, Macampagne, Ngaliema, Kinshasa',
+  address: 'Avenue de la République No. 1, Macampagne, Ngaliema, Kinshasa',
   email: env.SCHOOL_EMAIL,
   phone: '+243 895 326 011',
   instagram: 'https://www.instagram.com/kinshasachristianschoolknights',
@@ -34,11 +34,11 @@ const schoolFacts = {
     'Advanced Placement opportunities for high school students',
   ],
   admissionsDocuments: [
-    'student birth certificate',
-    'previous school transcript or report card',
-    'requested grade/class',
-    'parent or guardian contact information',
-    'medical or identity documents when requested by admissions',
+    'student birth certificate / certificat de naissance',
+    'previous school transcript or report card / bulletin ou relevé précédent',
+    'requested grade/class / classe souhaitée',
+    'parent or guardian contact information / contacts du parent ou tuteur',
+    'medical or identity documents when requested by admissions / documents médicaux ou d’identité si demandés',
   ],
 }
 
@@ -67,12 +67,12 @@ const buildLocalSchoolAnswer = (question: string, language?: string) => {
 
   if (hasAny(q, ['admission', 'inscription', 'inscrire', 'apply', 'enroll', 'registration', 'postuler'])) {
     return isFr
-      ? `Pour postuler a ${schoolFacts.shortName}:\n${formatList([
-          'ouvrez la page Admissions et completez le formulaire',
-          `preparez: ${schoolFacts.admissionsDocuments.join(', ')}`,
+      ? `Pour postuler à ${schoolFacts.shortName} :\n${formatList([
+          'ouvrez la page Admissions et complétez le formulaire',
+          `préparez : ${schoolFacts.admissionsDocuments.join(', ')}`,
           `contactez le bureau des admissions au ${schoolFacts.phone}`,
-          `ou ecrivez a ${schoolFacts.email}`,
-        ])}\n\nSi vous me donnez l'age ou la classe souhaitee, je peux vous orienter vers la bonne division.`
+          `ou écrivez à ${schoolFacts.email}`,
+        ])}\n\nSi vous me donnez l'âge ou la classe souhaitée, je peux vous orienter vers la bonne division.`
       : `To apply to ${schoolFacts.shortName}:\n${formatList([
           'open the Admissions page and complete the application form',
           `prepare: ${schoolFacts.admissionsDocuments.join(', ')}`,
@@ -83,48 +83,49 @@ const buildLocalSchoolAnswer = (question: string, language?: string) => {
 
   if (hasAny(q, ['fee', 'fees', 'tuition', 'cost', 'price', 'prix', 'cout', 'frais', 'scolarite', 'paiement'])) {
     return isFr
-      ? `Les frais peuvent dependre de la classe, du dossier et des modalites de paiement. Pour obtenir le montant officiel et a jour, contactez l'administration:\n- Email: ${schoolFacts.email}\n- Telephone: ${schoolFacts.phone}\n\nVous pouvez aussi demander les options de paiement et les documents requis.`
+      ? `Les frais peuvent dépendre de la classe, du dossier et des modalités de paiement. Pour obtenir le montant officiel et à jour, contactez l'administration :\n- Email : ${schoolFacts.email}\n- Téléphone : ${schoolFacts.phone}\n\nVous pouvez aussi demander les options de paiement et les documents requis.`
       : `Tuition and fees can depend on the grade, application file, and payment option. For the official current amount, contact administration:\n- Email: ${schoolFacts.email}\n- Phone: ${schoolFacts.phone}\n\nYou can also ask for payment options and required documents.`
   }
 
   if (hasAny(q, ['program', 'programme', 'grade', 'classe', 'division', 'curriculum', 'academ', 'ap ', 'college board', 'maternelle', 'primaire', 'secondaire'])) {
     return isFr
-      ? `${schoolFacts.shortName} accueille les eleves dans ces divisions:\n${formatList(schoolFacts.divisions)}\n\nLe programme met l'accent sur:\n${formatList(schoolFacts.academics)}`
+      ? `${schoolFacts.shortName} accueille les élèves dans ces divisions :\n${formatList(schoolFacts.divisions)}\n\nLe programme met l'accent sur :\n${formatList(schoolFacts.academics)}`
       : `${schoolFacts.shortName} serves students through these divisions:\n${formatList(schoolFacts.divisions)}\n\nThe program emphasizes:\n${formatList(schoolFacts.academics)}`
   }
 
   if (hasAny(q, ['contact', 'phone', 'email', 'address', 'adresse', 'telephone', 'mail', 'where', 'location', 'situe', 'localisation'])) {
     return isFr
-      ? `Voici les contacts de ${schoolFacts.shortName}:\n- Adresse: ${schoolFacts.address}\n- Telephone: ${schoolFacts.phone}\n- Email: ${schoolFacts.email}\n- Instagram: ${schoolFacts.instagram}\n- YouTube: ${schoolFacts.youtube}`
+      ? `Voici les contacts de ${schoolFacts.shortName} :\n- Adresse : ${schoolFacts.address}\n- Téléphone : ${schoolFacts.phone}\n- Email : ${schoolFacts.email}\n- Instagram : ${schoolFacts.instagram}\n- YouTube : ${schoolFacts.youtube}`
       : `Here is how to contact ${schoolFacts.shortName}:\n- Address: ${schoolFacts.address}\n- Phone: ${schoolFacts.phone}\n- Email: ${schoolFacts.email}\n- Instagram: ${schoolFacts.instagram}\n- YouTube: ${schoolFacts.youtube}`
   }
 
   if (hasAny(q, ['schedule', 'calendar', 'event', 'horaire', 'calendrier', 'evenement', 'rentre', 'rentree', 'meeting', 'reunion'])) {
     return isFr
-      ? `Pour les horaires, reunions parents-professeurs, evenements et dates importantes, consultez les pages News/Events de Nexus ou contactez l'ecole au ${schoolFacts.phone}. Pour une date precise, donnez-moi l'evenement que vous cherchez.`
+      ? `Pour les horaires, réunions parents-professeurs, événements et dates importantes, consultez les pages News/Events de Nexus ou contactez l'école au ${schoolFacts.phone}. Pour une date précise, donnez-moi l'événement que vous cherchez.`
       : `For schedules, parent-teacher meetings, events, and important dates, check the Nexus News/Events pages or call the school at ${schoolFacts.phone}. If you need a specific date, tell me which event you are looking for.`
   }
 
   if (hasAny(q, ['portal', 'login', 'connexion', 'parent', 'student', 'teacher', 'dashboard', 'nexus', 'compte', 'mot de passe'])) {
     return isFr
-      ? `KCS Nexus regroupe les portails parents, eleves, enseignants et administration. Si vous avez un probleme de connexion, verifiez votre email/code d'acces, puis contactez l'administration avec votre nom complet et votre role.`
+      ? `KCS Nexus regroupe les portails parents, élèves, enseignants et administration. Si vous avez un problème de connexion, vérifiez votre email ou votre code d'accès, puis contactez l'administration avec votre nom complet et votre rôle.`
       : `KCS Nexus includes parent, student, teacher, and administration portals. If you cannot sign in, check your email/access code, then contact administration with your full name and role.`
   }
 
   return isFr
-    ? `Je peux vous aider sur les admissions, les frais, les programmes, le calendrier, les contacts et l'utilisation de KCS Nexus.\n\nPour une reponse precise, posez-moi une question comme: "Comment inscrire mon enfant en Grade 6 ?" ou "Ou se trouve l'ecole ?"\n\nContact direct: ${schoolFacts.phone} | ${schoolFacts.email}`
+    ? `Je peux vous aider sur les admissions, les frais, les programmes, le calendrier, les contacts et l'utilisation de KCS Nexus.\n\nPour une réponse précise, posez-moi une question comme : "Comment inscrire mon enfant en Grade 6 ?" ou "Où se trouve l'école ?"\n\nContact direct : ${schoolFacts.phone} | ${schoolFacts.email}`
     : `I can help with admissions, fees, programs, calendar items, contact details, and KCS Nexus portal questions.\n\nFor a precise answer, ask something like: "How do I enroll my child in Grade 6?" or "Where is the school located?"\n\nDirect contact: ${schoolFacts.phone} | ${schoolFacts.email}`
 }
 
 const buildSystemPrompt = (language: ChatLanguage) => {
   const languageInstruction = language === 'fr'
-    ? 'Answer in French unless the visitor asks for English.'
+    ? 'Réponds en français naturel avec les accents, apostrophes, espaces et ponctuation corrects, sauf si le visiteur demande explicitement l’anglais.'
     : 'Answer in English unless the visitor asks for French.'
 
   return [
     'You are the public visitor assistant for Kinshasa Christian School inside KCS Nexus.',
     languageInstruction,
     'Be warm, concise, accurate, and practical. Prefer short paragraphs and bullet points.',
+    'Preserve the user language and do not remove diacritics from French words.',
     'Only answer school-related questions: admissions, programs, fees, contacts, calendar, events, location, portals, and general school life.',
     'If a question needs an official current amount, private student data, legal decision, or live confirmation, say so and route the visitor to the school office.',
     `School facts: ${JSON.stringify(schoolFacts)}`,

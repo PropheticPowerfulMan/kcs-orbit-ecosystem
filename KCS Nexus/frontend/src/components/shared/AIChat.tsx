@@ -10,12 +10,12 @@ const generateId = () => Math.random().toString(36).substring(2, 9)
 const SCHOOL_CONTACT = {
   email: 'kinshasachristianschool@gmail.com',
   phone: '+243 895 326 011',
-  address: 'Avenue de la Republique No. 1, Macampagne, Ngaliema, Kinshasa',
+  address: 'Avenue de la République No. 1, Macampagne, Ngaliema, Kinshasa',
 }
 
 const WELCOME_MESSAGES: Record<string, string> = {
   en: `Hello! I am the KCS visitor assistant. Ask me about admissions, programs, fees, events, location, or KCS Nexus access.`,
-  fr: `Bonjour ! Je suis l'assistant KCS pour les visiteurs. Posez-moi vos questions sur les admissions, les programmes, les frais, les evenements, l'adresse ou l'acces a KCS Nexus.`,
+  fr: `Bonjour ! Je suis l'assistant KCS pour les visiteurs. Posez-moi vos questions sur les admissions, les programmes, les frais, les événements, l'adresse ou l'accès à KCS Nexus.`,
 }
 
 const normalize = (value: string) =>
@@ -26,26 +26,40 @@ const normalize = (value: string) =>
 
 const hasAny = (value: string, keywords: string[]) => keywords.some((keyword) => value.includes(keyword))
 
+const formatSchoolList = (items: string[]) => items.map((item) => `- ${item}`).join('\n')
+
 const getLocalSchoolResponse = (question: string, lang: 'en' | 'fr'): string => {
   const q = normalize(question)
 
   if (lang === 'fr') {
     if (hasAny(q, ['admission', 'inscription', 'inscrire', 'postuler'])) {
-      return `Pour postuler a KCS:\n- ouvrez la page Admissions et completez le formulaire\n- preparez le certificat de naissance, le bulletin ou releve precedent, la classe souhaitee et les contacts du parent\n- contactez l'ecole au ${SCHOOL_CONTACT.phone} ou a ${SCHOOL_CONTACT.email}\n\nDonnez-moi l'age ou la classe de l'enfant et je vous oriente plus precisement.`
+      return `Pour postuler à KCS :\n${formatSchoolList([
+        'ouvrez la page Admissions et complétez le formulaire',
+        'préparez le certificat de naissance, le bulletin ou relevé précédent, la classe souhaitée et les contacts du parent',
+        `contactez l'école au ${SCHOOL_CONTACT.phone} ou à ${SCHOOL_CONTACT.email}`,
+      ])}\n\nDonnez-moi l'âge ou la classe de l'enfant et je vous orienterai plus précisément.`
     }
     if (hasAny(q, ['frais', 'cout', 'prix', 'scolarite', 'paiement'])) {
-      return `Les frais dependent de la classe et des modalites. Pour le montant officiel et a jour, contactez l'administration:\n- ${SCHOOL_CONTACT.email}\n- ${SCHOOL_CONTACT.phone}`
+      return `Les frais dépendent de la classe et des modalités de paiement. Pour obtenir le montant officiel et à jour, contactez l'administration :\n- ${SCHOOL_CONTACT.email}\n- ${SCHOOL_CONTACT.phone}\n\nVous pouvez aussi demander les options de paiement et les documents requis.`
     }
     if (hasAny(q, ['programme', 'classe', 'maternelle', 'primaire', 'secondaire', 'ap', 'academ'])) {
-      return `KCS propose:\n- Kindergarten: K3-K5\n- Elementary: Grade 1-Grade 5\n- Middle School: Grade 6-Grade 8\n- High School: Grade 9-Grade 12\n\nL'ecole combine education chretienne, academics americains, STEAM, leadership, arts, sports et opportunites AP au lycee.`
+      return `KCS propose :\n${formatSchoolList([
+        'Kindergarten : K3-K5',
+        'Elementary School : Grade 1-Grade 5',
+        'Middle School : Grade 6-Grade 8',
+        'High School : Grade 9-Grade 12',
+      ])}\n\nL'école combine éducation chrétienne, programme académique américain, STEAM, leadership, arts, sports et opportunités AP au lycée.`
     }
     if (hasAny(q, ['contact', 'telephone', 'adresse', 'email', 'situe', 'localisation'])) {
-      return `Contacts KCS:\n- Adresse: ${SCHOOL_CONTACT.address}\n- Telephone: ${SCHOOL_CONTACT.phone}\n- Email: ${SCHOOL_CONTACT.email}`
+      return `Contacts KCS :\n- Adresse : ${SCHOOL_CONTACT.address}\n- Téléphone : ${SCHOOL_CONTACT.phone}\n- Email : ${SCHOOL_CONTACT.email}`
     }
     if (hasAny(q, ['horaire', 'calendrier', 'evenement', 'reunion', 'rentree'])) {
-      return `Pour les horaires, evenements, reunions et dates importantes, consultez les pages News/Events de Nexus ou contactez l'ecole au ${SCHOOL_CONTACT.phone}.`
+      return `Pour les horaires, événements, réunions et dates importantes, consultez les pages News/Events de Nexus ou contactez l'école au ${SCHOOL_CONTACT.phone}.`
     }
-    return `Je peux repondre sur les admissions, les programmes, les frais, les evenements, l'adresse, les contacts et l'acces a KCS Nexus.\n\nContact direct: ${SCHOOL_CONTACT.phone} | ${SCHOOL_CONTACT.email}`
+    if (hasAny(q, ['connexion', 'compte', 'mot de passe', 'nexus', 'portail', 'parent', 'eleve', 'enseignant'])) {
+      return `KCS Nexus regroupe les portails parents, élèves, enseignants et administration. Si vous avez un problème de connexion, vérifiez votre email ou votre code d'accès, puis contactez l'administration avec votre nom complet et votre rôle.`
+    }
+    return `Je peux répondre sur les admissions, les programmes, les frais, les événements, l'adresse, les contacts et l'accès à KCS Nexus.\n\nPour une réponse plus précise, indiquez la classe, l'âge de l'élève ou le portail concerné.\n\nContact direct : ${SCHOOL_CONTACT.phone} | ${SCHOOL_CONTACT.email}`
   }
 
   if (hasAny(q, ['admission', 'apply', 'enroll', 'registration'])) {
@@ -156,7 +170,7 @@ const AIChat = () => {
   }
 
   const quickQuestions = chatLanguage === 'fr'
-    ? ['Comment inscrire mon enfant ?', 'Quels programmes ?', 'Quels frais ?', 'Ou est KCS ?']
+    ? ['Comment inscrire mon enfant ?', 'Quels programmes ?', 'Quels frais ?', 'Où est KCS ?']
     : ['How do I apply?', 'What programs?', 'Tuition fees?', 'Where is KCS?']
 
   return (
@@ -184,8 +198,8 @@ const AIChat = () => {
             animate={{ opacity: 1, scale: 1, y: 0, height: minimized ? 'auto' : 540 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.3, type: 'spring', stiffness: 300, damping: 30 }}
-            className="nexus-glass-card fixed bottom-6 right-6 z-50 flex w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl"
-            style={{ maxHeight: minimized ? undefined : 540 }}
+            className="nexus-glass-card fixed bottom-4 right-4 z-50 flex w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl sm:bottom-6 sm:right-6"
+            style={{ maxHeight: minimized ? undefined : 'min(540px, calc(100dvh - 2rem))' }}
           >
             <div className="flex flex-shrink-0 items-center justify-between p-4 kcs-gradient">
               <div className="flex items-center gap-3">
@@ -196,7 +210,7 @@ const AIChat = () => {
                   <p className="text-sm font-semibold text-white">KCS Assistant</p>
                   <div className="flex items-center gap-1.5">
                     <span className="h-2 w-2 rounded-full bg-green-400" />
-                    <span className="text-xs text-kcs-blue-200">School answers online</span>
+                    <span className="text-xs text-kcs-blue-100">{chatLanguage === 'fr' ? 'Réponses scolaires en ligne' : 'School answers online'}</span>
                   </div>
                 </div>
               </div>
@@ -230,7 +244,7 @@ const AIChat = () => {
 
             {!minimized && (
               <>
-                <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                   {messages.map((message) => (
                     <div key={message.id} className={`flex gap-2.5 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                       <div
@@ -263,7 +277,7 @@ const AIChat = () => {
                       <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-white/55 bg-white/55 px-4 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45">
                         <Loader2 size={14} className="animate-spin text-kcs-blue-600 dark:text-kcs-blue-400" />
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {chatLanguage === 'fr' ? 'Recherche de la meilleure reponse...' : 'Finding the best answer...'}
+                          {chatLanguage === 'fr' ? 'Recherche de la meilleure réponse...' : 'Finding the best answer...'}
                         </span>
                       </div>
                     </div>
@@ -286,7 +300,7 @@ const AIChat = () => {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 border-t border-white/40 bg-white/20 p-3 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-950/30">
+                <div className="flex items-center gap-2 border-t border-white/55 bg-white/45 p-3 backdrop-blur-2xl dark:border-white/10 dark:bg-kcs-blue-950/40">
                   <input
                     ref={inputRef}
                     value={input}

@@ -104,6 +104,7 @@
 
   .nexus-glass-card {
     @apply relative overflow-hidden border border-white/70 bg-white/75 shadow-xl backdrop-blur-2xl dark:border-white/10 dark:bg-kcs-blue-950/60;
+    color: #0f2742;
     background:
       linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.56) 44%, rgba(18, 174, 232, 0.13)),
       rgba(255, 255, 255, 0.58);
@@ -166,6 +167,7 @@
   .dark .glass-card,
   .dark .nexus-glass-card,
   .dark .nexus-glass-rail {
+    color: #f8fafc;
     background:
       linear-gradient(145deg, rgba(0, 64, 128, 0.5), rgba(0, 27, 54, 0.64) 48%, rgba(18, 174, 232, 0.12)),
       rgba(0, 27, 54, 0.56);
@@ -399,6 +401,24 @@
       0 16px 44px rgba(0, 27, 54, 0.1);
   }
 
+  .portal-shell :is(section, article, div, button, a).rounded-2xl:is(.bg-white, .bg-gray-50),
+  .portal-shell :is(section, article, div, button, a).rounded-xl:is(.bg-white, .bg-gray-50),
+  .portal-shell .nexus-glass-card {
+    color: #102a43;
+  }
+
+  .portal-shell :is(section, article, div, button, a).rounded-2xl:is(.bg-white, .bg-gray-50):is(.text-white, .text-white\/90, .text-white\/80),
+  .portal-shell :is(section, article, div, button, a).rounded-xl:is(.bg-white, .bg-gray-50):is(.text-white, .text-white\/90, .text-white\/80),
+  .portal-shell .nexus-glass-card :is(.text-white, .text-white\/90, .text-white\/80):not(.kcs-gradient *):not([class*="bg-kcs-blue"]):not([class*="bg-kcs-red"]) {
+    color: #102a43;
+  }
+
+  .portal-shell :is(section, article, div).rounded-2xl:is(.bg-white, .bg-gray-50) :is(.text-gray-400, .text-gray-500),
+  .portal-shell :is(section, article, div).rounded-xl:is(.bg-white, .bg-gray-50) :is(.text-gray-400, .text-gray-500),
+  .portal-shell .nexus-glass-card :is(.text-gray-400, .text-gray-500) {
+    color: #52677a;
+  }
+
   .dark .portal-shell :is(section, article, div).rounded-xl:is(.dark\:bg-kcs-blue-900\/50, .dark\:bg-kcs-blue-800\/30) {
     background:
       linear-gradient(145deg, rgba(0, 64, 128, 0.42), rgba(0, 27, 54, 0.64) 48%, rgba(18, 174, 232, 0.1)),
@@ -407,6 +427,12 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.13),
       0 18px 52px rgba(0, 0, 0, 0.3);
+  }
+
+  .dark .portal-shell :is(section, article, div, button, a).rounded-2xl:is(.dark\:bg-kcs-blue-900\/50, .dark\:bg-kcs-blue-800\/30),
+  .dark .portal-shell :is(section, article, div, button, a).rounded-xl:is(.dark\:bg-kcs-blue-900\/50, .dark\:bg-kcs-blue-800\/30),
+  .dark .portal-shell .nexus-glass-card {
+    color: #f8fafc;
   }
 }
 
