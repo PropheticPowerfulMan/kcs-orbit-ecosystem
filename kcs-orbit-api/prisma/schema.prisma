@@ -194,6 +194,7 @@ model Parent {
   accessCode     String?
   phone          String?
   email          String?
+  physicalAddress String?
   mustChangePassword Boolean   @default(false)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
@@ -213,6 +214,7 @@ model Teacher {
   accessCode     String?
   phone          String?
   email          String?
+  physicalAddress String?
   subject        String?
   employeeId     String?
   employeeType   String?

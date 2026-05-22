@@ -138,6 +138,7 @@ export const ParentPayloadSchema = z.object({
   accessCode: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
+  physicalAddress: TrimmedStringSchema.optional(),
   mustChangePassword: z.boolean().optional()
 }).superRefine((value, ctx) => {
   if (value.fullName || (value.firstName && value.lastName)) {
@@ -158,6 +159,7 @@ export const TeacherPayloadSchema = z.object({
   accessCode: TrimmedStringSchema.optional(),
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
+  physicalAddress: TrimmedStringSchema.optional(),
   subject: TrimmedStringSchema.optional(),
   subjects: z.array(TrimmedStringSchema).optional(),
   employeeId: TrimmedStringSchema.optional(),

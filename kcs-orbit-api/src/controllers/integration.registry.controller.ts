@@ -34,6 +34,7 @@ const createParentSchema = withCanonicalNameValidation({
   accessCode: z.string().min(6).max(24).optional(),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
+  physicalAddress: z.string().min(1).optional(),
   mustChangePassword: z.boolean().optional(),
 });
 
@@ -42,6 +43,7 @@ const createTeacherSchema = withCanonicalNameValidation({
   accessCode: z.string().min(6).max(24).optional(),
   email: z.string().email().optional(),
   phone: z.string().min(6).optional(),
+  physicalAddress: z.string().min(1).optional(),
   subject: z.string().min(1).optional(),
 });
 
@@ -68,6 +70,7 @@ const createFamilySchema = z.object({
     accessCode: z.string().min(6).max(24).optional(),
     email: z.string().email().optional(),
     phone: z.string().min(6).optional(),
+    physicalAddress: z.string().min(1).optional(),
     mustChangePassword: z.boolean().optional(),
   }),
   students: z.array(createStudentSchema.omit({ organizationId: true, parentOrbitId: true })).min(1),
@@ -86,6 +89,7 @@ const updateParentSchema = z.object({
   accessCode: z.string().min(6).max(24).nullable().optional(),
   email: z.string().email().nullable().optional(),
   phone: z.string().min(6).nullable().optional(),
+  physicalAddress: z.string().min(1).nullable().optional(),
   mustChangePassword: z.boolean().optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
@@ -99,6 +103,7 @@ const updateTeacherSchema = z.object({
   accessCode: z.string().min(6).max(24).nullable().optional(),
   email: z.string().email().nullable().optional(),
   phone: z.string().min(6).nullable().optional(),
+  physicalAddress: z.string().min(1).nullable().optional(),
   subject: z.string().min(1).nullable().optional(),
   employeeType: z.string().min(1).nullable().optional(),
   department: z.string().min(1).nullable().optional(),
@@ -485,6 +490,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(parentPayload.accessCode !== undefined ? { accessCode: normalizedAccessCode } : {}),
           ...(parentPayload.email !== undefined ? { email: parentPayload.email } : {}),
           ...(parentPayload.phone !== undefined ? { phone: parentPayload.phone } : {}),
+          ...(parentPayload.physicalAddress !== undefined ? { physicalAddress: parentPayload.physicalAddress ? normalizeText(parentPayload.physicalAddress) : null } : {}),
           ...(parentPayload.mustChangePassword !== undefined ? { mustChangePassword: parentPayload.mustChangePassword } : {}),
         },
       });
@@ -552,6 +558,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(teacherPayload.accessCode !== undefined ? { accessCode: normalizedAccessCode } : {}),
           ...(teacherPayload.email !== undefined ? { email: teacherPayload.email } : {}),
           ...(teacherPayload.phone !== undefined ? { phone: teacherPayload.phone } : {}),
+          ...(teacherPayload.physicalAddress !== undefined ? { physicalAddress: teacherPayload.physicalAddress ? normalizeText(teacherPayload.physicalAddress) : null } : {}),
           ...(teacherPayload.subject !== undefined ? { subject: teacherPayload.subject ? normalizeText(teacherPayload.subject) : null } : {}),
           ...(teacherPayload.employeeType !== undefined ? { employeeType: teacherPayload.employeeType ? normalizeText(teacherPayload.employeeType) : null } : {}),
           ...(teacherPayload.department !== undefined ? { department: teacherPayload.department ? normalizeText(teacherPayload.department) : null } : {}),
@@ -691,6 +698,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           accessCode: parentAccessCode,
           email: payload.parent.email,
           phone: payload.parent.phone,
+          physicalAddress: payload.parent.physicalAddress ? normalizeText(payload.parent.physicalAddress) : undefined,
           mustChangePassword: payload.parent.mustChangePassword,
         },
       });
@@ -765,6 +773,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           accessCode,
           email: payload.email,
           phone: payload.phone,
+          physicalAddress: payload.physicalAddress ? normalizeText(payload.physicalAddress) : undefined,
           mustChangePassword: payload.mustChangePassword,
         },
       });
@@ -803,6 +812,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           accessCode,
           email: payload.email,
           phone: payload.phone,
+          physicalAddress: payload.physicalAddress ? normalizeText(payload.physicalAddress) : undefined,
           subject: payload.subject,
         },
       });

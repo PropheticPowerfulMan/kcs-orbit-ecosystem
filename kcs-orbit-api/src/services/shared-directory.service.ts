@@ -52,6 +52,7 @@ export type SharedDirectoryParent = {
   accessCode: string | null;
   phone: string | null;
   email: string | null;
+  physicalAddress: string | null;
   mustChangePassword: boolean;
   organizationId: string | null;
   studentIds: string[];
@@ -68,6 +69,7 @@ export type SharedDirectoryTeacher = {
   accessCode: string | null;
   phone: string | null;
   email: string | null;
+  physicalAddress: string | null;
   subject: string | null;
   employeeId: string | null;
   employeeType: string | null;
@@ -206,6 +208,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         accessCode: true,
         phone: true,
         email: true,
+        physicalAddress: true,
         mustChangePassword: true,
         organizationId: true,
         students: {
@@ -226,6 +229,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         accessCode: true,
         phone: true,
         email: true,
+        physicalAddress: true,
         subject: true,
         employeeId: true,
         employeeType: true,
@@ -323,6 +327,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         accessCode: parent.accessCode,
         phone: parent.phone,
         email: parent.email,
+        physicalAddress: parent.physicalAddress,
         mustChangePassword: parent.mustChangePassword,
         organizationId: parent.organizationId,
         studentIds: parent.students.map((student) => student.id),
@@ -345,6 +350,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         accessCode: teacher.accessCode,
         phone: teacher.phone,
         email: teacher.email,
+        physicalAddress: teacher.physicalAddress,
         subject: teacher.subject,
         employeeId: teacher.employeeId,
         employeeType: teacher.employeeType,

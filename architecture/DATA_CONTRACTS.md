@@ -1,32 +1,3 @@
-# Contrats d'echange de donnees
-
-## Objectif
-
-Definir des contrats stables entre KCS Orbit API et les autres applications afin d'eviter les integrations fragiles basees sur des schemas locaux divergents.
-
-## Regles communes
-
-Tous les payloads d'integration doivent contenir:
-
-- `organizationId`
-- `externalId`
-- `sourceApp`
-- `occurredAt`
-- `version`
-
-Quand l'entite centrale existe deja, ajouter aussi:
-
-- `orbitId`
-
-## Entete de securite
-
-Pour les appels machine-to-machine:
-
-- `x-api-key`
-- `x-app-slug`
-- `content-type: application/json`
-
-## Contrat commun d'enveloppe
 
 ```json
 {
@@ -47,8 +18,8 @@ Pour les appels machine-to-machine:
 Pour reduire les divergences entre SAVANEX, EduPay, KCS Nexus, EduSync AI et Orbit, le noyau canonique adopte les regles suivantes:
 
 - `student` expose toujours `firstName`, `lastName`, `fullName`, `studentNumber`, `email`, `phone`, `dateOfBirth`, `status`, `mustChangePassword`, `classId|className`, `parentId`, `organizationId`, `externalIds[]`
-- `parent` expose toujours `fullName`, `phone`, `email`, `accessCode`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
-- `teacher` expose toujours `fullName`, `phone`, `email`, `subject`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName`, `employeeId`, `employeeType`, `department`, `jobTitle`
+- `parent` expose toujours `fullName`, `phone`, `email`, `physicalAddress`, `accessCode`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
+- `teacher` expose toujours `fullName`, `phone`, `email`, `physicalAddress`, `subject`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName`, `employeeId`, `employeeType`, `department`, `jobTitle`
 - `studentNumber` represente l'identifiant visible par les utilisateurs; Orbit privilegie l'`externalId` de l'application proprietaire quand il existe
 - `externalIds[]` reste la source de verite transverse pour les correspondances inter-applications
 - `className` peut etre derive localement si seule une reference `classId` existe, mais le contrat partage doit l'exposer quand il est connu
@@ -171,6 +142,7 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
       "lastName": "Ilunga",
       "phone": "+243000000001",
       "email": "jean.ilunga@example.org",
+      "physicalAddress": "Avenue de la Paix, Gombe, Kinshasa",
       "mustChangePassword": true,
       "organizationId": "org_123",
       "studentIds": ["std_001"],
@@ -188,6 +160,7 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
       "lastName": "Kabeya",
       "phone": "+243000000002",
       "email": "aline.kabeya@example.org",
+      "physicalAddress": "Commune de Limete, Kinshasa",
       "subject": "Mathematiques",
       "employeeId": "SAV-EMP-00000001",
       "employeeType": "TEACHER",
