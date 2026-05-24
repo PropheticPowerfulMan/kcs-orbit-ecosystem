@@ -46,11 +46,12 @@ def current_or_default_academic_year() -> AcademicYear:
         return current_year
 
     today = date.today()
-    start_year = today.year if today.month >= 8 else today.year - 1
+    # Année scolaire commence en septembre (9) et finit en juin (6) de l’année suivante
+    start_year = today.year if today.month >= 9 else today.year - 1
     return AcademicYear.objects.create(
         name=f"{start_year}-{start_year + 1}",
-        start_date=date(start_year, 8, 1),
-        end_date=date(start_year + 1, 7, 31),
+        start_date=date(start_year, 9, 1),
+        end_date=date(start_year + 1, 6, 30),
         is_current=True,
     )
 
