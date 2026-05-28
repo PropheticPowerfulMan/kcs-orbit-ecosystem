@@ -50,7 +50,7 @@ function Get-ConfigValue {
 
 $orbitDatabaseUrl = Get-ConfigValue -Name 'ORBIT_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
 $eduPayDatabaseUrl = Get-ConfigValue -Name 'EDUPAY_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'
-$eduPayReceiptVerificationUrl = Get-ConfigValue -Name 'EDUPAY_RECEIPT_VERIFICATION_URL' -DefaultValue 'https://edupay-web.onrender.com/EduPay-Smart-System/'
+$eduPayReceiptVerificationUrl = Get-ConfigValue -Name 'EDUPAY_RECEIPT_VERIFICATION_URL' -DefaultValue ''
 $orbitUrl = Get-ConfigValue -Name 'KCS_ORBIT_API_URL' -DefaultValue 'http://localhost:4500'
 $kcsNexusApiPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_API_PORT' -DefaultValue '5000')
 $kcsNexusFrontendPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_FRONTEND_PORT' -DefaultValue '5173')
