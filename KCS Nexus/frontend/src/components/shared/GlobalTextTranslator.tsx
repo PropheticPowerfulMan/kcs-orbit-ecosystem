@@ -4,6 +4,7 @@ import { globalFrenchText } from '@/i18n/globalText'
 
 const textAttributes = ['aria-label', 'placeholder', 'title']
 const ignoredTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA'])
+const originalTextNodes = new WeakMap<Text, string>()
 const englishByFrench = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [french, english]))
 const normalize = (value: string) => value.replace(/\s+/g, ' ').trim()
 const frenchByNormalizedEnglish = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [normalize(english), french]))
@@ -39,12 +40,33 @@ const translateText = (value: string, language: string) => {
 }
 
 const translateNode = (node: Node, language: string) => {
+  if (node instanceof Text) {
+    const parent = node.parentElement
+    if (!parent || ignoredTags.has(parent.tagName) || parent.isContentEditable) return
+
+    if (language === 'fr') {
+      const original = originalTextNodes.get(node) ?? node.nodeValue ?? ''
+      if (!originalTextNodes.has(node)) {
+        originalTextNodes.set(node, original)
+      }
+      const next = translateText(original, language)
+      if (next !== node.nodeValue) {
+        node.nodeValue = next
+      }
+      return
+    }
+
+    const original = originalTextNodes.get(node)
+    if (original && node.nodeValue !== original) {
+      node.nodeValue = original
+    }
+    return
+  }
+
   if (!(node instanceof HTMLElement) || ignoredTags.has(node.tagName) || node.isContentEditable) {
     return
   }
 
-  // Keep React-owned text nodes untouched. Mutating them outside React can crash
-  // route changes with DOM reconciliation errors after logout/login role swaps.
   textAttributes.forEach((attribute) => {
     const value = node.getAttribute(attribute)
     if (value) {
@@ -80,6 +102,7 @@ const GlobalTextTranslator = () => {
     observer.observe(document.body, {
       childList: true,
       subtree: true,
+      characterData: true,
       attributes: true,
       attributeFilter: textAttributes,
     })

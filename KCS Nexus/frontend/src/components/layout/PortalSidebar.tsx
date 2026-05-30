@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
   GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, ClipboardList, Image, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun
+  Shield, Home, UserCheck, ClipboardList, Image, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -22,74 +22,74 @@ interface NavItem {
 const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
-    { to: dashboardPath, label: 'Dashboard', icon: LayoutDashboard },
+    { to: dashboardPath, label: t('portalNav.dashboard'), icon: LayoutDashboard },
   ]
 
   switch (role) {
     case 'student':
       return [
         ...base,
-        { to: '/portal/student/grades', label: 'My Grades', icon: BarChart3 },
-        { to: '/portal/student/assignments', label: 'Assignments', icon: FileText },
-        { to: '/portal/student/timetable', label: 'Timetable', icon: Calendar },
-        { to: '/portal/student/ai-tutor', label: 'AI Tutor', icon: Brain },
-        { to: '/portal/student/forum', label: 'Student Forum', icon: MessageSquare },
-        { to: '/portal/student/messages', label: 'Messages', icon: MessageSquare },
-        { to: '/portal/student/profile', label: 'My Profile', icon: UserCheck },
+        { to: '/portal/student/grades', label: t('portalNav.myGrades'), icon: BarChart3 },
+        { to: '/portal/student/assignments', label: t('portalNav.assignments'), icon: FileText },
+        { to: '/portal/student/timetable', label: t('portalNav.timetable'), icon: Calendar },
+        { to: '/portal/student/ai-tutor', label: t('portalNav.aiTutor'), icon: Brain },
+        { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
+        { to: '/portal/student/messages', label: t('portalNav.messages'), icon: MessageSquare },
+        { to: '/portal/student/profile', label: t('portalNav.myProfile'), icon: UserCheck },
       ]
     case 'parent':
       return [
         ...base,
-        { to: '/portal/parent/performance', label: 'Performance', icon: BarChart3 },
-        { to: '/portal/parent/forum', label: 'Parent Forum', icon: MessageSquare },
-        { to: '/portal/parent/messages', label: 'Messages', icon: MessageSquare },
-        { to: '/portal/parent/calendar', label: 'Calendar', icon: Calendar },
-        { to: '/portal/parent/finance', label: 'Fees', icon: WalletCards },
-        { to: '/portal/parent/profile', label: 'Profile', icon: UserCheck },
+        { to: '/portal/parent/performance', label: t('portalNav.performance'), icon: BarChart3 },
+        { to: '/portal/parent/forum', label: t('portalNav.parentForum'), icon: MessageSquare },
+        { to: '/portal/parent/messages', label: t('portalNav.messages'), icon: MessageSquare },
+        { to: '/portal/parent/calendar', label: t('portalNav.calendar'), icon: Calendar },
+        { to: '/portal/parent/finance', label: t('portalNav.fees'), icon: WalletCards },
+        { to: '/portal/parent/profile', label: t('portalNav.profile'), icon: UserCheck },
       ]
     case 'teacher':
       return [
         ...base,
-        { to: '/portal/teacher/courses', label: 'My Courses', icon: BookOpen },
-        { to: '/portal/teacher/students', label: 'Students', icon: Users },
-        { to: '/portal/teacher/attendance', label: 'Attendance', icon: ClipboardCheck },
-        { to: '/portal/teacher/assignments', label: 'Assignments', icon: FileText },
-        { to: '/portal/teacher/grades', label: 'Gradebook', icon: BarChart3 },
-        { to: '/portal/teacher/reports', label: 'Reports', icon: FileSpreadsheet },
-        { to: '/portal/teacher/discipline', label: 'Discipline Report', icon: AlertTriangle },
-        { to: '/portal/teacher/messages', label: 'Messages', icon: MessageSquare },
+        { to: '/portal/teacher/courses', label: t('portalNav.myCourses'), icon: BookOpen },
+        { to: '/portal/teacher/students', label: t('portalNav.students'), icon: Users },
+        { to: '/portal/teacher/attendance', label: t('portalNav.attendance'), icon: ClipboardCheck },
+        { to: '/portal/teacher/assignments', label: t('portalNav.assignments'), icon: FileText },
+        { to: '/portal/teacher/grades', label: t('portalNav.gradebook'), icon: BarChart3 },
+        { to: '/portal/teacher/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
+        { to: '/portal/teacher/discipline', label: t('portalNav.disciplineReport'), icon: AlertTriangle },
+        { to: '/portal/teacher/messages', label: t('portalNav.messages'), icon: MessageSquare },
       ]
     case 'staff':
       return [
         ...base,
-        { to: '/portal/staff/records', label: 'Records', icon: LibraryBig },
-        { to: '/portal/staff/admissions', label: 'Admissions', icon: ClipboardList },
-        { to: '/portal/staff/announcements', label: 'Announcements', icon: Megaphone },
-        { to: '/portal/staff/reports', label: 'Reports', icon: FileSpreadsheet },
-        { to: '/portal/staff/finance', label: 'Fee Tracking', icon: WalletCards },
-        { to: '/portal/staff/messages', label: 'Messages', icon: MessageSquare, badge: 12 },
-        { to: '/portal/staff/permissions', label: 'Permissions', icon: Shield },
+        { to: '/portal/staff/records', label: t('portalNav.records'), icon: LibraryBig },
+        { to: '/portal/staff/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
+        { to: '/portal/staff/announcements', label: t('portalNav.announcements'), icon: Megaphone },
+        { to: '/portal/staff/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
+        { to: '/portal/staff/finance', label: t('portalNav.feeTracking'), icon: WalletCards },
+        { to: '/portal/staff/messages', label: t('portalNav.messages'), icon: MessageSquare, badge: 12 },
+        { to: '/portal/staff/permissions', label: t('portalNav.permissions'), icon: Shield },
       ]
     case 'admin':
       return [
         ...base,
-        { to: '/admin/students', label: 'Students', icon: GraduationCap },
-        { to: '/admin/parents', label: 'Parents', icon: Users },
-        { to: '/admin/transcripts', label: 'Transcripts', icon: FileSpreadsheet },
-        { to: '/admin/communications', label: 'Communications', icon: Megaphone },
-        { to: '/admin/staff-attendance', label: 'Staff Attendance', icon: ClipboardCheck },
-        { to: '/admin/discipline', label: 'Discipline', icon: AlertTriangle },
-        { to: '/admin/teachers', label: 'Teachers', icon: Users },
-        { to: '/admin/courses', label: 'Courses', icon: BookOpen },
-        { to: '/admin/admissions', label: 'Admissions', icon: ClipboardList },
-        { to: '/admin/finance', label: 'Finance', icon: WalletCards },
-        { to: '/admin/reports', label: 'Reports', icon: FileSpreadsheet },
-        { to: '/admin/news', label: 'News & Events', icon: FileText },
-        { to: '/admin/media', label: 'Media', icon: Image },
-        { to: '/admin/forum-insights', label: 'Parent AI Report', icon: Brain },
-        { to: '/admin/student-forum-insights', label: 'Student AI Report', icon: Shield },
-        { to: '/admin/analytics', label: 'AI Analytics', icon: Brain },
-        { to: '/admin/settings', label: 'Settings', icon: Settings },
+        { to: '/admin/students', label: t('portalNav.students'), icon: GraduationCap },
+        { to: '/admin/parents', label: t('portalNav.parents'), icon: Users },
+        { to: '/admin/transcripts', label: t('portalNav.transcripts'), icon: FileSpreadsheet },
+        { to: '/admin/communications', label: t('portalNav.communications'), icon: Megaphone },
+        { to: '/admin/staff-attendance', label: t('portalNav.staffAttendance'), icon: ClipboardCheck },
+        { to: '/admin/discipline', label: t('portalNav.discipline'), icon: AlertTriangle },
+        { to: '/admin/teachers', label: t('portalNav.teachers'), icon: Users },
+        { to: '/admin/courses', label: t('portalNav.courses'), icon: BookOpen },
+        { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
+        { to: '/admin/finance', label: t('portalNav.finance'), icon: WalletCards },
+        { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
+        { to: '/admin/news', label: t('portalNav.newsEvents'), icon: FileText },
+        { to: '/admin/media', label: t('portalNav.media'), icon: Image },
+        { to: '/admin/forum-insights', label: t('portalNav.parentAiReport'), icon: Brain },
+        { to: '/admin/student-forum-insights', label: t('portalNav.studentAiReport'), icon: Shield },
+        { to: '/admin/analytics', label: t('portalNav.aiAnalytics'), icon: Brain },
+        { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     default:
       return base
@@ -97,7 +97,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
 }
 
 const PortalSidebar = () => {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const mobileSidebarRef = useRef<HTMLElement>(null)
@@ -108,6 +108,8 @@ const PortalSidebar = () => {
     sidebarOpen,
     theme,
     toggleTheme,
+    language,
+    setLanguage,
     toggleSidebar,
     toggleSidebarCollapse,
     setSidebarOpen,
@@ -157,6 +159,12 @@ const PortalSidebar = () => {
   if (!user) return null
 
   const navItems = getNavItems(user.role, t)
+  const currentLanguage = (i18n.resolvedLanguage || language).startsWith('fr') ? 'fr' : 'en'
+  const toggleLanguage = () => {
+    const next = currentLanguage === 'en' ? 'fr' : 'en'
+    setLanguage(next)
+    void i18n.changeLanguage(next)
+  }
   const roleColor = {
     admin: 'bg-purple-600',
     staff: 'bg-slate-700',
@@ -166,11 +174,11 @@ const PortalSidebar = () => {
   }[user.role]
 
   const roleName = {
-    admin: 'Administrator',
-    staff: 'Administrative Staff',
-    teacher: 'Teacher',
-    student: 'Student',
-    parent: 'Parent',
+    admin: t('roles.admin'),
+    staff: t('roles.staff'),
+    teacher: t('roles.teacher'),
+    student: t('roles.student'),
+    parent: t('roles.parent'),
   }[user.role]
 
   const renderNavigation = (isMobile = false) => (
@@ -208,21 +216,31 @@ const PortalSidebar = () => {
       <div className={isMobile ? 'nexus-mobile-menu-actions' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}>
         <button
           type="button"
+          onClick={toggleLanguage}
+          className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
+          title={!isMobile && sidebarCollapsed ? t('common.language') : undefined}
+          aria-label={t('common.language')}
+        >
+          <Globe size={18} className="flex-shrink-0" />
+          {(isMobile || !sidebarCollapsed) && <span>{currentLanguage.toUpperCase()}</span>}
+        </button>
+        <button
+          type="button"
           onClick={toggleTheme}
           className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
-          title={!isMobile && sidebarCollapsed ? (theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : undefined}
+          title={!isMobile && sidebarCollapsed ? (theme === 'dark' ? t('common.lightMode') : t('common.darkMode')) : undefined}
         >
           {theme === 'dark' ? <Sun size={18} className="flex-shrink-0" /> : <Moon size={18} className="flex-shrink-0" />}
-          {(isMobile || !sidebarCollapsed) && <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>}
+          {(isMobile || !sidebarCollapsed) && <span>{theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}</span>}
         </button>
         <Link
           to="/"
           onClick={() => isMobile && setSidebarOpen(false)}
           className={isMobile ? 'nexus-mobile-action' : `sidebar-link ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
-          title={!isMobile && sidebarCollapsed ? 'Main Website' : undefined}
+          title={!isMobile && sidebarCollapsed ? t('common.mainWebsite') : undefined}
         >
           <Home size={18} className="flex-shrink-0" />
-          {(isMobile || !sidebarCollapsed) && <span>Main Website</span>}
+          {(isMobile || !sidebarCollapsed) && <span>{t('common.mainWebsite')}</span>}
         </Link>
         <button
           onClick={() => {
@@ -231,10 +249,10 @@ const PortalSidebar = () => {
             navigate('/login', { replace: true })
           }}
           className={isMobile ? 'nexus-mobile-action nexus-mobile-action-danger' : `sidebar-link w-full text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
-          title={!isMobile && sidebarCollapsed ? 'Sign Out' : undefined}
+          title={!isMobile && sidebarCollapsed ? t('nav.logout') : undefined}
         >
           <LogOut size={18} className="flex-shrink-0" />
-          {(isMobile || !sidebarCollapsed) && <span>Sign Out</span>}
+          {(isMobile || !sidebarCollapsed) && <span>{t('nav.logout')}</span>}
         </button>
       </div>
     </>
@@ -260,10 +278,19 @@ const PortalSidebar = () => {
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
+            onClick={toggleLanguage}
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/70 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
+            aria-label={t('common.language')}
+            title={currentLanguage === 'fr' ? 'Français' : 'English'}
+          >
+            <Globe size={18} />
+          </button>
+          <button
+            type="button"
             onClick={toggleTheme}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/70 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
-            aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
-            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            aria-label={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
+            title={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -271,7 +298,7 @@ const PortalSidebar = () => {
             ref={mobileSidebarButtonRef}
             onClick={toggleSidebar}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-700 text-white shadow-kcs transition-colors hover:bg-kcs-blue-800 dark:bg-kcs-gold-600 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-500"
-            aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+            aria-label={sidebarOpen ? t('common.close') : t('nav.portal')}
           >
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -317,7 +344,7 @@ const PortalSidebar = () => {
                     type="button"
                     onClick={() => setSidebarOpen(false)}
                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/80 text-kcs-blue-700 shadow-sm transition hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/70 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
-                    aria-label="Fermer le menu"
+                    aria-label={t('common.close')}
                   >
                     <X size={18} />
                   </button>
