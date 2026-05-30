@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import authRoutes from "./routes/auth.routes";
+import academicYearRoutes from "./routes/academic-year.routes";
 import coreRoutes from "./routes/core.routes";
 import integrationIngestRoutes from "./routes/integration.ingest.routes";
 import integrationRegistryRoutes from "./routes/integration.registry.routes";
@@ -48,6 +49,7 @@ export function createApp() {
 
   app.use("/api/auth", authRoutes);
   app.use("/api", coreRoutes);
+  app.use("/api/integration/academic-year", academicYearRoutes);
   app.use("/api/integration", integrationRoutes);
   app.use("/api/integration/read", integrationReadRoutes);
   app.use("/api/integration/registry", integrationRegistryRoutes);
