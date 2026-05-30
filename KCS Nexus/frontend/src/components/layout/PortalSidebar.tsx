@@ -282,7 +282,7 @@ const PortalSidebar = () => {
       <AnimatePresence>
         {sidebarOpen && (
           <motion.div
-            className="fixed inset-0 z-40 bg-kcs-blue-950/45 p-3 pt-[76px] backdrop-blur-sm lg:hidden"
+            className="nexus-mobile-menu-overlay fixed inset-x-0 bottom-0 z-[60] bg-kcs-blue-950/45 p-3 backdrop-blur-sm lg:hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -291,14 +291,15 @@ const PortalSidebar = () => {
           >
             <motion.aside
               ref={mobileSidebarRef}
-              className="nexus-glass-rail flex max-h-[calc(100dvh-88px)] w-[min(calc(100vw-1.5rem),360px)] flex-col overflow-hidden rounded-[26px] border shadow-2xl shadow-kcs-blue-950/24"
+              className="nexus-mobile-menu-panel nexus-glass-rail flex w-[min(calc(100vw-1.5rem),372px)] flex-col overflow-hidden rounded-[26px] border shadow-2xl shadow-kcs-blue-950/24"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ duration: 0.16, ease: 'easeOut' }}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="border-b border-gray-100 p-3 dark:border-kcs-blue-800">
+              <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/42 p-3 backdrop-blur-xl dark:border-kcs-blue-800 dark:bg-kcs-blue-950/42">
+                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-kcs-blue-200 dark:bg-kcs-blue-700" aria-hidden="true" />
                 <div className="rounded-[24px] border border-white/70 bg-white/60 p-3 shadow-inner shadow-white/40 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/40 dark:shadow-none">
                 <div className="flex items-center gap-3">
                   <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${roleColor} text-sm font-bold text-white ring-4 ring-white dark:ring-kcs-blue-950`}>
@@ -312,6 +313,14 @@ const PortalSidebar = () => {
                       {user.role}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/80 text-kcs-blue-700 shadow-sm transition hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/70 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
+                    aria-label="Fermer le menu"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
                 </div>
               </div>

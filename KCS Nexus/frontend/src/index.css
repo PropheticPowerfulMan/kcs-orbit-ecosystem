@@ -251,6 +251,20 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.12),
       0 18px 46px rgba(0, 12, 28, 0.34);
   }
+
+  .nexus-mobile-menu-overlay {
+    top: calc(4.75rem + env(safe-area-inset-top, 0px));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .nexus-mobile-menu-panel {
+    max-height: calc(100dvh - 5.75rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .nexus-mobile-menu-panel nav {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
   
   .section-padding {
     @apply py-16 md:py-24 lg:py-32;
@@ -619,6 +633,18 @@
 
   .portal-shell {
     overflow: hidden;
+  }
+
+  .nexus-mobile-menu-overlay {
+    top: calc(4.55rem + env(safe-area-inset-top, 0px));
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+  }
+
+  .nexus-mobile-menu-panel {
+    width: min(calc(100vw - 1.25rem), 360px);
+    max-height: calc(100dvh - 5.4rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    border-radius: 1.35rem;
   }
 
   .portal-shell > main {
