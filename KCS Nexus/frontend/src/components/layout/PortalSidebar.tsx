@@ -242,26 +242,26 @@ const PortalSidebar = () => {
 
   return (
     <>
-      <div className="fixed inset-x-0 top-0 z-50 px-3 pt-3 lg:hidden">
-        <div className="nexus-glass-rail flex h-14 items-center justify-between rounded-[28px] border px-3">
-        <Link to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full kcs-gradient shadow-kcs ring-4 ring-white dark:ring-kcs-blue-900">
+      <div className="fixed inset-x-0 top-0 z-50 px-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:px-4 lg:hidden">
+        <div className="nexus-mobile-dashboard-bar flex min-h-14 items-center justify-between gap-2 rounded-[24px] border px-2.5 py-2 sm:rounded-[28px] sm:px-3">
+        <Link to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 flex-1 items-center gap-2.5">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full kcs-gradient shadow-kcs ring-2 ring-white/80 dark:ring-kcs-blue-900">
             <span className="font-display text-sm font-bold text-white">KCS</span>
           </div>
           <div className="min-w-0">
-            <p className="truncate font-display text-sm font-bold text-kcs-blue-900 dark:text-white">
+            <p className="truncate font-display text-[13px] font-bold leading-tight text-kcs-blue-900 dark:text-white sm:text-sm">
               KCS Nexus
             </p>
-            <p className="truncate text-xs text-kcs-gold-600 dark:text-kcs-gold-400">
+            <p className="truncate text-[11px] font-semibold leading-tight text-kcs-gold-700 dark:text-kcs-gold-300 sm:text-xs">
               {roleName} Portal
             </p>
           </div>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
             onClick={toggleTheme}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/70 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
             aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
           >
@@ -270,7 +270,7 @@ const PortalSidebar = () => {
           <button
             ref={mobileSidebarButtonRef}
             onClick={toggleSidebar}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
+            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-700 text-white shadow-kcs transition-colors hover:bg-kcs-blue-800 dark:bg-kcs-gold-600 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-500"
             aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
           >
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
@@ -291,7 +291,7 @@ const PortalSidebar = () => {
           >
             <motion.aside
               ref={mobileSidebarRef}
-              className="nexus-glass-rail flex max-h-[calc(100dvh-88px)] w-[min(88vw,360px)] flex-col overflow-hidden rounded-[30px] border"
+              className="nexus-glass-rail flex max-h-[calc(100dvh-88px)] w-[min(calc(100vw-1.5rem),360px)] flex-col overflow-hidden rounded-[26px] border shadow-2xl shadow-kcs-blue-950/24"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
