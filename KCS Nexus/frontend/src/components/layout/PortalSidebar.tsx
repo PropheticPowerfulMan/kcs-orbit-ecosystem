@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -100,6 +100,8 @@ const PortalSidebar = () => {
   const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
+  const mobileSidebarRef = useRef<HTMLElement>(null)
+  const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const { user, logout } = useAuthStore()
   const {
     sidebarCollapsed,
@@ -129,15 +131,25 @@ const PortalSidebar = () => {
     }
 
     document.body.style.overflow = 'hidden'
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (mobileSidebarRef.current?.contains(target) || mobileSidebarButtonRef.current?.contains(target)) {
+        return
+      }
+
+      setSidebarOpen(false)
+    }
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setSidebarOpen(false)
       }
     }
 
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true)
     window.addEventListener('keydown', closeOnEscape)
     return () => {
       document.body.style.overflow = ''
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [sidebarOpen, setSidebarOpen])
@@ -256,6 +268,7 @@ const PortalSidebar = () => {
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           <button
+            ref={mobileSidebarButtonRef}
             onClick={toggleSidebar}
             className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-kcs-blue-50 text-kcs-blue-700 transition-colors hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
             aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
@@ -277,6 +290,7 @@ const PortalSidebar = () => {
             onClick={() => setSidebarOpen(false)}
           >
             <motion.aside
+              ref={mobileSidebarRef}
               className="nexus-glass-rail flex max-h-[calc(100dvh-88px)] w-[min(88vw,360px)] flex-col overflow-hidden rounded-[30px] border"
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}

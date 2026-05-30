@@ -46,8 +46,8 @@ export default function SuggestionBox() {
   const labels = useMemo(() => ({
     title: language === 'fr' ? 'Boîte à suggestions' : 'Suggestion box',
     subtitle: language === 'fr'
-      ? 'Le message reste anonyme pour le suivi normal; seul le super admin peut lever le secret en cas de besoin.'
-      : 'The normal view stays anonymous; only the super admin can reveal identity when needed.',
+      ? 'Le message reste anonyme dans le suivi normal.'
+      : 'The normal view stays anonymous.',
     send: language === 'fr' ? 'Envoyer en anonymat' : 'Send anonymously',
     sent: language === 'fr' ? 'Suggestion enregistrée dans le canal confidentiel.' : 'Suggestion saved in the confidential channel.',
     audit: language === 'fr' ? 'Audit super admin' : 'Super admin audit',

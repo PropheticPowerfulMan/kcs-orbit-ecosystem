@@ -19,6 +19,7 @@ const Header = () => {
   const [scrolled, setScrolled] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', onScroll)
@@ -34,7 +35,7 @@ const Header = () => {
 
     const closeOnOutsideClick = (event: PointerEvent) => {
       const target = event.target as Node
-      if (headerRef.current?.contains(target) || mobileMenuRef.current?.contains(target)) {
+      if (mobileMenuButtonRef.current?.contains(target) || mobileMenuRef.current?.contains(target)) {
         return
       }
       setMobileOpen(false)
@@ -207,6 +208,7 @@ const Header = () => {
 
             {/* Mobile Menu Toggle */}
             <button
+              ref={mobileMenuButtonRef}
               type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
               className={`flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-200 lg:hidden ${
