@@ -175,7 +175,7 @@ const PortalSidebar = () => {
 
   const renderNavigation = (isMobile = false) => (
     <>
-      <nav className={`flex-1 space-y-1 overflow-y-auto ${isMobile ? 'px-3 py-2' : 'p-3'}`}>
+      <nav className={`${isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'flex-1 space-y-1 overflow-y-auto p-3'}`}>
         {navItems.map(({ to, label, icon: Icon, badge }) => (
           <NavLink
             key={to}
@@ -205,11 +205,11 @@ const PortalSidebar = () => {
         ))}
       </nav>
 
-      <div className={`${isMobile ? 'mx-3 mb-3 rounded-[22px] border border-gray-100 bg-gray-50/70 p-2 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}`}>
+      <div className={isMobile ? 'nexus-mobile-menu-actions' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}>
         <button
           type="button"
           onClick={toggleTheme}
-          className={`sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} w-full ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`}
+          className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
           title={!isMobile && sidebarCollapsed ? (theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode') : undefined}
         >
           {theme === 'dark' ? <Sun size={18} className="flex-shrink-0" /> : <Moon size={18} className="flex-shrink-0" />}
@@ -218,7 +218,7 @@ const PortalSidebar = () => {
         <Link
           to="/"
           onClick={() => isMobile && setSidebarOpen(false)}
-          className={`sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`}
+          className={isMobile ? 'nexus-mobile-action' : `sidebar-link ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
           title={!isMobile && sidebarCollapsed ? 'Main Website' : undefined}
         >
           <Home size={18} className="flex-shrink-0" />
@@ -230,7 +230,7 @@ const PortalSidebar = () => {
             logout()
             navigate('/login', { replace: true })
           }}
-          className={`sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} w-full text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`}
+          className={isMobile ? 'nexus-mobile-action nexus-mobile-action-danger' : `sidebar-link w-full text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
           title={!isMobile && sidebarCollapsed ? 'Sign Out' : undefined}
         >
           <LogOut size={18} className="flex-shrink-0" />
