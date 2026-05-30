@@ -15,6 +15,21 @@ export const academicContext = {
   nextExamWindow: 'May 3 - May 17',
 }
 
+export const parents = [
+  { id: 'parent-kabongo', name: 'Rachel Kabongo', studentIds: ['stu-elise', 'stu-david'], email: 'rachel.kabongo@kcs.local', phone: '+243812450221' },
+  { id: 'parent-mbuyi', name: 'Mireille Mbuyi', studentIds: ['stu-amani'], email: 'mireille.mbuyi@kcs.local', phone: '+243899120882' },
+  { id: 'parent-ilunga', name: 'Patrick Ilunga', studentIds: ['stu-naomi'], email: 'patrick.ilunga@kcs.local', phone: '+243843774101' },
+  { id: 'parent-kalala', name: 'Claire Kalala', studentIds: ['stu-sarah'], email: 'claire.kalala@kcs.local', phone: '+243815330477' },
+  { id: 'parent-banza', name: 'Beatrice Banza', studentIds: ['stu-joel'], email: 'beatrice.banza@kcs.local', phone: '+243817444909' },
+]
+
+export const employees = [
+  { id: 'teacher-lukusa', name: 'M. Alain Lukusa', role: 'teacher', subject: 'Mathematiques' },
+  { id: 'teacher-moke', name: 'Mme Chantal Moke', role: 'teacher', subject: 'Francais' },
+  { id: 'teacher-ngalula', name: 'Dr. Peter Ngalula', role: 'teacher', subject: 'Sciences' },
+  { id: 'teacher-kalala', name: 'Mme Esther Kalala', role: 'teacher', subject: 'Anglais' },
+]
+
 export const students = [
   {
     id: 'stu-elise',
@@ -47,6 +62,70 @@ export const students = [
     strengths: ['Class participation', 'History recall', 'Oral presentations'],
     weaknesses: ['Fractions', 'Homework consistency'],
     aiInsight: 'David needs a parent-teacher follow-up and a 20-minute daily math routine for the next 14 days.',
+  },
+  {
+    id: 'stu-amani',
+    name: 'Amani Mbuyi',
+    grade: 'Grade 10',
+    section: 'A',
+    parentId: 'parent-mbuyi',
+    advisor: 'Mrs. Diallo',
+    average: 64,
+    gpa: 2.0,
+    rank: 31,
+    attendance: 72,
+    risk: 'high',
+    strengths: ['Oral participation'],
+    weaknesses: ['Attendance consistency', 'Exam readiness'],
+    aiInsight: 'Amani needs a coordinated attendance and academic support plan this week.',
+  },
+  {
+    id: 'stu-naomi',
+    name: 'Naomi Ilunga',
+    grade: 'Grade 7',
+    section: 'A',
+    parentId: 'parent-ilunga',
+    advisor: 'Mrs. Nkosi',
+    average: 82,
+    gpa: 3.0,
+    rank: 12,
+    attendance: 91,
+    risk: 'low',
+    strengths: ['Reading comprehension'],
+    weaknesses: ['Science lab vocabulary'],
+    aiInsight: 'Naomi is stable; keep vocabulary reinforcement inside science lessons.',
+  },
+  {
+    id: 'stu-sarah',
+    name: 'Sarah Kalala',
+    grade: 'Grade 6',
+    section: '',
+    parentId: 'parent-kalala',
+    advisor: 'Dr. Mukendi',
+    average: 76,
+    gpa: 2.5,
+    rank: 20,
+    attendance: 88,
+    risk: 'low',
+    strengths: ['Steady improvement'],
+    weaknesses: ['Writing structure'],
+    aiInsight: 'Sarah is improving; weekly writing practice should lift her next report.',
+  },
+  {
+    id: 'stu-joel',
+    name: 'Joel Banza',
+    grade: 'Grade 10',
+    section: 'B',
+    parentId: 'parent-banza',
+    advisor: 'Mr. Belanger',
+    average: 61,
+    gpa: 1.8,
+    rank: 34,
+    attendance: 74,
+    risk: 'high',
+    strengths: ['Practical projects'],
+    weaknesses: ['Homework completion', 'Attendance'],
+    aiInsight: 'Joel should be escalated to the academic coordinator and family follow-up queue.',
   },
 ]
 

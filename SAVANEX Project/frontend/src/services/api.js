@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
-import { students as demoStudents } from '../data/demoSchoolData';
+import {
+  classDistribution as demoClassDistribution,
+  students as demoStudents,
+  teachers as demoTeachers,
+} from '../data/demoSchoolData';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 const DEMO_ACCESS_TOKEN = 'demo-access-token';
@@ -18,9 +22,9 @@ const demoUser = {
 };
 
 const demoOverview = {
-  total_students: 428,
-  total_teachers: 34,
-  total_classes: 18,
+  total_students: demoStudents.length,
+  total_teachers: demoTeachers.length,
+  total_classes: demoClassDistribution.length,
   attendance_rate_30d: 92,
   average_grade: 74,
 };
