@@ -20,6 +20,16 @@ class NLPEngine:
 
     def __init__(self):
         self.intent_definitions: dict[str, IntentDefinition] = {
+            "greeting_query": IntentDefinition(
+                keywords=("hi", "hello", "hey", "bonjour", "salut", "bonsoir", "how are you", "comment ca va"),
+                actions_en=("greet_user", "offer_direct_help", "listen_for_request"),
+                actions_fr=("saluer_utilisateur", "proposer_aide_directe", "attendre_demande"),
+            ),
+            "language_preference": IntentDefinition(
+                keywords=("speak french", "speak in french", "parle francais", "parle en francais", "parle moi en francais", "reponds en francais"),
+                actions_en=("switch_reply_language", "confirm_language_preference"),
+                actions_fr=("basculer_langue_reponse", "confirmer_preference_langue"),
+            ),
             "ecosystem_status_query": IntentDefinition(
                 keywords=(
                     "ecosystem", "ecosysteme", "system", "systeme", "etat", "status",
@@ -126,6 +136,10 @@ class NLPEngine:
         text = self._normalize(message)
         if not text:
             return "capability_query", 0.65
+        if self._is_language_preference(text):
+            return "language_preference", 0.96
+        if self._is_greeting(text):
+            return "greeting_query", 0.94
 
         scores: dict[str, float] = {}
         for intent, definition in self.intent_definitions.items():
@@ -163,6 +177,8 @@ class NLPEngine:
             response = self._compose_french_response(intent, message, details)
             response = self._apply_spokesperson_frame(response, context, "fr")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_fr)
+            if intent == "finance_query" and details.get("payment_status") == "impayes":
+                actions = ["ouvrir_module_finance", "filtrer_eleves_impayes", "exporter_liste_impayes", "verifier_soldes"]
         else:
             response = self._compose_english_response(intent, message, details)
             response = self._apply_spokesperson_frame(response, context, "en")
@@ -173,6 +189,19 @@ class NLPEngine:
     def _compose_french_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
         if intent == "ecosystem_status_query":
             return self._compose_ecosystem_status("fr", details)
+
+        if intent == "greeting_query":
+            return (
+                "Bonjour, je vais bien et je suis pret a t'aider. "
+                "Je peux te donner directement une liste, un etat de l'ecosysteme, une annonce, un rapport, une alerte ou une action a lancer. "
+                "Pose simplement la demande, par exemple: donne-moi les eleves de K3."
+            )
+
+        if intent == "language_preference":
+            return (
+                "D'accord. Je continue en francais. "
+                "Tu peux me demander directement une liste, un rapport, une annonce, une alerte ou l'etat reel de l'ecosysteme."
+            )
 
         if intent == "announcement_request":
             audience = details.get("audience", "le public concerne")
@@ -202,15 +231,17 @@ class NLPEngine:
         if intent == "finance_query":
             paid_status = details.get("payment_status", "payes")
             audience = self._localized_audience(details.get("audience", "students"), "fr")
+            status_label = "impayes" if paid_status == "impayes" else "partiellement payes" if paid_status == "partiellement payes" else "qui ont paye"
+            filter_label = "Impaye" if paid_status == "impayes" else "Partiel" if paid_status == "partiellement payes" else "Paye"
             return "\n".join([
-                f"Tu demandes une liste financiere: les {audience} qui ont ete {paid_status}.",
+                f"Tu demandes une liste financiere: les {audience} {status_label}.",
                 "",
                 "Reponse correcte: ce n'est pas une annonce a rediger. Il faut interroger le module paiement/frais, puis retourner un tableau.",
                 "",
                 "Colonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.",
-                "Filtres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.",
+                f"Filtres utiles: annee scolaire, trimestre, classe, statut {filter_label}.",
                 "",
-                "Action suivante: ouvre EduPay ou le module Finance SAVANEX, filtre le statut Paye, puis exporte la liste. Si tu me donnes la classe ou la periode, je prepare le filtre exact.",
+                f"Action suivante: ouvre EduPay ou le module Finance SAVANEX, filtre le statut {filter_label}, puis exporte la liste. Si tu me donnes la classe ou la periode, je prepare le filtre exact.",
             ])
 
         if intent == "directory_query":
@@ -266,6 +297,16 @@ class NLPEngine:
     def _compose_english_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
         if intent == "ecosystem_status_query":
             return self._compose_ecosystem_status("en", details)
+
+        if intent == "greeting_query":
+            return (
+                "Hi, I am doing well and ready to help. "
+                "Ask me directly for a list, ecosystem status, announcement, report, alert, or workflow action. "
+                "For example: list the K3 students."
+            )
+
+        if intent == "language_preference":
+            return "Understood. I will answer in French when you ask in French."
 
         if intent == "announcement_request":
             audience = details.get("audience", "the target audience")
@@ -382,6 +423,35 @@ class NLPEngine:
         )
         return any(self._contains_term(text, verb) for verb in verbs)
 
+    def _is_greeting(self, text: str) -> bool:
+        normalized = re.sub(r"[,!?\.]+", " ", text).strip()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized in {
+            "hi",
+            "hello",
+            "hey",
+            "bonjour",
+            "salut",
+            "bonsoir",
+            "how are you",
+            "hi how are you",
+            "hello how are you",
+            "comment ca va",
+        }
+
+    def _is_language_preference(self, text: str) -> bool:
+        return any(
+            phrase in text
+            for phrase in (
+                "parle moi en francais",
+                "parle en francais",
+                "parle francais",
+                "reponds en francais",
+                "speak french",
+                "speak in french",
+            )
+        )
+
     def _is_payment_question(self, text: str) -> bool:
         payment_terms = (
             "paye", "payes", "payee", "payees", "paiement", "paiements",
@@ -417,6 +487,7 @@ class NLPEngine:
             "annonce", "conge", "reunion", "rapport", "enseignant", "ecole",
             "classe", "eleves", "parents", "peux", "faire", "aide",
             "etat", "ecosysteme", "donne", "general", "francais", "parle",
+            "qui", "pas", "paye", "impaye",
         )
         return "fr" if any(marker in text for marker in french_markers) else "en"
 
@@ -433,7 +504,12 @@ class NLPEngine:
             details["priority"] = "normal"
 
         has_paid = any(self._contains_term(text, term) for term in ("paye", "payes", "payee", "payees", "paid"))
-        has_unpaid = any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid"))
+        has_unpaid = (
+            any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid"))
+            or "pas paye" in text
+            or "pas payer" in text
+            or "non paye" in text
+        )
 
         if has_unpaid:
             details["payment_status"] = "impayes"

@@ -214,6 +214,10 @@ function demoResponse(path, method, body) {
     const spokespersonPrefix = isFrench
       ? `Voix officielle EduSync AI: je parle au nom de l'ecosysteme et je me base uniquement sur les donnees disponibles.\nEtat verifie: ${ecosystemFacts.announcements} annonces, ${ecosystemFacts.workflows} workflows en attente, ${ecosystemFacts.unread} notifications non lues. Source: donnees demo EduSync; Orbit/SAVANEX/EduPay/Nexus non confirmes dans ce mode.\n\n`
       : `Official EduSync AI voice: I speak for the ecosystem and use only available data.\nVerified state: ${ecosystemFacts.announcements} announcements, ${ecosystemFacts.workflows} pending workflows, ${ecosystemFacts.unread} unread notifications. Source: EduSync demo data; Orbit/SAVANEX/EduPay/Nexus not confirmed in this mode.\n\n`;
+    const compactGreeting = normalized.replace(/[,!?\.]/g, "").trim();
+    const isGreeting = ["hi", "hello", "hey", "bonjour", "salut", "bonsoir", "how are you", "hi how are you", "hello how are you", "comment ca va"].includes(compactGreeting);
+    const isLanguagePreference = /parle( moi)?( en)? francais|reponds en francais|speak( in)? french/.test(normalized);
+    const isUnpaidFinance = /\b(impaye|impayes|unpaid)\b|pas paye|non paye/.test(normalized);
     const details = {
       audience: normalized.includes("parent")
         ? "parents"
@@ -282,6 +286,22 @@ function demoResponse(path, method, body) {
     };
     const intents = [
       {
+        intent: "language_preference",
+        terms: [],
+        response: "D'accord. Je continue en francais. Tu peux me demander directement une liste, un rapport, une annonce, une alerte ou l'etat reel de l'ecosysteme.",
+        actions: ["basculer_langue_reponse", "confirmer_preference_langue"],
+      },
+      {
+        intent: "greeting_query",
+        terms: [],
+        response: isFrench
+          ? "Bonjour, je vais bien et je suis pret a t'aider. Pose directement ta demande, par exemple: donne-moi les eleves de K3."
+          : "Hi, I am doing well and ready to help. Ask me directly for a list, ecosystem status, announcement, report, alert, or workflow action.",
+        actions: isFrench
+          ? ["saluer_utilisateur", "proposer_aide_directe", "attendre_demande"]
+          : ["greet_user", "offer_direct_help", "listen_for_request"],
+      },
+      {
         intent: "directory_query",
         terms: ["liste des parents", "tous les parents", "parents de l ecole", "liste des eleves", "tous les eleves", "liste de tous les elves", "eleves de k", "elves de k", "list parents", "all parents", "list students", "students in k"],
         response: directoryResponse(),
@@ -302,12 +322,14 @@ function demoResponse(path, method, body) {
       {
         intent: "finance_query",
         terms: ["paye", "payes", "payee", "paiement", "frais", "solde", "scolarite", "finance", "paid", "payment", "payments", "fees", "balance", "balances", "export"],
-        response: isFrench
-          ? `Tu demandes une liste financiere: les eleves qui ont paye.\n\nCe n'est pas une annonce. Il faut interroger le module paiement/frais et retourner un tableau.\n\nColonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.\nFiltres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.\n\nAction suivante: ouvre EduPay ou Finance SAVANEX, filtre statut Paye, puis exporte la liste.`
-          : `Finance command understood: list paid students, check balances, and prepare export.\n\nCorrect handling: open the finance/payment module, not announcements or messaging.\n\nApply filters: status = Paid, entity = Students. Add class, academic year, or term if provided.\nTable columns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nExport: generate CSV/XLSX with the visible filtered rows.\n\nNext step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.`,
+        response: (() => {
+          return isFrench
+            ? `Tu demandes une liste financiere: les eleves ${isUnpaidFinance ? "impayes" : "qui ont paye"}.\n\nCe n'est pas une annonce. Il faut interroger le module paiement/frais et retourner un tableau.\n\nColonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.\nFiltres utiles: annee scolaire, trimestre, classe, statut ${isUnpaidFinance ? "Impaye" : "Paye"}.\n\nAction suivante: ouvre EduPay ou Finance SAVANEX, applique ce filtre, puis exporte la liste.`
+            : `Finance command understood: list ${isUnpaidFinance ? "unpaid" : "paid"} students, check balances, and prepare export.\n\nCorrect handling: open the finance/payment module, not announcements or messaging.\n\nApply filters: status = ${isUnpaidFinance ? "Unpaid" : "Paid"}, entity = Students. Add class, academic year, or term if provided.\nTable columns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nExport: generate CSV/XLSX with the visible filtered rows.\n\nNext step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.`;
+        })(),
         actions: isFrench
-          ? ["ouvrir_module_finance", "filtrer_eleves_payes", "exporter_liste_paiements"]
-          : ["open_finance_module", "filter_paid_students", "export_payment_list", "check_balances"],
+          ? ["ouvrir_module_finance", isUnpaidFinance ? "filtrer_eleves_impayes" : "filtrer_eleves_payes", "exporter_liste_paiements"]
+          : ["open_finance_module", isUnpaidFinance ? "filter_unpaid_students" : "filter_paid_students", "export_payment_list", "check_balances"],
       },
       {
         intent: "announcement_request",
@@ -351,6 +373,8 @@ function demoResponse(path, method, body) {
       },
     ];
     const match =
+      (isLanguagePreference ? intents.find((item) => item.intent === "language_preference") : null) ||
+      (isGreeting ? intents.find((item) => item.intent === "greeting_query") : null) ||
       (isDirectoryList ? intents.find((item) => item.intent === "directory_query") : null) ||
       intents.find((item) => item.terms.some((term) => normalized.includes(term))) ||
       {

@@ -136,14 +136,52 @@ class EduSyncSpokespersonTests(unittest.TestCase):
         self.assertIn("retourner_tableau_repertoire", actions)
 
     def test_explicit_french_request_answers_in_french(self):
+        intent, confidence = self.engine.detect_intent("parle moi en francais")
+        self.assertEqual(intent, "language_preference")
+        self.assertGreaterEqual(confidence, 0.9)
+
         response, _actions = self.engine.generate_context_response(
-            "general_query",
+            intent,
             self.context,
             "parle moi en francais",
         )
 
         self.assertIn("Voix officielle EduSync AI", response)
-        self.assertIn("J'ai compris", response)
+        self.assertIn("Je continue en francais", response)
+        self.assertNotIn("demande est trop ouverte", response)
+
+    def test_greeting_is_not_misclassified_as_capabilities(self):
+        intent, confidence = self.engine.detect_intent("hi, how are you?")
+
+        self.assertEqual(intent, "greeting_query")
+        self.assertGreaterEqual(confidence, 0.9)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "hi, how are you?",
+        )
+
+        self.assertIn("Hi, I am doing well", response)
+        self.assertNotIn("capabilities", response.lower())
+        self.assertIn("greet_user", actions)
+
+    def test_unpaid_finance_question_stays_french_and_unpaid(self):
+        intent, confidence = self.engine.detect_intent("qui n'a pas paye?")
+
+        self.assertEqual(intent, "finance_query")
+        self.assertGreaterEqual(confidence, 0.8)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "qui n'a pas paye?",
+        )
+
+        self.assertIn("Tu demandes une liste financiere", response)
+        self.assertIn("impayes", response)
+        self.assertNotIn("paid students", response)
+        self.assertIn("ouvrir_module_finance", actions)
 
 
 if __name__ == "__main__":
