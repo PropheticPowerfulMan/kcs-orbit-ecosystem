@@ -54,9 +54,11 @@ class NLPEngine:
                 keywords=(
                     "liste parents", "liste des parents", "tous les parents", "parents de l ecole",
                     "liste eleves", "liste des eleves", "tous les eleves", "eleves de l ecole",
+                    "liste elve", "liste elves", "tous les elves", "elve de l ecole", "elves de l ecole",
+                    "eleves de k", "elves de k", "eleves de grade", "students in k", "students in grade",
                     "liste enseignants", "liste des enseignants", "tous les enseignants",
                     "repertoire", "annuaire", "directory", "list parents", "all parents",
-                    "list students", "all students", "list teachers", "all teachers",
+                    "list students", "all students", "list teachers", "all teachers", "class list",
                 ),
                 actions_en=("read_shared_directory", "return_directory_table", "verify_orbit_source"),
                 actions_fr=("lire_repertoire_partage", "retourner_tableau_repertoire", "verifier_source_orbit"),
@@ -400,7 +402,8 @@ class NLPEngine:
         list_terms = ("liste", "lister", "affiche", "afficher", "donne", "voir", "show", "list", "display", "all")
         directory_terms = (
             "parent", "parents", "eleve", "eleves", "student", "students",
-            "enseignant", "enseignants", "teacher", "teachers", "employe", "employes",
+            "elve", "elves", "enseignant", "enseignants", "teacher", "teachers",
+            "employe", "employes", "k3", "k4", "k5", "grade",
         )
         return (
             any(self._contains_term(text, term) for term in list_terms)
@@ -413,7 +416,7 @@ class NLPEngine:
             "je ", "tu ", "nous ", "vous ", "pour ", "avec ", "demande",
             "annonce", "conge", "reunion", "rapport", "enseignant", "ecole",
             "classe", "eleves", "parents", "peux", "faire", "aide",
-            "etat", "ecosysteme", "donne", "general",
+            "etat", "ecosysteme", "donne", "general", "francais", "parle",
         )
         return "fr" if any(marker in text for marker in french_markers) else "en"
 
@@ -456,8 +459,12 @@ class NLPEngine:
                 details["directory_entity"] = "parents"
             elif any(self._contains_term(text, term) for term in ("enseignant", "enseignants", "teacher", "teachers")):
                 details["directory_entity"] = "teachers"
-            elif any(self._contains_term(text, term) for term in ("eleve", "eleves", "student", "students")):
+            elif any(self._contains_term(text, term) for term in ("eleve", "eleves", "elve", "elves", "student", "students", "k3", "k4", "k5", "grade")):
                 details["directory_entity"] = "students"
+
+            class_match = re.search(r"\b(k[3-5]|kg\s*[3-5]|grade\s*\d{1,2}|class\s*\d{1,2}|g\d{1,2})\b", text)
+            if class_match:
+                details["class_filter"] = re.sub(r"\s+", " ", class_match.group(1)).upper().replace("KG ", "K")
 
         date_match = re.search(
             r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
@@ -475,6 +482,12 @@ class NLPEngine:
         directory = ecosystem.get("shared_directory", {})
         entity = details.get("directory_entity", "parents")
         rows = directory.get(entity, []) if directory.get("available") else []
+        class_filter = details.get("class_filter")
+        if entity == "students" and class_filter:
+            rows = [
+                item for item in rows
+                if self._class_matches(item.get("className") or item.get("grade") or item.get("section"), class_filter)
+            ]
 
         if not directory.get("available"):
             if language == "fr":
@@ -491,22 +504,24 @@ class NLPEngine:
 
         if not rows:
             label = self._localized_audience(entity, language)
+            class_suffix = f" de {class_filter}" if language == "fr" and class_filter else f" in {class_filter}" if class_filter else ""
             return (
-                f"Repertoire Orbit disponible, mais aucun enregistrement {label} n'est visible."
+                f"Repertoire Orbit disponible, mais aucun enregistrement {label}{class_suffix} n'est visible."
                 if language == "fr"
-                else f"Orbit directory is available, but no {label} record is visible."
+                else f"Orbit directory is available, but no {label}{class_suffix} record is visible."
             )
 
         if language == "fr":
+            student_title = f"Liste des eleves de {class_filter}" if class_filter else "Liste des eleves de l'ecole"
             title = {
                 "parents": "Liste des parents de l'ecole",
-                "students": "Liste des eleves de l'ecole",
+                "students": student_title,
                 "teachers": "Liste des enseignants/employes de l'ecole",
             }.get(entity, "Liste du repertoire")
             lines = [
                 f"{title} ({len(rows)} visible(s) dans le contexte charge):",
                 "",
-                "Nom | Identifiant | Email | Telephone | Eleves lies",
+                "Nom | Identifiant | Email | Telephone | Classe/Relation",
             ]
             for item in rows[:30]:
                 lines.append(self._format_directory_row(item, entity))
@@ -518,13 +533,13 @@ class NLPEngine:
 
         title = {
             "parents": "School parent list",
-            "students": "School student list",
+            "students": f"School student list{(' for ' + class_filter) if class_filter else ''}",
             "teachers": "School teacher/employee list",
         }.get(entity, "Directory list")
         lines = [
             f"{title} ({len(rows)} visible in the loaded context):",
             "",
-            "Name | ID | Email | Phone | Linked students",
+            "Name | ID | Email | Phone | Class/Relation",
         ]
         for item in rows[:30]:
             lines.append(self._format_directory_row(item, entity))
@@ -541,13 +556,20 @@ class NLPEngine:
         phone = item.get("phone") or item.get("parentPhone") or "-"
         linked = item.get("studentIds") or item.get("childrenExternalIds") or []
         if entity == "students":
-            linked = item.get("parentId") or item.get("parentExternalId") or "-"
+            linked = item.get("className") or item.get("grade") or item.get("section") or item.get("parentId") or item.get("parentExternalId") or "-"
         elif entity == "teachers":
             linked = item.get("department") or item.get("jobTitle") or "-"
         linked_label = ", ".join(str(value) for value in linked[:4]) if isinstance(linked, list) else str(linked)
         if isinstance(linked, list) and len(linked) > 4:
             linked_label += f", +{len(linked) - 4}"
         return f"- {name} | {identifier} | {email} | {phone} | {linked_label or '-'}"
+
+    def _class_matches(self, class_name: str | None, class_filter: str) -> bool:
+        class_name = self._normalize(class_name or "").replace(" ", "")
+        class_filter = self._normalize(class_filter or "").replace(" ", "")
+        if not class_name or not class_filter:
+            return False
+        return class_name == class_filter.lower() or class_name.startswith(class_filter.lower())
 
     def _apply_spokesperson_frame(self, response: str, context: dict, language: str) -> str:
         ecosystem = context.get("ecosystem_context")

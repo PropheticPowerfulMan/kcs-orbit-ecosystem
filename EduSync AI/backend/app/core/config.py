@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     savanex_login_path: str = "/api/auth/login/"
     savanex_timeout_seconds: int = 5
 
+    external_ai_enabled: bool = False
+    external_ai_provider: str = "openai_compatible"
+    external_ai_base_url: str = ""
+    external_ai_api_key: str = ""
+    external_ai_model: str = ""
+    external_ai_timeout_seconds: int = 12
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 

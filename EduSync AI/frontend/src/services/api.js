@@ -91,6 +91,8 @@ const demoState = {
       },
     ],
     students: [
+      { id: "stu-jeremie", fullName: "Jeremie Lumbu", studentNumber: "K3-001", className: "K3", parentId: "parent-lumbu" },
+      { id: "stu-malia", fullName: "Malia Tshibangu", studentNumber: "K3-002", className: "K3", parentId: "parent-tshibangu" },
       { id: "stu-elise", fullName: "Elise Kabongo", className: "Grade 11A", parentId: "parent-kabongo" },
       { id: "stu-david", fullName: "David Kabongo", className: "Grade 8B", parentId: "parent-kabongo" },
       { id: "stu-amani", fullName: "Amani Mbuyi", className: "Grade 10A", parentId: "parent-mbuyi" },
@@ -200,7 +202,7 @@ function demoResponse(path, method, body) {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
-    const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe|systeme|ecosysteme|etat)\b/.test(
+    const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe|systeme|ecosysteme|etat|francais|parle|donne|eleve|eleves|elve|elves)\b/.test(
       normalized
     );
     const ecosystemFacts = {
@@ -225,21 +227,63 @@ function demoResponse(path, method, body) {
     };
     const isDirectoryList =
       /\b(liste|lister|affiche|afficher|donne|voir|show|list|display|all)\b/.test(normalized) &&
-      /\b(parent|parents|eleve|eleves|student|students|enseignant|enseignants|teacher|teachers)\b/.test(normalized) &&
+      /\b(parent|parents|eleve|eleves|elve|elves|student|students|enseignant|enseignants|teacher|teachers|k3|k4|k5|grade)\b/.test(normalized) &&
       !/\b(paye|payes|payee|paiement|frais|solde|scolarite|finance|paid|payment|fees|balance)\b/.test(normalized);
+    const classFilter = normalized.match(/\b(k[3-5]|kg\s*[3-5]|grade\s*\d{1,2}|class\s*\d{1,2}|g\d{1,2})\b/)?.[1]
+      ?.replace(/\s+/g, " ")
+      .toUpperCase()
+      .replace("KG ", "K");
+    const directoryEntity = /\b(parent|parents)\b/.test(normalized)
+      ? "parents"
+      : /\b(enseignant|enseignants|teacher|teachers)\b/.test(normalized)
+        ? "teachers"
+        : "students";
+    const classMatches = (className = "") => {
+      if (!classFilter) return true;
+      const left = String(className).toLowerCase().replace(/\s+/g, "");
+      const right = classFilter.toLowerCase().replace(/\s+/g, "");
+      return left === right || left.startsWith(right);
+    };
     const directoryResponse = () => {
-      const rows = demoState.directory.parents;
+      const rows = (demoState.directory[directoryEntity] || [])
+        .filter((item) => directoryEntity !== "students" || classMatches(item.className));
+      const title = isFrench
+        ? directoryEntity === "parents"
+          ? "Liste des parents de l'ecole"
+          : directoryEntity === "teachers"
+            ? "Liste des enseignants/employes de l'ecole"
+            : `Liste des eleves ${classFilter ? `de ${classFilter}` : "de l'ecole"}`
+        : directoryEntity === "parents"
+          ? "School parent list"
+          : directoryEntity === "teachers"
+            ? "School teacher/employee list"
+            : `School student list${classFilter ? ` for ${classFilter}` : ""}`;
+      if (!rows.length) {
+        return isFrench
+          ? `Repertoire demo disponible, mais aucun enregistrement ${directoryEntity === "students" ? "eleve" : directoryEntity}${classFilter ? ` de ${classFilter}` : ""} n'est visible.\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
+          : `Demo directory is available, but no ${directoryEntity}${classFilter ? ` in ${classFilter}` : ""} record is visible.\n\nSource: EduSync demo data. I did not invent names.`;
+      }
       const table = rows
-        .map((parent) => `- ${parent.fullName} | ${parent.displayId} | ${parent.email} | ${parent.phone} | ${parent.studentIds.join(", ")}`)
+        .map((item) => {
+          const id = item.displayId || item.studentNumber || item.employeeId || item.id || "-";
+          const email = item.email || "-";
+          const phone = item.phone || "-";
+          const relation = directoryEntity === "students"
+            ? item.className || "-"
+            : directoryEntity === "teachers"
+              ? item.subject || item.department || item.jobTitle || "-"
+              : (item.studentIds || []).join(", ");
+          return `- ${item.fullName} | ${id} | ${email} | ${phone} | ${relation || "-"}`;
+        })
         .join("\n");
       return isFrench
-        ? `Liste des parents de l'ecole (${rows.length} visible(s) dans le contexte demo):\n\nNom | Identifiant | Email | Telephone | Eleves lies\n${table}\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
-        : `School parent list (${rows.length} visible in demo context):\n\nName | ID | Email | Phone | Linked students\n${table}\n\nSource: EduSync demo data. I did not invent names.`;
+        ? `${title} (${rows.length} visible(s) dans le contexte demo):\n\nNom | Identifiant | Email | Telephone | Classe/Relation\n${table}\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
+        : `${title} (${rows.length} visible in demo context):\n\nName | ID | Email | Phone | Class/Relation\n${table}\n\nSource: EduSync demo data. I did not invent names.`;
     };
     const intents = [
       {
         intent: "directory_query",
-        terms: ["liste des parents", "tous les parents", "parents de l ecole", "list parents", "all parents"],
+        terms: ["liste des parents", "tous les parents", "parents de l ecole", "liste des eleves", "tous les eleves", "liste de tous les elves", "eleves de k", "elves de k", "list parents", "all parents", "list students", "students in k"],
         response: directoryResponse(),
         actions: isFrench
           ? ["lire_repertoire_partage", "retourner_tableau_repertoire", "verifier_source_orbit"]

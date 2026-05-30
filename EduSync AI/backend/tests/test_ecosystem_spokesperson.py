@@ -28,7 +28,7 @@ class EduSyncSpokespersonTests(unittest.TestCase):
                     "available": True,
                     "source": "KCS Orbit",
                     "parents_count": 2,
-                    "students_count": 0,
+                    "students_count": 3,
                     "teachers_count": 0,
                     "parents": [
                         {
@@ -46,6 +46,32 @@ class EduSyncSpokespersonTests(unittest.TestCase):
                             "email": "",
                             "phone": "+243000002",
                             "studentIds": ["stu-2", "stu-3"],
+                        },
+                    ],
+                    "students": [
+                        {
+                            "id": "stu-k3-1",
+                            "displayId": "STU-K3-001",
+                            "fullName": "Jeremie Lumbu",
+                            "studentNumber": "K3-001",
+                            "className": "K3",
+                            "parentId": "par-1",
+                        },
+                        {
+                            "id": "stu-k3-2",
+                            "displayId": "STU-K3-002",
+                            "fullName": "Malia Tshibangu",
+                            "studentNumber": "K3-002",
+                            "className": "K3 A",
+                            "parentId": "par-2",
+                        },
+                        {
+                            "id": "stu-g1-1",
+                            "displayId": "STU-G1-001",
+                            "fullName": "Noah Banza",
+                            "studentNumber": "G1-001",
+                            "className": "Grade 1",
+                            "parentId": "par-2",
                         },
                     ],
                 },
@@ -89,6 +115,35 @@ class EduSyncSpokespersonTests(unittest.TestCase):
         self.assertIn("Parent Beta", response)
         self.assertNotIn("ouvrir EduPay", response)
         self.assertIn("retourner_tableau_repertoire", actions)
+
+    def test_k3_student_list_typo_returns_filtered_students(self):
+        intent, confidence = self.engine.detect_intent("donne moi la liste de tous les elves de k3")
+
+        self.assertEqual(intent, "directory_query")
+        self.assertGreaterEqual(confidence, 0.8)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "donne moi la liste de tous les elves de k3",
+        )
+
+        self.assertIn("Liste des eleves de K3", response)
+        self.assertIn("Jeremie Lumbu", response)
+        self.assertIn("Malia Tshibangu", response)
+        self.assertNotIn("Noah Banza", response)
+        self.assertNotIn("demande est trop ouverte", response)
+        self.assertIn("retourner_tableau_repertoire", actions)
+
+    def test_explicit_french_request_answers_in_french(self):
+        response, _actions = self.engine.generate_context_response(
+            "general_query",
+            self.context,
+            "parle moi en francais",
+        )
+
+        self.assertIn("Voix officielle EduSync AI", response)
+        self.assertIn("J'ai compris", response)
 
 
 if __name__ == "__main__":
