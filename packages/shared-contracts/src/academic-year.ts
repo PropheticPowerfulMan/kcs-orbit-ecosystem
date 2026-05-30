@@ -17,7 +17,8 @@ export const AcademicProgressionStudentSchema = z.object({
   lastName: TrimmedStringSchema.optional(),
   classId: TrimmedStringSchema.nullable().optional(),
   className: TrimmedStringSchema.nullable().optional(),
-  status: TrimmedStringSchema.nullable().optional()
+  status: TrimmedStringSchema.nullable().optional(),
+  averagePercent: z.number().min(0).max(100).nullable().optional()
 });
 
 export const AcademicProgressionClassSchema = z.object({
@@ -65,6 +66,8 @@ export type AcademicProgressionPlanItem = {
   toClassId: string | null;
   toClassName: string | null;
   status: string | null;
+  averagePercent: number | null;
+  passThreshold: number;
   eventType: "student.promoted" | "student.repeated" | "student.manually_transferred" | "student.held" | "student.graduated";
   warnings: string[];
 };
@@ -216,11 +219,13 @@ export function buildAcademicProgressionPlan(input: {
   classes: AcademicProgressionClass[];
   overrides?: AcademicProgressionOverride[];
   effectiveDate?: Date;
+  passThreshold?: number;
 }): AcademicProgressionPlan {
   const students = z.array(AcademicProgressionStudentSchema).parse(input.students);
   const classes = z.array(AcademicProgressionClassSchema).parse(input.classes);
   const overrides = z.array(AcademicProgressionOverrideSchema).parse(input.overrides || []);
   const effectiveDate = input.effectiveDate || new Date();
+  const passThreshold = input.passThreshold ?? 75;
   const window = getAcademicYearWindow(effectiveDate);
   const nextWindow = getAcademicYearWindow(new Date(Date.UTC(effectiveDate.getUTCFullYear() + 1, 8, 1)));
   const overridesByStudent = new Map(overrides.map((override) => [override.studentId, override]));
@@ -259,6 +264,16 @@ export function buildAcademicProgressionPlan(input: {
       status = "GRADUATED";
       target = { classId: null, className: "Graduated" };
     } else {
+      const averagePercent = student.averagePercent ?? null;
+      if (averagePercent === null) {
+        action = "HOLD";
+        target = { classId: current.classId, className: current.className };
+        itemWarnings.push("PASS_AVERAGE_MISSING");
+      } else if (averagePercent < passThreshold) {
+        action = "REPEAT";
+        target = { classId: current.classId, className: current.className };
+        itemWarnings.push("PASS_THRESHOLD_NOT_MET");
+      } else {
       const nextClassName = getNextAcademicClassName(current.className);
       if (!nextClassName) {
         const parsed = parseAcademicClassName(current.className);
@@ -276,6 +291,7 @@ export function buildAcademicProgressionPlan(input: {
         if (!target.classId) {
           itemWarnings.push("TARGET_CLASS_NOT_IN_CATALOG");
         }
+      }
       }
     }
 
@@ -304,6 +320,8 @@ export function buildAcademicProgressionPlan(input: {
       toClassId: target.classId,
       toClassName: target.className,
       status,
+      averagePercent: student.averagePercent ?? null,
+      passThreshold,
       eventType,
       warnings: itemWarnings
     };

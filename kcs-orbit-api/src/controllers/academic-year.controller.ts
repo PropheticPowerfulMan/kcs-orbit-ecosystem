@@ -10,6 +10,7 @@ const academicYearRolloverSchema = z.object({
   organizationId: z.string().min(1),
   effectiveDate: z.coerce.date().optional(),
   force: z.boolean().optional(),
+  passThreshold: z.number().min(0).max(100).optional(),
   overrides: z.array(AcademicProgressionOverrideSchema).optional(),
   decisions: z.array(AcademicProgressionOverrideSchema).optional()
 });
@@ -20,6 +21,7 @@ function parseRolloverRequest(req: Request) {
     organizationId: body.organizationId,
     effectiveDate: body.effectiveDate,
     force: body.force,
+    passThreshold: body.passThreshold,
     overrides: body.overrides || body.decisions || []
   };
 }

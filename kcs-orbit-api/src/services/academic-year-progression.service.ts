@@ -10,6 +10,7 @@ export type AcademicYearRolloverInput = {
   organizationId: string;
   effectiveDate?: Date;
   force?: boolean;
+  passThreshold?: number;
   overrides?: AcademicProgressionOverride[];
 };
 
@@ -27,7 +28,13 @@ async function loadRolloverCatalog(organizationId: string) {
         lastName: true,
         classId: true,
         className: true,
-        status: true
+        status: true,
+        grades: {
+          select: {
+            score: true,
+            maxScore: true
+          }
+        }
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }]
     }),
@@ -43,7 +50,22 @@ async function loadRolloverCatalog(organizationId: string) {
     })
   ]);
 
-  return { students, classes };
+  return {
+    students: students.map((student) => {
+      const totalScore = student.grades.reduce((sum, grade) => sum + grade.score, 0);
+      const totalMaxScore = student.grades.reduce((sum, grade) => sum + grade.maxScore, 0);
+      return {
+        id: student.id,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        classId: student.classId,
+        className: student.className,
+        status: student.status,
+        averagePercent: totalMaxScore > 0 ? Number(((totalScore / totalMaxScore) * 100).toFixed(2)) : null
+      };
+    }),
+    classes
+  };
 }
 
 export async function previewAcademicYearRollover(input: AcademicYearRolloverInput) {
@@ -53,7 +75,8 @@ export async function previewAcademicYearRollover(input: AcademicYearRolloverInp
     students,
     classes,
     overrides: input.overrides,
-    effectiveDate: normalizeDate(input.effectiveDate)
+    effectiveDate: normalizeDate(input.effectiveDate),
+    passThreshold: input.passThreshold
   });
 }
 
@@ -126,6 +149,8 @@ export async function executeAcademicYearRollover(input: AcademicYearRolloverInp
             fromClassName: item.fromClassName,
             toClassId: item.toClassId,
             toClassName: item.toClassName,
+            averagePercent: item.averagePercent,
+            passThreshold: item.passThreshold,
             warnings: item.warnings
           } as never
         }
@@ -145,6 +170,7 @@ export async function executeAcademicYearRollover(input: AcademicYearRolloverInp
           nextAcademicYear: plan.nextAcademicYear,
           effectiveDate: plan.effectiveDate,
           counts: plan.counts,
+          passThreshold: input.passThreshold ?? 75,
           force: Boolean(input.force),
           warningCount: plan.warnings.length
         } as never

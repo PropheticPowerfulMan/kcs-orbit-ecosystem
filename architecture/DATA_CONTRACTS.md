@@ -251,6 +251,13 @@ Actions supportees:
 - `HOLD`: aucun changement, avec avertissement si la classe ne peut pas etre interpretee
 - `GRADUATE`: sortie de `Grade 12` avec statut `GRADUATED`
 
+Regle de reussite KCS:
+
+- le seuil canonique de reussite est `75%`
+- un eleve avec une moyenne inferieure a `75%` redouble automatiquement
+- un eleve sans moyenne calculee est place en `HOLD` pour validation administrative
+- une decision administrative explicite peut forcer `REPEAT`, `MANUAL_TRANSFER`, `HOLD` ou `GRADUATE`
+
 ```json
 {
   "academicYear": "2025-2026",
@@ -262,6 +269,8 @@ Actions supportees:
   "fromClassName": "K5 A",
   "toClassId": "cls_grade_1_a",
   "toClassName": "Grade 1 A",
+  "averagePercent": 82.5,
+  "passThreshold": 75,
   "warnings": []
 }
 ```

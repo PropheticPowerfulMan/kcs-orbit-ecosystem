@@ -35,16 +35,18 @@ test("class progression preserves sections and graduates the final grade", () =>
   assert.equal(getNextAcademicClassName("Grade 12 A"), null);
 });
 
-test("progression plan covers promotion, repeat, manual transfer, hold warnings and graduation", () => {
+test("progression plan promotes only students who meet the 75 percent KCS success threshold", () => {
   const plan = buildAcademicProgressionPlan({
     effectiveDate: new Date("2026-07-15T12:00:00.000Z"),
     classes,
     students: [
-      { id: "student-k5", firstName: "Amina", lastName: "K.", classId: "k5-a", className: "K5 A", status: "ACTIVE" },
-      { id: "student-repeat", firstName: "Beni", lastName: "M.", classId: "grade-4-b", className: "Grade 4 B", status: "ACTIVE" },
-      { id: "student-transfer", firstName: "Clara", lastName: "N.", classId: "k4-a", className: "K4 A", status: "ACTIVE" },
-      { id: "student-unknown", firstName: "David", lastName: "P.", className: "Blue Room", status: "ACTIVE" },
-      { id: "student-final", firstName: "Elie", lastName: "S.", classId: "grade-12-a", className: "Grade 12 A", status: "ACTIVE" }
+      { id: "student-k5", firstName: "Amina", lastName: "K.", classId: "k5-a", className: "K5 A", status: "ACTIVE", averagePercent: 75 },
+      { id: "student-failed", firstName: "Beni", lastName: "M.", classId: "grade-4-b", className: "Grade 4 B", status: "ACTIVE", averagePercent: 74.99 },
+      { id: "student-repeat", firstName: "Celine", lastName: "L.", classId: "grade-4-b", className: "Grade 4 B", status: "ACTIVE", averagePercent: 90 },
+      { id: "student-transfer", firstName: "Clara", lastName: "N.", classId: "k4-a", className: "K4 A", status: "ACTIVE", averagePercent: 30 },
+      { id: "student-unknown", firstName: "David", lastName: "P.", className: "Blue Room", status: "ACTIVE", averagePercent: 95 },
+      { id: "student-missing-average", firstName: "Dina", lastName: "R.", classId: "k4-a", className: "K4 A", status: "ACTIVE" },
+      { id: "student-final", firstName: "Elie", lastName: "S.", classId: "grade-12-a", className: "Grade 12 A", status: "ACTIVE", averagePercent: 88 }
     ],
     overrides: [
       { studentId: "student-repeat", decision: "REPEAT", reason: "Needs another year" },
@@ -57,19 +59,24 @@ test("progression plan covers promotion, repeat, manual transfer, hold warnings 
   assert.equal(plan.isRolloverWindow, true);
   assert.equal(byStudent.get("student-k5")?.action, "PROMOTE");
   assert.equal(byStudent.get("student-k5")?.toClassId, "grade-1-a");
+  assert.equal(byStudent.get("student-k5")?.passThreshold, 75);
+  assert.equal(byStudent.get("student-failed")?.action, "REPEAT");
+  assert.deepEqual(byStudent.get("student-failed")?.warnings, ["PASS_THRESHOLD_NOT_MET"]);
   assert.equal(byStudent.get("student-repeat")?.action, "REPEAT");
   assert.equal(byStudent.get("student-repeat")?.toClassId, "grade-4-b");
   assert.equal(byStudent.get("student-transfer")?.action, "MANUAL_TRANSFER");
   assert.equal(byStudent.get("student-transfer")?.toClassName, "Grade 7 A");
   assert.equal(byStudent.get("student-unknown")?.action, "HOLD");
   assert.deepEqual(byStudent.get("student-unknown")?.warnings, ["CLASS_LEVEL_COULD_NOT_BE_PARSED"]);
+  assert.equal(byStudent.get("student-missing-average")?.action, "HOLD");
+  assert.deepEqual(byStudent.get("student-missing-average")?.warnings, ["PASS_AVERAGE_MISSING"]);
   assert.equal(byStudent.get("student-final")?.action, "GRADUATE");
   assert.equal(byStudent.get("student-final")?.status, "GRADUATED");
   assert.deepEqual(plan.counts, {
     PROMOTE: 1,
-    REPEAT: 1,
+    REPEAT: 2,
     MANUAL_TRANSFER: 1,
-    HOLD: 1,
+    HOLD: 2,
     GRADUATE: 1
   });
 });
