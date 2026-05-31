@@ -268,15 +268,17 @@ body {
 
 .savanex-modal-backdrop {
   background:
-    radial-gradient(circle at 50% 18%, rgba(88, 166, 255, 0.14), transparent 34%),
-    rgba(1, 4, 9, 0.78);
-  backdrop-filter: blur(18px) saturate(1.12);
-  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+    radial-gradient(circle at 50% 18%, rgba(88, 166, 255, 0.18), transparent 36%),
+    rgba(1, 4, 9, 0.84);
+  backdrop-filter: blur(26px) saturate(1.22);
+  -webkit-backdrop-filter: blur(26px) saturate(1.22);
 }
 
 .savanex-modal-panel {
   position: relative;
-  max-height: min(84vh, 760px);
+  width: min(1320px, calc(100vw - 2rem));
+  min-height: min(700px, calc(100dvh - 2rem));
+  max-height: min(94dvh, 940px);
   border-radius: 18px;
   border: 1px solid rgba(88, 166, 255, 0.16);
   background:
@@ -285,15 +287,20 @@ body {
   box-shadow:
     inset 0 1px 0 rgba(240, 246, 252, 0.05),
     inset 0 0 0 1px rgba(139, 148, 158, 0.08),
-    0 24px 70px rgba(1, 4, 9, 0.58),
+    0 30px 90px rgba(1, 4, 9, 0.68),
     0 0 0 1px rgba(88, 166, 255, 0.06);
   backdrop-filter: blur(24px) saturate(1.22);
   -webkit-backdrop-filter: blur(24px) saturate(1.22);
 }
 
 .savanex-entity-detail-panel {
-  min-height: min(620px, calc(100dvh - 2rem));
-  max-width: min(1120px, calc(100vw - 2rem));
+  width: min(1320px, calc(100vw - 2rem));
+  min-height: min(720px, calc(100dvh - 2rem));
+}
+
+.savanex-entity-edit-panel {
+  width: min(1360px, calc(100vw - 2rem));
+  min-height: min(760px, calc(100dvh - 2rem));
 }
 
 .savanex-entity-action {

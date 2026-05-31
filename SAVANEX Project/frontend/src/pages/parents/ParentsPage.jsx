@@ -429,8 +429,8 @@ const ParentsPage = () => {
       <EntityDetailPanel entity={selectedParent} type="parent" onClose={() => setSelectedParent(null)} />
 
       {editingParent ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-github-border bg-slate-950 p-6 shadow-2xl">
+        <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8">
+          <section role="dialog" aria-modal="true" aria-label="Modifier un parent" className="savanex-modal-panel savanex-entity-edit-panel w-full overflow-y-auto p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Gestion parent</p>
@@ -442,7 +442,7 @@ const ParentsPage = () => {
             <div className="mt-6 space-y-4">
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Identité du parent</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <label className="grid gap-1 text-xs font-semibold text-slate-400">
                     Prénom
                     <input value={editForm.first_name} onChange={(event) => setEditForm({ ...editForm, first_name: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
@@ -455,7 +455,7 @@ const ParentsPage = () => {
               </section>
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Coordonnées</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <label className="grid gap-1 text-xs font-semibold text-slate-400">
                     Email
                     <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
@@ -468,7 +468,7 @@ const ParentsPage = () => {
               </section>
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Enfants liés</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-xl bg-slate-950/55 p-3">
                     <p className="text-xs text-slate-500">Élèves</p>
                     <p className="mt-1 text-sm font-semibold text-slate-100">{editingParent.students_label || 'Aucun élève lié'}</p>
@@ -487,7 +487,7 @@ const ParentsPage = () => {
                 {submitting ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>
-          </div>
+          </section>
         </div>
       ) : null}
 
