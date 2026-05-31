@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Eye, Mail, MessageSquare, Send, Users, X } from 'lucide-react';
+import { CheckSquare, Eye, Mail, MessageSquare, Send, Square, Users, X } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import StatCard from '../../components/ui/StatCard';
 import { useTranslation } from 'react-i18next';
@@ -79,6 +79,7 @@ const CommunicationPage = () => {
   const [sendEmail, setSendEmail] = useState(true);
   const [sendSms, setSendSms] = useState(true);
   const [parentSearch, setParentSearch] = useState('');
+  const [contactFilter, setContactFilter] = useState('all');
   const [historySearch, setHistorySearch] = useState('');
   const [deliveryFilter, setDeliveryFilter] = useState('all');
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -123,9 +124,23 @@ const CommunicationPage = () => {
   );
   const visibleParents = useMemo(() => {
     const query = parentSearch.trim().toLowerCase();
-    if (!query) return parentOptions;
-    return parentOptions.filter((parent) => `${parent.name} ${parent.email} ${parent.phone} ${parent.students.join(' ')}`.toLowerCase().includes(query));
-  }, [parentOptions, parentSearch]);
+    return parentOptions.filter((parent) => {
+      if (contactFilter === 'email' && !parent.email) return false;
+      if (contactFilter === 'sms' && !parent.phone) return false;
+      if (contactFilter === 'both' && (!parent.email || !parent.phone)) return false;
+      if (!query) return true;
+      const haystack = [
+        parent.id,
+        parent.name,
+        parent.email,
+        parent.phone,
+        parent.students.join(' '),
+        parent.students.length,
+      ].join(' ').toLowerCase();
+      return query.split(/\s+/).filter(Boolean).every((token) => haystack.includes(token));
+    });
+  }, [contactFilter, parentOptions, parentSearch]);
+  const allVisibleSelected = visibleParents.length > 0 && visibleParents.every((parent) => selectedParentIds.includes(String(parent.id)));
 
   const recommendedText = useMemo(() => {
     if (!selectedParents.length) {
@@ -164,6 +179,19 @@ const CommunicationPage = () => {
     setSelectedParentIds((current) => (
       current.includes(safeId) ? current.filter((id) => id !== safeId) : [...current, safeId]
     ));
+  };
+
+  const selectVisibleParents = () => {
+    setSelectedParentIds((current) => Array.from(new Set([...current, ...visibleParents.map((parent) => String(parent.id))])));
+  };
+
+  const toggleAllVisibleParents = () => {
+    if (allVisibleSelected) {
+      const visibleIds = new Set(visibleParents.map((parent) => String(parent.id)));
+      setSelectedParentIds((current) => current.filter((id) => !visibleIds.has(id)));
+      return;
+    }
+    selectVisibleParents();
   };
 
   const sendMessage = async (event) => {
@@ -225,12 +253,30 @@ const CommunicationPage = () => {
             </div>
             <Users className="h-6 w-6 text-cyan-300" />
           </div>
-          <input
-            value={parentSearch}
-            onChange={(event) => setParentSearch(event.target.value)}
-            placeholder="Rechercher parent, enfant, email ou téléphone..."
-            className={`${inputClass} mt-4`}
-          />
+          <div className="mt-4 grid gap-2">
+            <input
+              value={parentSearch}
+              onChange={(event) => setParentSearch(event.target.value)}
+              placeholder="Recherche precise: parent + enfant + email + telephone..."
+              className={inputClass}
+            />
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <select value={contactFilter} onChange={(event) => setContactFilter(event.target.value)} className={inputClass}>
+                <option value="all">Tous les contacts</option>
+                <option value="email">Avec email</option>
+                <option value="sms">Avec telephone/SMS</option>
+                <option value="both">Email + SMS</option>
+              </select>
+              <button type="button" onClick={toggleAllVisibleParents} className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/15">
+                {allVisibleSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                {allVisibleSelected ? 'Retirer visibles' : 'Tous visibles'}
+              </button>
+              <button type="button" onClick={() => setSelectedParentIds([])} className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-github-border px-4 py-2 text-sm font-bold text-slate-300 hover:bg-slate-800/70">
+                Vider
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">{visibleParents.length} parent(s) dans le filtre - {selectedParentIds.length} selectionne(s). Selection possible: 1, 2, 3, n ou tous.</p>
+          </div>
           <div className="mt-4 max-h-[460px] space-y-2 overflow-y-auto pr-1">
             {visibleParents.map((parent) => {
               const checked = selectedParentIds.includes(String(parent.id));
