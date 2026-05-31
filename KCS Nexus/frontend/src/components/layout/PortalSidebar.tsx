@@ -134,8 +134,11 @@ const PortalSidebar = () => {
 
     document.body.style.overflow = 'hidden'
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target as Node
-      if (mobileSidebarRef.current?.contains(target) || mobileSidebarButtonRef.current?.contains(target)) {
+      const eventPath = event.composedPath()
+      if (
+        (mobileSidebarRef.current && eventPath.includes(mobileSidebarRef.current)) ||
+        (mobileSidebarButtonRef.current && eventPath.includes(mobileSidebarButtonRef.current))
+      ) {
         return
       }
 
@@ -314,6 +317,7 @@ const PortalSidebar = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.08 }}
+            onPointerDown={() => setSidebarOpen(false)}
             onClick={() => setSidebarOpen(false)}
           >
             <motion.aside
@@ -323,6 +327,7 @@ const PortalSidebar = () => {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ duration: 0.16, ease: 'easeOut' }}
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
               <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/42 p-3 backdrop-blur-xl dark:border-kcs-blue-800 dark:bg-kcs-blue-950/42">

@@ -430,7 +430,7 @@ const AdmissionsPage = () => {
                   ))}
                 </ul>
               </motion.div>
-              <motion.div variants={fadeUp} className="glass-card rounded-2xl p-6 bg-white/5 border border-white/10">
+              <motion.div variants={fadeUp} className="public-admissions-dates glass-card rounded-2xl p-6 bg-white/5 border border-white/10">
                 <h3 className="font-bold text-xl mb-4">Key Dates 2025–2026</h3>
                 {[
                   { date: 'Now – Jun 30', label: 'Applications Open' },
@@ -441,7 +441,7 @@ const AdmissionsPage = () => {
                 ].map(({ date, label }) => (
                   <div key={label} className="flex justify-between items-center py-2.5 border-b border-white/10 last:border-0">
                     <span className="text-kcs-blue-200 text-sm">{label}</span>
-                    <span className="text-kcs-gold-400 font-semibold text-sm">{date}</span>
+                    <span className="public-date-value text-kcs-gold-400 font-semibold text-sm">{date}</span>
                   </div>
                 ))}
               </motion.div>
