@@ -1,9 +1,10 @@
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from django.utils import timezone
 from .models import Message, Notification
 from .serializers import MessageSerializer, MessageCreateSerializer, NotificationSerializer
-from .services import deliver_parent_communication
+from .services import deliver_direct_parent_contact, deliver_parent_communication
 
 
 class MessageListCreateView(generics.ListCreateAPIView):
@@ -22,6 +23,51 @@ class MessageListCreateView(generics.ListCreateAPIView):
         return MessageSerializer
 
     def create(self, request, *args, **kwargs):
+        recipients = request.data.get('recipients')
+        if isinstance(recipients, list) and recipients:
+            subject = str(request.data.get('subject') or '').strip()
+            body = str(request.data.get('body') or '').strip()
+            channels = request.data.get('channels') or ['email', 'sms']
+            normalized_channels = [str(channel).lower() for channel in channels if str(channel).lower() in {'email', 'sms'}]
+
+            if not subject:
+                return Response({'detail': 'Subject is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not body:
+                return Response({'detail': 'Body is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not normalized_channels:
+                return Response({'detail': 'At least one delivery channel is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            sent_at = timezone.now()
+            records = []
+            for index, recipient in enumerate(recipients):
+                if not isinstance(recipient, dict):
+                    continue
+
+                name = str(recipient.get('name') or recipient.get('receiver_name') or 'Parent').strip()
+                email = str(recipient.get('email') or '').strip()
+                phone = str(recipient.get('phone') or '').strip()
+                delivery = deliver_direct_parent_contact(
+                    name=name,
+                    email=email,
+                    phone=phone,
+                    subject=subject,
+                    body=body,
+                    channels=normalized_channels,
+                )
+                records.append({
+                    'id': f'direct-{int(sent_at.timestamp())}-{index}',
+                    'receiver': recipient.get('id') or recipient.get('receiver') or '',
+                    'receiver_name': name,
+                    'subject': subject,
+                    'body': body,
+                    'sent_at': sent_at.isoformat(),
+                    'delivery': [result.__dict__ for result in delivery],
+                    'parent_message': None,
+                    'reply_count': 0,
+                })
+
+            return Response({'results': records, 'sentCount': len(records)}, status=status.HTTP_201_CREATED)
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         message = serializer.save()

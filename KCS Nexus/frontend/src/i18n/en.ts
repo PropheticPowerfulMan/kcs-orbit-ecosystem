@@ -111,6 +111,49 @@ const en = {
     trackApplication: 'Track Application',
   },
 
+  admissionsPublic: {
+    heroBadge: 'Admissions 2025-2026 Now Open',
+    heroTitle: 'Begin Your',
+    heroTitleHighlight: 'KCS Journey',
+    heroSubtitle: 'Kinshasa Christian School welcomes families seeking an excellence-driven, faith-based American education for their children.',
+    applyNow: 'Apply Now',
+    viewPrograms: 'View Programs',
+    programsTitle: 'Available Programs',
+    programsSubtitle: 'Spaces available for the 2025-2026 academic year',
+    spotsRemaining: '{{count}} spots remaining',
+    processTitle: 'Admission Process',
+    processSubtitle: 'Six simple steps to joining KCS',
+    stepLabel: 'Step {{num}}',
+    steps: {
+      1: { title: 'Submit Application', desc: 'Complete the online form with student and family details.' },
+      2: { title: 'Document Review', desc: 'Our admissions team reviews transcripts, recommendation letters, and required documents.' },
+      3: { title: 'Entrance Assessment', desc: 'Scheduled assessment in English, Math, and general knowledge for new students.' },
+      4: { title: 'Parent Interview', desc: 'A meeting with the Principal and Admissions Director to discuss school fit and expectations.' },
+      5: { title: 'Admission Decision', desc: 'You will receive a decision within 5-10 business days via email.' },
+      6: { title: 'Enrollment & Registration', desc: 'Complete enrollment forms, pay registration fees, and join the KCS family!' },
+    },
+    requirementsTitle: 'Required Documents',
+    requirementsSubtitle: 'Please prepare the following documents before beginning your application.',
+    requirements: [
+      'Completed online application form',
+      'Birth certificate',
+      'Previous school transcript',
+      'Parent or guardian contact information',
+      'Requested class level',
+      'Additional comments for the admissions team',
+    ],
+    keyDatesTitle: 'Key Dates 2025-2026',
+    keyDates: [
+      { date: 'Now - Jun 30', label: 'Applications Open' },
+      { date: 'Jul 1 - Jul 15', label: 'Entrance Assessments' },
+      { date: 'Jul 20', label: 'Decisions Released' },
+      { date: 'Aug 1 - Aug 15', label: 'Enrollment Period' },
+      { date: 'Aug 25', label: 'First Day of School' },
+    ],
+    applicationTitle: 'Online Application',
+    applicationSubtitle: 'Complete all sections to submit your application.',
+  },
+
   // Portal
   portal: {
     student: {

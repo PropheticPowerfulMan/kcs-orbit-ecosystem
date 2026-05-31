@@ -341,9 +341,9 @@ const ParentsPage = () => {
       label: 'Action',
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setSelectedParent({ ...row, full_name: row.family_name, role: 'Parent' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
-          <button type="button" onClick={() => openEdit(row)} className="rounded-lg border border-amber-400/30 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10">Modifier</button>
-          <button type="button" onClick={() => void handleDelete(row)} className="rounded-lg border border-rose-400/30 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Supprimer</button>
+          <button type="button" onClick={() => setSelectedParent({ ...row, full_name: row.family_name, role: 'Parent' })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
+          <button type="button" onClick={() => openEdit(row)} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+          <button type="button" onClick={() => void handleDelete(row)} className="savanex-entity-action savanex-entity-action-danger">Supprimer</button>
         </div>
       )
     },

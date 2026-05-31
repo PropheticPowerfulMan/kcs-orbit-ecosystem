@@ -103,12 +103,12 @@ const EntityDetailPanel = ({ entity, type, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-slate-950/78 p-4 backdrop-blur-md sm:p-6"
+      className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
-      <section className="card my-4 max-h-[calc(100dvh-2rem)] w-full max-w-5xl overflow-y-auto p-5 shadow-2xl sm:my-6" onClick={(event) => event.stopPropagation()}>
+      <section className="savanex-modal-panel savanex-entity-detail-panel w-full overflow-y-auto p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Consultation</p>

@@ -291,6 +291,55 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(1.22);
 }
 
+.savanex-entity-detail-panel {
+  min-height: min(620px, calc(100dvh - 2rem));
+  max-width: min(1120px, calc(100vw - 2rem));
+}
+
+.savanex-entity-action {
+  display: inline-flex !important;
+  min-width: 96px !important;
+  min-height: 42px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  border-radius: 14px !important;
+  padding: 10px 15px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, color 160ms ease !important;
+}
+
+.savanex-entity-action:hover {
+  transform: translateY(-1px);
+}
+
+.savanex-entity-action-view {
+  border: 1px solid rgba(34, 211, 238, 0.36) !important;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.14), rgba(14, 165, 216, 0.06)) !important;
+  color: #a5f3fc !important;
+}
+
+.savanex-entity-action-edit {
+  border: 1px solid rgba(251, 191, 36, 0.42) !important;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.16), rgba(245, 158, 11, 0.07)) !important;
+  color: #fde68a !important;
+}
+
+.savanex-entity-action-danger {
+  border: 1px solid rgba(251, 113, 133, 0.42) !important;
+  background: linear-gradient(135deg, rgba(251, 113, 133, 0.16), rgba(190, 18, 60, 0.07)) !important;
+  color: #fecdd3 !important;
+}
+
+.savanex-entity-action-muted {
+  min-width: 118px !important;
+  border: 1px solid rgba(148, 163, 184, 0.34) !important;
+  background: rgba(15, 23, 42, 0.64) !important;
+  color: #cbd5e1 !important;
+}
+
 .savanex-family-launcher {
   position: relative;
   overflow: hidden;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
@@ -163,6 +163,7 @@ const TeachersPage = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [employeeFormVisible, setEmployeeFormVisible] = useState(true);
   const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
+  const employeeFormRef = useRef(null);
 
   const loadTeachers = async () => {
     setLoading(true);
@@ -248,6 +249,18 @@ const TeachersPage = () => {
     setEditingEmployee(null);
   };
 
+  const openEmployeeEdit = (row) => {
+    setEditingEmployee(row);
+    setForm(mapTeacherToForm(row));
+    setEmployeeFormVisible(true);
+    setLastTemporaryCredentials(null);
+    setFeedback('');
+    setError('');
+    window.requestAnimationFrame(() => {
+      employeeFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const submitTeacher = async (event) => {
     event.preventDefault();
     setSubmitting(true);
@@ -319,15 +332,9 @@ const TeachersPage = () => {
       label: 'Action',
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setSelectedEmployee({ ...row, role: row.employee_label || 'Employé' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
-          <button type="button" onClick={() => {
-            setEditingEmployee(row);
-            setForm(mapTeacherToForm(row));
-            setEmployeeFormVisible(true);
-            setFeedback('');
-            setError('');
-          }} className="rounded-lg border border-amber-400/30 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10">Modifier</button>
-          <button type="button" onClick={() => void handleDelete(row)} className="rounded-lg border border-rose-400/30 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Supprimer</button>
+          <button type="button" onClick={() => setSelectedEmployee({ ...row, role: row.employee_label || 'Employe' })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
+          <button type="button" onClick={() => openEmployeeEdit(row)} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+          <button type="button" onClick={() => void handleDelete(row)} className="savanex-entity-action savanex-entity-action-danger">Supprimer</button>
         </div>
       )
     },
@@ -348,7 +355,7 @@ const TeachersPage = () => {
         <StatCard title="Départements" value={departments} accent="text-amber-300" />
       </section>
 
-      <section className="mb-6 card p-5">
+      <section ref={employeeFormRef} className="mb-6 card p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <h3 className="font-display text-xl font-semibold text-slate-100">{editingEmployee ? 'Modifier un employé' : 'Nouvel employé'}</h3>

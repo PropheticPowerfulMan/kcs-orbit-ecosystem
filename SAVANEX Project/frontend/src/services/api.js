@@ -459,6 +459,27 @@ export const communicationService = {
     return Array.isArray(res.data) ? res.data : (res.data.results || []);
   },
 
+  async sendParentMessages({ recipients, subject, body, channels = ['email', 'sms'] }) {
+    const safeRecipients = Array.isArray(recipients) ? recipients : [];
+    if (isDemoSession()) {
+      return safeRecipients.map((recipient, index) => ({
+        id: Date.now() + index,
+        receiver: recipient.id,
+        receiver_name: recipient.name || 'Parent demo',
+        subject,
+        body,
+        sent_at: new Date().toISOString(),
+        delivery: [
+          ...(channels.includes('email') ? [{ channel: 'email', status: 'simulated', detail: recipient.email || 'demo' }] : [{ channel: 'email', status: 'skipped', detail: 'disabled' }]),
+          ...(channels.includes('sms') ? [{ channel: 'sms', status: 'simulated', detail: recipient.phone || 'demo' }] : [{ channel: 'sms', status: 'skipped', detail: 'disabled' }]),
+        ],
+      }));
+    }
+
+    const res = await api.post('/communication/messages/', { recipients: safeRecipients, subject, body, channels });
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+
   async sendParentMessage({ receiver, subject, body }) {
     if (isDemoSession()) {
       return {

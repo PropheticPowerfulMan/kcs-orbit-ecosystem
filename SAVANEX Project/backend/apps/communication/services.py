@@ -6,6 +6,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -171,6 +172,25 @@ def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE
         _send_user_email(user, subject, body),
         _send_user_sms(user, _short_sms(subject, body)),
     ]
+
+
+def deliver_direct_parent_contact(name='', email='', phone='', subject='', body='', channels=None):
+    enabled_channels = set(channels or ['email', 'sms'])
+    contact = SimpleNamespace(email=email or '', phone=phone or '')
+    label = name or 'Parent'
+    results = []
+
+    if 'email' in enabled_channels:
+        results.append(_send_user_email(contact, subject, body, label))
+    else:
+        results.append(DeliveryResult('email', 'skipped', 'Email channel disabled.'))
+
+    if 'sms' in enabled_channels:
+        results.append(_send_user_sms(contact, _short_sms(subject, body), label))
+    else:
+        results.append(DeliveryResult('sms', 'skipped', 'SMS channel disabled.'))
+
+    return results
 
 
 def summarize_student_evolution(student):

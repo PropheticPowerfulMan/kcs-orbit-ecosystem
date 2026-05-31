@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Eye, Mail, MessageSquare, Send, Users, X } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
 import { useTranslation } from 'react-i18next';
 import { communicationService, studentsService } from '../../services/api';
@@ -10,23 +10,45 @@ const deliveryClass = {
   simulated: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200',
   skipped: 'border-slate-500/30 bg-slate-500/10 text-slate-300',
   failed: 'border-rose-400/30 bg-rose-400/10 text-rose-200',
+  pending: 'border-amber-400/30 bg-amber-400/10 text-amber-200',
 };
 
-const inputClass = 'rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue';
+const inputClass = 'w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue';
 
 const initialDraft = {
-  receiver: '',
   subject: 'Suivi scolaire SAVANEX',
   body: '',
 };
+const DIRECT_MESSAGE_STORAGE_KEY = 'savanex-direct-parent-messages';
+
+const readDirectMessageCache = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(DIRECT_MESSAGE_STORAGE_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveDirectMessageCache = (messages) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(DIRECT_MESSAGE_STORAGE_KEY, JSON.stringify(messages.slice(0, 250)));
+};
+
+const stableParentId = (student) => (
+  student.parent
+  || student.parent_external_id
+  || `${student.parent_name || 'parent'}-${student.parent_email || ''}-${student.parent_phone || ''}`
+);
 
 const buildParentOptions = (students) => {
   const parents = new Map();
   students.forEach((student) => {
-    const parentId = student.parent || student.parent_external_id;
-    if (!parentId) {
-      return;
-    }
+    const hasContact = student.parent_email || student.parent_phone || student.parent_name;
+    if (!hasContact) return;
+
+    const parentId = stableParentId(student);
     if (!parents.has(parentId)) {
       parents.set(parentId, {
         id: parentId,
@@ -39,7 +61,7 @@ const buildParentOptions = (students) => {
     parents.get(parentId).students.push(student.full_name);
   });
   return Array.from(parents.values())
-    .filter((parent) => parent.email || parent.phone || parent.students.length)
+    .filter((parent) => parent.email || parent.phone)
     .sort((left, right) => left.name.localeCompare(right.name));
 };
 
@@ -52,8 +74,14 @@ const CommunicationPage = () => {
   const { t } = useTranslation();
   const [messageList, setMessageList] = useState([]);
   const [students, setStudents] = useState([]);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [selectedParentIds, setSelectedParentIds] = useState([]);
   const [draft, setDraft] = useState(initialDraft);
+  const [sendEmail, setSendEmail] = useState(true);
+  const [sendSms, setSendSms] = useState(true);
+  const [parentSearch, setParentSearch] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [deliveryFilter, setDeliveryFilter] = useState('all');
+  const [selectedMessage, setSelectedMessage] = useState(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -70,24 +98,16 @@ const CommunicationPage = () => {
       ]);
       if (!alive) return;
 
-      if (messagesResult.status === 'fulfilled') {
-        setMessageList(messagesResult.value);
-      } else {
-        setMessageList([]);
-        setNotice("Historique des messages momentanement indisponible. La selection des parents reste chargee.");
-      }
+      const cachedDirectMessages = readDirectMessageCache();
+      setMessageList(messagesResult.status === 'fulfilled' ? [...cachedDirectMessages, ...messagesResult.value] : cachedDirectMessages);
+      setStudents(studentsResult.status === 'fulfilled' ? studentsResult.value : []);
 
-      if (studentsResult.status === 'fulfilled') {
-        setStudents(studentsResult.value);
-      } else {
-        setStudents([]);
+      if (messagesResult.status === 'rejected') {
+        setNotice("Historique momentanement indisponible. L'envoi email/SMS reste disponible.");
       }
-
       if (studentsResult.status === 'rejected') {
-        const failed = studentsResult.reason;
-        setError(failed?.response?.data?.detail || failed?.message || 'Impossible de charger les parents joignables.');
+        setError(studentsResult.reason?.response?.data?.detail || studentsResult.reason?.message || 'Impossible de charger les parents joignables.');
       }
-
       setLoading(false);
     }
     loadCommunication();
@@ -97,47 +117,38 @@ const CommunicationPage = () => {
   }, []);
 
   const parentOptions = useMemo(() => buildParentOptions(students), [students]);
-  const selectedParent = parentOptions.find((parent) => String(parent.id) === String(draft.receiver));
+  const selectedParents = useMemo(
+    () => parentOptions.filter((parent) => selectedParentIds.includes(String(parent.id))),
+    [parentOptions, selectedParentIds]
+  );
+  const visibleParents = useMemo(() => {
+    const query = parentSearch.trim().toLowerCase();
+    if (!query) return parentOptions;
+    return parentOptions.filter((parent) => `${parent.name} ${parent.email} ${parent.phone} ${parent.students.join(' ')}`.toLowerCase().includes(query));
+  }, [parentOptions, parentSearch]);
 
   const recommendedText = useMemo(() => {
-    if (!selectedParent) {
-      return 'Bonjour, SAVANEX souhaite vous informer de l evolution scolaire de votre enfant. Merci de contacter l administration si vous souhaitez un accompagnement.';
+    if (!selectedParents.length) {
+      return "Bonjour, SAVANEX souhaite vous informer de l'evolution scolaire de votre enfant. Merci de contacter l'administration si vous souhaitez un accompagnement.";
     }
-    const childLabel = selectedParent.students.join(', ') || 'votre enfant';
-    return `Bonjour ${selectedParent.name}, SAVANEX souhaite vous informer de l evolution scolaire de ${childLabel}. Merci de contacter l administration si vous souhaitez un accompagnement.`;
-  }, [selectedParent]);
+    const childLabel = selectedParents.flatMap((parent) => parent.students).slice(0, 4).join(', ') || 'votre enfant';
+    return `Bonjour, SAVANEX souhaite vous informer de l'evolution scolaire de ${childLabel}. Merci de contacter l'administration si vous souhaitez un accompagnement.`;
+  }, [selectedParents]);
 
-  const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
+  const channels = useMemo(() => [
+    ...(sendEmail ? ['email'] : []),
+    ...(sendSms ? ['sms'] : []),
+  ], [sendEmail, sendSms]);
 
-  const useSuggestedMessage = () => {
-    setDraft((current) => ({
-      ...current,
-      body: recommendedText,
-    }));
-  };
-
-  const submitDraft = async (event) => {
-    event.preventDefault();
-    setSending(true);
-    setError('');
-    setNotice('');
-
-    try {
-      const created = await communicationService.sendParentMessage({
-        receiver: draft.receiver,
-        subject: draft.subject,
-        body: draft.body || recommendedText,
-      });
-      setMessageList((current) => [created, ...current]);
-      setNotice(`Message envoye. ${formatDelivery(created.delivery)}`);
-      setComposerOpen(false);
-      setDraft(initialDraft);
-    } catch (sendError) {
-      setError(sendError?.response?.data?.detail || sendError?.message || "Impossible d'envoyer le message.");
-    } finally {
-      setSending(false);
-    }
-  };
+  const filteredMessages = useMemo(() => {
+    const query = historySearch.trim().toLowerCase();
+    return messageList.filter((message) => {
+      const haystack = `${message.subject || ''} ${message.receiver_name || ''} ${message.body || ''}`.toLowerCase();
+      const matchesQuery = !query || haystack.includes(query);
+      const matchesDelivery = deliveryFilter === 'all' || (message.delivery || []).some((item) => item.status === deliveryFilter || item.channel === deliveryFilter);
+      return matchesQuery && matchesDelivery;
+    });
+  }, [deliveryFilter, historySearch, messageList]);
 
   const deliveryStats = useMemo(() => {
     const all = messageList.flatMap((message) => message.delivery || []);
@@ -148,25 +159,40 @@ const CommunicationPage = () => {
     };
   }, [messageList]);
 
-  const columns = [
-    { key: 'subject', label: 'Sujet' },
-    { key: 'receiver_name', label: 'Parent' },
-    { key: 'body', label: 'Message', render: (value) => <span className="line-clamp-2 text-slate-300">{value}</span> },
-    {
-      key: 'delivery',
-      label: 'Email + SMS',
-      render: (delivery) => (
-        <div className="flex flex-wrap gap-1.5">
-          {(delivery?.length ? delivery : [{ channel: 'sync', status: 'pending' }]).map((item) => (
-            <span key={`${item.channel}-${item.status}`} className={`rounded-full border px-2 py-1 text-xs ${deliveryClass[item.status] || deliveryClass.skipped}`}>
-              {item.channel.toUpperCase()} {item.status}
-            </span>
-          ))}
-        </div>
-      ),
-    },
-    { key: 'sent_at', label: 'Date', render: (value) => value ? new Date(value).toLocaleString() : '-' },
-  ];
+  const toggleParent = (parentId) => {
+    const safeId = String(parentId);
+    setSelectedParentIds((current) => (
+      current.includes(safeId) ? current.filter((id) => id !== safeId) : [...current, safeId]
+    ));
+  };
+
+  const sendMessage = async (event) => {
+    event.preventDefault();
+    if (!selectedParents.length || !channels.length) return;
+
+    setSending(true);
+    setError('');
+    setNotice('');
+
+    try {
+      const body = draft.body || recommendedText;
+      const created = await communicationService.sendParentMessages({
+        recipients: selectedParents,
+        subject: draft.subject,
+        body,
+        channels,
+      });
+      setMessageList((current) => [...created, ...current]);
+      saveDirectMessageCache([...created, ...readDirectMessageCache()]);
+      setNotice(`${created.length} message(s) parent envoye(s). ${created.map((item) => formatDelivery(item.delivery)).join(' | ')}`);
+      setDraft(initialDraft);
+      setSelectedParentIds([]);
+    } catch (sendError) {
+      setError(sendError?.response?.data?.detail || sendError?.message || "Impossible d'envoyer le message.");
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -174,75 +200,184 @@ const CommunicationPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Communication hub</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.communication')}</h2>
-          <p className="mt-2 text-sm text-slate-400">Messages parents par email + SMS, avec alertes automatiques selon notes, presence et evolution.</p>
+          <p className="mt-2 max-w-3xl text-sm text-slate-400">
+            Envoi groupé ou ciblé aux parents par email et SMS, même quand le parent est seulement un contact relié à l'élève.
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setComposerOpen((value) => !value)}
-          className="rounded-xl bg-kcs-blue px-4 py-2 text-sm font-semibold text-slate-950"
-        >
-          Composer un message
-        </button>
       </section>
 
       {notice ? <p className="mb-4 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{notice}</p> : null}
       {error ? <p className="mb-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
 
-      {composerOpen ? (
-        <section className="mb-6 card p-5">
-          <h3 className="font-display text-lg font-semibold text-slate-100">Nouveau message parent</h3>
-          <form onSubmit={submitDraft} className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_1fr_auto]">
-            <select value={draft.receiver} onChange={(event) => updateDraft('receiver', event.target.value)} className={inputClass} required>
-              <option value="">Choisir un parent</option>
-              {parentOptions.map((parent) => (
-                <option key={parent.id} value={parent.id}>
-                  {parent.name} - {parent.students.join(', ')}
-                </option>
-              ))}
-            </select>
-            <input value={draft.subject} onChange={(event) => updateDraft('subject', event.target.value)} placeholder="Sujet" className={inputClass} required />
-            <button type="button" onClick={useSuggestedMessage} className="rounded-xl border border-github-border px-4 py-3 text-sm font-semibold text-slate-200">
-              Message suggere
-            </button>
-            <textarea
-              value={draft.body}
-              onChange={(event) => updateDraft('body', event.target.value)}
-              placeholder={recommendedText}
-              className={`${inputClass} min-h-32 lg:col-span-2`}
-            />
-            <button type="submit" disabled={sending || !draft.receiver} className="rounded-xl bg-kcs-blue px-4 py-3 text-sm font-semibold text-slate-950 disabled:opacity-50">
-              {sending ? 'Envoi...' : 'Envoyer email + SMS'}
-            </button>
-          </form>
-          <p className="mt-4 rounded-xl border border-github-border bg-slate-950/45 p-4 text-sm text-slate-300">{recommendedText}</p>
-        </section>
-      ) : null}
-
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard title="Messages envoyes" value={loading ? '...' : messageList.length} accent="text-cyan-300" />
-        <StatCard title="Canaux envoyes" value={deliveryStats.sent} subtitle="Email/SMS reels" accent="text-emerald-300" />
-        <StatCard title="Simulations SMS" value={deliveryStats.simulated} subtitle="Cle SMS a configurer" accent="text-cyan-300" />
-        <StatCard title="Echecs" value={deliveryStats.failed} subtitle="A verifier" accent="text-rose-300" />
+        <StatCard title="Parents joignables" value={loading ? '...' : parentOptions.length} accent="text-cyan-300" />
+        <StatCard title="Messages envoyés" value={messageList.length} accent="text-sky-300" />
+        <StatCard title="Canaux réels" value={deliveryStats.sent} subtitle="Email/SMS livrés" accent="text-emerald-300" />
+        <StatCard title="Échecs" value={deliveryStats.failed} subtitle={`${deliveryStats.simulated} simulation(s)`} accent="text-rose-300" />
       </section>
 
-      <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <article className="card p-5 lg:col-span-2">
-          <p className="font-display text-lg font-semibold text-slate-100">Alertes automatiques actives</p>
-          <p className="mt-2 text-sm text-slate-400">SAVANEX avertit les parents quand une note est publiee, quand une absence/retard est enregistre, quand la moyenne baisse ou progresse nettement, ou quand la presence passe sous 75%.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Email</span>
-            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">SMS</span>
-            <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">Notification interne</span>
+      <section className="mb-6 grid gap-4 xl:grid-cols-[0.95fr_1.35fr]">
+        <article className="card p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Destinataires</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Parents liés aux élèves</h3>
+            </div>
+            <Users className="h-6 w-6 text-cyan-300" />
+          </div>
+          <input
+            value={parentSearch}
+            onChange={(event) => setParentSearch(event.target.value)}
+            placeholder="Rechercher parent, enfant, email ou téléphone..."
+            className={`${inputClass} mt-4`}
+          />
+          <div className="mt-4 max-h-[460px] space-y-2 overflow-y-auto pr-1">
+            {visibleParents.map((parent) => {
+              const checked = selectedParentIds.includes(String(parent.id));
+              return (
+                <button
+                  key={parent.id}
+                  type="button"
+                  onClick={() => toggleParent(parent.id)}
+                  className={`w-full rounded-2xl border p-4 text-left transition ${checked ? 'border-cyan-300/60 bg-cyan-400/12' : 'border-github-border bg-slate-950/35 hover:border-cyan-400/40 hover:bg-slate-900/70'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-100">{parent.name}</p>
+                      <p className="mt-1 text-xs text-slate-400">{parent.students.join(', ')}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${checked ? 'bg-cyan-300 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>
+                      {checked ? 'Sélectionné' : 'Choisir'}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">{parent.email || 'Email absent'} · {parent.phone || 'Téléphone absent'}</p>
+                </button>
+              );
+            })}
           </div>
         </article>
+
         <article className="card p-5">
-          <p className="text-sm text-slate-400">Parents joignables</p>
-          <p className="mt-2 font-display text-4xl font-bold text-emerald-300">{parentOptions.length}</p>
-          <p className="mt-2 text-xs text-slate-500">Comptes parents locaux avec email ou telephone.</p>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Composer</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Message email + SMS</h3>
+              <p className="mt-1 text-sm text-slate-400">{selectedParents.length} parent(s) sélectionné(s)</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSendEmail((value) => !value)} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold ${sendEmail ? 'border-emerald-300/50 bg-emerald-300/12 text-emerald-200' : 'border-github-border text-slate-400'}`}>
+                <Mail className="h-4 w-4" /> Email
+              </button>
+              <button type="button" onClick={() => setSendSms((value) => !value)} className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold ${sendSms ? 'border-cyan-300/50 bg-cyan-300/12 text-cyan-200' : 'border-github-border text-slate-400'}`}>
+                <MessageSquare className="h-4 w-4" /> SMS
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={sendMessage} className="mt-5 space-y-4">
+            <input value={draft.subject} onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Sujet" className={inputClass} required />
+            <textarea
+              value={draft.body}
+              onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
+              placeholder={recommendedText}
+              className={`${inputClass} min-h-[210px] resize-y`}
+            />
+            <div className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-sm text-slate-300">
+              {recommendedText}
+            </div>
+            <button type="submit" disabled={sending || !selectedParents.length || !channels.length} className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-kcs-blue px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">
+              <Send className="h-4 w-4" />
+              {sending ? 'Envoi...' : 'Envoyer aux parents'}
+            </button>
+          </form>
         </article>
       </section>
 
-      <DataTable columns={columns} data={messageList} />
+      <section className="card p-5">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Historique</p>
+            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Messages sortants</h3>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Rechercher dans l'historique..." className={inputClass} />
+            <select value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)} className={inputClass}>
+              <option value="all">Tous les statuts</option>
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+              <option value="sent">Envoyé</option>
+              <option value="simulated">Simulation</option>
+              <option value="failed">Échec</option>
+            </select>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[780px] text-sm">
+            <thead className="bg-slate-800/55 text-slate-300">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Parent</th>
+                <th className="px-4 py-3 text-left font-semibold">Sujet</th>
+                <th className="px-4 py-3 text-left font-semibold">Canaux</th>
+                <th className="px-4 py-3 text-left font-semibold">Date</th>
+                <th className="px-4 py-3 text-left font-semibold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMessages.map((message, index) => (
+                <tr key={message.id || index} className="border-t border-github-border hover:bg-slate-800/35">
+                  <td className="px-4 py-3 text-slate-100">{message.receiver_name || 'Parent'}</td>
+                  <td className="px-4 py-3 text-slate-200">
+                    <p className="font-semibold">{message.subject}</p>
+                    <p className="mt-1 line-clamp-1 text-xs text-slate-500">{message.body}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(message.delivery?.length ? message.delivery : [{ channel: 'sync', status: 'pending' }]).map((item) => (
+                        <span key={`${message.id}-${item.channel}-${item.status}`} className={`rounded-full border px-2 py-1 text-xs ${deliveryClass[item.status] || deliveryClass.pending}`}>
+                          {item.channel.toUpperCase()} {item.status}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-300">{message.sent_at ? new Date(message.sent_at).toLocaleString() : '-'}</td>
+                  <td className="px-4 py-3">
+                    <button type="button" onClick={() => setSelectedMessage(message)} className="savanex-entity-action savanex-entity-action-view">
+                      <Eye className="h-4 w-4" /> Voir
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {selectedMessage ? (
+        <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8" role="dialog" aria-modal="true" onClick={() => setSelectedMessage(null)}>
+          <section className="savanex-modal-panel w-full max-w-4xl overflow-y-auto p-5 sm:p-6" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Message parent</p>
+                <h3 className="mt-2 font-display text-2xl font-semibold text-slate-100">{selectedMessage.subject}</h3>
+                <p className="mt-1 text-sm text-slate-400">{selectedMessage.receiver_name || 'Parent'} · {selectedMessage.sent_at ? new Date(selectedMessage.sent_at).toLocaleString() : '-'}</p>
+              </div>
+              <button type="button" onClick={() => setSelectedMessage(null)} className="inline-flex items-center gap-2 rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200 hover:bg-slate-800/60">
+                <X className="h-4 w-4" /> Fermer
+              </button>
+            </div>
+            <div className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-sm leading-7 text-slate-200">
+              {selectedMessage.body}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(selectedMessage.delivery || []).map((item) => (
+                <span key={`${item.channel}-${item.status}-${item.detail}`} className={`rounded-full border px-3 py-1.5 text-xs ${deliveryClass[item.status] || deliveryClass.pending}`}>
+                  {item.channel.toUpperCase()} {item.status}: {item.detail || '-'}
+                </span>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </DashboardLayout>
   );
 };

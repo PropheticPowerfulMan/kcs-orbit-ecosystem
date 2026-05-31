@@ -333,13 +333,13 @@ const StudentsPage = () => {
       label: 'Action',
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
+          <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
           {row.is_read_only ? (
-            <span className="rounded-lg border border-slate-600/60 bg-slate-900/70 px-3 py-1 text-xs font-semibold text-slate-300">Lecture seule</span>
+            <span className="savanex-entity-action savanex-entity-action-muted">Lecture seule</span>
           ) : (
             <>
-              <button type="button" onClick={() => openEditDialog(row)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-300/20">Modifier</button>
-              <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="rounded-lg border border-rose-300/40 bg-rose-300/10 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-300/20 disabled:opacity-50">
+              <button type="button" onClick={() => openEditDialog(row)} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+              <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="savanex-entity-action savanex-entity-action-danger disabled:opacity-50">
                 {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
               </button>
             </>
