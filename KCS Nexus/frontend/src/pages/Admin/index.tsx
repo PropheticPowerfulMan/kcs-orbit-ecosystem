@@ -36,6 +36,7 @@ import {
   scheduleConflicts,
   sensitiveActions,
   staffOperations,
+  studentTrackingProfiles,
   students,
   subjects,
   transcripts,
@@ -2949,6 +2950,72 @@ const AdminDashboard = () => {
                 </motion.div>
               )
             })}
+          </div>
+
+          <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+            <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300">
+                  <Shield size={19} />
+                  <span className="text-xs font-bold uppercase tracking-wide">Suivi unitaire intelligent</span>
+                </div>
+                <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Chaque eleve suivi individuellement</h2>
+                <p className="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
+                  Consolidation academique, preference scientifique/non-scientifique, discipline, presence, prediction, recommandations et alertes parent email/SMS.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-xl bg-red-50 px-3 py-2 text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                  <p className="font-display text-lg font-black">{studentTrackingProfiles.filter((profile) => profile.prediction === 'critical').length}</p>
+                  <span>critiques</span>
+                </div>
+                <div className="rounded-xl bg-yellow-50 px-3 py-2 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
+                  <p className="font-display text-lg font-black">{studentTrackingProfiles.filter((profile) => profile.prediction === 'warning').length}</p>
+                  <span>alertes</span>
+                </div>
+                <div className="rounded-xl bg-green-50 px-3 py-2 text-green-700 dark:bg-green-900/20 dark:text-green-300">
+                  <p className="font-display text-lg font-black">{studentTrackingProfiles.filter((profile) => profile.prediction === 'strong' || profile.prediction === 'stable').length}</p>
+                  <span>stables</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              {studentTrackingProfiles.slice(0, 6).map((profile) => (
+                <article key={profile.student.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{profile.student.name}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{profile.student.grade} {profile.student.section} - {profile.parent?.name ?? 'Parent pending'}</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${profile.prediction === 'critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : profile.prediction === 'warning' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+                      {profile.riskScore}%
+                    </span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="rounded-xl bg-white p-2 dark:bg-kcs-blue-900/60">
+                      <p className="font-bold text-kcs-blue-900 dark:text-white">{profile.scienceAverage ?? '-'}</p>
+                      <span className="text-gray-400">Science</span>
+                    </div>
+                    <div className="rounded-xl bg-white p-2 dark:bg-kcs-blue-900/60">
+                      <p className="font-bold text-kcs-blue-900 dark:text-white">{profile.nonScienceAverage ?? '-'}</p>
+                      <span className="text-gray-400">Non-science</span>
+                    </div>
+                    <div className="rounded-xl bg-white p-2 dark:bg-kcs-blue-900/60">
+                      <p className="font-bold text-kcs-blue-900 dark:text-white">{profile.disciplineOpen}</p>
+                      <span className="text-gray-400">Discipline</span>
+                    </div>
+                  </div>
+                  <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900/60 dark:text-kcs-blue-100">{profile.preference}</p>
+                  <p className="mt-3 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{profile.recommendation}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${profile.alerts.email ? 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-200' : 'bg-gray-100 text-gray-500 dark:bg-kcs-blue-900/50 dark:text-gray-400'}`}><Mail size={12} /> Email</span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${profile.alerts.sms ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200' : 'bg-gray-100 text-gray-500 dark:bg-kcs-blue-900/50 dark:text-gray-400'}`}><Phone size={12} /> SMS</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-kcs-gold-100 px-2.5 py-1 text-kcs-blue-800 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200"><FileText size={12} /> Rapport</span>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">

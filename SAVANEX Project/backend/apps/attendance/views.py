@@ -93,7 +93,7 @@ def attendance_report(request):
             'late': item['late'],
             'excused': item['excused'],
             'attendance_rate': round(attendance_rate, 2),
-            'at_risk': attendance_rate < 75,
+            'at_risk': attendance_rate < 70,
         })
 
     return Response(result)

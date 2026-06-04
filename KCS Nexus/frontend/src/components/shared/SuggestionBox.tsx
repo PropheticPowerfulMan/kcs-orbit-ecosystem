@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Eye, Filter, LockKeyhole, MessageSquareText, Printer, Search, Send, ShieldCheck } from 'lucide-react'
+import { CalendarDays, Eye, Filter, LockKeyhole, MessageSquareText, Printer, Search, Send, ShieldCheck, UserRoundSearch } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getUserDisplayName } from '@/utils/portalGreeting'
@@ -45,6 +45,31 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, '&#039;')
 }
 
+function normalizeText(value: unknown) {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function suggestionMatchesDateRange(record: SuggestionRecord, dateFrom: string, dateTo: string) {
+  const timestamp = new Date(record.createdAt).getTime()
+  if (Number.isNaN(timestamp)) return false
+  const min = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : Number.NEGATIVE_INFINITY
+  const max = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : Number.POSITIVE_INFINITY
+  return timestamp >= min && timestamp <= max
+}
+
+function openSuggestionPrintWindow(html: string) {
+  const printWindow = window.open('', '_blank', 'width=1100,height=800')
+  if (!printWindow) return
+  printWindow.document.open()
+  printWindow.document.write(html)
+  printWindow.document.close()
+  printWindow.focus()
+}
+
 function printSuggestionReport(records: SuggestionRecord[], scopeLabel: string) {
   const logoUrl = typeof window === 'undefined' ? SCHOOL_LOGO_SRC : new URL(SCHOOL_LOGO_SRC, window.location.origin).href
   const generatedAt = new Date().toLocaleString()
@@ -66,6 +91,8 @@ function printSuggestionReport(records: SuggestionRecord[], scopeLabel: string) 
   const chips = Object.entries(categoryCounts).map(([category, count]) => `<span>${escapeHtml(category)}: <strong>${count}</strong></span>`).join('')
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Rapport suggestions KCS</title><style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; }
     body { margin: 0; background: #eef4fb; color: #0f172a; font-family: Arial, sans-serif; }
     .sheet { min-height: 100vh; padding: 26px; border-top: 10px solid #004080; background: #fff; position: relative; overflow: hidden; }
     .watermark { position: absolute; inset: 190px auto auto 50%; width: 470px; height: 470px; transform: translateX(-50%); opacity: .045; object-fit: contain; }
@@ -105,13 +132,31 @@ function printSuggestionReport(records: SuggestionRecord[], scopeLabel: string) 
     <section class="chips">${chips || '<span>Aucune categorie</span>'}</section>
     <table><thead><tr><th>#</th><th>ID / Date</th><th>Categorie</th><th>Role anonyme</th><th>Suggestion</th><th>Identite super admin</th></tr></thead><tbody>${rows || '<tr><td colspan="6">Aucune suggestion pour ce filtre.</td></tr>'}</tbody></table>
     <footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus - ${escapeHtml(documentId)}</span><span>Rapport conforme a la charte administrative KCS</span></footer>
-  </main><script>window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print();},250);});</script></body></html>`
+  </main><script>
+    function printWhenReady() {
+      var images = Array.prototype.slice.call(document.images || []);
+      var pending = images.filter(function (image) { return !image.complete; });
+      var waitForImages = pending.map(function (image) {
+        return new Promise(function (resolve) {
+          image.onload = resolve;
+          image.onerror = resolve;
+        });
+      });
+      Promise.all(waitForImages).then(function () {
+        requestAnimationFrame(function () {
+          window.focus();
+          window.print();
+        });
+      });
+    }
+    if (document.readyState === 'complete') {
+      setTimeout(printWhenReady, 350);
+    } else {
+      window.addEventListener('load', function () { setTimeout(printWhenReady, 350); });
+    }
+  </script></body></html>`
 
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=1100,height=800')
-  if (!printWindow) return
-  printWindow.document.open()
-  printWindow.document.write(html)
-  printWindow.document.close()
+  openSuggestionPrintWindow(html)
 }
 
 export default function SuggestionBox() {
@@ -124,7 +169,10 @@ export default function SuggestionBox() {
   const [records, setRecords] = useState<SuggestionRecord[]>(readSuggestions)
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [identityFilter, setIdentityFilter] = useState('all')
   const [roleFilter, setRoleFilter] = useState('all')
+  const [dateFromFilter, setDateFromFilter] = useState('')
+  const [dateToFilter, setDateToFilter] = useState('')
   const isAdmin = user?.role === 'admin'
 
   const labels = useMemo(() => ({
@@ -139,15 +187,19 @@ export default function SuggestionBox() {
   }), [language])
 
   const categories = useMemo(() => Array.from(new Set(records.map((record) => record.category))).sort(), [records])
+  const identities = useMemo(() => Array.from(new Map(records.map((record) => [record.privateIdentity.userId, record.privateIdentity])).values())
+    .sort((left, right) => left.fullName.localeCompare(right.fullName, 'fr', { sensitivity: 'base' })), [records])
   const roles = useMemo(() => Array.from(new Set(records.map((record) => record.anonymousRole))).sort(), [records])
 
   const filteredRecords = useMemo(() => {
-    const needle = query.trim().toLowerCase()
+    const tokens = normalizeText(query).split(/\s+/).filter(Boolean)
     return records.filter((record) => {
       if (categoryFilter !== 'all' && record.category !== categoryFilter) return false
+      if (identityFilter !== 'all' && record.privateIdentity.userId !== identityFilter) return false
       if (roleFilter !== 'all' && record.anonymousRole !== roleFilter) return false
-      if (!needle) return true
-      const haystack = [
+      if (!suggestionMatchesDateRange(record, dateFromFilter, dateToFilter)) return false
+      if (tokens.length === 0) return true
+      const haystack = normalizeText([
         record.id,
         record.category,
         record.message,
@@ -157,10 +209,21 @@ export default function SuggestionBox() {
         record.privateIdentity.role,
         record.privateIdentity.userId,
         new Date(record.createdAt).toLocaleString(),
-      ].join(' ').toLowerCase()
-      return haystack.includes(needle)
+      ].join(' '))
+      return tokens.every((token) => haystack.includes(token))
     })
-  }, [categoryFilter, query, records, roleFilter])
+  }, [categoryFilter, dateFromFilter, dateToFilter, identityFilter, query, records, roleFilter])
+
+  const reportScopeLabel = useMemo(() => {
+    const parts = [
+      query.trim() ? `Recherche: ${query.trim()}` : '',
+      categoryFilter !== 'all' ? `Categorie: ${categoryFilter}` : 'Toutes categories',
+      identityFilter !== 'all' ? `Auteur/parent: ${identities.find((item) => item.userId === identityFilter)?.fullName ?? identityFilter}` : 'Tous auteurs/parents',
+      roleFilter !== 'all' ? `Role: ${roleFilter}` : 'Tous roles',
+      dateFromFilter || dateToFilter ? `Periode: ${dateFromFilter || 'debut'} - ${dateToFilter || 'aujourd hui'}` : 'Toute periode',
+    ].filter(Boolean)
+    return parts.join(' | ')
+  }, [categoryFilter, dateFromFilter, dateToFilter, identities, identityFilter, query, roleFilter])
 
   const submit = () => {
     const cleanMessage = message.trim()
@@ -202,7 +265,7 @@ export default function SuggestionBox() {
 
       {!isAdmin && (
         <div className="mt-4 grid gap-3 lg:grid-cols-[220px_1fr_auto]">
-          <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none">
+          <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-xl border border-white/10 bg-kcs-blue-950/95 px-3 py-3 text-sm text-white outline-none">
             <option value="wellbeing">Wellbeing</option>
             <option value="discipline">Discipline</option>
             <option value="teaching">Teaching</option>
@@ -230,14 +293,14 @@ export default function SuggestionBox() {
             <p className="flex items-center gap-2 text-sm font-bold text-cyan-100"><ShieldCheck size={16} /> {labels.audit}</p>
             <button
               type="button"
-              onClick={() => printSuggestionReport(filteredRecords, query || `${categoryFilter}/${roleFilter}`)}
+              onClick={() => printSuggestionReport(filteredRecords, reportScopeLabel)}
               className="inline-flex w-fit items-center gap-2 rounded-xl border border-kcs-gold-300/30 bg-kcs-gold-300/12 px-4 py-2.5 text-sm font-bold text-kcs-gold-100 hover:bg-kcs-gold-300/18"
             >
               <Printer size={16} /> Imprimer / PDF
             </button>
           </div>
 
-          <div className="grid gap-3 xl:grid-cols-[1fr_180px_180px]">
+          <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 md:grid-cols-2 xl:grid-cols-6">
             <label className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kcs-blue-200" />
               <input
@@ -249,15 +312,50 @@ export default function SuggestionBox() {
             </label>
             <label className="relative">
               <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kcs-blue-200" />
-              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-white/10 py-3 pl-10 pr-3 text-sm text-white outline-none">
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-kcs-blue-950/95 py-3 pl-10 pr-3 text-sm text-white outline-none">
                 <option value="all">Toutes categories</option>
                 {categories.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </label>
-            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none">
-              <option value="all">Tous roles</option>
-              {roles.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
+            <label className="relative">
+              <UserRoundSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kcs-blue-200" />
+              <select value={identityFilter} onChange={(event) => setIdentityFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-kcs-blue-950/95 py-3 pl-10 pr-3 text-sm text-white outline-none">
+                <option value="all">Tous parents/auteurs</option>
+                {identities.map((item) => <option key={item.userId} value={item.userId}>{item.fullName}</option>)}
+              </select>
+            </label>
+            <label className="relative">
+              <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kcs-blue-200" />
+              <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-kcs-blue-950/95 py-3 pl-10 pr-3 text-sm text-white outline-none">
+                <option value="all">Tous roles</option>
+                {roles.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <label className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kcs-blue-200" />
+              <input type="date" value={dateFromFilter} onChange={(event) => setDateFromFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-kcs-blue-950/95 py-3 pl-10 pr-3 text-sm text-white outline-none [color-scheme:dark]" aria-label="Date de debut" />
+            </label>
+            <label className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-kcs-blue-200" />
+              <input type="date" value={dateToFilter} onChange={(event) => setDateToFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-kcs-blue-950/95 py-3 pl-10 pr-3 text-sm text-white outline-none [color-scheme:dark]" aria-label="Date de fin" />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-kcs-blue-100">
+            <span>{filteredRecords.length} suggestion(s) affichee(s) sur {records.length}.</span>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                setCategoryFilter('all')
+                setIdentityFilter('all')
+                setRoleFilter('all')
+                setDateFromFilter('')
+                setDateToFilter('')
+              }}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold text-cyan-100 hover:bg-white/10"
+            >
+              Reinitialiser les filtres
+            </button>
           </div>
 
           <div className="grid gap-3 md:grid-cols-4">

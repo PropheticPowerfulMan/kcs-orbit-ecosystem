@@ -263,9 +263,9 @@ def notify_parent_about_student_evolution(student, trigger_label, notif_type=Not
 
     body, summary = build_evolution_message(student, trigger_label)
     should_notify = force
-    if summary['attendance_rate'] is not None and summary['attendance_rate'] < 75:
+    if summary['attendance_rate'] is not None and summary['attendance_rate'] < 70:
         should_notify = True
-    if summary['recent_average'] is not None and summary['recent_average'] < 75:
+    if summary['recent_average'] is not None and summary['recent_average'] < 70:
         should_notify = True
     if summary['trend'] is not None and abs(summary['trend']) >= 1:
         should_notify = True
@@ -283,7 +283,7 @@ def notify_parent_about_grade(grade):
     return notify_parent_about_student_evolution(
         grade.student,
         trigger,
-        notif_type=Notification.TYPE_GRADE if percentage >= 75 else Notification.TYPE_WARNING,
+        notif_type=Notification.TYPE_GRADE if percentage >= 70 else Notification.TYPE_WARNING,
         force=True,
     )
 

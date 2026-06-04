@@ -203,7 +203,7 @@ export const announcements = [
 ]
 
 export const communicationFlows = [
-  { trigger: 'Grade entered', update: 'Student and parent dashboard refresh', notification: 'Grade alert if score is below 75%', recipients: ['student', 'parent', 'teacher'] },
+  { trigger: 'Grade entered', update: 'Student and parent dashboard refresh', notification: 'Grade alert if score is below 70%', recipients: ['student', 'parent', 'teacher'] },
   { trigger: 'Attendance marked late/absent', update: 'Attendance analytics and child record update', notification: 'Parent absence alert', recipients: ['parent', 'staff', 'admin'] },
   { trigger: 'Assignment published', update: 'Student workload and parent deadlines update', notification: 'Homework due reminder', recipients: ['student', 'parent'] },
   { trigger: 'Schedule changed', update: 'Timetable and room schedule update', notification: 'Affected user alert', recipients: ['student', 'parent', 'teacher', 'staff'] },
@@ -323,3 +323,95 @@ export const performanceTrend = [
   { month: 'Mar', Elise: 92, David: 79 },
   { month: 'Apr', Elise: 92, David: 78 },
 ]
+
+const scienceSubjectTerms = ['biology', 'science', 'chemistry', 'physics', 'lab', 'calculus', 'math', 'algebra']
+
+const subjectDomain = (subject: string) => {
+  const normalized = subject.toLowerCase()
+  return scienceSubjectTerms.some((term) => normalized.includes(term)) ? 'scientific' : 'non_scientific'
+}
+
+const averageScores = (scores: number[]) => {
+  if (!scores.length) return null
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+}
+
+const predictionTone = (riskScore: number) => {
+  if (riskScore >= 72) return 'critical'
+  if (riskScore >= 48) return 'warning'
+  if (riskScore <= 20) return 'strong'
+  return 'stable'
+}
+
+const buildStudentTrackingProfile = (student: (typeof students)[number]) => {
+  const studentGrades = grades.filter((grade) => grade.studentId === student.id)
+  const scientificScores = studentGrades.filter((grade) => subjectDomain(grade.subject) === 'scientific').map((grade) => Math.round((grade.score / grade.max) * 100))
+  const nonScientificScores = studentGrades.filter((grade) => subjectDomain(grade.subject) === 'non_scientific').map((grade) => Math.round((grade.score / grade.max) * 100))
+  const scienceAverage = averageScores(scientificScores)
+  const nonScienceAverage = averageScores(nonScientificScores)
+  const studentAttendance = attendance.filter((record) => record.studentId === student.id)
+  const lateCount = studentAttendance.filter((record) => record.status === 'late').length
+  const absentCount = studentAttendance.filter((record) => record.status === 'absent').length
+  const studentDiscipline = disciplineReports.filter((report) => report.studentId === student.id)
+  const openDiscipline = studentDiscipline.filter((report) => report.status !== 'Resolved' && report.status !== 'Closed').length
+  const missingAssignments = assignments.filter((assignment) => assignment.studentId === student.id && assignment.status === 'missing').length
+  const parent = parents.find((item) => item.id === student.parentId)
+  const riskScore = Math.min(100, Math.max(0,
+    (100 - student.average) * 0.34 +
+    (100 - student.attendance) * 0.28 +
+    openDiscipline * 18 +
+    absentCount * 10 +
+    lateCount * 5 +
+    missingAssignments * 12 +
+    (student.risk === 'high' ? 16 : student.risk === 'medium' ? 8 : 0),
+  ))
+  const preference =
+    scienceAverage !== null && nonScienceAverage !== null
+      ? scienceAverage >= nonScienceAverage + 4
+        ? 'Scientific preference'
+        : nonScienceAverage >= scienceAverage + 4
+          ? 'Non-scientific preference'
+          : 'Balanced preference'
+      : scienceAverage !== null
+        ? 'Scientific preference'
+        : nonScienceAverage !== null
+          ? 'Non-scientific preference'
+          : 'Insufficient evidence'
+  const recommendations = [
+    student.average < 70 ? 'Open a weekly academic intervention plan with the advisor.' : 'Maintain enrichment tasks and monitor the next assessment window.',
+    student.attendance < 88 ? 'Send an attendance digest to the parent and require a daily check-in.' : 'Keep regular attendance monitoring active.',
+    openDiscipline > 0 ? 'Schedule restorative discipline follow-up and record parent confirmation.' : 'Reinforce positive conduct notes in the student file.',
+    preference === 'Scientific preference' ? 'Offer science lab extension, AP/STEM pathway guidance, and project mentorship.' : preference === 'Non-scientific preference' ? 'Offer humanities, arts, languages, leadership, and presentation pathway guidance.' : 'Use mixed STEM/humanities projects before assigning a pathway.',
+  ]
+
+  return {
+    student,
+    parent,
+    scienceAverage,
+    nonScienceAverage,
+    preference,
+    disciplineOpen: openDiscipline,
+    disciplineTotal: studentDiscipline.length,
+    absences: absentCount,
+    lates: lateCount,
+    missingAssignments,
+    riskScore: Math.round(riskScore),
+    prediction: predictionTone(riskScore),
+    recommendation: recommendations[0],
+    recommendations,
+    alerts: {
+      email: Boolean(parent?.email) && riskScore >= 48,
+      sms: Boolean(parent?.phone) && (riskScore >= 48 || absentCount > 0 || openDiscipline > 0),
+      report: riskScore >= 20 || studentDiscipline.length > 0,
+    },
+    timeline: [
+      ...studentGrades.map((grade) => ({ date: grade.date, type: 'Grade', label: `${grade.subject}: ${Math.round((grade.score / grade.max) * 100)}%` })),
+      ...studentAttendance.map((record) => ({ date: record.date, type: 'Attendance', label: `${record.status} - ${record.className}` })),
+      ...studentDiscipline.map((report) => ({ date: report.date, type: 'Discipline', label: `${report.category}: ${report.status}` })),
+    ],
+  }
+}
+
+export const studentTrackingProfiles = students
+  .map(buildStudentTrackingProfile)
+  .sort((left, right) => right.riskScore - left.riskScore)

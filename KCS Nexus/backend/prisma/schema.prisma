@@ -109,6 +109,7 @@ model User {
   authoredNews       NewsPost[]           @relation("NewsAuthor")
   contactMessages    ContactMessage[]
   refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   forumPosts         ParentForumPost[]    @relation("ForumPostAuthor")
   forumComments      ParentForumComment[] @relation("ForumCommentAuthor")
   aiForumReports     AIForumReport[]      @relation("AIForumReportReviewer")
@@ -156,6 +157,19 @@ model RefreshToken {
   expiresAt  DateTime
   createdAt  DateTime @default(now())
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([usedAt])
 }
 
 model StudentProfile {

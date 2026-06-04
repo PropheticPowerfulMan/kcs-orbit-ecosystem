@@ -162,11 +162,11 @@ const PortalSidebar = () => {
   if (!user) return null
 
   const navItems = getNavItems(user.role, t)
-  const currentLanguage = (i18n.resolvedLanguage || language).startsWith('fr') ? 'fr' : 'en'
+  const currentLanguage = language === 'fr' ? 'fr' : 'en'
+  const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
   const toggleLanguage = () => {
-    const next = currentLanguage === 'en' ? 'fr' : 'en'
-    setLanguage(next)
-    void i18n.changeLanguage(next)
+    setLanguage(nextLanguage)
+    void i18n.changeLanguage(nextLanguage)
   }
   const roleColor = {
     admin: 'bg-purple-600',
@@ -220,12 +220,18 @@ const PortalSidebar = () => {
         <button
           type="button"
           onClick={toggleLanguage}
-          className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`}
-          title={!isMobile && sidebarCollapsed ? t('common.language') : undefined}
+          className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center gap-1 px-0'}`}
+          title={!isMobile && sidebarCollapsed ? (nextLanguage === 'fr' ? 'Français' : 'English') : undefined}
           aria-label={t('common.language')}
         >
-          <Globe size={18} className="flex-shrink-0" />
-          {(isMobile || !sidebarCollapsed) && <span>{currentLanguage.toUpperCase()}</span>}
+          {!isMobile && sidebarCollapsed ? (
+            <span className="text-xs font-bold">{nextLanguage.toUpperCase()}</span>
+          ) : (
+            <>
+              <Globe size={18} className="flex-shrink-0" />
+              <span>{nextLanguage.toUpperCase()}</span>
+            </>
+          )}
         </button>
         <button
           type="button"
@@ -282,11 +288,12 @@ const PortalSidebar = () => {
           <button
             type="button"
             onClick={toggleLanguage}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-white/70 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
+            className="flex h-10 flex-shrink-0 items-center justify-center gap-1 rounded-full border border-kcs-blue-100 bg-white/70 px-2 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
             aria-label={t('common.language')}
-            title={currentLanguage === 'fr' ? 'Français' : 'English'}
+            title={nextLanguage === 'fr' ? 'Français' : 'English'}
           >
-            <Globe size={18} />
+            <Globe size={16} />
+            <span className="text-xs font-bold">{nextLanguage.toUpperCase()}</span>
           </button>
           <button
             type="button"

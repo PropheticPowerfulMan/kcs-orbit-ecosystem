@@ -312,7 +312,7 @@ function Ensure-EduPaySchoolAdmin {
   Invoke-InDirectory -Path $eduPayApiPath -Script {
     $env:DATABASE_URL = $eduPayDatabaseUrl
     $nodeScript = @'
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -516,12 +516,18 @@ if ($databasePreparationMode -eq 'skipped-by-user') {
 }
 
 if ($databasePreparationMode -ne 'full') {
-  Sync-OrbitRuntime
-  Sync-EduPayApiRuntime
-  Sync-SavanexDatabase
+  Write-Step 'Generating Prisma clients from existing local schemas'
+  Invoke-InDirectory -Path $orbitPath -Script {
+    $env:DATABASE_URL = $orbitDatabaseUrl
+    & pnpm exec prisma generate
+    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+  }
 
-  Write-Step 'Checking EduPay school/admin seed'
-  Ensure-EduPaySchoolAdmin
+  Invoke-InDirectory -Path $eduPayApiPath -Script {
+    $env:DATABASE_URL = $eduPayDatabaseUrl
+    & pnpm exec prisma generate
+    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
+  }
 }
 
 if ($databasePreparationMode -eq 'full') {
@@ -550,7 +556,7 @@ if ($databasePreparationMode -eq 'full') {
       & pnpm exec prisma db push
     }
     $nodeScript = @'
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 

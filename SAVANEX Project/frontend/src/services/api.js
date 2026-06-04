@@ -32,27 +32,107 @@ const demoOverview = {
 const demoWarnings = {
   students: [
     {
+      id: 1,
       student_name: 'Amina K.',
       attendance_rate: 71,
       average_normalized: 72,
       average_excellence_percentage: 72,
-      risk_flags: ['Attendance below 75%'],
+      risk_flags: ['Attendance watch'],
     },
     {
+      id: 2,
       student_name: 'David M.',
       attendance_rate: 83,
       average_normalized: 64,
       average_excellence_percentage: 64,
-      risk_flags: ['Average excellence below 75%'],
+      risk_flags: ['Average excellence below 70%'],
     },
     {
+      id: 3,
       student_name: 'Sarah N.',
       attendance_rate: 68,
       average_normalized: 68,
       average_excellence_percentage: 68,
-      risk_flags: ['Attendance below 75%', 'Average excellence below 75%'],
+      risk_flags: ['Attendance below 70%', 'Average excellence below 70%'],
     },
   ],
+};
+
+const buildDemoLivingProfile = (studentId) => {
+  const student = demoStudents.find((entry) => entry.id === Number(studentId));
+  if (!student) {
+    return null;
+  }
+
+  const scienceAverage = Math.round(student.average * (student.id % 2 === 0 ? 4.85 : 5.2));
+  const nonScienceAverage = Math.round(student.average * (student.id % 2 === 0 ? 5.15 : 4.8));
+  const riskScore = Math.min(100, Math.max(0,
+    (100 - scienceAverage) * 0.22 +
+    (100 - nonScienceAverage) * 0.22 +
+    (100 - student.attendance) * 0.5 +
+    (student.risk.includes('lev') ? 22 : student.risk.includes('Moy') ? 10 : 0)
+  ));
+  const level = riskScore >= 65 ? 'critical' : riskScore >= 42 ? 'warning' : riskScore <= 18 ? 'strong' : 'stable';
+  const preference = scienceAverage >= nonScienceAverage + 4
+    ? 'scientific'
+    : nonScienceAverage >= scienceAverage + 4
+      ? 'non_scientific'
+      : 'balanced';
+  const disciplineLevel = student.attendance < 70 ? 'warning' : student.attendance < 85 ? 'watch' : 'clear';
+
+  return {
+    student: { id: student.id, student_id: `DEMO-${student.id}`, full_name: student.name },
+    severity: level,
+    metrics: {
+      risk_score: Math.round(riskScore),
+      prediction_level: level,
+      science_average: scienceAverage,
+      non_science_average: nonScienceAverage,
+      learning_preference: preference,
+      discipline_level: disciplineLevel,
+      discipline_flags: disciplineLevel === 'clear' ? [] : ['attendance_pattern'],
+      absences: student.attendance < 80 ? 3 : 0,
+      lates: student.attendance < 90 ? 2 : 0,
+      recommendations: [
+        student.average < 12
+          ? 'Ouvrir un plan de soutien academique hebdomadaire avec objectifs mesurables.'
+          : preference === 'scientific'
+            ? 'Orienter vers laboratoire, STEM, projets pratiques et mentorat scientifique.'
+            : 'Conserver un suivi mixte avec exercices cibles et point parent hebdomadaire.',
+      ],
+      alert_channels: {
+        in_app: true,
+        email: riskScore >= 42,
+        sms: riskScore >= 65 || disciplineLevel === 'warning',
+      },
+    },
+    prediction: { risk_score: Math.round(riskScore), level },
+    learning_profile: {
+      preference,
+      science_average: scienceAverage,
+      non_science_average: nonScienceAverage,
+      subject_breakdown: {},
+    },
+    discipline: {
+      level: disciplineLevel,
+      flags: disciplineLevel === 'clear' ? [] : ['attendance_pattern'],
+      absences: student.attendance < 80 ? 3 : 0,
+      lates: student.attendance < 90 ? 2 : 0,
+    },
+    recommendations: [
+      student.average < 12
+        ? 'Ouvrir un plan de soutien academique hebdomadaire avec objectifs mesurables.'
+        : preference === 'scientific'
+          ? 'Orienter vers laboratoire, STEM, projets pratiques et mentorat scientifique.'
+          : 'Conserver un suivi mixte avec exercices cibles et point parent hebdomadaire.',
+    ],
+    alert_channels: {
+      in_app: true,
+      email: riskScore >= 42,
+      sms: riskScore >= 65 || disciplineLevel === 'warning',
+    },
+    timeline: [],
+  };
 };
 
 const isDemoSession = () => useAuthStore.getState().accessToken === DEMO_ACCESS_TOKEN;
@@ -245,6 +325,14 @@ export const authService = {
     const res = await api.post('/auth/login/', { username, password });
     return res.data;
   },
+  async forgotPassword(email) {
+    const res = await api.post('/auth/forgot-password/', { email });
+    return res.data;
+  },
+  async resetPassword(uid, token, password) {
+    const res = await api.post('/auth/reset-password/', { uid, token, password });
+    return res.data;
+  },
   async demoLogin() {
     return {
       access: DEMO_ACCESS_TOKEN,
@@ -285,7 +373,7 @@ export const intelligenceService = {
 
   async getStudentLivingProfile(studentId) {
     if (isDemoSession()) {
-      return null;
+      return buildDemoLivingProfile(studentId);
     }
 
     const res = await api.get(`/intelligence/students/${studentId}/living-profile/`);

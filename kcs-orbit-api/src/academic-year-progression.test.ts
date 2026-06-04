@@ -35,13 +35,13 @@ test("class progression preserves sections and graduates the final grade", () =>
   assert.equal(getNextAcademicClassName("Grade 12 A"), null);
 });
 
-test("progression plan promotes only students who meet the 75 percent KCS success threshold", () => {
+test("progression plan promotes only students who meet the 70 percent KCS success threshold", () => {
   const plan = buildAcademicProgressionPlan({
     effectiveDate: new Date("2026-07-15T12:00:00.000Z"),
     classes,
     students: [
-      { id: "student-k5", firstName: "Amina", lastName: "K.", classId: "k5-a", className: "K5 A", status: "ACTIVE", averagePercent: 75 },
-      { id: "student-failed", firstName: "Beni", lastName: "M.", classId: "grade-4-b", className: "Grade 4 B", status: "ACTIVE", averagePercent: 74.99 },
+      { id: "student-k5", firstName: "Amina", lastName: "K.", classId: "k5-a", className: "K5 A", status: "ACTIVE", averagePercent: 70 },
+      { id: "student-failed", firstName: "Beni", lastName: "M.", classId: "grade-4-b", className: "Grade 4 B", status: "ACTIVE", averagePercent: 69.99 },
       { id: "student-repeat", firstName: "Celine", lastName: "L.", classId: "grade-4-b", className: "Grade 4 B", status: "ACTIVE", averagePercent: 90 },
       { id: "student-transfer", firstName: "Clara", lastName: "N.", classId: "k4-a", className: "K4 A", status: "ACTIVE", averagePercent: 30 },
       { id: "student-unknown", firstName: "David", lastName: "P.", className: "Blue Room", status: "ACTIVE", averagePercent: 95 },
@@ -59,7 +59,7 @@ test("progression plan promotes only students who meet the 75 percent KCS succes
   assert.equal(plan.isRolloverWindow, true);
   assert.equal(byStudent.get("student-k5")?.action, "PROMOTE");
   assert.equal(byStudent.get("student-k5")?.toClassId, "grade-1-a");
-  assert.equal(byStudent.get("student-k5")?.passThreshold, 75);
+  assert.equal(byStudent.get("student-k5")?.passThreshold, 70);
   assert.equal(byStudent.get("student-failed")?.action, "REPEAT");
   assert.deepEqual(byStudent.get("student-failed")?.warnings, ["PASS_THRESHOLD_NOT_MET"]);
   assert.equal(byStudent.get("student-repeat")?.action, "REPEAT");

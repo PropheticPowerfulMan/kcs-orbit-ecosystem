@@ -46,3 +46,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if settings.app_env.lower() in {"prod", "production"} and settings.jwt_secret in {"change-me", "dev-secret", "dev_secret"}:
+    raise RuntimeError("EduSync production configuration is unsafe. Set a strong JWT_SECRET.")

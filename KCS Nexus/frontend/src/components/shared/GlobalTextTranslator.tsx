@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { globalFrenchText } from '@/i18n/globalText'
+import { useUIStore } from '@/store/uiStore'
 
 const textAttributes = ['aria-label', 'placeholder', 'title']
 const ignoredTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA'])
@@ -82,6 +83,18 @@ const translateNode = (node: Node, language: string) => {
 
 const GlobalTextTranslator = () => {
   const { i18n } = useTranslation()
+  const language = useUIStore((state) => state.language)
+
+  useEffect(() => {
+    const normalizedLanguage = language === 'fr' ? 'fr' : 'en'
+    const activeLanguage = (i18n.resolvedLanguage || i18n.language || 'en').startsWith('fr') ? 'fr' : 'en'
+
+    document.documentElement.lang = normalizedLanguage
+
+    if (activeLanguage !== normalizedLanguage) {
+      void i18n.changeLanguage(normalizedLanguage)
+    }
+  }, [i18n, language])
 
   useEffect(() => {
     let scheduled = 0

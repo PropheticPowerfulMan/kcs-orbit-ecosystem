@@ -170,7 +170,7 @@ export async function executeAcademicYearRollover(input: AcademicYearRolloverInp
           nextAcademicYear: plan.nextAcademicYear,
           effectiveDate: plan.effectiveDate,
           counts: plan.counts,
-          passThreshold: input.passThreshold ?? 75,
+          passThreshold: input.passThreshold ?? 70,
           force: Boolean(input.force),
           warningCount: plan.warnings.length
         } as never

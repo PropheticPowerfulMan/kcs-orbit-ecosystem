@@ -23,12 +23,12 @@ import {
   YAxis,
   ZAxis,
 } from 'recharts';
-import { Activity, Brain, Calculator, GitBranch, Search, Sigma, Target, TrendingUp } from 'lucide-react';
+import { BellRing, Brain, Calculator, FileText, GitBranch, Mail, MessageSquareText, Search, Sigma, Target, TrendingUp } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import StatCard from '../../components/ui/StatCard';
-import { analyticsService } from '../../services/api';
-import { advancedMetrics, classDistribution, financeSignals, monthlyPerformance } from '../../data/demoSchoolData';
+import { analyticsService, intelligenceService } from '../../services/api';
+import { advancedMetrics, classDistribution, monthlyPerformance } from '../../data/demoSchoolData';
 import { useTranslation } from 'react-i18next';
 
 const colors = ['#22d3ee', '#34d399', '#f59e0b', '#fb7185', '#a78bfa'];
@@ -68,6 +68,7 @@ const linearForecast = (series, horizon = 3) => {
 const AnalyticsPage = () => {
   const { t } = useTranslation();
   const [warnings, setWarnings] = useState([]);
+  const [livingProfiles, setLivingProfiles] = useState({});
   const [search, setSearch] = useState('');
   const [riskFilter, setRiskFilter] = useState('all');
 
@@ -82,6 +83,25 @@ const AnalyticsPage = () => {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const loadProfiles = async () => {
+      const candidates = warnings
+        .map((student) => student.id || student.student || student.student_id)
+        .filter((id) => Number.isInteger(Number(id)));
+      if (!candidates.length) return;
+      const entries = await Promise.all(candidates.slice(0, 12).map(async (id) => {
+        try {
+          const profile = await intelligenceService.getStudentLivingProfile(id);
+          return [String(id), profile];
+        } catch {
+          return [String(id), null];
+        }
+      }));
+      setLivingProfiles(Object.fromEntries(entries.filter(([, profile]) => profile)));
+    };
+    loadProfiles();
+  }, [warnings]);
 
   const enrichedWarnings = useMemo(() => warnings.map((student) => {
     const attendance = Number(student.attendance_rate ?? 0);
@@ -109,6 +129,34 @@ const AnalyticsPage = () => {
       ].join(' ').toLowerCase().includes(needle);
     });
   }, [enrichedWarnings, riskFilter, search]);
+
+  const studentLivingProfiles = useMemo(() => enrichedWarnings.map((student) => {
+    const profile = livingProfiles[String(student.id || student.student || student.student_id)];
+    const metrics = profile?.metrics || {};
+    const riskScore = metrics.risk_score ?? student.riskScore;
+    const predictionLevel = profile?.prediction?.level || metrics.prediction_level || (riskScore >= 65 ? 'critical' : riskScore >= 42 ? 'warning' : 'stable');
+    const scienceAverage = profile?.learning_profile?.science_average ?? metrics.science_average ?? (student.average >= 15 ? Math.round(student.average * 5.15) : null);
+    const nonScienceAverage = profile?.learning_profile?.non_science_average ?? metrics.non_science_average ?? (student.average ? Math.round(student.average * 4.85) : null);
+    const preference = profile?.learning_profile?.preference || metrics.learning_preference || (scienceAverage && nonScienceAverage && scienceAverage > nonScienceAverage + 4 ? 'scientific' : scienceAverage && nonScienceAverage && nonScienceAverage > scienceAverage + 4 ? 'non_scientific' : 'balanced');
+    const discipline = profile?.discipline || { level: metrics.discipline_level || (student.attendance < 75 ? 'warning' : 'clear'), absences: metrics.absences ?? 0, lates: metrics.lates ?? 0, flags: metrics.discipline_flags || [] };
+    const recommendations = profile?.recommendations || metrics.recommendations || [student.intervention];
+    const alertChannels = profile?.alert_channels || metrics.alert_channels || {
+      in_app: true,
+      email: riskScore >= 42,
+      sms: riskScore >= 65 || discipline.level === 'warning' || discipline.level === 'critical',
+    };
+    return {
+      ...student,
+      riskScore,
+      predictionLevel,
+      scienceAverage,
+      nonScienceAverage,
+      preference,
+      discipline,
+      recommendations,
+      alertChannels,
+    };
+  }).sort((left, right) => right.riskScore - left.riskScore), [enrichedWarnings, livingProfiles]);
 
   const model = useMemo(() => {
     const attendance = enrichedWarnings.map((student) => student.attendance);
@@ -300,6 +348,70 @@ const AnalyticsPage = () => {
             })}
           </div>
         </article>
+      </section>
+
+      <section className="mb-6 card p-5">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Living student tracking</p>
+            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Suivi minutieux eleve par eleve</h3>
+            <p className="mt-1 max-w-4xl text-sm text-slate-400">
+              Chaque fiche combine performance academique, preference scientifique/non-scientifique, discipline, prediction, recommandations et alertes in-app/email/SMS.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="rounded-xl bg-rose-500/10 px-3 py-2 text-rose-200">
+              <p className="font-display text-lg font-bold">{studentLivingProfiles.filter((profile) => profile.predictionLevel === 'critical').length}</p>
+              <span>critiques</span>
+            </div>
+            <div className="rounded-xl bg-amber-500/10 px-3 py-2 text-amber-200">
+              <p className="font-display text-lg font-bold">{studentLivingProfiles.filter((profile) => profile.predictionLevel === 'warning').length}</p>
+              <span>alertes</span>
+            </div>
+            <div className="rounded-xl bg-emerald-500/10 px-3 py-2 text-emerald-200">
+              <p className="font-display text-lg font-bold">{studentLivingProfiles.filter((profile) => ['stable', 'strong', 'success'].includes(profile.predictionLevel)).length}</p>
+              <span>stables</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          {studentLivingProfiles.slice(0, 6).map((profile) => (
+            <article key={profile.student_name} className="rounded-2xl border border-github-border bg-slate-950/45 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-100">{profile.student_name}</p>
+                  <p className="mt-1 text-xs text-slate-400">{profile.severity} - {profile.intervention}</p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-black ${profile.riskScore >= 65 ? 'bg-rose-500/15 text-rose-200' : profile.riskScore >= 42 ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-200'}`}>
+                  {profile.riskScore}%
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-xl bg-slate-900/70 p-2">
+                  <p className="font-bold text-slate-100">{profile.scienceAverage ?? '-'}</p>
+                  <span className="text-slate-500">Science</span>
+                </div>
+                <div className="rounded-xl bg-slate-900/70 p-2">
+                  <p className="font-bold text-slate-100">{profile.nonScienceAverage ?? '-'}</p>
+                  <span className="text-slate-500">Non-science</span>
+                </div>
+                <div className="rounded-xl bg-slate-900/70 p-2">
+                  <p className="font-bold text-slate-100">{profile.discipline.level}</p>
+                  <span className="text-slate-500">Discipline</span>
+                </div>
+              </div>
+              <p className="mt-3 rounded-xl bg-slate-900/70 px-3 py-2 text-xs font-semibold text-cyan-100">{profile.preference}</p>
+              <p className="mt-3 text-xs leading-relaxed text-slate-300">{profile.recommendations[0]}</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-slate-300"><BellRing className="h-3 w-3" /> In-app</span>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${profile.alertChannels.email ? 'bg-cyan-500/15 text-cyan-200' : 'bg-slate-900 text-slate-500'}`}><Mail className="h-3 w-3" /> Email</span>
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 ${profile.alertChannels.sms ? 'bg-emerald-500/15 text-emerald-200' : 'bg-slate-900 text-slate-500'}`}><MessageSquareText className="h-3 w-3" /> SMS</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-200"><FileText className="h-3 w-3" /> Rapport</span>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="mb-4 card p-4">

@@ -45,12 +45,12 @@ const Header = () => {
     return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
   }, [mobileOpen])
 
-  const currentLanguage = (i18n.resolvedLanguage || language).startsWith('fr') ? 'fr' : 'en'
+  const currentLanguage = language === 'fr' ? 'fr' : 'en'
+  const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
 
   const toggleLanguage = () => {
-    const next = currentLanguage === 'en' ? 'fr' : 'en'
-    setLanguage(next)
-    void i18n.changeLanguage(next)
+    setLanguage(nextLanguage)
+    void i18n.changeLanguage(nextLanguage)
   }
 
   const isHomePage = location.pathname === '/'
@@ -141,9 +141,10 @@ const Header = () => {
                   : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
               aria-label={t('common.language')}
+              title={nextLanguage === 'fr' ? 'Français' : 'English'}
             >
               <Globe size={16} />
-              <span className="hidden sm:inline">{currentLanguage.toUpperCase()}</span>
+              <span>{nextLanguage.toUpperCase()}</span>
             </button>
 
             {/* Theme Toggle */}
@@ -242,9 +243,10 @@ const Header = () => {
                   onClick={toggleLanguage}
                   className="flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-kcs-blue-100 bg-white/70 px-3 py-2 text-sm font-bold text-kcs-blue-800 shadow-sm transition hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-white/10"
                   aria-label={t('common.language')}
+                  title={nextLanguage === 'fr' ? 'Français' : 'English'}
                 >
                   <Globe size={17} />
-                  {currentLanguage.toUpperCase()}
+                  {nextLanguage.toUpperCase()}
                 </button>
                 <button
                   type="button"

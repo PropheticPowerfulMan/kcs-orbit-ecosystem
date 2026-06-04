@@ -20,9 +20,9 @@ def _normalized_average(grades):
 def _classical_equivalent(excellence_percentage):
     if excellence_percentage is None:
         return None
-    if excellence_percentage <= 75:
-        return round(excellence_percentage * (50 / 75), 2)
-    return round(50 + ((excellence_percentage - 75) * 2), 2)
+    if excellence_percentage <= 70:
+        return round(excellence_percentage * (50 / 70), 2)
+    return round(50 + ((excellence_percentage - 70) * (50 / 30)), 2)
 
 
 def _attendance_rate(queryset):
@@ -65,7 +65,7 @@ def overview(request):
             'average_grade_is_available': avg_grade is not None,
             'notes': [
                 'Les moyennes sont exprimees sur 100% selon la cotation d excellence.',
-                'Dans cette echelle, 75% excellence equivaut a 50% classique.',
+                'Dans cette echelle, 70% excellence equivaut a 50% classique.',
                 'Les indicateurs sans donnees restent null au lieu d etre remplaces par une valeur artificielle.',
             ],
         },
@@ -76,7 +76,7 @@ def overview(request):
 @permission_classes([IsAuthenticated])
 def early_warning(request):
     """
-    Identify students with weak attendance (<75%) or low excellence average (<75%).
+    Identify students with weak attendance (<70%) or low excellence average (<70%).
     """
     warnings = []
 
@@ -92,12 +92,12 @@ def early_warning(request):
         data_gaps = []
         if attendance_rate is None:
             data_gaps.append('no_attendance_data')
-        elif attendance_rate < 75:
+        elif attendance_rate < 70:
             risk_flags.append('low_attendance')
 
         if avg_normalized is None:
             data_gaps.append('no_grade_data')
-        elif avg_normalized < 75:
+        elif avg_normalized < 70:
             risk_flags.append('low_performance')
 
         if risk_flags or data_gaps:

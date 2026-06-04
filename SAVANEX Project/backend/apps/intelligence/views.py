@@ -65,6 +65,24 @@ def student_living_profile(request, pk):
         'period_start': period_start,
         'period_end': period_end,
         'metrics': metrics,
+        'prediction': {
+            'risk_score': metrics.get('risk_score'),
+            'level': metrics.get('prediction_level'),
+        },
+        'learning_profile': {
+            'preference': metrics.get('learning_preference'),
+            'science_average': metrics.get('science_average'),
+            'non_science_average': metrics.get('non_science_average'),
+            'subject_breakdown': metrics.get('subject_breakdown', {}),
+        },
+        'discipline': {
+            'level': metrics.get('discipline_level'),
+            'flags': metrics.get('discipline_flags', []),
+            'absences': metrics.get('absences', 0),
+            'lates': metrics.get('lates', 0),
+        },
+        'recommendations': metrics.get('recommendations', []),
+        'alert_channels': metrics.get('alert_channels', {}),
         'timeline': EvolutionEventSerializer(events, many=True).data,
     })
 

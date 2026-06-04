@@ -307,7 +307,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     const average = analytics?.average ?? student.average ?? 0
     const message = average >= 88
       ? `${student.name} demonstrates strong mastery and should receive enrichment through advanced application tasks.`
-      : average >= 75
+      : average >= 70
         ? `${student.name} is progressing, with the greatest gains likely from targeted practice on ${student.weaknesses?.[0] ?? 'current unit skills'}.`
         : `${student.name} needs immediate support, missing-work recovery, and a parent-teacher intervention plan this week.`
     setComments((current) => ({ ...current, [`feedback:${student.id}`]: message }))

@@ -34,9 +34,88 @@ def _student_label(student):
 def _classical_equivalent(excellence_percentage):
     if excellence_percentage is None:
         return None
-    if excellence_percentage <= 75:
-        return round(excellence_percentage * (50 / 75), 2)
-    return round(50 + ((excellence_percentage - 75) * 2), 2)
+    if excellence_percentage <= 70:
+        return round(excellence_percentage * (50 / 70), 2)
+    return round(50 + ((excellence_percentage - 70) * (50 / 30)), 2)
+
+
+SCIENCE_KEYWORDS = [
+    'science',
+    'biology',
+    'chimie',
+    'chemistry',
+    'physique',
+    'physics',
+    'math',
+    'algebra',
+    'calculus',
+    'laboratoire',
+    'lab',
+    'technology',
+    'ict',
+]
+
+
+def _subject_domain(subject_name):
+    normalized = (subject_name or '').lower()
+    if any(keyword in normalized for keyword in SCIENCE_KEYWORDS):
+        return 'scientific'
+    return 'non_scientific'
+
+
+def _average(values):
+    safe_values = [float(value) for value in values if value is not None]
+    return round(sum(safe_values) / len(safe_values), 2) if safe_values else None
+
+
+def _discipline_level(absences, lates, negative_events):
+    score = (absences or 0) * 12 + (lates or 0) * 5 + negative_events * 18
+    if score >= 55:
+        return 'critical'
+    if score >= 28:
+        return 'warning'
+    if score > 0:
+        return 'watch'
+    return 'clear'
+
+
+def _prediction_from_metrics(metrics):
+    risk_score = 0
+    if metrics.get('average_normalized') is not None:
+        risk_score += max(0, 70 - float(metrics['average_normalized'])) * 1.2
+    if metrics.get('attendance_rate') is not None:
+        risk_score += max(0, 90 - float(metrics['attendance_rate'])) * 1.1
+    risk_score += (metrics.get('absences') or 0) * 7
+    risk_score += (metrics.get('lates') or 0) * 3
+    risk_score += len(metrics.get('discipline_flags') or []) * 12
+    risk_score = round(min(100, max(0, risk_score)), 2)
+    if risk_score >= 72:
+        level = 'critical'
+    elif risk_score >= 48:
+        level = 'warning'
+    elif risk_score <= 18:
+        level = 'strong'
+    else:
+        level = 'stable'
+    return {'risk_score': risk_score, 'level': level}
+
+
+def _student_recommendations(metrics):
+    recommendations = []
+    if metrics.get('average_normalized') is not None and metrics['average_normalized'] < 70:
+        recommendations.append('Ouvrir un plan de soutien academique hebdomadaire avec objectifs mesurables.')
+    if metrics.get('attendance_rate') is not None and metrics['attendance_rate'] < 90:
+        recommendations.append('Declencher un suivi presence avec le parent et controle quotidien.')
+    if metrics.get('discipline_level') in ['warning', 'critical']:
+        recommendations.append('Planifier une rencontre restorative discipline avec trace ecrite et date de suivi.')
+    preference = metrics.get('learning_preference')
+    if preference == 'scientific':
+        recommendations.append('Orienter vers laboratoire, STEM, projets pratiques et mentorat scientifique.')
+    elif preference == 'non_scientific':
+        recommendations.append('Orienter vers langues, humanites, arts, leadership et communication.')
+    else:
+        recommendations.append('Garder une exploration mixte science/non-science avant toute orientation definitive.')
+    return recommendations
 
 
 def _entity_identity(instance):
@@ -76,8 +155,38 @@ def analyze_student_evolution(student, reference_date=None):
 
     current_attendance = attendance_window(current_start, reference_date)
     previous_attendance = attendance_window(previous_start, current_start - timezone.timedelta(days=1))
-    current_average = grade_average(Grade.objects.filter(student=student, date__gte=current_start, date__lte=reference_date))
-    previous_average = grade_average(Grade.objects.filter(student=student, date__gte=previous_start, date__lt=current_start))
+    current_grade_qs = Grade.objects.filter(student=student, date__gte=current_start, date__lte=reference_date).select_related('class_subject__subject')
+    previous_grade_qs = Grade.objects.filter(student=student, date__gte=previous_start, date__lt=current_start).select_related('class_subject__subject')
+    current_average = grade_average(current_grade_qs)
+    previous_average = grade_average(previous_grade_qs)
+    science_scores = []
+    non_science_scores = []
+    subject_breakdown = {}
+    for grade in current_grade_qs:
+        subject_name = getattr(grade.class_subject.subject, 'name', '')
+        domain = _subject_domain(subject_name)
+        score = grade.excellence_percentage
+        subject_breakdown.setdefault(subject_name or 'Unknown', {'domain': domain, 'scores': []})
+        subject_breakdown[subject_name or 'Unknown']['scores'].append(score)
+        if domain == 'scientific':
+            science_scores.append(score)
+        else:
+            non_science_scores.append(score)
+    science_average = _average(science_scores)
+    non_science_average = _average(non_science_scores)
+    if science_average is not None and non_science_average is not None:
+        if science_average >= non_science_average + 4:
+            learning_preference = 'scientific'
+        elif non_science_average >= science_average + 4:
+            learning_preference = 'non_scientific'
+        else:
+            learning_preference = 'balanced'
+    elif science_average is not None:
+        learning_preference = 'scientific'
+    elif non_science_average is not None:
+        learning_preference = 'non_scientific'
+    else:
+        learning_preference = 'unknown'
 
     grade_delta = None
     if current_average is not None and previous_average is not None:
@@ -92,14 +201,14 @@ def analyze_student_evolution(student, reference_date=None):
     if current_attendance['rate'] is not None and current_attendance['rate'] < 65:
         flags.append('critical_attendance')
         severity = EvolutionEvent.SEVERITY_CRITICAL
-    elif current_attendance['rate'] is not None and current_attendance['rate'] < 75:
+    elif current_attendance['rate'] is not None and current_attendance['rate'] < 70:
         flags.append('low_attendance')
         severity = EvolutionEvent.SEVERITY_WARNING
 
     if current_average is not None and current_average < 60:
         flags.append('critical_performance')
         severity = EvolutionEvent.SEVERITY_CRITICAL
-    elif current_average is not None and current_average < 75:
+    elif current_average is not None and current_average < 70:
         flags.append('low_performance')
         if severity != EvolutionEvent.SEVERITY_CRITICAL:
             severity = EvolutionEvent.SEVERITY_WARNING
@@ -111,6 +220,20 @@ def analyze_student_evolution(student, reference_date=None):
     elif grade_delta is not None and grade_delta >= 10 and not flags:
         flags.append('strong_progress')
         severity = EvolutionEvent.SEVERITY_SUCCESS
+
+    negative_events = EvolutionEvent.objects.filter(
+        subject_student=student,
+        created_at__date__gte=current_start,
+        severity__in=[EvolutionEvent.SEVERITY_WARNING, EvolutionEvent.SEVERITY_CRITICAL],
+    ).count()
+    discipline_level = _discipline_level(current_attendance['absent'] or 0, current_attendance['late'] or 0, negative_events)
+    discipline_flags = []
+    if current_attendance['absent']:
+        discipline_flags.append('absence_pattern')
+    if current_attendance['late']:
+        discipline_flags.append('late_pattern')
+    if negative_events:
+        discipline_flags.append('negative_evolution_events')
 
     metrics = {
         'period_days': 30,
@@ -125,7 +248,31 @@ def analyze_student_evolution(student, reference_date=None):
         'previous_classical_equivalent': _classical_equivalent(previous_average),
         'grade_delta': grade_delta,
         'flags': flags,
+        'science_average': science_average,
+        'non_science_average': non_science_average,
+        'learning_preference': learning_preference,
+        'subject_breakdown': {
+            subject: {
+                'domain': values['domain'],
+                'average': _average(values['scores']),
+                'count': len(values['scores']),
+            }
+            for subject, values in subject_breakdown.items()
+        },
+        'discipline_level': discipline_level,
+        'discipline_flags': discipline_flags,
     }
+    prediction = _prediction_from_metrics(metrics)
+    metrics.update({
+        'risk_score': prediction['risk_score'],
+        'prediction_level': prediction['level'],
+        'recommendations': _student_recommendations(metrics),
+        'alert_channels': {
+            'in_app': prediction['risk_score'] >= 18 or severity in [EvolutionEvent.SEVERITY_SUCCESS, EvolutionEvent.SEVERITY_WARNING, EvolutionEvent.SEVERITY_CRITICAL],
+            'email': prediction['risk_score'] >= 48 or severity in [EvolutionEvent.SEVERITY_WARNING, EvolutionEvent.SEVERITY_CRITICAL],
+            'sms': prediction['risk_score'] >= 72 or discipline_level in ['warning', 'critical'],
+        },
+    })
     return severity, metrics, current_start, reference_date
 
 
@@ -139,8 +286,16 @@ def _build_summary(student, trigger_label, metrics):
         lines.append(f"Presence 30 jours: {metrics['attendance_rate']}%.")
     if metrics.get('absences') or metrics.get('lates'):
         lines.append(f"Absences: {metrics.get('absences', 0)}; retards: {metrics.get('lates', 0)}.")
+    if metrics.get('learning_preference') and metrics.get('learning_preference') != 'unknown':
+        lines.append(f"Preference detectee: {metrics['learning_preference']}.")
+    if metrics.get('discipline_level'):
+        lines.append(f"Discipline: {metrics['discipline_level']}.")
+    if metrics.get('risk_score') is not None:
+        lines.append(f"Prediction risque: {metrics['risk_score']}% ({metrics.get('prediction_level')}).")
     if metrics.get('flags'):
         lines.append('Attention recommandee par l ecosysteme.')
+    if metrics.get('recommendations'):
+        lines.append('Recommandation: ' + metrics['recommendations'][0])
     return '\n'.join(lines)
 
 
@@ -255,7 +410,7 @@ def observe_grade(grade, actor=None):
         EvolutionEvent.EVENT_GRADE,
         f'Note publiee en {subject_name}: {grade.excellence_percentage}%',
         actor=actor or grade.entered_by,
-        force_alert=float(grade.excellence_percentage) < 75,
+        force_alert=float(grade.excellence_percentage) < 70,
         snapshot={
             'score': float(grade.score),
             'max_score': float(grade.max_score),
@@ -339,7 +494,7 @@ def _nexus_severity(payload):
             percentage = float(percentage)
             if percentage < 60:
                 return EvolutionEvent.SEVERITY_CRITICAL
-            if percentage < 75:
+            if percentage < 70:
                 return EvolutionEvent.SEVERITY_WARNING
             if percentage >= 90:
                 return EvolutionEvent.SEVERITY_SUCCESS
@@ -373,10 +528,14 @@ def ingest_nexus_academic_event(envelope):
         'source_app': envelope.get('sourceApp') or 'KCS_NEXUS',
         'kind': kind,
         'subject': subject,
+        'domain': _subject_domain(subject),
         'score': score,
         'max_score': max_score,
         'percentage': percentage,
         'term': _payload_value(payload, 'term', 'period'),
+        'discipline_level': _payload_value(payload, 'disciplineLevel', 'discipline_level'),
+        'learning_preference': _payload_value(payload, 'learningPreference', 'learning_preference'),
+        'recommendation': _payload_value(payload, 'recommendation', 'description', 'feedback', 'comment'),
         'risk_level': _payload_value(payload, 'riskLevel', 'risk_level'),
         'teacher': _payload_value(payload, 'teacherName', 'teacher'),
         'flags': [flag for flag in [_payload_value(payload, 'riskLevel', 'risk_level')] if flag],
@@ -498,7 +657,7 @@ def _report_summary_rows(report):
         ['Taux de presence', f"{report['attendance']['rate']}%" if report['attendance']['rate'] is not None else 'N/A', ''],
         ['Absences', report['attendance']['absences'], ''],
         ['Retards', report['attendance']['lates'], ''],
-        ['Moyenne generale excellence', f"{report['performance']['average_normalized']}%" if report['performance']['average_normalized'] is not None else 'N/A', '75% = 50% classique'],
+        ['Moyenne generale excellence', f"{report['performance']['average_normalized']}%" if report['performance']['average_normalized'] is not None else 'N/A', '70% = 50% classique'],
         ['Equivalent classique', f"{report['performance']['average_classical_equivalent']}%" if report['performance']['average_classical_equivalent'] is not None else 'N/A', ''],
         ['Signaux academiques Nexus', report['performance']['nexus_academic_events'], ''],
         ['Moyenne Nexus %', f"{report['performance']['nexus_average_percentage']}%" if report['performance']['nexus_average_percentage'] is not None else 'N/A', ''],

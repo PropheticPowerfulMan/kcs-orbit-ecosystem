@@ -90,7 +90,7 @@ def seed_default_admin() -> None:
                 setattr(admin, field, expected_value)
                 changed = True
 
-        if not verify_password("Admin@123", admin.hashed_password):
+        if settings.app_env.lower() not in {"prod", "production"} and not verify_password("Admin@123", admin.hashed_password):
             admin.hashed_password = get_password_hash("Admin@123")
             changed = True
 

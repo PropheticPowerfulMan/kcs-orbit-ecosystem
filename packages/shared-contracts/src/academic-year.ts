@@ -225,7 +225,7 @@ export function buildAcademicProgressionPlan(input: {
   const classes = z.array(AcademicProgressionClassSchema).parse(input.classes);
   const overrides = z.array(AcademicProgressionOverrideSchema).parse(input.overrides || []);
   const effectiveDate = input.effectiveDate || new Date();
-  const passThreshold = input.passThreshold ?? 75;
+  const passThreshold = input.passThreshold ?? 70;
   const window = getAcademicYearWindow(effectiveDate);
   const nextWindow = getAcademicYearWindow(new Date(Date.UTC(effectiveDate.getUTCFullYear() + 1, 8, 1)));
   const overridesByStudent = new Map(overrides.map((override) => [override.studentId, override]));
