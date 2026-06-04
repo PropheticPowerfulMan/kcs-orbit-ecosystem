@@ -162,7 +162,7 @@ const PortalSidebar = () => {
   if (!user) return null
 
   const navItems = getNavItems(user.role, t)
-  const currentLanguage = language === 'fr' ? 'fr' : 'en'
+  const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
   const toggleLanguage = () => {
     setLanguage(nextLanguage)

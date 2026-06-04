@@ -5,7 +5,6 @@ import { useUIStore } from '@/store/uiStore'
 
 const textAttributes = ['aria-label', 'placeholder', 'title']
 const ignoredTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA'])
-const originalTextNodes = new WeakMap<Text, string>()
 const englishByFrench = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [french, english]))
 const normalize = (value: string) => value.replace(/\s+/g, ' ').trim()
 const frenchByNormalizedEnglish = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [normalize(english), french]))
@@ -28,6 +27,19 @@ const translateText = (value: string, language: string) => {
     if (/^\d+\s+spots remaining$/i.test(trimmed)) {
       return value.replace(trimmed, trimmed.replace(/\s+spots remaining$/i, ' places restantes'))
     }
+  } else {
+    if (/^\d+\s+ans d/i.test(trimmed)) {
+      return value.replace(trimmed, trimmed.replace(/\s+ans d.*$/i, ' years experience'))
+    }
+    if (/^Ã‰tape\s+\d+$/i.test(trimmed) || /^Étape\s+\d+$/i.test(trimmed)) {
+      return value.replace(trimmed, trimmed.replace(/^Ã‰tape|^Étape/i, 'Step'))
+    }
+    if (/^\d+\s+Ã©lÃ¨ves$/i.test(trimmed) || /^\d+\s+élèves$/i.test(trimmed)) {
+      return value.replace(trimmed, trimmed.replace(/\s+(Ã©lÃ¨ves|élèves)$/i, ' students'))
+    }
+    if (/^\d+\s+places restantes$/i.test(trimmed)) {
+      return value.replace(trimmed, trimmed.replace(/\s+places restantes$/i, ' spots remaining'))
+    }
   }
 
   const normalized = normalize(trimmed)
@@ -45,21 +57,9 @@ const translateNode = (node: Node, language: string) => {
     const parent = node.parentElement
     if (!parent || ignoredTags.has(parent.tagName) || parent.isContentEditable) return
 
-    if (language === 'fr') {
-      const original = originalTextNodes.get(node) ?? node.nodeValue ?? ''
-      if (!originalTextNodes.has(node)) {
-        originalTextNodes.set(node, original)
-      }
-      const next = translateText(original, language)
-      if (next !== node.nodeValue) {
-        node.nodeValue = next
-      }
-      return
-    }
-
-    const original = originalTextNodes.get(node)
-    if (original && node.nodeValue !== original) {
-      node.nodeValue = original
+    const next = translateText(node.nodeValue ?? '', language)
+    if (next !== node.nodeValue) {
+      node.nodeValue = next
     }
     return
   }
@@ -84,6 +84,7 @@ const translateNode = (node: Node, language: string) => {
 const GlobalTextTranslator = () => {
   const { i18n } = useTranslation()
   const language = useUIStore((state) => state.language)
+  const setLanguage = useUIStore((state) => state.setLanguage)
 
   useEffect(() => {
     const normalizedLanguage = language === 'fr' ? 'fr' : 'en'
@@ -109,6 +110,15 @@ const GlobalTextTranslator = () => {
       scheduled = window.requestAnimationFrame(run)
     }
 
+    const syncStoreAndSchedule = (nextLanguage: string) => {
+      const normalizedLanguage = nextLanguage.startsWith('fr') ? 'fr' : 'en'
+      if (useUIStore.getState().language !== normalizedLanguage) {
+        setLanguage(normalizedLanguage)
+      }
+      document.documentElement.lang = normalizedLanguage
+      schedule()
+    }
+
     schedule()
 
     const observer = new MutationObserver(schedule)
@@ -120,14 +130,14 @@ const GlobalTextTranslator = () => {
       attributeFilter: textAttributes,
     })
 
-    i18n.on('languageChanged', schedule)
+    i18n.on('languageChanged', syncStoreAndSchedule)
 
     return () => {
       if (scheduled) window.cancelAnimationFrame(scheduled)
       observer.disconnect()
-      i18n.off('languageChanged', schedule)
+      i18n.off('languageChanged', syncStoreAndSchedule)
     }
-  }, [i18n])
+  }, [i18n, setLanguage])
 
   return null
 }

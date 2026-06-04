@@ -45,7 +45,7 @@ const Header = () => {
     return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
   }, [mobileOpen])
 
-  const currentLanguage = language === 'fr' ? 'fr' : 'en'
+  const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
 
   const toggleLanguage = () => {
