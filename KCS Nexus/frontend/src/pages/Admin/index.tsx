@@ -571,24 +571,24 @@ const buildReportRows = (
 
   if (category === 'enrollment' || category === 'executive') {
     rows.push(
-      { section: 'Inscriptions', metric: 'Effectif officiel', value: officialRoster.length, detail: `${officialRoster.length} eleves actifs dans le registre super administrateur.`, action: 'Verifier les nouvelles admissions et les classes incompletes.' },
+      { section: 'Inscriptions', metric: 'Effectif officiel', value: officialRoster.length, detail: `${officialRoster.length} élèves actifs dans le registre super administrateur.`, action: 'Vérifier les nouvelles admissions et les classes incomplètes.' },
       { section: 'Inscriptions', metric: 'Dossiers en attente', value: pendingAdmissions, detail: `${pendingAdmissions} demandes necessitent une decision sur la periode ${cadenceNote}.`, action: 'Prioriser les dossiers soumis ou en revue.' },
-      { section: 'Inscriptions', metric: 'Admissions acceptees', value: acceptedAdmissions, detail: `${acceptedAdmissions} candidats ont deja ete acceptes dans le cycle actuel.`, action: 'Confirmer la creation des dossiers officiels.' },
+      { section: 'Inscriptions', metric: 'Admissions acceptées', value: acceptedAdmissions, detail: `${acceptedAdmissions} candidats ont déjà été acceptés dans le cycle actuel.`, action: 'Confirmer la création des dossiers officiels.' },
     )
   }
 
   if (category === 'academic' || category === 'executive') {
     rows.push(
-      { section: 'Academique', metric: 'GPA moyen', value: averageGpa, detail: `Moyenne academique globale calculee sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matieres sous la moyenne.' },
-      { section: 'Academique', metric: 'Assiduite moyenne', value: `${averageAttendance}%`, detail: `Presence moyenne pour le rapport ${cadenceNote}.`, action: 'Declencher un suivi parent pour les presences inferieures a 88%.' },
-      { section: 'Academique', metric: 'Eleves a risque', value: needsAction, detail: `${needsAction} eleves combinent risque academique, presence ou discipline.`, action: 'Assigner un plan de soutien et une date de suivi.' },
+      { section: 'Académique', metric: 'GPA moyen', value: averageGpa, detail: `Moyenne académique globale calculée sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matières sous la moyenne.' },
+      { section: 'Académique', metric: 'Assiduité moyenne', value: `${averageAttendance}%`, detail: `Présence moyenne pour le rapport ${cadenceNote}.`, action: 'Déclencher un suivi parent pour les présences inférieures à 88%.' },
+      { section: 'Académique', metric: 'Élèves à risque', value: needsAction, detail: `${needsAction} élèves combinent risque académique, présence ou discipline.`, action: 'Assigner un plan de soutien et une date de suivi.' },
     )
   }
 
   if (category === 'operations' || category === 'executive') {
     rows.push(
       { section: 'Operations', metric: 'Rapports discipline ouverts', value: openDiscipline, detail: `${openDiscipline} rapports demandent encore une resolution administrative.`, action: 'Valider les contacts parents et les mesures correctives.' },
-      { section: 'Operations', metric: 'Factures non soldees', value: unpaidInvoices, detail: `${unpaidInvoices} comptes financiers ne sont pas entierement soldes.`, action: 'Envoyer les releves et organiser les relances.' },
+      { section: 'Opérations', metric: 'Factures non soldées', value: unpaidInvoices, detail: `${unpaidInvoices} comptes financiers ne sont pas entièrement soldés.`, action: 'Envoyer les relevés et organiser les relances.' },
       { section: 'Operations', metric: 'Alertes IA', value: aiSignals.length, detail: `${aiSignals.length} signaux IA alimentent ce rapport detaille.`, action: 'Revoir les recommandations prioritaires avec les responsables.' },
     )
   }
@@ -679,7 +679,7 @@ const buildAdminReportDocument = (
   const generatedIso = new Date().toISOString()
   const authenticityCode = buildAuthenticityCode(`${title}|${periodLabel}|${generatedIso}|${rows.map((row) => `${row.section}:${row.metric}:${row.value}`).join('|')}`)
   const documentId = `KCS-${category.toUpperCase()}-${cadence.toUpperCase()}-${generatedIso.slice(0, 10).replace(/-/g, '')}-${authenticityCode}`
-  const criticalActions = rows.filter((row) => /risque|ouverts|attente|non soldees/i.test(`${row.metric} ${row.detail}`)).length
+  const criticalActions = rows.filter((row) => /risque|ouverts|attente|non soldées/i.test(`${row.metric} ${row.detail}`)).length
   const logoUrl = typeof window === 'undefined' ? SCHOOL_SEAL_SRC : new URL(SCHOOL_SEAL_SRC, window.location.origin).href
   const escapedRows = rows.map((row) => `
     <tr>
@@ -989,7 +989,7 @@ const buildAdminReportDocument = (
     <section class="overview">
       <div class="panel">
         <h2>Resume executif</h2>
-        <p>Ce rapport consolide ${escapeHtml(rows.length)} indicateurs pour la periode ${escapeHtml(periodLabel)}. Il met en evidence les donnees du registre, les points de suivi operationnel et les actions administratives a traiter. Les priorites signalees ci-dessous servent de base aux controles de direction et aux decisions du Super Administrateur.</p>
+        <p>Ce rapport consolide ${escapeHtml(rows.length)} indicateurs pour la période ${escapeHtml(periodLabel)}. Il met en évidence les données du registre, les points de suivi opérationnel et les actions administratives à traiter. Les priorités signalées ci-dessous servent de base aux contrôles de direction et aux décisions du Super Administrateur.</p>
       </div>
       <div class="panel">
         <h2>Surete documentaire</h2>
@@ -1338,7 +1338,7 @@ const AdminSectionView = ({
         setViewingStudent(null)
         setSharedDirectory(null)
         setApiSynced(false)
-        setStudentNotice('La synchronisation du registre est indisponible. Verifiez que KCS Orbit API est bien lance pour voir les eleves provenant des autres applications.')
+        setStudentNotice('La synchronisation du registre est indisponible. Vérifiez que KCS Orbit API est bien lancé pour voir les élèves provenant des autres applications.')
       })
     return () => {
       mounted = false
@@ -1539,7 +1539,7 @@ const AdminSectionView = ({
       if (updatedParent) {
         setSelectedParent(updatedParent)
       }
-      setParentNotice(response.data?.message || `${normalizedName} a ete mis a jour avec succes.`)
+      setParentNotice(response.data?.message || `${normalizedName} a été mis à jour avec succès.`)
     } catch (error) {
       setParentNotice(extractStudentApiMessage(error, 'Impossible de modifier ce parent pour le moment.'))
     } finally {
@@ -1556,7 +1556,7 @@ const AdminSectionView = ({
       await refreshOfficialRoster()
       setSelectedParent((current) => current?.id === parent.id ? null : current)
       setEditingParent((current) => current?.id === parent.id ? null : current)
-      setParentNotice(response.data?.message || `${parent.name} a ete supprime du registre parent.`)
+      setParentNotice(response.data?.message || `${parent.name} a été supprimé du registre parent.`)
     } catch (error) {
       setParentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${parent.name} pour le moment.`))
     }
@@ -1699,7 +1699,7 @@ const AdminSectionView = ({
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">SAVANEX shared registry</p>
               <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Parents</h2>
-              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Annuaire des parents responsables, construit depuis les familles et les eleves synchronises dans KCS Nexus.</p>
+              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Annuaire des parents responsables, construit depuis les familles et les élèves synchronisés dans KCS Nexus.</p>
             </div>
             <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{apiSynced ? 'Synchronise Orbit' : 'Mode local'}</span>
           </div>
@@ -2677,7 +2677,7 @@ const AdminSectionView = ({
     const reportStats = [
       { label: 'Periode', value: reportCadenceLabels[reportCadence], detail: reportWindow.label, icon: CalendarDays },
       { label: 'Indicateurs', value: String(reportRows.length), detail: reportCategoryLabels[reportCategory], icon: BarChart3 },
-      { label: 'Eleves a risque', value: String(officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length), detail: 'academique, presence ou discipline', icon: AlertTriangle },
+      { label: 'Élèves à risque', value: String(officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length), detail: 'académique, présence ou discipline', icon: AlertTriangle },
       { label: 'Exports', value: 'PDF XLS CSV', detail: 'telechargement ou impression', icon: Download },
     ]
 
@@ -2692,7 +2692,7 @@ const AdminSectionView = ({
               </div>
               <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Rapports detailles exportables</h2>
               <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
-                Generer des rapports journaliers, hebdomadaires, mensuels ou annuels avec les donnees d'inscriptions, d'academique, d'operations, de finances, de discipline et d'alertes IA.
+                Générer des rapports journaliers, hebdomadaires, mensuels ou annuels avec les données d'inscriptions, d'académique, d'opérations, de finances, de discipline et d'alertes IA.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
@@ -2764,7 +2764,7 @@ const AdminSectionView = ({
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">Exporter le rapport</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Le PDF s'ouvre en impression afin de choisir "Enregistrer en PDF"; Excel et CSV sont telecharges directement.</p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Le PDF s'ouvre en impression afin de choisir "Enregistrer en PDF"; Excel et CSV sont téléchargés directement.</p>
               <div className="mt-4 grid gap-3">
                 <button className={`${adminButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'pdf', officialRoster, admissionRequests)}>
                   <FileText size={16} /> PDF
@@ -2781,7 +2781,7 @@ const AdminSectionView = ({
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">Contenu inclus</h3>
               <div className="mt-3 space-y-3">
-                {['Registre officiel des eleves', 'Admissions et decisions', 'Notes, presences et risques', 'Finances, discipline et audit IA'].map((item) => (
+                {['Registre officiel des élèves', 'Admissions et décisions', 'Notes, présences et risques', 'Finances, discipline et audit IA'].map((item) => (
                   <div key={item} className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                     <CheckCircle2 size={16} className="mt-0.5 text-green-600 dark:text-green-300" />
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{item}</span>
@@ -2961,7 +2961,7 @@ const AdminDashboard = () => {
                 </div>
                 <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Chaque eleve suivi individuellement</h2>
                 <p className="mt-1 max-w-4xl text-sm text-gray-500 dark:text-gray-400">
-                  Consolidation academique, preference scientifique/non-scientifique, discipline, presence, prediction, recommandations et alertes parent email/SMS.
+                  Consolidation académique, préférence scientifique/non-scientifique, discipline, présence, prédiction, recommandations et alertes parent e-mail/SMS.
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center text-xs">

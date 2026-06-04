@@ -31,11 +31,11 @@ const translateText = (value: string, language: string) => {
     if (/^\d+\s+ans d/i.test(trimmed)) {
       return value.replace(trimmed, trimmed.replace(/\s+ans d.*$/i, ' years experience'))
     }
-    if (/^Ã‰tape\s+\d+$/i.test(trimmed) || /^Étape\s+\d+$/i.test(trimmed)) {
-      return value.replace(trimmed, trimmed.replace(/^Ã‰tape|^Étape/i, 'Step'))
+    if (/^Étape\s+\d+$/i.test(trimmed)) {
+      return value.replace(trimmed, trimmed.replace(/^Étape/i, 'Step'))
     }
-    if (/^\d+\s+Ã©lÃ¨ves$/i.test(trimmed) || /^\d+\s+élèves$/i.test(trimmed)) {
-      return value.replace(trimmed, trimmed.replace(/\s+(Ã©lÃ¨ves|élèves)$/i, ' students'))
+    if (/^\d+\s+élèves$/i.test(trimmed)) {
+      return value.replace(trimmed, trimmed.replace(/\s+élèves$/i, ' students'))
     }
     if (/^\d+\s+places restantes$/i.test(trimmed)) {
       return value.replace(trimmed, trimmed.replace(/\s+places restantes$/i, ' spots remaining'))
@@ -102,7 +102,7 @@ const GlobalTextTranslator = () => {
 
     const run = () => {
       scheduled = 0
-      translateNode(document.body, i18n.resolvedLanguage?.startsWith('fr') ? 'fr' : 'en')
+      translateNode(document.body, useUIStore.getState().language === 'fr' ? 'fr' : 'en')
     }
 
     const schedule = () => {
@@ -130,14 +130,21 @@ const GlobalTextTranslator = () => {
       attributeFilter: textAttributes,
     })
 
+    const onStoreLanguageChange = (event: Event) => {
+      const nextLanguage = (event as CustomEvent<{ language?: string }>).detail?.language ?? useUIStore.getState().language
+      syncStoreAndSchedule(nextLanguage)
+    }
+
     i18n.on('languageChanged', syncStoreAndSchedule)
+    window.addEventListener('kcs-language-change', onStoreLanguageChange)
 
     return () => {
       if (scheduled) window.cancelAnimationFrame(scheduled)
       observer.disconnect()
       i18n.off('languageChanged', syncStoreAndSchedule)
+      window.removeEventListener('kcs-language-change', onStoreLanguageChange)
     }
-  }, [i18n, setLanguage])
+  }, [i18n, language, setLanguage])
 
   return null
 }

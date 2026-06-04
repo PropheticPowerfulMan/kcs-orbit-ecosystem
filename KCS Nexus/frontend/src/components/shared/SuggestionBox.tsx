@@ -176,7 +176,7 @@ export default function SuggestionBox() {
   const isAdmin = user?.role === 'admin'
 
   const labels = useMemo(() => ({
-    title: language === 'fr' ? 'Boite a suggestions' : 'Suggestion box',
+    title: language === 'fr' ? 'Boîte à suggestions' : 'Suggestion box',
     subtitle: language === 'fr'
       ? 'Le message reste anonyme dans le suivi normal, mais il arrive dans le registre confidentiel du super admin.'
       : 'The normal view stays anonymous, while the super admin receives the confidential registry.',
@@ -277,7 +277,7 @@ export default function SuggestionBox() {
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             className="min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:text-kcs-blue-200"
-            placeholder={language === 'fr' ? 'Ecrivez librement votre suggestion...' : 'Write your suggestion freely...'}
+            placeholder={language === 'fr' ? 'Écrivez librement votre suggestion...' : 'Write your suggestion freely...'}
           />
           <button type="button" onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-3 text-sm font-black text-kcs-blue-950 transition-colors hover:bg-kcs-gold-300">
             <Send size={16} /> {labels.send}

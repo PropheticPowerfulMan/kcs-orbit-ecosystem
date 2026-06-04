@@ -54,7 +54,7 @@ class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: stri
               className="mt-5 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800"
               onClick={() => this.setState({ error: null })}
             >
-              Reessayer
+              Réessayer
             </button>
           </section>
         </main>

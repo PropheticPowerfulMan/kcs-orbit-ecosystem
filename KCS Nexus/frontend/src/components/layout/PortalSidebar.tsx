@@ -280,7 +280,7 @@ const PortalSidebar = () => {
               KCS Nexus
             </p>
             <p className="truncate text-[11px] font-semibold leading-tight text-kcs-gold-700 dark:text-kcs-gold-300 sm:text-xs">
-              {roleName} Portal
+              {roleName}
             </p>
           </div>
         </Link>
@@ -402,7 +402,7 @@ const PortalSidebar = () => {
                   KCS Nexus
                 </p>
                 <p className="text-xs text-kcs-gold-600 dark:text-kcs-gold-400 whitespace-nowrap">
-                  {roleName} Portal
+                  {roleName}
                 </p>
               </motion.div>
             )}

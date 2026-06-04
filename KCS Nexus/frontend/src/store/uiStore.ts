@@ -51,7 +51,10 @@ export const useUIStore = create<UIStore>()(
         applyTheme(next)
       },
 
-      setLanguage: (language) => set({ language }),
+      setLanguage: (language) => {
+        set({ language })
+        applyLanguage(language)
+      },
 
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
@@ -112,5 +115,15 @@ function applyTheme(theme: Theme) {
     } else {
       root.classList.remove('dark')
     }
+  }
+}
+
+function applyLanguage(language: Language) {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = language
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('kcs-language-change', { detail: { language } }))
   }
 }

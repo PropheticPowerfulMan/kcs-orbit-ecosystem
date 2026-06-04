@@ -90,11 +90,11 @@ const getLoginErrorMessage = (err: any) => {
   }
 
   if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
-    return `Erreur reseau : KCS Nexus n'arrive pas a joindre son API (${API_BASE}). Lancez le backend KCS Nexus, puis verifiez que EDUPAY_API_URL pointe vers EduPay API et que SAVANEX_API_URL pointe vers SAVANEX pour accepter les identifiants crees dans les autres applications.`
+    return `Erreur réseau : KCS Nexus n'arrive pas à joindre son API (${API_BASE}). Lancez le backend KCS Nexus, puis vérifiez que EDUPAY_API_URL pointe vers EduPay API et que SAVANEX_API_URL pointe vers SAVANEX pour accepter les identifiants créés dans les autres applications.`
   }
 
   if (err?.code === 'ECONNABORTED') {
-    return `Erreur reseau : la connexion a l'API KCS Nexus (${API_BASE}) a expire. Verifiez que KCS Nexus Backend, EduPay API, SAVANEX et KCS Orbit sont demarres.`
+    return `Erreur réseau : la connexion à l'API KCS Nexus (${API_BASE}) a expiré. Vérifiez que KCS Nexus Backend, EduPay API, SAVANEX et KCS Orbit sont démarrés.`
   }
 
   if (err?.message) {

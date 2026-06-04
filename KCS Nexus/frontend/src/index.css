@@ -4,24 +4,24 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 205 100% 97%;
     --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
+    --card: 204 100% 98%;
     --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
+    --popover: 204 100% 98%;
     --popover-foreground: 222 47% 11%;
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
+    --secondary: 204 88% 94%;
     --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
+    --muted: 204 88% 94%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    --accent: 195 95% 93%;
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 199 57% 85%;
+    --input: 199 57% 85%;
     --ring: 221 83% 53%;
     --radius: 0.75rem;
   }
@@ -66,6 +66,7 @@
     scroll-behavior: smooth;
     scrollbar-color: rgba(18, 174, 232, 0.7) rgba(0, 64, 128, 0.08);
     scrollbar-width: thin;
+    background-color: #edf6ff;
     background-image:
       radial-gradient(circle at 16% 6%, rgba(18, 174, 232, 0.18), transparent 28rem),
       radial-gradient(circle at 84% 10%, rgba(190, 18, 60, 0.1), transparent 26rem),
