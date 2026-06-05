@@ -33,7 +33,7 @@ const Layout = () => {
   }
 
   return (
-    <div className="public-site-shell min-h-screen flex flex-col bg-white dark:bg-kcs-blue-950">
+    <div className="public-site-shell min-h-screen flex flex-col dark:bg-kcs-blue-950">
       <Header />
       <main className="public-site-main flex-1">
         <Outlet />

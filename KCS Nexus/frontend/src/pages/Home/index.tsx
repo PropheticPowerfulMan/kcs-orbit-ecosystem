@@ -333,7 +333,7 @@ const HomePage = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-kcs-blue-950/60 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <div className="glass-card p-4">
+                    <div className="public-image-caption p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-kcs-gold-500 rounded-xl flex items-center justify-center">
                           <BookOpen size={20} className="text-kcs-blue-950" />
