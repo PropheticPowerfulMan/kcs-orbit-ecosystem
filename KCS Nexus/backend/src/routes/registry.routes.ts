@@ -26,6 +26,12 @@ export const registryRouter = Router()
 type SharedDirectoryResponse = {
   source: 'orbit'
   visibility: 'shared-directory'
+  counts?: {
+    families: number
+    parents: number
+    students: number
+    teachers: number
+  }
   parents: Array<{
     id: string
     fullName: string
@@ -396,6 +402,12 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
   return success(res, {
     source: 'local' as const,
     visibility: 'shared-directory' as const,
+    counts: {
+      families: parentsMap.size,
+      parents: parentsMap.size,
+      students: students.length,
+      teachers: teachers.length,
+    },
     parents: Array.from(parentsMap.values()).sort((left, right) => left.fullName.localeCompare(right.fullName)),
     students: students.map((student) => ({
       id: student.id,

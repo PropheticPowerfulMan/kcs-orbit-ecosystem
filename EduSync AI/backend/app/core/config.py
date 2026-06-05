@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     external_ai_model: str = ""
     external_ai_timeout_seconds: int = 12
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8-sig", extra="ignore")
 
 
 settings = Settings()
