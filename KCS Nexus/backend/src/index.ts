@@ -1,14 +1,22 @@
 import { env } from './config/env.js'
 import { prisma } from './config/prisma.js'
 import { app } from './app.js'
+import { isDatabaseReady, setDatabaseReady } from './config/runtimeStatus.js'
 import { ensureUserAccessCodeColumn } from './utils/userAccessCode.js'
 
 const start = async () => {
-  await prisma.$connect()
-  await ensureUserAccessCodeColumn(prisma)
+  try {
+    await prisma.$connect()
+    await ensureUserAccessCodeColumn(prisma)
+    setDatabaseReady(true)
+  } catch (error) {
+    setDatabaseReady(false)
+    console.error('KCS Nexus database unavailable; starting API in degraded mode.', error)
+  }
 
   app.listen(env.PORT, () => {
-    console.log(`KCS Nexus API listening on port ${env.PORT}`)
+    const mode = isDatabaseReady() ? 'ready' : 'degraded: database unavailable'
+    console.log(`KCS Nexus API listening on port ${env.PORT} (${mode})`)
   })
 }
 

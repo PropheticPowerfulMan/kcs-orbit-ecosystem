@@ -3,6 +3,7 @@ import express from 'express'
 import helmet from 'helmet'
 import morgan from 'morgan'
 import { env } from './config/env.js'
+import { isDatabaseReady } from './config/runtimeStatus.js'
 import { router } from './routes/index.js'
 import { errorHandler, notFoundHandler } from './middleware/error.js'
 
@@ -41,7 +42,11 @@ app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 
 app.get('/health', (_req, res) => {
-  res.json({ success: true, message: 'KCS Nexus API healthy' })
+  res.json({
+    success: true,
+    message: isDatabaseReady() ? 'KCS Nexus API healthy' : 'KCS Nexus API running in degraded mode',
+    databaseReady: isDatabaseReady(),
+  })
 })
 
 app.use('/api/auth', authRateLimit(15 * 60 * 1000, 20))
