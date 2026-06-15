@@ -1,0 +1,731 @@
+{
+  "generatedAt": "2026-06-15T06:18:45.267Z",
+  "grades": [
+    "Grade 4",
+    "Grade 6",
+    "Grade 9"
+  ],
+  "subjects": [
+    "FRENCH",
+    "MATHEMATICS"
+  ],
+  "totals": {
+    "candidates": 10,
+    "submissions": 20,
+    "approved": 8,
+    "retakeRequested": 12,
+    "mean": 55,
+    "variance": 1575,
+    "standardDeviation": 39.69
+  },
+  "bySubject": [
+    {
+      "subject": "FRENCH",
+      "count": 10,
+      "average": 54
+    },
+    {
+      "subject": "MATHEMATICS",
+      "count": 10,
+      "average": 56
+    }
+  ],
+  "submissions": [
+    {
+      "id": "candidate-01-FRENCH",
+      "candidate": {
+        "id": "candidate-01",
+        "name": "Amani",
+        "grade": "Grade 4",
+        "ability": 0.96
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 4",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "Amani scored 100% in FRENCH.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-01-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-01",
+        "name": "Amani",
+        "grade": "Grade 4",
+        "ability": 0.96
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 4",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "Amani scored 100% in MATHEMATICS.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-02-FRENCH",
+      "candidate": {
+        "id": "candidate-02",
+        "name": "Naomi",
+        "grade": "Grade 6",
+        "ability": 0.88
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 6",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "Naomi scored 100% in FRENCH.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-02-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-02",
+        "name": "Naomi",
+        "grade": "Grade 6",
+        "ability": 0.88
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 6",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "Naomi scored 100% in MATHEMATICS.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-03-FRENCH",
+      "candidate": {
+        "id": "candidate-03",
+        "name": "David",
+        "grade": "Grade 9",
+        "ability": 0.77
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 9",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "David scored 100% in FRENCH.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-03-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-03",
+        "name": "David",
+        "grade": "Grade 9",
+        "ability": 0.77
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 9",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "David scored 100% in MATHEMATICS.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-04-FRENCH",
+      "candidate": {
+        "id": "candidate-04",
+        "name": "Sarah",
+        "grade": "Grade 4",
+        "ability": 0.69
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 4",
+      "score": 5,
+      "totalPossible": 10,
+      "percentage": 50,
+      "masteryLevel": "At Risk",
+      "riskLevel": "HIGH",
+      "decisionSuggestion": "academic interview necessary",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar"
+      ],
+      "weaknesses": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.13,
+      "percentile": 60,
+      "relativeRank": 9,
+      "aiRecommendation": {
+        "summary": "Sarah scored 50% in FRENCH.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Reading comprehension, Grammar, Written expression.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-04-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-04",
+        "name": "Sarah",
+        "grade": "Grade 4",
+        "ability": 0.69
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 4",
+      "score": 5,
+      "totalPossible": 10,
+      "percentage": 50,
+      "masteryLevel": "At Risk",
+      "riskLevel": "HIGH",
+      "decisionSuggestion": "academic interview necessary",
+      "strengths": [
+        "Number sense",
+        "Problem solving"
+      ],
+      "weaknesses": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.13,
+      "percentile": 60,
+      "relativeRank": 9,
+      "aiRecommendation": {
+        "summary": "Sarah scored 50% in MATHEMATICS.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Number sense, Problem solving, Reasoning.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-05-FRENCH",
+      "candidate": {
+        "id": "candidate-05",
+        "name": "Joel",
+        "grade": "Grade 6",
+        "ability": 0.61
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 6",
+      "score": 2,
+      "totalPossible": 10,
+      "percentage": 20,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar"
+      ],
+      "weaknesses": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.88,
+      "percentile": 40,
+      "relativeRank": 13,
+      "aiRecommendation": {
+        "summary": "Joel scored 20% in FRENCH.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Reading comprehension, Grammar, Written expression.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-05-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-05",
+        "name": "Joel",
+        "grade": "Grade 6",
+        "ability": 0.61
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 6",
+      "score": 2,
+      "totalPossible": 10,
+      "percentage": 20,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Number sense",
+        "Problem solving"
+      ],
+      "weaknesses": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.88,
+      "percentile": 40,
+      "relativeRank": 13,
+      "aiRecommendation": {
+        "summary": "Joel scored 20% in MATHEMATICS.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Number sense, Problem solving, Reasoning.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-06-FRENCH",
+      "candidate": {
+        "id": "candidate-06",
+        "name": "Grace",
+        "grade": "Grade 9",
+        "ability": 0.54
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 9",
+      "score": 0,
+      "totalPossible": 10,
+      "percentage": 0,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar"
+      ],
+      "weaknesses": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -1.39,
+      "percentile": 15,
+      "relativeRank": 18,
+      "aiRecommendation": {
+        "summary": "Grace scored 0% in FRENCH.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Reading comprehension, Grammar, Written expression.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-06-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-06",
+        "name": "Grace",
+        "grade": "Grade 9",
+        "ability": 0.54
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 9",
+      "score": 2,
+      "totalPossible": 10,
+      "percentage": 20,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Number sense",
+        "Problem solving"
+      ],
+      "weaknesses": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.88,
+      "percentile": 40,
+      "relativeRank": 13,
+      "aiRecommendation": {
+        "summary": "Grace scored 20% in MATHEMATICS.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Number sense, Problem solving, Reasoning.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-07-FRENCH",
+      "candidate": {
+        "id": "candidate-07",
+        "name": "Nathan",
+        "grade": "Grade 4",
+        "ability": 0.47
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 4",
+      "score": 0,
+      "totalPossible": 10,
+      "percentage": 0,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar"
+      ],
+      "weaknesses": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -1.39,
+      "percentile": 15,
+      "relativeRank": 18,
+      "aiRecommendation": {
+        "summary": "Nathan scored 0% in FRENCH.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Reading comprehension, Grammar, Written expression.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-07-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-07",
+        "name": "Nathan",
+        "grade": "Grade 4",
+        "ability": 0.47
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 4",
+      "score": 0,
+      "totalPossible": 10,
+      "percentage": 0,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Number sense",
+        "Problem solving"
+      ],
+      "weaknesses": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -1.39,
+      "percentile": 15,
+      "relativeRank": 18,
+      "aiRecommendation": {
+        "summary": "Nathan scored 0% in MATHEMATICS.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Number sense, Problem solving, Reasoning.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-08-FRENCH",
+      "candidate": {
+        "id": "candidate-08",
+        "name": "Elise",
+        "grade": "Grade 6",
+        "ability": 0.82
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 6",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "Elise scored 100% in FRENCH.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-08-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-08",
+        "name": "Elise",
+        "grade": "Grade 6",
+        "ability": 0.82
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 6",
+      "score": 10,
+      "totalPossible": 10,
+      "percentage": 100,
+      "masteryLevel": "Excellent",
+      "riskLevel": "LOW",
+      "decisionSuggestion": "accepted at requested grade",
+      "strengths": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "weaknesses": [],
+      "approvedBySuperAdmin": true,
+      "zScore": 1.13,
+      "percentile": 100,
+      "relativeRank": 1,
+      "aiRecommendation": {
+        "summary": "Elise scored 100% in MATHEMATICS.",
+        "parentRecommendation": "Maintain steady study habits.",
+        "teacherRecommendation": "Proceed with enrichment tasks.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-09-FRENCH",
+      "candidate": {
+        "id": "candidate-09",
+        "name": "Samuel",
+        "grade": "Grade 9",
+        "ability": 0.73
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 9",
+      "score": 5,
+      "totalPossible": 10,
+      "percentage": 50,
+      "masteryLevel": "At Risk",
+      "riskLevel": "HIGH",
+      "decisionSuggestion": "academic interview necessary",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar"
+      ],
+      "weaknesses": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.13,
+      "percentile": 60,
+      "relativeRank": 9,
+      "aiRecommendation": {
+        "summary": "Samuel scored 50% in FRENCH.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Reading comprehension, Grammar, Written expression.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-09-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-09",
+        "name": "Samuel",
+        "grade": "Grade 9",
+        "ability": 0.73
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 9",
+      "score": 5,
+      "totalPossible": 10,
+      "percentage": 50,
+      "masteryLevel": "At Risk",
+      "riskLevel": "HIGH",
+      "decisionSuggestion": "academic interview necessary",
+      "strengths": [
+        "Number sense",
+        "Problem solving"
+      ],
+      "weaknesses": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.13,
+      "percentile": 60,
+      "relativeRank": 9,
+      "aiRecommendation": {
+        "summary": "Samuel scored 50% in MATHEMATICS.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Number sense, Problem solving, Reasoning.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-10-FRENCH",
+      "candidate": {
+        "id": "candidate-10",
+        "name": "Rachel",
+        "grade": "Grade 4",
+        "ability": 0.58
+      },
+      "subject": "FRENCH",
+      "grade": "Grade 4",
+      "score": 2,
+      "totalPossible": 10,
+      "percentage": 20,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Reading comprehension",
+        "Grammar"
+      ],
+      "weaknesses": [
+        "Reading comprehension",
+        "Grammar",
+        "Written expression"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.88,
+      "percentile": 40,
+      "relativeRank": 13,
+      "aiRecommendation": {
+        "summary": "Rachel scored 20% in FRENCH.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Reading comprehension, Grammar, Written expression.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    },
+    {
+      "id": "candidate-10-MATHEMATICS",
+      "candidate": {
+        "id": "candidate-10",
+        "name": "Rachel",
+        "grade": "Grade 4",
+        "ability": 0.58
+      },
+      "subject": "MATHEMATICS",
+      "grade": "Grade 4",
+      "score": 2,
+      "totalPossible": 10,
+      "percentage": 20,
+      "masteryLevel": "Critical",
+      "riskLevel": "CRITICAL",
+      "decisionSuggestion": "test retake requested",
+      "strengths": [
+        "Number sense",
+        "Problem solving"
+      ],
+      "weaknesses": [
+        "Number sense",
+        "Problem solving",
+        "Reasoning"
+      ],
+      "approvedBySuperAdmin": false,
+      "zScore": -0.88,
+      "percentile": 40,
+      "relativeRank": 13,
+      "aiRecommendation": {
+        "summary": "Rachel scored 20% in MATHEMATICS.",
+        "parentRecommendation": "Plan guided practice and review with the academic office.",
+        "teacherRecommendation": "Target Number sense, Problem solving, Reasoning.",
+        "governance": "AI does not make final decisions; Super Admin approval is required."
+      }
+    }
+  ]
+}

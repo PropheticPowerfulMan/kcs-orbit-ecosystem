@@ -87,6 +87,48 @@ enum FeeStatus {
   WAIVED
 }
 
+enum DiagnosticSubject {
+  FRENCH
+  MATHEMATICS
+}
+
+enum DiagnosticTestStatus {
+  DRAFT
+  PUBLISHED
+  ASSIGNED
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_GRADED
+  PENDING_SUPER_ADMIN_APPROVAL
+  APPROVED
+  REJECTED
+  RETAKE_REQUESTED
+  ARCHIVED
+}
+
+enum DiagnosticQuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  NUMERIC
+  ESSAY_OPTIONAL
+}
+
+enum DiagnosticDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum DiagnosticDecision {
+  ACCEPT_REQUESTED_GRADE
+  ACCEPT_WITH_REMEDIATION
+  RECOMMEND_LOWER_LEVEL
+  RETAKE_TEST
+  ACADEMIC_INTERVIEW_REQUIRED
+  REJECT
+}
+
 model User {
   id                 String               @id @default(cuid())
   email              String               @unique
@@ -122,6 +164,8 @@ model User {
   sentMessages        InternalMessage[]     @relation("MessageSender")
   receivedMessages    InternalMessage[]     @relation("MessageRecipient")
   approvedReportCards ReportCard[]          @relation("ReportCardApprover")
+  createdDiagnosticTests DiagnosticTest[]    @relation("DiagnosticTestCreator")
+  diagnosticApprovals DiagnosticApproval[]   @relation("DiagnosticApprovalActor")
 }
 
 model StaffProfile {
@@ -193,6 +237,8 @@ model StudentProfile {
   reportCards        ReportCard[]
   transcripts        Transcript[]
   feeInvoices        FeeInvoice[]
+  diagnosticAssignments DiagnosticAssignment[]
+  diagnosticSubmissions DiagnosticSubmission[]
 }
 
 model ParentStudentLink {
@@ -216,6 +262,7 @@ model TeacherProfile {
   bio                String?
   user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   courses            Course[]
+  diagnosticTests    DiagnosticTest[]
 }
 
 model Course {
@@ -454,6 +501,9 @@ model AdmissionApplication {
   submittedAt        DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   documents          AdmissionDocument[]
+  diagnosticAssignments DiagnosticAssignment[]
+  diagnosticSubmissions DiagnosticSubmission[]
+  diagnosticReports  DiagnosticAnalyticsSnapshot[]
 }
 
 model AdmissionDocument {
@@ -464,6 +514,149 @@ model AdmissionDocument {
   url            String
   uploadedAt     DateTime              @default(now())
   application    AdmissionApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model DiagnosticTest {
+  id                 String                  @id @default(cuid())
+  title              String
+  subject            DiagnosticSubject
+  gradeLevel         String
+  academicYear       String
+  createdByTeacherId String?
+  createdByUserId    String?
+  status             DiagnosticTestStatus    @default(DRAFT)
+  durationMinutes    Int?
+  passingScore       Float                   @default(70)
+  competencies       String[]                @default([])
+  answerKey          Json?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  createdByTeacher   TeacherProfile?         @relation(fields: [createdByTeacherId], references: [id], onDelete: SetNull)
+  createdByUser      User?                   @relation("DiagnosticTestCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  questions          DiagnosticQuestion[]
+  assignments        DiagnosticAssignment[]
+  submissions        DiagnosticSubmission[]
+
+  @@index([subject, gradeLevel, status])
+  @@index([academicYear])
+}
+
+model DiagnosticQuestion {
+  id             String                 @id @default(cuid())
+  testId         String
+  questionText   String
+  questionType   DiagnosticQuestionType
+  options        Json?
+  correctAnswer  Json?
+  points         Float                  @default(1)
+  difficulty     DiagnosticDifficulty   @default(MEDIUM)
+  competencyTag  String
+  explanation    String?
+  order          Int                    @default(0)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  test           DiagnosticTest         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  answers        DiagnosticAnswer[]
+
+  @@index([testId, order])
+}
+
+model DiagnosticAssignment {
+  id                      String                 @id @default(cuid())
+  testId                  String
+  studentId               String?
+  enrollmentApplicationId String?
+  applicantName           String?
+  applicantEmail          String?
+  status                  DiagnosticTestStatus   @default(ASSIGNED)
+  assignedById            String?
+  assignedAt              DateTime               @default(now())
+  dueAt                   DateTime?
+  test                    DiagnosticTest         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  student                 StudentProfile?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  enrollmentApplication   AdmissionApplication?  @relation(fields: [enrollmentApplicationId], references: [id], onDelete: SetNull)
+  submission              DiagnosticSubmission?
+
+  @@index([status, assignedAt])
+  @@index([studentId])
+  @@index([enrollmentApplicationId])
+}
+
+model DiagnosticSubmission {
+  id                      String                 @id @default(cuid())
+  testId                  String
+  assignmentId            String?                @unique
+  studentId               String?
+  enrollmentApplicationId String?
+  applicantName           String?
+  answersJson             Json?
+  startedAt               DateTime               @default(now())
+  submittedAt             DateTime?
+  autoScore               Float                  @default(0)
+  percentage              Float                  @default(0)
+  status                  DiagnosticTestStatus   @default(IN_PROGRESS)
+  statistics              Json?
+  aiRecommendation        Json?
+  teacherReview           String?
+  superAdminDecision      DiagnosticDecision?
+  finalComment            String?
+  approvedById            String?
+  approvedAt              DateTime?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  test                    DiagnosticTest         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  assignment              DiagnosticAssignment?  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  student                 StudentProfile?        @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  enrollmentApplication   AdmissionApplication?  @relation(fields: [enrollmentApplicationId], references: [id], onDelete: SetNull)
+  answers                 DiagnosticAnswer[]
+  analyticsSnapshots      DiagnosticAnalyticsSnapshot[]
+  approvals               DiagnosticApproval[]
+
+  @@index([status, submittedAt])
+  @@index([studentId])
+  @@index([enrollmentApplicationId])
+}
+
+model DiagnosticAnswer {
+  id            String                @id @default(cuid())
+  submissionId  String
+  questionId    String
+  answer        Json?
+  isCorrect     Boolean?
+  pointsAwarded Float                 @default(0)
+  feedback      String?
+  createdAt     DateTime              @default(now())
+  submission    DiagnosticSubmission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question      DiagnosticQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, questionId])
+}
+
+model DiagnosticAnalyticsSnapshot {
+  id                      String                 @id @default(cuid())
+  submissionId            String
+  enrollmentApplicationId String?
+  summaryJson             Json
+  generatedAt             DateTime               @default(now())
+  submission              DiagnosticSubmission   @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  enrollmentApplication   AdmissionApplication?  @relation(fields: [enrollmentApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([generatedAt])
+  @@index([enrollmentApplicationId])
+}
+
+model DiagnosticApproval {
+  id           String                @id @default(cuid())
+  submissionId String
+  actorId      String?
+  action       DiagnosticTestStatus
+  decision     DiagnosticDecision?
+  comment      String?
+  createdAt    DateTime              @default(now())
+  submission   DiagnosticSubmission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  actor        User?                  @relation("DiagnosticApprovalActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([submissionId, createdAt])
 }
 
 model MediaItem {

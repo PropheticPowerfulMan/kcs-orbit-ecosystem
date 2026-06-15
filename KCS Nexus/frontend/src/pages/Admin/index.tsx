@@ -2636,6 +2636,17 @@ const AdminSectionView = ({
                 <p className="text-gray-500 dark:text-gray-400">Previous school: {item.previousSchool}</p>
                 <p className="text-gray-500 dark:text-gray-400">Docs: {item.documents?.length ? item.documents.join(', ') : 'Pending document review'}</p>
               </div>
+              <div className="mt-4 rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 text-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">Diagnostic Assessment</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Status: Not assigned / assign French and Mathematics for {item.gradeApplying}</p>
+                  </div>
+                  <a href="#/admin/diagnostic" className="rounded-lg bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white">
+                    Assign / report
+                  </a>
+                </div>
+              </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <button className={adminOutlineButton} onClick={() => updateAdmissionStatus(item, 'UNDER_REVIEW')}>Review</button>
                 <button className={adminOutlineButton} onClick={() => updateAdmissionStatus(item, 'INTERVIEW_SCHEDULED')}>Interview</button>

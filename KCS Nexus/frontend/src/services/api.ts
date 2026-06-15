@@ -170,6 +170,27 @@ export const admissionsAPI = {
     api.post(`/admissions/${id}/documents`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  getDiagnosticReport: (id: string) =>
+    api.get(`/enrollment-applications/${id}/diagnostic-report`),
+}
+
+// --- Diagnostic Assessment API ---
+export const diagnosticAPI = {
+  getTests: (params?: object) => api.get('/diagnostic-tests', { params }),
+  createTest: (data: object) => api.post('/diagnostic-tests', data),
+  getTest: (id: string) => api.get(`/diagnostic-tests/${id}`),
+  updateTest: (id: string, data: object) => api.put(`/diagnostic-tests/${id}`, data),
+  deleteTest: (id: string) => api.delete(`/diagnostic-tests/${id}`),
+  publishTest: (id: string) => api.post(`/diagnostic-tests/${id}/publish`),
+  assignTest: (id: string, data: object) => api.post(`/diagnostic-tests/${id}/assign`, data),
+  getSubmissions: (params?: object) => api.get('/diagnostic-submissions', { params }),
+  startSubmission: (data: object) => api.post('/diagnostic-submissions/start', data),
+  submit: (id: string, answers: object[]) => api.post(`/diagnostic-submissions/${id}/submit`, { answers }),
+  getReport: (id: string) => api.get(`/diagnostic-submissions/${id}/report`),
+  approve: (id: string, data: object) => api.post(`/diagnostic-submissions/${id}/approve`, data),
+  reject: (id: string, data: object) => api.post(`/diagnostic-submissions/${id}/reject`, data),
+  requestRetake: (id: string, data: object) => api.post(`/diagnostic-submissions/${id}/request-retake`, data),
+  getAnalytics: () => api.get('/diagnostic-analytics'),
 }
 
 // --- Media API ---

@@ -21,6 +21,7 @@ const ParentForumPage = lazy(() => import('@/pages/ParentForum'))
 const TeacherPortal = lazy(() => import('@/pages/TeacherPortal'))
 const StaffPortal = lazy(() => import('@/pages/StaffPortal'))
 const AdminDashboard = lazy(() => import('@/pages/Admin'))
+const DiagnosticCenter = lazy(() => import('@/pages/DiagnosticCenter'))
 
 class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
@@ -148,6 +149,14 @@ const App = () => {
               }
             />
             <Route
+              path="/portal/student/diagnostic"
+              element={
+                <ProtectedRoute allowedRoles={['student']}>
+                  <DiagnosticCenter />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/portal/student/forum"
               element={
                 <ProtectedRoute allowedRoles={['student', 'admin']}>
@@ -228,6 +237,14 @@ const App = () => {
               }
             />
             <Route
+              path="/portal/teacher/diagnostic"
+              element={
+                <ProtectedRoute allowedRoles={['teacher']}>
+                  <DiagnosticCenter />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/portal/teacher/dashboard"
               element={
                 <ProtectedRoute allowedRoles={['teacher']}>
@@ -261,6 +278,14 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['staff']}>
                   <StaffPortal />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/portal/staff/diagnostic"
+              element={
+                <ProtectedRoute allowedRoles={['staff']}>
+                  <DiagnosticCenter />
                 </ProtectedRoute>
               }
             />
@@ -302,6 +327,14 @@ const App = () => {
             />
             <Route path="/portal/admin" element={<Navigate to="/admin" replace />} />
             <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
+            <Route
+              path="/admin/diagnostic"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <DiagnosticCenter />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin/*"
               element={
