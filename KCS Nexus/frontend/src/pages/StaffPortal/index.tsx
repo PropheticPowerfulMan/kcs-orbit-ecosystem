@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
@@ -44,6 +45,10 @@ const StaffSectionView = ({ segment }: { segment: string }) => {
   const [selectedRecord, setSelectedRecord] = useState(students[0])
   const [announcementSent, setAnnouncementSent] = useState(false)
   const [messageSent, setMessageSent] = useState(false)
+
+  if (segment === 'settings') {
+    return <AccountSettingsPanel roleLabel="Staff account" />
+  }
 
   if (segment === 'records') {
     return (

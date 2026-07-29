@@ -11,6 +11,7 @@ import { useUIStore } from '@/store/uiStore'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis
@@ -278,6 +279,10 @@ const ParentSectionView = ({ segment, selectedChild }: { segment: string; select
         {actionMessage && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}
       </div>
     )
+  }
+
+  if (segment === 'settings') {
+    return <AccountSettingsPanel roleLabel="Parent account" />
   }
 
   if (segment === 'profile') {

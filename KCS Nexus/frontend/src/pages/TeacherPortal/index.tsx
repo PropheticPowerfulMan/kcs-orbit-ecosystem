@@ -3,11 +3,12 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bell, BookOpen, Brain, Calendar, CheckCircle2, ChevronRight,
-  Clock, FileText, GraduationCap, MessageSquare, TrendingUp, Users, AlertTriangle, ClipboardCheck, Maximize2, X
+  Clock, FileText, GraduationCap, MessageSquare, TrendingUp, Users, AlertTriangle, ClipboardCheck, Maximize2, X, Send, Eye, Award
 } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import { studentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
@@ -62,6 +63,7 @@ const statusTone = (value: string) => {
 }
 
 const gradeOptions = ['K3', 'K4', 'K5', ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`)]
+const lessonPlanUrl = 'https://propheticpowerfulman.github.io/LessonPlanPowerfullyDone/'
 
 const inferGradeLabel = (className: string) => {
   if (className.includes('12')) return 'Grade 12'
@@ -215,7 +217,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [gradebookScores, setGradebookScores] = useState<Record<string, string>>({})
   const [teacherStudents, setTeacherStudents] = useState<RegistryStudent[]>(() => ecosystemStudents)
   const [attendanceEntries, setAttendanceEntries] = useState(() => ecosystemAttendance)
+  const [selectedAttendanceClass, setSelectedAttendanceClass] = useState('')
   const [assignmentList, setAssignmentList] = useState(() => ecosystemAssignments)
+  const [assignmentAudience, setAssignmentAudience] = useState<'student' | 'class' | 'group'>('class')
+  const [assignmentClass, setAssignmentClass] = useState('Grade 11 A')
+  const [assignmentGroupIds, setAssignmentGroupIds] = useState<string[]>([])
+  const [assignmentScores, setAssignmentScores] = useState<Record<string, number>>({})
   const [gradeEntries, setGradeEntries] = useState(() => ecosystemGrades)
   const [reportList, setReportList] = useState(() => reportCards)
   const [disciplineList, setDisciplineList] = useState(() => disciplineReports)
@@ -273,7 +280,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     studentId: '',
     title: 'Exit ticket reflection',
     subject: 'AP Biology',
-    due: 'Tomorrow',
+    due: '2026-05-12',
     status: 'pending',
     priority: 'medium',
   })
@@ -312,7 +319,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     maxPoints: 100,
   })
 
-  const findStudent = (studentId: string) => superAdminStudentPool.find((student) => student.id === studentId)
+  const findStudent = (studentId: string) => rosterSourceStudents.find((student) => student.id === studentId)
   const runAction = (message: string) => setActionMessage(message)
 
   useEffect(() => {
@@ -624,10 +631,69 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     runAction(`${student?.name ?? 'Student'} marked ${attendanceDraft.status}; parent/admin visibility queued.`)
   }
 
+  const markClassAttendance = (studentId: string, status: string) => {
+    const student = findStudent(studentId)
+    const nextRecord = {
+      studentId,
+      date: attendanceDate,
+      className: selectedAttendanceClassName,
+      status,
+    }
+    setAttendanceEntries((current) => [
+      nextRecord,
+      ...current.filter((entry) => !(entry.studentId === studentId && entry.date === attendanceDate && entry.className === selectedAttendanceClassName)),
+    ])
+    runAction(`${student?.name ?? 'Student'} marked ${status} for ${selectedAttendanceClassName}; attendance analytics recalculated.`)
+  }
+
   const createAssignment = () => {
-    const student = findStudent(assignmentDraft.studentId)
-    setAssignmentList((current) => [{ id: `asg-${Date.now()}`, ...assignmentDraft }, ...current])
-    runAction(`${assignmentDraft.title} assigned to ${student?.name ?? 'selected student'}.`)
+    const recipients = assignmentRecipients.length ? assignmentRecipients : teacherStudents.slice(0, 1)
+    const createdAt = Date.now()
+    const nextAssignments = recipients.map((student, index) => ({
+      id: `asg-${createdAt}-${index}`,
+      ...assignmentDraft,
+      studentId: student.id,
+      subject: assignmentDraft.subject,
+      status: 'pending',
+      audience: assignmentAudience,
+      parentVisible: true,
+      studentVisible: true,
+      gradebookSynced: false,
+    }))
+
+    setAssignmentList((current) => [...nextAssignments, ...current])
+    runAction(`${assignmentDraft.title} sent to ${recipients.length} student(s); student dashboards and parent visibility were queued.`)
+  }
+
+  const toggleAssignmentGroupStudent = (studentId: string) => {
+    setAssignmentGroupIds((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId])
+  }
+
+  const gradeAssignment = (assignment: (typeof assignmentList)[number]) => {
+    const score = Math.max(0, Math.min(100, Number(assignmentScores[assignment.id]) || 0))
+    const student = findStudent(assignment.studentId)
+    const gradebookColumnId = `assignment-${assignment.id}`
+
+    setGradeEntries((current) => [{
+      studentId: assignment.studentId,
+      subject: assignment.subject,
+      assessment: assignment.title,
+      score,
+      max: 100,
+      date: 'Today',
+      teacher: 'Dr. Mukendi',
+    }, ...current])
+
+    setGradebookColumnsByCourse((current) => ({
+      ...current,
+      [selectedGradebookCourse.id]: [
+        ...(current[selectedGradebookCourse.id] ?? []).filter((column) => column.id !== gradebookColumnId),
+        { id: gradebookColumnId, title: assignment.title, type: 'Assignment', date: 'Today', maxPoints: 100 },
+      ],
+    }))
+    setGradebookScores((current) => ({ ...current, [`${selectedGradebookCourse.id}-${gradebookColumnId}-${assignment.studentId}`]: String(score) }))
+    setAssignmentList((current) => current.map((item) => item.id === assignment.id ? { ...item, status: 'submitted', gradebookSynced: true, score } : item))
+    runAction(`${student?.name ?? 'Student'} received ${score}/100 for ${assignment.title}; gradebook, student dashboard, and parent view were updated.`)
   }
 
   const addGrade = () => {
@@ -682,6 +748,32 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, {})
   const sortedStudentClassEntries = Object.entries(studentsByClass).sort(([left], [right]) => normalizeGradeOnlyKey(left).localeCompare(normalizeGradeOnlyKey(right)) || left.localeCompare(right))
   const selectedClassStudents = selectedClassRoster ? studentsByClass[selectedClassRoster] ?? [] : []
+  const attendanceClassOptions = sortedStudentClassEntries
+  const selectedAttendanceClassName = selectedAttendanceClass || attendanceClassOptions[0]?.[0] || ''
+  const attendanceClassStudents = selectedAttendanceClassName ? studentsByClass[selectedAttendanceClassName] ?? [] : []
+  const attendanceDate = attendanceDraft.date
+  const attendanceClassRecords = attendanceClassStudents.map((student) => {
+    const record = attendanceEntries.find((entry) => entry.studentId === student.id && entry.date === attendanceDate && entry.className === selectedAttendanceClassName)
+    return { student, status: record?.status ?? 'unmarked' }
+  })
+  const attendanceMarkedCount = attendanceClassRecords.filter((record) => record.status !== 'unmarked').length
+  const attendancePresentCount = attendanceClassRecords.filter((record) => record.status === 'present').length
+  const attendanceLateCount = attendanceClassRecords.filter((record) => record.status === 'late').length
+  const attendanceAbsentCount = attendanceClassRecords.filter((record) => record.status === 'absent').length
+  const attendanceExcusedCount = attendanceClassRecords.filter((record) => record.status === 'excused').length
+  const attendanceDenominator = Math.max(attendanceClassStudents.length, 1)
+  const dailyPresenceRate = Math.round(((attendancePresentCount + attendanceLateCount * 0.5 + attendanceExcusedCount) / attendanceDenominator) * 100)
+  const punctualityRate = Math.round((attendancePresentCount / attendanceDenominator) * 100)
+  const absenceRate = Math.round((attendanceAbsentCount / attendanceDenominator) * 100)
+  const assignmentClassName = assignmentClass || sortedStudentClassEntries[0]?.[0] || ''
+  const assignmentClassStudents = assignmentClassName ? studentsByClass[assignmentClassName] ?? [] : []
+  const assignmentRecipients = assignmentAudience === 'student'
+    ? [findStudent(assignmentDraft.studentId)].filter((student): student is RegistryStudent => Boolean(student))
+    : assignmentAudience === 'class'
+      ? assignmentClassStudents
+      : assignmentGroupIds.map((studentId) => findStudent(studentId)).filter((student): student is RegistryStudent => Boolean(student))
+  const assignmentParentVisibility = assignmentRecipients.length
+  const assignmentStudentVisibility = assignmentRecipients.length
 
   if (segment === 'grades') {
     return (
@@ -714,13 +806,17 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
         <AdvancedGradebook
           courses={courses}
-          students={superAdminStudentPool}
+          students={rosterSourceStudents}
           selectedCourseId={selectedGradebookCourseId}
           onSelectCourse={setSelectedGradebookCourseId}
           onAction={runAction}
         />
       </section>
     )
+  }
+
+  if (segment === 'settings') {
+    return <AccountSettingsPanel roleLabel="Teacher account" />
   }
 
   return (
@@ -1125,85 +1221,235 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'attendance' && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <h3 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Daily Register</h3>
-            <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-              <select className={inputClass} value={attendanceDraft.studentId} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, studentId: event.target.value }))}>
-                {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-              </select>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <input className={inputClass} value={attendanceDraft.date} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, date: event.target.value }))} />
-                <select className={inputClass} value={attendanceDraft.status} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, status: event.target.value }))}>
-                  <option value="present">Present</option>
-                  <option value="late">Late</option>
-                  <option value="absent">Absent</option>
-                </select>
-                <button onClick={addAttendance} className={compactButton}>Mark</button>
+        <div className="space-y-6">
+          <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="font-bold text-kcs-blue-900 dark:text-white">Homeroom Daily Register</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Mark the daily presence for every student in the class where this teacher is responsible.</p>
+                </div>
+                <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">
+                  {attendanceMarkedCount}/{attendanceClassStudents.length} marked
+                </span>
               </div>
-            </div>
-            <div className="space-y-3">
-              {attendanceEntries.map((record, index) => {
-                const student = findStudent(record.studentId)
-                return (
-                  <div key={`${record.studentId}-${record.date}-${index}`} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                    <div>
-                      <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{student?.name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{record.date} - {record.className}</p>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusTone(record.status)}`}>{record.status}</span>
+
+              <div className="mt-5 grid gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Homeroom class
+                  <select className={inputClass} value={selectedAttendanceClassName} onChange={(event) => setSelectedAttendanceClass(event.target.value)}>
+                    {attendanceClassOptions.map(([className, classStudents]) => (
+                      <option key={className} value={className}>{className} - {classStudents.length} students</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Attendance date
+                  <input className={inputClass} type="date" value={attendanceDate} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, date: event.target.value }))} />
+                </label>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                {[
+                  ['Presence index', `${dailyPresenceRate}%`, 'Present + excused + half late'],
+                  ['Punctuality', `${punctualityRate}%`, 'Present on time only'],
+                  ['Absence pressure', `${absenceRate}%`, 'Absent students today'],
+                ].map(([label, value, detail]) => (
+                  <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                    <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">{label}</p>
+                    <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">{detail}</p>
                   </div>
-                )
-              })}
-            </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {attendanceAnalytics.map((item) => (
-              <div key={item.scope} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-                <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.scope}</p>
-                <p className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{item.present}%</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{item.late}% late - {item.absent}% absent</p>
-                <p className="mt-3 text-xs font-semibold capitalize text-kcs-blue-600 dark:text-kcs-blue-300">{item.trend}</p>
+                ))}
               </div>
-            ))}
+
+              <div className="mt-5 grid gap-2">
+                {attendanceClassRecords.map(({ student, status }) => (
+                  <div key={student.id} className="rounded-xl border border-gray-100 bg-white p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {student.grade}{student.section ? ` ${student.section}` : ''} - attendance history {student.attendance ?? 'pending'}% - {student.risk ?? 'low'} risk
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap">
+                        {['present', 'late', 'absent', 'excused'].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => markClassAttendance(student.id, option)}
+                            className={`rounded-lg px-2.5 py-2 text-xs font-bold capitalize transition-colors ${status === option ? 'bg-kcs-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-kcs-blue-50 hover:text-kcs-blue-700 dark:bg-kcs-blue-800/50 dark:text-gray-300'}`}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!attendanceClassRecords.length && (
+                  <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-300">No students are attached to this homeroom class yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <h3 className="font-bold text-kcs-blue-900 dark:text-white">Scientific Attendance Analytics</h3>
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  {[
+                    ['Present', attendancePresentCount, 'green'],
+                    ['Late', attendanceLateCount, 'yellow'],
+                    ['Absent', attendanceAbsentCount, 'red'],
+                    ['Excused', attendanceExcusedCount, 'blue'],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-xl bg-gray-50 p-4 text-center dark:bg-kcs-blue-800/30">
+                      <p className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                  <div className="rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-900/30">
+                    <p className="font-bold text-kcs-blue-900 dark:text-white">Formula</p>
+                    <p className="mt-1">Presence index = ((present + excused + 0.5 x late) / class size) x 100.</p>
+                  </div>
+                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                    <p className="font-bold text-kcs-blue-900 dark:text-white">Automatic decision support</p>
+                    <p className="mt-1">
+                      {absenceRate >= 20
+                        ? 'High absence pressure: parent notifications and admin review should be triggered today.'
+                        : dailyPresenceRate < 85
+                          ? 'Moderate attendance concern: review late arrivals and verify transportation or health notes.'
+                          : 'Attendance is mathematically stable for today; keep monitoring punctuality.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                {attendanceAnalytics.map((item) => (
+                  <div key={item.scope} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                    <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.scope}</p>
+                    <p className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{item.present}%</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.late}% late - {item.absent}% absent</p>
+                    <p className="mt-3 text-xs font-semibold capitalize text-kcs-blue-600 dark:text-kcs-blue-300">{item.trend}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {segment === 'assignments' && (
-        <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <div className={panelClass}>
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Create assignment</h3>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-kcs-blue-900 dark:text-white">Assignment Dispatch Center</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Send homework to one student, a whole class, or a selected group. Student and parent dashboards receive the correct visibility.</p>
+              </div>
+              <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">{assignmentRecipients.length} recipient(s)</span>
+            </div>
             <div className="mt-4 grid gap-3">
-              <select className={inputClass} value={assignmentDraft.studentId} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, studentId: event.target.value }))}>
-                {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-              </select>
-              <input className={inputClass} value={assignmentDraft.title} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, title: event.target.value }))} />
-              <input className={inputClass} value={assignmentDraft.subject} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, subject: event.target.value }))} />
               <div className="grid gap-2 sm:grid-cols-3">
-                <input className={inputClass} value={assignmentDraft.due} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, due: event.target.value }))} />
+                {[
+                  ['student', 'One student'],
+                  ['class', 'Whole class'],
+                  ['group', 'Selected group'],
+                ].map(([id, label]) => (
+                  <button key={id} type="button" onClick={() => setAssignmentAudience(id as typeof assignmentAudience)} className={`rounded-xl px-3 py-2 text-sm font-bold transition-colors ${assignmentAudience === id ? 'bg-kcs-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-kcs-blue-50 hover:text-kcs-blue-700 dark:bg-kcs-blue-800/40 dark:text-gray-300'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {assignmentAudience === 'student' && (
+                <select className={inputClass} value={assignmentDraft.studentId} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, studentId: event.target.value }))}>
+                  {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section ? ` ${student.section}` : ''}</option>)}
+                </select>
+              )}
+
+              {assignmentAudience !== 'student' && (
+                <select className={inputClass} value={assignmentClassName} onChange={(event) => setAssignmentClass(event.target.value)}>
+                  {sortedStudentClassEntries.map(([className, classStudents]) => <option key={className} value={className}>{className} - {classStudents.length} students</option>)}
+                </select>
+              )}
+
+              {assignmentAudience === 'group' && (
+                <div className="grid max-h-56 gap-2 overflow-y-auto rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30 sm:grid-cols-2">
+                  {assignmentClassStudents.map((student) => (
+                    <label key={student.id} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-kcs-blue-900 dark:bg-kcs-blue-950/50 dark:text-white">
+                      <input type="checkbox" checked={assignmentGroupIds.includes(student.id)} onChange={() => toggleAssignmentGroupStudent(student.id)} className="h-4 w-4 rounded border-gray-300 text-kcs-blue-700 focus:ring-kcs-blue-500" />
+                      {student.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Homework title
+                <input className={inputClass} value={assignmentDraft.title} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, title: event.target.value }))} />
+              </label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Subject
+                  <input className={inputClass} value={assignmentDraft.subject} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, subject: event.target.value }))} />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Due date
+                  <input className={`${inputClass} dark:[color-scheme:dark]`} type="date" value={assignmentDraft.due} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, due: event.target.value }))} />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Priority
                 <select className={inputClass} value={assignmentDraft.priority} onChange={(event) => setAssignmentDraft((draft) => ({ ...draft, priority: event.target.value }))}>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                 </select>
-                <button onClick={createAssignment} className={compactButton}>Assign</button>
+                </label>
               </div>
+              <div className="grid gap-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30 sm:grid-cols-3">
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{assignmentStudentVisibility}</p><p className="text-xs text-gray-500">student dashboard updates</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{assignmentParentVisibility}</p><p className="text-xs text-gray-500">parent dashboard notices</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">Gradebook</p><p className="text-xs text-gray-500">auto-sync after grading</p></div>
+              </div>
+              <button onClick={createAssignment} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800"><Send size={16} /> Send assignment</button>
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4">
           {assignmentList.map((assignment) => {
             const student = findStudent(assignment.studentId)
             return (
               <div key={assignment.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <h3 className="font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400">{assignment.subject} - {student?.name}</p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusTone(assignment.status)}`}>{assignment.status}</span>
                 </div>
-                <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">Due: {assignment.due} - Priority: {assignment.priority}</p>
+                <div className="mt-4 grid gap-3 rounded-xl bg-gray-50 p-3 text-xs text-gray-600 dark:bg-kcs-blue-800/30 dark:text-gray-300 sm:grid-cols-3">
+                  <span className="inline-flex items-center gap-1"><Clock size={13} /> Due: {assignment.due}</span>
+                  <span className="inline-flex items-center gap-1"><Eye size={13} /> Parent/student visible</span>
+                  <span className="inline-flex items-center gap-1"><Award size={13} /> {(assignment as any).gradebookSynced ? 'Synced to gradebook' : 'Waiting for grade'}</span>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    className={`${inputClass} sm:max-w-40`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={assignmentScores[assignment.id] ?? ''}
+                    onChange={(event) => setAssignmentScores((current) => ({ ...current, [assignment.id]: Number(event.target.value) }))}
+                    placeholder="Score /100"
+                  />
+                  <button type="button" onClick={() => gradeAssignment(assignment)} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800">
+                    Grade and sync
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -1515,9 +1761,25 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'reports' && (
+        <div className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ['Drafts', reportList.length, 'teacher-created'],
+              ['Ready for approval', reportList.filter((card) => String(card.principalStatus).toLowerCase().includes('pending')).length, 'principal review'],
+              ['Parent portal', reportList.length, 'after approval'],
+              ['Report cards', generatedReportCards.length, 'generated live'],
+            ].map(([label, value, detail]) => (
+              <div key={label} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">{label}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">{detail}</p>
+              </div>
+            ))}
+          </div>
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Draft report card</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Prepare academic, conduct, parent-ready and approval-ready reports from the same student record.</p>
             <div className="mt-4 grid gap-3">
               <select className={inputClass} value={reportDraft.student} onChange={(event) => setReportDraft((draft) => ({ ...draft, student: event.target.value }))}>
                 {teacherStudents.map((student) => <option key={student.id} value={student.name}>{student.name}</option>)}
@@ -1529,6 +1791,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <input className={inputClass} value={reportDraft.conduct} onChange={(event) => setReportDraft((draft) => ({ ...draft, conduct: event.target.value }))} />
               <textarea className={inputClass} value={reportDraft.teacherComment} onChange={(event) => setReportDraft((draft) => ({ ...draft, teacherComment: event.target.value }))} rows={4} />
               <button onClick={createReport} className={compactButton}>Create report draft</button>
+              <button onClick={() => runAction('Report PDF, parent portal preview, and coordinator approval package prepared.')} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Preview publication package</button>
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -1543,16 +1806,37 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
               <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{card.teacherComment}</p>
               <p className="mt-3 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{card.download}</p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <button onClick={() => runAction(`${card.student} report sent to principal approval queue.`)} className="rounded-lg bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">Approve flow</button>
+                <button onClick={() => runAction(`${card.student} parent portal preview prepared.`)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Parent preview</button>
+                <button onClick={() => runAction(`${card.student} report PDF export prepared.`)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">PDF</button>
+              </div>
             </div>
           ))}
           </div>
         </div>
+        </div>
       )}
 
       {segment === 'discipline' && (
+        <div className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ['Open cases', disciplineList.filter((report) => report.status !== 'Resolved').length],
+              ['Parent notices', disciplineList.filter((report) => report.parentContact).length],
+              ['High severity', disciplineList.filter((report) => report.level === 'high').length],
+              ['Follow-ups', disciplineList.length],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</p>
+              </div>
+            ))}
+          </div>
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Open discipline report</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Document incident, context, action, parent/student communication, grading impact, and resolution path.</p>
             <div className="mt-4 grid gap-3">
               <select className={inputClass} value={disciplineDraft.studentId} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, studentId: event.target.value }))}>
                 {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
@@ -1567,6 +1851,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <option value="high">High</option>
               </select>
               <button onClick={createDisciplineReport} className={compactButton}>Create detailed report</button>
+              <button onClick={() => runAction('Parent/student discipline communication draft prepared with audit trail.')} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Prepare communication</button>
             </div>
           </div>
           <div className="space-y-4">
@@ -1597,13 +1882,34 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   </div>
                 ))}
               </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                <button onClick={() => runAction(`${report.student} parent notification queued.`)} className="rounded-lg bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">Notify parent</button>
+                <button onClick={() => runAction(`${report.student} restorative resolution plan opened.`)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Resolution</button>
+                <button onClick={() => runAction(`${report.student} discipline grade impact reviewed.`)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Grade impact</button>
+                <button onClick={() => runAction(`${report.student} report exported for admin archive.`)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Export</button>
+              </div>
             </article>
           ))}
           </div>
         </div>
+        </div>
       )}
 
       {segment === 'messages' && (
+        <div className="space-y-6">
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              ['Inbox', inbox.length],
+              ['Needs response', inbox.filter((message) => message.requiresResponse).length],
+              ['Threads', internalThreads.length],
+              ['Channels', 4],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</p>
+              </div>
+            ))}
+          </div>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <h3 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Teacher Inbox</h3>
@@ -1620,6 +1926,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <h3 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Compose and active threads</h3>
             <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
+              <div className="grid gap-2 sm:grid-cols-4">
+                {['Email', 'Text', 'Letter', 'Call'].map((channel) => (
+                  <button key={channel} type="button" onClick={() => runAction(`${channel} channel selected and audit metadata prepared.`)} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:bg-kcs-blue-950/50 dark:text-kcs-blue-200">
+                    {channel}
+                  </button>
+                ))}
+              </div>
               <input className={inputClass} value={messageDraft.to} onChange={(event) => setMessageDraft((draft) => ({ ...draft, to: event.target.value }))} />
               <input className={inputClass} value={messageDraft.subject} onChange={(event) => setMessageDraft((draft) => ({ ...draft, subject: event.target.value }))} />
               <textarea className={inputClass} value={messageDraft.body} onChange={(event) => setMessageDraft((draft) => ({ ...draft, body: event.target.value }))} rows={3} />
@@ -1628,12 +1941,18 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <div className="space-y-3">
               {internalThreads.map((thread) => (
                 <div key={thread.subject} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                  <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{thread.subject}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{thread.channel} - {thread.unread} unread</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{thread.subject}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{thread.channel} - {thread.unread} unread</p>
+                    </div>
+                    <button onClick={() => runAction(`${thread.subject} opened with participant visibility rules.`)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Open</button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+        </div>
         </div>
       )}
     </section>
@@ -2055,6 +2374,12 @@ const TeacherPortal = () => {
               <Link to="/portal/teacher/assignments" className="btn-gold text-sm py-2 flex items-center gap-2">
                 <Brain size={16} /> AI Insights
               </Link>
+              <Link to="/portal/teacher/diagnostic" className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                Diagnostic Test
+              </Link>
+              <a href={lessonPlanUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                Lesson Plan
+              </a>
             </div>
           </div>
         </div>

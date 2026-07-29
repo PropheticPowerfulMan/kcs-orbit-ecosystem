@@ -11,6 +11,7 @@ import { useUIStore } from '@/store/uiStore'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
@@ -299,6 +300,10 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
         </div>
       </div>
     )
+  }
+
+  if (segment === 'settings') {
+    return <AccountSettingsPanel roleLabel="Student account" />
   }
 
   if (segment === 'profile') {

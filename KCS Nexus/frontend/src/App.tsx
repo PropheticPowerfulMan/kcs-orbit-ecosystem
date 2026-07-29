@@ -164,7 +164,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['grades', 'assignments', 'timetable', 'messages', 'profile'].map((segment) => (
+            {['grades', 'assignments', 'timetable', 'messages', 'profile', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/student/${segment}`}
@@ -208,7 +208,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['performance', 'messages', 'calendar', 'profile', 'grades', 'finance'].map((segment) => (
+            {['performance', 'messages', 'calendar', 'profile', 'grades', 'finance', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/parent/${segment}`}
@@ -253,7 +253,7 @@ const App = () => {
               }
             />
             <Route path="/portal/teacher/report-card" element={<Navigate to="/portal/teacher/grades" replace />} />
-            {['courses', 'students', 'attendance', 'assignments', 'grades', 'reports', 'discipline', 'messages'].map((segment) => (
+            {['courses', 'students', 'attendance', 'assignments', 'grades', 'reports', 'discipline', 'messages', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/teacher/${segment}`}
@@ -297,7 +297,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['records', 'admissions', 'announcements', 'reports', 'finance', 'messages', 'permissions'].map((segment) => (
+            {['records', 'admissions', 'announcements', 'reports', 'finance', 'messages', 'permissions', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/staff/${segment}`}

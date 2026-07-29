@@ -16,6 +16,8 @@ import {
   TrendingDown,
   TrendingUp,
   Wand2,
+  Maximize2,
+  X,
 } from 'lucide-react'
 import {
   Area,
@@ -80,7 +82,7 @@ type Props = {
 }
 
 const assignmentTypes: AssignmentType[] = ['homework', 'quiz', 'test', 'exam', 'project', 'participation']
-const terms = ['Term 1', 'Term 2', 'Final']
+const terms = ['Trimestre 1', 'Trimestre 2', 'Semestre 1', 'Trimestre 3', 'Trimestre 4', 'Semestre 2', 'Examen final annuel']
 const scoreScales = [20, 100, 50]
 
 const defaultPointsByType: Record<AssignmentType, number> = {
@@ -92,6 +94,8 @@ const defaultPointsByType: Record<AssignmentType, number> = {
   participation: 10,
 }
 
+const categoryForType = (type: AssignmentType) => type === 'project' ? 'test' : type
+
 const defaultCategories: Category[] = [
   { id: 'homework', name: 'Homework', weight: 15 },
   { id: 'quiz', name: 'Quiz', weight: 20 },
@@ -101,11 +105,11 @@ const defaultCategories: Category[] = [
 ]
 
 const defaultAssignments: GradebookColumn[] = [
-  { id: 'gb-lab', title: 'Lab Report', type: 'project', category: 'test', maxPoints: 100, date: '2026-04-18', term: 'Term 2', description: 'Research, evidence, and lab conclusion.' },
-  { id: 'gb-quiz', title: 'Genetics Quiz', type: 'quiz', category: 'quiz', maxPoints: 20, date: '2026-04-22', term: 'Term 2', description: 'Fast check on heredity vocabulary.' },
-  { id: 'gb-homework', title: 'Problem Set', type: 'homework', category: 'homework', maxPoints: 50, date: '2026-04-25', term: 'Term 2', description: 'Independent practice submitted online.' },
-  { id: 'gb-exam', title: 'Unit Exam', type: 'exam', category: 'exam', maxPoints: 100, date: '2026-05-03', term: 'Final', description: 'Cumulative unit performance.' },
-  { id: 'gb-participation', title: 'Seminar', type: 'participation', category: 'participation', maxPoints: 10, date: '2026-05-08', term: 'Final', description: 'Discussion preparedness and collaboration.' },
+  { id: 'gb-lab', title: 'Lab Report', type: 'project', category: 'test', maxPoints: 100, date: '2026-04-18', term: 'Trimestre 4', description: 'Research, evidence, and lab conclusion.' },
+  { id: 'gb-quiz', title: 'Genetics Quiz', type: 'quiz', category: 'quiz', maxPoints: 20, date: '2026-04-22', term: 'Trimestre 4', description: 'Fast check on heredity vocabulary.' },
+  { id: 'gb-homework', title: 'Problem Set', type: 'homework', category: 'homework', maxPoints: 50, date: '2026-04-25', term: 'Trimestre 4', description: 'Independent practice submitted online.' },
+  { id: 'gb-exam', title: 'Unit Exam', type: 'exam', category: 'exam', maxPoints: 100, date: '2026-05-03', term: 'Semestre 2', description: 'Cumulative unit performance.' },
+  { id: 'gb-participation', title: 'Seminar', type: 'participation', category: 'participation', maxPoints: 10, date: '2026-05-08', term: 'Semestre 2', description: 'Discussion preparedness and collaboration.' },
 ]
 
 const buildInitialScores = (students: GradebookStudent[]) => {
@@ -163,10 +167,11 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [categories, setCategories] = useState(defaultCategories)
   const [scores, setScores] = useState(() => buildInitialScores(students))
   const [comments, setComments] = useState<Record<string, string>>({})
-  const [term, setTerm] = useState('Term 2')
+  const [term, setTerm] = useState('Trimestre 4')
   const [scale, setScale] = useState(100)
   const [query, setQuery] = useState('')
   const [bulkValue, setBulkValue] = useState('')
+  const [spreadsheetWindowOpen, setSpreadsheetWindowOpen] = useState(false)
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(defaultAssignments[0].id)
   const [draft, setDraft] = useState({
     title: 'Concept Check',
@@ -181,12 +186,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const courseStudents = useMemo(() => {
     const roster = selectedCourse?.studentIds?.length
       ? selectedCourse.studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as GradebookStudent[]
-      : students
+      : []
 
     return roster.filter((student) => `${student.name} ${student.grade} ${student.section}`.toLowerCase().includes(query.toLowerCase()))
   }, [query, selectedCourse, students])
 
-  const visibleAssignments = assignments.filter((assignment) => assignment.term === term || term === 'Final')
+  const visibleAssignments = assignments.filter((assignment) => assignment.term === term)
 
   const scoreKey = (assignmentId: string, studentId: string) => `${assignmentId}:${studentId}`
 
@@ -257,7 +262,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       id: `gb-${Date.now()}`,
       title: draft.title.trim() || 'New Assignment',
       type: draft.type,
-      category: draft.category,
+      category: categoryForType(draft.type),
       maxPoints: Math.max(1, Number(draft.maxPoints) || scale),
       date: draft.date,
       term,
@@ -322,6 +327,105 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     setCategories((current) => current.map((category) => category.id === categoryId ? { ...category, weight: Math.max(0, weight) } : category))
   }
 
+  const spreadsheetTable = (expanded = false) => (
+    <div className={`${expanded ? 'max-h-[78vh]' : 'max-h-[680px]'} overflow-auto`}>
+      <table className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm">
+        <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm dark:bg-kcs-blue-900 dark:text-gray-300">
+          <tr>
+            <th className="sticky left-0 z-30 w-64 bg-gray-50 px-4 py-3 text-left dark:bg-kcs-blue-900">Student</th>
+            {visibleAssignments.map((assignment) => (
+              <th key={assignment.id} className="min-w-36 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
+                <span className="block normal-case text-gray-400">{assignment.type} - {assignment.maxPoints} pts</span>
+                <button onClick={() => deleteAssignment(assignment.id)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold normal-case text-red-500 hover:text-red-600"><Trash2 size={12} /> Delete</button>
+              </th>
+            ))}
+            <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Average</th>
+            <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Prediction</th>
+            <th className="min-w-40 border-l border-gray-100 px-3 py-3 text-left dark:border-kcs-blue-800">AI status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {studentAnalytics.map(({ student, average, missing, projected, risk }) => (
+            <tr key={student.id} className="group">
+              <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-4 py-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+                <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{student.grade}{student.section} - {student.advisor ?? 'Advisor pending'}</p>
+              </td>
+              {visibleAssignments.map((assignment) => {
+                const normalized = getScore(assignment, student.id)
+                return (
+                  <td key={`${student.id}-${assignment.id}`} className="border-l border-t border-gray-100 px-3 py-3 dark:border-kcs-blue-800">
+                    <div className="flex flex-col gap-2">
+                      <input
+                        className={`mx-auto w-20 rounded-lg px-2 py-2 text-center text-sm font-bold outline-none ring-1 transition-colors focus:ring-2 focus:ring-kcs-blue-400 ${toneForScore(normalized)}`}
+                        value={getRawScore(assignment.id, student.id)}
+                        onChange={(event) => updateScore(assignment.id, student.id, event.target.value)}
+                        placeholder="I"
+                      />
+                      <div className="flex justify-center gap-1">
+                        <button className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => updateScore(assignment.id, student.id, suggestGrade(assignment, student))}>
+                          AI
+                        </button>
+                        <button className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => setComments((current) => ({ ...current, [scoreKey(assignment.id, student.id)]: current[scoreKey(assignment.id, student.id)] || 'Teacher note pending.' }))}>
+                          Note
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                )
+              })}
+              <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(average)}`}>{formatPercent(average)}</span>
+              </td>
+              <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(projected)}`}>{formatPercent(projected)}</span>
+              </td>
+              <td className="border-l border-t border-gray-100 px-3 py-3 dark:border-kcs-blue-800">
+                <div className="flex flex-col gap-2">
+                  <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${risk === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : risk === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+                    {risk} risk
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{missing} missing</span>
+                </div>
+              </td>
+            </tr>
+          ))}
+          {studentAnalytics.length > 0 && (
+            <tr className="bg-gray-50 font-bold text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-white">
+              <td className="sticky left-0 z-10 border-t border-gray-100 bg-gray-50 px-4 py-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-800">
+                Class average
+              </td>
+              {visibleAssignments.map((assignment) => (
+                <td key={`average-${assignment.id}`} className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                  {formatPercent(getAssignmentAverage(assignment))}
+                </td>
+              ))}
+              <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                {formatPercent(studentAnalytics.some((item) => item.average !== null) ? classAverage : null)}
+              </td>
+              <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                {formatPercent(studentAnalytics.some((item) => item.projected !== null)
+                  ? studentAnalytics.reduce((sum, item) => sum + (item.projected ?? 0), 0) / Math.max(1, studentAnalytics.filter((item) => item.projected !== null).length)
+                  : null)}
+              </td>
+              <td className="border-l border-t border-gray-100 px-3 py-3 text-xs text-gray-500 dark:border-kcs-blue-800 dark:text-gray-300">
+                Auto-calculated
+              </td>
+            </tr>
+          )}
+          {!studentAnalytics.length && (
+            <tr>
+              <td colSpan={visibleAssignments.length + 4} className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                Select a class with students from the Super Admin registry to start entering grades.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
@@ -341,16 +445,25 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_0.7fr_0.7fr_1fr]">
-            <select className="input-kcs py-2 text-sm" value={selectedCourse?.id} onChange={(event) => onSelectCourse(event.target.value)}>
-              {courses.map((course) => <option key={course.id} value={course.id}>{course.gradeLevels[0]} - {course.name}</option>)}
-            </select>
-            <select className="input-kcs py-2 text-sm" value={term} onChange={(event) => setTerm(event.target.value)}>
-              {terms.map((item) => <option key={item}>{item}</option>)}
-            </select>
-            <select className="input-kcs py-2 text-sm" value={scale} onChange={(event) => setScale(Number(event.target.value))}>
-              {scoreScales.map((item) => <option key={item} value={item}>{item}-point scale</option>)}
-            </select>
+          <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_0.9fr_0.7fr_1fr]">
+            <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Course and class roster
+              <select className="input-kcs py-2 text-sm" value={selectedCourse?.id} onChange={(event) => onSelectCourse(event.target.value)}>
+                {courses.map((course) => <option key={course.id} value={course.id}>{course.gradeLevels[0]} - {course.name} ({course.studentIds.length} students)</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Academic period
+              <select className="input-kcs py-2 text-sm" value={term} onChange={(event) => setTerm(event.target.value)}>
+                {terms.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Score scale
+              <select className="input-kcs py-2 text-sm" value={scale} onChange={(event) => setScale(Number(event.target.value))}>
+                {scoreScales.map((item) => <option key={item} value={item}>{item}-point scale</option>)}
+              </select>
+            </label>
             <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
               <Search size={16} className="text-gray-400" />
               <input className="w-full bg-transparent text-sm outline-none dark:text-white" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students" />
@@ -384,30 +497,42 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">RBAC: teacher classes only</span>
           </div>
           <div className="mt-4 grid gap-3">
-            <input className="input-kcs py-2 text-sm" value={draft.title} onChange={(event) => setDraft((item) => ({ ...item, title: event.target.value }))} placeholder="Title" />
-            <div className="grid gap-3 sm:grid-cols-3">
-              <select
-                className="input-kcs py-2 text-sm"
-                value={draft.type}
-                onChange={(event) => {
-                  const type = event.target.value as AssignmentType
-                  setDraft((item) => ({
-                    ...item,
-                    type,
-                    category: type,
-                    maxPoints: defaultPointsByType[type],
-                  }))
-                }}
-              >
-                {assignmentTypes.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-              <select className="input-kcs py-2 text-sm" value={draft.category} onChange={(event) => setDraft((item) => ({ ...item, category: event.target.value }))}>
-                {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <input className="input-kcs py-2 text-sm" type="number" min={1} value={draft.maxPoints} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: Number(event.target.value) }))} />
+            <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Task title
+              <input className="input-kcs py-2 text-sm" value={draft.title} onChange={(event) => setDraft((item) => ({ ...item, title: event.target.value }))} placeholder="Example: Genetics quiz, Lab report, Unit exam" />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Assessment type
+                <select
+                  className="input-kcs py-2 text-sm"
+                  value={draft.type}
+                  onChange={(event) => {
+                    const type = event.target.value as AssignmentType
+                    setDraft((item) => ({
+                      ...item,
+                      type,
+                      category: categoryForType(type),
+                      maxPoints: defaultPointsByType[type],
+                    }))
+                  }}
+                >
+                  {assignmentTypes.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Weighting counter / max points
+                <input className="input-kcs py-2 text-sm" type="number" min={1} value={draft.maxPoints} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: Number(event.target.value) }))} />
+              </label>
             </div>
-            <input className="input-kcs py-2 text-sm" type="date" value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
-            <textarea className="input-kcs min-h-20 py-2 text-sm" value={draft.description} onChange={(event) => setDraft((item) => ({ ...item, description: event.target.value }))} />
+            <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Date
+              <input className="input-kcs py-2 text-sm dark:[color-scheme:dark]" type="date" value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Description / grading evidence
+              <textarea className="input-kcs min-h-20 py-2 text-sm" value={draft.description} onChange={(event) => setDraft((item) => ({ ...item, description: event.target.value }))} />
+            </label>
             <button onClick={addAssignment} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800"><Plus size={16} className="mr-1 inline" /> Add task</button>
           </div>
         </div>
@@ -442,6 +567,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button onClick={() => setSpreadsheetWindowOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-kcs-blue-100 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+              <Maximize2 size={15} /> Open window
+            </button>
             <select className="input-kcs py-2 text-sm" value={selectedAssignmentId} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
               {visibleAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
             </select>
@@ -450,103 +578,28 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div>
         </div>
 
-        <div className="max-h-[680px] overflow-auto">
-          <table className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm">
-            <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm dark:bg-kcs-blue-900 dark:text-gray-300">
-              <tr>
-                <th className="sticky left-0 z-30 w-64 bg-gray-50 px-4 py-3 text-left dark:bg-kcs-blue-900">Student</th>
-                {visibleAssignments.map((assignment) => (
-                  <th key={assignment.id} className="min-w-36 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
-                    <span className="block normal-case text-gray-400">{assignment.type} - {assignment.maxPoints} pts</span>
-                    <button onClick={() => deleteAssignment(assignment.id)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold normal-case text-red-500 hover:text-red-600"><Trash2 size={12} /> Delete</button>
-                  </th>
-                ))}
-                <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Average</th>
-                <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Prediction</th>
-                <th className="min-w-40 border-l border-gray-100 px-3 py-3 text-left dark:border-kcs-blue-800">AI status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {studentAnalytics.map(({ student, average, missing, projected, risk }) => (
-                <tr key={student.id} className="group">
-                  <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-4 py-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{student.grade}{student.section} - {student.advisor ?? 'Advisor pending'}</p>
-                  </td>
-                  {visibleAssignments.map((assignment) => {
-                    const normalized = getScore(assignment, student.id)
-                    return (
-                      <td key={`${student.id}-${assignment.id}`} className="border-l border-t border-gray-100 px-3 py-3 dark:border-kcs-blue-800">
-                        <div className="flex flex-col gap-2">
-                          <input
-                            className={`mx-auto w-20 rounded-lg px-2 py-2 text-center text-sm font-bold outline-none ring-1 transition-colors focus:ring-2 focus:ring-kcs-blue-400 ${toneForScore(normalized)}`}
-                            value={getRawScore(assignment.id, student.id)}
-                            onChange={(event) => updateScore(assignment.id, student.id, event.target.value)}
-                            placeholder="I"
-                          />
-                          <div className="flex justify-center gap-1">
-                            <button className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => updateScore(assignment.id, student.id, suggestGrade(assignment, student))}>
-                              AI
-                            </button>
-                            <button className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => setComments((current) => ({ ...current, [scoreKey(assignment.id, student.id)]: current[scoreKey(assignment.id, student.id)] || 'Teacher note pending.' }))}>
-                              Note
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    )
-                  })}
-                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(average)}`}>{formatPercent(average)}</span>
-                  </td>
-                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(projected)}`}>{formatPercent(projected)}</span>
-                  </td>
-                  <td className="border-l border-t border-gray-100 px-3 py-3 dark:border-kcs-blue-800">
-                    <div className="flex flex-col gap-2">
-                      <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${risk === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : risk === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
-                        {risk} risk
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{missing} missing</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {studentAnalytics.length > 0 && (
-                <tr className="bg-gray-50 font-bold text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-white">
-                  <td className="sticky left-0 z-10 border-t border-gray-100 bg-gray-50 px-4 py-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-800">
-                    Class average
-                  </td>
-                  {visibleAssignments.map((assignment) => (
-                    <td key={`average-${assignment.id}`} className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                      {formatPercent(getAssignmentAverage(assignment))}
-                    </td>
-                  ))}
-                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    {formatPercent(studentAnalytics.some((item) => item.average !== null) ? classAverage : null)}
-                  </td>
-                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    {formatPercent(studentAnalytics.some((item) => item.projected !== null)
-                      ? studentAnalytics.reduce((sum, item) => sum + (item.projected ?? 0), 0) / Math.max(1, studentAnalytics.filter((item) => item.projected !== null).length)
-                      : null)}
-                  </td>
-                  <td className="border-l border-t border-gray-100 px-3 py-3 text-xs text-gray-500 dark:border-kcs-blue-800 dark:text-gray-300">
-                    Auto-calculated
-                  </td>
-                </tr>
-              )}
-              {!studentAnalytics.length && (
-                <tr>
-                  <td colSpan={visibleAssignments.length + 4} className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
-                    Select a class with students from the Super Admin registry to start entering grades.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {spreadsheetTable()}
       </div>
+
+      {spreadsheetWindowOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Live spreadsheet dedicated window">
+          <section className="max-h-[94vh] w-full max-w-[min(97vw,110rem)] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+            <div className="flex flex-col gap-3 border-b border-gray-100 p-5 dark:border-kcs-blue-800 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{selectedCourse?.gradeLevels[0]} - {selectedCourse?.name}</p>
+                <h3 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{courseStudents.length} enrolled student(s), {visibleAssignments.length} task(s), weighted averages live.</p>
+              </div>
+              <button type="button" onClick={() => setSpreadsheetWindowOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                <X size={16} /> Close
+              </button>
+            </div>
+            <div className="p-3 sm:p-5">
+              {spreadsheetTable(true)}
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="grid gap-6 lg:grid-cols-2">

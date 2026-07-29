@@ -17,7 +17,10 @@ interface NavItem {
   label: string
   icon: React.ElementType
   badge?: number
+  external?: boolean
 }
+
+const lessonPlanUrl = 'https://propheticpowerfulman.github.io/LessonPlanPowerfullyDone/'
 
 const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
@@ -37,6 +40,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/portal/student/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/student/profile', label: t('portalNav.myProfile'), icon: UserCheck },
+        { to: '/portal/student/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'parent':
       return [
@@ -47,6 +51,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/parent/calendar', label: t('portalNav.calendar'), icon: Calendar },
         { to: '/portal/parent/finance', label: t('portalNav.fees'), icon: WalletCards },
         { to: '/portal/parent/profile', label: t('portalNav.profile'), icon: UserCheck },
+        { to: '/portal/parent/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'teacher':
       return [
@@ -57,9 +62,11 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/teacher/assignments', label: t('portalNav.assignments'), icon: FileText },
         { to: '/portal/teacher/diagnostic', label: 'Diagnostic Tests', icon: ClipboardList },
         { to: '/portal/teacher/grades', label: t('portalNav.gradebook'), icon: BarChart3 },
+        { to: lessonPlanUrl, label: 'Lesson Plan', icon: BookOpen, external: true },
         { to: '/portal/teacher/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
         { to: '/portal/teacher/discipline', label: t('portalNav.disciplineReport'), icon: AlertTriangle },
         { to: '/portal/teacher/messages', label: t('portalNav.messages'), icon: MessageSquare },
+        { to: '/portal/teacher/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'staff':
       return [
@@ -72,6 +79,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/staff/finance', label: t('portalNav.feeTracking'), icon: WalletCards },
         { to: '/portal/staff/messages', label: t('portalNav.messages'), icon: MessageSquare, badge: 12 },
         { to: '/portal/staff/permissions', label: t('portalNav.permissions'), icon: Shield },
+        { to: '/portal/staff/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'admin':
       return [
@@ -192,32 +200,50 @@ const PortalSidebar = () => {
   const renderNavigation = (isMobile = false) => (
     <>
       <nav className={`${isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'flex-1 space-y-1 overflow-y-auto p-3'}`}>
-        {navItems.map(({ to, label, icon: Icon, badge }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === (user.role === 'admin' ? '/admin' : `/portal/${user.role}`)}
-            onClick={(event) => {
-              event.preventDefault()
-              setSidebarOpen(false)
-              document.body.style.overflow = ''
-              navigate(to)
-            }}
-            className={({ isActive }) =>
-              `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`
-            }
-            title={!isMobile && sidebarCollapsed ? label : undefined}
-          >
-            <Icon size={18} className="flex-shrink-0" />
-            {(isMobile || !sidebarCollapsed) && (
-              <span className="min-w-0 flex-1 truncate">{label}</span>
-            )}
-            {badge && badge > 0 && (isMobile || !sidebarCollapsed) && (
-              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                {badge > 99 ? '99+' : badge}
-              </span>
-            )}
-          </NavLink>
+        {navItems.map(({ to, label, icon: Icon, badge, external }) => (
+          external ? (
+            <a
+              key={to}
+              href={to}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => {
+                setSidebarOpen(false)
+                document.body.style.overflow = ''
+              }}
+              className={`sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`}
+              title={!isMobile && sidebarCollapsed ? label : undefined}
+            >
+              <Icon size={18} className="flex-shrink-0" />
+              {(isMobile || !sidebarCollapsed) && <span className="min-w-0 flex-1 truncate">{label}</span>}
+            </a>
+          ) : (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === (user.role === 'admin' ? '/admin' : `/portal/${user.role}`)}
+              onClick={(event) => {
+                event.preventDefault()
+                setSidebarOpen(false)
+                document.body.style.overflow = ''
+                navigate(to)
+              }}
+              className={({ isActive }) =>
+                `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`
+              }
+              title={!isMobile && sidebarCollapsed ? label : undefined}
+            >
+              <Icon size={18} className="flex-shrink-0" />
+              {(isMobile || !sidebarCollapsed) && (
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+              )}
+              {badge && badge > 0 && (isMobile || !sidebarCollapsed) && (
+                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                  {badge > 99 ? '99+' : badge}
+                </span>
+              )}
+            </NavLink>
+          )
         ))}
       </nav>
 
