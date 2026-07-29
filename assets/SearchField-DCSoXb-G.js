@@ -1,1 +1,0 @@
-import{j as s,_ as e}from"./ui-02Ef6XjM.js";const a=({wrapperClassName:a="",inputClassName:t="",type:l="search",...r})=>s.jsxs("label",{className:`relative block ${a}`.trim(),children:[s.jsx(e,{size:18,className:"pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"}),s.jsx("input",{type:l,className:`input-kcs pl-11 ${t}`.trim(),...r})]});export{a as S};
