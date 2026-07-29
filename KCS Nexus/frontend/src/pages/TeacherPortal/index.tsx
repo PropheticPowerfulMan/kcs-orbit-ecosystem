@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -239,8 +239,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [gradeEntries, setGradeEntries] = useState(() => ecosystemGrades)
   const [reportList, setReportList] = useState(() => reportCards)
   const [disciplineList, setDisciplineList] = useState(() => disciplineReports)
+  const [reportCardClass, setReportCardClass] = useState('')
   const [reportCardStudentId, setReportCardStudentId] = useState('')
   const [reportCardTerm, setReportCardTerm] = useState('Trimestre 3')
+  const [reportCardPreviewOpen, setReportCardPreviewOpen] = useState(false)
+  const reportCardPreviewRef = useRef<HTMLIFrameElement>(null)
   const [reportCardRows, setReportCardRows] = useState(() =>
     subjects.slice(0, 4).map((subject, index) => ({
       id: subject.id,
@@ -385,6 +388,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (!firstStudent) return
 
     setSelectedStudentId((current) => current || firstStudent.id)
+    setReportCardClass((current) => current || `${firstStudent.grade}${firstStudent.section}`)
     setReportCardStudentId((current) => current || firstStudent.id)
     setAttendanceDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
     setAssignmentDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
@@ -393,6 +397,27 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setDisciplineDraft((draft) => ({ ...draft, studentId: draft.studentId || superAdminStudentPool[1]?.id || firstStudent.id }))
     setCourseDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
   }, [superAdminStudentPool])
+  const reportCardClasses = useMemo(() => {
+    const classes = Array.from(new Set(teacherStudents.map((student) => `${student.grade}${student.section}`).filter(Boolean)))
+    return classes.length ? classes : Array.from(new Set(rosterSourceStudents.map((student) => `${student.grade}${student.section}`).filter(Boolean)))
+  }, [rosterSourceStudents, teacherStudents])
+  const reportCardClassStudents = useMemo(() => {
+    const source = teacherStudents.length ? teacherStudents : rosterSourceStudents
+    return reportCardClass ? source.filter((student) => `${student.grade}${student.section}` === reportCardClass) : source
+  }, [reportCardClass, rosterSourceStudents, teacherStudents])
+
+  useEffect(() => {
+    if (!reportCardClasses.length) return
+    setReportCardClass((current) => current || reportCardClasses[0])
+  }, [reportCardClasses])
+
+  useEffect(() => {
+    if (!reportCardClassStudents.length) return
+    if (!reportCardClassStudents.some((student) => student.id === reportCardStudentId)) {
+      setReportCardStudentId(reportCardClassStudents[0].id)
+      setMainTeacherCommentEdited(false)
+    }
+  }, [reportCardClassStudents, reportCardStudentId])
   const reportCardStudent = findStudent(reportCardStudentId)
   const reportCardAverage = useMemo(() => {
     const totalWeightedPoints = reportCardRows.reduce((sum, row) => sum + Math.max(0, Math.min(100, row.points)) * row.coefficient, 0)
@@ -401,7 +426,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [reportCardRows])
   const reportCardMention = reportCardAverage >= 90 ? 'Excellent' : reportCardAverage >= 80 ? 'Very Good' : reportCardAverage >= 70 ? 'Satisfactory' : reportCardAverage >= 60 ? 'Needs Support' : 'Intervention Required'
   const reportCardDecision = reportCardAverage >= 70 ? 'Promote academic momentum' : 'Create support plan before final approval'
-  const suggestedMainTeacherComment = `${reportCardStudent?.name ?? 'The student'} completed ${reportCardRows.length} course evaluation(s) for ${reportCardTerm} with a weighted average of ${reportCardAverage}%. Strengths should be maintained through consistent class participation, while the main teacher should monitor the lowest course score and coordinate support with the concerned subject teacher.`
+  const reportCardStudentName = reportCardStudent?.name ?? reportCardClassStudents[0]?.name ?? 'Selected student'
+  const suggestedMainTeacherComment = `${reportCardStudentName} completed ${reportCardRows.length} course evaluation(s) for ${reportCardTerm} with a weighted average of ${reportCardAverage}%. ${reportCardStudentName} should maintain the strongest subject habits through consistent class participation, while the main teacher monitors the lowest course score and coordinates support with the concerned subject teacher.`
 
   useEffect(() => {
     if (!mainTeacherCommentEdited) setMainTeacherComment(suggestedMainTeacherComment)
@@ -492,21 +518,17 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     }).join('')
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(SCHOOL_NAME)} Report Card</title><style>
-      @page{size:A4;margin:10mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;width:210mm;min-height:297mm;margin:0 auto;background:#fff;border:1px solid #d6dfec;padding:13mm;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.035;pointer-events:none}.watermark img{width:165mm;max-width:86%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:5px solid #0b3b73;padding-bottom:14px}.brand{display:flex;align-items:center;gap:18px}.logo{height:112px;width:112px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:28px;font-weight:900;letter-spacing:.02em}.tag{margin:6px 0 0;color:#b8872c;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.14em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{margin:20px 0 14px;text-align:center}.title h1{margin:0;color:#0b3b73;font-size:31px}.title p{margin:6px 0 0;color:#526172}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;padding:9px;background:#f8fafc}.label{display:block;color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:900;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th{background:#0b3b73;color:#fff;text-align:left;padding:8px;border:1px solid #0b3b73}td{padding:8px;border:1px solid #dbe4f0;vertical-align:top}td span{color:#64748b;font-size:9px}.num{text-align:right;font-weight:900}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px}.average{font-size:24px;color:#0b3b73}.comment{margin-top:14px;border-left:5px solid #d8a536;background:#fff8e6;padding:13px;color:#3f3215;min-height:34mm}.auth{display:grid;grid-template-columns:1fr 148px;gap:14px;align-items:center;margin-top:14px;border:1px dashed #9ab0cb;background:#f8fafc;padding:10px}.qr{height:138px;width:138px;border:6px solid #fff;box-shadow:0 0 0 1px #dbe4f0}.auth p{margin:4px 0;font-size:11px}.mono{font-family:Consolas,monospace;font-weight:900;color:#0b3b73}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:18px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;margin:0;padding:0;width:auto;min-height:auto}.actions{display:none}}
+      @page{size:A4;margin:10mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;width:210mm;min-height:297mm;margin:0 auto;background:#fff;border:1px solid #d6dfec;padding:13mm;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.055;pointer-events:none}.watermark img{width:190mm;max-width:94%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:5px solid #0b3b73;padding-bottom:14px}.brand{display:flex;align-items:center;gap:20px}.logo{height:146px;width:146px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:28px;font-weight:900;letter-spacing:.02em}.tag{margin:6px 0 0;color:#b8872c;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.14em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{margin:20px 0 14px;text-align:center}.title h1{margin:0;color:#0b3b73;font-size:31px}.title p{margin:6px 0 0;color:#526172}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;padding:9px;background:#f8fafc}.label{display:block;color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:900;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th{background:#0b3b73;color:#fff;text-align:left;padding:8px;border:1px solid #0b3b73}td{padding:8px;border:1px solid #dbe4f0;vertical-align:top}td span{color:#64748b;font-size:9px}.num{text-align:right;font-weight:900}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px}.average{font-size:24px;color:#0b3b73}.comment{margin-top:14px;border-left:5px solid #d8a536;background:#fff8e6;padding:13px;color:#3f3215;min-height:34mm}.auth{display:grid;grid-template-columns:1fr 148px;gap:14px;align-items:center;margin-top:14px;border:1px dashed #9ab0cb;background:#f8fafc;padding:10px}.qr{height:138px;width:138px;border:6px solid #fff;box-shadow:0 0 0 1px #dbe4f0}.auth p{margin:4px 0;font-size:11px}.mono{font-family:Consolas,monospace;font-weight:900;color:#0b3b73}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:18px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;margin:0;padding:0;width:auto;min-height:auto}.actions{display:none}}
     </style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Excellence in Education, Rooted in Faith</p></div></section><aside class="badge"><strong>Official Report Card</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>Academic Report Card</h1><p>${escapeHtml(reportCardTerm)} - 2026 Academic Year - A4 official school copy</p></section><section class="info"><div><span class="label">Student</span><span class="value">${escapeHtml(studentName)}</span></div><div><span class="label">Class</span><span class="value">${escapeHtml(grade)}</span></div><div><span class="label">Main teacher</span><span class="value">${escapeHtml(reportCardStudent?.advisor ?? 'Homeroom teacher')}</span></div><div><span class="label">Status</span><span class="value">Teacher draft</span></div></section><table><thead><tr><th>Course / gradebook source</th><th>Teacher</th><th>Coef.</th><th>Final score</th><th>Mention</th><th>Teacher comment</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div><span class="label">General average</span><span class="value average">${escapeHtml(reportCardAverage)}%</span></div><div><span class="label">Mention</span><span class="value">${escapeHtml(reportCardMention)}</span></div><div><span class="label">Decision</span><span class="value">${escapeHtml(reportCardDecision)}</span></div><div><span class="label">Publication</span><span class="value">After approval and fee clearance</span></div></section><section class="comment"><strong>Main teacher final comment</strong><br>${escapeHtml(mainTeacherComment)}</section><section class="auth"><div><span class="label">Digital authenticity markers</span><p>Verification code: <span class="mono">${escapeHtml(verificationCode)}</span></p><p>Document ID: <span class="mono">${escapeHtml(documentId)}</span></p><p>Scan the QR code to open the Nexus verification address for this report-card copy.</p><p class="mono">${escapeHtml(verificationUrl)}</p></div><img class="qr" src="${escapeHtml(qrUrl)}" alt="Report card verification QR code"></section><section class="signatures"><div class="sig">Main Teacher Comment / Signature</div><div class="sig">Academic Coordinator</div><div class="sig">Super Admin / Principal</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus official academic document</span><span>${escapeHtml(documentId)} - ${escapeHtml(verificationCode)}</span></footer></main></body></html>`
   }
 
   const openReportCardDocument = (printNow = false) => {
-    const win = window.open('', '_blank')
-    if (!win) {
-      runAction('Browser blocked the report-card preview window. Allow pop-ups for KCS Nexus and try again.')
-      return
-    }
-    win.document.write(reportCardDocumentHtml())
-    win.document.close()
+    setReportCardPreviewOpen(true)
     if (printNow) {
-      win.focus()
-      setTimeout(() => win.print(), 250)
+      setTimeout(() => {
+        reportCardPreviewRef.current?.contentWindow?.focus()
+        reportCardPreviewRef.current?.contentWindow?.print()
+      }, 350)
     }
   }
 
@@ -1702,9 +1724,29 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">Bulletin officiel</h3>
               <div className="mt-4 grid gap-3">
                 <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Classe du main teacher
+                  <select
+                    className={inputClass}
+                    value={reportCardClass}
+                    onChange={(event) => {
+                      setReportCardClass(event.target.value)
+                      setMainTeacherCommentEdited(false)
+                    }}
+                  >
+                    {reportCardClasses.map((className) => <option key={className} value={className}>{className} - {reportCardClass === className ? reportCardClassStudents.length : teacherStudents.filter((student) => `${student.grade}${student.section}` === className).length} eleve(s)</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                   Eleve concerne
-                  <select className={inputClass} value={reportCardStudentId} onChange={(event) => setReportCardStudentId(event.target.value)}>
-                    {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section}</option>)}
+                  <select
+                    className={inputClass}
+                    value={reportCardStudentId}
+                    onChange={(event) => {
+                      setReportCardStudentId(event.target.value)
+                      setMainTeacherCommentEdited(false)
+                    }}
+                  >
+                    {reportCardClassStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section}</option>)}
                   </select>
                 </label>
                 <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1728,10 +1770,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <button onClick={generateReportCard} className={compactButton}>Save draft</button>
-                  <button onClick={addReportCardCourse} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Add course</button>
-                  <button onClick={() => openReportCardDocument(false)} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Preview</button>
-                  <button onClick={() => openReportCardDocument(true)} className="rounded-xl bg-kcs-gold-500 px-4 py-2 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Print / Download PDF</button>
+                  <button onClick={generateReportCard} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-blue-500 dark:text-white dark:hover:bg-kcs-blue-400">Save draft</button>
+                  <button onClick={addReportCardCourse} className="rounded-xl border border-kcs-blue-300 bg-white px-4 py-2.5 text-sm font-bold text-kcs-blue-800 shadow-sm hover:bg-kcs-blue-50 dark:border-kcs-blue-500 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">Add course</button>
+                  <button onClick={() => openReportCardDocument(false)} className="rounded-xl border border-kcs-gold-400 bg-kcs-gold-50 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-100 dark:border-kcs-gold-500 dark:bg-kcs-gold-500 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-400">Preview</button>
+                  <button onClick={() => openReportCardDocument(true)} className="rounded-xl bg-green-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-green-800 dark:bg-green-500 dark:text-white dark:hover:bg-green-400">Print / Download PDF</button>
                 </div>
               </div>
             </div>
@@ -1838,6 +1880,43 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {reportCardPreviewOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Report card preview window">
+              <section className="flex max-h-[95vh] w-full max-w-[min(98vw,88rem)] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+                <div className="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-kcs-blue-800 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">A4 official report card preview</p>
+                    <h3 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{reportCardStudentName} - {reportCardTerm}</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => reportCardPreviewRef.current?.contentWindow?.print()}
+                      className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white hover:bg-green-800 dark:bg-green-500 dark:hover:bg-green-400"
+                    >
+                      Print / Save PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportCardPreviewOpen(false)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800"
+                    >
+                      <X size={16} /> Close
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 bg-gray-100 p-3 dark:bg-kcs-blue-950">
+                  <iframe
+                    ref={reportCardPreviewRef}
+                    title="Official report card preview"
+                    srcDoc={reportCardDocumentHtml()}
+                    className="h-[78vh] w-full rounded-xl border border-gray-200 bg-white dark:border-kcs-blue-800"
+                  />
+                </div>
+              </section>
             </div>
           )}
         </div>
