@@ -67,6 +67,8 @@ const emptyQuestion: DiagnosticQuestion = {
   explanation: '',
 }
 
+const diagnosticInputClass = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-kcs-blue-900 outline-none transition-colors placeholder:text-gray-400 focus:border-kcs-blue-500 focus:ring-2 focus:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-kcs-blue-400 dark:focus:ring-kcs-blue-800/60'
+
 const demoDiagnosticTests: DiagnosticTest[] = [
   {
     id: 'diag-demo-math-6',
@@ -280,20 +282,20 @@ export default function DiagnosticCenter() {
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-4 flex items-center gap-2"><Plus className="text-kcs-blue-600" /><h2 className="font-bold text-kcs-blue-900 dark:text-white">Diagnostic Test Builder</h2></div>
               <div className="grid gap-3">
-                <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} className="rounded-xl border px-3 py-2" placeholder="Title" />
+                <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} className={diagnosticInputClass} placeholder="Title" />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <select value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value as any })} className="rounded-xl border px-3 py-2"><option value="FRENCH">French</option><option value="MATHEMATICS">Mathematics</option></select>
-                  <input value={draft.gradeLevel} onChange={(e) => setDraft({ ...draft, gradeLevel: e.target.value })} className="rounded-xl border px-3 py-2" />
+                  <select value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value as any })} className={diagnosticInputClass}><option value="FRENCH">French</option><option value="MATHEMATICS">Mathematics</option></select>
+                  <input value={draft.gradeLevel} onChange={(e) => setDraft({ ...draft, gradeLevel: e.target.value })} className={diagnosticInputClass} />
                 </div>
-                <input value={draft.competencies} onChange={(e) => setDraft({ ...draft, competencies: e.target.value })} className="rounded-xl border px-3 py-2" placeholder="Competencies, comma separated" />
+                <input value={draft.competencies} onChange={(e) => setDraft({ ...draft, competencies: e.target.value })} className={diagnosticInputClass} placeholder="Competencies, comma separated" />
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/30">
                   <p className="mb-2 text-sm font-bold text-kcs-blue-900 dark:text-white">Add question</p>
-                  <textarea value={question.questionText} onChange={(e) => setQuestion({ ...question, questionText: e.target.value })} className="min-h-20 w-full rounded-xl border px-3 py-2" placeholder="Question text" />
+                  <textarea value={question.questionText} onChange={(e) => setQuestion({ ...question, questionText: e.target.value })} className={`${diagnosticInputClass} min-h-20 w-full`} placeholder="Question text" />
                   <div className="mt-2 grid gap-2 sm:grid-cols-4">
-                    <select value={question.questionType} onChange={(e) => setQuestion({ ...question, questionType: e.target.value as any })} className="rounded-xl border px-3 py-2"><option>MULTIPLE_CHOICE</option><option>TRUE_FALSE</option><option>SHORT_ANSWER</option><option>NUMERIC</option><option>ESSAY_OPTIONAL</option></select>
-                    <input value={String(question.correctAnswer ?? '')} onChange={(e) => setQuestion({ ...question, correctAnswer: question.questionType === 'NUMERIC' ? Number(e.target.value) : e.target.value })} className="rounded-xl border px-3 py-2" placeholder="Correct answer" />
-                    <input type="number" value={question.points} onChange={(e) => setQuestion({ ...question, points: Number(e.target.value) })} className="rounded-xl border px-3 py-2" />
-                    <input value={question.competencyTag} onChange={(e) => setQuestion({ ...question, competencyTag: e.target.value })} className="rounded-xl border px-3 py-2" />
+                    <select value={question.questionType} onChange={(e) => setQuestion({ ...question, questionType: e.target.value as any })} className={diagnosticInputClass}><option>MULTIPLE_CHOICE</option><option>TRUE_FALSE</option><option>SHORT_ANSWER</option><option>NUMERIC</option><option>ESSAY_OPTIONAL</option></select>
+                    <input value={String(question.correctAnswer ?? '')} onChange={(e) => setQuestion({ ...question, correctAnswer: question.questionType === 'NUMERIC' ? Number(e.target.value) : e.target.value })} className={diagnosticInputClass} placeholder="Correct answer" />
+                    <input type="number" value={question.points} onChange={(e) => setQuestion({ ...question, points: Number(e.target.value) })} className={diagnosticInputClass} />
+                    <input value={question.competencyTag} onChange={(e) => setQuestion({ ...question, competencyTag: e.target.value })} className={diagnosticInputClass} />
                   </div>
                   <button type="button" onClick={addQuestion} className="mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Add question</button>
                 </div>
@@ -324,9 +326,9 @@ export default function DiagnosticCenter() {
               <div className="mt-5 rounded-xl border border-kcs-blue-100 p-4 dark:border-kcs-blue-800">
                 <p className="mb-2 text-sm font-bold">Assign diagnostic test</p>
                 <div className="grid gap-2 sm:grid-cols-3">
-                  <input value={assignmentDraft.testId} onChange={(e) => setAssignmentDraft({ ...assignmentDraft, testId: e.target.value })} className="rounded-xl border px-3 py-2" placeholder="Test ID" />
-                  <input value={assignmentDraft.applicantName} onChange={(e) => setAssignmentDraft({ ...assignmentDraft, applicantName: e.target.value })} className="rounded-xl border px-3 py-2" />
-                  <input value={assignmentDraft.applicantEmail} onChange={(e) => setAssignmentDraft({ ...assignmentDraft, applicantEmail: e.target.value })} className="rounded-xl border px-3 py-2" />
+                  <input value={assignmentDraft.testId} onChange={(e) => setAssignmentDraft({ ...assignmentDraft, testId: e.target.value })} className={diagnosticInputClass} placeholder="Test ID" />
+                  <input value={assignmentDraft.applicantName} onChange={(e) => setAssignmentDraft({ ...assignmentDraft, applicantName: e.target.value })} className={diagnosticInputClass} />
+                  <input value={assignmentDraft.applicantEmail} onChange={(e) => setAssignmentDraft({ ...assignmentDraft, applicantEmail: e.target.value })} className={diagnosticInputClass} />
                 </div>
                 <button onClick={assign} className="mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Assign</button>
               </div>
@@ -352,7 +354,7 @@ export default function DiagnosticCenter() {
                 {activeSubmission.test.questions.map((item, index) => (
                   <label key={item.id} className="block rounded-xl border border-gray-100 p-4">
                     <span className="text-sm font-bold">{index + 1}. {item.questionText}</span>
-                    <input value={answers[item.id ?? ''] ?? ''} onChange={(e) => setAnswers({ ...answers, [item.id ?? '']: e.target.value })} className="mt-2 w-full rounded-xl border px-3 py-2" placeholder="Answer" />
+                    <input value={answers[item.id ?? ''] ?? ''} onChange={(e) => setAnswers({ ...answers, [item.id ?? '']: e.target.value })} className={`${diagnosticInputClass} mt-2 w-full`} placeholder="Answer" />
                   </label>
                 ))}
                 <button onClick={submit} className="rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white">Submit answers</button>

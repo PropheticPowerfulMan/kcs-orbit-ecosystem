@@ -8,6 +8,7 @@ type AccountSettingsPanelProps = {
 }
 
 const inputClass = 'rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-kcs-blue-900 outline-none transition-colors focus:border-kcs-blue-500 focus:ring-2 focus:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:focus:border-kcs-blue-400 dark:focus:ring-kcs-blue-800/60'
+const passwordInputClass = 'min-w-0 flex-1 bg-white px-4 py-3 text-sm text-kcs-blue-900 outline-none transition-colors dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark] dark:[&:-webkit-autofill]:[-webkit-text-fill-color:#ffffff] dark:[&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#0f2352_inset]'
 
 const accountStatusItems: Array<[string, string, LucideIcon]> = [
   ['Profile completeness', '92%', UserCheck],
@@ -97,9 +98,9 @@ const AccountSettingsPanel = ({ roleLabel }: AccountSettingsPanelProps) => {
             {passwordFields.map(([id, label, placeholder]) => (
               <label key={id} className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                 {label}
-                <span className="flex items-center rounded-xl border border-gray-200 bg-white pr-2 focus-within:border-kcs-blue-500 focus-within:ring-2 focus-within:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:focus-within:border-kcs-blue-400 dark:focus-within:ring-kcs-blue-800/60">
+                <span className="flex items-center overflow-hidden rounded-xl border border-gray-200 bg-white pr-2 focus-within:border-kcs-blue-500 focus-within:ring-2 focus-within:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:focus-within:border-kcs-blue-400 dark:focus-within:ring-kcs-blue-800/60">
                   <input
-                    className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm text-kcs-blue-900 outline-none dark:text-white"
+                    className={passwordInputClass}
                     type={visiblePasswords[id] ? 'text' : 'password'}
                     placeholder={placeholder}
                   />

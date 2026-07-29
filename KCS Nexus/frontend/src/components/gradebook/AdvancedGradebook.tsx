@@ -8,6 +8,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  Save,
   Lightbulb,
   Plus,
   Search,
@@ -71,6 +72,24 @@ type Category = {
   id: string
   name: string
   weight: number
+}
+
+type ReportCardCourseSubmission = {
+  id: string
+  studentId: string
+  studentName: string
+  courseId: string
+  courseName: string
+  courseCode: string
+  gradeLevel: string
+  term: string
+  average: number | null
+  assignmentsCount: number
+  teacherVisibility: 'All teachers'
+  parentVisible: boolean
+  studentVisible: boolean
+  clearanceNote: string
+  submittedAt: string
 }
 
 type Props = {
@@ -172,6 +191,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [query, setQuery] = useState('')
   const [bulkValue, setBulkValue] = useState('')
   const [spreadsheetWindowOpen, setSpreadsheetWindowOpen] = useState(false)
+  const [reportCardWindowOpen, setReportCardWindowOpen] = useState(false)
+  const [reportCardSubmissions, setReportCardSubmissions] = useState<Record<string, ReportCardCourseSubmission>>({})
+  const [selectedReportCardStudentId, setSelectedReportCardStudentId] = useState('')
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(defaultAssignments[0].id)
   const [draft, setDraft] = useState({
     title: 'Concept Check',
@@ -323,6 +345,55 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     onAction(`${format} export prepared with gradebook table, report-card comments, and audit metadata.`)
   }
 
+  const hasPortalClearance = (student: GradebookStudent) => {
+    return (student.risk ?? 'low') !== 'high' && (student.attendance ?? 100) >= 85
+  }
+
+  const saveGradebook = () => {
+    onAction(`${selectedCourse?.name ?? 'Gradebook'} saved with ${courseStudents.length} roster student(s), ${visibleAssignments.length} active task(s), and live averages preserved.`)
+  }
+
+  const submitToReportCard = () => {
+    if (!selectedCourse || !courseStudents.length) {
+      onAction('Select a course with enrolled students before submitting grades to report cards.')
+      return
+    }
+
+    const submittedAt = new Date().toLocaleString()
+    const nextRows = courseStudents.map((student) => {
+      const average = getWeightedAverage(student.id)
+      const clear = hasPortalClearance(student)
+      return {
+        id: `${selectedCourse.id}:${student.id}:${term}`,
+        studentId: student.id,
+        studentName: student.name,
+        courseId: selectedCourse.id,
+        courseName: selectedCourse.name,
+        courseCode: selectedCourse.abbreviation,
+        gradeLevel: selectedCourse.gradeLevels[0] ?? student.grade,
+        term,
+        average,
+        assignmentsCount: visibleAssignments.length,
+        teacherVisibility: 'All teachers' as const,
+        parentVisible: clear,
+        studentVisible: clear,
+        clearanceNote: clear ? 'Fees and school obligations cleared for portal publication.' : 'Portal publication locked until fees and school obligations are cleared.',
+        submittedAt,
+      }
+    })
+
+    setReportCardSubmissions((current) => {
+      const next = { ...current }
+      nextRows.forEach((row) => {
+        next[row.id] = row
+      })
+      return next
+    })
+    setSelectedReportCardStudentId((current) => current || nextRows[0]?.studentId || '')
+    setReportCardWindowOpen(true)
+    onAction(`${selectedCourse.name} grades submitted to the report-card course rubric for ${nextRows.length} student(s).`)
+  }
+
   const updateCategoryWeight = (categoryId: string, weight: number) => {
     setCategories((current) => current.map((category) => category.id === categoryId ? { ...category, weight: Math.max(0, weight) } : category))
   }
@@ -426,6 +497,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     </div>
   )
 
+  const reportCardRows = Object.values(reportCardSubmissions).sort((a, b) => a.studentName.localeCompare(b.studentName) || a.courseName.localeCompare(b.courseName))
+  const reportCardStudents = courseStudents.length ? courseStudents : students
+  const selectedReportCardStudent = reportCardStudents.find((student) => student.id === selectedReportCardStudentId) ?? reportCardStudents[0]
+  const selectedReportCardRows = selectedReportCardStudent ? reportCardRows.filter((row) => row.studentId === selectedReportCardStudent.id) : []
+  const selectedReportCardAverage = selectedReportCardRows.filter((row) => row.average !== null).reduce((sum, row) => sum + (row.average ?? 0), 0) / Math.max(1, selectedReportCardRows.filter((row) => row.average !== null).length)
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
@@ -439,6 +516,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button onClick={saveGradebook} className="rounded-xl bg-green-700 px-3 py-2 text-sm font-semibold text-white hover:bg-green-800"><Save size={15} className="mr-1 inline" /> Save</button>
+              <button onClick={submitToReportCard} className="rounded-xl bg-kcs-gold-500 px-3 py-2 text-sm font-semibold text-kcs-blue-950 hover:bg-kcs-gold-400"><CheckCircle2 size={15} className="mr-1 inline" /> Submit to the report card</button>
+              <button onClick={() => setReportCardWindowOpen(true)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> Report Card</button>
               <button onClick={() => exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
               <button onClick={() => exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
               <button onClick={() => exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
@@ -596,6 +676,86 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             </div>
             <div className="p-3 sm:p-5">
               {spreadsheetTable(true)}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {reportCardWindowOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Report card dedicated window">
+          <section className="max-h-[94vh] w-full max-w-[min(97vw,96rem)] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+            <div className="flex flex-col gap-3 border-b border-gray-100 p-5 dark:border-kcs-blue-800 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Shared academic record</p>
+                <h3 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Report Card</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Teacher-wide view. Parent and student portals unlock only after fee and school-obligation clearance.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <select className="input-kcs py-2 text-sm" value={selectedReportCardStudent?.id ?? ''} onChange={(event) => setSelectedReportCardStudentId(event.target.value)}>
+                  {reportCardStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section}</option>)}
+                </select>
+                <button type="button" onClick={() => setReportCardWindowOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                  <X size={16} /> Close
+                </button>
+              </div>
+            </div>
+            <div className="grid max-h-[78vh] gap-5 overflow-auto p-5 xl:grid-cols-[0.7fr_1.3fr]">
+              <aside className="rounded-2xl border border-gray-100 p-4 dark:border-kcs-blue-800">
+                <p className="text-sm font-bold text-kcs-blue-900 dark:text-white">{selectedReportCardStudent?.name ?? 'Select student'}</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/40">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Submitted courses</p>
+                    <p className="mt-1 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{selectedReportCardRows.length}</p>
+                  </div>
+                  <div className="rounded-xl bg-green-50 p-4 dark:bg-green-900/20">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Report average</p>
+                    <p className="mt-1 font-display text-3xl font-bold text-green-700 dark:text-green-300">{selectedReportCardRows.length ? `${Math.round(selectedReportCardAverage)}%` : 'I'}</p>
+                  </div>
+                  <div className="rounded-xl bg-yellow-50 p-4 dark:bg-yellow-900/20">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Portal access</p>
+                    <p className="mt-1 text-sm font-bold text-yellow-700 dark:text-yellow-300">{selectedReportCardRows.every((row) => row.parentVisible && row.studentVisible) && selectedReportCardRows.length ? 'Parent/student visible' : 'Conditional'}</p>
+                  </div>
+                </div>
+              </aside>
+              <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-kcs-blue-800">
+                <table className="w-full min-w-[860px] text-sm">
+                  <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500 dark:bg-kcs-blue-950 dark:text-gray-300">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Course rubric</th>
+                      <th className="px-4 py-3 font-semibold">Term</th>
+                      <th className="px-4 py-3 text-right font-semibold">Average</th>
+                      <th className="px-4 py-3 font-semibold">Teachers</th>
+                      <th className="px-4 py-3 font-semibold">Parent / student portals</th>
+                      <th className="px-4 py-3 font-semibold">Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
+                    {selectedReportCardRows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-4 py-4">
+                          <p className="font-bold text-kcs-blue-900 dark:text-white">{row.courseName}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{row.courseCode} - {row.gradeLevel} - {row.assignmentsCount} task(s)</p>
+                        </td>
+                        <td className="px-4 py-4 text-gray-600 dark:text-gray-300">{row.term}</td>
+                        <td className="px-4 py-4 text-right font-display text-2xl font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{formatPercent(row.average)}</td>
+                        <td className="px-4 py-4"><span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-300">{row.teacherVisibility}</span></td>
+                        <td className="px-4 py-4">
+                          <p className={`text-xs font-bold ${row.parentVisible && row.studentVisible ? 'text-green-700 dark:text-green-300' : 'text-orange-700 dark:text-orange-300'}`}>{row.parentVisible && row.studentVisible ? 'Visible after publication' : 'Locked'}</p>
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{row.clearanceNote}</p>
+                        </td>
+                        <td className="px-4 py-4 text-xs text-gray-500 dark:text-gray-400">{row.submittedAt}</td>
+                      </tr>
+                    ))}
+                    {!selectedReportCardRows.length && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                          No course has been submitted yet for this student. Use "Submit to the report card" from the gradebook to publish the selected course rubric.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
         </div>

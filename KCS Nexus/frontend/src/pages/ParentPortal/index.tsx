@@ -133,6 +133,8 @@ const ParentSectionView = ({ segment, selectedChild }: { segment: string; select
   if (segment === 'performance' || segment === 'grades') {
     const childReport = reportCards.find((card) => card.student.includes(childFirstName))
     const childGrades = recentGrades.filter((grade) => grade.child === childFirstName)
+    const childFeeAccount = feeAccounts.find((fee) => fee.student.includes(childFirstName))
+    const canViewOfficialReportCard = !childFeeAccount || childFeeAccount.balance === 0
 
     return (
       <div className="space-y-6">
@@ -192,6 +194,47 @@ const ParentSectionView = ({ segment, selectedChild }: { segment: string; select
               </RadarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-bold text-kcs-blue-900 dark:text-white">Official Report Card</h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Parent access follows the finance and school-obligation clearance rule.</p>
+            </div>
+            <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${canViewOfficialReportCard ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'}`}>
+              {canViewOfficialReportCard ? 'Unlocked' : `Locked: $${childFeeAccount?.balance ?? 0} due`}
+            </span>
+          </div>
+          {canViewOfficialReportCard && childReport ? (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[620px] text-sm">
+                <thead className="text-left text-xs uppercase text-gray-400">
+                  <tr className="border-b border-gray-100 dark:border-kcs-blue-800">
+                    <th className="pb-3 font-medium">Student</th>
+                    <th className="pb-3 font-medium">Term</th>
+                    <th className="pb-3 text-right font-medium">Average</th>
+                    <th className="pb-3 font-medium">Conduct</th>
+                    <th className="pb-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="py-3 font-semibold text-kcs-blue-900 dark:text-white">{childReport.student}</td>
+                    <td className="py-3 text-gray-500 dark:text-gray-400">{childReport.term}</td>
+                    <td className="py-3 text-right font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{childReport.average}%</td>
+                    <td className="py-3 text-gray-500 dark:text-gray-400">{childReport.conduct}</td>
+                    <td className="py-3 text-gray-500 dark:text-gray-400">{childReport.principalStatus} - {childReport.download}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="mt-3 rounded-xl bg-green-50 p-4 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200">{childReport.teacherComment}</p>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900/40 dark:bg-orange-900/20 dark:text-orange-200">
+              The official bulletin remains hidden for the parent portal until finance confirms a zero balance and all school obligations are cleared.
+            </div>
+          )}
         </div>
       </div>
     )
