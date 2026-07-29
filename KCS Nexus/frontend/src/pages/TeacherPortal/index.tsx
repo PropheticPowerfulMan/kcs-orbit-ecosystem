@@ -14,6 +14,7 @@ import { studentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
+import { getAssetUrl } from '@/utils/assets'
 import {
   aiSignals,
   aiRecommendations,
@@ -38,6 +39,11 @@ const gradingQueue = [
   { id: 2, title: 'Genetics Quiz', className: 'Grade 10', pending: 27, due: 'Tomorrow' },
   { id: 3, title: 'Science Fair Proposal', className: 'Grade 9', pending: 11, due: 'Apr 24' },
 ]
+
+const SCHOOL_NAME = 'Kinshasa Christian School'
+const SCHOOL_LOGO_SRC = getAssetUrl('images/kcs-logo.png')
+const reportCardPeriods = ['Trimestre 1', 'Trimestre 2', 'Semestre 1', 'Trimestre 3', 'Trimestre 4', 'Semestre 2', 'Final annuel']
+const escapeHtml = (value: string | number | undefined | null) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char))
 
 const studentAlerts = [
   { student: 'Naomi K.', note: 'Attendance dropped to 84% over the last 3 weeks.', severity: 'high' },
@@ -227,7 +233,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [reportList, setReportList] = useState(() => reportCards)
   const [disciplineList, setDisciplineList] = useState(() => disciplineReports)
   const [reportCardStudentId, setReportCardStudentId] = useState('')
-  const [reportCardTerm, setReportCardTerm] = useState('Term 3')
+  const [reportCardTerm, setReportCardTerm] = useState('Trimestre 3')
   const [reportCardRows, setReportCardRows] = useState(() =>
     subjects.slice(0, 4).map((subject, index) => ({
       id: subject.id,
@@ -235,7 +241,6 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       teacher: subject.teacher,
       coefficient: index === 1 ? 2 : 1,
       points: index === 0 ? 89 : index === 1 ? 95 : index === 2 ? 91 : 76,
-      maxPoints: 100,
       comment: index === 1 ? 'Excellent lab reasoning' : index === 3 ? 'Needs steady homework rhythm' : 'Good progress',
     })),
   )
@@ -380,15 +385,20 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [superAdminStudentPool])
   const reportCardStudent = findStudent(reportCardStudentId)
   const reportCardAverage = useMemo(() => {
-    const totalWeightedPoints = reportCardRows.reduce((sum, row) => sum + (row.points / Math.max(row.maxPoints, 1)) * 100 * row.coefficient, 0)
+    const totalWeightedPoints = reportCardRows.reduce((sum, row) => sum + Math.max(0, Math.min(100, row.points)) * row.coefficient, 0)
     const totalCoefficient = reportCardRows.reduce((sum, row) => sum + row.coefficient, 0)
     return totalCoefficient ? Number((totalWeightedPoints / totalCoefficient).toFixed(2)) : 0
   }, [reportCardRows])
   const reportCardMention = reportCardAverage >= 90 ? 'Excellent' : reportCardAverage >= 80 ? 'Very Good' : reportCardAverage >= 70 ? 'Satisfactory' : reportCardAverage >= 60 ? 'Needs Support' : 'Intervention Required'
   const reportCardDecision = reportCardAverage >= 70 ? 'Promote academic momentum' : 'Create support plan before final approval'
 
-  const updateReportCardRow = (rowId: string, field: 'course' | 'points' | 'maxPoints' | 'coefficient' | 'comment', value: string | number) => {
-    setReportCardRows((current) => current.map((row) => row.id === rowId ? { ...row, [field]: value } : row))
+  const updateReportCardRow = (rowId: string, field: 'course' | 'points' | 'coefficient' | 'comment', value: string | number) => {
+    setReportCardRows((current) => current.map((row) => {
+      if (row.id !== rowId) return row
+      if (field === 'points') return { ...row, points: Math.max(0, Math.min(100, Number(value) || 0)) }
+      if (field === 'coefficient') return { ...row, coefficient: Math.max(1, Number(value) || 1) }
+      return { ...row, [field]: value }
+    }))
   }
 
   const addReportCardCourse = () => {
@@ -400,7 +410,6 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         teacher: 'Dr. Mukendi',
         coefficient: 1,
         points: 0,
-        maxPoints: 100,
         comment: 'Teacher comment pending',
       },
     ])
@@ -448,6 +457,36 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       download: 'Report card draft',
     }, ...current])
     runAction(`${studentName}'s report card was generated with an automatic ${reportCardAverage}% average.`)
+  }
+
+  const reportCardDocumentHtml = () => {
+    const studentName = reportCardStudent?.name ?? 'Selected student'
+    const grade = reportCardStudent ? `${reportCardStudent.grade}${reportCardStudent.section}` : 'Grade pending'
+    const logoUrl = typeof window === 'undefined' ? SCHOOL_LOGO_SRC : new URL(SCHOOL_LOGO_SRC, window.location.origin).href
+    const documentId = `KCS-RC-${Date.now()}`
+    const rows = reportCardRows.map((row) => {
+      const score = Math.max(0, Math.min(100, row.points))
+      const remark = score >= 90 ? 'Excellent' : score >= 80 ? 'Very good' : score >= 70 ? 'Satisfactory' : score >= 60 ? 'Needs support' : 'Intervention'
+      return `<tr><td>${escapeHtml(row.course)}</td><td>${escapeHtml(row.teacher)}</td><td class="num">${escapeHtml(row.coefficient)}</td><td class="num">${score.toFixed(1)}%</td><td>${escapeHtml(remark)}</td><td>${escapeHtml(row.comment)}</td></tr>`
+    }).join('')
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(SCHOOL_NAME)} Report Card</title><style>
+      @page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;min-height:100vh;background:#fff;border:1px solid #d6dfec;padding:28px;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.035;pointer-events:none}.watermark img{width:520px;max-width:80%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:4px solid #0b3b73;padding-bottom:18px}.brand{display:flex;align-items:center;gap:16px}.logo{height:78px;width:78px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:25px;font-weight:900;letter-spacing:.02em}.tag{margin:5px 0 0;color:#b8872c;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.16em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{margin:24px 0 18px;text-align:center}.title h1{margin:0;color:#0b3b73;font-size:30px}.title p{margin:6px 0 0;color:#526172}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;padding:10px;background:#f8fafc}.label{display:block;color:#64748b;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:800;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}th{background:#0b3b73;color:#fff;text-align:left;padding:10px;border:1px solid #0b3b73}td{padding:10px;border:1px solid #dbe4f0;vertical-align:top}.num{text-align:right;font-weight:800}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.average{font-size:24px;color:#0b3b73}.comment{margin-top:18px;border-left:5px solid #d8a536;background:#fff8e6;padding:14px;color:#3f3215}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:42px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:24px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;min-height:auto;padding:0}.actions{display:none}}
+    </style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Excellence in Education, Rooted in Faith</p></div></section><aside class="badge"><strong>Official Report Card</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>Academic Report Card</h1><p>${escapeHtml(reportCardTerm)} - 2026 Academic Year</p></section><section class="info"><div><span class="label">Student</span><span class="value">${escapeHtml(studentName)}</span></div><div><span class="label">Class</span><span class="value">${escapeHtml(grade)}</span></div><div><span class="label">Homeroom</span><span class="value">${escapeHtml(reportCardStudent?.advisor ?? 'Academic Office')}</span></div><div><span class="label">Status</span><span class="value">Teacher draft</span></div></section><table><thead><tr><th>Course</th><th>Teacher</th><th>Coef.</th><th>Score</th><th>Mention</th><th>Teacher comment</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div><span class="label">General average</span><span class="value average">${escapeHtml(reportCardAverage)}%</span></div><div><span class="label">Mention</span><span class="value">${escapeHtml(reportCardMention)}</span></div><div><span class="label">Decision</span><span class="value">${escapeHtml(reportCardDecision)}</span></div><div><span class="label">Publication</span><span class="value">After approval and fee clearance</span></div></section><section class="comment"><strong>Class teacher narrative</strong><br>${escapeHtml(studentName)} is currently at ${escapeHtml(reportCardAverage)}% for ${escapeHtml(reportCardTerm)}. The school recommends maintaining strengths while targeting the lowest course through a documented support plan.</section><section class="signatures"><div class="sig">Homeroom Teacher</div><div class="sig">Academic Coordinator</div><div class="sig">Super Admin / Principal</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus official academic document</span><span>${escapeHtml(documentId)}</span></footer></main></body></html>`
+  }
+
+  const openReportCardDocument = (printNow = false) => {
+    const win = window.open('', '_blank')
+    if (!win) {
+      runAction('Browser blocked the report-card preview window. Allow pop-ups for KCS Nexus and try again.')
+      return
+    }
+    win.document.write(reportCardDocumentHtml())
+    win.document.close()
+    if (printNow) {
+      win.focus()
+      setTimeout(() => win.print(), 250)
+    }
   }
 
   const createCourse = () => {
@@ -1639,12 +1678,20 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         <div className="space-y-6">
           <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
             <div className={panelClass}>
-              <h3 className="font-bold text-kcs-blue-900 dark:text-white">Bulletin setup</h3>
+              <h3 className="font-bold text-kcs-blue-900 dark:text-white">Bulletin officiel</h3>
               <div className="mt-4 grid gap-3">
-                <select className={inputClass} value={reportCardStudentId} onChange={(event) => setReportCardStudentId(event.target.value)}>
-                  {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section}</option>)}
-                </select>
-                <input className={inputClass} value={reportCardTerm} onChange={(event) => setReportCardTerm(event.target.value)} />
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Eleve concerne
+                  <select className={inputClass} value={reportCardStudentId} onChange={(event) => setReportCardStudentId(event.target.value)}>
+                    {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Periode academique
+                  <select className={inputClass} value={reportCardTerm} onChange={(event) => setReportCardTerm(event.target.value)}>
+                    {reportCardPeriods.map((period) => <option key={period} value={period}>{period}</option>)}
+                  </select>
+                </label>
                 <div className="grid grid-cols-3 gap-3 rounded-xl bg-gray-50 p-4 text-center dark:bg-kcs-blue-800/30">
                   <div>
                     <p className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{reportCardAverage}%</p>
@@ -1659,8 +1706,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     <p className="text-xs text-gray-500 dark:text-gray-400">Courses</p>
                   </div>
                 </div>
-                <button onClick={generateReportCard} className={compactButton}>Generate report card</button>
-                <button onClick={addReportCardCourse} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Add course row</button>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button onClick={generateReportCard} className={compactButton}>Save draft</button>
+                  <button onClick={addReportCardCourse} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Add course</button>
+                  <button onClick={() => openReportCardDocument(false)} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Preview</button>
+                  <button onClick={() => openReportCardDocument(true)} className="rounded-xl bg-kcs-gold-500 px-4 py-2 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Print / Download PDF</button>
+                </div>
               </div>
             </div>
 
@@ -1668,7 +1719,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="font-bold text-kcs-blue-900 dark:text-white">{reportCardStudent?.name} report card</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{reportCardTerm} - weighted automatic calculation</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{reportCardTerm} - scores are evaluated directly on 100% with weighted coefficients.</p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(reportCardAverage >= 70 ? 'low' : 'high')}`}>{reportCardDecision}</span>
               </div>
@@ -1678,8 +1729,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   <thead>
                     <tr className="border-b border-gray-100 text-xs uppercase text-gray-400 dark:border-kcs-blue-800">
                       <th className="pb-3 pr-3">Course</th>
-                      <th className="pb-3 pr-3">Points</th>
-                      <th className="pb-3 pr-3">Max</th>
+                      <th className="pb-3 pr-3">Score / 100%</th>
                       <th className="pb-3 pr-3">Coef.</th>
                       <th className="pb-3 pr-3">Average</th>
                       <th className="pb-3">Comment</th>
@@ -1687,17 +1737,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
                     {reportCardRows.map((row) => {
-                      const courseAverage = Number(((row.points / Math.max(row.maxPoints, 1)) * 100).toFixed(1))
+                      const courseAverage = Math.max(0, Math.min(100, row.points))
                       return (
                         <tr key={row.id}>
                           <td className="py-3 pr-3">
                             <input className={inputClass} value={row.course} onChange={(event) => updateReportCardRow(row.id, 'course', event.target.value)} />
                           </td>
                           <td className="py-3 pr-3">
-                            <input className={inputClass} type="number" min={0} value={row.points} onChange={(event) => updateReportCardRow(row.id, 'points', Number(event.target.value))} />
-                          </td>
-                          <td className="py-3 pr-3">
-                            <input className={inputClass} type="number" min={1} value={row.maxPoints} onChange={(event) => updateReportCardRow(row.id, 'maxPoints', Number(event.target.value))} />
+                            <input className={inputClass} type="number" min={0} max={100} value={row.points} onChange={(event) => updateReportCardRow(row.id, 'points', Number(event.target.value))} />
                           </td>
                           <td className="py-3 pr-3">
                             <input className={inputClass} type="number" min={1} value={row.coefficient} onChange={(event) => updateReportCardRow(row.id, 'coefficient', Number(event.target.value))} />
