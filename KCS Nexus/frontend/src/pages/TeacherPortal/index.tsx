@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bell, BookOpen, Brain, Calendar, CheckCircle2, ChevronRight,
-  Clock, FileText, GraduationCap, MessageSquare, TrendingUp, Users, AlertTriangle, ClipboardCheck
+  Clock, FileText, GraduationCap, MessageSquare, TrendingUp, Users, AlertTriangle, ClipboardCheck, Maximize2, X
 } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
@@ -31,13 +31,6 @@ import {
   students as ecosystemStudents,
   subjects,
 } from '@/data/schoolEcosystem'
-
-const todayClasses = [
-  { time: '7:45 AM', course: 'Grade 11 AP Biology', room: 'Lab 3', students: 24 },
-  { time: '9:15 AM', course: 'Grade 10 Biology', room: 'Room 204', students: 28 },
-  { time: '11:00 AM', course: 'Grade 9 General Science', room: 'Lab 1', students: 31 },
-  { time: '1:30 PM', course: 'Teacher Mentorship Block', room: 'Faculty Lounge', students: 6 },
-]
 
 const gradingQueue = [
   { id: 1, title: 'AP Biology Lab Reports', className: 'Grade 11', pending: 18, due: 'Today' },
@@ -68,14 +61,24 @@ const statusTone = (value: string) => {
   return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
 }
 
-const gradeOptions = ['K4', 'K3', 'K5', 'Kindergarten', '1st Grade', '2nd Grade', '3rd Grade', '4th Grade', '5th Grade', '6th Grade', '7th Grade', '8th Grade', '9th Grade', '10th Grade', '11th Grade', '12th Grade']
+const gradeOptions = ['K3', 'K4', 'K5', ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`)]
 
 const inferGradeLabel = (className: string) => {
-  if (className.includes('12')) return '12th Grade'
-  if (className.includes('11')) return '11th Grade'
-  if (className.includes('10')) return '10th Grade'
-  if (className.includes('9')) return '9th Grade'
-  if (className.includes('8')) return '8th Grade'
+  if (className.includes('12')) return 'Grade 12'
+  if (className.includes('11')) return 'Grade 11'
+  if (className.includes('10')) return 'Grade 10'
+  if (className.includes('9')) return 'Grade 9'
+  if (className.includes('8')) return 'Grade 8'
+  if (className.includes('7')) return 'Grade 7'
+  if (className.includes('6')) return 'Grade 6'
+  if (className.includes('5')) return 'Grade 5'
+  if (className.includes('4')) return 'Grade 4'
+  if (className.includes('3')) return 'Grade 3'
+  if (className.includes('2')) return 'Grade 2'
+  if (className.includes('1')) return 'Grade 1'
+  if (className.toUpperCase().includes('K5')) return 'K5'
+  if (className.toUpperCase().includes('K4')) return 'K4'
+  if (className.toUpperCase().includes('K3')) return 'K3'
   return className
 }
 
@@ -132,6 +135,7 @@ type StudentProfileResponse = {
 }
 
 const toClassKey = (grade: string, section = '') => `${grade}${section}`.replace(/\s+/g, '').toLowerCase()
+const normalizeGradeOnlyKey = (value: string) => inferGradeLabel(value).replace(/\s+/g, '').toLowerCase()
 
 const mapRegistryStudent = (student: StudentProfileResponse, index: number): RegistryStudent => {
   const firstName = student.user?.firstName?.trim() ?? ''
@@ -173,10 +177,18 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const Icon = meta.icon
   const [superAdminStudentPool, setSuperAdminStudentPool] = useState<RegistryStudent[]>([])
   const [registryStatus, setRegistryStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const rosterSourceStudents = superAdminStudentPool.length ? superAdminStudentPool : ecosystemStudents
 
-  const getRosterForClass = (className: string) => superAdminStudentPool.filter((student) => (
-    toClassKey(student.grade, student.section) === toClassKey(className) || inferGradeLabel(`${student.grade}${student.section}`) === className
-  ))
+  const getRosterForClass = (className: string) => {
+    const selectedClassKey = toClassKey(className)
+    const selectedGradeKey = normalizeGradeOnlyKey(className)
+
+    return rosterSourceStudents.filter((student) => {
+      const exactClassKey = toClassKey(student.grade, student.section)
+      const gradeOnlyKey = normalizeGradeOnlyKey(student.grade)
+      return exactClassKey === selectedClassKey || gradeOnlyKey === selectedGradeKey
+    })
+  }
 
   const [actionMessage, setActionMessage] = useState('')
   const [courses, setCourses] = useState(() =>
@@ -187,7 +199,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         abbreviation: subject.name.split(' ').map((word) => word[0]).join('').slice(0, 6).toUpperCase(),
         creditHours: index === 1 ? 4 : index === 0 ? 3 : 2,
         gradeLevels: [gradeLevel],
-        studentIds: [] as string[],
+        studentIds: ecosystemStudents.filter((student) => normalizeGradeOnlyKey(student.grade) === normalizeGradeOnlyKey(gradeLevel)).map((student) => student.id),
         status: 'active',
       }
     }),
@@ -195,6 +207,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [courseTab, setCourseTab] = useState<'setup' | 'enrollment'>('setup')
   const [courseSearch, setCourseSearch] = useState('')
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
+  const [rosterModalCourseId, setRosterModalCourseId] = useState<string | null>(null)
+  const [selectedClassRoster, setSelectedClassRoster] = useState<string | null>(null)
   const [selectedEnrollmentCourseId, setSelectedEnrollmentCourseId] = useState(subjects[0].id)
   const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState(subjects[1].id)
   const [gradebookColumnsByCourse, setGradebookColumnsByCourse] = useState<Record<string, GradebookColumn[]>>({})
@@ -243,9 +257,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     name: 'Integrated Science Lab',
     abbreviation: 'ISL',
     creditHours: 1,
-    className: 'Grade 10A',
+    className: 'Grade 10',
     room: 'Lab 2',
-    gradeLevels: ['10th Grade'],
+    gradeLevels: ['Grade 10'],
     studentId: '',
   })
   const [selectedStudentId, setSelectedStudentId] = useState('')
@@ -334,12 +348,22 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [superAdminStudentPool])
 
   useEffect(() => {
+    if (!superAdminStudentPool.length) return
+
+    const enrolledStudentIds = Array.from(new Set(courses.flatMap((course) => course.studentIds)))
+    const controlledStudents = enrolledStudentIds
+      .map((studentId) => superAdminStudentPool.find((student) => student.id === studentId))
+      .filter((student): student is RegistryStudent => Boolean(student))
+
+    setTeacherStudents(controlledStudents.length ? controlledStudents : rosterSourceStudents)
+  }, [courses, superAdminStudentPool])
+
+  useEffect(() => {
     const firstStudent = superAdminStudentPool[0]
     if (!firstStudent) return
 
     setSelectedStudentId((current) => current || firstStudent.id)
     setReportCardStudentId((current) => current || firstStudent.id)
-    setTeacherStudents((current) => current.length ? current : superAdminStudentPool)
     setAttendanceDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
     setAssignmentDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
     setGradeDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
@@ -387,9 +411,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       name: 'Integrated Science Lab',
       abbreviation: 'ISL',
       creditHours: 1,
-      className: 'Grade 10A',
+      className: 'Grade 10',
       room: 'Lab 2',
-      gradeLevels: ['10th Grade'],
+      gradeLevels: ['Grade 10'],
       studentId: firstStudentId,
     })
   }
@@ -420,7 +444,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const createCourse = () => {
-    const selectedGrade = courseDraft.gradeLevels[0] ?? '10th Grade'
+    const selectedGrade = courseDraft.gradeLevels[0] ?? 'Grade 10'
     const roster = getRosterForClass(courseDraft.className || selectedGrade)
     const nextCourse = {
       id: editingCourseId ?? `course-${Date.now()}`,
@@ -435,10 +459,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       status: editingCourseId ? 'updated' : 'draft',
     }
     setCourses((current) => editingCourseId ? current.map((course) => course.id === editingCourseId ? { ...course, ...nextCourse } : course) : [nextCourse, ...current])
-    setTeacherStudents((current) => {
-      const existingIds = new Set(current.map((student) => student.id))
-      return [...roster.filter((student) => !existingIds.has(student.id)), ...current]
-    })
+    setSelectedEnrollmentCourseId(nextCourse.id)
     setSelectedGradebookCourseId(nextCourse.id)
     runAction(`${nextCourse.name} ${editingCourseId ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) were enrolled and sent to Grade Book.`)
     setEditingCourseId(null)
@@ -457,6 +478,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       gradeLevels: course.gradeLevels,
       studentId: course.studentIds[0] ?? superAdminStudentPool[0]?.id ?? '',
     })
+    setCourseTab('setup')
     runAction(`${course.name} loaded for editing.`)
   }
 
@@ -473,6 +495,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     return searchable.includes(courseSearch.toLowerCase())
   })
   const selectedEnrollmentCourse = courses.find((course) => course.id === selectedEnrollmentCourseId) ?? courses[0]
+  const rosterModalCourse = rosterModalCourseId ? courses.find((course) => course.id === rosterModalCourseId) ?? null : null
+  const rosterModalEnrolledStudents = rosterModalCourse?.studentIds
+    .map((studentId) => rosterSourceStudents.find((student) => student.id === studentId))
+    .filter((student): student is RegistryStudent => Boolean(student)) ?? []
+  const rosterModalAvailableStudents = rosterModalCourse
+    ? rosterSourceStudents.filter((student) => !rosterModalCourse.studentIds.includes(student.id))
+    : []
   const totalEnrollment = courses.reduce((sum, course) => sum + course.studentIds.length, 0)
   const totalCreditHours = courses.reduce((sum, course) => sum + course.creditHours, 0)
   const coveredGrades = Array.from(new Set(courses.flatMap((course) => course.gradeLevels))).length
@@ -482,6 +511,26 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setSelectedEnrollmentCourseId(courseId)
     setCourseTab('enrollment')
     runAction(`${course?.name ?? 'Subject'} enrollment opened.`)
+  }
+
+  const openCourseRosterDialog = (courseId: string) => {
+    const course = courses.find((item) => item.id === courseId)
+    setRosterModalCourseId(courseId)
+    setSelectedEnrollmentCourseId(courseId)
+    runAction(`${course?.name ?? 'Subject'} roster editor opened with central registry students.`)
+  }
+
+  const toggleCourseStudent = (courseId: string, studentId: string) => {
+    const course = courses.find((item) => item.id === courseId)
+    const student = rosterSourceStudents.find((item) => item.id === studentId)
+    if (!course || !student) return
+    const enrolled = course.studentIds.includes(studentId)
+    setCourses((current) => current.map((item) => (
+      item.id === courseId
+        ? { ...item, studentIds: enrolled ? item.studentIds.filter((id) => id !== studentId) : [...item.studentIds, studentId] }
+        : item
+    )))
+    runAction(`${student.name} ${enrolled ? 'removed from' : 'added to'} ${course.name}.`)
   }
 
   const selectedGradebookCourse = courses.find((course) => course.id === selectedGradebookCourseId) ?? courses[0]
@@ -557,8 +606,16 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const importStudent = () => {
     const student = findStudent(selectedStudentId)
     if (!student) return
-    setTeacherStudents((current) => current.some((item) => item.id === student.id) ? current : [student, ...current])
-    runAction(`${student.name} imported from the Super Admin student registry.`)
+    const targetCourseId = selectedEnrollmentCourseId || courses[0]?.id
+    const targetCourse = courses.find((course) => course.id === targetCourseId) ?? courses[0]
+    if (!targetCourse) return
+    setCourses((current) => current.map((course) => (
+      course.id === targetCourse.id && !course.studentIds.includes(student.id)
+        ? { ...course, studentIds: [...course.studentIds, student.id] }
+        : course
+    )))
+    setSelectedEnrollmentCourseId(targetCourse.id)
+    runAction(`${student.name} enrolled in ${targetCourse.name}; Students updated automatically from course enrollment.`)
   }
 
   const addAttendance = () => {
@@ -618,6 +675,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const inputClass = 'input-kcs py-2 text-sm'
   const panelClass = 'rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
   const compactButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
+  const studentsByClass = teacherStudents.reduce<Record<string, RegistryStudent[]>>((groups, student) => {
+    const className = `${student.grade}${student.section ? ` ${student.section}` : ''}`
+    groups[className] = [...(groups[className] ?? []), student]
+    return groups
+  }, {})
+  const sortedStudentClassEntries = Object.entries(studentsByClass).sort(([left], [right]) => normalizeGradeOnlyKey(left).localeCompare(normalizeGradeOnlyKey(right)) || left.localeCompare(right))
+  const selectedClassStudents = selectedClassRoster ? studentsByClass[selectedClassRoster] ?? [] : []
 
   if (segment === 'grades') {
     return (
@@ -760,13 +824,29 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     <div>
                       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Which class do you teach the subject for?</p>
                       <div className="mt-2 rounded-xl border border-gray-100 bg-white p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/30">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-                        {gradeOptions.map((grade) => (
-                          <label key={grade} className="flex min-w-0 items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                            <input className="h-4 w-4 flex-shrink-0 border-gray-300 text-kcs-blue-700 focus:ring-kcs-blue-500" type="radio" name="course-grade" checked={courseDraft.gradeLevels[0] === grade} onChange={() => toggleCourseGrade(grade)} />
-                            <span className="min-w-0 break-words leading-snug">{grade}</span>
-                          </label>
-                        ))}
+                        <div className="space-y-4">
+                          <div>
+                            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Kindergarten</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {gradeOptions.slice(0, 3).map((grade) => (
+                                <label key={grade} className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${courseDraft.gradeLevels[0] === grade ? 'border-kcs-blue-500 bg-kcs-blue-50 text-kcs-blue-800 dark:border-kcs-blue-400 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-100' : 'border-gray-100 text-gray-700 hover:border-kcs-blue-200 dark:border-kcs-blue-800 dark:text-gray-300'}`}>
+                                  <input className="h-4 w-4 flex-shrink-0 border-gray-300 text-kcs-blue-700 focus:ring-kcs-blue-500" type="radio" name="course-grade" checked={courseDraft.gradeLevels[0] === grade} onChange={() => toggleCourseGrade(grade)} />
+                                  <span>{grade}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Elementary to High School</p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              {gradeOptions.slice(3).map((grade) => (
+                                <label key={grade} className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${courseDraft.gradeLevels[0] === grade ? 'border-kcs-blue-500 bg-kcs-blue-50 text-kcs-blue-800 dark:border-kcs-blue-400 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-100' : 'border-gray-100 text-gray-700 hover:border-kcs-blue-200 dark:border-kcs-blue-800 dark:text-gray-300'}`}>
+                                  <input className="h-4 w-4 flex-shrink-0 border-gray-300 text-kcs-blue-700 focus:ring-kcs-blue-500" type="radio" name="course-grade" checked={courseDraft.gradeLevels[0] === grade} onChange={() => toggleCourseGrade(grade)} />
+                                  <span className="min-w-0 break-words leading-snug">{grade}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -805,12 +885,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                             <td className="px-3 py-3">{subject.abbreviation}</td>
                             <td className="px-3 py-3">{subject.creditHours}</td>
                             <td className="px-3 py-3">
-                              <button onClick={() => openCourseEnrollment(subject.id)} className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-700 hover:text-white dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200">
+                              <button onClick={() => openCourseRosterDialog(subject.id)} className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-700 hover:text-white dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200">
                                 {subject.studentIds.length} enrolled
                               </button>
                             </td>
                             <td className="px-3 py-3">
-                              <button onClick={() => editCourse(subject.id)} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 transition-colors hover:bg-kcs-blue-100 hover:text-kcs-blue-800 dark:bg-kcs-blue-800/40 dark:text-gray-200">
+                              <button onClick={() => openCourseRosterDialog(subject.id)} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 transition-colors hover:bg-kcs-blue-100 hover:text-kcs-blue-800 dark:bg-kcs-blue-800/40 dark:text-gray-200">
                                 Edit
                               </button>
                             </td>
@@ -836,9 +916,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <div>
                         <p className="text-xs font-semibold uppercase text-kcs-blue-500">Selected subject enrollment</p>
                         <h4 className="font-bold text-kcs-blue-900 dark:text-white">{selectedEnrollmentCourse.name}</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-300">{selectedEnrollmentCourse.gradeLevels.join(', ')} - {selectedEnrollmentCourse.studentIds.length} enrolled - {superAdminStudentPool.length - selectedEnrollmentCourse.studentIds.length} available</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">{selectedEnrollmentCourse.gradeLevels.join(', ')} - {selectedEnrollmentCourse.studentIds.length} enrolled - {rosterSourceStudents.length - selectedEnrollmentCourse.studentIds.length} available</p>
                       </div>
-                      <button onClick={() => editCourse(selectedEnrollmentCourse.id)} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-kcs-blue-700 shadow-sm hover:bg-kcs-blue-100 dark:bg-kcs-blue-950 dark:text-kcs-blue-200">
+                      <button onClick={() => openCourseRosterDialog(selectedEnrollmentCourse.id)} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-kcs-blue-700 shadow-sm hover:bg-kcs-blue-100 dark:bg-kcs-blue-950 dark:text-kcs-blue-200">
                         Edit selected subject
                       </button>
                     </div>
@@ -855,16 +935,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <span className="badge-blue text-xs">{subject.studentIds.length} enrolled</span>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {superAdminStudentPool.map((student) => {
+                      {rosterSourceStudents.map((student) => {
                         const enrolled = subject.studentIds.includes(student.id)
                         return (
                           <button
                             key={student.id}
-                            onClick={() => {
-                              setCourses((current) => current.map((course) => course.id === subject.id ? { ...course, studentIds: enrolled ? course.studentIds.filter((id) => id !== student.id) : [...course.studentIds, student.id] } : course))
-                              if (!enrolled && !teacherStudents.some((item) => item.id === student.id)) setTeacherStudents((current) => [student, ...current])
-                              runAction(`${student.name} ${enrolled ? 'removed from' : 'enrolled in'} ${subject.name}.`)
-                            }}
+                            onClick={() => toggleCourseStudent(subject.id, student.id)}
                             className={`rounded-full px-3 py-1 text-xs font-semibold ${enrolled ? 'bg-kcs-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-kcs-blue-50 hover:text-kcs-blue-700 dark:bg-kcs-blue-950/50 dark:text-gray-300'}`}
                           >
                             {enrolled ? '✓' : '+'} {student.name}
@@ -880,40 +956,171 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         </div>
       )}
 
+      {rosterModalCourse && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Edit course enrollment">
+          <section className="max-h-[94vh] w-full max-w-[min(96vw,96rem)] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900 sm:p-7">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Central student database</p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{rosterModalCourse.name}</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {rosterModalCourse.gradeLevels.join(', ')} - {rosterModalCourse.studentIds.length} enrolled - {rosterModalAvailableStudents.length} available from the school registry.
+                </p>
+              </div>
+              <button type="button" onClick={() => setRosterModalCourseId(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">Enrolled students</h4>
+                  <span className="rounded-full bg-kcs-blue-700 px-3 py-1 text-xs font-bold text-white">{rosterModalEnrolledStudents.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {rosterModalEnrolledStudents.map((student) => (
+                    <div key={student.id} className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{student.grade}{student.section ? ` ${student.section}` : ''} - {student.risk ?? 'low'} risk</p>
+                      </div>
+                      <button type="button" onClick={() => toggleCourseStudent(rosterModalCourse.id, student.id)} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-900/20">
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {rosterModalEnrolledStudents.length === 0 && (
+                    <p className="rounded-xl bg-white p-4 text-sm font-semibold text-gray-500 dark:bg-kcs-blue-900/70 dark:text-gray-300">No student enrolled yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">Available students</h4>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200">{rosterModalAvailableStudents.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {rosterModalAvailableStudents.map((student) => (
+                    <div key={student.id} className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 dark:bg-kcs-blue-900/70">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{student.grade}{student.section ? ` ${student.section}` : ''} - official registry</p>
+                      </div>
+                      <button type="button" onClick={() => toggleCourseStudent(rosterModalCourse.id, student.id)} className="rounded-lg bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                  {rosterModalAvailableStudents.length === 0 && (
+                    <p className="rounded-xl bg-white p-4 text-sm font-semibold text-gray-500 dark:bg-kcs-blue-900/70 dark:text-gray-300">All central registry students are already enrolled in this subject.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
       {segment === 'students' && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className={panelClass}>
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Import from Super Admin registry</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Teacher-created rosters must be based on official school records.</p>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Automatic student control</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">This list is controlled by course enrollment. The teacher sees official students first, then every grade, attendance, assignment, report and discipline action follows that student record.</p>
             <div className="mt-4 grid gap-3">
               <select className={inputClass} value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
-                {superAdminStudentPool.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section} - {student.risk} risk</option>)}
+                {rosterSourceStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section ? ` ${student.section}` : ''} - {student.risk} risk</option>)}
               </select>
-              <button onClick={importStudent} className={compactButton}>Add to my students</button>
+              <button onClick={importStudent} className={compactButton}>Enroll selected student</button>
             </div>
-            <div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">
-              {superAdminStudentPool.length} verified students available from the school registry.
+            <div className="mt-5 grid gap-3">
+              {[
+                ['Official registry', `${superAdminStudentPool.length} verified student(s)`],
+                ['Controlled by teacher courses', `${teacherStudents.length} active student(s)`],
+                ['Parent link', 'Indirect through each student profile'],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">
+                  <p className="text-xs font-bold uppercase tracking-wide opacity-70">{label}</p>
+                  <p className="mt-1 font-semibold">{value}</p>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-          {teacherStudents.map((student) => (
-            <div key={student.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="flex items-start justify-between gap-3">
+          <div className="grid gap-4 2xl:grid-cols-2">
+          {sortedStudentClassEntries.map(([className, classStudents]) => (
+            <section key={className} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-bold text-kcs-blue-900 dark:text-white">{student.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{student.grade}{student.section} - advisor {student.advisor}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Class roster</p>
+                  <h3 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{className}</h3>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
+                <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200">{classStudents.length} student{classStudents.length > 1 ? 's' : ''}</span>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.average}%</p><p className="text-xs text-gray-500">Average</p></div>
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.attendance}%</p><p className="text-xs text-gray-500">Attendance</p></div>
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">#{student.rank}</p><p className="text-xs text-gray-500">Rank</p></div>
+              <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30">
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{Math.round(classStudents.reduce((sum, student) => sum + (student.average ?? 0), 0) / Math.max(classStudents.length, 1))}%</p><p className="text-xs text-gray-500">Avg</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{Math.round(classStudents.reduce((sum, student) => sum + (student.attendance ?? 0), 0) / Math.max(classStudents.length, 1))}%</p><p className="text-xs text-gray-500">Attendance</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{classStudents.filter((student) => student.risk !== 'low').length}</p><p className="text-xs text-gray-500">To watch</p></div>
               </div>
-              <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{student.aiInsight}</p>
-            </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {classStudents.slice(0, 5).map((student) => (
+                  <span key={student.id} className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200">{student.name}</span>
+                ))}
+                {classStudents.length > 5 && <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500 dark:bg-kcs-blue-800 dark:text-gray-300">+{classStudents.length - 5}</span>}
+              </div>
+              <button type="button" onClick={() => setSelectedClassRoster(className)} className="mt-4 w-full rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800">
+                Open class window
+              </button>
+            </section>
           ))}
           </div>
+        </div>
+      )}
+
+      {selectedClassRoster && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Class student list">
+          <section className="max-h-[94vh] w-full max-w-[min(96vw,100rem)] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900 sm:p-7">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Dedicated class window</p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{selectedClassRoster}</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{selectedClassStudents.length} student{selectedClassStudents.length > 1 ? 's' : ''} controlled by this teacher workspace.</p>
+              </div>
+              <button type="button" onClick={() => setSelectedClassRoster(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                Close
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-gray-100 dark:border-kcs-blue-800">
+              <table className="min-w-[900px] w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500 dark:bg-kcs-blue-800/40 dark:text-gray-300">
+                  <tr>
+                    <th className="px-4 py-3">Student</th>
+                    <th className="px-4 py-3">Average</th>
+                    <th className="px-4 py-3">Attendance</th>
+                    <th className="px-4 py-3">Rank</th>
+                    <th className="px-4 py-3">Risk</th>
+                    <th className="px-4 py-3">Insight</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
+                  {selectedClassStudents.map((student) => (
+                    <tr key={student.id} className="align-top">
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-kcs-blue-900 dark:text-white">{student.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Advisor {student.advisor}</p>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-kcs-blue-900 dark:text-white">{student.average ?? '-'}%</td>
+                      <td className="px-4 py-3 font-bold text-kcs-blue-900 dark:text-white">{student.attendance ?? '-'}%</td>
+                      <td className="px-4 py-3 font-bold text-kcs-blue-900 dark:text-white">#{student.rank ?? '-'}</td>
+                      <td className="px-4 py-3"><span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'}</span></td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{student.aiInsight}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       )}
 
@@ -1434,6 +1641,32 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 }
 
 const TeacherDashboardHome = () => {
+  const [dashboardWindow, setDashboardWindow] = useState<'schedule' | 'actions' | 'risk' | 'sync' | 'communication' | null>(null)
+
+  const adminAssignedTeacherSchedule = useMemo(() => (
+    ecosystemSchedules
+      .filter((item) => item.role === 'teacher')
+      .map((item) => {
+        const scheduleItem = item as typeof item & {
+          students?: number
+          linkedStudentIds?: string[]
+          parentOwnerIds?: string[]
+          assignedBy?: string
+        }
+
+        const linkedStudentCount = Array.isArray(scheduleItem.linkedStudentIds) ? scheduleItem.linkedStudentIds.length : 0
+        const parentPortalCount = Array.isArray(scheduleItem.parentOwnerIds) ? scheduleItem.parentOwnerIds.length : 0
+
+        return {
+          ...scheduleItem,
+          course: scheduleItem.title,
+          students: scheduleItem.students ?? linkedStudentCount,
+          studentPortalCount: linkedStudentCount,
+          parentPortalCount,
+        }
+      })
+  ), [])
+
   const metricCards = [
     { label: 'Assigned Students', value: '83', sub: 'Across 4 active classes', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
     { label: 'Pending Actions', value: '56', sub: 'Grades, comments, follow-ups', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
@@ -1455,6 +1688,128 @@ const TeacherDashboardHome = () => {
     ['Risk intervention', 'Suggest support plans for struggling students.'],
     ['Meeting summary', 'Prepare parent-teacher conference notes.'],
   ]
+
+  const expandButton = (id: NonNullable<typeof dashboardWindow>, label = 'Open window') => (
+    <button
+      type="button"
+      onClick={() => setDashboardWindow(id)}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-kcs-blue-100 px-3 py-2 text-xs font-semibold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
+    >
+      <Maximize2 size={14} /> {label}
+    </button>
+  )
+
+  const scheduleCards = (
+    <div className="space-y-3">
+      {adminAssignedTeacherSchedule.map((item, index) => (
+        <div key={`${item.ownerId}-${item.time}-${item.title}`} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{item.day ?? 'School day'} - {item.time}</p>
+            <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{item.students} students</span>
+          </div>
+          <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{item.room} - assigned by {item.assignedBy ?? 'Super Admin'}</p>
+          <div className="mt-3 grid gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
+            <span className="rounded-lg bg-white px-3 py-2 dark:bg-kcs-blue-950/50">{item.studentPortalCount} student portal link{item.studentPortalCount > 1 ? 's' : ''}</span>
+            <span className="rounded-lg bg-white px-3 py-2 dark:bg-kcs-blue-950/50">{item.parentPortalCount} parent portal link{item.parentPortalCount > 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
+  const actionQueueCards = (
+    <div className="space-y-3">
+      {gradingQueue.map((task) => (
+        <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold text-kcs-blue-900 dark:text-white">{task.title}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{task.className} - due {task.due}</p>
+            </div>
+            <span className="badge-gold text-xs">{task.pending}</span>
+          </div>
+        </div>
+      ))}
+      {ecosystemAssignments.filter((item) => item.status === 'missing').map((item) => (
+        <div key={item.id} className="rounded-xl border border-red-100 bg-red-50 p-4 dark:border-red-900/30 dark:bg-red-900/20">
+          <p className="font-semibold text-red-700 dark:text-red-300">{item.title}</p>
+          <p className="text-xs text-red-600/80 dark:text-red-200/80">Missing assignment detection - {item.subject}</p>
+        </div>
+      ))}
+    </div>
+  )
+
+  const riskCards = (
+    <div className="space-y-3">
+      {studentAlerts.map((alert) => (
+        <div key={alert.student} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.student}</p>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${alert.severity === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+              {alert.severity}
+            </span>
+          </div>
+          <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{alert.note}</p>
+        </div>
+      ))}
+    </div>
+  )
+
+  const syncCards = (
+    <div className="space-y-3">
+      {[
+        ['Schedule', 'Super Admin assignments feed teacher, student, and parent dashboards with the matching portion only.', 'Admin source'],
+        ['Grades', 'Student and parent dashboards update after teacher release.', 'Ready'],
+        ['Attendance', 'Absent and late statuses trigger parent notifications.', 'Live'],
+        ['Assignments', 'Class tasks sync across student portals and reports.', 'Synced'],
+        ['Comments', 'Teacher notes follow permission rules before publishing.', 'Protected'],
+      ].map(([label, detail, status]) => (
+        <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-semibold text-kcs-blue-900 dark:text-white">{label}</p>
+            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">{status}</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
+        </div>
+      ))}
+    </div>
+  )
+
+  const communicationCards = (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className="space-y-3">
+        {messages.map((message) => (
+          <div key={message.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/40">
+            <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{message.from}</p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{message.subject}</p>
+            <p className="mt-1 text-xs text-gray-400">{message.time}</p>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3">
+        {[
+          'Teacher can access assigned classes only',
+          'Grade changes are recorded in audit logs',
+          'Parent-visible updates require release status',
+          'AI suggestions never overwrite teacher judgment',
+        ].map((item) => (
+          <div key={item} className="flex items-start gap-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-600 dark:bg-kcs-blue-800/40 dark:text-gray-300">
+            <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0 text-green-500" />
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  const dashboardWindowContent = {
+    schedule: { title: 'Daily And Weekly Schedule', eyebrow: 'Loaded from Super Admin assignments', body: scheduleCards },
+    actions: { title: 'Action Queue', eyebrow: 'Teacher workflow window', body: actionQueueCards },
+    risk: { title: 'Student Risk Radar', eyebrow: 'Student-centered intervention window', body: riskCards },
+    sync: { title: 'Ecosystem Sync', eyebrow: 'Cross-dashboard data coherence', body: syncCards },
+    communication: { title: 'Communication, Audit, And Security', eyebrow: 'Messages, permissions, and logs', body: communicationCards },
+  }
 
   return (
     <>
@@ -1587,21 +1942,13 @@ const TeacherDashboardHome = () => {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-            <Calendar size={18} className="text-kcs-blue-500" /> Daily And Weekly Schedule
-          </h2>
-          <div className="space-y-3">
-            {todayClasses.map((item, index) => (
-              <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{item.time}</p>
-                  <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{item.students} students</span>
-                </div>
-                <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{item.room} - no conflict detected</p>
-              </div>
-            ))}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
+              <Calendar size={18} className="text-kcs-blue-500" /> Daily And Weekly Schedule
+            </h2>
+            {expandButton('schedule')}
           </div>
+          {scheduleCards}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -1609,27 +1956,9 @@ const TeacherDashboardHome = () => {
             <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
               <CheckCircle2 size={18} className="text-green-500" /> Action Queue
             </h2>
-            <Link to="/portal/teacher/assignments" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Open tasks</Link>
+            {expandButton('actions')}
           </div>
-          <div className="space-y-3">
-            {gradingQueue.map((task) => (
-              <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{task.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{task.className} - due {task.due}</p>
-                  </div>
-                  <span className="badge-gold text-xs">{task.pending}</span>
-                </div>
-              </div>
-            ))}
-            {ecosystemAssignments.filter((item) => item.status === 'missing').map((item) => (
-              <div key={item.id} className="rounded-xl border border-red-100 bg-red-50 p-4 dark:border-red-900/30 dark:bg-red-900/20">
-                <p className="font-semibold text-red-700 dark:text-red-300">{item.title}</p>
-                <p className="text-xs text-red-600/80 dark:text-red-200/80">Missing assignment detection - {item.subject}</p>
-              </div>
-            ))}
-          </div>
+          {actionQueueCards}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -1637,43 +1966,19 @@ const TeacherDashboardHome = () => {
             <h2 className="flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
               <AlertTriangle size={18} className="text-red-500" /> Student Risk Radar
             </h2>
-            <Link to="/portal/teacher/students" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Student profiles</Link>
+            {expandButton('risk')}
           </div>
-          <div className="space-y-3">
-            {studentAlerts.map((alert) => (
-              <div key={alert.student} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.student}</p>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${alert.severity === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : alert.severity === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
-                    {alert.severity}
-                  </span>
-                </div>
-                <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{alert.note}</p>
-              </div>
-            ))}
-          </div>
+          {riskCards}
         </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Ecosystem Sync</h2>
-          <div className="space-y-3">
-            {[
-              ['Grades', 'Student and parent dashboards update after teacher release.', 'Ready'],
-              ['Attendance', 'Absent and late statuses trigger parent notifications.', 'Live'],
-              ['Assignments', 'Class tasks sync across student portals and reports.', 'Synced'],
-              ['Comments', 'Teacher notes follow permission rules before publishing.', 'Protected'],
-            ].map(([label, detail, status]) => (
-              <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{label}</p>
-                  <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">{status}</span>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
-              </div>
-            ))}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="font-bold text-kcs-blue-900 dark:text-white">Ecosystem Sync</h2>
+            {expandButton('sync')}
           </div>
+          {syncCards}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -1682,36 +1987,28 @@ const TeacherDashboardHome = () => {
               <h2 className="font-bold text-kcs-blue-900 dark:text-white">Communication, Audit, And Security</h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">Teacher-only access, logged actions, and cross-role communication.</p>
             </div>
-            <Link to="/portal/teacher/messages" className="btn-gold flex items-center gap-2 py-2 text-sm">
-              Messages <ChevronRight size={15} />
-            </Link>
+            {expandButton('communication')}
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-3">
-              {messages.map((message) => (
-                <div key={message.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/40">
-                  <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{message.from}</p>
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{message.subject}</p>
-                  <p className="mt-1 text-xs text-gray-400">{message.time}</p>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-3">
-              {[
-                'Teacher can access assigned classes only',
-                'Grade changes are recorded in audit logs',
-                'Parent-visible updates require release status',
-                'AI suggestions never overwrite teacher judgment',
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-600 dark:bg-kcs-blue-800/40 dark:text-gray-300">
-                  <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0 text-green-500" />
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
+          {communicationCards}
         </div>
       </div>
+
+      {dashboardWindow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label={dashboardWindowContent[dashboardWindow].title}>
+          <section className="max-h-[94vh] w-full max-w-[min(96vw,96rem)] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900 sm:p-7">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{dashboardWindowContent[dashboardWindow].eyebrow}</p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white sm:text-3xl">{dashboardWindowContent[dashboardWindow].title}</h3>
+              </div>
+              <button type="button" onClick={() => setDashboardWindow(null)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                <X size={16} /> Close
+              </button>
+            </div>
+            {dashboardWindowContent[dashboardWindow].body}
+          </section>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-gray-100 bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white dark:border-kcs-blue-800">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1959,12 +2256,12 @@ const TeacherPortal = () => {
                 <span className="badge-blue text-xs">Biology Department</span>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
-                {todayClasses.map((item, index) => (
-                  <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
+                {ecosystemSchedules.filter((item) => item.role === 'teacher').map((item, index) => (
+                  <div key={`${item.ownerId}-${item.time}-${item.title}`} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
                     <p className="text-xs text-gray-400 dark:text-gray-500">{item.time}</p>
-                    <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course}</p>
+                    <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{item.room}</p>
-                    <p className="mt-2 text-xs font-medium text-kcs-blue-700 dark:text-kcs-blue-300">{item.students} students</p>
+                    <p className="mt-2 text-xs font-medium text-kcs-blue-700 dark:text-kcs-blue-300">{(item as typeof item & { students?: number }).students ?? 0} students</p>
                   </div>
                 ))}
               </div>

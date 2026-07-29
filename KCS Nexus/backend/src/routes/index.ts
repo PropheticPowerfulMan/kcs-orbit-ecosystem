@@ -16,6 +16,7 @@ import { forumRouter } from './forum.routes.js'
 import { studentForumRouter } from './student-forum.routes.js'
 import { intelligenceRouter } from './intelligence.routes.js'
 import { diagnosticRouter } from './diagnostic.routes.js'
+import { schoolManagementRouter } from './school-management.routes.js'
 
 export const router = Router()
 
@@ -35,4 +36,5 @@ router.use('/registry', registryRouter)
 router.use('/forum', forumRouter)
 router.use('/student-forum', studentForumRouter)
 router.use('/intelligence', intelligenceRouter)
+router.use('/school-management', schoolManagementRouter)
 router.use('/', diagnosticRouter)

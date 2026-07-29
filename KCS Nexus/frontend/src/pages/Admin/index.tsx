@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowUpRight, BookOpen, Brain,
-  AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, GraduationCap, Mail, Megaphone, MessageSquare, Phone, Radio, Search, Shield, Trash2, UserPlus, Users, Video, X
+  AlertTriangle, BarChart3, CalendarDays, CheckCircle2, ClipboardList, Clock3, Download, FileSpreadsheet, FileText, GraduationCap, Mail, Megaphone, MessageSquare, Phone, Radio, Search, Shield, Trash2, UserPlus, Users, Video, X
 } from 'lucide-react'
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer,
@@ -473,6 +473,36 @@ const staffSeed = [
   { id: 'staff-003', name: 'Mr. Belanger', role: 'Math Teacher', department: 'Middle School', status: 'Late', time: '7:51 AM' },
   { id: 'staff-004', name: 'Registrar Office', role: 'Registrar', department: 'Administration', status: 'Present', time: '7:05 AM' },
   { id: 'staff-005', name: 'Discipline Office', role: 'Discipline Lead', department: 'Student Life', status: 'Absent', time: '-' },
+]
+
+const schoolManagementRequirements = [
+  { area: 'Admissions', owner: 'Admissions Office', route: '/admin/admissions', users: 'Admin, staff, applicant families', coverage: ['Inquiries', 'Applications', 'Review, interview, approval, refusal', 'Approved applications create student records'] },
+  { area: 'Gradebook and Subjects', owner: 'Teachers', route: '/portal/teacher/grades', users: 'Teachers, students, parents, admin', coverage: ['Subjects and courses', 'Assessments and weighted grades', 'Student and parent grade visibility', 'Grading scales'] },
+  { area: 'Report Cards', owner: 'Academic Office', route: '/portal/teacher/reports', users: 'Teachers, admin, students, parents', coverage: ['Quarterly reports', 'Payment condition', 'Email workflow', 'Parent portal posting', 'Downloadable branded records'] },
+  { area: 'Teachers', owner: 'Super Admin', route: '/admin/teachers', users: 'Admin, staff, teachers', coverage: ['Homeroom teacher status', 'Teacher and assistant teacher status', 'Subject assignments', 'Performance reviews'] },
+  { area: 'Fee Tracking', owner: 'Finance Office / EduPay', route: '/admin/finance', users: 'Admin, finance staff, parents', coverage: ['Student billing', 'Standard fees', 'Discounts', 'Scholarships', 'Family payments', 'Receipts and statements'] },
+  { area: 'Student Portal', owner: 'Student', route: '/portal/student', users: 'Students', coverage: ['Communication', 'Disciplinary action visibility', 'Ongoing grades', 'Attendance and assignments'] },
+  { area: 'Parent Portal', owner: 'Parent / Guardian', route: '/portal/parent', users: 'Parents and guardians', coverage: ['Communication', 'Message board', 'Disciplinary action visibility', 'Ongoing grades', 'Fee obligations'] },
+  { area: 'Messaging and Correspondence', owner: 'School Office', route: '/admin/communications', users: 'Admin, staff, teachers, parents, students', coverage: ['Email', 'Text', 'Letter', 'Calls', 'Portal correspondence history'] },
+  { area: 'Attendance', owner: 'Teachers and Student Life', route: '/portal/teacher/attendance', users: 'Teachers, staff, parents, students', coverage: ['School attendance', 'Classroom attendance', 'Automatic notifications', 'Attendance reports'] },
+  { area: 'Reports', owner: 'Super Admin', route: '/admin/reports', users: 'Admin and leadership', coverage: ['Admissions reports', 'Attendance reports', 'Discipline reports', 'School fee reports', 'Student reports', 'Teacher reports'] },
+  { area: 'Discipline', owner: 'Discipline Office', route: '/admin/discipline', users: 'Admin, staff, teachers, parents, students', coverage: ['Incident reporting', 'Resolution', 'Grading impact', 'Communication to parents and students'] },
+]
+
+const quickSchoolsCompetitiveCoverage = [
+  { module: 'Student Information System', parity: 'Covered', nexusAdvantage: 'Unified Orbit identity across Nexus, SAVANEX, EduPay and EduSync instead of isolated SIS records.' },
+  { module: 'Teacher Information', parity: 'Covered', nexusAdvantage: 'Teacher status, subjects, reviews, permissions and staff attendance sit in the same operational console.' },
+  { module: 'Parent and Student Portals', parity: 'Covered', nexusAdvantage: 'Portals include AI recommendations, finance context, discipline follow-up and private forums.' },
+  { module: 'Attendance', parity: 'Covered', nexusAdvantage: 'School/classroom attendance feeds parent alerts, staff reports and predictive risk scoring.' },
+  { module: 'Gradebook, Homework, Report Cards', parity: 'Covered', nexusAdvantage: 'Advanced gradebook, weighted categories, report-card generation, payment conditions and portal publication are connected.' },
+  { module: 'Transcripts', parity: 'Covered', nexusAdvantage: 'Official branded transcript print/export works from the Super Admin academic records.' },
+  { module: 'Admissions', parity: 'Covered', nexusAdvantage: 'Admissions decisions can create official student records and stay visible in executive reports.' },
+  { module: 'Fee Tracking and Payments', parity: 'Covered via EduPay', nexusAdvantage: 'Finance is a specialized app with receipts, allocations, parent lookup and Orbit synchronization.' },
+  { module: 'Messaging', parity: 'Covered via EduSync/Nexus', nexusAdvantage: 'Role-aware messaging, announcements, correspondence logs, parent/student forums and AI drafting work together.' },
+  { module: 'Report Creator', parity: 'Covered', nexusAdvantage: 'Admin reports cover admissions, attendance, discipline, fees, students, teachers, AI risk and exports.' },
+  { module: 'Scheduling', parity: 'Covered', nexusAdvantage: 'Student, teacher and conflict views are visible, with AI impact signals for exams and room conflicts.' },
+  { module: 'Discipline Tracking', parity: 'Covered', nexusAdvantage: 'Incident, resolution, parent/student communication and academic impact are tied to the same student profile.' },
+  { module: 'Beyond QuickSchools AI', parity: 'Superior', nexusAdvantage: 'Student risk prediction, pathway preference, cross-app intelligence, multilingual UI and ecosystem health visibility.' },
 ]
 
 const getAdminSegment = (pathname: string) => {
@@ -2826,6 +2856,114 @@ const AdminSectionView = ({
             <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Title" />
             <textarea className="min-h-32 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Details, audience, media notes..." />
             <button className={adminButton}>Publish</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (segment === 'requirements') {
+    const requirementStats = [
+      { label: 'Requirement groups', value: schoolManagementRequirements.length, detail: 'buyer checklist covered', icon: ClipboardList },
+      { label: 'Admissions pipeline', value: admissionRequests.length, detail: 'inquiries and applications owned by admissions', icon: UserPlus },
+      { label: 'Portal owners', value: 5, detail: 'admin, staff, teacher, parent, student', icon: Users },
+      { label: 'Communication channels', value: 5, detail: 'email, text, letter, calls, portal', icon: Mail },
+    ]
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300">
+                <ClipboardList size={20} />
+                <span className="text-xs font-bold uppercase tracking-wide">School management requirements</span>
+              </div>
+              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Buyer-ready functional coverage</h2>
+              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
+                Each requirement is attached to a responsible school entity, a working KCS Nexus screen, and the user group that operates or consumes it.
+              </p>
+            </div>
+            <span className="w-fit rounded-full bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200">Operational mapping complete</span>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {requirementStats.map((item) => {
+            const Icon = item.icon
+            return (
+              <div key={item.label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300">
+                  <Icon size={18} />
+                </div>
+                <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">{item.label}</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{item.detail}</p>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          {schoolManagementRequirements.map((requirement) => (
+            <div key={requirement.area} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{requirement.owner}</p>
+                  <h3 className="mt-1 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{requirement.area}</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{requirement.users}</p>
+                </div>
+                <Link to={requirement.route} className="inline-flex w-fit items-center gap-2 rounded-xl border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800">
+                  Open workflow <ArrowUpRight size={14} />
+                </Link>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {requirement.coverage.map((item) => (
+                  <div key={item} className="flex items-start gap-2 rounded-xl bg-gray-50 p-3 text-sm text-gray-700 dark:bg-kcs-blue-800/30 dark:text-gray-200">
+                    <CheckCircle2 size={15} className="mt-0.5 flex-shrink-0 text-green-600 dark:text-green-300" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/50">
+          <h3 className="font-bold text-kcs-blue-900 dark:text-white">Ownership note</h3>
+          <p className="mt-2 text-sm leading-6 text-kcs-blue-800 dark:text-kcs-blue-100">
+            Academic workflows stay with teachers and the academic office, financial workflows stay with finance/EduPay, admissions stay with the admissions office, and parent/student visibility is handled through their portals. KCS Nexus acts as the operational command center tying those entities together.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">QuickSchools parity and beyond</p>
+              <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Competitive feature map</h3>
+              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Nexus keeps the expected school-management modules, then adds federation, AI, finance specialization and cross-role visibility.</p>
+            </div>
+            <span className="w-fit rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200">Superior ecosystem target</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[900px] w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                <tr className="border-b border-gray-100 dark:border-kcs-blue-800">
+                  <th className="py-3 pr-4 font-semibold">QuickSchools module</th>
+                  <th className="py-3 pr-4 font-semibold">Status</th>
+                  <th className="py-3 pr-4 font-semibold">Nexus advantage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800/70">
+                {quickSchoolsCompetitiveCoverage.map((item) => (
+                  <tr key={item.module}>
+                    <td className="py-3 pr-4 font-semibold text-kcs-blue-900 dark:text-white">{item.module}</td>
+                    <td className="py-3 pr-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.parity === 'Superior' ? 'bg-kcs-gold-100 text-kcs-blue-900 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-200'}`}>{item.parity}</span></td>
+                    <td className="py-3 pr-4 text-gray-600 dark:text-gray-300">{item.nexusAdvantage}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

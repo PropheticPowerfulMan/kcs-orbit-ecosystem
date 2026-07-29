@@ -88,6 +88,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/admin/diagnostic', label: 'Diagnostic Approval', icon: ClipboardList },
         { to: '/admin/finance', label: t('portalNav.finance'), icon: WalletCards },
         { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
+        { to: '/admin/requirements', label: 'Requirements', icon: ClipboardList },
         { to: '/admin/news', label: t('portalNav.newsEvents'), icon: FileText },
         { to: '/admin/media', label: t('portalNav.media'), icon: Image },
         { to: '/admin/forum-insights', label: t('portalNav.parentAiReport'), icon: Brain },

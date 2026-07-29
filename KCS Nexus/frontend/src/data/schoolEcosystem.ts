@@ -185,10 +185,15 @@ export const lmsResources = [
 ]
 
 export const schedules = [
-  { role: 'student', ownerId: 'stu-elise', time: '8:15 AM', title: 'AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger' },
-  { role: 'student', ownerId: 'stu-elise', time: '10:15 AM', title: 'AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi' },
-  { role: 'teacher', ownerId: 'teacher-belanger', time: '8:15 AM', title: 'Grade 11 AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger' },
-  { role: 'teacher', ownerId: 'teacher-belanger', time: '11:00 AM', title: 'Grade 8 Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger' },
+  { role: 'student', ownerId: 'stu-elise', day: 'Monday', time: '8:15 AM', title: 'AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedTeacherId: 'teacher-belanger', parentOwnerId: 'parent-kabongo' },
+  { role: 'student', ownerId: 'stu-elise', day: 'Monday', time: '10:15 AM', title: 'AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi', source: 'admin-assigned', linkedTeacherId: 'teacher-mukendi', parentOwnerId: 'parent-kabongo' },
+  { role: 'student', ownerId: 'stu-david', day: 'Monday', time: '11:00 AM', title: 'Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedTeacherId: 'teacher-belanger', parentOwnerId: 'parent-kabongo' },
+  { role: 'parent', ownerId: 'parent-kabongo', day: 'Monday', time: '8:15 AM', title: 'Elise - AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedStudentId: 'stu-elise' },
+  { role: 'parent', ownerId: 'parent-kabongo', day: 'Monday', time: '10:15 AM', title: 'Elise - AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi', source: 'admin-assigned', linkedStudentId: 'stu-elise' },
+  { role: 'parent', ownerId: 'parent-kabongo', day: 'Monday', time: '11:00 AM', title: 'David - Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedStudentId: 'stu-david' },
+  { role: 'teacher', ownerId: 'teacher-belanger', day: 'Monday', time: '8:15 AM', title: 'Grade 11 AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger', students: 18, source: 'admin-assigned', assignedBy: 'Super Admin', linkedStudentIds: ['stu-elise'], parentOwnerIds: ['parent-kabongo'] },
+  { role: 'teacher', ownerId: 'teacher-belanger', day: 'Monday', time: '11:00 AM', title: 'Grade 8 Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger', students: 1, source: 'admin-assigned', assignedBy: 'Super Admin', linkedStudentIds: ['stu-david'], parentOwnerIds: ['parent-kabongo'] },
+  { role: 'teacher', ownerId: 'teacher-mukendi', day: 'Monday', time: '10:15 AM', title: 'Grade 11 AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi', students: 24, source: 'admin-assigned', assignedBy: 'Super Admin', linkedStudentIds: ['stu-elise'], parentOwnerIds: ['parent-kabongo'] },
 ]
 
 export const scheduleConflicts = [

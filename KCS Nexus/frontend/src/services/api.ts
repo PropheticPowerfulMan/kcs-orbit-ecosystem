@@ -236,3 +236,26 @@ export const adminAPI = {
   getAnalytics: (period?: string) => api.get('/admin/analytics', { params: { period } }),
   exportData: (type: string) => api.get(`/admin/export/${type}`, { responseType: 'blob' }),
 }
+
+// --- School Management Workflow API ---
+export const schoolManagementAPI = {
+  getOverview: () => api.get('/school-management/overview'),
+  getAdmissionInquiries: () => api.get('/school-management/admission-inquiries'),
+  createAdmissionInquiry: (data: object) => api.post('/school-management/admission-inquiries', data),
+  updateAdmissionInquiryStatus: (id: string, data: object) =>
+    api.patch(`/school-management/admission-inquiries/${id}/status`, data),
+  updateTeacherStatus: (id: string, data: object) =>
+    api.patch(`/school-management/teachers/${id}/status`, data),
+  createTeacherReview: (id: string, data: object) =>
+    api.post(`/school-management/teachers/${id}/reviews`, data),
+  getFeeCharges: () => api.get('/school-management/fee-charges'),
+  createFeeCharge: (data: object) => api.post('/school-management/fee-charges', data),
+  publishReportCard: (id: string, data: object) =>
+    api.patch(`/school-management/report-cards/${id}/publication`, data),
+  getCorrespondence: () => api.get('/school-management/correspondence'),
+  logCorrespondence: (data: object) => api.post('/school-management/correspondence', data),
+  getDisciplineCases: () => api.get('/school-management/discipline-cases'),
+  createDisciplineCase: (data: object) => api.post('/school-management/discipline-cases', data),
+  updateDisciplineResolution: (id: string, data: object) =>
+    api.patch(`/school-management/discipline-cases/${id}/resolution`, data),
+}
