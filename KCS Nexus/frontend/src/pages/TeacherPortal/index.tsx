@@ -312,11 +312,18 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   })
   const [reportDraft, setReportDraft] = useState({
     student: '',
-    term: 'Term 3',
+    period: 'Trimestre 3',
+    reportType: 'Academic progress report',
+    recipient: 'Direction / Academic Office',
+    priority: 'Normal',
     average: 88,
     conduct: 'Good',
+    actionRequested: 'Review and approve for official follow-up.',
+    recommendation: 'Maintain current supports and verify the next gradebook update before publication.',
     teacherComment: 'Shows steady progress and responds well to targeted feedback.',
   })
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false)
+  const reportPreviewRef = useRef<HTMLIFrameElement>(null)
   const [disciplineDraft, setDisciplineDraft] = useState({
     studentId: '',
     category: 'Classroom conduct',
@@ -528,6 +535,31 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       setTimeout(() => {
         reportCardPreviewRef.current?.contentWindow?.focus()
         reportCardPreviewRef.current?.contentWindow?.print()
+      }, 350)
+    }
+  }
+
+  const reportDocumentHtml = () => {
+    const logoUrl = typeof window === 'undefined' ? SCHOOL_LOGO_SRC : new URL(SCHOOL_LOGO_SRC, window.location.origin).href
+    const student = teacherStudents.find((item) => item.name === reportDraft.student) ?? teacherStudents[0]
+    const documentId = `KCS-TR-${Date.now()}`
+    const verificationCode = buildVerificationCode(`${reportDraft.student}|${reportDraft.period}|${reportDraft.reportType}|${reportDraft.recipient}|${reportDraft.average}`)
+    const verificationUrl = typeof window === 'undefined'
+      ? `https://propheticpowerfulman.github.io/kcs-nexus-demo/#teacher-report=${verificationCode}`
+      : `${window.location.origin}${window.location.pathname}#teacher-report=${verificationCode}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=132x132&data=${encodeURIComponent(verificationUrl)}`
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(SCHOOL_NAME)} Teacher Report</title><style>
+      @page{size:A4;margin:12mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#edf3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;width:210mm;min-height:297mm;margin:0 auto;background:#fff;border:1px solid #d6dfec;padding:13mm;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.055;pointer-events:none}.watermark img{width:188mm;max-width:94%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:5px solid #0b3b73;padding-bottom:14px}.brand{display:flex;align-items:center;gap:18px}.logo{height:132px;width:132px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:27px;font-weight:900}.tag{margin:6px 0 0;color:#b8872c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.14em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{text-align:center;margin:22px 0 16px}.title h1{margin:0;color:#0b3b73;font-size:30px}.title p{margin:6px 0 0;color:#526172}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.box{border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;padding:10px}.label{display:block;color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:5px;font-weight:900;color:#10233f}.section{position:relative;margin-top:16px;border:1px solid #dbe4f0;border-radius:12px;padding:14px;background:#fff}.section h2{margin:0 0 8px;color:#0b3b73;font-size:16px}.section p{margin:0;line-height:1.55}.priority{display:inline-block;border-radius:999px;background:${reportDraft.priority === 'Urgent' ? '#fee2e2' : '#dbeafe'};color:${reportDraft.priority === 'Urgent' ? '#991b1b' : '#1d4ed8'};padding:6px 10px;font-weight:900;font-size:11px}.auth{display:grid;grid-template-columns:1fr 144px;gap:12px;align-items:center;margin-top:16px;border:1px dashed #9ab0cb;background:#f8fafc;padding:10px}.qr{height:132px;width:132px;border:6px solid #fff;box-shadow:0 0 0 1px #dbe4f0}.auth p{margin:4px 0;font-size:11px}.mono{font-family:Consolas,monospace;font-weight:900;color:#0b3b73}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:22px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;margin:0;padding:0;width:auto;min-height:auto}}
+    </style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Official teacher report</p></div></section><aside class="badge"><strong>${escapeHtml(reportDraft.recipient)}</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>${escapeHtml(reportDraft.reportType)}</h1><p>${escapeHtml(reportDraft.period)} - ${escapeHtml(reportDraft.priority)} priority</p></section><section class="grid"><div class="box"><span class="label">Student</span><span class="value">${escapeHtml(reportDraft.student)}</span></div><div class="box"><span class="label">Class</span><span class="value">${escapeHtml(student ? `${student.grade}${student.section}` : 'Class pending')}</span></div><div class="box"><span class="label">Average</span><span class="value">${escapeHtml(reportDraft.average)}%</span></div><div class="box"><span class="label">Conduct</span><span class="value">${escapeHtml(reportDraft.conduct)}</span></div></section><section class="section"><h2>Teacher observation</h2><p>${escapeHtml(reportDraft.teacherComment)}</p></section><section class="section"><h2>Recommendation</h2><p>${escapeHtml(reportDraft.recommendation)}</p></section><section class="section"><h2>Requested action</h2><p><span class="priority">${escapeHtml(reportDraft.priority)}</span> ${escapeHtml(reportDraft.actionRequested)}</p></section><section class="section"><h2>Delivery logic</h2><p>This official report is prepared for ${escapeHtml(reportDraft.recipient)}. Parent-facing copies require school approval and finance/obligation clearance before portal publication.</p></section><section class="auth"><div><span class="label">Digital authenticity markers</span><p>Verification code: <span class="mono">${escapeHtml(verificationCode)}</span></p><p>Document ID: <span class="mono">${escapeHtml(documentId)}</span></p><p>Scan the QR code to verify this teacher report package in KCS Nexus.</p><p class="mono">${escapeHtml(verificationUrl)}</p></div><img class="qr" src="${escapeHtml(qrUrl)}" alt="Teacher report verification QR code"></section><section class="signatures"><div class="sig">Teacher</div><div class="sig">Academic Direction</div><div class="sig">Parent / Guardian if applicable</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus official teacher report</span><span>${escapeHtml(documentId)} - ${escapeHtml(verificationCode)}</span></footer></main></body></html>`
+  }
+
+  const openReportDocument = (printNow = false) => {
+    setReportPreviewOpen(true)
+    if (printNow) {
+      setTimeout(() => {
+        reportPreviewRef.current?.contentWindow?.focus()
+        reportPreviewRef.current?.contentWindow?.print()
       }, 350)
     }
   }
@@ -785,8 +817,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const createReport = () => {
-    setReportList((current) => [{ ...reportDraft, principalStatus: 'Pending review', download: 'Draft' }, ...current])
-    runAction(`${reportDraft.student}'s report draft created for principal approval.`)
+    setReportList((current) => [{ ...reportDraft, term: reportDraft.period, principalStatus: 'Pending review', download: `${reportDraft.recipient} package ready` }, ...current])
+    runAction(`${reportDraft.student}'s ${reportDraft.reportType.toLowerCase()} was prepared for ${reportDraft.recipient}.`)
   }
 
   const createDisciplineReport = () => {
@@ -1940,20 +1972,78 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           </div>
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Draft report card</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Prepare academic, conduct, parent-ready and approval-ready reports from the same student record.</p>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Official report draft</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Prepare a printable report for parents or school direction with approval, portal, and PDF logic.</p>
             <div className="mt-4 grid gap-3">
-              <select className={inputClass} value={reportDraft.student} onChange={(event) => setReportDraft((draft) => ({ ...draft, student: event.target.value }))}>
-                {teacherStudents.map((student) => <option key={student.id} value={student.name}>{student.name}</option>)}
-              </select>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Report recipient
+                <select className={inputClass} value={reportDraft.recipient} onChange={(event) => setReportDraft((draft) => ({ ...draft, recipient: event.target.value }))}>
+                  <option>Direction / Academic Office</option>
+                  <option>Parents / Guardians</option>
+                  <option>Super Admin approval</option>
+                  <option>Finance and obligations office</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Report type
+                <select className={inputClass} value={reportDraft.reportType} onChange={(event) => setReportDraft((draft) => ({ ...draft, reportType: event.target.value }))}>
+                  <option>Academic progress report</option>
+                  <option>Parent conference report</option>
+                  <option>Direction intervention report</option>
+                  <option>End-of-period academic report</option>
+                  <option>Student support recommendation</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Student concerned
+                <select className={inputClass} value={reportDraft.student} onChange={(event) => setReportDraft((draft) => ({ ...draft, student: event.target.value }))}>
+                  {teacherStudents.map((student) => <option key={student.id} value={student.name}>{student.name} - {student.grade}{student.section}</option>)}
+                </select>
+              </label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <input className={inputClass} value={reportDraft.term} onChange={(event) => setReportDraft((draft) => ({ ...draft, term: event.target.value }))} />
-                <input className={inputClass} type="number" value={reportDraft.average} onChange={(event) => setReportDraft((draft) => ({ ...draft, average: Number(event.target.value) }))} />
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Academic period
+                  <select className={inputClass} value={reportDraft.period} onChange={(event) => setReportDraft((draft) => ({ ...draft, period: event.target.value }))}>
+                    {reportCardPeriods.map((period) => <option key={period}>{period}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Current average / 100%
+                  <input className={inputClass} type="number" min={0} max={100} value={reportDraft.average} onChange={(event) => setReportDraft((draft) => ({ ...draft, average: Math.max(0, Math.min(100, Number(event.target.value))) }))} />
+                </label>
               </div>
-              <input className={inputClass} value={reportDraft.conduct} onChange={(event) => setReportDraft((draft) => ({ ...draft, conduct: event.target.value }))} />
-              <textarea className={inputClass} value={reportDraft.teacherComment} onChange={(event) => setReportDraft((draft) => ({ ...draft, teacherComment: event.target.value }))} rows={4} />
-              <button onClick={createReport} className={compactButton}>Create report draft</button>
-              <button onClick={() => runAction('Report PDF, parent portal preview, and coordinator approval package prepared.')} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Preview publication package</button>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Conduct / behavior summary
+                  <input className={inputClass} value={reportDraft.conduct} onChange={(event) => setReportDraft((draft) => ({ ...draft, conduct: event.target.value }))} />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Priority
+                  <select className={inputClass} value={reportDraft.priority} onChange={(event) => setReportDraft((draft) => ({ ...draft, priority: event.target.value }))}>
+                    <option>Normal</option>
+                    <option>Important</option>
+                    <option>Urgent</option>
+                  </select>
+                </label>
+              </div>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Teacher observation
+                <textarea className={`${inputClass} min-h-28`} value={reportDraft.teacherComment} onChange={(event) => setReportDraft((draft) => ({ ...draft, teacherComment: event.target.value }))} rows={4} />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Recommendation
+                <textarea className={`${inputClass} min-h-20`} value={reportDraft.recommendation} onChange={(event) => setReportDraft((draft) => ({ ...draft, recommendation: event.target.value }))} />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                Requested action
+                <textarea className={`${inputClass} min-h-20`} value={reportDraft.actionRequested} onChange={(event) => setReportDraft((draft) => ({ ...draft, actionRequested: event.target.value }))} />
+              </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button onClick={createReport} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-kcs-blue-800">Save draft</button>
+                <button onClick={() => runAction(`${reportDraft.reportType} queued for ${reportDraft.recipient}.`)} className="rounded-xl bg-green-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-800">Send package</button>
+                <button onClick={() => openReportDocument(false)} className="rounded-xl border border-kcs-gold-400 bg-kcs-gold-50 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-100 dark:bg-kcs-gold-500">Preview official PDF</button>
+                <button onClick={() => openReportDocument(true)} className="rounded-xl bg-kcs-gold-500 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Print / Download PDF</button>
+              </div>
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -1977,6 +2067,27 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           ))}
           </div>
         </div>
+        {reportPreviewOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Official teacher report preview">
+            <section className="flex max-h-[95vh] w-full max-w-[min(98vw,88rem)] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+              <div className="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-kcs-blue-800 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Official teacher report preview</p>
+                  <h3 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{reportDraft.student} - {reportDraft.reportType}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => reportPreviewRef.current?.contentWindow?.print()} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white hover:bg-green-800 dark:bg-green-500 dark:hover:bg-green-400">Print / Save PDF</button>
+                  <button type="button" onClick={() => setReportPreviewOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">
+                    <X size={16} /> Close
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 bg-gray-100 p-3 dark:bg-kcs-blue-950">
+                <iframe ref={reportPreviewRef} title="Official teacher report PDF preview" srcDoc={reportDocumentHtml()} className="h-[78vh] w-full rounded-xl border border-gray-200 bg-white dark:border-kcs-blue-800" />
+              </div>
+            </section>
+          </div>
+        )}
         </div>
       )}
 
