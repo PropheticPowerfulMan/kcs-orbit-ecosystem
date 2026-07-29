@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -93,6 +93,7 @@ const SCHOOL_NAME = 'Kinshasa Christian School'
 
 const SCHOOL_LOGO_SRC = getAssetUrl('images/kcs-logo.png')
 const SCHOOL_SEAL_SRC = getAssetUrl('images/kcs.jpg')
+const ADMIN_REPORT_CARD_PERIODS = ['Trimestre 1', 'Trimestre 2', 'Semestre 1', 'Trimestre 3', 'Trimestre 4', 'Semestre 2', 'Final annuel']
 
 const liveEventControls = [
   { title: 'Spring Arts Festival', status: 'Live now', platform: 'YouTube Live', audience: '312 viewers', nextStep: 'Monitor comments and stream health' },
@@ -571,6 +572,14 @@ const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
+
+const buildVerificationCode = (value: string) => {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
+  }
+  return `KCS-${Math.abs(hash).toString(36).toUpperCase().padStart(8, '0')}`
+}
 
 const downloadExportFile = (filename: string, content: string, type: string) => {
   const blob = new Blob([content], { type })
@@ -1285,6 +1294,14 @@ const AdminSectionView = ({
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
   const [showCreateStudent, setShowCreateStudent] = useState(false)
   const [selectedTranscriptId, setSelectedTranscriptId] = useState('')
+  const [adminReportCardClass, setAdminReportCardClass] = useState('')
+  const [adminReportCardStudentId, setAdminReportCardStudentId] = useState('')
+  const [adminReportCardPeriod, setAdminReportCardPeriod] = useState('Trimestre 3')
+  const [adminReportCardDecision, setAdminReportCardDecision] = useState<'Draft review' | 'Approved' | 'Published' | 'Locked'>('Draft review')
+  const [adminReportCardComment, setAdminReportCardComment] = useState('')
+  const [adminReportCardCommentEdited, setAdminReportCardCommentEdited] = useState(false)
+  const [adminReportPreviewOpen, setAdminReportPreviewOpen] = useState(false)
+  const adminReportPreviewRef = useRef<HTMLIFrameElement>(null)
   const [reportCadence, setReportCadence] = useState<AdminReportCadence>('weekly')
   const [reportCategory, setReportCategory] = useState<AdminReportCategory>('executive')
   const [editingStudent, setEditingStudent] = useState<AdminStudentRecord | null>(null)
@@ -1635,6 +1652,70 @@ const AdminSectionView = ({
 
   const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0] ?? adminRosterSeed[0]
   const officialTranscript = buildOfficialTranscript(transcriptStudent)
+  const adminReportCardClasses = useMemo(() => Array.from(new Set(officialRoster.map((student) => formatClassName(student.grade, student.section)).filter(Boolean))).sort(), [officialRoster])
+  const adminReportCardStudents = useMemo(() => {
+    return adminReportCardClass ? officialRoster.filter((student) => formatClassName(student.grade, student.section) === adminReportCardClass) : officialRoster
+  }, [adminReportCardClass, officialRoster])
+  const adminReportCardStudent = adminReportCardStudents.find((student) => student.id === adminReportCardStudentId) ?? adminReportCardStudents[0] ?? officialRoster[0] ?? adminRosterSeed[0]
+  const adminReportCardRows = useMemo(() => {
+    const baseAverage = Math.round((adminReportCardStudent.gpa || 3.2) * 20)
+    return subjects.slice(0, 6).map((subject, index) => {
+      const score = Math.max(45, Math.min(99, baseAverage + ((index % 3) - 1) * 4 + (index === 1 ? 5 : 0)))
+      return {
+        id: subject.id,
+        course: subject.name,
+        teacher: subject.teacher,
+        coefficient: index === 1 || index === 3 ? 2 : 1,
+        score,
+        comment: score >= 85 ? 'Strong mastery submitted by subject teacher.' : score >= 70 ? 'Satisfactory gradebook evidence; keep monitoring.' : 'Administrative support plan required.',
+        source: `Final score submitted from ${subject.teacher}'s gradebook`,
+      }
+    })
+  }, [adminReportCardStudent.gpa])
+  const adminReportCardAverage = useMemo(() => {
+    const total = adminReportCardRows.reduce((sum, row) => sum + row.score * row.coefficient, 0)
+    const coefficient = adminReportCardRows.reduce((sum, row) => sum + row.coefficient, 0)
+    return coefficient ? Number((total / coefficient).toFixed(2)) : 0
+  }, [adminReportCardRows])
+  const adminFeeAccount = feeAccounts.find((fee) => fee.student === adminReportCardStudent.name)
+  const adminCanPublishReportCard = !adminFeeAccount || adminFeeAccount.balance === 0
+  const adminSuggestedComment = `${adminReportCardStudent.name} has an administrative report-card average of ${adminReportCardAverage}% for ${adminReportCardPeriod}. As Super Admin, review all submitted teacher gradebooks, confirm finance clearance, validate the main teacher narrative, and publish only after academic and obligation checks are complete.`
+
+  useEffect(() => {
+    if (!adminReportCardClasses.length) return
+    setAdminReportCardClass((current) => current || adminReportCardClasses[0])
+  }, [adminReportCardClasses])
+
+  useEffect(() => {
+    if (!adminReportCardStudents.length) return
+    if (!adminReportCardStudents.some((student) => student.id === adminReportCardStudentId)) {
+      setAdminReportCardStudentId(adminReportCardStudents[0].id)
+      setAdminReportCardCommentEdited(false)
+    }
+  }, [adminReportCardStudentId, adminReportCardStudents])
+
+  useEffect(() => {
+    if (!adminReportCardCommentEdited) setAdminReportCardComment(adminSuggestedComment)
+  }, [adminReportCardCommentEdited, adminSuggestedComment])
+
+  const buildAdminReportCardHtml = () => {
+    const logoUrl = typeof window === 'undefined' ? SCHOOL_LOGO_SRC : new URL(SCHOOL_LOGO_SRC, window.location.origin).href
+    const grade = formatClassName(adminReportCardStudent.grade, adminReportCardStudent.section)
+    const documentId = `KCS-ADMIN-RC-${Date.now()}`
+    const verificationCode = buildVerificationCode(`${adminReportCardStudent.name}|${grade}|${adminReportCardPeriod}|${adminReportCardAverage}|${adminReportCardDecision}`)
+    const verificationUrl = typeof window === 'undefined'
+      ? `https://propheticpowerfulman.github.io/kcs-nexus-demo/#admin-verify=${verificationCode}`
+      : `${window.location.origin}${window.location.pathname}#admin-verify=${verificationCode}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`
+    const rows = adminReportCardRows.map((row) => {
+      const mention = row.score >= 90 ? 'Excellent' : row.score >= 80 ? 'Very good' : row.score >= 70 ? 'Satisfactory' : row.score >= 60 ? 'Needs support' : 'Intervention'
+      return `<tr><td><strong>${escapeHtml(row.course)}</strong><br><span>${escapeHtml(row.source)}</span></td><td>${escapeHtml(row.teacher)}</td><td class="num">${escapeHtml(row.coefficient)}</td><td class="num">${row.score.toFixed(1)}%</td><td>${escapeHtml(mention)}</td><td>${escapeHtml(row.comment)}</td></tr>`
+    }).join('')
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(SCHOOL_NAME)} Super Admin Report Card</title><style>
+      @page{size:A4;margin:10mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;width:210mm;min-height:297mm;margin:0 auto;background:#fff;border:1px solid #d6dfec;padding:12mm;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.06;pointer-events:none}.watermark img{width:195mm;max-width:95%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:6px solid #0b3b73;padding-bottom:13px}.brand{display:flex;align-items:center;gap:20px}.logo{height:154px;width:154px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:28px;font-weight:900}.tag{margin:6px 0 0;color:#b8872c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.14em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{text-align:center;margin:18px 0 12px}.title h1{margin:0;color:#0b3b73;font-size:30px}.title p{margin:6px 0 0;color:#526172}.info,.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;padding:9px}.label{display:block;color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:900;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th{background:#0b3b73;color:#fff;text-align:left;padding:8px;border:1px solid #0b3b73}td{padding:8px;border:1px solid #dbe4f0;vertical-align:top}td span{color:#64748b;font-size:9px}.num{text-align:right;font-weight:900}.summary{margin-top:12px}.average{font-size:23px;color:#0b3b73}.comment{margin-top:12px;min-height:30mm;border-left:5px solid #d8a536;background:#fff8e6;padding:12px;color:#3f3215}.auth{display:grid;grid-template-columns:1fr 160px;gap:12px;align-items:center;margin-top:12px;border:1px dashed #9ab0cb;background:#f8fafc;padding:10px}.qr{height:150px;width:150px;border:6px solid #fff;box-shadow:0 0 0 1px #dbe4f0}.auth p{margin:4px 0;font-size:11px}.mono{font-family:Consolas,monospace;font-weight:900;color:#0b3b73}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:16px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;margin:0;padding:0;width:auto;min-height:auto}}
+    </style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Super Admin Official Control Copy</p></div></section><aside class="badge"><strong>Report Card Authority</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>Official Academic Report Card</h1><p>${escapeHtml(adminReportCardPeriod)} - 2026 Academic Year - Administrative A4 copy</p></section><section class="info"><div><span class="label">Student</span><span class="value">${escapeHtml(adminReportCardStudent.name)}</span></div><div><span class="label">Class</span><span class="value">${escapeHtml(grade)}</span></div><div><span class="label">Parent</span><span class="value">${escapeHtml(adminReportCardStudent.parent)}</span></div><div><span class="label">Authority status</span><span class="value">${escapeHtml(adminReportCardDecision)}</span></div></section><table><thead><tr><th>Course / gradebook source</th><th>Teacher</th><th>Coef.</th><th>Final score</th><th>Mention</th><th>Administrative note</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div><span class="label">General average</span><span class="value average">${escapeHtml(adminReportCardAverage)}%</span></div><div><span class="label">GPA</span><span class="value">${escapeHtml(adminReportCardStudent.gpa)}</span></div><div><span class="label">Finance clearance</span><span class="value">${adminCanPublishReportCard ? 'Cleared' : `Blocked: $${adminFeeAccount?.balance ?? 0}`}</span></div><div><span class="label">Portal publication</span><span class="value">${adminCanPublishReportCard && adminReportCardDecision === 'Published' ? 'Visible' : 'Controlled'}</span></div></section><section class="comment"><strong>Super Admin final comment / override</strong><br>${escapeHtml(adminReportCardComment)}</section><section class="auth"><div><span class="label">Digital authenticity markers</span><p>Verification code: <span class="mono">${escapeHtml(verificationCode)}</span></p><p>Document ID: <span class="mono">${escapeHtml(documentId)}</span></p><p>QR verifies this administrative report-card copy in KCS Nexus.</p><p class="mono">${escapeHtml(verificationUrl)}</p></div><img class="qr" src="${escapeHtml(qrUrl)}" alt="Report card verification QR code"></section><section class="signatures"><div class="sig">Super Admin / Principal</div><div class="sig">Academic Coordinator</div><div class="sig">Finance Office Clearance</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus administrative report-card document</span><span>${escapeHtml(documentId)} - ${escapeHtml(verificationCode)}</span></footer></main></body></html>`
+  }
 
   const filteredRoster = useMemo(() => {
     const query = studentQuery.trim().toLowerCase()
@@ -3041,7 +3122,73 @@ const AdminDashboard = () => {
   const activeSegment = getAdminSegment(location.pathname)
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
   const [admissionRequests, setAdmissionRequests] = useState<AdminAdmissionRequest[]>(readStoredAdmissions)
+  const [adminReportCardClass, setAdminReportCardClass] = useState('')
+  const [adminReportCardStudentId, setAdminReportCardStudentId] = useState('')
+  const [adminReportCardPeriod, setAdminReportCardPeriod] = useState('Trimestre 3')
+  const [adminReportCardDecision, setAdminReportCardDecision] = useState<'Draft review' | 'Approved' | 'Published' | 'Locked'>('Draft review')
+  const [adminReportCardComment, setAdminReportCardComment] = useState('')
+  const [adminReportCardCommentEdited, setAdminReportCardCommentEdited] = useState(false)
+  const [adminReportPreviewOpen, setAdminReportPreviewOpen] = useState(false)
+  const adminReportPreviewRef = useRef<HTMLIFrameElement>(null)
   const pendingAdmissions = admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW')
+  const adminReportCardClasses = useMemo(() => Array.from(new Set(officialRoster.map((student) => formatClassName(student.grade, student.section)).filter(Boolean))).sort(), [officialRoster])
+  const adminReportCardStudents = useMemo(() => adminReportCardClass ? officialRoster.filter((student) => formatClassName(student.grade, student.section) === adminReportCardClass) : officialRoster, [adminReportCardClass, officialRoster])
+  const adminReportCardStudent = adminReportCardStudents.find((student) => student.id === adminReportCardStudentId) ?? adminReportCardStudents[0] ?? officialRoster[0] ?? adminRosterSeed[0]
+  const adminReportCardRows = useMemo(() => {
+    const baseAverage = Math.round((adminReportCardStudent.gpa || 3.2) * 20)
+    return subjects.slice(0, 6).map((subject, index) => {
+      const score = Math.max(45, Math.min(99, baseAverage + ((index % 3) - 1) * 4 + (index === 1 ? 5 : 0)))
+      return {
+        id: subject.id,
+        course: subject.name,
+        teacher: subject.teacher,
+        coefficient: index === 1 || index === 3 ? 2 : 1,
+        score,
+        comment: score >= 85 ? 'Strong mastery submitted by subject teacher.' : score >= 70 ? 'Satisfactory gradebook evidence; keep monitoring.' : 'Administrative support plan required.',
+        source: `Final score submitted from ${subject.teacher}'s gradebook`,
+      }
+    })
+  }, [adminReportCardStudent.gpa])
+  const adminReportCardAverage = useMemo(() => {
+    const total = adminReportCardRows.reduce((sum, row) => sum + row.score * row.coefficient, 0)
+    const coefficient = adminReportCardRows.reduce((sum, row) => sum + row.coefficient, 0)
+    return coefficient ? Number((total / coefficient).toFixed(2)) : 0
+  }, [adminReportCardRows])
+  const adminFeeAccount = feeAccounts.find((fee) => fee.student === adminReportCardStudent.name)
+  const adminCanPublishReportCard = !adminFeeAccount || adminFeeAccount.balance === 0
+  const adminSuggestedComment = `${adminReportCardStudent.name} has an administrative report-card average of ${adminReportCardAverage}% for ${adminReportCardPeriod}. As Super Admin, review all submitted teacher gradebooks, confirm finance clearance, validate the main teacher narrative, and publish only after academic and obligation checks are complete.`
+
+  useEffect(() => {
+    if (!adminReportCardClasses.length) return
+    setAdminReportCardClass((current) => current || adminReportCardClasses[0])
+  }, [adminReportCardClasses])
+
+  useEffect(() => {
+    if (!adminReportCardStudents.length) return
+    if (!adminReportCardStudents.some((student) => student.id === adminReportCardStudentId)) {
+      setAdminReportCardStudentId(adminReportCardStudents[0].id)
+      setAdminReportCardCommentEdited(false)
+    }
+  }, [adminReportCardStudentId, adminReportCardStudents])
+
+  useEffect(() => {
+    if (!adminReportCardCommentEdited) setAdminReportCardComment(adminSuggestedComment)
+  }, [adminReportCardCommentEdited, adminSuggestedComment])
+
+  const buildAdminReportCardHtml = () => {
+    const logoUrl = typeof window === 'undefined' ? SCHOOL_LOGO_SRC : new URL(SCHOOL_LOGO_SRC, window.location.origin).href
+    const grade = formatClassName(adminReportCardStudent.grade, adminReportCardStudent.section)
+    const documentId = `KCS-ADMIN-RC-${Date.now()}`
+    const verificationCode = buildVerificationCode(`${adminReportCardStudent.name}|${grade}|${adminReportCardPeriod}|${adminReportCardAverage}|${adminReportCardDecision}`)
+    const verificationUrl = typeof window === 'undefined' ? `https://propheticpowerfulman.github.io/kcs-nexus-demo/#admin-verify=${verificationCode}` : `${window.location.origin}${window.location.pathname}#admin-verify=${verificationCode}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationUrl)}`
+    const rows = adminReportCardRows.map((row) => {
+      const mention = row.score >= 90 ? 'Excellent' : row.score >= 80 ? 'Very good' : row.score >= 70 ? 'Satisfactory' : row.score >= 60 ? 'Needs support' : 'Intervention'
+      return `<tr><td><strong>${escapeHtml(row.course)}</strong><br><span>${escapeHtml(row.source)}</span></td><td>${escapeHtml(row.teacher)}</td><td class="num">${escapeHtml(row.coefficient)}</td><td class="num">${row.score.toFixed(1)}%</td><td>${escapeHtml(mention)}</td><td>${escapeHtml(row.comment)}</td></tr>`
+    }).join('')
+
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(SCHOOL_NAME)} Super Admin Report Card</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;width:210mm;min-height:297mm;margin:0 auto;background:#fff;border:1px solid #d6dfec;padding:12mm;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.06;pointer-events:none}.watermark img{width:195mm;max-width:95%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:6px solid #0b3b73;padding-bottom:13px}.brand{display:flex;align-items:center;gap:20px}.logo{height:154px;width:154px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:28px;font-weight:900}.tag{margin:6px 0 0;color:#b8872c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.14em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{text-align:center;margin:18px 0 12px}.title h1{margin:0;color:#0b3b73;font-size:30px}.title p{margin:6px 0 0;color:#526172}.info,.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;background:#f8fafc;padding:9px}.label{display:block;color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:900;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th{background:#0b3b73;color:#fff;text-align:left;padding:8px;border:1px solid #0b3b73}td{padding:8px;border:1px solid #dbe4f0;vertical-align:top}td span{color:#64748b;font-size:9px}.num{text-align:right;font-weight:900}.summary{margin-top:12px}.average{font-size:23px;color:#0b3b73}.comment{margin-top:12px;min-height:30mm;border-left:5px solid #d8a536;background:#fff8e6;padding:12px;color:#3f3215}.auth{display:grid;grid-template-columns:1fr 160px;gap:12px;align-items:center;margin-top:12px;border:1px dashed #9ab0cb;background:#f8fafc;padding:10px}.qr{height:150px;width:150px;border:6px solid #fff;box-shadow:0 0 0 1px #dbe4f0}.auth p{margin:4px 0;font-size:11px}.mono{font-family:Consolas,monospace;font-weight:900;color:#0b3b73}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:16px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;margin:0;padding:0;width:auto;min-height:auto}}</style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Super Admin Official Control Copy</p></div></section><aside class="badge"><strong>Report Card Authority</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>Official Academic Report Card</h1><p>${escapeHtml(adminReportCardPeriod)} - 2026 Academic Year - Administrative A4 copy</p></section><section class="info"><div><span class="label">Student</span><span class="value">${escapeHtml(adminReportCardStudent.name)}</span></div><div><span class="label">Class</span><span class="value">${escapeHtml(grade)}</span></div><div><span class="label">Parent</span><span class="value">${escapeHtml(adminReportCardStudent.parent)}</span></div><div><span class="label">Authority status</span><span class="value">${escapeHtml(adminReportCardDecision)}</span></div></section><table><thead><tr><th>Course / gradebook source</th><th>Teacher</th><th>Coef.</th><th>Final score</th><th>Mention</th><th>Administrative note</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div><span class="label">General average</span><span class="value average">${escapeHtml(adminReportCardAverage)}%</span></div><div><span class="label">GPA</span><span class="value">${escapeHtml(adminReportCardStudent.gpa)}</span></div><div><span class="label">Finance clearance</span><span class="value">${adminCanPublishReportCard ? 'Cleared' : `Blocked: $${adminFeeAccount?.balance ?? 0}`}</span></div><div><span class="label">Portal publication</span><span class="value">${adminCanPublishReportCard && adminReportCardDecision === 'Published' ? 'Visible' : 'Controlled'}</span></div></section><section class="comment"><strong>Super Admin final comment / override</strong><br>${escapeHtml(adminReportCardComment)}</section><section class="auth"><div><span class="label">Digital authenticity markers</span><p>Verification code: <span class="mono">${escapeHtml(verificationCode)}</span></p><p>Document ID: <span class="mono">${escapeHtml(documentId)}</span></p><p>QR verifies this administrative report-card copy in KCS Nexus.</p><p class="mono">${escapeHtml(verificationUrl)}</p></div><img class="qr" src="${escapeHtml(qrUrl)}" alt="Report card verification QR code"></section><section class="signatures"><div class="sig">Super Admin / Principal</div><div class="sig">Academic Coordinator</div><div class="sig">Finance Office Clearance</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus administrative report-card document</span><span>${escapeHtml(documentId)} - ${escapeHtml(verificationCode)}</span></footer></main></body></html>`
+  }
 
   return (
     <div className="portal-shell flex">
@@ -3427,26 +3574,63 @@ const AdminDashboard = () => {
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Report Cards & Transcripts</h2>
-                <span className="badge-gold text-xs">Principal workflow</span>
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="font-bold text-kcs-blue-900 dark:text-white">Super Admin Report Card Control</h2>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Approve, lock, publish, audit, and print official A4 report cards from teacher gradebook submissions.</p>
+                </div>
+                <span className="badge-gold text-xs">Chief authority</span>
               </div>
-              <div className="space-y-3">
-                {[...reportCards, ...transcripts].map((item: any) => (
-                  <div key={`${item.student}-${item.term ?? item.years}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.student}</p>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          {item.term ?? item.years} ? {item.principalStatus ?? item.status}
-                        </p>
-                      </div>
-                      <button type="button" onClick={() => printAcademicWorkflowDocument(item)} className="inline-flex w-fit items-center justify-center rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900">
-                        Print PDF
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="grid gap-3">
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Class control
+                  <select className="input-kcs py-2 text-sm" value={adminReportCardClass} onChange={(event) => {
+                    setAdminReportCardClass(event.target.value)
+                    setAdminReportCardCommentEdited(false)
+                  }}>
+                    {adminReportCardClasses.map((className) => (
+                      <option key={className} value={className}>{className} - {officialRoster.filter((student) => formatClassName(student.grade, student.section) === className).length} student(s)</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Student report card
+                  <select className="input-kcs py-2 text-sm" value={adminReportCardStudent.id} onChange={(event) => {
+                    setAdminReportCardStudentId(event.target.value)
+                    setAdminReportCardCommentEdited(false)
+                  }}>
+                    {adminReportCardStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {formatClassName(student.grade, student.section)}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  Academic period
+                  <select className="input-kcs py-2 text-sm" value={adminReportCardPeriod} onChange={(event) => setAdminReportCardPeriod(event.target.value)}>
+                    {ADMIN_REPORT_CARD_PERIODS.map((period) => <option key={period}>{period}</option>)}
+                  </select>
+                </label>
+                <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-50 p-3 text-center dark:bg-kcs-blue-800/30">
+                  <div><p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{adminReportCardAverage}%</p><p className="text-xs text-gray-500 dark:text-gray-400">Average</p></div>
+                  <div><p className="font-display text-lg font-bold text-kcs-blue-900 dark:text-white">{adminReportCardRows.length}</p><p className="text-xs text-gray-500 dark:text-gray-400">Courses</p></div>
+                  <div><p className={`text-sm font-bold ${adminCanPublishReportCard ? 'text-green-700 dark:text-green-300' : 'text-orange-700 dark:text-orange-300'}`}>{adminCanPublishReportCard ? 'Cleared' : 'Blocked'}</p><p className="text-xs text-gray-500 dark:text-gray-400">Finance</p></div>
+                </div>
+                <textarea className="input-kcs min-h-28 py-2 text-sm" value={adminReportCardComment} onChange={(event) => {
+                  setAdminReportCardCommentEdited(true)
+                  setAdminReportCardComment(event.target.value)
+                }} />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button className="rounded-xl bg-green-700 px-3 py-2 text-xs font-bold text-white hover:bg-green-800" onClick={() => setAdminReportCardDecision('Approved')}>Approve</button>
+                  <button className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800 disabled:opacity-50" disabled={!adminCanPublishReportCard} onClick={() => setAdminReportCardDecision('Published')}>Publish portals</button>
+                  <button className="rounded-xl bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-800" onClick={() => setAdminReportCardDecision('Locked')}>Lock report card</button>
+                  <button className="rounded-xl border border-kcs-blue-200 bg-white px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800" onClick={() => {
+                    setAdminReportCardCommentEdited(false)
+                    setAdminReportCardComment(adminSuggestedComment)
+                  }}>Regenerate AI comment</button>
+                  <button className="rounded-xl border border-kcs-gold-400 bg-kcs-gold-50 px-3 py-2 text-xs font-bold text-kcs-blue-950 hover:bg-kcs-gold-100 dark:bg-kcs-gold-500" onClick={() => setAdminReportPreviewOpen(true)}>Preview A4</button>
+                  <button className="rounded-xl bg-kcs-gold-500 px-3 py-2 text-xs font-bold text-kcs-blue-950 hover:bg-kcs-gold-400" onClick={() => {
+                    setAdminReportPreviewOpen(true)
+                    setTimeout(() => adminReportPreviewRef.current?.contentWindow?.print(), 350)
+                  }}>Print / PDF</button>
+                </div>
               </div>
             </div>
           </div>
@@ -3490,6 +3674,28 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
+
+          {adminReportPreviewOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Super Admin report card preview">
+              <section className="flex max-h-[95vh] w-full max-w-[min(98vw,88rem)] flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+                <div className="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-kcs-blue-800 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Super Admin A4 report-card preview</p>
+                    <h3 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{adminReportCardStudent.name} - {adminReportCardPeriod}</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => adminReportPreviewRef.current?.contentWindow?.print()} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white hover:bg-green-800 dark:bg-green-500 dark:hover:bg-green-400">Print / Save PDF</button>
+                    <button type="button" onClick={() => setAdminReportPreviewOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">
+                      <X size={16} /> Close
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 bg-gray-100 p-3 dark:bg-kcs-blue-950">
+                  <iframe ref={adminReportPreviewRef} title="Super Admin official report-card preview" srcDoc={buildAdminReportCardHtml()} className="h-[78vh] w-full rounded-xl border border-gray-200 bg-white dark:border-kcs-blue-800" />
+                </div>
+              </section>
+            </div>
+          )}
 
           <div className="grid gap-6 xl:grid-cols-3">
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
