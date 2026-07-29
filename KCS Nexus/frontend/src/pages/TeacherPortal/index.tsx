@@ -44,6 +44,13 @@ const SCHOOL_NAME = 'Kinshasa Christian School'
 const SCHOOL_LOGO_SRC = getAssetUrl('images/kcs-logo.png')
 const reportCardPeriods = ['Trimestre 1', 'Trimestre 2', 'Semestre 1', 'Trimestre 3', 'Trimestre 4', 'Semestre 2', 'Final annuel']
 const escapeHtml = (value: string | number | undefined | null) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char))
+const buildVerificationCode = (value: string) => {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
+  }
+  return `KCS-${Math.abs(hash).toString(36).toUpperCase().padStart(8, '0')}`
+}
 
 const studentAlerts = [
   { student: 'Naomi K.', note: 'Attendance dropped to 84% over the last 3 weeks.', severity: 'high' },
@@ -242,8 +249,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       coefficient: index === 1 ? 2 : 1,
       points: index === 0 ? 89 : index === 1 ? 95 : index === 2 ? 91 : 76,
       comment: index === 1 ? 'Excellent lab reasoning' : index === 3 ? 'Needs steady homework rhythm' : 'Good progress',
+      source: 'Submitted from teacher gradebook',
     })),
   )
+  const [mainTeacherComment, setMainTeacherComment] = useState('')
+  const [mainTeacherCommentEdited, setMainTeacherCommentEdited] = useState(false)
   const [generatedReportCards, setGeneratedReportCards] = useState<Array<{
     id: string
     student: string
@@ -391,6 +401,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [reportCardRows])
   const reportCardMention = reportCardAverage >= 90 ? 'Excellent' : reportCardAverage >= 80 ? 'Very Good' : reportCardAverage >= 70 ? 'Satisfactory' : reportCardAverage >= 60 ? 'Needs Support' : 'Intervention Required'
   const reportCardDecision = reportCardAverage >= 70 ? 'Promote academic momentum' : 'Create support plan before final approval'
+  const suggestedMainTeacherComment = `${reportCardStudent?.name ?? 'The student'} completed ${reportCardRows.length} course evaluation(s) for ${reportCardTerm} with a weighted average of ${reportCardAverage}%. Strengths should be maintained through consistent class participation, while the main teacher should monitor the lowest course score and coordinate support with the concerned subject teacher.`
+
+  useEffect(() => {
+    if (!mainTeacherCommentEdited) setMainTeacherComment(suggestedMainTeacherComment)
+  }, [mainTeacherCommentEdited, suggestedMainTeacherComment])
 
   const updateReportCardRow = (rowId: string, field: 'course' | 'points' | 'coefficient' | 'comment', value: string | number) => {
     setReportCardRows((current) => current.map((row) => {
@@ -411,6 +426,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         coefficient: 1,
         points: 0,
         comment: 'Teacher comment pending',
+        source: 'Pending gradebook submission',
       },
     ])
     runAction('New report-card course row added.')
@@ -436,7 +452,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const generateReportCard = () => {
     const studentName = reportCardStudent?.name ?? 'Selected student'
-    const summary = `${studentName} earned ${reportCardAverage}% for ${reportCardTerm}. Mention: ${reportCardMention}. Decision: ${reportCardDecision}.`
+    const summary = `${studentName} earned ${reportCardAverage}% for ${reportCardTerm}. Mention: ${reportCardMention}. Decision: ${reportCardDecision}. Main teacher comment: ${mainTeacherComment}`
     const nextReport = {
       id: `rc-final-${Date.now()}`,
       student: studentName,
@@ -464,15 +480,20 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const grade = reportCardStudent ? `${reportCardStudent.grade}${reportCardStudent.section}` : 'Grade pending'
     const logoUrl = typeof window === 'undefined' ? SCHOOL_LOGO_SRC : new URL(SCHOOL_LOGO_SRC, window.location.origin).href
     const documentId = `KCS-RC-${Date.now()}`
+    const verificationCode = buildVerificationCode(`${studentName}|${grade}|${reportCardTerm}|${reportCardAverage}|${reportCardRows.map((row) => `${row.course}:${row.points}:${row.coefficient}`).join('|')}`)
+    const verificationUrl = typeof window === 'undefined'
+      ? `https://propheticpowerfulman.github.io/kcs-nexus-demo/#verify=${verificationCode}`
+      : `${window.location.origin}${window.location.pathname}#verify=${verificationCode}`
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=138x138&data=${encodeURIComponent(verificationUrl)}`
     const rows = reportCardRows.map((row) => {
       const score = Math.max(0, Math.min(100, row.points))
       const remark = score >= 90 ? 'Excellent' : score >= 80 ? 'Very good' : score >= 70 ? 'Satisfactory' : score >= 60 ? 'Needs support' : 'Intervention'
-      return `<tr><td>${escapeHtml(row.course)}</td><td>${escapeHtml(row.teacher)}</td><td class="num">${escapeHtml(row.coefficient)}</td><td class="num">${score.toFixed(1)}%</td><td>${escapeHtml(remark)}</td><td>${escapeHtml(row.comment)}</td></tr>`
+      return `<tr><td><strong>${escapeHtml(row.course)}</strong><br><span>${escapeHtml(row.source)}</span></td><td>${escapeHtml(row.teacher)}</td><td class="num">${escapeHtml(row.coefficient)}</td><td class="num">${score.toFixed(1)}%</td><td>${escapeHtml(remark)}</td><td>${escapeHtml(row.comment)}</td></tr>`
     }).join('')
 
     return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(SCHOOL_NAME)} Report Card</title><style>
-      @page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;min-height:100vh;background:#fff;border:1px solid #d6dfec;padding:28px;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.035;pointer-events:none}.watermark img{width:520px;max-width:80%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:4px solid #0b3b73;padding-bottom:18px}.brand{display:flex;align-items:center;gap:16px}.logo{height:78px;width:78px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:25px;font-weight:900;letter-spacing:.02em}.tag{margin:5px 0 0;color:#b8872c;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.16em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{margin:24px 0 18px;text-align:center}.title h1{margin:0;color:#0b3b73;font-size:30px}.title p{margin:6px 0 0;color:#526172}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;padding:10px;background:#f8fafc}.label{display:block;color:#64748b;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:800;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}th{background:#0b3b73;color:#fff;text-align:left;padding:10px;border:1px solid #0b3b73}td{padding:10px;border:1px solid #dbe4f0;vertical-align:top}.num{text-align:right;font-weight:800}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.average{font-size:24px;color:#0b3b73}.comment{margin-top:18px;border-left:5px solid #d8a536;background:#fff8e6;padding:14px;color:#3f3215}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:42px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:24px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;min-height:auto;padding:0}.actions{display:none}}
-    </style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Excellence in Education, Rooted in Faith</p></div></section><aside class="badge"><strong>Official Report Card</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>Academic Report Card</h1><p>${escapeHtml(reportCardTerm)} - 2026 Academic Year</p></section><section class="info"><div><span class="label">Student</span><span class="value">${escapeHtml(studentName)}</span></div><div><span class="label">Class</span><span class="value">${escapeHtml(grade)}</span></div><div><span class="label">Homeroom</span><span class="value">${escapeHtml(reportCardStudent?.advisor ?? 'Academic Office')}</span></div><div><span class="label">Status</span><span class="value">Teacher draft</span></div></section><table><thead><tr><th>Course</th><th>Teacher</th><th>Coef.</th><th>Score</th><th>Mention</th><th>Teacher comment</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div><span class="label">General average</span><span class="value average">${escapeHtml(reportCardAverage)}%</span></div><div><span class="label">Mention</span><span class="value">${escapeHtml(reportCardMention)}</span></div><div><span class="label">Decision</span><span class="value">${escapeHtml(reportCardDecision)}</span></div><div><span class="label">Publication</span><span class="value">After approval and fee clearance</span></div></section><section class="comment"><strong>Class teacher narrative</strong><br>${escapeHtml(studentName)} is currently at ${escapeHtml(reportCardAverage)}% for ${escapeHtml(reportCardTerm)}. The school recommends maintaining strengths while targeting the lowest course through a documented support plan.</section><section class="signatures"><div class="sig">Homeroom Teacher</div><div class="sig">Academic Coordinator</div><div class="sig">Super Admin / Principal</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus official academic document</span><span>${escapeHtml(documentId)}</span></footer></main></body></html>`
+      @page{size:A4;margin:10mm}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;background:#eef3fb;color:#10233f;font-family:Arial,Helvetica,sans-serif}.sheet{position:relative;width:210mm;min-height:297mm;margin:0 auto;background:#fff;border:1px solid #d6dfec;padding:13mm;overflow:hidden}.watermark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.035;pointer-events:none}.watermark img{width:165mm;max-width:86%}header{position:relative;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:5px solid #0b3b73;padding-bottom:14px}.brand{display:flex;align-items:center;gap:18px}.logo{height:112px;width:112px;object-fit:contain}.school{margin:0;color:#0b3b73;font-size:28px;font-weight:900;letter-spacing:.02em}.tag{margin:6px 0 0;color:#b8872c;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.14em}.badge{border:1px solid #d8b66b;background:#fff8e6;border-radius:12px;padding:12px 14px;text-align:right;font-size:12px;color:#5c420b}.title{margin:20px 0 14px;text-align:center}.title h1{margin:0;color:#0b3b73;font-size:31px}.title p{margin:6px 0 0;color:#526172}.info{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px}.info div,.summary div{border:1px solid #dbe4f0;border-radius:10px;padding:9px;background:#f8fafc}.label{display:block;color:#64748b;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.value{display:block;margin-top:4px;font-weight:900;color:#10233f}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th{background:#0b3b73;color:#fff;text-align:left;padding:8px;border:1px solid #0b3b73}td{padding:8px;border:1px solid #dbe4f0;vertical-align:top}td span{color:#64748b;font-size:9px}.num{text-align:right;font-weight:900}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:14px}.average{font-size:24px;color:#0b3b73}.comment{margin-top:14px;border-left:5px solid #d8a536;background:#fff8e6;padding:13px;color:#3f3215;min-height:34mm}.auth{display:grid;grid-template-columns:1fr 148px;gap:14px;align-items:center;margin-top:14px;border:1px dashed #9ab0cb;background:#f8fafc;padding:10px}.qr{height:138px;width:138px;border:6px solid #fff;box-shadow:0 0 0 1px #dbe4f0}.auth p{margin:4px 0;font-size:11px}.mono{font-family:Consolas,monospace;font-weight:900;color:#0b3b73}.signatures{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}.sig{border-top:1px solid #718096;padding-top:8px;text-align:center;font-size:11px;color:#64748b}footer{margin-top:18px;display:flex;justify-content:space-between;color:#64748b;font-size:10px}@media print{body{background:#fff}.sheet{border:0;margin:0;padding:0;width:auto;min-height:auto}.actions{display:none}}
+    </style></head><body><main class="sheet"><div class="watermark"><img src="${escapeHtml(logoUrl)}" alt=""></div><header><section class="brand"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"><div><p class="school">${escapeHtml(SCHOOL_NAME)}</p><p class="tag">Excellence in Education, Rooted in Faith</p></div></section><aside class="badge"><strong>Official Report Card</strong><br>${escapeHtml(documentId)}<br>${escapeHtml(new Date().toLocaleString())}</aside></header><section class="title"><h1>Academic Report Card</h1><p>${escapeHtml(reportCardTerm)} - 2026 Academic Year - A4 official school copy</p></section><section class="info"><div><span class="label">Student</span><span class="value">${escapeHtml(studentName)}</span></div><div><span class="label">Class</span><span class="value">${escapeHtml(grade)}</span></div><div><span class="label">Main teacher</span><span class="value">${escapeHtml(reportCardStudent?.advisor ?? 'Homeroom teacher')}</span></div><div><span class="label">Status</span><span class="value">Teacher draft</span></div></section><table><thead><tr><th>Course / gradebook source</th><th>Teacher</th><th>Coef.</th><th>Final score</th><th>Mention</th><th>Teacher comment</th></tr></thead><tbody>${rows}</tbody></table><section class="summary"><div><span class="label">General average</span><span class="value average">${escapeHtml(reportCardAverage)}%</span></div><div><span class="label">Mention</span><span class="value">${escapeHtml(reportCardMention)}</span></div><div><span class="label">Decision</span><span class="value">${escapeHtml(reportCardDecision)}</span></div><div><span class="label">Publication</span><span class="value">After approval and fee clearance</span></div></section><section class="comment"><strong>Main teacher final comment</strong><br>${escapeHtml(mainTeacherComment)}</section><section class="auth"><div><span class="label">Digital authenticity markers</span><p>Verification code: <span class="mono">${escapeHtml(verificationCode)}</span></p><p>Document ID: <span class="mono">${escapeHtml(documentId)}</span></p><p>Scan the QR code to open the Nexus verification address for this report-card copy.</p><p class="mono">${escapeHtml(verificationUrl)}</p></div><img class="qr" src="${escapeHtml(qrUrl)}" alt="Report card verification QR code"></section><section class="signatures"><div class="sig">Main Teacher Comment / Signature</div><div class="sig">Academic Coordinator</div><div class="sig">Super Admin / Principal</div></section><footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus official academic document</span><span>${escapeHtml(documentId)} - ${escapeHtml(verificationCode)}</span></footer></main></body></html>`
   }
 
   const openReportCardDocument = (printNow = false) => {
@@ -1766,10 +1787,25 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className={panelClass}>
-              <p className="text-xs font-semibold uppercase text-gray-400">Teacher narrative</p>
-              <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                {reportCardStudent?.name} is currently at {reportCardAverage}% with a {reportCardMention.toLowerCase()} standing. The next step is to keep the strongest courses visible while targeting the lowest course for intervention.
-              </p>
+              <p className="text-xs font-semibold uppercase text-gray-400">Main teacher final comment</p>
+              <textarea
+                className={`${inputClass} mt-2 min-h-36 w-full`}
+                value={mainTeacherComment}
+                onChange={(event) => {
+                  setMainTeacherCommentEdited(true)
+                  setMainTeacherComment(event.target.value)
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setMainTeacherCommentEdited(false)
+                  setMainTeacherComment(suggestedMainTeacherComment)
+                }}
+                className="mt-3 rounded-xl border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40"
+              >
+                Regenerate AI comment
+              </button>
             </div>
             <div className={panelClass}>
               <p className="text-xs font-semibold uppercase text-gray-400">Parent-ready summary</p>
