@@ -252,8 +252,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            <Route path="/portal/teacher/report-card" element={<Navigate to="/portal/teacher/grades" replace />} />
-            {['courses', 'students', 'attendance', 'assignments', 'grades', 'reports', 'discipline', 'messages', 'settings'].map((segment) => (
+            {['courses', 'students', 'attendance', 'assignments', 'grades', 'report-card', 'reports', 'discipline', 'messages', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/teacher/${segment}`}

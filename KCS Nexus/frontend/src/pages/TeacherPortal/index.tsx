@@ -775,7 +775,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const assignmentParentVisibility = assignmentRecipients.length
   const assignmentStudentVisibility = assignmentRecipients.length
 
-  if (segment === 'grades') {
+  if (segment === 'grades' || segment === 'report-card') {
     return (
       <section className="space-y-6">
         <div className="rounded-2xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">

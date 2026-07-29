@@ -62,6 +62,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/teacher/assignments', label: t('portalNav.assignments'), icon: FileText },
         { to: '/portal/teacher/diagnostic', label: 'Diagnostic Tests', icon: ClipboardList },
         { to: '/portal/teacher/grades', label: t('portalNav.gradebook'), icon: BarChart3 },
+        { to: '/portal/teacher/report-card', label: 'Report Card', icon: FileText },
         { to: lessonPlanUrl, label: 'Lesson Plan', icon: BookOpen, external: true },
         { to: '/portal/teacher/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
         { to: '/portal/teacher/discipline', label: t('portalNav.disciplineReport'), icon: AlertTriangle },
