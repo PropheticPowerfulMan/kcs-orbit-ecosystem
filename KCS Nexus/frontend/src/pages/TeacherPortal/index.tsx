@@ -339,6 +339,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     subject: 'Student support update',
     body: 'Please review the new intervention note and confirm next steps.',
   })
+  const [messageChannel, setMessageChannel] = useState<'Email' | 'Text' | 'Letter' | 'Call'>('Email')
   const [gradebookColumnDraft, setGradebookColumnDraft] = useState({
     title: 'Homework',
     type: 'Assignment',
@@ -901,13 +902,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const sendMessage = () => {
     setInbox((current) => [{
       id: Date.now(),
-      from: `To ${messageDraft.to}`,
+      from: `${messageChannel} to ${messageDraft.to}`,
       subject: messageDraft.subject,
       body: messageDraft.body,
       time: 'Just now',
       requiresResponse: false,
     }, ...current])
-    runAction(`Message sent to ${messageDraft.to} and logged in the teacher thread.`)
+    runAction(`${messageChannel} message sent to ${messageDraft.to}, logged in the thread, and queued for portal audit.`)
   }
 
   const inputClass = 'input-kcs py-2 text-sm'
@@ -964,8 +965,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => runAction('Gradebook saved locally and queued for backend sync.')} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
-              <button onClick={() => runAction('Advanced gradebook export prepared.')} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
+              <button onClick={() => runAction(`${selectedGradebookCourse.name} saved with ${gradebookColumns.length} assessment column(s) and ${gradebookStudents.length} selected student(s).`)} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
+              <button onClick={() => openOfficialMemo('Official Gradebook Export', `${selectedGradebookCourse.name} - ${selectedGradebookCourse.gradeLevels.join(', ')}`, [
+                ['Course', selectedGradebookCourse.name],
+                ['Class level', selectedGradebookCourse.gradeLevels.join(', ')],
+                ['Selected students', String(gradebookStudents.length)],
+                ['Assessment columns', gradebookColumns.map((column) => `${column.title} (${column.maxPoints} pts)`).join(', ') || 'No assessment column yet'],
+                ['Report-card sync', 'Final scores are ready to be submitted to the student report-card subject line.'],
+              ], true)} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
             </div>
           </div>
         </div>
@@ -1005,8 +1012,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => runAction('Workspace saved locally and queued for backend sync.')} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
-            <button onClick={() => runAction(`${meta.title} export prepared.`)} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
+            <button onClick={() => runAction(`${meta.title} workspace saved with current teacher data and queued for central sync.`)} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
+            <button onClick={() => openOfficialMemo(`${meta.title} Official Export`, 'Teacher workspace document', [
+              ['Section', meta.title],
+              ['Prepared for', 'Direction / Academic Office'],
+              ['Teacher action', 'Current records saved and exported for review.'],
+              ['Generated from', 'KCS Nexus teacher dashboard'],
+              ['Generated on', new Date().toLocaleString()],
+            ], true)} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
           </div>
         </div>
       </div>
@@ -2172,18 +2185,36 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Open discipline report</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Document incident, context, action, parent/student communication, grading impact, and resolution path.</p>
             <div className="mt-4 grid gap-3">
-              <select className={inputClass} value={disciplineDraft.studentId} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, studentId: event.target.value }))}>
-                {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
-              </select>
-              <input className={inputClass} value={disciplineDraft.category} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, category: event.target.value }))} />
-              <textarea className={inputClass} value={disciplineDraft.incident} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, incident: event.target.value }))} rows={3} />
-              <textarea className={inputClass} value={disciplineDraft.actionTaken} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, actionTaken: event.target.value }))} rows={3} />
-              <textarea className={inputClass} value={disciplineDraft.followUp} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, followUp: event.target.value }))} rows={3} />
-              <select className={inputClass} value={disciplineDraft.level} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, level: event.target.value }))}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Student concerned by this report
+                <select className={inputClass} value={disciplineDraft.studentId} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, studentId: event.target.value }))}>
+                  {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Official incident category
+                <input className={inputClass} value={disciplineDraft.category} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, category: event.target.value }))} />
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Precise description of observed facts
+                <textarea className={inputClass} value={disciplineDraft.incident} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, incident: event.target.value }))} rows={3} />
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Teacher action already taken
+                <textarea className={inputClass} value={disciplineDraft.actionTaken} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, actionTaken: event.target.value }))} rows={3} />
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Resolution plan and parent/direction follow-up
+                <textarea className={inputClass} value={disciplineDraft.followUp} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, followUp: event.target.value }))} rows={3} />
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Severity level and treatment priority
+                <select className={inputClass} value={disciplineDraft.level} onChange={(event) => setDisciplineDraft((draft) => ({ ...draft, level: event.target.value }))}>
+                  <option value="low">Low - classroom correction</option>
+                  <option value="medium">Medium - parent follow-up</option>
+                  <option value="high">High - direction approval required</option>
+                </select>
+              </label>
               <button onClick={createDisciplineReport} className={compactButton}>Create detailed report</button>
               <button onClick={() => openOfficialMemo('Official Discipline Report', 'Parent/student communication package', [
                 ['Student', findStudent(disciplineDraft.studentId)?.name ?? 'Selected student'],
@@ -2193,6 +2224,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 ['Follow-up', disciplineDraft.followUp],
                 ['Severity', disciplineDraft.level],
               ], false)} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-900/40">Prepare communication</button>
+              <button onClick={() => openOfficialMemo('Official Discipline Report', 'Printable archive and parent notice', [
+                ['Student', findStudent(disciplineDraft.studentId)?.name ?? 'Selected student'],
+                ['Category', disciplineDraft.category],
+                ['Incident', disciplineDraft.incident],
+                ['Action taken', disciplineDraft.actionTaken],
+                ['Follow-up', disciplineDraft.followUp],
+                ['Severity', disciplineDraft.level],
+              ], true)} className="rounded-xl bg-kcs-gold-500 px-4 py-2 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Print / PDF</button>
             </div>
           </div>
           <div className="space-y-4">
@@ -2224,32 +2263,47 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 ))}
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-4">
-                <button onClick={() => openOfficialMemo('Official Discipline Parent Notice', `${report.student} - ${report.date}`, [
+                <button onClick={() => {
+                  setDisciplineList((current) => current.map((item) => item.id === report.id ? { ...item, parentContact: 'Parent notified through portal, email/text package prepared', status: item.status === 'Resolved' ? item.status : 'Parent notified' } : item))
+                  openOfficialMemo('Official Discipline Parent Notice', `${report.student} - ${report.date}`, [
                   ['Incident', report.incident],
                   ['Context', report.context],
                   ['Action taken', report.actionTaken],
                   ['Follow-up plan', report.followUp],
-                  ['Parent contact', report.parentContact],
-                ], false)} className="rounded-lg bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">Notify parent</button>
-                <button onClick={() => openOfficialMemo('Discipline Resolution Plan', `${report.student} - ${report.status}`, [
+                  ['Parent contact', 'Parent notified through portal, email/text package prepared'],
+                ], false)
+                }} className="rounded-lg bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">Notify parent</button>
+                <button onClick={() => {
+                  setDisciplineList((current) => current.map((item) => item.id === report.id ? { ...item, status: 'Resolved', followUp: `${item.followUp} Resolution checkpoint completed by teacher.` } : item))
+                  openOfficialMemo('Discipline Resolution Plan', `${report.student} - Resolved`, [
                   ['Incident', report.incident],
                   ['Resolution path', report.followUp],
                   ['Action already taken', report.actionTaken],
                   ['Next review', 'Teacher, student, and academic direction review required.'],
-                ], false)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Resolution</button>
-                <button onClick={() => openOfficialMemo('Discipline Grade Impact Review', `${report.student} - ${report.category}`, [
+                  ['Status update', 'Resolved and ready for direction review.'],
+                ], false)
+                }} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Resolution</button>
+                <button onClick={() => {
+                  runAction(`Grade-impact review prepared for ${report.student}; participation, homework, and assessment readiness are flagged for the gradebook.`)
+                  openOfficialMemo('Discipline Grade Impact Review', `${report.student} - ${report.category}`, [
                   ['Academic impact', report.incident],
                   ['Teacher action', report.actionTaken],
                   ['Follow-up', report.followUp],
                   ['Gradebook note', 'Review whether conduct affected participation, homework, or assessment readiness.'],
-                ], false)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Grade impact</button>
-                <button onClick={() => openOfficialMemo('Official Discipline Archive Copy', `${report.student} - ${report.id}`, [
+                  ['Action required', 'Teacher must confirm whether a conduct note should be attached to the student gradebook record.'],
+                ], false)
+                }} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Grade impact</button>
+                <button onClick={() => {
+                  setDisciplineList((current) => current.map((item) => item.id === report.id ? { ...item, status: item.status === 'Resolved' ? 'Resolved' : 'Exported' } : item))
+                  openOfficialMemo('Official Discipline Archive Copy', `${report.student} - ${report.id}`, [
                   ['Incident', report.incident],
                   ['Context', report.context],
                   ['Action taken', report.actionTaken],
                   ['Follow-up plan', report.followUp],
                   ['Status', report.status],
-                ], true)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Export</button>
+                  ['Archive action', 'Official PDF generated and discipline log marked as exported.'],
+                ], true)
+                }} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Export</button>
               </div>
             </article>
           ))}
@@ -2290,28 +2344,42 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <h3 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Compose and active threads</h3>
             <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
               <div className="grid gap-2 sm:grid-cols-4">
-                {['Email', 'Text', 'Letter', 'Call'].map((channel) => (
-                  <button key={channel} type="button" onClick={() => runAction(`${channel} channel selected and audit metadata prepared.`)} className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:bg-kcs-blue-950/50 dark:text-kcs-blue-200">
+                {(['Email', 'Text', 'Letter', 'Call'] as const).map((channel) => (
+                  <button key={channel} type="button" onClick={() => {
+                    setMessageChannel(channel)
+                    runAction(`${channel} channel selected and audit metadata prepared.`)
+                  }} className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${messageChannel === channel ? 'bg-kcs-blue-700 text-white shadow-sm dark:bg-kcs-gold-400 dark:text-kcs-blue-950' : 'bg-white text-kcs-blue-700 hover:bg-kcs-blue-50 dark:bg-kcs-blue-950/50 dark:text-kcs-blue-200'}`}>
                     {channel}
                   </button>
                 ))}
               </div>
-              <input className={inputClass} value={messageDraft.to} onChange={(event) => setMessageDraft((draft) => ({ ...draft, to: event.target.value }))} />
-              <input className={inputClass} value={messageDraft.subject} onChange={(event) => setMessageDraft((draft) => ({ ...draft, subject: event.target.value }))} />
-              <textarea className={inputClass} value={messageDraft.body} onChange={(event) => setMessageDraft((draft) => ({ ...draft, body: event.target.value }))} rows={3} />
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Official recipient
+                <input className={inputClass} value={messageDraft.to} onChange={(event) => setMessageDraft((draft) => ({ ...draft, to: event.target.value }))} />
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Message subject
+                <input className={inputClass} value={messageDraft.subject} onChange={(event) => setMessageDraft((draft) => ({ ...draft, subject: event.target.value }))} />
+              </label>
+              <label className="grid gap-1 text-xs font-bold uppercase text-gray-500 dark:text-gray-400">
+                Content to send, print, or archive
+                <textarea className={inputClass} value={messageDraft.body} onChange={(event) => setMessageDraft((draft) => ({ ...draft, body: event.target.value }))} rows={3} />
+              </label>
               <div className="grid gap-2 sm:grid-cols-3">
                 <button onClick={sendMessage} className={compactButton}>Send message</button>
                 <button onClick={() => openOfficialMemo('Official School Correspondence', messageDraft.to, [
                   ['Recipient', messageDraft.to],
+                  ['Channel', messageChannel],
                   ['Subject', messageDraft.subject],
                   ['Message', messageDraft.body],
-                  ['Delivery channels', 'Email, text, letter, call log, and portal inbox.'],
+                  ['Delivery channels', `${messageChannel}, portal inbox, audit trail, and parent/student visibility rules.`],
                 ], false)} className="rounded-xl border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Preview letter</button>
                 <button onClick={() => openOfficialMemo('Official School Correspondence', messageDraft.to, [
                   ['Recipient', messageDraft.to],
+                  ['Channel', messageChannel],
                   ['Subject', messageDraft.subject],
                   ['Message', messageDraft.body],
-                  ['Delivery channels', 'Email, text, letter, call log, and portal inbox.'],
+                  ['Delivery channels', `${messageChannel}, portal inbox, audit trail, and parent/student visibility rules.`],
                 ], true)} className="rounded-xl bg-kcs-gold-500 px-3 py-2 text-xs font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Print / PDF</button>
               </div>
             </div>
@@ -2756,10 +2824,10 @@ const TeacherPortal = () => {
               <Link to="/portal/teacher/assignments" className="btn-gold text-sm py-2 flex items-center gap-2">
                 <Brain size={16} /> AI Insights
               </Link>
-              <Link to="/portal/teacher/diagnostic" className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+              <Link to="/portal/teacher/diagnostic" className="inline-flex items-center rounded-xl border border-kcs-blue-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/80 dark:text-white dark:hover:bg-kcs-blue-800">
                 Diagnostic Test
               </Link>
-              <a href={lessonPlanUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+              <a href={lessonPlanUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-xl border border-kcs-gold-300 bg-kcs-gold-50 px-4 py-2 text-sm font-bold text-kcs-blue-950 shadow-sm transition-colors hover:bg-kcs-gold-100 dark:border-kcs-gold-400 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
                 Lesson Plan
               </a>
             </div>

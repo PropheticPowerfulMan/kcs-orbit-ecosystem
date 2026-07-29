@@ -264,8 +264,8 @@ export default function SuggestionBox() {
       </div>
 
       {!isAdmin && (
-        <div className="mt-4 grid gap-3 lg:grid-cols-[220px_1fr_auto]">
-          <select value={category} onChange={(event) => setCategory(event.target.value)} className="rounded-xl border border-white/10 bg-kcs-blue-950/95 px-3 py-3 text-sm text-white outline-none">
+        <div className="mt-4 grid gap-2 lg:grid-cols-[180px_1fr_auto] lg:items-start">
+          <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-10 rounded-lg border border-white/10 bg-kcs-blue-950/95 px-3 text-xs font-bold text-white outline-none transition-colors hover:border-kcs-gold-300/40">
             <option value="wellbeing">Wellbeing</option>
             <option value="discipline">Discipline</option>
             <option value="teaching">Teaching</option>
@@ -276,10 +276,10 @@ export default function SuggestionBox() {
           <textarea
             value={message}
             onChange={(event) => setMessage(event.target.value)}
-            className="min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:text-kcs-blue-200"
+            className="min-h-20 rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-kcs-blue-200"
             placeholder={language === 'fr' ? 'Écrivez librement votre suggestion...' : 'Write your suggestion freely...'}
           />
-          <button type="button" onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-3 text-sm font-black text-kcs-blue-950 transition-colors hover:bg-kcs-gold-300">
+          <button type="button" onClick={submit} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-kcs-gold-400 px-3 text-xs font-black text-kcs-blue-950 shadow-sm transition-colors hover:bg-kcs-gold-300">
             <Send size={16} /> {labels.send}
           </button>
         </div>
