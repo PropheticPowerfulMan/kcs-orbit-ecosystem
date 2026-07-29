@@ -2824,10 +2824,10 @@ const TeacherPortal = () => {
               <Link to="/portal/teacher/assignments" className="btn-gold text-sm py-2 flex items-center gap-2">
                 <Brain size={16} /> AI Insights
               </Link>
-              <Link to="/portal/teacher/diagnostic" className="inline-flex items-center rounded-xl border border-kcs-blue-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/80 dark:text-white dark:hover:bg-kcs-blue-800">
+              <Link to="/portal/teacher/diagnostic" className="inline-flex items-center rounded-xl border border-kcs-blue-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 shadow-sm ring-1 ring-white/40 transition-colors hover:bg-kcs-blue-50 dark:border-white/70 dark:bg-white dark:text-kcs-blue-950 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.22)] dark:hover:bg-kcs-blue-50">
                 Diagnostic Test
               </Link>
-              <a href={lessonPlanUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-xl border border-kcs-gold-300 bg-kcs-gold-50 px-4 py-2 text-sm font-bold text-kcs-blue-950 shadow-sm transition-colors hover:bg-kcs-gold-100 dark:border-kcs-gold-400 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
+              <a href={lessonPlanUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-xl border border-kcs-gold-300 bg-kcs-gold-50 px-4 py-2 text-sm font-bold text-kcs-blue-950 shadow-sm ring-1 ring-kcs-gold-100 transition-colors hover:bg-kcs-gold-100 dark:border-kcs-gold-200 dark:bg-kcs-gold-300 dark:text-kcs-blue-950 dark:shadow-[0_0_0_1px_rgba(250,204,21,0.28)] dark:hover:bg-kcs-gold-200">
                 Lesson Plan
               </a>
             </div>

@@ -1135,7 +1135,7 @@ const openPrintableDocument = (html: string) => {
   printWindow.document.close()
 }
 
-const buildOfficialTranscriptPrintHtml = (transcript: ReturnType<typeof buildOfficialTranscript>) => {
+const buildOfficialTranscriptPrintHtml = (transcript: ReturnType<typeof buildOfficialTranscript>, autoPrint = true) => {
   const logoUrl = typeof window === 'undefined' ? SCHOOL_SEAL_SRC : new URL(SCHOOL_SEAL_SRC, window.location.origin).href
   const documentId = `KCS-TR-${Date.now().toString(36).toUpperCase()}`
   const generatedAt = new Date().toLocaleString()
@@ -1210,11 +1210,11 @@ const buildOfficialTranscriptPrintHtml = (transcript: ReturnType<typeof buildOff
     <section class="panel"><h2>Controls, Method and Administrative Notes</h2><div class="grid">${controls}</div></section>
     <section class="signatures"><div class="signature">Registrar / Records Office</div><div class="signature">Direction / Super Administrateur</div><div class="stamp">Verified<br>${escapeHtml(documentId)}</div></section>
     <footer><span>${escapeHtml(SCHOOL_NAME)} - KCS Nexus official transcript</span><span>Confidential academic document - ${escapeHtml(documentId)}</span></footer>
-  </main><script>window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print();},250);});</script></body></html>`
+  </main>${autoPrint ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print();},250);});</script>` : ''}</body></html>`
 }
 
 const printOfficialTranscript = (transcript: ReturnType<typeof buildOfficialTranscript>) => {
-  openPrintableDocument(buildOfficialTranscriptPrintHtml(transcript))
+  openPrintableDocument(buildOfficialTranscriptPrintHtml(transcript, true))
 }
 
 const printAcademicWorkflowDocument = (item: any) => {
@@ -1300,6 +1300,8 @@ const AdminSectionView = ({
   const [adminReportCardDecision, setAdminReportCardDecision] = useState<'Draft review' | 'Approved' | 'Published' | 'Locked'>('Draft review')
   const [adminReportCardComment, setAdminReportCardComment] = useState('')
   const [adminReportCardCommentEdited, setAdminReportCardCommentEdited] = useState(false)
+  const [transcriptPreviewOpen, setTranscriptPreviewOpen] = useState(false)
+  const transcriptPreviewRef = useRef<HTMLIFrameElement>(null)
   const [adminReportPreviewOpen, setAdminReportPreviewOpen] = useState(false)
   const adminReportPreviewRef = useRef<HTMLIFrameElement>(null)
   const [reportCadence, setReportCadence] = useState<AdminReportCadence>('weekly')
@@ -2417,7 +2419,11 @@ const AdminSectionView = ({
               </div>
             </div>
             <div className="grid gap-2 sm:flex sm:flex-wrap">
-              <button className={`${adminButton} w-full sm:w-auto`} onClick={() => printOfficialTranscript(officialTranscript)}>Print official transcript</button>
+              <button className={`${adminButton} w-full sm:w-auto`} onClick={() => setTranscriptPreviewOpen(true)}>Preview official transcript</button>
+              <button className={`${adminOutlineButton} w-full sm:w-auto`} onClick={() => {
+                setTranscriptPreviewOpen(true)
+                setTimeout(() => transcriptPreviewRef.current?.contentWindow?.print(), 350)
+              }}>Print / Save PDF</button>
               <button className={`${adminOutlineButton} w-full sm:w-auto`} onClick={() => setSelectedTranscriptId(grade9to12[0]?.id ?? '')}>Reset selection</button>
             </div>
           </div>
@@ -2558,6 +2564,28 @@ const AdminSectionView = ({
             </div>
           </div>
         </div>
+        {transcriptPreviewOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-5" role="dialog" aria-modal="true" aria-label="Official transcript preview window">
+            <div className="flex h-[92vh] w-full max-w-7xl flex-col rounded-2xl border border-white/20 bg-white shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
+              <div className="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-kcs-blue-800 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Super Admin official transcript preview</p>
+                  <h3 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{officialTranscript.student.name}</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => transcriptPreviewRef.current?.contentWindow?.print()} className="rounded-xl bg-green-700 px-4 py-2 text-sm font-bold text-white hover:bg-green-800 dark:bg-green-500 dark:hover:bg-green-400">Print / Save PDF</button>
+                  <button type="button" onClick={() => printOfficialTranscript(officialTranscript)} className="rounded-xl border border-kcs-gold-300 bg-kcs-gold-50 px-4 py-2 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-100 dark:bg-kcs-gold-400 dark:hover:bg-kcs-gold-300">Open print window</button>
+                  <button type="button" onClick={() => setTranscriptPreviewOpen(false)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">
+                    <X size={16} /> Close
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 bg-gray-100 p-3 dark:bg-kcs-blue-950/70">
+                <iframe ref={transcriptPreviewRef} title="Official transcript PDF preview" srcDoc={buildOfficialTranscriptPrintHtml(officialTranscript, false)} className="h-full w-full rounded-xl border border-gray-200 bg-white dark:border-kcs-blue-800" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
