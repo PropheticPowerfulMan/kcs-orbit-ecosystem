@@ -2,7 +2,7 @@
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH || '/Syst-me-de-gestion-scolaire/',
+  base: process.env.VITE_BASE_PATH || '/kcs-orbit-ecosystem/',
   plugins: [react()],
   server: {
     port: 3000,
