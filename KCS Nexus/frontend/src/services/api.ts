@@ -44,7 +44,9 @@ api.interceptors.response.use(
       try {
         const { refreshToken, token: currentToken } = useAuthStore.getState()
         if (currentToken?.startsWith('demo-') || refreshToken?.startsWith('demo-')) {
-          return Promise.reject(error)
+          useAuthStore.getState().logout()
+          window.location.replace(getRouteUrl('login'))
+          return Promise.reject(new Error('Legacy demo session cleared. Please sign in again.'))
         }
         if (!refreshToken) throw new Error('No refresh token')
 
