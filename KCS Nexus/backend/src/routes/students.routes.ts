@@ -351,27 +351,33 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       email: parent.email,
       phone: parent.phone || undefined,
       physicalAddress: parent.physicalAddress || undefined,
+      mustChangePassword: true,
     })
     const parentOrbitId = parentResult.orbitId
     if (!parentOrbitId) {
       throw new ApiError(502, 'Orbit parent creation did not return an id')
     }
 
+    const parentAccessCode = String((parentResult.entity as { accessCode?: string } | undefined)?.accessCode || await generateUniqueAccessCode(prisma, 'parent'))
+    const parentPasswordHash = await bcrypt.hash(parentTemporaryPassword, 10)
+    const localParentUser = await prisma.user.upsert({
+      where: { email: parent.email },
+      update: { accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, role: 'PARENT' },
+      create: { email: parent.email, accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, role: 'PARENT' },
+    })
+
     const temporaryCredentials: {
-      parent: { username: string; temporaryPassword: string } | null
-      students: Array<{ studentId: string; username: string; temporaryPassword: string }>
+      parent: { username: string; accessCode: string; temporaryPassword: string } | null
+      students: Array<{ studentId: string; username: string; accessCode: string; temporaryPassword: string }>
     } = {
-      parent: {
-        username: parent.email,
-        temporaryPassword: parentTemporaryPassword,
-      },
+      parent: { username: parent.email, accessCode: parentAccessCode, temporaryPassword: parentTemporaryPassword },
       students: [],
     }
 
     for (const student of students) {
       const studentTemporaryPassword = generateTemporaryPassword('STU')
       const studentEmail = student.email ?? `${student.studentNumber.toLowerCase()}@students.kcs.local`
-      await createRegistryEntityInOrbit('student', {
+      const studentResult = await createRegistryEntityInOrbit('student', {
         firstName: student.firstName,
         middleName: student.middleName,
         lastName: student.lastName,
@@ -383,11 +389,24 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
         className: `${student.grade} ${student.section || ''}`.trim(),
         parentOrbitId,
       })
-      temporaryCredentials.students.push({
-        studentId: student.studentNumber,
-        username: studentEmail,
-        temporaryPassword: studentTemporaryPassword,
+      const studentAccessCode = String((studentResult.entity as { accessCode?: string } | undefined)?.accessCode || await generateUniqueAccessCode(prisma, 'student'))
+      const studentPasswordHash = await bcrypt.hash(studentTemporaryPassword, 10)
+      const localStudentUser = await prisma.user.upsert({
+        where: { email: studentEmail },
+        update: { accessCode: studentAccessCode, passwordHash: studentPasswordHash, firstName: student.firstName, middleName: student.middleName || null, lastName: student.lastName, role: 'STUDENT' },
+        create: { email: studentEmail, accessCode: studentAccessCode, passwordHash: studentPasswordHash, firstName: student.firstName, middleName: student.middleName || null, lastName: student.lastName, role: 'STUDENT' },
       })
+      const localStudentProfile = await prisma.studentProfile.upsert({
+        where: { studentNumber: student.studentNumber },
+        update: { userId: localStudentUser.id, grade: student.grade, section: student.section || '', status: 'active' },
+        create: { userId: localStudentUser.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section || '', status: 'active' },
+      })
+      await prisma.parentStudentLink.upsert({
+        where: { parentId_studentId: { parentId: localParentUser.id, studentId: localStudentProfile.id } },
+        update: { relation: parent.relationship },
+        create: { parentId: localParentUser.id, studentId: localStudentProfile.id, relation: parent.relationship },
+      })
+      temporaryCredentials.students.push({ studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
     }
 
     const directory = await getSharedDirectoryFromOrbit()
@@ -736,6 +755,15 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
     if (!target) throw new ApiError(404, 'Student not found')
 
     await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
+    await prisma.user.deleteMany({
+      where: {
+        role: 'STUDENT',
+        OR: [
+          ...(target.accessCode ? [{ accessCode: target.accessCode }] : []),
+          ...(target.email ? [{ email: target.email }] : []),
+        ],
+      },
+    })
     return success(res, { id: studentId, deleted: true }, 'Student deleted through Orbit')
   }
 

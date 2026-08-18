@@ -114,6 +114,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
+  const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
 
   useEffect(() => {
     setFamilyDialogOpen(familyWorkspace);
@@ -509,6 +510,26 @@ const StudentsPage = ({ familyWorkspace = false }) => {
             </button>
           </div>
 
+          {credentialsDialogOpen && lastTemporaryCredentials ? createPortal((
+            <div className={modalBackdropClass}>
+              <section role="dialog" aria-modal="true" aria-label="Identifiants générés" className={`${modalPanelClass} max-w-3xl`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div><p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Identifiants générés</p><h3 className="mt-1 text-xl font-bold text-white">Accès à remettre à la famille</h3><p className="mt-2 text-sm text-slate-300">Ces accès fonctionnent dans les portails autorisés de l'écosystème. SAVANEX reste réservé aux administrateurs.</p></div>
+                  <button type="button" onClick={() => setCredentialsDialogOpen(false)} className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-white">Fermer</button>
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {[lastTemporaryCredentials.parent, ...lastTemporaryCredentials.students].filter(Boolean).map((credential, index) => (
+                    <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-300/25 bg-slate-950/80 p-4">
+                      <p className="text-xs font-bold uppercase text-emerald-200">{index === 0 && lastTemporaryCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p>
+                      <p className="mt-3 text-sm text-slate-200">Identifiant : <strong className="text-white">{credential.username}</strong></p>
+                      <p className="mt-2 text-sm text-slate-200">Code d'accès : <strong className="text-sky-200">{credential.accessCode}</strong></p>
+                      <p className="mt-2 text-sm text-slate-200">Mot de passe : <strong className="text-emerald-200">{credential.temporaryPassword}</strong></p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+          ), document.body) : null}
           {familyDialogOpen ? createPortal((
             <div className={`${modalBackdropClass} ${familyWorkspace ? 'savanex-family-route' : ''}`}>
               <section role="dialog" aria-modal="true" aria-label="Nouvelle famille" className={`${modalPanelClass} savanex-family-modal`}>

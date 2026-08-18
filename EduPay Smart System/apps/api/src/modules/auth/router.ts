@@ -173,8 +173,8 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   try {
     response = await fetch(`${env.SAVANEX_API_URL.replace(/\/$/, "")}${env.SAVANEX_LOGIN_PATH}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: identifier, password }),
+      headers: { "Content-Type": "application/json", "x-api-key": env.KCS_ORBIT_API_KEY },
+      body: JSON.stringify({ identifier, password }),
       signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000)
     });
   } catch {
@@ -214,6 +214,32 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   };
 }
 
+async function authenticateWithNexus(identifier: string, password: string) {
+  if (!env.KCS_NEXUS_API_URL) return null;
+  let response: Response;
+  try {
+    response = await fetch(`${env.KCS_NEXUS_API_URL.replace(/\/$/, "")}${env.KCS_NEXUS_LOGIN_PATH}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-kcs-local-auth-only": "true" },
+      body: JSON.stringify({ email: identifier, password }),
+      signal: AbortSignal.timeout(env.KCS_NEXUS_TIMEOUT_SECONDS * 1000)
+    });
+  } catch { return null; }
+  if ([400, 401, 403, 404].includes(response.status)) return null;
+  if (!response.ok) throw new Error("Nexus shared authentication is temporarily unavailable.");
+  const payload = await response.json().catch(() => ({} as Record<string, any>));
+  const user = payload?.data?.user || {};
+  const role = typeof user.role === "string" ? user.role.trim().toLowerCase() : "";
+  if (!["parent", "teacher", "staff"].includes(role)) return null;
+  const accessCode = normalizeAccessCode(typeof user.accessCode === "string" ? user.accessCode : identifier);
+  const email = typeof user.email === "string" && user.email.trim() ? user.email.trim().toLowerCase() : `${accessCode.toLowerCase()}@nexus.local`;
+  return {
+    role: role === "parent" ? "parent" : "employee",
+    fullName: [user.lastName, user.firstName].filter(Boolean).join(" ") || "Utilisateur Nexus",
+    email, accessCode, mustChangePassword: true, employeeId: "",
+    phone: typeof user.phone === "string" ? user.phone : ""
+  };
+}
 async function resolveEduPaySchoolId() {
   const school = await prisma.school.findFirst({
     orderBy: { createdAt: "asc" },
@@ -248,7 +274,7 @@ async function ensureExternalParentUser(options: {
   }
 
   const parent = await prisma.parent.findFirst({
-    where: { id: sharedParent.id, schoolId },
+    where: { id: sharedParent.localId || sharedParent.id, schoolId },
     include: { user: true }
   });
 
@@ -499,7 +525,8 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       }
     }
 
-    const externalUser = await authenticateWithSavanex(identifier, payload.password);
+    const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true';
+    const externalUser = localAuthOnly ? null : (await authenticateWithSavanex(identifier, payload.password) || await authenticateWithNexus(identifier, payload.password));
     if (externalUser?.role === "parent") {
       const resolved = await ensureExternalParentUser({
         identifier,

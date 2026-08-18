@@ -1142,6 +1142,7 @@ const AdminSectionView = ({
   const [classSuffixFilter, setClassSuffixFilter] = useState<typeof SEARCH_CLASS_SUFFIXES[number]>('All')
   const [familyFilter, setFamilyFilter] = useState('All')
   const [studentNotice, setStudentNotice] = useState('')
+  const [familyCredentials, setFamilyCredentials] = useState<any>(null)
   const [parentNotice, setParentNotice] = useState('')
   const [apiSynced, setApiSynced] = useState(false)
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
@@ -1367,11 +1368,12 @@ const AdminSectionView = ({
       }
       setApiSynced(true)
       const temporaryCredentials = response.data?.data?.temporaryCredentials
+      if (temporaryCredentials) setFamilyCredentials(temporaryCredentials)
       const credentialSummary = [
-        temporaryCredentials?.parent?.temporaryPassword ? `Parent: ${temporaryCredentials.parent.username} / ${temporaryCredentials.parent.temporaryPassword}` : null,
+        temporaryCredentials?.parent?.temporaryPassword ? `Parent: ${temporaryCredentials.parent.username} · Code: ${temporaryCredentials.parent.accessCode || 'non défini'} · Mot de passe: ${temporaryCredentials.parent.temporaryPassword}` : null,
         ...(temporaryCredentials?.students ?? [])
           .filter((credential: { temporaryPassword?: string }) => credential.temporaryPassword)
-          .map((credential: { studentId: string; username: string; temporaryPassword: string }) => `${credential.studentId}: ${credential.username} / ${credential.temporaryPassword}`),
+          .map((credential: { studentId: string; username: string; accessCode?: string; temporaryPassword: string }) => `${credential.studentId}: ${credential.username} · Code: ${credential.accessCode || 'non défini'} · Mot de passe: ${credential.temporaryPassword}`),
       ].filter(Boolean).join(' | ')
       setStudentNotice(`Famille enregistrée avec ${finalRecords.length} élève(s). Accès temporaires: ${credentialSummary || 'déjà définis'}. Format commun: KCS-123456, à changer à la première connexion.`)
     } catch (error) {
@@ -1927,6 +1929,16 @@ const AdminSectionView = ({
               {familyDirectory.map((familyName) => <option key={familyName}>{familyName}</option>)}
             </select>
           </div>
+          {familyCredentials && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+              <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950">
+                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Identifiants générés</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Accès de la nouvelle famille</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n'accèdent ni à SAVANEX ni à EduPay.</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
+                </div>
+              </section>
+            </div>
+          )}
           {showCreateStudent && (
             <form className="mt-5 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30" onSubmit={(event) => {
               event.preventDefault()

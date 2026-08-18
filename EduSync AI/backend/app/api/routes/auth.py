@@ -136,8 +136,8 @@ def authenticate_with_savanex(identifier: str, password: str) -> dict | None:
 
     base_url = settings.savanex_api_url.rstrip("/")
     login_url = f"{base_url}{settings.savanex_login_path}"
-    body = json.dumps({"username": identifier, "password": password}).encode("utf-8")
-    req = request.Request(login_url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    body = json.dumps({"identifier": identifier, "password": password}).encode("utf-8")
+    req = request.Request(login_url, data=body, headers={"Content-Type": "application/json", "x-api-key": settings.kcs_orbit_api_key}, method="POST")
 
     try:
         with request.urlopen(req, timeout=settings.savanex_timeout_seconds) as response:
@@ -168,6 +168,30 @@ def authenticate_with_savanex(identifier: str, password: str) -> dict | None:
         "department": default_department_for_role(mapped_role),
     }
 
+
+def authenticate_with_nexus(identifier: str, password: str) -> dict | None:
+    if not settings.kcs_nexus_api_url:
+        return None
+    login_url = f"{settings.kcs_nexus_api_url.rstrip('/')}{settings.kcs_nexus_login_path}"
+    body = json.dumps({"email": identifier, "password": password}).encode("utf-8")
+    req = request.Request(login_url, data=body, headers={"Content-Type": "application/json", "x-kcs-local-auth-only": "true"}, method="POST")
+    try:
+        with request.urlopen(req, timeout=settings.kcs_nexus_timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        if exc.code in (400, 401, 403, 404):
+            return None
+        raise HTTPException(status_code=503, detail="Nexus authentication is temporarily unavailable") from exc
+    except Exception:
+        return None
+    external_user = (payload.get("data") or {}).get("user") or {}
+    mapped_role = map_savanex_role(external_user.get("role"))
+    if mapped_role is None:
+        return None
+    access_code = normalize_access_code(external_user.get("accessCode")) or normalize_access_code(identifier)
+    email = (external_user.get("email") or "").strip().lower() or f"{access_code.lower()}@nexus.local"
+    full_name = " ".join(filter(None, [external_user.get("lastName"), external_user.get("firstName")])) or "Nexus User"
+    return {"full_name": full_name, "email": email, "access_code": access_code or None, "role": mapped_role, "department": default_department_for_role(mapped_role)}
 
 def upsert_external_user(db: Session, external_user: dict, password: str) -> User:
     email = external_user["email"]
@@ -243,7 +267,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         db.commit()
         return TokenResponse(access_token=token)
 
-    external_user = authenticate_with_edupay(identifier, payload.password)
+    external_user = authenticate_with_nexus(identifier, payload.password)
+    if external_user is None:
+        external_user = authenticate_with_edupay(identifier, payload.password)
     if external_user is None:
         external_user = authenticate_with_savanex(identifier, payload.password)
 

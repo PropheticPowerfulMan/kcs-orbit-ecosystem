@@ -1,10 +1,13 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from django.conf import settings
+from django.db.models import Q
 
 from apps.students.models import Student
 from apps.teachers.models import Teacher
 from apps.users.models import User
+from apps.users.serializers import UserMeSerializer
 from apps.users.permissions import IsAdminUser
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
 
@@ -104,3 +107,24 @@ def shared_entity_detail_view(request, entity_type, identifier):
         return Response(delete_registry_entity(entity_type, identifier, identifier_type))
 
     return Response(update_registry_entity(entity_type, identifier, request.data, identifier_type))
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def authenticate_ecosystem_identity_view(request):
+    provided_key = request.headers.get('x-api-key', '')
+    trusted_keys = {settings.KCS_NEXUS_AUTH_KEY, settings.EDUPAY_AUTH_KEY, settings.EDUSYNC_AUTH_KEY} - {''}
+    if not provided_key or provided_key not in trusted_keys:
+        return Response({'detail': 'Unauthorized ecosystem authentication request.'}, status=401)
+
+    identifier = str(request.data.get('identifier') or request.data.get('username') or '').strip()
+    password = str(request.data.get('password') or '')
+    user = User.objects.filter(
+        Q(username__iexact=identifier) | Q(email__iexact=identifier) | Q(access_code__iexact=identifier)
+    ).first()
+    if user is None or not user.is_active or not user.check_password(password):
+        return Response({'detail': 'Invalid credentials.'}, status=401)
+
+    if user.role not in {User.ROLE_PARENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE, User.ROLE_STUDENT}:
+        return Response({'detail': 'Identity is not federated.'}, status=403)
+
+    return Response({'user': UserMeSerializer(user).data})

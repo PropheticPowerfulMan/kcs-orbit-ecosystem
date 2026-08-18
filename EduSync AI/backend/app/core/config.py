@@ -32,7 +32,10 @@ class Settings(BaseSettings):
     edupay_timeout_seconds: int = 5
 
     savanex_api_url: str = ""
-    savanex_login_path: str = "/api/auth/login/"
+    savanex_login_path: str = "/api/integration/authenticate/"
+    kcs_nexus_api_url: str = ""
+    kcs_nexus_login_path: str = "/api/auth/login"
+    kcs_nexus_timeout_seconds: int = 5
     savanex_timeout_seconds: int = 5
 
     external_ai_enabled: bool = False

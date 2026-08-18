@@ -30,8 +30,12 @@ const envSchema = z.object({
   ENABLE_DEMO_AUTH_FALLBACK: z.enum(["true", "false"]).default("false"),
   ENABLE_DEMO_DATA_FALLBACK: z.enum(["true", "false"]).default("false"),
   SAVANEX_API_URL: z.string().default(""),
-  SAVANEX_LOGIN_PATH: z.string().default("/api/auth/login/"),
+  SAVANEX_LOGIN_PATH: z.string().default("/api/integration/authenticate/"),
   SAVANEX_TIMEOUT_SECONDS: z.coerce.number().default(5),
+  KCS_NEXUS_API_URL: z.string().default(''),
+  KCS_NEXUS_LOGIN_PATH: z.string().default('/api/auth/login'),
+  KCS_NEXUS_TIMEOUT_SECONDS: z.coerce.number().default(5),
+  KCS_ORBIT_API_KEY: z.string().default(""),
   ADMIN_RECOVERY_CODE: z.string().default("")
 });
 

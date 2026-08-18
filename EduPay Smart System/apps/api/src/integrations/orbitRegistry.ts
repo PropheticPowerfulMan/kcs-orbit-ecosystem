@@ -286,7 +286,7 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
   };
 }
 
-async function fetchOrbitSharedDirectory(): Promise<OrbitSharedDirectory> {
+export async function fetchOrbitSharedDirectory(): Promise<OrbitSharedDirectory> {
   const baseUrl = (process.env.KCS_ORBIT_API_URL || "").replace(/\/$/, "");
   const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
   const apiKey = process.env.KCS_ORBIT_API_KEY || "";
@@ -308,7 +308,11 @@ async function fetchOrbitSharedDirectory(): Promise<OrbitSharedDirectory> {
   return response.json() as Promise<OrbitSharedDirectory>;
 }
 
-async function orbitRegistryRequest<T>(path: string, init: RequestInit): Promise<T> {
+
+export async function readOrbitSharedOptions() {
+  const directory = await fetchOrbitSharedDirectory();
+  return mapOrbitDirectoryToSharedOptions(directory);
+}async function orbitRegistryRequest<T>(path: string, init: RequestInit): Promise<T> {
   const baseUrl = (process.env.KCS_ORBIT_API_URL || "").replace(/\/$/, "");
   const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
   const apiKey = process.env.KCS_ORBIT_API_KEY || "";

@@ -727,7 +727,7 @@ parentRouter.put("/me/photo", authorize("PARENT"), async (req: AuthenticatedRequ
 });
 
 // POST create parent + students
-parentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
   const payload = parentSchema.parse(req.body);
   const temporaryPassword = generateTemporaryPassword();
   const normalizedEmail = payload.email.trim().toLowerCase();
@@ -778,7 +778,7 @@ parentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res
 
       const user = await ensureParentPortalUser({
         schoolId: req.user!.schoolId,
-        parentId: mirroredParent.id,
+        parentId: mirroredParent.localId || mirroredParent.id,
         fullName: payload.fullName,
         email: payload.email,
         accessCode: mirroredParent.accessCode || accessCode,
@@ -786,7 +786,7 @@ parentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res
       });
 
       const localParent = await prisma.parent.findFirst({
-        where: { id: mirroredParent.id, schoolId: req.user!.schoolId },
+        where: { id: mirroredParent.localId || mirroredParent.id, schoolId: req.user!.schoolId },
         include: { user: true, students: { include: { class: true } } },
       });
 
@@ -828,12 +828,12 @@ parentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res
 
       await assignOnboardingFinance({
         schoolId: req.user!.schoolId,
-        parentId: mirroredParent.id,
+        parentId: mirroredParent.localId || mirroredParent.id,
         students: createdStudents,
       });
 
       const createdParent = await prisma.parent.findUnique({
-        where: { id: mirroredParent.id },
+        where: { id: mirroredParent.localId || mirroredParent.id },
         include: parentInclude
       });
       if (!createdParent) {
@@ -1013,7 +1013,7 @@ parentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res
   }
 });
 
-parentRouter.post("/:id/reset-password", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+parentRouter.post("/:id/reset-password", async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const preferences = notificationPreferenceSchema.parse(req.body ?? {});
   const temporaryPassword = generateTemporaryPassword();
@@ -1075,7 +1075,7 @@ parentRouter.post("/:id/reset-password", denyEntityMutation, async (req: Authent
 });
 
 // PUT update parent
-parentRouter.put("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const payload = parentSchema.parse(req.body);
   const normalizedEmail = payload.email.trim().toLowerCase();
@@ -1344,7 +1344,7 @@ parentRouter.put("/:id", denyEntityMutation, async (req: AuthenticatedRequest, r
 });
 
 // DELETE parent
-parentRouter.delete("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+parentRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   if (orbitRegistryIsEnabled()) {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);

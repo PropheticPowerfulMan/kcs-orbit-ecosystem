@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
 import { authGuard, AuthenticatedRequest } from "../../middlewares/auth";
-import { deleteOrbitTeacher, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitTeacher } from "../../integrations/orbitRegistry";
+import { deleteOrbitTeacher, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitTeacher } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { notifyStandaloneEntityChange } from "../notifications/entityChange";
 
@@ -143,24 +143,24 @@ sharedDirectoryRouter.use(authGuard);
 
 sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
-    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-    const mirroredStudentIds = mirrored.students.map((student) => student.localId).filter((id): id is string => Boolean(id));
-    const localStudents = mirroredStudentIds.length
+    const mirrored = await readOrbitSharedOptions();
+    const mirroredStudentExternalIds = mirrored.students.map((student) => student.externalStudentId).filter((id): id is string => Boolean(id));
+    const localStudents = mirroredStudentExternalIds.length
       ? await prisma.student.findMany({
-        where: { schoolId: req.user!.schoolId, id: { in: mirroredStudentIds } },
+        where: { schoolId: req.user!.schoolId, externalStudentId: { in: mirroredStudentExternalIds } },
         include: {
           class: true,
           planAssignments: activePlanAssignmentInclude,
         },
       })
       : [];
-    const localStudentById = new Map(localStudents.map((student) => [student.id, student]));
+    const localStudentByExternalId = new Map(localStudents.filter((student) => student.externalStudentId).map((student) => [student.externalStudentId!, student]));
     const parents = mirrored.parents.map((parent) => ({
       ...parent,
-      localId: parent.localId,
+      localId: undefined,
       id: parent.orbitId || parent.id,
       students: parent.students.map((student) => {
-        const localStudent = student.localId ? localStudentById.get(student.localId) : undefined;
+        const localStudent = student.externalStudentId ? localStudentByExternalId.get(student.externalStudentId) : undefined;
         const serialized = serializeSharedStudent(localStudent ? {
           ...localStudent,
           orbitId: student.orbitId,
@@ -171,7 +171,7 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
         } : {
           ...student,
           class: { name: student.className },
-          parentId: parent.localId || parent.id,
+          parentId: parent.id,
         }, req.user!.schoolId, parent.orbitId || parent.id);
         return {
           ...serialized,
@@ -182,7 +182,7 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
       }),
     }));
     const students = mirrored.students.map((student) => {
-      const localStudent = student.localId ? localStudentById.get(student.localId) : undefined;
+      const localStudent = student.externalStudentId ? localStudentByExternalId.get(student.externalStudentId) : undefined;
       const serialized = serializeSharedStudent(localStudent ? {
         ...localStudent,
         orbitId: student.orbitId,
@@ -292,11 +292,11 @@ sharedDirectoryRouter.get("/teachers", async (req: AuthenticatedRequest, res) =>
     return res.json([]);
   }
 
-  const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+  const mirrored = await readOrbitSharedOptions();
   return res.json(mirrored.teachers);
 });
 
-sharedDirectoryRouter.put("/teachers/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+sharedDirectoryRouter.put("/teachers/:id", async (req: AuthenticatedRequest, res) => {
   if (!orbitRegistryIsEnabled()) {
     return res.status(400).json({ message: "La synchronisation des employes n'est pas activee sur cet environnement." });
   }
@@ -322,7 +322,7 @@ sharedDirectoryRouter.put("/teachers/:id", denyEntityMutation, async (req: Authe
   }
 });
 
-sharedDirectoryRouter.delete("/teachers/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+sharedDirectoryRouter.delete("/teachers/:id", async (req: AuthenticatedRequest, res) => {
   if (!orbitRegistryIsEnabled()) {
     return res.status(400).json({ message: "La synchronisation des employes n'est pas activee sur cet environnement." });
   }

@@ -209,8 +209,8 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   try {
     response = await fetch(loginUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: identifier, password }),
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY! },
+      body: JSON.stringify({ identifier, password }),
       signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
     })
   } catch (error) {
@@ -470,7 +470,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     }
   }
 
-  const externalUser = await authenticateWithSharedProviders(identifier, payload.password)
+  const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true'
+  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password)
   if (!externalUser) {
     throw new ApiError(401, 'Invalid email or password')
   }

@@ -500,6 +500,10 @@ function Start-EduSyncBackend {
     "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
     "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduSyncAI)'; " +
     "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
+    "`$env:EDUPAY_API_URL='http://localhost:4000'; " +
+    "`$env:SAVANEX_API_URL='http://localhost:8001'; " +
+    "`$env:SAVANEX_LOGIN_PATH='/api/integration/authenticate/'; " +
+    "`$env:KCS_NEXUS_API_URL='http://localhost:$kcsNexusApiPort'; " +
     "Set-Location '$eduSyncBackendPath'; " +
     "while (`$true) { " +
     "  & '$eduSyncPythonPath' -m uvicorn app.main:app --host 0.0.0.0 --port $eduSyncApiPort; " +
@@ -746,10 +750,14 @@ Start-ServiceWindow -Title 'KCS Nexus Backend' -Command (
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.KcsNexus)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "`$env:EDUPAY_API_URL='http://localhost:4000'; " +
+  "`$env:KCS_NEXUS_AUTH_KEY='$($integrationKeys.KcsNexus)'; " +
+  "`$env:EDUPAY_AUTH_KEY='$($integrationKeys.EduPay)'; " +
   "`$env:EDUPAY_SERVICE_EMAIL='admin@school.com'; " +
   "`$env:EDUPAY_SERVICE_PASSWORD='password123'; " +
   "`$env:EDUPAY_LOGIN_PATH='/api/auth/login'; " +
   "`$env:EDUPAY_TIMEOUT_SECONDS='15'; " +
+  "`$env:SAVANEX_API_URL='http://localhost:8001'; " +
+  "`$env:SAVANEX_LOGIN_PATH='/api/integration/authenticate/'; " +
   "npm run dev"
 ) -Port $kcsNexusApiPort -LogName 'kcs-nexus-backend.log'
 
@@ -761,6 +769,10 @@ Start-ServiceWindow -Title 'EduPay API' -Command (
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduPay)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "`$env:FRONTEND_URL='http://localhost:5174'; " +
+  "`$env:KCS_NEXUS_API_URL='http://localhost:$kcsNexusApiPort'; " +
+  "`$env:KCS_NEXUS_LOGIN_PATH='/api/auth/login'; " +
+  "`$env:SAVANEX_API_URL='http://localhost:8001'; " +
+  "`$env:SAVANEX_LOGIN_PATH='/api/integration/authenticate/'; " +
   "pnpm run dev"
 ) -Port 4000 -LogName 'edupay-api.log'
 
@@ -777,6 +789,11 @@ Start-ServiceWindow -Title 'SAVANEX Backend' -Command (
   "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.Savanex)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
+  "`$env:KCS_NEXUS_API_URL='http://localhost:$kcsNexusApiPort'; " +
+  "`$env:EDUPAY_API_URL='http://localhost:4000'; " +
+  "`$env:KCS_NEXUS_AUTH_KEY='$($integrationKeys.KcsNexus)'; " +
+  "`$env:EDUPAY_AUTH_KEY='$($integrationKeys.EduPay)'; " +
+  "`$env:EDUSYNC_AUTH_KEY='$($integrationKeys.EduSyncAI)'; " +
   "& '$savanexPythonPath' manage.py runserver 0.0.0.0:8001"
 ) -Port 8001 -LogName 'savanex-backend.log'
 

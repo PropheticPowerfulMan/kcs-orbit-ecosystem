@@ -1,4 +1,5 @@
 import jwt, { type SignOptions } from 'jsonwebtoken'
+import { randomUUID } from 'node:crypto'
 import type { User } from '@prisma/client'
 import { env } from '../config/env.js'
 
@@ -25,7 +26,7 @@ export const signAccessToken = (user: User) => {
 }
 
 export const signRefreshToken = (user: User) => {
-  return jwt.sign({ sub: user.id, role: user.role.toLowerCase() }, env.JWT_REFRESH_SECRET, {
+  return jwt.sign({ sub: user.id, role: user.role.toLowerCase(), jti: randomUUID() }, env.JWT_REFRESH_SECRET, {
     expiresIn: toJwtDuration(env.JWT_REFRESH_EXPIRES_IN),
   })
 }
