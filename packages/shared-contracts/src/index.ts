@@ -254,7 +254,6 @@ export const AttendanceUpsertSchema = IntegrationEnvelopeSchema.extend({
 export type AppSlug = z.infer<typeof AppSlugSchema>;
 export type RoleAudience = z.infer<typeof RoleAudienceSchema>;
 export type IntegrationEnvelope = z.infer<typeof IntegrationEnvelopeSchema>;
-export type CanonicalIdentity = z.infer<typeof CanonicalIdentitySchema>;
 export type StudentUpsert = z.infer<typeof StudentUpsertSchema>;
 export type ClassUpsert = z.infer<typeof ClassUpsertSchema>;
 export type ParentUpsert = z.infer<typeof ParentUpsertSchema>;

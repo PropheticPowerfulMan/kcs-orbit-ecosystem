@@ -144,7 +144,7 @@ sharedDirectoryRouter.use(authGuard);
 sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-    const mirroredStudentIds = mirrored.parents.flatMap((parent) => parent.students.map((student) => student.id));
+    const mirroredStudentIds = mirrored.students.map((student) => student.localId).filter((id): id is string => Boolean(id));
     const localStudents = mirroredStudentIds.length
       ? await prisma.student.findMany({
         where: { schoolId: req.user!.schoolId, id: { in: mirroredStudentIds } },
@@ -157,9 +157,11 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
     const localStudentById = new Map(localStudents.map((student) => [student.id, student]));
     const parents = mirrored.parents.map((parent) => ({
       ...parent,
+      localId: parent.localId,
+      id: parent.orbitId || parent.id,
       students: parent.students.map((student) => {
-        const localStudent = localStudentById.get(student.id);
-        return serializeSharedStudent(localStudent ? {
+        const localStudent = student.localId ? localStudentById.get(student.localId) : undefined;
+        const serialized = serializeSharedStudent(localStudent ? {
           ...localStudent,
           orbitId: student.orbitId,
           displayId: student.displayId,
@@ -169,11 +171,35 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
         } : {
           ...student,
           class: { name: student.className },
-          parentId: parent.id,
-        }, req.user!.schoolId, parent.id);
+          parentId: parent.localId || parent.id,
+        }, req.user!.schoolId, parent.orbitId || parent.id);
+        return {
+          ...serialized,
+          localId: localStudent?.id,
+          id: student.orbitId || serialized.id,
+          parentId: parent.orbitId || parent.id,
+        };
       }),
     }));
-    const students = parents.flatMap((parent) => parent.students);
+    const students = mirrored.students.map((student) => {
+      const localStudent = student.localId ? localStudentById.get(student.localId) : undefined;
+      const serialized = serializeSharedStudent(localStudent ? {
+        ...localStudent,
+        orbitId: student.orbitId,
+        displayId: student.displayId,
+        studentNumber: student.studentNumber,
+        accessCode: student.accessCode,
+        mustChangePassword: student.mustChangePassword,
+      } : {
+        ...student,
+        class: { name: student.className },
+      }, req.user!.schoolId);
+      return {
+        ...serialized,
+        localId: localStudent?.id,
+        id: student.orbitId || student.id,
+      };
+    });
 
     const teachers = mirrored.teachers;
 
@@ -187,11 +213,11 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
         teachers: teachers.length,
       },
       families: mirrored.parents.map((parent) => ({
-        id: parent.id,
-        displayId: parent.displayId || parent.id,
+        id: parent.orbitId || parent.id,
+        displayId: parent.displayId || parent.orbitId || parent.id,
         familyLabel: `${splitFullName(parent.fullName).lastName || parent.fullName} Family`,
-        parentIds: [parent.id],
-        studentIds: parent.students.map((student) => student.id),
+        parentIds: [parent.orbitId || parent.id],
+        studentIds: parent.students.map((student) => student.orbitId || student.id),
         organizationId: req.user!.schoolId,
         externalIds: [],
       })),

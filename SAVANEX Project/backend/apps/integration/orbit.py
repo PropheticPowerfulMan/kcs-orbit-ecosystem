@@ -88,9 +88,13 @@ def _send_json(path: str, payload: dict) -> tuple[bool, str | None]:
     if not orbit_sync_is_enabled():
         return False, "Missing Orbit configuration"
 
+    hydrated_payload = dict(payload)
+    if not hydrated_payload.get("organizationId"):
+        hydrated_payload["organizationId"] = KCS_ORBIT_ORGANIZATION_ID
+
     req = request.Request(
         url=f"{KCS_ORBIT_API_URL}{path}",
-        data=json.dumps(_strip_empty_values(payload)).encode("utf-8"),
+        data=json.dumps(_strip_empty_values(hydrated_payload)).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "x-api-key": KCS_ORBIT_API_KEY,

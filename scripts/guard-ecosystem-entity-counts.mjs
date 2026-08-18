@@ -1,43 +1,33 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+const orbitUrl = (process.env.KCS_ORBIT_API_URL || "http://localhost:4500").replace(/\/$/, "");
+const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID;
+const apiKey = process.env.SAVANEX_INTEGRATION_KEY || "savanex-dev-key";
 
-const ecosystemRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-
-const checks = [
-  {
-    file: "kcs-orbit-api/src/services/shared-directory.service.ts",
-    required: ["families: families.length", "parents: parents.length", "students: students.length", "teachers: teachers.length"],
-  },
-  {
-    file: "EduPay Smart System/apps/api/src/modules/shared-directory/router.ts",
-    required: ["families: parents.length", "parents: parents.length", "students: students.length", "teachers: teachers.length"],
-  },
-  {
-    file: "SAVANEX Project/backend/apps/integration/views.py",
-    required: ["'families': parents.count()", "'parents': parents.count()", "'students': students.count()", "'teachers': teachers.count()"],
-  },
-  {
-    file: "KCS Nexus/backend/src/routes/registry.routes.ts",
-    required: ["families: parentsMap.size", "parents: parentsMap.size", "students: students.length", "teachers: teachers.length"],
-  },
-  {
-    file: "EduSync AI/backend/app/api/routes/directory.py",
-    required: ["\"counts\"", "\"families\"", "\"parents\"", "\"students\"", "\"teachers\""],
-  },
-];
-
-const failures = [];
-for (const check of checks) {
-  const source = readFileSync(join(ecosystemRoot, check.file), "utf8");
-  for (const token of check.required) {
-    if (!source.includes(token)) failures.push(`${check.file}: missing ${token}`);
-  }
+if (!organizationId) {
+  console.error("KCS_ORBIT_ORGANIZATION_ID is required. This check compares live records, not source-code tokens.");
+  process.exit(2);
 }
 
-if (failures.length) {
-  console.error("Entity-count contract failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"));
+const response = await fetch(`${orbitUrl}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(organizationId)}`, {
+  headers: { "x-api-key": apiKey, "x-app-slug": "SAVANEX" },
+});
+
+if (!response.ok) {
+  console.error(`Orbit directory request failed: HTTP ${response.status} ${await response.text()}`);
   process.exit(1);
 }
 
-console.log("Entity-count contract OK: Orbit, EduPay, Savanex, Nexus and EduSync expose coherent shared-directory counts.");
+const directory = await response.json();
+const actual = {
+  parents: Array.isArray(directory.parents) ? directory.parents.length : -1,
+  students: Array.isArray(directory.students) ? directory.students.length : -1,
+  teachers: Array.isArray(directory.teachers) ? directory.teachers.length : -1,
+};
+const advertised = directory.counts || {};
+const mismatches = Object.entries(actual).filter(([key, value]) => advertised[key] !== value);
+
+if (mismatches.length) {
+  console.error(`Orbit directory count mismatch: ${JSON.stringify({ advertised, actual })}`);
+  process.exit(1);
+}
+
+console.log(JSON.stringify({ status: "PASS", source: directory.source || "orbit", organizationId, counts: actual }, null, 2));

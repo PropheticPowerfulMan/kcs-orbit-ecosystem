@@ -77,6 +77,7 @@ type OrbitSharedDirectory = {
 
 export type SharedStudentOption = {
   id: string;
+  localId?: string;
   orbitId?: string;
   displayId?: string;
   externalStudentId?: string;
@@ -95,6 +96,7 @@ export type SharedStudentOption = {
 
 export type SharedParentOption = {
   id: string;
+  localId?: string;
   orbitId?: string;
   displayId?: string;
   createdAt?: Date;
@@ -224,6 +226,29 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
     };
   });
 
+  const students = directory.students.map((student) => {
+    const className = student.className || student.classId || "Classe non renseignee";
+    classNames.add(className);
+    const displayId = pickSharedStudentId(student);
+    return {
+      id: student.id,
+      orbitId: student.id,
+      displayId,
+      externalStudentId: displayId,
+      studentNumber: student.studentNumber,
+      email: student.email,
+      phone: student.phone,
+      accessCode: student.accessCode,
+      dateOfBirth: student.dateOfBirth,
+      status: student.status,
+      mustChangePassword: student.mustChangePassword,
+      fullName: student.fullName,
+      classId: className,
+      className,
+      annualFee: 0,
+    };
+  });
+
   const classes = Array.from(classNames).sort((left, right) => left.localeCompare(right));
   const teachers = directory.teachers.map((teacher) => ({
     id: teacher.id,
@@ -249,6 +274,7 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
 
   return {
     parents,
+    students,
     classes,
     teachers,
     counts: directory.counts ?? {
@@ -439,6 +465,7 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
   if (!orbitRegistryIsEnabled()) {
     return {
       parents: [] as SharedParentOption[],
+      students: [] as SharedStudentOption[],
       classes: [] as Array<{ id: string; name: string; level: string }>,
       teachers: [] as SharedTeacherOption[],
       counts: { families: 0, parents: 0, students: 0, teachers: 0 },
@@ -470,7 +497,6 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
   }
 
   const parentIdByLookupKey = new Map<string, string>();
-  const mappedParentByLookupKey = new Map(mapped.parents.map((parent) => [parent.lookupKey, parent]));
   for (const parent of mapped.parents) {
     const existingParent = parent.email
       ? await prisma.parent.findFirst({ where: { schoolId, email: parent.email } })
@@ -614,13 +640,6 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
     : [];
 
   const parentById = new Map(parents.map((parent) => [parent.id, parent]));
-  const orderedParents = mapped.parents
-    .map((parent) => {
-      const parentId = parentIdByLookupKey.get(parent.lookupKey);
-      return parentId ? parentById.get(parentId) : null;
-    })
-    .filter((parent): parent is NonNullable<typeof parent> => Boolean(parent));
-
   const classes = mapped.classes.length > 0
     ? await prisma.class.findMany({
       where: {
@@ -632,44 +651,48 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
     : [];
 
   return {
-    parents: orderedParents.map((parent) => {
-      const orbitParent = mappedParentByLookupKey.get(buildParentLookupKey({
-        fullName: parent.fullName,
-        email: parent.email,
-        phone: parent.phone,
-      }));
+    parents: mapped.parents.map((orbitParent) => {
+      const localParentId = parentIdByLookupKey.get(orbitParent.lookupKey);
+      const parent = localParentId ? parentById.get(localParentId) : undefined;
       return {
-        id: parent.id,
-        orbitId: orbitParent?.orbitId,
-        displayId: orbitParent?.displayId || parent.id,
-        createdAt: parent.createdAt,
-        fullName: parent.fullName,
-        phone: parent.phone,
-        email: parent.email,
-        physicalAddress: orbitParent?.physicalAddress || null,
-        accessCode: orbitParent?.accessCode,
-        mustChangePassword: orbitParent?.mustChangePassword,
-        students: parent.students.map((student) => ({
-          id: student.id,
-          orbitId: orbitParent?.students.find((entry) => entry.externalStudentId === (student.externalStudentId || undefined) || entry.fullName === student.fullName)?.orbitId,
-          displayId: student.externalStudentId || student.id,
-          externalStudentId: student.externalStudentId || undefined,
-          studentNumber: student.externalStudentId || undefined,
-          accessCode: orbitParent?.students.find((entry) => entry.externalStudentId === (student.externalStudentId || undefined) || entry.fullName === student.fullName)?.accessCode,
-          mustChangePassword: orbitParent?.students.find((entry) => entry.externalStudentId === (student.externalStudentId || undefined) || entry.fullName === student.fullName)?.mustChangePassword,
-          fullName: student.fullName,
-          classId: student.classId,
-          className: student.class.name,
-          annualFee: student.annualFee,
-        })),
+        ...orbitParent,
+        id: orbitParent.orbitId,
+        localId: parent?.id,
+        createdAt: parent?.createdAt,
+        students: orbitParent.students.map((orbitStudent) => {
+          const localStudent = parent?.students.find((student) =>
+            student.externalStudentId === orbitStudent.externalStudentId
+            || student.fullName === orbitStudent.fullName
+          );
+          return {
+            ...orbitStudent,
+            id: orbitStudent.orbitId,
+            localId: localStudent?.id,
+            classId: localStudent?.classId || orbitStudent.classId,
+            className: localStudent?.class.name || orbitStudent.className,
+            annualFee: localStudent?.annualFee || orbitStudent.annualFee,
+          };
+        }),
       };
-    }),
-    classes,
+    }),    students: mapped.students.map((orbitStudent) => {
+      const localStudent = parents.flatMap((parent) => parent.students).find((student) =>
+        student.externalStudentId === orbitStudent.externalStudentId
+        || student.fullName === orbitStudent.fullName
+      );
+      return {
+        ...orbitStudent,
+        id: orbitStudent.orbitId,
+        localId: localStudent?.id,
+        classId: localStudent?.classId || orbitStudent.classId,
+        className: localStudent?.class.name || orbitStudent.className,
+        annualFee: localStudent?.annualFee || orbitStudent.annualFee,
+      };
+    }),    classes,
     teachers: mapped.teachers,
     counts: {
-      families: orderedParents.length,
-      parents: orderedParents.length,
-      students: orderedParents.reduce((total, parent) => total + parent.students.length, 0),
+      families: mapped.parents.length,
+      parents: mapped.parents.length,
+      students: mapped.parents.reduce((total, parent) => total + parent.students.length, 0),
       teachers: mapped.counts.teachers,
     },
   };

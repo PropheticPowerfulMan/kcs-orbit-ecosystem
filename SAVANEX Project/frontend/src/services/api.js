@@ -423,21 +423,8 @@ export const studentsService = {
       }));
     }
 
-    const [localResult, sharedResult] = await Promise.allSettled([
-      api.get('/students/'),
-      api.get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS }),
-    ]);
-
-    const localStudents = localResult.status === 'fulfilled'
-      ? (Array.isArray(localResult.value.data) ? localResult.value.data : (localResult.value.data.results || []))
-      : [];
-    const sharedDirectory = sharedResult.status === 'fulfilled' ? sharedResult.value.data : null;
-
-    if (localResult.status === 'rejected' && sharedResult.status === 'rejected') {
-      throw localResult.reason;
-    }
-
-    return mergeLocalAndSharedStudents(localStudents, sharedDirectory);
+    const sharedDirectory = await sharedDirectoryService.get();
+    return mergeLocalAndSharedStudents([], sharedDirectory);
   },
 
   async registerFamily(data) {
@@ -629,8 +616,30 @@ export const teachersService = {
       }));
     }
 
-    const res = await api.get('/teachers/');
-    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+    const directory = await sharedDirectoryService.get();
+    return (Array.isArray(directory?.teachers) ? directory.teachers : []).map((teacher) => ({
+      id: `orbit:${teacher.id}`,
+      orbit_id: teacher.id,
+      teacher_id: teacher.displayId || teacher.employeeId || teacher.id,
+      employee_id: teacher.employeeId || teacher.displayId || teacher.id,
+      full_name: teacher.fullName,
+      first_name: teacher.firstName || '',
+      middle_name: teacher.middleName || '',
+      last_name: teacher.lastName || '',
+      email: teacher.email || '',
+      phone: teacher.phone || '',
+      address: teacher.physicalAddress || '',
+      employee_type: teacher.employeeType || 'teacher',
+      employee_label: teacher.employeeType || 'Employé',
+      job_title: teacher.jobTitle || '',
+      specialization: teacher.subject || '',
+      department: teacher.department || '',
+      employment_status: teacher.status || 'active',
+      is_active: (teacher.status || 'ACTIVE') !== 'INACTIVE',
+      source: 'orbit',
+      source_label: 'Orbit',
+      is_read_only: false,
+    }));
   },
 
   async create(data) {
