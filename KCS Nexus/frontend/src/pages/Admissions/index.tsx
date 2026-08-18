@@ -7,6 +7,7 @@ import {
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { admissionsAPI } from '@/services/api'
 
@@ -233,6 +234,7 @@ const sendAdmissionFallbackEmail = async (
 
 /* ────────────── Component ────────────── */
 const AdmissionsPage = () => {
+  const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState<Step>('Student')
   const [studentData, setStudentData] = useState<StudentData | null>(null)
   const [parentData,  setParentData]  = useState<ParentData  | null>(null)
@@ -352,17 +354,17 @@ const AdmissionsPage = () => {
         <div className="relative container-custom text-center">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-kcs-gold-500/20 text-kcs-gold-300 text-sm font-medium mb-6 border border-kcs-gold-500/30">
-              <Star size={14} /> Admissions 2025–2026 Now Open
+              <Star size={14} /> {t('admissionsPublic.heroBadge')}
             </span>
             <h1 className="text-4xl md:text-6xl font-bold font-display mb-4">
-              Begin Your <span className="text-kcs-gold-400">KCS Journey</span>
+              {t('admissionsPublic.heroTitle')} <span className="text-kcs-gold-400">{t('admissionsPublic.heroTitleHighlight')}</span>
             </h1>
             <p className="text-kcs-blue-200 text-lg max-w-2xl mx-auto mb-8">
-              Kinshasa Christian School welcomes families seeking an excellence-driven, faith-based American education for their children.
+              {t('admissionsPublic.heroSubtitle')}
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
-              <a href="#apply" className="btn-gold">Apply Now <ArrowRight size={16} className="inline ml-1" /></a>
-              <a href="#programs" className="btn-primary bg-white/10 border border-white/20">View Programs</a>
+              <a href="#apply" className="btn-gold">{t('admissionsPublic.applyNow')} <ArrowRight size={16} className="inline ml-1" /></a>
+              <a href="#programs" className="btn-primary bg-white/10 border border-white/20">{t('admissionsPublic.viewPrograms')}</a>
             </div>
           </motion.div>
         </div>
@@ -373,8 +375,8 @@ const AdmissionsPage = () => {
         <div className="container-custom">
           <AnimSection>
             <motion.div variants={fadeUp} className="text-center mb-12">
-              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">Available Programs</h2>
-              <p className="text-gray-500 dark:text-gray-400">Spaces available for the 2025–2026 academic year</p>
+              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">{t('admissionsPublic.programsTitle')}</h2>
+              <p className="text-gray-500 dark:text-gray-400">{t('admissionsPublic.programsSubtitle')}</p>
             </motion.div>
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {programs.map((p) => (
@@ -386,7 +388,7 @@ const AdmissionsPage = () => {
                   <p className="text-sm text-gray-500 dark:text-gray-400">{p.grades} · {p.age}</p>
                   <div className="mt-3 pt-3 border-t border-gray-100 dark:border-kcs-blue-800">
                     <p className="text-lg font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{p.tuition}</p>
-                    <p className="text-xs text-gray-400">{p.spots} spots remaining</p>
+                    <p className="text-xs text-gray-400">{t('admissionsPublic.spotsRemaining', { count: p.spots })}</p>
                   </div>
                 </motion.div>
               ))}
@@ -400,8 +402,8 @@ const AdmissionsPage = () => {
         <div className="container-custom">
           <AnimSection>
             <motion.div variants={fadeUp} className="text-center mb-12">
-              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">Admission Process</h2>
-              <p className="text-gray-500 dark:text-gray-400">Six simple steps to joining KCS</p>
+              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">{t('admissionsPublic.processTitle')}</h2>
+              <p className="text-gray-500 dark:text-gray-400">{t('admissionsPublic.processSubtitle')}</p>
             </motion.div>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {steps.map(({ num, title, desc, icon: Icon }) => (
@@ -412,9 +414,9 @@ const AdmissionsPage = () => {
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-400 mb-0.5">Step {num}</p>
-                    <h3 className="font-bold text-kcs-blue-900 dark:text-white mb-1">{title}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
+                    <p className="text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-400 mb-0.5">{t('admissionsPublic.stepLabel', { num })}</p>
+                    <h3 className="font-bold text-kcs-blue-900 dark:text-white mb-1">{t(`admissionsPublic.steps.${num}.title`, title)}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{t(`admissionsPublic.steps.${num}.desc`, desc)}</p>
                   </div>
                 </motion.div>
               ))}
@@ -429,29 +431,23 @@ const AdmissionsPage = () => {
           <AnimSection>
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <motion.div variants={fadeUp}>
-                <h2 className="text-3xl font-bold font-display mb-4">Required Documents</h2>
-                <p className="text-kcs-blue-200 mb-6">Please prepare the following documents before beginning your application.</p>
+                <h2 className="text-3xl font-bold font-display mb-4">{t('admissionsPublic.requirementsTitle')}</h2>
+                <p className="text-kcs-blue-200 mb-6">{t('admissionsPublic.requirementsSubtitle')}</p>
                 <ul className="space-y-3">
-                  {requirements.map((req) => (
+                  {requirements.map((req, index) => (
                     <li key={req} className="flex items-center gap-3">
                       <CheckCircle2 size={18} className="text-kcs-gold-400 flex-shrink-0" />
-                      <span className="text-kcs-blue-100">{req}</span>
+                      <span className="text-kcs-blue-100">{t(`admissionsPublic.requirements.${index}`, req)}</span>
                     </li>
                   ))}
                 </ul>
               </motion.div>
-              <motion.div variants={fadeUp} className="glass-card rounded-2xl p-6 bg-white/5 border border-white/10">
-                <h3 className="font-bold text-xl mb-4">Key Dates 2025–2026</h3>
-                {[
-                  { date: 'Now – Jun 30', label: 'Applications Open' },
-                  { date: 'Jul 1 – Jul 15', label: 'Entrance Assessments' },
-                  { date: 'Jul 20', label: 'Decisions Released' },
-                  { date: 'Aug 1 – Aug 15', label: 'Enrollment Period' },
-                  { date: 'Aug 25', label: 'First Day of School' },
-                ].map(({ date, label }) => (
-                  <div key={label} className="flex justify-between items-center py-2.5 border-b border-white/10 last:border-0">
-                    <span className="text-kcs-blue-200 text-sm">{label}</span>
-                    <span className="text-kcs-gold-400 font-semibold text-sm">{date}</span>
+              <motion.div variants={fadeUp} className="public-admissions-dates glass-card rounded-2xl p-6 bg-white/5 border border-white/10">
+                <h3 className="font-bold text-xl mb-4">{t('admissionsPublic.keyDatesTitle')}</h3>
+                {[0, 1, 2, 3, 4].map((index) => (
+                  <div key={index} className="flex justify-between items-center py-2.5 border-b border-white/10 last:border-0">
+                    <span className="text-kcs-blue-200 text-sm">{t(`admissionsPublic.keyDates.${index}.label`)}</span>
+                    <span className="public-date-value text-kcs-gold-400 font-semibold text-sm">{t(`admissionsPublic.keyDates.${index}.date`)}</span>
                   </div>
                 ))}
               </motion.div>
@@ -465,8 +461,8 @@ const AdmissionsPage = () => {
         <div className="container-custom">
           <div className="max-w-3xl mx-auto">
             <div className="text-center mb-10">
-              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">Online Application</h2>
-              <p className="text-gray-500 dark:text-gray-400">Complete all sections to submit your application.</p>
+              <h2 className="text-3xl font-bold font-display text-kcs-blue-900 dark:text-white mb-3">{t('admissionsPublic.applicationTitle')}</h2>
+              <p className="text-gray-500 dark:text-gray-400">{t('admissionsPublic.applicationSubtitle')}</p>
             </div>
 
             {submitted ? (

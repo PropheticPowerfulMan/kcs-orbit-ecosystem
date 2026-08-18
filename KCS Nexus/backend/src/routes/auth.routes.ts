@@ -1,14 +1,20 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
+import crypto from 'node:crypto'
 import jwt, { type SignOptions } from 'jsonwebtoken'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { sendSchoolMail } from '../utils/mail.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
 import { ensureUserAccessCodeColumn, isMissingAccessCodeColumnError } from '../utils/userAccessCode.js'
 import { generateTotpSecret, verifyTotp } from '../utils/totp.js'
+
+const RESET_TOKEN_TTL_MINUTES = 30
+const RESET_TOKEN_BYTES = 32
+const PASSWORD_RESET_RESPONSE = 'If an account exists, a reset link will be sent.'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -16,6 +22,38 @@ function generateAccessCode(role: string) {
 
 function normalizeAccessCode(value: string | undefined) {
   return (value || '').trim().toUpperCase()
+}
+
+function hashResetToken(token: string) {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+function buildPasswordResetUrl(token: string) {
+  const baseUrl = env.FRONTEND_URL.replace(/\/$/, '')
+  return `${baseUrl}/login?resetToken=${encodeURIComponent(token)}`
+}
+
+function buildPasswordResetEmail(firstName: string, resetUrl: string) {
+  const text = [
+    `Hello ${firstName},`,
+    '',
+    'A password reset was requested for your KCS Nexus account.',
+    `Use this secure link within ${RESET_TOKEN_TTL_MINUTES} minutes: ${resetUrl}`,
+    '',
+    'If you did not request this, ignore this message and contact the school administration.',
+  ].join('\n')
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
+      <p>Hello ${firstName},</p>
+      <p>A password reset was requested for your KCS Nexus account.</p>
+      <p><a href="${resetUrl}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700">Reset password</a></p>
+      <p>This link expires in ${RESET_TOKEN_TTL_MINUTES} minutes.</p>
+      <p>If you did not request this, ignore this message and contact the school administration.</p>
+    </div>
+  `
+
+  return { text, html }
 }
 
 function splitFullName(fullName: string) {
@@ -494,13 +532,86 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
 authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
   const schema = z.object({ email: z.string().email() })
   const { email } = schema.parse(req.body)
-  return success(res, { email }, 'Password reset workflow initiated')
+  const normalizedEmail = email.trim().toLowerCase()
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+
+  if (user?.passwordHash && !isConfiguredSuperAdminUser(user.id)) {
+    const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('base64url')
+    const tokenHash = hashResetToken(rawToken)
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000)
+
+    await prisma.$transaction([
+      prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
+        data: { usedAt: new Date() },
+      }),
+      prisma.passwordResetToken.create({
+        data: { tokenHash, userId: user.id, expiresAt },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actorId: user.id,
+          action: 'auth.password_reset_requested',
+          targetType: 'User',
+          targetId: user.id,
+          metadata: { email: normalizedEmail, expiresAt: expiresAt.toISOString() },
+        },
+      }),
+    ])
+
+    const resetUrl = buildPasswordResetUrl(rawToken)
+    const emailContent = buildPasswordResetEmail(user.firstName, resetUrl)
+    const result = await sendSchoolMail({
+      to: user.email,
+      subject: 'KCS Nexus password reset',
+      text: emailContent.text,
+      html: emailContent.html,
+    })
+
+    if (!result.sent) {
+      console.warn(`[auth] Password reset link for ${user.email}: ${resetUrl}`)
+    }
+  }
+
+  return success(res, null, PASSWORD_RESET_RESPONSE)
 }))
 
 authRouter.post('/reset-password', asyncHandler(async (req, res) => {
   const schema = z.object({ token: z.string().min(1), password: z.string().min(8) })
-  schema.parse(req.body)
-  return success(res, null, 'Password reset scaffold ready')
+  const { token, password } = schema.parse(req.body)
+  const tokenHash = hashResetToken(token)
+  const resetToken = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+    include: { user: true },
+  })
+
+  if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date() || !resetToken.user.passwordHash) {
+    throw new ApiError(400, 'Password reset link is invalid or expired')
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10)
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: resetToken.userId },
+      data: { passwordHash },
+    }),
+    prisma.passwordResetToken.update({
+      where: { id: resetToken.id },
+      data: { usedAt: new Date() },
+    }),
+    prisma.refreshToken.deleteMany({ where: { userId: resetToken.userId } }),
+    prisma.auditLog.create({
+      data: {
+        actorId: resetToken.userId,
+        action: 'auth.password_reset_completed',
+        targetType: 'User',
+        targetId: resetToken.userId,
+        metadata: { email: resetToken.user.email },
+      },
+    }),
+  ])
+
+  return success(res, null, 'Password reset completed')
 }))
 
 authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {

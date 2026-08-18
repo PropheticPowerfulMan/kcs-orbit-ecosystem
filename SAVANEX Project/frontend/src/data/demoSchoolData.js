@@ -47,12 +47,11 @@ export const monthlyPerformance = [
 ];
 
 export const classDistribution = [
-  { name: 'Grade 7', students: 74 },
-  { name: 'Grade 8', students: 82 },
-  { name: 'Grade 9', students: 79 },
-  { name: 'Grade 10', students: 91 },
-  { name: 'Grade 11', students: 64 },
-  { name: 'Grade 12', students: 38 },
+  { name: 'Grade 6', students: 1 },
+  { name: 'Grade 7', students: 1 },
+  { name: 'Grade 8', students: 1 },
+  { name: 'Grade 10', students: 2 },
+  { name: 'Grade 11', students: 1 },
 ];
 
 export const financeSignals = [

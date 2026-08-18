@@ -44,9 +44,9 @@ const Footer = () => {
   ]
 
   return (
-    <footer className="bg-kcs-blue-950 dark:bg-gray-950 text-white">
+    <footer className="public-footer bg-kcs-blue-950 dark:bg-gray-950 text-white">
       {/* CTA Banner */}
-      <div className="bg-gradient-to-r from-kcs-blue-700 via-kcs-blue-600 to-kcs-blue-800 py-12">
+      <div className="public-footer-cta bg-gradient-to-r from-kcs-blue-700 via-kcs-blue-600 to-kcs-blue-800 py-12">
         <div className="container-custom">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div>
@@ -60,14 +60,14 @@ const Footer = () => {
             <div className="flex gap-3">
               <Link
                 to="/admissions"
-                className="flex items-center gap-2 bg-kcs-gold-500 hover:bg-kcs-gold-400 text-kcs-blue-900 font-bold px-6 py-3 rounded-xl transition-all duration-300 hover:shadow-gold"
+                className="public-footer-primary flex items-center gap-2 bg-kcs-gold-500 hover:bg-kcs-gold-400 text-kcs-blue-900 font-bold px-6 py-3 rounded-xl transition-all duration-300 hover:shadow-gold"
               >
                 Apply Now
                 <ArrowRight size={18} />
               </Link>
               <Link
                 to="/contact"
-                className="flex items-center gap-2 border-2 border-white/30 hover:border-white text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300"
+                className="public-footer-secondary flex items-center gap-2 border-2 border-white/30 hover:border-white text-white font-semibold px-6 py-3 rounded-xl transition-all duration-300"
               >
                 Contact Us
               </Link>

@@ -8,6 +8,7 @@ import { asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 
 const openai = env.OPENAI_API_KEY ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null
+const openaiModel = env.OPENAI_MODEL
 
 export const aiRouter = Router()
 
@@ -202,7 +203,7 @@ aiRouter.post('/chat', asyncHandler(async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: openaiModel,
       messages: completionMessages,
       temperature: 0.35,
       max_tokens: 500,
@@ -271,7 +272,7 @@ aiRouter.post('/tutor', authenticate, asyncHandler(async (req, res) => {
 
   const response = openai
     ? await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: openaiModel,
         messages: [
           { role: 'system', content: `You are an expert ${subject} tutor for an American international school in Kinshasa. Explain clearly and step by step.` },
           { role: 'user', content: question },

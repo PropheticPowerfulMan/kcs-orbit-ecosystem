@@ -11,6 +11,7 @@ import { useUIStore } from '@/store/uiStore'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { financeAPI, messagesAPI, notificationsAPI, studentsAPI } from '@/services/api'
 import type { Notification as PortalNotification } from '@/types'
@@ -479,6 +480,10 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
         {composeOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/55 p-4 backdrop-blur-sm"><form onSubmit={async (event) => { event.preventDefault(); await messagesAPI.send(messageDraft); setComposeOpen(false); setMessageDraft({ recipientId:'', subject:'', body:'' }); setActionMessage('Message sent successfully.'); await loadMessages() }} className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950"><div className="flex justify-between"><h2 className="text-xl font-bold text-kcs-blue-900 dark:text-white">New message</h2><button type="button" onClick={() => setComposeOpen(false)}><X/></button></div><div className="mt-5 grid gap-3"><select required value={messageDraft.recipientId} onChange={(event) => setMessageDraft({...messageDraft,recipientId:event.target.value})} className="input-kcs"><option value="">Select recipient</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.firstName} {contact.lastName} · {contact.role}</option>)}</select><input required value={messageDraft.subject} onChange={(event) => setMessageDraft({...messageDraft,subject:event.target.value})} placeholder="Subject" className="input-kcs"/><textarea required value={messageDraft.body} onChange={(event) => setMessageDraft({...messageDraft,body:event.target.value})} placeholder="Write your message..." className="input-kcs min-h-44"/><button className={studentActionButton}>Send message</button></div></form></div>}
       </div>
     )
+  }
+
+  if (segment === 'settings') {
+    return <AccountSettingsPanel roleLabel="Student account" />
   }
 
   if (segment === 'profile') {

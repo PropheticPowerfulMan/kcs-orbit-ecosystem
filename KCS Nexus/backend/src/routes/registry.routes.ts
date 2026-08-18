@@ -26,6 +26,12 @@ export const registryRouter = Router()
 type SharedDirectoryResponse = {
   source: 'orbit'
   visibility: 'shared-directory'
+  counts?: {
+    families: number
+    parents: number
+    students: number
+    teachers: number
+  }
   parents: Array<{
     id: string
     fullName: string

@@ -238,6 +238,47 @@ Ce contrat couvre les notes, evaluations, devoirs, competences, observations ped
 }
 ```
 
+### AcademicYearRollover
+
+Source: KCS Orbit API
+Destination: Toutes les applications consommatrices de l'ecosysteme
+
+L'annee scolaire canonique va du 1er septembre au 30 juin. La fenetre automatique de rollover commence le 1er juillet et se termine le 30 septembre; hors de cette fenetre, un administrateur peut forcer une correction explicite.
+
+Orbit lance aussi un planificateur quotidien au demarrage de l'API. Il execute le rollover une seule fois par organisation active et par annee scolaire ciblee, puis inscrit un `AuditLog` `academic_year.rollover.executed`. Le planificateur peut etre desactive avec `ACADEMIC_ROLLOVER_AUTO_ENABLED=false`.
+
+Actions supportees:
+
+- `PROMOTE`: passage automatique a la classe superieure
+- `REPEAT`: redoublement, l'eleve reste dans la meme classe
+- `MANUAL_TRANSFER`: changement manuel de classe par l'administration
+- `HOLD`: aucun changement, avec avertissement si la classe ne peut pas etre interpretee
+- `GRADUATE`: sortie de `Grade 12` avec statut `GRADUATED`
+
+Regle de reussite KCS:
+
+- le seuil canonique de reussite est `75%`
+- un eleve avec une moyenne inferieure a `75%` redouble automatiquement
+- un eleve sans moyenne calculee est place en `HOLD` pour validation administrative
+- une decision administrative explicite peut forcer `REPEAT`, `MANUAL_TRANSFER`, `HOLD` ou `GRADUATE`
+
+```json
+{
+  "academicYear": "2025-2026",
+  "nextAcademicYear": "2026-2027",
+  "effectiveDate": "2026-07-01",
+  "action": "PROMOTE",
+  "decision": "AUTO",
+  "fromClassId": "cls_k5_a",
+  "fromClassName": "K5 A",
+  "toClassId": "cls_grade_1_a",
+  "toClassName": "Grade 1 A",
+  "averagePercent": 82.5,
+  "passThreshold": 75,
+  "warnings": []
+}
+```
+
 ## Evenements de reference
 
 Evenements minimum a standardiser:
@@ -256,6 +297,11 @@ Evenements minimum a standardiser:
 - `nexus.grade.published`
 - `nexus.pedagogy.observed`
 - `nexus.ai.recommendation`
+- `student.promoted`
+- `student.repeated`
+- `student.manually_transferred`
+- `student.held`
+- `student.graduated`
 
 ## Regles de synchronisation
 
@@ -301,6 +347,8 @@ Les endpoints d'ingestion deja exposes dans [kcs-orbit-api/src/routes/integratio
 Endpoint de lecture partage ajoute pour les applications consommatrices:
 
 - `GET /api/integration/read/shared-directory?organizationId=...`
+- `POST /api/integration/academic-year/rollover/preview`
+- `POST /api/integration/academic-year/rollover/run`
 
 Endpoints d'ecriture partages ajoutes pour les applications autorisees de l'ecosysteme:
 

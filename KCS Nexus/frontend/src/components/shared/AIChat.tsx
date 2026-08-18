@@ -89,6 +89,11 @@ const AIChat = () => {
   const [minimized, setMinimized] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const nextChatLanguage = chatLanguage === 'en' ? 'fr' : 'en'
+
+  useEffect(() => {
+    setChatLanguage(language === 'fr' ? 'fr' : 'en')
+  }, [language])
 
   useEffect(() => {
     setMessages((current) => {
@@ -216,12 +221,12 @@ const AIChat = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setChatLanguage(chatLanguage === 'en' ? 'fr' : 'en')}
+                  onClick={() => setChatLanguage(nextChatLanguage)}
                   className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-xs font-bold text-white transition-colors hover:bg-white/30"
-                  title="Toggle language"
+                  title={nextChatLanguage === 'fr' ? 'FranÃ§ais' : 'English'}
                   type="button"
                 >
-                  {chatLanguage.toUpperCase()}
+                  {nextChatLanguage.toUpperCase()}
                 </button>
                 <button
                   onClick={() => setMinimized(!minimized)}

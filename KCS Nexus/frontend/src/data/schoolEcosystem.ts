@@ -15,6 +15,21 @@ export const academicContext = {
   nextExamWindow: 'May 3 - May 17',
 }
 
+export const parents = [
+  { id: 'parent-kabongo', name: 'Rachel Kabongo', studentIds: ['stu-elise', 'stu-david'], email: 'rachel.kabongo@kcs.local', phone: '+243812450221' },
+  { id: 'parent-mbuyi', name: 'Mireille Mbuyi', studentIds: ['stu-amani'], email: 'mireille.mbuyi@kcs.local', phone: '+243899120882' },
+  { id: 'parent-ilunga', name: 'Patrick Ilunga', studentIds: ['stu-naomi'], email: 'patrick.ilunga@kcs.local', phone: '+243843774101' },
+  { id: 'parent-kalala', name: 'Claire Kalala', studentIds: ['stu-sarah'], email: 'claire.kalala@kcs.local', phone: '+243815330477' },
+  { id: 'parent-banza', name: 'Beatrice Banza', studentIds: ['stu-joel'], email: 'beatrice.banza@kcs.local', phone: '+243817444909' },
+]
+
+export const employees = [
+  { id: 'teacher-lukusa', name: 'M. Alain Lukusa', role: 'teacher', subject: 'Mathematiques' },
+  { id: 'teacher-moke', name: 'Mme Chantal Moke', role: 'teacher', subject: 'Francais' },
+  { id: 'teacher-ngalula', name: 'Dr. Peter Ngalula', role: 'teacher', subject: 'Sciences' },
+  { id: 'teacher-kalala', name: 'Mme Esther Kalala', role: 'teacher', subject: 'Anglais' },
+]
+
 export const students = [
   {
     id: 'stu-elise',
@@ -47,6 +62,70 @@ export const students = [
     strengths: ['Class participation', 'History recall', 'Oral presentations'],
     weaknesses: ['Fractions', 'Homework consistency'],
     aiInsight: 'David needs a parent-teacher follow-up and a 20-minute daily math routine for the next 14 days.',
+  },
+  {
+    id: 'stu-amani',
+    name: 'Amani Mbuyi',
+    grade: 'Grade 10',
+    section: 'A',
+    parentId: 'parent-mbuyi',
+    advisor: 'Mrs. Diallo',
+    average: 64,
+    gpa: 2.0,
+    rank: 31,
+    attendance: 72,
+    risk: 'high',
+    strengths: ['Oral participation'],
+    weaknesses: ['Attendance consistency', 'Exam readiness'],
+    aiInsight: 'Amani needs a coordinated attendance and academic support plan this week.',
+  },
+  {
+    id: 'stu-naomi',
+    name: 'Naomi Ilunga',
+    grade: 'Grade 7',
+    section: 'A',
+    parentId: 'parent-ilunga',
+    advisor: 'Mrs. Nkosi',
+    average: 82,
+    gpa: 3.0,
+    rank: 12,
+    attendance: 91,
+    risk: 'low',
+    strengths: ['Reading comprehension'],
+    weaknesses: ['Science lab vocabulary'],
+    aiInsight: 'Naomi is stable; keep vocabulary reinforcement inside science lessons.',
+  },
+  {
+    id: 'stu-sarah',
+    name: 'Sarah Kalala',
+    grade: 'Grade 6',
+    section: '',
+    parentId: 'parent-kalala',
+    advisor: 'Dr. Mukendi',
+    average: 76,
+    gpa: 2.5,
+    rank: 20,
+    attendance: 88,
+    risk: 'low',
+    strengths: ['Steady improvement'],
+    weaknesses: ['Writing structure'],
+    aiInsight: 'Sarah is improving; weekly writing practice should lift her next report.',
+  },
+  {
+    id: 'stu-joel',
+    name: 'Joel Banza',
+    grade: 'Grade 10',
+    section: 'B',
+    parentId: 'parent-banza',
+    advisor: 'Mr. Belanger',
+    average: 61,
+    gpa: 1.8,
+    rank: 34,
+    attendance: 74,
+    risk: 'high',
+    strengths: ['Practical projects'],
+    weaknesses: ['Homework completion', 'Attendance'],
+    aiInsight: 'Joel should be escalated to the academic coordinator and family follow-up queue.',
   },
 ]
 
@@ -106,10 +185,15 @@ export const lmsResources = [
 ]
 
 export const schedules = [
-  { role: 'student', ownerId: 'stu-elise', time: '8:15 AM', title: 'AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger' },
-  { role: 'student', ownerId: 'stu-elise', time: '10:15 AM', title: 'AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi' },
-  { role: 'teacher', ownerId: 'teacher-belanger', time: '8:15 AM', title: 'Grade 11 AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger' },
-  { role: 'teacher', ownerId: 'teacher-belanger', time: '11:00 AM', title: 'Grade 8 Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger' },
+  { role: 'student', ownerId: 'stu-elise', day: 'Monday', time: '8:15 AM', title: 'AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedTeacherId: 'teacher-belanger', parentOwnerId: 'parent-kabongo' },
+  { role: 'student', ownerId: 'stu-elise', day: 'Monday', time: '10:15 AM', title: 'AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi', source: 'admin-assigned', linkedTeacherId: 'teacher-mukendi', parentOwnerId: 'parent-kabongo' },
+  { role: 'student', ownerId: 'stu-david', day: 'Monday', time: '11:00 AM', title: 'Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedTeacherId: 'teacher-belanger', parentOwnerId: 'parent-kabongo' },
+  { role: 'parent', ownerId: 'parent-kabongo', day: 'Monday', time: '8:15 AM', title: 'Elise - AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedStudentId: 'stu-elise' },
+  { role: 'parent', ownerId: 'parent-kabongo', day: 'Monday', time: '10:15 AM', title: 'Elise - AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi', source: 'admin-assigned', linkedStudentId: 'stu-elise' },
+  { role: 'parent', ownerId: 'parent-kabongo', day: 'Monday', time: '11:00 AM', title: 'David - Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger', source: 'admin-assigned', linkedStudentId: 'stu-david' },
+  { role: 'teacher', ownerId: 'teacher-belanger', day: 'Monday', time: '8:15 AM', title: 'Grade 11 AP Calculus', room: 'Room 204', teacher: 'Mr. Belanger', students: 18, source: 'admin-assigned', assignedBy: 'Super Admin', linkedStudentIds: ['stu-elise'], parentOwnerIds: ['parent-kabongo'] },
+  { role: 'teacher', ownerId: 'teacher-belanger', day: 'Monday', time: '11:00 AM', title: 'Grade 8 Pre-Algebra', room: 'Room 202', teacher: 'Mr. Belanger', students: 1, source: 'admin-assigned', assignedBy: 'Super Admin', linkedStudentIds: ['stu-david'], parentOwnerIds: ['parent-kabongo'] },
+  { role: 'teacher', ownerId: 'teacher-mukendi', day: 'Monday', time: '10:15 AM', title: 'Grade 11 AP Biology', room: 'Lab 3', teacher: 'Dr. Mukendi', students: 24, source: 'admin-assigned', assignedBy: 'Super Admin', linkedStudentIds: ['stu-elise'], parentOwnerIds: ['parent-kabongo'] },
 ]
 
 export const scheduleConflicts = [
@@ -124,7 +208,7 @@ export const announcements = [
 ]
 
 export const communicationFlows = [
-  { trigger: 'Grade entered', update: 'Student and parent dashboard refresh', notification: 'Grade alert if score is below 75%', recipients: ['student', 'parent', 'teacher'] },
+  { trigger: 'Grade entered', update: 'Student and parent dashboard refresh', notification: 'Grade alert if score is below 70%', recipients: ['student', 'parent', 'teacher'] },
   { trigger: 'Attendance marked late/absent', update: 'Attendance analytics and child record update', notification: 'Parent absence alert', recipients: ['parent', 'staff', 'admin'] },
   { trigger: 'Assignment published', update: 'Student workload and parent deadlines update', notification: 'Homework due reminder', recipients: ['student', 'parent'] },
   { trigger: 'Schedule changed', update: 'Timetable and room schedule update', notification: 'Affected user alert', recipients: ['student', 'parent', 'teacher', 'staff'] },
@@ -250,3 +334,95 @@ export const performanceTrend = [
   { month: 'Mar', Elise: 92, David: 79 },
   { month: 'Apr', Elise: 92, David: 78 },
 ]
+
+const scienceSubjectTerms = ['biology', 'science', 'chemistry', 'physics', 'lab', 'calculus', 'math', 'algebra']
+
+const subjectDomain = (subject: string) => {
+  const normalized = subject.toLowerCase()
+  return scienceSubjectTerms.some((term) => normalized.includes(term)) ? 'scientific' : 'non_scientific'
+}
+
+const averageScores = (scores: number[]) => {
+  if (!scores.length) return null
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+}
+
+const predictionTone = (riskScore: number) => {
+  if (riskScore >= 72) return 'critical'
+  if (riskScore >= 48) return 'warning'
+  if (riskScore <= 20) return 'strong'
+  return 'stable'
+}
+
+const buildStudentTrackingProfile = (student: (typeof students)[number]) => {
+  const studentGrades = grades.filter((grade) => grade.studentId === student.id)
+  const scientificScores = studentGrades.filter((grade) => subjectDomain(grade.subject) === 'scientific').map((grade) => Math.round((grade.score / grade.max) * 100))
+  const nonScientificScores = studentGrades.filter((grade) => subjectDomain(grade.subject) === 'non_scientific').map((grade) => Math.round((grade.score / grade.max) * 100))
+  const scienceAverage = averageScores(scientificScores)
+  const nonScienceAverage = averageScores(nonScientificScores)
+  const studentAttendance = attendance.filter((record) => record.studentId === student.id)
+  const lateCount = studentAttendance.filter((record) => record.status === 'late').length
+  const absentCount = studentAttendance.filter((record) => record.status === 'absent').length
+  const studentDiscipline = disciplineReports.filter((report) => report.studentId === student.id)
+  const openDiscipline = studentDiscipline.filter((report) => report.status !== 'Resolved' && report.status !== 'Closed').length
+  const missingAssignments = assignments.filter((assignment) => assignment.studentId === student.id && assignment.status === 'missing').length
+  const parent = parents.find((item) => item.id === student.parentId)
+  const riskScore = Math.min(100, Math.max(0,
+    (100 - student.average) * 0.34 +
+    (100 - student.attendance) * 0.28 +
+    openDiscipline * 18 +
+    absentCount * 10 +
+    lateCount * 5 +
+    missingAssignments * 12 +
+    (student.risk === 'high' ? 16 : student.risk === 'medium' ? 8 : 0),
+  ))
+  const preference =
+    scienceAverage !== null && nonScienceAverage !== null
+      ? scienceAverage >= nonScienceAverage + 4
+        ? 'Scientific preference'
+        : nonScienceAverage >= scienceAverage + 4
+          ? 'Non-scientific preference'
+          : 'Balanced preference'
+      : scienceAverage !== null
+        ? 'Scientific preference'
+        : nonScienceAverage !== null
+          ? 'Non-scientific preference'
+          : 'Insufficient evidence'
+  const recommendations = [
+    student.average < 70 ? 'Open a weekly academic intervention plan with the advisor.' : 'Maintain enrichment tasks and monitor the next assessment window.',
+    student.attendance < 88 ? 'Send an attendance digest to the parent and require a daily check-in.' : 'Keep regular attendance monitoring active.',
+    openDiscipline > 0 ? 'Schedule restorative discipline follow-up and record parent confirmation.' : 'Reinforce positive conduct notes in the student file.',
+    preference === 'Scientific preference' ? 'Offer science lab extension, AP/STEM pathway guidance, and project mentorship.' : preference === 'Non-scientific preference' ? 'Offer humanities, arts, languages, leadership, and presentation pathway guidance.' : 'Use mixed STEM/humanities projects before assigning a pathway.',
+  ]
+
+  return {
+    student,
+    parent,
+    scienceAverage,
+    nonScienceAverage,
+    preference,
+    disciplineOpen: openDiscipline,
+    disciplineTotal: studentDiscipline.length,
+    absences: absentCount,
+    lates: lateCount,
+    missingAssignments,
+    riskScore: Math.round(riskScore),
+    prediction: predictionTone(riskScore),
+    recommendation: recommendations[0],
+    recommendations,
+    alerts: {
+      email: Boolean(parent?.email) && riskScore >= 48,
+      sms: Boolean(parent?.phone) && (riskScore >= 48 || absentCount > 0 || openDiscipline > 0),
+      report: riskScore >= 20 || studentDiscipline.length > 0,
+    },
+    timeline: [
+      ...studentGrades.map((grade) => ({ date: grade.date, type: 'Grade', label: `${grade.subject}: ${Math.round((grade.score / grade.max) * 100)}%` })),
+      ...studentAttendance.map((record) => ({ date: record.date, type: 'Attendance', label: `${record.status} - ${record.className}` })),
+      ...studentDiscipline.map((report) => ({ date: report.date, type: 'Discipline', label: `${report.category}: ${report.status}` })),
+    ],
+  }
+}
+
+export const studentTrackingProfiles = students
+  .map(buildStudentTrackingProfile)
+  .sort((left, right) => right.riskScore - left.riskScore)

@@ -1,4 +1,4 @@
-const CACHE_NAME = "kcs-nexus-app-v1";
+const CACHE_NAME = "kcs-nexus-app-v2";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./images/kcs-logo.png", "./images/kcs.jpg"];
 
 self.addEventListener("install", (event) => {
