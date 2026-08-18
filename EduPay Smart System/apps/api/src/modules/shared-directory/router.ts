@@ -1,13 +1,15 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
-import { authGuard, AuthenticatedRequest, authorize } from "../../middlewares/auth";
+import { authGuard, AuthenticatedRequest } from "../../middlewares/auth";
 import { deleteOrbitTeacher, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitTeacher } from "../../integrations/orbitRegistry";
-import { getParentFinancialSnapshot } from "../finance/service";
 import { prisma } from "../../prisma";
+import { notifyStandaloneEntityChange } from "../notifications/entityChange";
 
 export const sharedDirectoryRouter = Router();
+const denyEntityMutation = (_req: Request, res: Response, _next: NextFunction) => res.status(403).json({
+  message: 'EduPay dispose d’un accès en lecture seule aux entités. Utilisez Savanex ou le superadministrateur KCS Nexus pour toute modification.',
+});
 
-const employeeWriteRoles = ["SUPER_ADMIN", "OWNER", "ADMIN", "HR_MANAGER"] as const;
 
 const updateEmployeeSchema = z.object({
   fullName: z.string().trim().min(1).optional(),
@@ -24,7 +26,7 @@ const updateEmployeeSchema = z.object({
   jobTitle: z.string().trim().min(1).nullable().optional(),
   mustChangePassword: z.boolean().optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
-  message: "Au moins un champ doit etre fourni.",
+  message: "Au moins un champ doit être fourni.",
 });
 
 const activePlanAssignmentInclude = {
@@ -44,17 +46,17 @@ function splitFullName(fullName: string) {
 
   const parts = normalized.split(" ");
   if (parts.length === 1) {
-    return { firstName: parts[0], middleName: null as string | null, lastName: "" };
+    return { firstName: "", middleName: null as string | null, lastName: parts[0] };
   }
 
   if (parts.length === 2) {
-    return { firstName: parts[0], middleName: null as string | null, lastName: parts[1] };
+    return { firstName: parts[1], middleName: null as string | null, lastName: parts[0] };
   }
 
   return {
-    firstName: parts[0],
+    firstName: parts[parts.length - 1],
     middleName: parts.slice(1, -1).join(" "),
-    lastName: parts[parts.length - 1],
+    lastName: parts[0],
   };
 }
 
@@ -83,31 +85,14 @@ function resolveDisplayedAnnualFee(student: {
   return Number.isFinite(displayedAnnualFee) ? displayedAnnualFee : 0;
 }
 
-async function buildFinanceStudentLookup(schoolId: string, parentIds: string[]) {
-  const snapshots = await Promise.all(parentIds.map(async (parentId) => {
-    try {
-      return await getParentFinancialSnapshot({ schoolId, parentId });
-    } catch {
-      return null;
-    }
-  }));
-
-  return new Map(
-    snapshots
-      .filter((snapshot): snapshot is NonNullable<typeof snapshot> => Boolean(snapshot))
-      .flatMap((snapshot) => snapshot.students.map((student) => [student.id, {
-        expectedTotal: Number(student.expectedTotal || 0),
-        reductionTotal: Number(student.reductionTotal || 0),
-        originalAmount: Number(student.originalAmount || 0),
-        paymentOptionType: student.paymentOptionType ?? null,
-        planName: student.planName ?? "",
-      }] as const))
-  );
-}
-
 function serializeSharedStudent(student: {
   id: string;
+  orbitId?: string | null;
+  displayId?: string | null;
   externalStudentId?: string | null;
+  studentNumber?: string | null;
+  accessCode?: string | null;
+  mustChangePassword?: boolean | null;
   fullName: string;
   classId: string;
   createdAt?: Date | string | null;
@@ -132,9 +117,12 @@ function serializeSharedStudent(student: {
   return {
     ...splitFullName(student.fullName),
     id: student.id,
-    displayId: student.externalStudentId || student.id,
-    studentNumber: student.externalStudentId || student.id,
+    orbitId: student.orbitId || undefined,
+    displayId: student.displayId || student.externalStudentId || student.id,
+    studentNumber: student.studentNumber || student.externalStudentId || student.id,
     externalStudentId: student.externalStudentId || undefined,
+    accessCode: student.accessCode || undefined,
+    mustChangePassword: student.mustChangePassword ?? undefined,
     fullName: student.fullName,
     classId: student.classId,
     className: student.class?.name || student.classId,
@@ -156,7 +144,6 @@ sharedDirectoryRouter.use(authGuard);
 sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-    const financeStudentLookup = await buildFinanceStudentLookup(req.user!.schoolId, mirrored.parents.map((parent) => parent.id));
     const mirroredStudentIds = mirrored.parents.flatMap((parent) => parent.students.map((student) => student.id));
     const localStudents = mirroredStudentIds.length
       ? await prisma.student.findMany({
@@ -170,18 +157,35 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
     const localStudentById = new Map(localStudents.map((student) => [student.id, student]));
     const parents = mirrored.parents.map((parent) => ({
       ...parent,
-      students: parent.students.map((student) => serializeSharedStudent(localStudentById.get(student.id) ?? {
-        ...student,
-        class: { name: student.className },
-        parentId: parent.id,
-      }, req.user!.schoolId, parent.id, financeStudentLookup.get(student.id))),
+      students: parent.students.map((student) => {
+        const localStudent = localStudentById.get(student.id);
+        return serializeSharedStudent(localStudent ? {
+          ...localStudent,
+          orbitId: student.orbitId,
+          displayId: student.displayId,
+          studentNumber: student.studentNumber,
+          accessCode: student.accessCode,
+          mustChangePassword: student.mustChangePassword,
+        } : {
+          ...student,
+          class: { name: student.className },
+          parentId: parent.id,
+        }, req.user!.schoolId, parent.id);
+      }),
     }));
     const students = parents.flatMap((parent) => parent.students);
+
+    const teachers = mirrored.teachers;
 
     return res.json({
       source: "orbit",
       visibility: "shared-directory",
-      counts: mirrored.counts,
+      counts: {
+        families: parents.length,
+        parents: parents.length,
+        students: students.length,
+        teachers: teachers.length,
+      },
       families: mirrored.parents.map((parent) => ({
         id: parent.id,
         displayId: parent.displayId || parent.id,
@@ -193,9 +197,11 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
       })),
       parents,
       students,
-      teachers: mirrored.teachers,
+      teachers,
     });
   }
+
+  return res.status(503).json({ message: 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.' });
 
   const [parents, students] = await Promise.all([
     prisma.parent.findMany({
@@ -219,8 +225,6 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
       orderBy: { fullName: "asc" },
     }),
   ]);
-  const financeStudentLookup = await buildFinanceStudentLookup(req.user!.schoolId, parents.map((parent) => parent.id));
-
   return res.json({
     source: "local",
     visibility: "shared-directory",
@@ -250,9 +254,9 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
       phone: parent.phone,
       email: parent.email,
       physicalAddress: parent.physicalAddress,
-      students: parent.students.map((student) => serializeSharedStudent(student, req.user!.schoolId, parent.id, financeStudentLookup.get(student.id))),
+      students: parent.students.map((student) => serializeSharedStudent(student, req.user!.schoolId, parent.id)),
     })),
-    students: students.map((student) => serializeSharedStudent(student, req.user!.schoolId, student.parentId, financeStudentLookup.get(student.id))),
+    students: students.map((student) => serializeSharedStudent(student, req.user!.schoolId, student.parentId)),
     teachers: [],
   });
 });
@@ -266,17 +270,33 @@ sharedDirectoryRouter.get("/teachers", async (req: AuthenticatedRequest, res) =>
   return res.json(mirrored.teachers);
 });
 
-sharedDirectoryRouter.put("/teachers/:id", authorize(...employeeWriteRoles), async (req: AuthenticatedRequest, res) => {
+sharedDirectoryRouter.put("/teachers/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   if (!orbitRegistryIsEnabled()) {
     return res.status(400).json({ message: "La synchronisation des employes n'est pas activee sur cet environnement." });
   }
 
   const payload = updateEmployeeSchema.parse(req.body);
-  const result = await updateOrbitTeacher(req.params.id, payload);
-  return res.json(result);
+  try {
+    const result = await updateOrbitTeacher(req.params.id, payload);
+    await syncOrbitRegistryMirror(req.user!.schoolId);
+    const notificationStatus = await notifyStandaloneEntityChange({
+      schoolId: req.user!.schoolId,
+      subject: "Mise à jour du dossier employé EduPay",
+      body: [
+        `Le dossier employé ${payload.fullName || req.params.id} vient d'être modifié dans EduPay.`,
+        "Les informations sont synchronisées avec le registre partagé de l'écosystème.",
+      ].join("\n"),
+      email: payload.email ?? undefined,
+      phone: payload.phone ?? undefined,
+    });
+    return res.json({ ...result, notificationStatus });
+  } catch (error) {
+    console.error("[TEACHER_UPDATE_ORBIT] Unable to update teacher in shared registry", error);
+    return res.status(502).json({ message: error instanceof Error ? error.message : "Modification employe indisponible dans le registre partage." });
+  }
 });
 
-sharedDirectoryRouter.delete("/teachers/:id", authorize(...employeeWriteRoles), async (req: AuthenticatedRequest, res) => {
+sharedDirectoryRouter.delete("/teachers/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   if (!orbitRegistryIsEnabled()) {
     return res.status(400).json({ message: "La synchronisation des employes n'est pas activee sur cet environnement." });
   }

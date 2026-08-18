@@ -28,7 +28,7 @@ class EduSyncSpokespersonTests(unittest.TestCase):
                     "available": True,
                     "source": "KCS Orbit",
                     "parents_count": 2,
-                    "students_count": 0,
+                    "students_count": 3,
                     "teachers_count": 0,
                     "parents": [
                         {
@@ -46,6 +46,32 @@ class EduSyncSpokespersonTests(unittest.TestCase):
                             "email": "",
                             "phone": "+243000002",
                             "studentIds": ["stu-2", "stu-3"],
+                        },
+                    ],
+                    "students": [
+                        {
+                            "id": "stu-k3-1",
+                            "displayId": "STU-K3-001",
+                            "fullName": "Jeremie Lumbu",
+                            "studentNumber": "K3-001",
+                            "className": "K3",
+                            "parentId": "par-1",
+                        },
+                        {
+                            "id": "stu-k3-2",
+                            "displayId": "STU-K3-002",
+                            "fullName": "Malia Tshibangu",
+                            "studentNumber": "K3-002",
+                            "className": "K3 A",
+                            "parentId": "par-2",
+                        },
+                        {
+                            "id": "stu-g1-1",
+                            "displayId": "STU-G1-001",
+                            "fullName": "Noah Banza",
+                            "studentNumber": "G1-001",
+                            "className": "Grade 1",
+                            "parentId": "par-2",
                         },
                     ],
                 },
@@ -89,6 +115,73 @@ class EduSyncSpokespersonTests(unittest.TestCase):
         self.assertIn("Parent Beta", response)
         self.assertNotIn("ouvrir EduPay", response)
         self.assertIn("retourner_tableau_repertoire", actions)
+
+    def test_k3_student_list_typo_returns_filtered_students(self):
+        intent, confidence = self.engine.detect_intent("donne moi la liste de tous les elves de k3")
+
+        self.assertEqual(intent, "directory_query")
+        self.assertGreaterEqual(confidence, 0.8)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "donne moi la liste de tous les elves de k3",
+        )
+
+        self.assertIn("Liste des eleves de K3", response)
+        self.assertIn("Jeremie Lumbu", response)
+        self.assertIn("Malia Tshibangu", response)
+        self.assertNotIn("Noah Banza", response)
+        self.assertNotIn("demande est trop ouverte", response)
+        self.assertIn("retourner_tableau_repertoire", actions)
+
+    def test_explicit_french_request_answers_in_french(self):
+        intent, confidence = self.engine.detect_intent("parle moi en francais")
+        self.assertEqual(intent, "language_preference")
+        self.assertGreaterEqual(confidence, 0.9)
+
+        response, _actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "parle moi en francais",
+        )
+
+        self.assertIn("Voix officielle EduSync AI", response)
+        self.assertIn("Je continue en francais", response)
+        self.assertNotIn("demande est trop ouverte", response)
+
+    def test_greeting_is_not_misclassified_as_capabilities(self):
+        intent, confidence = self.engine.detect_intent("hi, how are you?")
+
+        self.assertEqual(intent, "greeting_query")
+        self.assertGreaterEqual(confidence, 0.9)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "hi, how are you?",
+        )
+
+        self.assertIn("Hi, I am doing well", response)
+        self.assertNotIn("capabilities", response.lower())
+        self.assertIn("greet_user", actions)
+
+    def test_unpaid_finance_question_stays_french_and_unpaid(self):
+        intent, confidence = self.engine.detect_intent("qui n'a pas paye?")
+
+        self.assertEqual(intent, "finance_query")
+        self.assertGreaterEqual(confidence, 0.8)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "qui n'a pas paye?",
+        )
+
+        self.assertIn("Tu demandes une liste financiere", response)
+        self.assertIn("impayes", response)
+        self.assertNotIn("paid students", response)
+        self.assertIn("ouvrir_module_finance", actions)
 
 
 if __name__ == "__main__":

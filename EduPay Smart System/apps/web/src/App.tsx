@@ -6,7 +6,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { ReceiptVerificationPage } from "./pages/ReceiptVerificationPage";
 import { STAFF_ROLES, useAuthStore } from "./store/auth";
 import type { Role } from "./store/auth";
-import { warmStaffRoute } from "./utils/staffRouteWarmup";
+import { warmAllStaffRoutes } from "./utils/staffRouteWarmup";
 
 const loadAIAssistantPage = () => import("./pages/AIAssistantPage");
 const loadFinanceDashboardPage = () => import("./pages/FinanceDashboardPage");
@@ -18,6 +18,7 @@ const AIAssistantPage = lazy(() => loadAIAssistantPage().then((module) => ({ def
 const FinanceDashboardPage = lazy(() => loadFinanceDashboardPage().then((module) => ({ default: module.FinanceDashboardPage })));
 const FinancialOperationsPage = lazy(() => loadFinancialOperationsPage().then((module) => ({ default: module.FinancialOperationsPage })));
 const EmployeesPage = lazy(() => import("./pages/EmployeesPage").then((module) => ({ default: module.EmployeesPage })));
+const EmployeeFinancePage = lazy(() => import("./pages/EmployeeFinancePage").then((module) => ({ default: module.EmployeeFinancePage })));
 const FinanceParentAdminPage = lazy(() => import("./pages/FinanceParentAdminPage").then((module) => ({ default: module.FinanceParentAdminPage })));
 const FinanceParentPage = lazy(() => import("./pages/FinanceParentPage").then((module) => ({ default: module.FinanceParentPage })));
 const MessagesPage = lazy(() => import("./pages/MessagesPage").then((module) => ({ default: module.MessagesPage })));
@@ -43,6 +44,7 @@ function withPageLoader(element: React.ReactNode) {
 
 function getHomePathByRole(role: Role | null) {
   if (!role) return "/login";
+  if (role === "EMPLOYEE") return "/employee";
   return role === "PARENT" ? "/parent" : "/";
 }
 
@@ -50,20 +52,11 @@ function ProtectedLayout() {
   const role = useAuthStore((s) => s.role);
 
   useEffect(() => {
-    if (!role || role === "PARENT") return;
-
-    void loadFinanceDashboardPage();
-    void loadFinancialOperationsPage();
-    void loadReportsPage();
-    void loadFinanceParentAdminPage();
-    void warmStaffRoute("/");
+    if (!role || role === "PARENT" || role === "EMPLOYEE") return;
 
     const warmupTimer = window.setTimeout(() => {
-      void Promise.allSettled([
-        warmStaffRoute("/reports"),
-        warmStaffRoute("/parent-payments")
-      ]);
-    }, 120);
+      void warmAllStaffRoutes();
+    }, 150);
 
     return () => {
       window.clearTimeout(warmupTimer);
@@ -102,6 +95,9 @@ function RoleHome() {
   const role = useAuthStore((s) => s.role);
   if (role === "PARENT") {
     return <Navigate to="/parent" replace />;
+  }
+  if (role === "EMPLOYEE") {
+    return <Navigate to="/employee" replace />;
   }
   if (role && STAFF_ROLES.includes(role)) {
     return withPageLoader(<FinanceDashboardPage />);
@@ -155,6 +151,9 @@ export function App() {
           <Route element={<RoleRoute allowedRoles={["PARENT"]} />}>
             <Route path="parent" element={withPageLoader(<FinanceParentPage />)} />
           </Route>
+          <Route element={<RoleRoute allowedRoles={["EMPLOYEE"]} />}>
+            <Route path="employee" element={withPageLoader(<EmployeeFinancePage />)} />
+          </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>
@@ -162,3 +161,4 @@ export function App() {
     </Routes>
   );
 }
+

@@ -13,23 +13,34 @@ const ROLE_STORAGE_KEY = "edupay_role";
 const NAME_STORAGE_KEY = "edupay_name";
 const PARENT_ID_STORAGE_KEY = "edupay_parent_id";
 const SESSION_ACTIVE_KEY = "edupay_session_active";
-const DEMO_PARENTS_KEY = "edupay_demo_parents_v2";
-const DEMO_PAYMENTS_KEY = "edupay_payments_v3";
+const DEMO_PARENTS_KEY = "edupay_demo_parents_v3";
+const DEMO_PAYMENTS_KEY = "edupay_payments_v4";
 const DEMO_NOTIFICATIONS_KEY = "edupay-payment-notifications-enabled";
 const DEMO_MANUAL_MESSAGES_KEY = "edupay_manual_messages_v1";
 const DEMO_PARENT_CREDENTIALS_KEY = "edupay_demo_parent_credentials_v1";
+const DEMO_ADMIN_PASSWORD_KEY = "edupay_demo_admin_password_v1";
+const DEMO_PARENT_PASSWORD_KEY = "edupay_demo_parent_password_v1";
+const DEMO_PASSWORD_RESET_TOKENS_KEY = "edupay_demo_password_reset_tokens_v1";
 const DEMO_FINANCE_OVERRIDES_KEY = "edupay_demo_finance_overrides_v1";
 const DEMO_EXPENSE_CATEGORIES_KEY = "edupay_demo_expense_categories_v1";
 const DEMO_EXPENSE_VENDORS_KEY = "edupay_demo_expense_vendors_v1";
 const DEMO_EXPENSE_BUDGETS_KEY = "edupay_demo_expense_budgets_v1";
 const DEMO_EXPENSE_ITEMS_KEY = "edupay_demo_expense_items_v1";
-const DEMO_SALARY_PROFILES_KEY = "edupay_demo_salary_profiles_v1";
+const DEMO_SALARY_PROFILES_KEY = "edupay_demo_salary_profiles_v2";
 const DEMO_PAYROLL_RUNS_KEY = "edupay_demo_payroll_runs_v1";
-const DEMO_EMPLOYEES_KEY = "edupay_demo_employees_v1";
+const DEMO_EMPLOYEE_OBLIGATIONS_KEY = "edupay_demo_employee_obligations_v1";
+const DEMO_EMPLOYEES_KEY = "edupay_demo_employees_v2";
+const DEMO_EMPLOYEE_MESSAGES_KEY = "edupay_demo_employee_messages_v1";
 const API_RESPONSE_CACHE_PREFIX = "edupay_api_cache_v1:";
 const OFFLINE_MUTATION_QUEUE_KEY = "edupay_offline_mutation_queue_v1";
 const DEMO_FALLBACK_ENABLED = (import.meta.env.VITE_ENABLE_DEMO_FALLBACK ?? "").trim().toLowerCase() === "true";
-const STATIC_APP_FALLBACK_ENABLED = ["demo", "github-pages", "pages"].includes((import.meta.env.VITE_ENVIRONMENT ?? "").trim().toLowerCase());
+const RUNTIME_STATIC_APP_FALLBACK_ENABLED = typeof window !== "undefined" && (
+  window.location.hostname.endsWith(".github.io") ||
+  window.location.pathname.startsWith("/EduPay-Smart-System/")
+);
+const STATIC_APP_FALLBACK_ENABLED =
+  RUNTIME_STATIC_APP_FALLBACK_ENABLED ||
+  ["demo", "github-pages", "pages"].includes((import.meta.env.VITE_ENVIRONMENT ?? "").trim().toLowerCase());
 const PLACEHOLDER_API_URL = /MON-BACKEND|example\.com/i.test(API_BASE_URL);
 const PRODUCTION_MODE = import.meta.env.PROD && !STATIC_APP_FALLBACK_ENABLED && !DEMO_FALLBACK_ENABLED;
 const LOCAL_API_FALLBACK_ENABLED =
@@ -38,6 +49,12 @@ const LOCAL_API_FALLBACK_ENABLED =
     STATIC_APP_FALLBACK_ENABLED ||
     PLACEHOLDER_API_URL
   );
+const LOCAL_AUTH_RECOVERY_FALLBACK_PATHS = new Set([
+  "/api/auth/login",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+  "/api/auth/recover-admin-password"
+]);
 
 type DemoSpecialAgreement = {
   title?: string;
@@ -47,7 +64,7 @@ type DemoSpecialAgreement = {
   installmentMode?: "ONE_TIME" | "TWO_INSTALLMENTS" | "THREE_INSTALLMENTS";
 };
 type DemoStudent = { id: string; fullName: string; gender?: "F" | "M" | "O" | ""; classId: string; className: string; annualFee: number; createdAt?: string; payments?: DemoPayment[]; paymentOptionType?: DemoPaymentOptionType; specialAgreement?: DemoSpecialAgreement };
-type DemoParent = { id: string; nom: string; postnom: string; prenom: string; fullName: string; phone: string; email: string; physicalAddress?: string; photoUrl?: string; students: DemoStudent[]; createdAt: string };
+type DemoParent = { id: string; nom: string; postnom: string; prenom: string; fullName: string; phone: string; email: string; physicalAddress?: string; photoUrl?: string; accessCode?: string; students: DemoStudent[]; createdAt: string };
 type DemoTuitionAllocationLine = {
   installmentId: string;
   studentId: string;
@@ -75,9 +92,11 @@ type DemoTuitionAllocationSummary = {
     lines: Array<{ label: string; dueBucket: string; outstandingBefore: number; allocated: number; outstandingAfter: number }>;
   }>;
 };
-type DemoPayment = { id: string; transactionNumber: string; parentId?: string; parentFullName: string; paymentSubjectName?: string; studentNames?: string[]; reason: string; method: string; amount: number; status: string; createdAt: string; date: string; tuitionAllocationSummary?: DemoTuitionAllocationSummary; bankTransferDetails?: { bankName: string; referenceNumber: string; transferDate: string; senderAccountNumber?: string; beneficiaryAccountNumber: string } | null };
-type DemoManualMessage = { id: string; parentId: string; parentName: string; parentPhone?: string; parentEmail?: string; type: "MANUAL_MESSAGE"; language: "fr" | "en"; channel: "DASHBOARD"; content: string; status: string; createdAt: string };
-type DemoParentCredential = { parentId: string; email: string; password: string };
+type DemoPayment = { id: string; transactionNumber: string; parentId?: string; parentFullName: string; paymentSubjectName?: string; studentIds?: string[]; studentNames?: string[]; reason: string; method: string; amount: number; status: string; createdAt: string; date: string; tuitionAllocationSummary?: DemoTuitionAllocationSummary; bankTransferDetails?: { bankName: string; referenceNumber: string; transferDate: string; senderAccountNumber?: string; beneficiaryAccountNumber: string } | null };
+type DemoNotificationType = "MANUAL_MESSAGE" | "CONFIRMATION" | "REMINDER" | "LATE_ALERT" | "UNPAID_BALANCE" | "INCOMPLETE_SCHEDULE";
+type DemoManualMessage = { id: string; parentId: string; parentName: string; parentPhone?: string; parentEmail?: string; type: DemoNotificationType; language: "fr" | "en"; channel: "DASHBOARD" | "EMAIL" | "SMS"; content: string; status: string; createdAt: string };
+type DemoParentCredential = { parentId: string; email: string; password: string; accessCode?: string };
+type DemoPasswordResetToken = { token: string; email: string; expiresAt: string; usedAt?: string };
 type DemoPaymentOptionType = "FULL_PRESEPTEMBER" | "TWO_INSTALLMENTS" | "THREE_INSTALLMENTS" | "STANDARD_MONTHLY" | "SPECIAL_OWNER_AGREEMENT";
 type DemoFinanceOverride =
   | { mode: "OFFICIAL"; paymentOptionType: DemoPaymentOptionType }
@@ -190,6 +209,10 @@ type DemoSalaryProfile = {
   defaultDeduction: number;
   advanceBalance: number;
   debtRecoveryRate: number;
+  deductionMode?: "AUTOMATIC" | "MANUAL" | "HYBRID";
+  maxDeductionRate?: number;
+  contactEmail?: string;
+  contactPhone?: string;
   notes?: string;
   isActive: boolean;
   createdAt: string;
@@ -222,6 +245,51 @@ type DemoPayrollRun = {
   }>;
 };
 
+type DemoEmployeeRepayment = {
+  id: string;
+  method: string;
+  expectedAmount: number;
+  paidAmount: number;
+  currency: string;
+  dueDate: string;
+  paidAt?: string | null;
+  status: string;
+  reference?: string | null;
+  notes?: string | null;
+};
+
+type DemoEmployeeObligation = {
+  id: string;
+  salaryProfileId: string;
+  type: string;
+  title: string;
+  principalAmount: number;
+  amountPaid: number;
+  balance: number;
+  currency: string;
+  repaymentMethod: string;
+  installmentAmount: number;
+  startDate: string;
+  dueDate: string;
+  status: string;
+  riskLevel: string;
+  riskScore: number;
+  notes?: string;
+  salaryProfile?: DemoSalaryProfile;
+  repayments: DemoEmployeeRepayment[];
+  createdAt: string;
+};
+
+type DemoEmployeeMessage = {
+  id: string;
+  salaryProfileId: string;
+  channel: "DASHBOARD" | "EMAIL" | "SMS";
+  subject?: string;
+  content: string;
+  status: string;
+  createdAt: string;
+};
+
 type DemoEmployee = {
   id: string;
   orbitId: string;
@@ -246,43 +314,87 @@ const demoClasses = [
   ...Array.from({ length: 12 }, (_v, index) => ({ id: `section-grade-${index + 1}`, name: `Grade ${index + 1}` }))
 ];
 
-const seedParents: DemoParent[] = [
-  {
-    id: "PAR-KCS-RACHEL-KABONGO",
-    nom: "Kabongo",
-    postnom: "",
-    prenom: "Rachel",
-    fullName: "Rachel Kabongo",
-    phone: "+243 812 450 221",
-    email: "rachel.kabongo@kcs.local",
-    physicalAddress: "Avenue Kasa-Vubu, Gombe, Kinshasa",
-    createdAt: new Date().toISOString(),
-    students: [
-      { id: "STU-KCS-ELISE-KABONGO", fullName: "Elise Kabongo", gender: "F", classId: "section-grade-11", className: "Grade 11A", annualFee: 2200, createdAt: "2026-01-12T08:15:00.000Z" },
-      { id: "STU-KCS-DAVID-KABONGO", fullName: "David Kabongo", gender: "M", classId: "section-grade-8", className: "Grade 8B", annualFee: 1800, createdAt: "2026-01-12T08:18:00.000Z" }
-    ]
-  },
-  {
-    id: "PAR-KCS-MIREILLE-MBUYI",
-    nom: "Mbuyi",
-    postnom: "",
-    prenom: "Mireille",
-    fullName: "Mireille Mbuyi",
-    phone: "+243 899 120 882",
-    email: "mireille.mbuyi@kcs.local",
-    physicalAddress: "Quartier Ma Campagne, Ngaliema, Kinshasa",
-    createdAt: new Date().toISOString(),
-    students: [
-      { id: "STU-KCS-AMANI-MBUYI", fullName: "Amani Mbuyi", gender: "O", classId: "section-grade-10", className: "Grade 10A", annualFee: 2400, createdAt: "2026-02-03T09:42:00.000Z" }
-    ]
-  }
-];
+const OFFICIAL_DEMO_COUNTS = { parents: 29, students: 44, employees: 10 };
+const parentSeedNames = [
+  ["Kabongo", "Rachel"], ["Mbuyi", "Mireille"], ["Lukusa", "Cedric"], ["Ilunga", "Nadine"], ["Tshibangu", "Patrick"],
+  ["Mavungu", "Aline"], ["Kalala", "Samuel"], ["Moke", "Sarah"], ["Banza", "Grace"], ["Kanku", "David"],
+  ["Mukendi", "Chantal"], ["Tshomba", "Daniel"], ["Mbala", "Esther"], ["Kasongo", "Joel"], ["Ngoy", "Carine"],
+  ["Kitenge", "Fabrice"], ["Mulumba", "Ruth"], ["Nkulu", "Benedicte"], ["Beya", "Jonathan"], ["Lunda", "Prisca"],
+  ["Tshimanga", "Arnaud"], ["Kayembe", "Rose"], ["Mutombo", "Lionel"], ["Kabasele", "Diane"], ["Nsimba", "Marc"],
+  ["Mpoyi", "Sandrine"], ["Lwamba", "Eric"], ["Makiese", "Gloria"], ["Kalonji", "Herve"]
+] as const;
+const studentGivenNames = [
+  "Elise", "David", "Amani", "Noah", "Naomi", "Ethan", "Sarah", "Joshua", "Deborah", "Samuel", "Rebecca",
+  "Nathan", "Esther", "Daniel", "Merveille", "Joanna", "Grace", "Aaron", "Rachelle", "Jonathan", "Prisca",
+  "Emmanuel", "Christelle", "Benjamin", "Ruth", "Joel", "Benedicte", "Isaac", "Naomie", "Joseph", "Judith",
+  "Caleb", "Hadassa", "Ezekiel", "Miriam", "Levi", "Rachel", "Elie", "Abigail", "Matthieu", "Anne", "Simeon",
+  "Tabitha", "Timothee"
+] as const;
 
-const seedPayments: DemoPayment[] = [
-  { id: "pay-1", transactionNumber: "TXN-20260420-10001", parentId: "PAR-KCS-RACHEL-KABONGO", parentFullName: "Rachel Kabongo", reason: "Frais scolaires - Elise Kabongo", method: "CASH", amount: 1600, status: "COMPLETED", createdAt: new Date().toISOString(), date: new Date().toLocaleString("fr-FR") },
-  { id: "pay-2", transactionNumber: "TXN-20260421-10002", parentId: "PAR-KCS-RACHEL-KABONGO", parentFullName: "Rachel Kabongo", reason: "Frais scolaires - David Kabongo", method: "MPESA", amount: 980, status: "COMPLETED", createdAt: new Date().toISOString(), date: new Date().toLocaleString("fr-FR") },
-  { id: "pay-3", transactionNumber: "TXN-20260422-10003", parentId: "PAR-KCS-MIREILLE-MBUYI", parentFullName: "Mireille Mbuyi", reason: "Frais scolaires - Amani Mbuyi", method: "MPESA", amount: 800, status: "PENDING", createdAt: new Date().toISOString(), date: new Date().toLocaleString("fr-FR") }
-];
+function demoClassForStudent(index: number) {
+  const classEntry = demoClasses[index % demoClasses.length];
+  return { classId: classEntry.id, className: classEntry.name };
+}
+
+function buildUnifiedDemoParents(): DemoParent[] {
+  let studentIndex = 0;
+  return parentSeedNames.map(([nom, prenom], parentIndex) => {
+    const studentCount = parentIndex < 15 ? 2 : 1;
+    const students = Array.from({ length: studentCount }, () => {
+      const current = studentIndex;
+      studentIndex += 1;
+      const { classId, className } = demoClassForStudent(current);
+      return {
+        id: `STU-KCS-${String(current + 1).padStart(3, "0")}`,
+        fullName: `${studentGivenNames[current]} ${nom}`,
+        gender: current % 2 === 0 ? "F" : "M",
+        classId,
+        className,
+        annualFee: 1800 + ((current % 6) * 120),
+        createdAt: `2026-01-${String((current % 24) + 2).padStart(2, "0")}T08:00:00.000Z`
+      } satisfies DemoStudent;
+    });
+
+    return {
+      id: `PAR-KCS-${String(parentIndex + 1).padStart(3, "0")}`,
+      nom,
+      postnom: "",
+      prenom,
+      fullName: `${prenom} ${nom}`,
+      phone: `+243 812 45${String(parentIndex + 1).padStart(4, "0")}`,
+      email: `${prenom.toLowerCase()}.${nom.toLowerCase()}@kcs.local`,
+      accessCode: `ACC-PAR-${String(parentIndex + 1).padStart(4, "0")}`,
+      physicalAddress: `Commune ${["Gombe", "Ngaliema", "Limete", "Lemba", "Kintambo"][parentIndex % 5]}, Kinshasa`,
+      createdAt: `2026-01-${String((parentIndex % 24) + 2).padStart(2, "0")}T07:30:00.000Z`,
+      students
+    };
+  });
+}
+
+const seedParents: DemoParent[] = buildUnifiedDemoParents();
+
+function buildUnifiedDemoPayments(parents: DemoParent[]): DemoPayment[] {
+  return parents.slice(0, 12).map((parent, index) => {
+    const student = parent.students[0];
+    const completed = index % 4 !== 3;
+    return {
+      id: `pay-${String(index + 1).padStart(3, "0")}`,
+      transactionNumber: `TXN-202604${String(index + 10).padStart(2, "0")}-${String(10001 + index)}`,
+      parentId: parent.id,
+      parentFullName: parent.fullName,
+      paymentSubjectName: student?.fullName,
+      studentNames: parent.students.map((item) => item.fullName),
+      reason: `Frais scolaires - ${student?.fullName ?? parent.fullName}`,
+      method: ["CASH", "MPESA", "AIRTEL_MONEY"][index % 3],
+      amount: completed ? Math.round(parent.students.reduce((sum, item) => sum + item.annualFee, 0) * (0.35 + (index % 3) * 0.12)) : 0,
+      status: completed ? "COMPLETED" : "PENDING",
+      createdAt: `2026-04-${String(index + 10).padStart(2, "0")}T10:00:00.000Z`,
+      date: `2026-04-${String(index + 10).padStart(2, "0")}`
+    };
+  });
+}
+
+const seedPayments: DemoPayment[] = buildUnifiedDemoPayments(seedParents);
 
 function clearLocalSession() {
   sessionStorage.removeItem(SESSION_ACTIVE_KEY);
@@ -332,6 +444,10 @@ function readCachedResponse<T>(path: string): T | null {
   }
 }
 
+export function getCachedApiResponse<T>(path: string): T | null {
+  return readCachedResponse<T>(path);
+}
+
 function writeCachedResponse(path: string, value: unknown) {
   try {
     localStorage.setItem(cacheKeyFor(path), JSON.stringify({ cachedAt: new Date().toISOString(), value }));
@@ -339,6 +455,13 @@ function writeCachedResponse(path: string, value: unknown) {
     // Storage may be full or unavailable; live API response still wins.
   }
 }
+
+const API_MEMORY_CACHE_TTL_MS = 15_000;
+const API_OFFLINE_FLUSH_THROTTLE_MS = 15_000;
+const memoryResponseCache = new Map<string, { expiresAt: number; value: unknown }>();
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
+let offlineFlushPromise: Promise<unknown> | null = null;
+let lastOfflineFlushAt = 0;
 
 function isOfflineQueueableRequest(path: string, init?: RequestInit) {
   const method = (init?.method ?? "GET").toUpperCase();
@@ -404,6 +527,15 @@ export async function flushOfflineMutationQueue() {
   return { attempted: queue.length, sent, remaining: readOfflineQueue().length };
 }
 
+function scheduleOfflineMutationFlush() {
+  const now = Date.now();
+  if (offlineFlushPromise || now - lastOfflineFlushAt < API_OFFLINE_FLUSH_THROTTLE_MS) return;
+  lastOfflineFlushAt = now;
+  offlineFlushPromise = flushOfflineMutationQueue().finally(() => {
+    offlineFlushPromise = null;
+  });
+}
+
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => {
     void flushOfflineMutationQueue();
@@ -438,7 +570,13 @@ function buildUniqueDemoEntityId(prefix: "PAR" | "STU", fullName: string, existi
 }
 
 function getDemoParents() {
-  const parents = readJson<DemoParent[]>(DEMO_PARENTS_KEY, seedParents).map((parent) => ({
+  const storedParents = readJson<DemoParent[]>(DEMO_PARENTS_KEY, seedParents);
+  const storedStudentCount = storedParents.reduce((sum, parent) => sum + (parent.students?.length ?? 0), 0);
+  const sourceParents =
+    storedParents.length < OFFICIAL_DEMO_COUNTS.parents || storedStudentCount < OFFICIAL_DEMO_COUNTS.students
+      ? seedParents
+      : storedParents;
+  const parents = sourceParents.map((parent) => ({
     ...parent,
     students: parent.students.map((student) => ({
       ...student,
@@ -463,8 +601,12 @@ function getDemoParentCredentials() {
 
 function saveDemoParentCredential(credential: DemoParentCredential) {
   const email = credential.email.trim().toLowerCase();
-  const credentials = getDemoParentCredentials().filter((item) => item.email.trim().toLowerCase() !== email);
-  writeJson(DEMO_PARENT_CREDENTIALS_KEY, [{ ...credential, email }, ...credentials]);
+  const accessCode = credential.accessCode?.trim().toUpperCase();
+  const credentials = getDemoParentCredentials().filter((item) =>
+    item.email.trim().toLowerCase() !== email &&
+    (!accessCode || item.accessCode?.trim().toUpperCase() !== accessCode)
+  );
+  writeJson(DEMO_PARENT_CREDENTIALS_KEY, [{ ...credential, email, accessCode }, ...credentials]);
 }
 
 function generateDemoTemporaryPassword() {
@@ -475,6 +617,48 @@ function generateDemoTemporaryPassword() {
   }
 
   return `KCS-${String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0")}`;
+}
+
+function generateDemoPasswordResetToken() {
+  const values = new Uint32Array(4);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(values);
+    return Array.from(values).map((value) => value.toString(36).padStart(7, "0")).join("");
+  }
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 24)}`.padEnd(28, "0");
+}
+
+function getDemoPasswordResetTokens() {
+  const now = Date.now();
+  const tokens = readJson<DemoPasswordResetToken[]>(DEMO_PASSWORD_RESET_TOKENS_KEY, [])
+    .filter((token) => !token.usedAt && new Date(token.expiresAt).getTime() > now);
+  writeJson(DEMO_PASSWORD_RESET_TOKENS_KEY, tokens);
+  return tokens;
+}
+
+function saveDemoPasswordResetToken(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const token = generateDemoPasswordResetToken();
+  const tokens = getDemoPasswordResetTokens().filter((item) => item.email !== normalizedEmail);
+  writeJson(DEMO_PASSWORD_RESET_TOKENS_KEY, [
+    { token, email: normalizedEmail, expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString() },
+    ...tokens
+  ]);
+  return token;
+}
+
+function resolveDemoResetEmail(identifier: string) {
+  const normalized = identifier.trim().toLowerCase();
+  const accessCode = identifier.trim().toUpperCase();
+  if (normalized === "admin@school.com") return "admin@school.com";
+  if (normalized === "parent@school.com") return "parent@school.com";
+  const credential = getDemoParentCredentials().find((item) =>
+    item.email.trim().toLowerCase() === normalized ||
+    item.accessCode?.trim().toUpperCase() === accessCode ||
+    getDemoParents().find((parent) => parent.id === item.parentId)?.id === accessCode
+  );
+  return credential?.email.trim().toLowerCase() || null;
 }
 
 function getDemoFinanceOverrides() {
@@ -530,7 +714,7 @@ function buildOwnerAgreementInstallments(customTotal: number) {
   const third = Math.round((safeTotal - first - second) * 100) / 100;
   return [
     { label: "Engagement initial", dueDate: buildAcademicDueDate(8, 31), amountDue: first, notes: "Created during parent onboarding" },
-    { label: "Regularisation mi-annee", dueDate: buildAcademicDueDate(1, 31), amountDue: second, notes: "Created during parent onboarding" },
+    { label: "Régularisation mi-année", dueDate: buildAcademicDueDate(1, 31), amountDue: second, notes: "Created during parent onboarding" },
     { label: "Solde final", dueDate: buildAcademicDueDate(5, 31), amountDue: third, notes: "Created during parent onboarding" }
   ];
 }
@@ -731,7 +915,7 @@ function expenseOverview() {
     },
     {
       id: "budget-ops",
-      name: "Operations campus",
+      name: "Opérations campus",
       department: "Administration",
       plannedAmount: 2100,
       consumedAmount: 1875,
@@ -908,7 +1092,7 @@ function buildDefaultExpenseCategories(): DemoExpenseCategory[] {
     {
       id: "cat-charges-67",
       name: "67 Charges financières",
-      slug: "charges-financieres-67",
+      slug: "charges-financières-67",
       type: "ADMINISTRATIVE",
       children: [
         ["cat-charges-67-67100-interets", "67100 Intérêts bancaires et sur opérations de trésorerie"]
@@ -1000,7 +1184,7 @@ function getDemoExpenseBudgets() {
   const budgets = readJson<DemoBudget[]>(DEMO_EXPENSE_BUDGETS_KEY, [
     {
       id: "budget-ops-1",
-      name: "Operations campus",
+      name: "Opérations campus",
       department: "Administration",
       plannedAmount: 2400,
       consumedAmount: 1280,
@@ -1008,7 +1192,7 @@ function getDemoExpenseBudgets() {
       utilization: 53.33,
       status: "ACTIVE",
       alertThreshold: 80,
-      notes: "Budget operationnel general",
+      notes: "Budget opérationnel général",
       categoryId: "cat-admin",
       category: { id: "cat-admin", name: "Administrative Expenses" },
       period: getDemoCurrentPeriod(),
@@ -1035,6 +1219,41 @@ function getDemoExpenseBudgets() {
   return budgets;
 }
 
+function buildUnifiedDemoSalaryProfiles(): DemoSalaryProfile[] {
+  return [
+    ["EMP-001", "Mireille Ilunga", "Academique", "Teacher", 420],
+    ["EMP-002", "Patrick Nsenga", "Administration", "Accountant", 360],
+    ["EMP-003", "Anita Mbuyi", "Academique", "Teacher", 430],
+    ["EMP-004", "Daniel Kayembe", "Finances", "Finance Officer", 390],
+    ["EMP-005", "Nadine Ilunga", "Administration", "Director", 650],
+    ["EMP-006", "Cedric Lukusa", "Academique", "Teacher", 410],
+    ["EMP-007", "Grace Banza", "Vie scolaire", "Student Life Officer", 340],
+    ["EMP-008", "Joel Kasongo", "Operations", "Logistics Officer", 330],
+    ["EMP-009", "Carine Ngoy", "Academique", "Teacher", 405],
+    ["EMP-010", "Herve Kalonji", "Technologie", "IT Officer", 380]
+  ].map(([employeeCode, fullName, department, position, baseSalary], index) => ({
+    id: `salary-${String(index + 1).padStart(3, "0")}`,
+    employeeCode: String(employeeCode),
+    fullName: String(fullName),
+    department: String(department),
+    position: String(position),
+    baseSalary: Number(baseSalary),
+    currency: "USD",
+    frequency: "MONTHLY",
+    defaultBonus: index % 2 === 0 ? 25 : 15,
+    defaultDeduction: index % 3 === 0 ? 10 : 5,
+    advanceBalance: 0,
+    debtRecoveryRate: 0,
+    deductionMode: index % 4 === 0 ? "HYBRID" : "AUTOMATIC",
+    maxDeductionRate: 35,
+    contactEmail: `${String(fullName).toLowerCase().replace(/\s+/g, ".")}@kcs.local`,
+    contactPhone: `+24399000${String(index + 1).padStart(3, "0")}`,
+    notes: "Population demo unifiee KCS",
+    isActive: true,
+    createdAt: `2026-01-${String(index + 2).padStart(2, "0")}T07:00:00.000Z`
+  }));
+}
+
 function getDemoSalaryProfiles() {
   const profiles = readJson<DemoSalaryProfile[]>(DEMO_SALARY_PROFILES_KEY, [
     {
@@ -1050,6 +1269,10 @@ function getDemoSalaryProfiles() {
       defaultDeduction: 10,
       advanceBalance: 0,
       debtRecoveryRate: 0,
+      deductionMode: "HYBRID",
+      maxDeductionRate: 35,
+      contactEmail: "mireille.ilunga@kcs.local",
+      contactPhone: "+243990001001",
       notes: "Cycle secondaire",
       isActive: true,
       createdAt: new Date().toISOString()
@@ -1067,17 +1290,26 @@ function getDemoSalaryProfiles() {
       defaultDeduction: 5,
       advanceBalance: 0,
       debtRecoveryRate: 0,
-      notes: "Controle des operations",
+      notes: "Contrôle des opérations",
       isActive: true,
       createdAt: new Date().toISOString()
     }
   ]);
-  writeJson(DEMO_SALARY_PROFILES_KEY, profiles);
-  return profiles;
+  const reconciledProfiles = profiles.filter((profile) => profile.isActive !== false).length < OFFICIAL_DEMO_COUNTS.employees
+    ? buildUnifiedDemoSalaryProfiles()
+    : profiles.map((profile, index) => ({
+      ...profile,
+      deductionMode: profile.deductionMode ?? (index % 4 === 1 ? "MANUAL" : "AUTOMATIC"),
+      maxDeductionRate: profile.maxDeductionRate ?? 35,
+      contactEmail: profile.contactEmail ?? `${profile.fullName.toLowerCase().replace(/\s+/g, ".")}@kcs.local`,
+      contactPhone: profile.contactPhone ?? `+24399000${String(index + 1).padStart(3, "0")}`
+    }));
+  writeJson(DEMO_SALARY_PROFILES_KEY, reconciledProfiles);
+  return reconciledProfiles;
 }
 
 function getDemoEmployees() {
-  const employees = readJson<DemoEmployee[]>(DEMO_EMPLOYEES_KEY, getDemoSalaryProfiles().map((profile) => ({
+  const seedEmployees = getDemoSalaryProfiles().map((profile) => ({
     id: profile.id,
     orbitId: profile.id,
     displayId: profile.employeeCode,
@@ -1094,9 +1326,11 @@ function getDemoEmployees() {
     mustChangePassword: false,
     organizationId: "demo-school",
     externalIds: [{ appSlug: "SAVANEX", externalId: profile.employeeCode }],
-  })));
-  writeJson(DEMO_EMPLOYEES_KEY, employees);
-  return employees;
+  }));
+  const employees = readJson<DemoEmployee[]>(DEMO_EMPLOYEES_KEY, seedEmployees);
+  const reconciledEmployees = employees.length < OFFICIAL_DEMO_COUNTS.employees ? seedEmployees : employees;
+  writeJson(DEMO_EMPLOYEES_KEY, reconciledEmployees);
+  return reconciledEmployees;
 }
 
 function saveDemoEmployees(employees: DemoEmployee[]) {
@@ -1107,6 +1341,85 @@ function getDemoPayrollRuns() {
   const runs = readJson<DemoPayrollRun[]>(DEMO_PAYROLL_RUNS_KEY, []);
   writeJson(DEMO_PAYROLL_RUNS_KEY, runs);
   return runs;
+}
+
+function getDemoEmployeeObligations() {
+  const profiles = getDemoSalaryProfiles();
+  const first = profiles[0];
+  const second = profiles[1] ?? first;
+  const seed: DemoEmployeeObligation[] = first ? [
+    {
+      id: "emp-obligation-001",
+      salaryProfileId: first.id,
+      type: "SALARY_ADVANCE",
+      title: "Avance sur salaire - urgence familiale",
+      principalAmount: 180,
+      amountPaid: 60,
+      balance: 120,
+      currency: first.currency,
+      repaymentMethod: "SALARY_DEDUCTION",
+      installmentAmount: 30,
+      startDate: "2026-05-01T00:00:00.000Z",
+      dueDate: "2026-09-30T00:00:00.000Z",
+      status: "ACTIVE",
+      riskLevel: "LOW",
+      riskScore: 24,
+      notes: "Deduction mensuelle validee par le financier.",
+      salaryProfile: first,
+      repayments: [0, 1, 2, 3, 4, 5].map((index) => ({
+        id: `emp-repayment-001-${index}`,
+        method: "SALARY_DEDUCTION",
+        expectedAmount: 30,
+        paidAmount: index < 2 ? 30 : 0,
+        currency: first.currency,
+        dueDate: new Date(Date.UTC(2026, 4 + index, 28)).toISOString(),
+        paidAt: index < 2 ? new Date(Date.UTC(2026, 4 + index, 28)).toISOString() : null,
+        status: index < 2 ? "PAID" : "SCHEDULED"
+      })),
+      createdAt: "2026-05-01T08:00:00.000Z"
+    },
+    {
+      id: "emp-obligation-002",
+      salaryProfileId: second.id,
+      type: "SCHOOL_DEBT",
+      title: "Dette cantine employee",
+      principalAmount: 95,
+      amountPaid: 20,
+      balance: 75,
+      currency: second.currency,
+      repaymentMethod: "EXTERNAL_PAYMENT",
+      installmentAmount: 25,
+      startDate: "2026-04-15T00:00:00.000Z",
+      dueDate: "2026-06-15T00:00:00.000Z",
+      status: "OVERDUE",
+      riskLevel: "MEDIUM",
+      riskScore: 48,
+      notes: "Paiement hors salaire promis par mobile money.",
+      salaryProfile: second,
+      repayments: [0, 1, 2].map((index) => ({
+        id: `emp-repayment-002-${index}`,
+        method: "EXTERNAL_PAYMENT",
+        expectedAmount: index === 2 ? 45 : 25,
+        paidAmount: index === 0 ? 20 : 0,
+        currency: second.currency,
+        dueDate: new Date(Date.UTC(2026, 3 + index, 15)).toISOString(),
+        paidAt: index === 0 ? "2026-04-20T00:00:00.000Z" : null,
+        status: index === 0 ? "PARTIALLY_PAID" : "OVERDUE"
+      })),
+      createdAt: "2026-04-15T08:00:00.000Z"
+    }
+  ] : [];
+  const obligations = readJson<DemoEmployeeObligation[]>(DEMO_EMPLOYEE_OBLIGATIONS_KEY, seed);
+  const reconciled = obligations.length ? obligations.map((item) => ({
+    ...item,
+    salaryProfile: profiles.find((profile) => profile.id === item.salaryProfileId) ?? item.salaryProfile
+  })) : seed;
+  writeJson(DEMO_EMPLOYEE_OBLIGATIONS_KEY, reconciled);
+  return reconciled;
+}
+
+function saveDemoEmployeeObligations(obligations: DemoEmployeeObligation[]) {
+  writeJson(DEMO_EMPLOYEE_OBLIGATIONS_KEY, obligations);
 }
 
 function getDemoAccountingEntries() {
@@ -1163,7 +1476,7 @@ function getDemoCashflowEntries() {
       amount: expense.amount,
       currency: expense.currency,
       method: expense.paymentMethod ?? null,
-      referenceDate: expense.expenseDate,
+      référenceDate: expense.expenseDate,
       notes: expense.comments ?? "",
       expense: { id: expense.id, title: expense.title, department: expense.department, status: expense.status },
       payrollRun: null,
@@ -1178,7 +1491,7 @@ function getDemoCashflowEntries() {
     amount: run.totalNet,
     currency: "USD",
     method: null,
-    referenceDate: run.processedAt ?? run.createdAt,
+    référenceDate: run.processedAt ?? run.createdAt,
     notes: run.notes ?? "",
     expense: null,
     payrollRun: { id: run.id, title: run.title, department: run.department, status: run.status },
@@ -1186,7 +1499,7 @@ function getDemoCashflowEntries() {
     createdAt: run.createdAt
   }));
 
-  return [...expenseEntries, ...payrollEntries].sort((left, right) => String(right.referenceDate).localeCompare(String(left.referenceDate)));
+  return [...expenseEntries, ...payrollEntries].sort((left, right) => String(right.référenceDate).localeCompare(String(left.référenceDate)));
 }
 
 function getDemoExpenseItems() {
@@ -1270,6 +1583,122 @@ function saveDemoPayrollRuns(runs: DemoPayrollRun[]) {
   writeJson(DEMO_PAYROLL_RUNS_KEY, runs);
 }
 
+function getDemoEmployeeMessages() {
+  return readJson<DemoEmployeeMessage[]>(DEMO_EMPLOYEE_MESSAGES_KEY, []);
+}
+
+function saveDemoEmployeeMessages(messages: DemoEmployeeMessage[]) {
+  writeJson(DEMO_EMPLOYEE_MESSAGES_KEY, messages);
+}
+
+function calculateDemoSalaryProjection(profile: DemoSalaryProfile, obligations: DemoEmployeeObligation[]) {
+  const baseSalary = roundAmount(profile.baseSalary || 0);
+  const bonuses = roundAmount(profile.defaultBonus || 0);
+  const deductions = roundAmount(profile.defaultDeduction || 0);
+  const maxDeductionRate = Math.min(Math.max(Number(profile.maxDeductionRate ?? 35), 0), 80);
+  const deductionCeiling = roundAmount(baseSalary * (maxDeductionRate / 100));
+  const mode = profile.deductionMode ?? "AUTOMATIC";
+  const shouldAutoDeduct = mode !== "MANUAL";
+  const baseDebtRecovered = shouldAutoDeduct ? roundAmount((baseSalary * Number(profile.debtRecoveryRate || 0)) / 100) : 0;
+  let remainingRoom = Math.max(deductionCeiling - deductions - baseDebtRecovered, 0);
+  let advancesRecovered = 0;
+  let scheduledDebtRecovered = 0;
+  const plannedRepayments: Array<{ repaymentId: string; obligationId: string; amount: number; type: string }> = [];
+  const deferredRepayments: Array<{ repaymentId: string; obligationId: string; amount: number; reason: string; dueDate?: string }> = [];
+  const dueRepayments = obligations.flatMap((obligation) =>
+    obligation.repayments
+      .filter((repayment) => repayment.status !== "PAID" && new Date(repayment.dueDate).getTime() <= Date.now())
+      .map((repayment) => ({ repayment, obligation }))
+  );
+
+  for (const { repayment, obligation } of dueRepayments) {
+    const outstanding = roundAmount(Math.max(repayment.expectedAmount - repayment.paidAmount, 0));
+    if (outstanding <= 0) continue;
+    if (!shouldAutoDeduct || !["SALARY_DEDUCTION", "MIXED"].includes(repayment.method)) {
+      deferredRepayments.push({ repaymentId: repayment.id, obligationId: obligation.id, amount: outstanding, reason: mode === "MANUAL" ? "Mode manuel" : "Paiement hors salaire", dueDate: repayment.dueDate });
+      continue;
+    }
+    if (remainingRoom <= 0) {
+      deferredRepayments.push({ repaymentId: repayment.id, obligationId: obligation.id, amount: outstanding, reason: "Plafond salarial atteint", dueDate: repayment.dueDate });
+      continue;
+    }
+    const amount = roundAmount(Math.min(outstanding, remainingRoom));
+    plannedRepayments.push({ repaymentId: repayment.id, obligationId: obligation.id, amount, type: obligation.type });
+    if (obligation.type === "SALARY_ADVANCE") advancesRecovered = roundAmount(advancesRecovered + amount);
+    else scheduledDebtRecovered = roundAmount(scheduledDebtRecovered + amount);
+    remainingRoom = roundAmount(remainingRoom - amount);
+    if (amount < outstanding) {
+      deferredRepayments.push({ repaymentId: repayment.id, obligationId: obligation.id, amount: roundAmount(outstanding - amount), reason: "Solde reporte", dueDate: repayment.dueDate });
+    }
+  }
+
+  const debtRecovered = roundAmount(baseDebtRecovered + scheduledDebtRecovered);
+  const totalDeductions = roundAmount(deductions + advancesRecovered + debtRecovered);
+  const grossSalary = roundAmount(baseSalary + bonuses);
+  const netSalary = roundAmount(grossSalary - totalDeductions);
+  const salaryPressure = baseSalary > 0 ? roundAmount((totalDeductions / baseSalary) * 100) : 0;
+  return {
+    mode,
+    baseSalary,
+    bonuses,
+    deductions,
+    advancesRecovered,
+    debtRecovered,
+    totalDeductions,
+    grossSalary,
+    netSalary,
+    salaryPressure,
+    maxDeductionRate,
+    deductionCeiling,
+    plannedRepayments,
+    deferredRepayments,
+    recommendation: mode === "MANUAL"
+      ? "Mode manuel actif: aucune deduction automatique sans decision administrative."
+      : deferredRepayments.length
+        ? "Certaines echeances sont reportees pour proteger le salaire mensuel."
+        : "Deduction compatible avec le plafond salarial.",
+    riskLevel: salaryPressure >= 45 || deferredRepayments.length >= 3 ? "HIGH" : salaryPressure >= 30 || deferredRepayments.length ? "MEDIUM" : "LOW"
+  };
+}
+
+function buildDemoEmployeeFinancialSnapshot(profile: DemoSalaryProfile) {
+  const obligations = getDemoEmployeeObligations().filter((item) => item.salaryProfileId === profile.id);
+  const repayments = obligations.flatMap((item) => item.repayments);
+  const overdue = repayments.filter((item) => item.status !== "PAID" && new Date(item.dueDate).getTime() < Date.now());
+  const next = repayments.filter((item) => item.status !== "PAID").sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))[0] ?? null;
+  const salaryProjection = calculateDemoSalaryProjection(profile, obligations);
+  const payrollRecords = getDemoPayrollRuns().flatMap((run) =>
+    run.items.filter((item) => item.salaryProfile.employeeCode === profile.employeeCode).map((item) => ({ ...item, payrollRun: run }))
+  );
+  const totalBalance = roundAmount(obligations.reduce((sum, item) => sum + item.balance, 0));
+  return {
+    profile,
+    obligations,
+    payrollRecords,
+    salaryProjection,
+    communicationHistory: getDemoEmployeeMessages()
+      .filter((message) => message.salaryProfileId === profile.id)
+      .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt))),
+    totals: {
+      totalPrincipal: roundAmount(obligations.reduce((sum, item) => sum + item.principalAmount, 0)),
+      totalPaid: roundAmount(obligations.reduce((sum, item) => sum + item.amountPaid, 0)),
+      totalBalance,
+      salaryAdvanceBalance: roundAmount(obligations.filter((item) => item.type === "SALARY_ADVANCE").reduce((sum, item) => sum + item.balance, 0)),
+      schoolDebtBalance: roundAmount(obligations.filter((item) => item.type === "SCHOOL_DEBT").reduce((sum, item) => sum + item.balance, 0)),
+      overdueAmount: roundAmount(overdue.reduce((sum, item) => sum + Math.max(item.expectedAmount - item.paidAmount, 0), 0)),
+      overdueCount: overdue.length,
+      nextRepaymentAmount: roundAmount(next?.expectedAmount ?? 0),
+      nextRepaymentDueDate: next?.dueDate ?? null,
+      salaryPressure: salaryProjection.salaryPressure
+    },
+    intelligence: {
+      riskLevel: totalBalance > profile.baseSalary * 2 || overdue.length >= 2 || salaryProjection.riskLevel === "HIGH" ? "HIGH" : totalBalance > profile.baseSalary || overdue.length || salaryProjection.riskLevel === "MEDIUM" ? "MEDIUM" : "LOW",
+      recommendation: overdue.length ? "Regulariser les echeances en retard avant une nouvelle avance." : salaryProjection.recommendation,
+      salaryProtectionFloor: salaryProjection.deductionCeiling
+    }
+  };
+}
+
 function saveDemoExpenseItems(expenses: DemoExpenseItem[]) {
   writeJson(DEMO_EXPENSE_ITEMS_KEY, expenses);
 }
@@ -1331,6 +1760,49 @@ function saveDemoManualMessages(messages: DemoManualMessage[]) {
   writeJson(DEMO_MANUAL_MESSAGES_KEY, messages);
 }
 
+function appendDemoParentNotification(input: {
+  parent: Pick<DemoParent, "id" | "fullName" | "phone" | "email">;
+  content: string;
+  type?: DemoNotificationType;
+  channels?: Array<"DASHBOARD" | "EMAIL" | "SMS">;
+  status?: string;
+}) {
+  const createdAt = new Date().toISOString();
+  const channels: Array<"DASHBOARD" | "EMAIL" | "SMS"> = input.channels && input.channels.length > 0 ? input.channels : ["DASHBOARD"];
+  const entries = channels.map((channel, index): DemoManualMessage => ({
+    id: `auto-message-${Date.now()}-${index}-${input.parent.id}`,
+    parentId: input.parent.id,
+    parentName: input.parent.fullName,
+    parentPhone: input.parent.phone,
+    parentEmail: input.parent.email,
+    type: input.type ?? "MANUAL_MESSAGE",
+    language: "fr",
+    channel,
+    content: input.content,
+    status: input.status ?? (channel === "DASHBOARD" ? "OPEN" : "SIMULATED"),
+    createdAt
+  }));
+  saveDemoManualMessages([...entries, ...getDemoManualMessages()]);
+}
+
+function buildDemoPaymentNotificationContent(payment: DemoPayment, receiptNumber: string) {
+  const summary = payment.tuitionAllocationSummary;
+  const remaining = summary ? `Solde restant : $ ${roundAmount(summary.missingAmount).toFixed(2)} USD` : "";
+  const children = payment.studentNames?.length ? payment.studentNames.join(", ") : payment.paymentSubjectName || "Compte famille";
+  return [
+    "Paiement EduPay enregistre sur votre compte parent.",
+    `Transaction : ${payment.transactionNumber}`,
+    `Recu : ${receiptNumber}`,
+    `Motif : ${payment.reason}`,
+    `Montant recu : $ ${roundAmount(Number(payment.amount || 0)).toFixed(2)} USD`,
+    `Mode : ${payment.method}`,
+    `Eleve(s) : ${children}`,
+    remaining,
+    summary?.message ? `Detail : ${summary.message}` : "",
+    "Ce message est conserve dans Messages recus du dashboard parent."
+  ].filter(Boolean).join("\n");
+}
+
 function financeReductions() {
   getDemoFinanceOverrides();
   return buildDemoReductionAnalytics(getDemoParents(), getDemoPayments());
@@ -1359,17 +1831,38 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
   const body = parseBody(init);
 
-  await new Promise((resolve) => setTimeout(resolve, 80));
+  // GitHub Pages sert les donnees locales : aucune latence reseau ne doit y etre simulee.
+  if (!STATIC_APP_FALLBACK_ENABLED) {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
 
   if (normalizedPath === "/api/auth/login" && method === "POST") {
-    const email = String(body.email ?? "").toLowerCase();
+    const identifier = String(body.identifier ?? body.email ?? "").trim();
+    const email = identifier.toLowerCase();
+    const accessCode = identifier.toUpperCase();
     const password = String(body.password ?? "");
-    if (email === "parent@school.com" && password === "password123") {
+    const adminPassword = localStorage.getItem(DEMO_ADMIN_PASSWORD_KEY) || "password123";
+    const parentPassword = localStorage.getItem(DEMO_PARENT_PASSWORD_KEY) || "password123";
+    if (email === "parent@school.com" && password === parentPassword) {
       const parent = getDemoParents().find((item) => item.id === "PAR-KCS-RACHEL-KABONGO");
       return { token: "demo-parent-token", role: "PARENT", fullName: "Rachel Kabongo", parentId: "PAR-KCS-RACHEL-KABONGO", photoUrl: parent?.photoUrl || "" } as T;
     }
 
-    const credential = getDemoParentCredentials().find((item) => item.email === email && item.password === password);
+    const seededParent = getDemoParents().find((item) => item.accessCode?.trim().toUpperCase() === accessCode);
+    if (seededParent && password === parentPassword) {
+      return {
+        token: `demo-parent-token-${seededParent.id}`,
+        role: "PARENT",
+        fullName: seededParent.fullName,
+        parentId: seededParent.id,
+        photoUrl: seededParent.photoUrl || ""
+      } as T;
+    }
+
+    const credential = getDemoParentCredentials().find((item) =>
+      item.password === password &&
+      (item.email === email || item.accessCode?.trim().toUpperCase() === accessCode)
+    );
     if (credential) {
       const parent = getDemoParents().find((item) => item.id === credential.parentId);
       if (parent) {
@@ -1383,14 +1876,56 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       }
     }
 
-    if (email === "admin@school.com" && password === "password123") {
+    if (email === "admin@school.com" && password === adminPassword) {
       return { token: "local-admin-token", role: "ADMIN", fullName: "Administrateur" } as T;
+    }
+
+    if (email === "employee@school.com" && password === "password123") {
+      return { token: "local-employee-token", role: "EMPLOYEE", fullName: "Mireille Ilunga" } as T;
     }
 
     throw new Error("Identifiants invalides.");
   }
 
-  if (normalizedPath === "/api/auth/forgot-password") return { message: "OK" } as T;
+  if (normalizedPath === "/api/auth/forgot-password" && method === "POST") {
+    const identifier = String(body.identifier ?? body.email ?? "");
+    const email = resolveDemoResetEmail(identifier);
+    const token = email ? saveDemoPasswordResetToken(email) : "";
+    return {
+      message: email
+        ? "Mode local: code de reinitialisation genere pour tester le flux."
+        : "Si ce compte existe, un code de reinitialisation vient d'etre envoye.",
+      resetToken: token || undefined
+    } as T;
+  }
+
+  if (normalizedPath === "/api/auth/reset-password" && method === "POST") {
+    const identifier = String(body.identifier ?? body.email ?? "");
+    const token = String(body.token ?? "").trim();
+    const newPassword = String(body.newPassword ?? "");
+    const resetToken = getDemoPasswordResetTokens().find((item) => item.token === token);
+    const requestedEmail = resolveDemoResetEmail(identifier);
+    if (!resetToken || resetToken.usedAt || !requestedEmail || requestedEmail !== resetToken.email || newPassword.length < 8) {
+      throw new Error("Code de reinitialisation invalide ou expire.");
+    }
+
+    if (resetToken.email === "admin@school.com") {
+      localStorage.setItem(DEMO_ADMIN_PASSWORD_KEY, newPassword);
+    } else if (resetToken.email === "parent@school.com") {
+      localStorage.setItem(DEMO_PARENT_PASSWORD_KEY, newPassword);
+    } else {
+      const credentials = getDemoParentCredentials().map((item) =>
+        item.email.trim().toLowerCase() === resetToken.email ? { ...item, password: newPassword } : item
+      );
+      writeJson(DEMO_PARENT_CREDENTIALS_KEY, credentials);
+    }
+
+    writeJson(DEMO_PASSWORD_RESET_TOKENS_KEY, getDemoPasswordResetTokens().map((item) =>
+      item.token === token ? { ...item, usedAt: new Date().toISOString() } : item
+    ));
+    return { message: "Mot de passe reinitialise. Vous pouvez vous connecter." } as T;
+  }
+
   if (normalizedPath === "/api/auth/change-password") return { message: "OK" } as T;
   if (normalizedPath === "/api/auth/recover-admin-password" && method === "POST") {
     const email = String(body.email ?? "").trim().toLowerCase();
@@ -1398,12 +1933,12 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const newPassword = String(body.newPassword ?? "");
     const configuredCode = String(import.meta.env.VITE_ADMIN_RECOVERY_CODE ?? "");
     if (!configuredCode || configuredCode.startsWith("CHANGE_ME")) {
-      throw new Error("La recuperation administrateur n'est pas configuree.");
+      throw new Error("La reçuperation administrateur n'est pas configuree.");
     }
     if (recoveryCode !== configuredCode || email !== "admin@school.com" || newPassword.length < 10) {
-      throw new Error("Informations de recuperation invalides.");
+      throw new Error("Informations de reçuperation invalides.");
     }
-    return { message: "Mot de passe administrateur reinitialise en mode local." } as T;
+    return { message: "Mot de passe administrateur réinitialisé en mode local." } as T;
   }
   if (normalizedPath === "/api/parents/me/photo" && method === "PUT") {
     const parentId = localStorage.getItem(PARENT_ID_STORAGE_KEY);
@@ -1417,11 +1952,11 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const hasDebtQuestion = query.includes("impay") || query.includes("non pay") || query.includes("unpaid");
     return {
       answer: hasDebtQuestion
-        ? "Mode local actif : les donnees disponibles indiquent de prioriser les familles avec le plus grand solde restant et de relancer les paiements en attente."
-        : "Mode local actif : le diagnostic utilise les donnees stockees dans ce navigateur pendant que l'API distante est indisponible.",
+        ? "Mode local actif : les données disponibles indiquent de prioriser les familles avec le plus grand solde restant et de relancer les paiements en attente."
+        : "Mode local actif : le diagnostic utilise les données stockées dans ce navigateur pendant que l'API distante est indisponible.",
       suggestions: hasDebtQuestion
-        ? ["Voir les parents en retard", "Verifier les paiements en attente", "Preparer un echeancier"]
-        : ["Analyser le tableau de bord", "Controler les paiements recents", "Generer un rapport"]
+        ? ["Voir les parents en retard", "Vérifier les paiements en attente", "Préparer un échéancier"]
+        : ["Analyser le tableau de bord", "Contrôler les paiements récents", "Générer un rapport"]
     } as T;
   }
   if (normalizedPath === "/api/classes") return demoClasses as T;
@@ -1434,7 +1969,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const parentId = localStorage.getItem(PARENT_ID_STORAGE_KEY);
     return financeProfile(parentId) as T;
   }
-  if (normalizedPath === "/api/finance/reductions") return financeReductions() as T;
+  if (normalizedPath === "/api/finance/réductions") return financeReductions() as T;
   if (normalizedPath === "/api/analytics/overdue-parents") return { overdueParents: 1 } as T;
   if (normalizedPath === "/api/analytics/payment-anomalies") return { anomalies: 0 } as T;
   if (normalizedPath === "/api/analytics/system-health") return { dbOk: true, lastBackup: new Date().toLocaleDateString("fr-FR") } as T;
@@ -1551,6 +2086,10 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       defaultDeduction: roundAmount(Number(body.defaultDeduction ?? 0)),
       advanceBalance: roundAmount(Number(body.advanceBalance ?? 0)),
       debtRecoveryRate: roundAmount(Number(body.debtRecoveryRate ?? 0)),
+      deductionMode: String(body.deductionMode ?? "AUTOMATIC") as DemoSalaryProfile["deductionMode"],
+      maxDeductionRate: roundAmount(Number(body.maxDeductionRate ?? 35)),
+      contactEmail: String(body.contactEmail ?? ""),
+      contactPhone: String(body.contactPhone ?? ""),
       notes: String(body.notes ?? ""),
       isActive: true,
       createdAt: new Date().toISOString()
@@ -1558,7 +2097,192 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     saveDemoSalaryProfiles([profile, ...getDemoSalaryProfiles()]);
     return profile as T;
   }
+  if (normalizedPath.startsWith("/api/expenses/payroll/profiles/") && method === "PUT") {
+    const profileId = normalizedPath.split("/").pop();
+    const profiles = getDemoSalaryProfiles().map((profile) => profile.id !== profileId ? profile : ({
+      ...profile,
+      ...(body.employeeCode !== undefined ? { employeeCode: String(body.employeeCode) } : {}),
+      ...(body.fullName !== undefined ? { fullName: String(body.fullName) } : {}),
+      ...(body.department !== undefined ? { department: String(body.department) } : {}),
+      ...(body.position !== undefined ? { position: String(body.position) } : {}),
+      ...(body.baseSalary !== undefined ? { baseSalary: roundAmount(Number(body.baseSalary)) } : {}),
+      ...(body.defaultBonus !== undefined ? { defaultBonus: roundAmount(Number(body.defaultBonus)) } : {}),
+      ...(body.defaultDeduction !== undefined ? { defaultDeduction: roundAmount(Number(body.defaultDeduction)) } : {}),
+      ...(body.debtRecoveryRate !== undefined ? { debtRecoveryRate: roundAmount(Number(body.debtRecoveryRate)) } : {}),
+      ...(body.deductionMode !== undefined ? { deductionMode: String(body.deductionMode) as DemoSalaryProfile["deductionMode"] } : {}),
+      ...(body.maxDeductionRate !== undefined ? { maxDeductionRate: roundAmount(Number(body.maxDeductionRate)) } : {}),
+      ...(body.contactEmail !== undefined ? { contactEmail: String(body.contactEmail) } : {}),
+      ...(body.contactPhone !== undefined ? { contactPhone: String(body.contactPhone) } : {}),
+      ...(body.notes !== undefined ? { notes: String(body.notes) } : {}),
+      ...(body.isActive !== undefined ? { isActive: Boolean(body.isActive) } : {})
+    }));
+    saveDemoSalaryProfiles(profiles);
+    const updated = profiles.find((profile) => profile.id === profileId);
+    if (!updated) throw new Error("Profil salarial introuvable.");
+    return updated as T;
+  }
   if (normalizedPath === "/api/expenses/payroll/runs" && method === "GET") return getDemoPayrollRuns() as T;
+  if (normalizedPath.startsWith("/api/expenses/employee-finance/obligations") && method === "GET") {
+    const url = new URL(`http://local${normalizedPath}`);
+    const employeeCode = url.searchParams.get("employeeCode")?.trim().toLowerCase();
+    const query = url.searchParams.get("query")?.trim().toLowerCase();
+    const dateFrom = url.searchParams.get("dateFrom");
+    const dateTo = url.searchParams.get("dateTo");
+    return getDemoEmployeeObligations().filter((item) => {
+      const profile = item.salaryProfile;
+      const matchesEmployee = !employeeCode || profile?.employeeCode.toLowerCase() === employeeCode || profile?.fullName.toLowerCase().includes(employeeCode);
+      const matchesText = !query || [item.title, item.type, item.status, item.repaymentMethod, item.notes, profile?.fullName, profile?.department].join(" ").toLowerCase().includes(query);
+      const timestamps = [item.startDate, item.dueDate, ...item.repayments.map((repayment) => repayment.dueDate)].map((value) => new Date(value).getTime());
+      const from = dateFrom ? new Date(dateFrom).getTime() : Number.NEGATIVE_INFINITY;
+      const to = dateTo ? new Date(dateTo).getTime() + 86400000 : Number.POSITIVE_INFINITY;
+      const matchesPeriod = timestamps.some((value) => value >= from && value <= to);
+      return matchesEmployee && matchesText && matchesPeriod;
+    }) as T;
+  }
+  if (normalizedPath === "/api/expenses/employee-finance/obligations" && method === "POST") {
+    const profiles = getDemoSalaryProfiles();
+    const profile = profiles.find((item) => item.id === String(body.salaryProfileId));
+    if (!profile) throw new Error("Profil salarial introuvable.");
+    const amount = roundAmount(Number(body.principalAmount ?? 0));
+    const installmentAmount = roundAmount(Number(body.installmentAmount ?? amount));
+    const createdAt = new Date().toISOString();
+    const obligationId = `emp-obligation-${Date.now()}`;
+    const receiptNumber = `EMP-${String(body.type) === "SALARY_ADVANCE" ? "ADV" : "DEBT"}-${Date.now()}`;
+    const repayment = {
+      id: `emp-repayment-${Date.now()}`,
+      method: String(body.repaymentMethod ?? "SALARY_DEDUCTION"),
+      expectedAmount: installmentAmount,
+      paidAmount: 0,
+      currency: String(body.currency ?? profile.currency),
+      dueDate: new Date(String(body.dueDate ?? createdAt)).toISOString(),
+      paidAt: null,
+      status: "SCHEDULED"
+    };
+    const obligation = {
+      id: obligationId,
+      salaryProfileId: profile.id,
+      type: String(body.type ?? "SALARY_ADVANCE"),
+      title: String(body.title ?? "Opération employé"),
+      principalAmount: amount,
+      amountPaid: 0,
+      balance: amount,
+      currency: String(body.currency ?? profile.currency),
+      repaymentMethod: String(body.repaymentMethod ?? "SALARY_DEDUCTION"),
+      installmentAmount,
+      startDate: new Date(String(body.startDate ?? createdAt)).toISOString(),
+      dueDate: new Date(String(body.dueDate ?? createdAt)).toISOString(),
+      status: "ACTIVE",
+      riskLevel: "LOW",
+      riskScore: 12,
+      notes: String(body.notes ?? ""),
+      salaryProfile: profile,
+      repayments: [repayment],
+      createdAt,
+      receipt: { receiptNumber }
+    };
+    saveDemoEmployeeObligations([obligation, ...getDemoEmployeeObligations()]);
+    const content = [
+      `Bonjour ${profile.fullName},`,
+      `${obligation.type === "SALARY_ADVANCE" ? "Avance sur salaire" : "Dette employé"}: ${obligation.title}`,
+      `Montant: ${amount.toFixed(2)} ${obligation.currency}`,
+      `Reçu: ${receiptNumber}`,
+      "Ce message est aussi disponible dans votre compte EduPay."
+    ].join("\n");
+    const messages = [
+      { id: `employee-message-${Date.now()}-dashboard`, salaryProfileId: profile.id, channel: "DASHBOARD" as const, subject: "Opération employé enregistrée", content, status: "VISIBLE", createdAt },
+      { id: `employee-message-${Date.now()}-email`, salaryProfileId: profile.id, channel: "EMAIL" as const, subject: "Opération employé enregistrée", content, status: profile.contactEmail ? "SIMULATED" : "SKIPPED:NO_EMAIL", createdAt },
+      { id: `employee-message-${Date.now()}-sms`, salaryProfileId: profile.id, channel: "SMS" as const, subject: "Opération employé enregistrée", content, status: profile.contactPhone ? "SIMULATED" : "SKIPPED:NO_PHONE", createdAt }
+    ];
+    saveDemoEmployeeMessages([...messages, ...getDemoEmployeeMessages()]);
+    return { ...obligation, notificationStatus: messages.map((message) => ({ channel: message.channel, status: message.status })) } as T;
+  }
+  if (normalizedPath.startsWith("/api/expenses/employee-finance/repayments/") && normalizedPath.endsWith("/pay") && method === "POST") {
+    const repaymentPathParts = normalizedPath.split("/");
+    const repaymentId = repaymentPathParts[repaymentPathParts.length - 2];
+    const obligations = getDemoEmployeeObligations();
+    const obligation = obligations.find((item) => item.repayments.some((repayment) => repayment.id === repaymentId));
+    if (!obligation || !repaymentId) throw new Error("Échéance de remboursement introuvable.");
+    const profile = getDemoSalaryProfiles().find((item) => item.id === obligation.salaryProfileId) ?? obligation.salaryProfile;
+    const amount = roundAmount(Number(body.paidAmount ?? 0));
+    const receiptNumber = `EMP-PAY-${Date.now()}`;
+    let updatedRepayment: DemoEmployeeRepayment | null = null;
+    const updatedObligations = obligations.map((item) => {
+      if (item.id !== obligation.id) return item;
+      const repayments = item.repayments.map((repayment) => {
+        if (repayment.id !== repaymentId) return repayment;
+        const nextPaid = roundAmount(Number(repayment.paidAmount || 0) + amount);
+        updatedRepayment = {
+          ...repayment,
+          paidAmount: nextPaid,
+          paidAt: new Date().toISOString(),
+          status: nextPaid >= repayment.expectedAmount ? "PAID" : "PARTIALLY_PAID",
+          reference: String(body.reference ?? ""),
+          notes: String(body.notes ?? "")
+        };
+        return updatedRepayment;
+      });
+      const balance = roundAmount(Math.max(Number(item.balance || 0) - amount, 0));
+      return {
+        ...item,
+        amountPaid: roundAmount(Number(item.amountPaid || 0) + amount),
+        balance,
+        status: balance <= 0 ? "PAID" : item.status,
+        repayments
+      };
+    });
+    saveDemoEmployeeObligations(updatedObligations);
+    const content = [
+      `Bonjour ${profile?.fullName ?? "Employé"},`,
+      `Remboursement enregistré: ${amount.toFixed(2)} ${obligation.currency}`,
+      `Opération: ${obligation.title}`,
+      `Reçu: ${receiptNumber}`,
+      "Ce message est aussi disponible dans votre compte EduPay."
+    ].join("\n");
+    const createdAt = new Date().toISOString();
+    const messages = [
+      { id: `employee-message-${Date.now()}-dashboard`, salaryProfileId: obligation.salaryProfileId, channel: "DASHBOARD" as const, subject: "Remboursement employé enregistré", content, status: "VISIBLE", createdAt },
+      { id: `employee-message-${Date.now()}-email`, salaryProfileId: obligation.salaryProfileId, channel: "EMAIL" as const, subject: "Remboursement employé enregistré", content, status: profile?.contactEmail ? "SIMULATED" : "SKIPPED:NO_EMAIL", createdAt },
+      { id: `employee-message-${Date.now()}-sms`, salaryProfileId: obligation.salaryProfileId, channel: "SMS" as const, subject: "Remboursement employé enregistré", content, status: profile?.contactPhone ? "SIMULATED" : "SKIPPED:NO_PHONE", createdAt }
+    ];
+    saveDemoEmployeeMessages([...messages, ...getDemoEmployeeMessages()]);
+    if (!updatedRepayment) throw new Error("Échéance de remboursement introuvable.");
+    const repaymentResult: DemoEmployeeRepayment = updatedRepayment;
+    return { ...repaymentResult, receipt: { receiptNumber }, notificationStatus: messages.map((message) => ({ channel: message.channel, status: message.status })) } as T;
+  }
+  if (normalizedPath.startsWith("/api/expenses/employee-finance/snapshot") && method === "GET") {
+    const url = new URL(`http://local${normalizedPath}`);
+    const salaryProfileId = url.searchParams.get("salaryProfileId");
+    const employeeCode = url.searchParams.get("employeeCode")?.trim().toLowerCase();
+    const profile = getDemoSalaryProfiles().find((item) =>
+      (salaryProfileId && item.id === salaryProfileId)
+      || (employeeCode && (item.employeeCode.toLowerCase() === employeeCode || item.fullName.toLowerCase().includes(employeeCode)))
+    ) ?? getDemoSalaryProfiles()[0];
+    return buildDemoEmployeeFinancialSnapshot(profile) as T;
+  }
+  if (normalizedPath.startsWith("/api/expenses/employee-finance/me") && method === "GET") {
+    const profile = getDemoSalaryProfiles().find((item) => item.fullName === localStorage.getItem(NAME_STORAGE_KEY)) ?? getDemoSalaryProfiles()[0];
+    return buildDemoEmployeeFinancialSnapshot(profile) as T;
+  }
+  if (normalizedPath === "/api/expenses/employee-finance/notify" && method === "POST") {
+    const profile = getDemoSalaryProfiles().find((item) => item.id === String(body.salaryProfileId));
+    if (!profile) throw new Error("Profil salarial introuvable.");
+    const snapshot = buildDemoEmployeeFinancialSnapshot(profile);
+    const channels = Array.isArray(body.channels) ? body.channels.map((item) => String(item)) : ["DASHBOARD"];
+    const subject = String(body.subject ?? "Transparence salariale EduPay");
+    const content = String(body.body ?? `Salaire net previsionnel: ${snapshot.salaryProjection.netSalary.toFixed(2)} ${profile.currency}. Deductions: ${snapshot.salaryProjection.totalDeductions.toFixed(2)}. Solde avances/dettes: ${snapshot.totals.totalBalance.toFixed(2)}.`);
+    const createdAt = new Date().toISOString();
+    const messages = channels.map((channel) => ({
+      id: `employee-message-${Date.now()}-${channel}`,
+      salaryProfileId: profile.id,
+      channel: channel as DemoEmployeeMessage["channel"],
+      subject,
+      content,
+      status: channel === "EMAIL" ? (profile.contactEmail ? "SIMULATED" : "SKIPPED:NO_EMAIL") : channel === "SMS" ? (profile.contactPhone ? "SIMULATED" : "SKIPPED:NO_PHONE") : "VISIBLE",
+      createdAt
+    }));
+    saveDemoEmployeeMessages([...messages, ...getDemoEmployeeMessages()]);
+    return { profileId: profile.id, statuses: messages.map((message) => ({ channel: message.channel, status: message.status })), snapshot } as T;
+  }
   if (normalizedPath === "/api/expenses/payroll/runs" && method === "POST") {
     const profiles = getDemoSalaryProfiles().filter((profile) =>
       profile.isActive && (!body.department || profile.department === String(body.department))
@@ -1566,18 +2290,16 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     if (!profiles.length) throw new Error("Aucun profil salarial actif pour ce run.");
     const period = getDemoCurrentPeriod();
     const items = profiles.map((profile, index) => {
-      const bonuses = roundAmount(profile.defaultBonus || 0);
-      const deductions = roundAmount(profile.defaultDeduction || 0);
-      const debtRecovered = roundAmount((profile.baseSalary * profile.debtRecoveryRate) / 100);
-      const netSalary = roundAmount(profile.baseSalary + bonuses - deductions - debtRecovered);
+      const obligations = getDemoEmployeeObligations().filter((item) => item.salaryProfileId === profile.id);
+      const projection = calculateDemoSalaryProjection(profile, obligations);
       return {
         id: `payroll-item-${Date.now()}-${index}`,
-        baseSalary: profile.baseSalary,
-        bonuses,
-        deductions,
-        advancesRecovered: 0,
-        debtRecovered,
-        netSalary,
+        baseSalary: projection.baseSalary,
+        bonuses: projection.bonuses,
+        deductions: projection.deductions,
+        advancesRecovered: projection.advancesRecovered,
+        debtRecovered: projection.debtRecovered,
+        netSalary: projection.netSalary,
         salarySlipNumber: `SLIP-${Date.now()}-${index + 1}`,
         salaryProfile: profile
       };
@@ -1605,6 +2327,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (normalizedPath === "/api/finance/tuition-engine/preview-allocation" && method === "POST") {
     const parentId = String(body.parentId ?? "");
     const parent = getDemoParents().find((item) => item.id === parentId);
+    const requestedStudentIds = Array.from(new Set(Array.isArray(body.studentIds) ? (body.studentIds as string[]).filter(Boolean) : []));
     const amount = roundAmount(Number(body.amount ?? 0));
     const paymentOptionType = String(body.paymentOptionType ?? "STANDARD_MONTHLY") as DemoPaymentOptionType;
     const allocationMode = String(body.allocationMode ?? "AUTO") === "MANUAL" ? "MANUAL" : "AUTO";
@@ -1616,7 +2339,13 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       : [];
     const familyRate = (parent?.students.length ?? 0) >= 2 ? 10 : 0;
     const planRate = paymentOptionType === "FULL_PRESEPTEMBER" ? 10 : paymentOptionType === "TWO_INSTALLMENTS" ? 5 : paymentOptionType === "THREE_INSTALLMENTS" ? 2 : 0;
-    const calculations = (parent?.students ?? []).map((student) => {
+    const targetStudents = requestedStudentIds.length > 0
+      ? (parent?.students ?? []).filter((student) => requestedStudentIds.includes(student.id))
+      : (parent?.students ?? []);
+    if (parent && parent.students.length > 0 && targetStudents.length === 0) {
+      throw new Error("Selectionnez au moins un eleve pour previsualiser ce paiement.");
+    }
+    const calculations = targetStudents.map((student) => {
       const baseAnnualTuition = getDemoBaseAnnualTuition(student.className, student.annualFee);
       const familyDiscountAmount = roundAmount(baseAnnualTuition * familyRate / 100);
       const familyAdjustedTuition = roundAmount(baseAnnualTuition - familyDiscountAmount);
@@ -1730,6 +2459,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       parentId: String(body.parentId ?? ""),
       parentFullName: String((preview as any).parent?.fullName ?? "Parent"),
       paymentSubjectName: Array.isArray((preview as any).calculations) ? (preview as any).calculations.map((row: any) => String(row.studentName ?? "")).filter(Boolean).join(" / ") : "Tuition",
+      studentIds: Array.isArray(body.studentIds) ? (body.studentIds as string[]).filter(Boolean) : [],
       studentNames: Array.isArray((preview as any).calculations) ? (preview as any).calculations.map((row: any) => String(row.studentName ?? "")).filter(Boolean) : [],
       reason: "Tuition payment",
       amount: Number(body.amount ?? 0),
@@ -1740,7 +2470,17 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       tuitionAllocationSummary: buildDemoTuitionAllocationSummary(String(body.allocationMode ?? "AUTO") === "MANUAL" ? "MANUAL" : "AUTO", preview as any)
     };
     writeJson(DEMO_PAYMENTS_KEY, [payment, ...getDemoPayments()]);
-    return { ...preview, payment, receipt: { receiptNumber: `REC-${payment.transactionNumber}` } } as T;
+    const parent = getDemoParents().find((item) => item.id === payment.parentId);
+    const receiptNumber = `REC-${payment.transactionNumber}`;
+    if (parent && String(payment.status).toUpperCase() === "COMPLETED") {
+      appendDemoParentNotification({
+        parent,
+        type: "CONFIRMATION",
+        channels: ["DASHBOARD", "EMAIL", "SMS"],
+        content: buildDemoPaymentNotificationContent(payment as DemoPayment, receiptNumber)
+      });
+    }
+    return { ...preview, payment, receipt: { receiptNumber } } as T;
   }
 
   const financeParentProfileMatch = normalizedPath.match(/^\/api\/finance\/parents\/([^/]+)\/profile$/);
@@ -1860,7 +2600,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (normalizedPath === "/api/notifications/messages" && method === "POST") {
     const parentIds = Array.isArray(body.parentIds) ? body.parentIds.map((value) => String(value)) : [];
     const parents = getDemoParents().filter((parent) => parentIds.includes(parent.id));
-    if (parents.length === 0) throw new Error("Aucun parent valide n'a ete selectionne.");
+    if (parents.length === 0) throw new Error("Aucun parent valide n'a été sélectionné.");
 
     const subject = String(body.subject ?? "").trim();
     const bodyText = String(body.body ?? "").trim();
@@ -1946,10 +2686,13 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const parent = parentId
       ? getDemoParents().find((item) => item.id === parentId)
       : getDemoParents().find((item) => item.fullName === String(body.parentFullName ?? ""));
-    const studentIds = Array.isArray(body.studentIds) ? (body.studentIds as string[]) : [];
+    const studentIds = Array.from(new Set(Array.isArray(body.studentIds) ? (body.studentIds as string[]).filter(Boolean) : []));
     const studentNames = parent
       ? parent.students.filter((student) => studentIds.includes(student.id)).map((student) => student.fullName)
       : [];
+    if (String(body.paymentCategory ?? "TUITION") === "TUITION" && parent && parent.students.length > 0 && studentIds.length === 0) {
+      throw new Error("Selectionnez au moins un eleve pour enregistrer ce paiement de scolarite.");
+    }
     const bankTransferDetails: Record<string, unknown> | null = typeof body.bankTransferDetails === "object" && body.bankTransferDetails !== null
       ? (body.bankTransferDetails as Record<string, unknown>)
       : null;
@@ -1959,6 +2702,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       parentId: parent?.id || parentId || undefined,
       parentFullName: parent?.fullName || String(body.parentFullName ?? "Parent"),
       paymentSubjectName: String(body.studentDisplayName ?? "").trim() || studentNames.join(" / ") || parent?.fullName || String(body.parentFullName ?? "Parent"),
+      studentIds,
       studentNames,
       reason: String(body.reason ?? "Paiement"),
       method: String(body.method ?? "CASH"),
@@ -1975,7 +2719,21 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       } : null
     };
     writeJson(DEMO_PAYMENTS_KEY, [payment, ...getDemoPayments()]);
-    return { payment, receipt: { id: `receipt-${Date.now()}` }, notificationStatus: { email: "SIMULATED", sms: "SIMULATED" } } as T;
+    if (parent) {
+      appendDemoParentNotification({
+        parent,
+        channels: ["DASHBOARD", "EMAIL", "SMS"],
+        content: [
+          `Paiement EduPay enregistré pour ${payment.paymentSubjectName}.`,
+          `Transaction: ${payment.transactionNumber}.`,
+          `Motif: ${payment.reason}.`,
+          `Montant: ${payment.amount.toFixed(2)} $US.`,
+          studentNames.length > 0 ? `Élève(s): ${studentNames.join(", ")}.` : "",
+          "Le reçu et le détail du paiement sont disponibles dans votre espace parent."
+        ].filter(Boolean).join("\n")
+      });
+    }
+    return { payment, receipt: { id: `receipt-${Date.now()}` }, notificationStatus: { dashboard: parent ? "OPEN" : "SKIPPED", email: parent?.email ? "SIMULATED" : "SKIPPED", sms: parent?.phone ? "SIMULATED" : "SKIPPED" } } as T;
   }
 
   const cancelPaymentMatch = normalizedPath.match(/^\/api\/payments\/([^/]+)\/cancel$/);
@@ -1985,6 +2743,13 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     if (!payment) throw new Error("Paiement introuvable.");
     const cancelled = { ...payment, status: "CANCELLED" };
     writeJson(DEMO_PAYMENTS_KEY, payments.map((item) => item.id === payment.id ? cancelled : item));
+    const parent = getDemoParents().find((item) => item.id === payment.parentId);
+    if (parent) {
+      appendDemoParentNotification({
+        parent,
+        content: `Le paiement ${payment.transactionNumber} a été annulé dans EduPay. Vérifiez votre historique de paiements pour le solde mis à jour.`
+      });
+    }
     return { payment: cancelled, snapshot: financeProfile(payment.parentId ?? null) } as T;
   }
 
@@ -2137,18 +2902,19 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const normalizedEmail = String(body.email ?? "").trim().toLowerCase();
     const normalizedPhone = String(body.phone ?? "").replace(/\s+/g, "");
     const duplicateParent = existingParents.find((parent) =>
-      parent.email.trim().toLowerCase() === normalizedEmail
-      || parent.phone.replace(/\s+/g, "") === normalizedPhone
+      (normalizedEmail && parent.email.trim().toLowerCase() === normalizedEmail)
+      || (normalizedPhone && parent.phone.replace(/\s+/g, "") === normalizedPhone)
     );
     if (duplicateParent) {
       const reasons = [
-        duplicateParent.email.trim().toLowerCase() === normalizedEmail ? `email deja utilise (${duplicateParent.email})` : "",
-        duplicateParent.phone.replace(/\s+/g, "") === normalizedPhone ? `telephone deja utilise (${duplicateParent.phone})` : ""
+        duplicateParent.email.trim().toLowerCase() === normalizedEmail ? `email déjà utilisé (${duplicateParent.email})` : "",
+        duplicateParent.phone.replace(/\s+/g, "") === normalizedPhone ? `téléphone déjà utilisé (${duplicateParent.phone})` : ""
       ].filter(Boolean);
-      throw new Error(`Cette famille existe deja dans EduPay. Raison: ${reasons.join(", ") || "coordonnees parent deja utilisees"}.`);
+      throw new Error(`Cette famille existe déjà dans EduPay. Raison: ${reasons.join(", ") || "coordonnées parent déjà utilisées"}.`);
     }
     const id = buildUniqueDemoEntityId("PAR", parentFullName, existingParents.map((parent) => parent.id));
     const existingStudentIds = existingParents.flatMap((parent) => parent.students.map((student) => student.id));
+    const accessCode = `ACC-${id.replace(/^PAR-/, "").slice(0, 12)}`;
     const parent: DemoParent = {
       id,
       nom: String(body.nom ?? ""),
@@ -2159,6 +2925,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
       email: String(body.email ?? ""),
       physicalAddress: String(body.physicalAddress ?? ""),
       photoUrl: String(body.photoUrl ?? ""),
+      accessCode,
       createdAt: new Date().toISOString(),
       students: Array.isArray(body.students)
         ? (body.students as Array<DemoStudent>).map((student) => ({
@@ -2176,7 +2943,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const notifySms = body.notifySms !== false;
     const temporaryPassword = generateDemoTemporaryPassword();
     if (parent.email) {
-      saveDemoParentCredential({ parentId: parent.id, email: parent.email, password: temporaryPassword });
+      saveDemoParentCredential({ parentId: parent.id, email: parent.email, accessCode, password: temporaryPassword });
     }
     for (const student of parent.students as Array<DemoStudent>) {
       if (student.paymentOptionType === "SPECIAL_OWNER_AGREEMENT") {
@@ -2190,8 +2957,19 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     }
     saveDemoFinanceOverrides(overrides);
     writeJson(DEMO_PARENTS_KEY, [parent, ...existingParents]);
+    appendDemoParentNotification({
+      parent,
+      channels: ["DASHBOARD", "EMAIL", "SMS"],
+      content: [
+        `Votre compte parent EduPay a été créé pour ${parent.fullName}.`,
+        `Code d'accès: ${accessCode}.`,
+        `Élève(s): ${parent.students.map((student) => student.fullName).join(", ") || "aucun élève renseigné"}.`,
+        "Connectez-vous avec le mot de passe temporaire transmis par l'administration."
+      ].join("\n")
+    });
     return {
       ...parent,
+      accessCode,
       temporaryPassword,
       notificationStatus: {
         email: notifyEmail && parent.email ? "SIMULATED" : "SKIPPED",
@@ -2255,6 +3033,16 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     }
     saveDemoFinanceOverrides(overrides);
     writeJson(DEMO_PARENTS_KEY, parents);
+    appendDemoParentNotification({
+      parent: updatedParent,
+      channels: ["DASHBOARD", "EMAIL", "SMS"],
+      content: [
+        "Votre dossier EduPay a été mis à jour.",
+        `Parent: ${updatedParent.fullName}.`,
+        `Élève(s): ${updatedParent.students.map((student) => student.fullName).join(", ") || "aucun élève renseigné"}.`,
+        "Consultez votre espace parent pour vérifier les informations et les plans de scolarité."
+      ].join("\n")
+    });
     return updatedParent as T;
   }
   if (parentMatch && method === "DELETE") {
@@ -2269,11 +3057,19 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const notifyEmail = body.notifyEmail !== false;
     const notifySms = body.notifySms !== false;
     if (parent?.email) {
-      saveDemoParentCredential({ parentId: resetMatch[1], email: parent.email, password: temporaryPassword });
+      saveDemoParentCredential({ parentId: resetMatch[1], email: parent.email, accessCode: parent.accessCode, password: temporaryPassword });
+    }
+    if (parent) {
+      appendDemoParentNotification({
+        parent,
+        channels: ["DASHBOARD", "EMAIL", "SMS"],
+        content: "Votre mot de passe EduPay a été réinitialisé. Utilisez le mot de passe temporaire fourni par l'administration, puis changez-le après connexion."
+      });
     }
     return {
       parentId: resetMatch[1],
       email: parent?.email ?? "parent@school.com",
+      accessCode: parent?.accessCode,
       temporaryPassword,
       notificationStatus: {
         email: notifyEmail && parent?.email ? "SIMULATED" : "SKIPPED",
@@ -2298,8 +3094,18 @@ function isLocalSessionToken(token: string | null) {
 function canFallbackToDemo(path: string, init?: RequestInit) {
   const method = (init?.method ?? "GET").toUpperCase();
   if (!path.startsWith("/api/")) return false;
+  if (path === "/api/parents" && ["GET", "POST"].includes(method)) return true;
+  if (/^\/api\/parents\/[^/]+$/.test(path) && ["GET", "PUT", "DELETE"].includes(method)) return true;
+  if (/^\/api\/parents\/[^/]+\/reset-password$/.test(path) && method === "POST") return true;
+  if (path === "/api/payments" && ["GET", "POST"].includes(method)) return true;
+  if (/^\/api\/payments\/[^/]+\/cancel$/.test(path) && method === "POST") return true;
+  if (/^\/api\/payments\/[^/]+\/receipt\/printed$/.test(path) && method === "POST") return true;
+  if (path === "/api/payments/settings/notifications" && ["GET", "PUT"].includes(method)) return true;
   return method === "GET" ||
     path === "/api/auth/login" ||
+    path === "/api/auth/forgot-password" ||
+    path === "/api/auth/reset-password" ||
+    path === "/api/auth/recover-admin-password" ||
     path === "/api/auth/change-password" ||
     path === "/api/ai/assistant" ||
     path.startsWith("/api/finance") ||
@@ -2317,7 +3123,7 @@ function canUseParentSessionFallback(path: string, init?: RequestInit) {
   );
 }
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (shouldUseDemoApi(path)) return demoApi<T>(path, init);
 
   const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -2326,7 +3132,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if ((init?.method ?? "GET").toUpperCase() === "GET") {
-    void flushOfflineMutationQueue();
+    scheduleOfflineMutationFlush();
   }
 
   const token = storedToken ?? "";
@@ -2354,13 +3160,21 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
         message: "Action enregistree hors ligne. Elle sera synchronisee automatiquement au retour de la connexion."
       } as T;
     }
-    if (LOCAL_API_FALLBACK_ENABLED && canFallbackToDemo(path, init)) return demoApi<T>(path, init);
+    if (
+      (LOCAL_API_FALLBACK_ENABLED || (!PRODUCTION_MODE && LOCAL_AUTH_RECOVERY_FALLBACK_PATHS.has(path))) &&
+      canFallbackToDemo(path, init)
+    ) {
+      return demoApi<T>(path, init);
+    }
     throw new Error("Impossible de joindre l'API. Verifiez que le backend est demarre.");
   }
 
   if (!response.ok) {
     if (response.status === 401) {
       if (path === "/api/auth/login") {
+        if (LOCAL_API_FALLBACK_ENABLED && canFallbackToDemo(path, init)) {
+          return demoApi<T>(path, init);
+        }
         const loginError = await response.json().catch(() => null) as { message?: string } | null;
         throw new Error(loginError?.message || "Identifiants invalides.");
       }
@@ -2402,3 +3216,42 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
 }
+
+export function invalidateApiMemoryCache() {
+  memoryResponseCache.clear();
+  inFlightGetRequests.clear();
+}
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET" || !path.startsWith("/api/")) {
+    const result = await requestApi<T>(path, init);
+    invalidateApiMemoryCache();
+    return result;
+  }
+
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY) ?? "anonymous";
+  const cacheKey = `${token}:${path}`;
+  const cached = memoryResponseCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value as T;
+  if (cached) memoryResponseCache.delete(cacheKey);
+
+  const inFlight = inFlightGetRequests.get(cacheKey);
+  if (inFlight) return inFlight as Promise<T>;
+
+  const request = requestApi<T>(path, init)
+    .then((value) => {
+      memoryResponseCache.set(cacheKey, {
+        expiresAt: Date.now() + API_MEMORY_CACHE_TTL_MS,
+        value,
+      });
+      return value;
+    })
+    .finally(() => {
+      inFlightGetRequests.delete(cacheKey);
+    });
+
+  inFlightGetRequests.set(cacheKey, request);
+  return request;
+}
+

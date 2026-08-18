@@ -15,6 +15,9 @@ import { registryRouter } from './registry.routes.js'
 import { forumRouter } from './forum.routes.js'
 import { studentForumRouter } from './student-forum.routes.js'
 import { intelligenceRouter } from './intelligence.routes.js'
+import { financeRouter } from './finance.routes.js'
+import { messagesRouter } from './messages.routes.js'
+import { suggestionsRouter } from './suggestions.routes.js'
 
 export const router = Router()
 
@@ -34,3 +37,6 @@ router.use('/registry', registryRouter)
 router.use('/forum', forumRouter)
 router.use('/student-forum', studentForumRouter)
 router.use('/intelligence', intelligenceRouter)
+router.use('/finance', financeRouter)
+router.use('/messages', messagesRouter)
+router.use('/suggestions', suggestionsRouter)

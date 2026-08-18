@@ -6,7 +6,8 @@ param(
   [switch]$OpenBrowser,
   [switch]$AllowEduPayDataLoss,
   [switch]$Restart,
-  [switch]$NoWait
+  [switch]$NoWait,
+  [switch]$KeepAlive
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,6 +15,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
 
+$sharedContractsPath = Join-Path $repoRoot 'packages\shared-contracts'
 $orbitPath = Join-Path $repoRoot 'kcs-orbit-api'
 $kcsNexusBackendPath = Join-Path $repoRoot 'KCS Nexus\backend'
 $kcsNexusFrontendPath = Join-Path $repoRoot 'KCS Nexus\frontend'
@@ -49,11 +51,14 @@ function Get-ConfigValue {
 }
 
 $orbitDatabaseUrl = Get-ConfigValue -Name 'ORBIT_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
+$kcsNexusDatabaseUrl = Get-ConfigValue -Name 'KCS_NEXUS_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_nexus'
 $eduPayDatabaseUrl = Get-ConfigValue -Name 'EDUPAY_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'
 $eduPayReceiptVerificationUrl = Get-ConfigValue -Name 'EDUPAY_RECEIPT_VERIFICATION_URL' -DefaultValue 'https://edupay-web.onrender.com/EduPay-Smart-System/'
 $orbitUrl = Get-ConfigValue -Name 'KCS_ORBIT_API_URL' -DefaultValue 'http://localhost:4500'
 $kcsNexusApiPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_API_PORT' -DefaultValue '5000')
 $kcsNexusFrontendPort = [int](Get-ConfigValue -Name 'KCS_NEXUS_FRONTEND_PORT' -DefaultValue '5173')
+$kcsNexusJwtSecret = Get-ConfigValue -Name 'KCS_NEXUS_JWT_SECRET' -DefaultValue 'kcs-nexus-local-development-jwt-secret'
+$kcsNexusJwtRefreshSecret = Get-ConfigValue -Name 'KCS_NEXUS_JWT_REFRESH_SECRET' -DefaultValue 'kcs-nexus-local-development-refresh-secret'
 $kcsSentinelApiPort = [int](Get-ConfigValue -Name 'KCS_SENTINEL_API_PORT' -DefaultValue '5001')
 $kcsSentinelFrontendPort = [int](Get-ConfigValue -Name 'KCS_SENTINEL_FRONTEND_PORT' -DefaultValue '5176')
 $eduSyncPreferredApiPort = [int](Get-ConfigValue -Name 'EDUSYNC_AI_API_PORT' -DefaultValue '8000')
@@ -120,6 +125,35 @@ function Wait-PortOpen {
 
   Write-Host "Not ready yet: $Name on port $Port" -ForegroundColor Yellow
   return $false
+}
+
+function Wait-ServicesReady {
+  param(
+    [object[]]$Services,
+    [int]$TimeoutSeconds = 45
+  )
+
+  $pendingServices = @($Services)
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+  while ($pendingServices.Count -gt 0 -and (Get-Date) -lt $deadline) {
+    $readyServices = @($pendingServices | Where-Object {
+      Test-PortOpen -HostName '127.0.0.1' -Port $_.Port
+    })
+
+    foreach ($service in $readyServices) {
+      Write-Host "Ready $($service.Name) on port $($service.Port)" -ForegroundColor Green
+    }
+
+    $pendingServices = @($pendingServices | Where-Object { $_ -notin $readyServices })
+    if ($pendingServices.Count -gt 0) {
+      Start-Sleep -Milliseconds 700
+    }
+  }
+
+  foreach ($service in $pendingServices) {
+    Write-Host "Not ready yet: $($service.Name) on port $($service.Port)" -ForegroundColor Yellow
+  }
 }
 
 function Resolve-PreferredPort {
@@ -248,9 +282,22 @@ function Invoke-EduPayAccessCodeMigration {
   & pnpm exec prisma db execute --file $eduPayAccessCodeMigrationPath --schema prisma/schema.prisma
 }
 
-function Ensure-EduPayWebDependencies {
+function Ensure-EduPayDependencies {
   if ($SkipInstall) {
     return
+  }
+
+  $apiTsxBinary = Join-Path $eduPayApiPath 'node_modules\.bin\tsx.cmd'
+  $apiTsxEntryPoint = Join-Path $eduPayApiPath 'node_modules\tsx\dist\cli.mjs'
+  $apiSharedContractsEntryPoint = Join-Path $eduPayApiPath 'node_modules\@ecosystem\shared-contracts\dist\index.js'
+  if (-not (Test-Path $apiTsxBinary) -or -not (Test-Path $apiTsxEntryPoint) -or -not (Test-Path $apiSharedContractsEntryPoint)) {
+    Write-Step 'Installing missing EduPay API dependencies'
+    Invoke-InDirectory -Path $eduPayApiPath -Script {
+      & pnpm install --frozen-lockfile
+      if ($LASTEXITCODE -ne 0) {
+        throw "EduPay API dependency installation failed with exit code $LASTEXITCODE."
+      }
+    }
   }
 
   $viteBinary = Join-Path $eduPayWebPath 'node_modules\.bin\vite.cmd'
@@ -260,7 +307,39 @@ function Ensure-EduPayWebDependencies {
 
   Write-Step 'Installing missing EduPay web dependencies'
   Invoke-InDirectory -Path $eduPayWebPath -Script {
-    & pnpm install
+    & pnpm install --frozen-lockfile
+    if ($LASTEXITCODE -ne 0) {
+      throw "EduPay web dependency installation failed with exit code $LASTEXITCODE."
+    }
+  }
+}
+
+function Ensure-SharedContractsBuild {
+  $contractsEntryPoint = Join-Path $sharedContractsPath 'dist\index.js'
+  $contractSources = Get-ChildItem (Join-Path $sharedContractsPath 'src') -Recurse -File -ErrorAction SilentlyContinue
+  if (Test-Path $contractsEntryPoint) {
+    $builtAt = (Get-Item $contractsEntryPoint).LastWriteTimeUtc
+    $newestSource = $contractSources | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+    if (-not $newestSource -or $newestSource.LastWriteTimeUtc -le $builtAt) {
+      return
+    }
+  }
+
+  $typescriptBinary = Join-Path $sharedContractsPath 'node_modules\.bin\tsc.cmd'
+  if (-not (Test-Path $typescriptBinary)) {
+    Write-Step 'Installing shared TypeScript contract dependencies'
+    Invoke-InDirectory -Path $sharedContractsPath -Script {
+      & npm ci
+    }
+  }
+
+  Write-Step 'Building shared TypeScript contracts'
+  Invoke-InDirectory -Path $sharedContractsPath -Script {
+    & npm run build
+  }
+
+  if (-not (Test-Path $contractsEntryPoint)) {
+    throw "Shared contracts build did not produce: $contractsEntryPoint"
   }
 }
 
@@ -312,7 +391,7 @@ function Ensure-EduPaySchoolAdmin {
   Invoke-InDirectory -Path $eduPayApiPath -Script {
     $env:DATABASE_URL = $eduPayDatabaseUrl
     $nodeScript = @'
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -387,10 +466,15 @@ function Start-ServiceWindow {
 
   $windowTitle = "Ecosystem | $Title"
   $logPath = Join-Path $logRoot $LogName
+  $serviceCommand = $Command
   $fullCommand = (
     "`$host.UI.RawUI.WindowTitle = '$windowTitle'; " +
     "`$ErrorActionPreference = 'Continue'; " +
-    "$Command 2>&1 | Tee-Object -FilePath '$logPath' -Append"
+    "while (`$true) { " +
+    "  & { $serviceCommand } 2>&1 | Tee-Object -FilePath '$logPath' -Append; " +
+    "  Write-Host '$Title stopped unexpectedly; retrying in 3 seconds...' -ForegroundColor Yellow; " +
+    "  Start-Sleep -Seconds 3 " +
+    "}"
   )
 
   Start-Process powershell -ArgumentList @(
@@ -398,7 +482,7 @@ function Start-ServiceWindow {
     '-ExecutionPolicy', 'Bypass',
     '-Command',
     $fullCommand
-  ) -WorkingDirectory $repoRoot | Out-Null
+  ) -WorkingDirectory $repoRoot -WindowStyle Hidden | Out-Null
 
   Write-Host "Started $Title" -ForegroundColor Green
 }
@@ -417,7 +501,11 @@ function Start-EduSyncBackend {
     "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduSyncAI)'; " +
     "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
     "Set-Location '$eduSyncBackendPath'; " +
-    "& '$eduSyncPythonPath' -m uvicorn app.main:app --host 0.0.0.0 --port $eduSyncApiPort"
+    "while (`$true) { " +
+    "  & '$eduSyncPythonPath' -m uvicorn app.main:app --host 0.0.0.0 --port $eduSyncApiPort; " +
+    "  Write-Host 'EduSync AI Backend stopped unexpectedly; retrying in 3 seconds...' -ForegroundColor Yellow; " +
+    "  Start-Sleep -Seconds 3 " +
+    "}"
   )
 
   Start-Process powershell -ArgumentList @(
@@ -425,7 +513,7 @@ function Start-EduSyncBackend {
     '-ExecutionPolicy', 'Bypass',
     '-Command',
     $fullCommand
-  ) -WorkingDirectory $repoRoot | Out-Null
+  ) -WorkingDirectory $repoRoot -WindowStyle Hidden | Out-Null
 
   Write-Host "Started EduSync AI Backend" -ForegroundColor Green
 }
@@ -474,6 +562,7 @@ Assert-Command -Name 'node'
 Assert-Command -Name 'npm'
 Assert-Command -Name 'pnpm'
 
+Assert-Path -Path $sharedContractsPath -Label 'Shared contracts directory'
 Assert-Path -Path $orbitPath -Label 'Orbit directory'
 Assert-Path -Path $kcsNexusBackendPath -Label 'KCS Nexus backend directory'
 Assert-Path -Path $kcsNexusFrontendPath -Label 'KCS Nexus frontend directory'
@@ -491,7 +580,25 @@ if (-not (Test-PortOpen -HostName '127.0.0.1' -Port 5432 -TimeoutMs 1500)) {
   throw 'Local PostgreSQL is not reachable on localhost:5432.'
 }
 
-Ensure-EduPayWebDependencies
+# A TCP listener can appear a few seconds before PostgreSQL is ready to accept
+# Prisma connections after a restart. Require consecutive successful probes.
+$postgresStableChecks = 0
+$postgresDeadline = (Get-Date).AddSeconds(20)
+while ($postgresStableChecks -lt 3 -and (Get-Date) -lt $postgresDeadline) {
+  if (Test-PortOpen -HostName '127.0.0.1' -Port 5432 -TimeoutMs 1500) {
+    $postgresStableChecks += 1
+  }
+  else {
+    $postgresStableChecks = 0
+  }
+  if ($postgresStableChecks -lt 3) { Start-Sleep -Milliseconds 700 }
+}
+if ($postgresStableChecks -lt 3) {
+  throw 'Local PostgreSQL did not become stable on localhost:5432.'
+}
+
+Ensure-EduPayDependencies
+Ensure-SharedContractsBuild
 
 if ($FullPreparation -and $SkipDatabasePreparation) {
   throw 'Use either -FullPreparation or -SkipDatabasePreparation, not both.'
@@ -515,7 +622,7 @@ if ($databasePreparationMode -eq 'skipped-by-user') {
   Write-Step 'Skipping database preparation by request'
 }
 
-if ($databasePreparationMode -ne 'full') {
+if ($databasePreparationMode -eq 'cached') {
   Sync-OrbitRuntime
   Sync-EduPayApiRuntime
   Sync-SavanexDatabase
@@ -550,7 +657,7 @@ if ($databasePreparationMode -eq 'full') {
       & pnpm exec prisma db push
     }
     $nodeScript = @'
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -630,12 +737,17 @@ Start-ServiceWindow -Title 'KCS Orbit API' -Command (
 
 Start-ServiceWindow -Title 'KCS Nexus Backend' -Command (
   "Set-Location '$kcsNexusBackendPath'; " +
+  "`$env:DATABASE_URL='$kcsNexusDatabaseUrl'; " +
   "`$env:PORT='$kcsNexusApiPort'; " +
   "`$env:FRONTEND_URL='http://localhost:$kcsNexusFrontendPort'; " +
+  "`$env:JWT_SECRET='$kcsNexusJwtSecret'; " +
+  "`$env:JWT_REFRESH_SECRET='$kcsNexusJwtRefreshSecret'; " +
   "`$env:KCS_ORBIT_API_URL='$orbitUrl'; " +
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.KcsNexus)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "`$env:EDUPAY_API_URL='http://localhost:4000'; " +
+  "`$env:EDUPAY_SERVICE_EMAIL='admin@school.com'; " +
+  "`$env:EDUPAY_SERVICE_PASSWORD='password123'; " +
   "`$env:EDUPAY_LOGIN_PATH='/api/auth/login'; " +
   "`$env:EDUPAY_TIMEOUT_SECONDS='15'; " +
   "npm run dev"
@@ -649,7 +761,7 @@ Start-ServiceWindow -Title 'EduPay API' -Command (
   "`$env:KCS_ORBIT_API_KEY='$($integrationKeys.EduPay)'; " +
   "`$env:KCS_ORBIT_ORGANIZATION_ID='$orbitOrganizationId'; " +
   "`$env:FRONTEND_URL='http://localhost:5174'; " +
-  "pnpm dev"
+  "pnpm run dev"
 ) -Port 4000 -LogName 'edupay-api.log'
 
 Start-EduSyncBackend
@@ -678,9 +790,10 @@ if (-not $NoFrontends) {
 
   Start-ServiceWindow -Title 'EduPay Web' -Command (
     "Set-Location '$eduPayWebPath'; " +
+    "`$env:VITE_ENVIRONMENT='local-development'; " +
     "`$env:VITE_API_BASE_URL='http://localhost:4000'; " +
     "`$env:VITE_RECEIPT_VERIFICATION_BASE_URL='$eduPayReceiptVerificationUrl'; " +
-    "pnpm dev -- --host 0.0.0.0 --port 5174"
+    "pnpm run dev -- --host 0.0.0.0 --port 5174"
   ) -Port 5174 -LogName 'edupay-web.log'
 
   Start-ServiceWindow -Title 'EduSync AI Frontend' -Command (
@@ -700,26 +813,32 @@ Start-OptionalKcsSentinel
 
 if (-not $NoWait) {
   Write-Step 'Waiting for local services'
-  Wait-PortOpen -Name 'Orbit API' -Port 4500 | Out-Null
-  Wait-PortOpen -Name 'KCS Nexus API' -Port $kcsNexusApiPort | Out-Null
-  Wait-PortOpen -Name 'EduPay API' -Port 4000 | Out-Null
-  Wait-PortOpen -Name 'EduSync AI API' -Port $eduSyncApiPort | Out-Null
-  Wait-PortOpen -Name 'SAVANEX API' -Port 8001 | Out-Null
+  $servicesToWaitFor = @(
+    [pscustomobject]@{ Name = 'Orbit API'; Port = 4500 },
+    [pscustomobject]@{ Name = 'KCS Nexus API'; Port = $kcsNexusApiPort },
+    [pscustomobject]@{ Name = 'EduPay API'; Port = 4000 },
+    [pscustomobject]@{ Name = 'EduSync AI API'; Port = $eduSyncApiPort },
+    [pscustomobject]@{ Name = 'SAVANEX API'; Port = 8001 }
+  )
 
   if (-not $NoFrontends) {
-    Wait-PortOpen -Name 'KCS Nexus frontend' -Port $kcsNexusFrontendPort | Out-Null
-    Wait-PortOpen -Name 'EduPay web' -Port 5174 | Out-Null
-    Wait-PortOpen -Name 'EduSync AI frontend' -Port 5175 | Out-Null
-    Wait-PortOpen -Name 'SAVANEX frontend' -Port 3000 | Out-Null
+    $servicesToWaitFor += @(
+      [pscustomobject]@{ Name = 'KCS Nexus frontend'; Port = $kcsNexusFrontendPort },
+      [pscustomobject]@{ Name = 'EduPay web'; Port = 5174 },
+      [pscustomobject]@{ Name = 'EduSync AI frontend'; Port = 5175 },
+      [pscustomobject]@{ Name = 'SAVANEX frontend'; Port = 3000 }
+    )
   }
 
   if (Test-ProjectPath -Path $kcsSentinelBackendPath) {
-    Wait-PortOpen -Name 'KCS Sentinel API' -Port $kcsSentinelApiPort | Out-Null
+    $servicesToWaitFor += [pscustomobject]@{ Name = 'KCS Sentinel API'; Port = $kcsSentinelApiPort }
   }
 
   if ((Test-ProjectPath -Path $kcsSentinelFrontendPath) -and -not $NoFrontends) {
-    Wait-PortOpen -Name 'KCS Sentinel frontend' -Port $kcsSentinelFrontendPort | Out-Null
+    $servicesToWaitFor += [pscustomobject]@{ Name = 'KCS Sentinel frontend'; Port = $kcsSentinelFrontendPort }
   }
+
+  Wait-ServicesReady -Services $servicesToWaitFor
 
   Write-Step 'Synchronizing SAVANEX directory into Orbit'
   Invoke-InDirectory -Path $savanexBackendPath -Script {
@@ -773,3 +892,12 @@ Write-Host '  -AllowEduPayDataLoss      : allow Prisma db push --accept-data-los
 Write-Host '  -Restart                  : stop existing ecosystem services before launch' -ForegroundColor White
 Write-Host '  -NoWait                   : do not wait for ports to become ready' -ForegroundColor White
 Write-Host "Logs: $logRoot" -ForegroundColor Cyan
+
+if ($KeepAlive) {
+  Write-Host ''
+  Write-Host 'Ecosystem is running in keep-alive mode. All services active.' -ForegroundColor Green
+  while ($true) {
+    Start-Sleep -Seconds 2
+  }
+}
+

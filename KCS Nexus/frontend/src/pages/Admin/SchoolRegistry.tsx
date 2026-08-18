@@ -10,8 +10,8 @@ type RegistryFamily = {
   id: string
   familyLabel: string
   studentCount: number
-  parents: Array<{ id?: string; externalId?: string; relation: string; parent: { firstName: string; lastName: string; fullName: string; email?: string; phone?: string } }>
-  children: Array<{ id: string; externalId?: string; studentNumber: string; grade: string; section: string; status?: string; student: { firstName: string; lastName: string; fullName: string; email?: string } }>
+  parents: Array<{ id?: string; externalId?: string; relation: string; parent: { firstName: string; middleName?: string; lastName: string; fullName: string; email?: string; phone?: string } }>
+  children: Array<{ id: string; externalId?: string; studentNumber: string; grade: string; section: string; status?: string; student: { firstName: string; middleName?: string; lastName: string; fullName: string; email?: string } }>
 }
 
 const SchoolRegistryPage = () => {
@@ -23,12 +23,14 @@ const SchoolRegistryPage = () => {
   const [query, setQuery] = useState('')
   const [form, setForm] = useState({
     studentFirst: '',
+    studentMiddle: '',
     studentLast: '',
     studentNumber: '',
     studentGender: 'O',
     grade: '',
     section: 'A',
     parentFirst: '',
+    parentMiddle: '',
     parentLast: '',
     parentEmail: '',
     parentPhone: '',
@@ -82,6 +84,7 @@ const SchoolRegistryPage = () => {
       const registration = await registryAPI.registerFamily({
         parent: {
           firstName: form.parentFirst,
+          middleName: form.parentMiddle || undefined,
           lastName: form.parentLast,
           email: form.parentEmail,
           phone: form.parentPhone,
@@ -89,6 +92,7 @@ const SchoolRegistryPage = () => {
         },
         student: {
           firstName: form.studentFirst,
+          middleName: form.studentMiddle || undefined,
           lastName: form.studentLast,
           studentNumber: form.studentNumber,
           gender: form.studentGender,
@@ -115,7 +119,7 @@ const SchoolRegistryPage = () => {
       return
     }
 
-    setForm({ studentFirst: '', studentLast: '', studentNumber: '', studentGender: 'O', grade: '', section: 'A', parentFirst: '', parentLast: '', parentEmail: '', parentPhone: '', relation: 'Parent' })
+    setForm({ studentFirst: '', studentMiddle: '', studentLast: '', studentNumber: '', studentGender: 'O', grade: '', section: 'A', parentFirst: '', parentMiddle: '', parentLast: '', parentEmail: '', parentPhone: '', relation: 'Parent' })
   }
 
   return (
@@ -142,11 +146,13 @@ const SchoolRegistryPage = () => {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
-                  ['studentFirst', 'Student first name'],
                   ['studentLast', 'Student last name'],
+                  ['studentMiddle', 'Student middle name / Postnom'],
+                  ['studentFirst', 'Student first name'],
                   ['studentNumber', 'Student number'],
-                  ['parentFirst', 'Parent first name'],
                   ['parentLast', 'Parent last name'],
+                  ['parentMiddle', 'Parent middle name / Postnom'],
+                  ['parentFirst', 'Parent first name'],
                   ['parentEmail', 'Parent email'],
                   ['parentPhone', 'Parent phone'],
                 ].map(([key, label]) => (

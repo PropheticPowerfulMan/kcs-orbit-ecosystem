@@ -1,6 +1,6 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
 import { createOrbitParent, deleteOrbitFamily, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent } from "../../integrations/orbitRegistry";
@@ -9,6 +9,7 @@ import { env } from "../../config/env";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { sendEmail, sendSms } from "../../utils/messaging";
 import { createSpecialFinancialAgreement, getPaymentOptionLabel, upsertParentPlanAssignment } from "../finance/service";
+import { notifyParentEntityChange } from "../notifications/entityChange";
 
 type OwnerAgreementInstallmentMode = "ONE_TIME" | "TWO_INSTALLMENTS" | "THREE_INSTALLMENTS";
 
@@ -125,7 +126,7 @@ function buildOwnerAgreementInstallments(customTotal: number, reductionAmount = 
 
   return [
     { label: "Engagement initial", dueDate: buildAcademicDueDate(8, 31), amountDue: first, notes: "Created during parent onboarding" },
-    { label: "Regularisation mi-annee", dueDate: buildAcademicDueDate(1, 31), amountDue: second, notes: "Created during parent onboarding" },
+    { label: "Régularisation mi-année", dueDate: buildAcademicDueDate(1, 31), amountDue: second, notes: "Created during parent onboarding" },
     { label: "Solde final", dueDate: buildAcademicDueDate(5, 31), amountDue: third, notes: "Created during parent onboarding" }
   ];
 }
@@ -352,7 +353,7 @@ const parentInclude = {
       class: true,
       planAssignments: {
         where: { isActive: true },
-        include: { tuitionPlan: true },
+        include: { tuitionPlan: true, financialAgreement: true },
         orderBy: { updatedAt: "desc" as const }
       }
     }
@@ -387,7 +388,7 @@ function enrichParent(p: any) {
         paymentOptionLabel: assignment?.paymentOptionType
           ? getPaymentOptionLabel(assignment.paymentOptionType)
           : s.paymentOptionLabel ?? "",
-        tuitionPlanName: assignment?.tuitionPlan?.name ?? s.tuitionPlanName ?? ""
+        tuitionPlanName: assignment?.financialAgreement?.title ?? assignment?.tuitionPlan?.name ?? s.tuitionPlanName ?? ""
       };
     })
   };
@@ -596,22 +597,50 @@ async function assignOnboardingFinance(options: {
   }
 }
 
+        async function safeSendParentWelcomeNotifications(
+          parent: any,
+          temporaryPassword: string,
+          schoolId: string,
+          preferences: { notifyEmail?: boolean; notifySms?: boolean }
+        ) {
+          try {
+            return await sendParentWelcomeNotifications(parent, temporaryPassword, schoolId, preferences);
+          } catch (error) {
+            console.error("[PARENT_CREATE_CREDENTIALS] Notification failed", error);
+            return {
+              email: preferences.notifyEmail ? "ERROR" : "SKIPPED",
+              sms: preferences.notifySms ? "ERROR" : "SKIPPED"
+            };
+          }
+        }
+
+
 export const parentRouter = Router();
+const denyEntityMutation = (_req: Request, res: Response, _next: NextFunction) => res.status(403).json({
+  message: 'EduPay dispose d’un accès en lecture seule aux entités. Utilisez Savanex ou le superadministrateur KCS Nexus pour toute modification.',
+});
+
 parentRouter.use(authGuard);
 
 // GET all parents
 parentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
-  if (orbitRegistryIsEnabled()) {
-    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-    return res.json(mirrored.parents.map((parent) => enrichParent({
-      ...parent,
-      id: parent.id,
-      displayId: parent.displayId || parent.id,
-      createdAt: parent.createdAt || new Date(0),
-    })));
-  }
-
   try {
+    if (orbitRegistryIsEnabled()) {
+      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+      const mirroredParentIds = mirrored.parents.map((parent) => parent.id);
+      const localParents = mirroredParentIds.length
+        ? await prisma.parent.findMany({
+          where: { schoolId: req.user!.schoolId, id: { in: mirroredParentIds } },
+          include: parentInclude
+        })
+        : [];
+      const localParentById = new Map(localParents.map((parent) => [parent.id, parent]));
+      return res.json(mirroredParentIds.flatMap((id) => {
+        const parent = localParentById.get(id);
+        return parent ? [enrichParent(parent)] : [];
+      }));
+    }
+
     const parents = await prisma.parent.findMany({
       where: { schoolId: req.user!.schoolId },
       include: parentInclude
@@ -693,12 +722,12 @@ parentRouter.put("/me/photo", authorize("PARENT"), async (req: AuthenticatedRequ
       demoParent.photoUrl = payload.photoUrl;
       return res.json({ photoUrl: payload.photoUrl });
     }
-    return res.status(503).json({ message: "Mise a jour photo temporairement indisponible." });
+    return res.status(503).json({ message: "Mise à jour photo temporairement indisponible." });
   }
 });
 
 // POST create parent + students
-parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+parentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   const payload = parentSchema.parse(req.body);
   const temporaryPassword = generateTemporaryPassword();
   const normalizedEmail = payload.email.trim().toLowerCase();
@@ -813,10 +842,16 @@ parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
           orbitResult,
         });
       }
-      const notificationStatus = await sendParentWelcomeNotifications(createdParent, temporaryPassword, req.user!.schoolId, {
-        notifyEmail: payload.notifyEmail,
-        notifySms: payload.notifySms
-      });
+
+        const notificationStatus = await safeSendParentWelcomeNotifications(
+          createdParent,
+          temporaryPassword,
+          req.user!.schoolId,
+          {
+            notifyEmail: payload.notifyEmail,
+            notifySms: payload.notifySms
+          }
+        );
 
       return res.status(201).json({
         ...enrichParent(createdParent),
@@ -898,7 +933,7 @@ parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
           specialAgreement: st.specialAgreement
         });
       }
-      return { parentId: p.id, createdStudents };
+      return { parentId: p.id, createdStudents, accessCode: user.accessCode };
     });
     await assignOnboardingFinance({
       schoolId: req.user!.schoolId,
@@ -909,14 +944,28 @@ parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
       where: { id: parent.parentId },
       include: parentInclude
     });
-    const notificationStatus = await sendParentWelcomeNotifications(createdParent, temporaryPassword, req.user!.schoolId, {
-      notifyEmail: payload.notifyEmail,
-      notifySms: payload.notifySms
-    });
+
+      if (!createdParent) {
+  return res.status(500).json({
+    message: "Parent créé mais introuvable après création."
+  });
+}
+
+    const notificationStatus = await safeSendParentWelcomeNotifications(
+      createdParent,
+      temporaryPassword,
+      req.user!.schoolId,
+      {
+        notifyEmail: payload.notifyEmail,
+        notifySms: payload.notifySms
+      }
+    );
+
+
     return res.status(201).json({
       ...enrichParent(createdParent),
       temporaryPassword,
-      accessCode: createdParent?.user?.accessCode || "",
+      accessCode: parent.accessCode || createdParent?.user?.accessCode || "",
       notificationStatus
     });
   } catch (error) {
@@ -928,6 +977,7 @@ parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
       return res.status(503).json({ message: "Création parent temporairement indisponible. Vérifiez la base de données." });
     }
     const parentId = buildReadableEntityId("PAR", payload.fullName);
+    const accessCode = `ACC-PAR-DEMO${String(demoParents.length + 1).padStart(2, "0")}`;
     const newParent = {
       id: parentId,
       nom: payload.nom,
@@ -937,7 +987,7 @@ parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
       phone: payload.phone,
       email: payload.email,
       physicalAddress: payload.physicalAddress,
-      accessCode: `ACC-PAR-DEMO${String(demoParents.length + 1).padStart(2, "0")}`,
+      accessCode,
       photoUrl: payload.photoUrl,
       temporaryPassword,
       students: payload.students.map((s, i) => ({
@@ -958,11 +1008,12 @@ parentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
       notifyEmail: payload.notifyEmail,
       notifySms: payload.notifySms
     });
-    return res.status(201).json({ ...newParent, notificationStatus });
+    // Toujours retourner temporaryPassword et accessCode même en fallback/demo
+    return res.status(201).json({ ...newParent, temporaryPassword, accessCode, notificationStatus });
   }
 });
 
-parentRouter.post("/:id/reset-password", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+parentRouter.post("/:id/reset-password", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const preferences = notificationPreferenceSchema.parse(req.body ?? {});
   const temporaryPassword = generateTemporaryPassword();
@@ -1001,12 +1052,13 @@ parentRouter.post("/:id/reset-password", authorize("ADMIN", "ACCOUNTANT"), async
       });
     }
 
-    const notificationStatus = await sendParentWelcomeNotifications(parent, temporaryPassword, req.user!.schoolId, preferences);
+    const parentWithAccess = { ...parent, accessCode: user.accessCode, user };
+    const notificationStatus = await sendParentWelcomeNotifications(parentWithAccess, temporaryPassword, req.user!.schoolId, preferences);
     return res.json({ parentId: parent.id, email: user.email, accessCode: user.accessCode, temporaryPassword, notificationStatus });
   } catch (error) {
     console.error("DB unavailable on parent password reset", error);
     if (!demoDataFallbackEnabled()) {
-      return res.status(503).json({ message: "Reinitialisation parent temporairement indisponible." });
+      return res.status(503).json({ message: "Réinitialisation parent temporairement indisponible." });
     }
     const parent = demoParents.find((p) => p.id === id);
     if (!parent) return res.status(404).json({ message: "Parent non trouve" });
@@ -1023,11 +1075,12 @@ parentRouter.post("/:id/reset-password", authorize("ADMIN", "ACCOUNTANT"), async
 });
 
 // PUT update parent
-parentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+parentRouter.put("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const payload = parentSchema.parse(req.body);
   const normalizedEmail = payload.email.trim().toLowerCase();
   const normalizedPhone = payload.phone.replace(/\s+/g, "");
+  let orbitUpdateSucceeded = false;
   try {
     const parentExists = await prisma.parent.findFirst({
       where: { id, schoolId: req.user!.schoolId },
@@ -1036,23 +1089,34 @@ parentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentic
     if (!parentExists) return res.status(404).json({ message: "Parent non trouve" });
     // Suppression de la vérification d’unicité email/téléphone pour respecter la règle de l’écosystème
 
+
     if (orbitRegistryIsEnabled()) {
-      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-      const mirroredParent = mirrored.parents.find((entry) => matchesSharedParentIdentifier(entry, id));
-      if (!mirroredParent?.orbitId) {
-        return res.status(409).json({ message: "Impossible de modifier ce parent car son identifiant Orbit est introuvable." });
+      try {
+        const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+        const mirroredParent = mirrored.parents.find((entry) => matchesSharedParentIdentifier(entry, id));
+
+        if (mirroredParent?.orbitId) {
+          const { firstName, lastName } = splitPersonName(payload.fullName);
+
+          await updateOrbitParent(mirroredParent.orbitId, {
+            fullName: payload.fullName,
+            firstName: payload.prenom || firstName,
+            lastName: [payload.nom, payload.postnom].filter(Boolean).join(" ") || lastName,
+            email: normalizedEmail,
+            phone: normalizedPhone,
+            physicalAddress: payload.physicalAddress || null
+          });
+
+          await syncOrbitRegistryMirror(req.user!.schoolId);
+          orbitUpdateSucceeded = true;
+        } else {
+          console.error("[PARENT_UPDATE_ORBIT] Orbit ID introuvable pour parent", id);
+        }
+      } catch (error) {
+        console.error("[PARENT_UPDATE_ORBIT] Orbit sync failed but local update will continue", error);
       }
-      const { firstName, lastName } = splitPersonName(payload.fullName);
-      await updateOrbitParent(mirroredParent.orbitId, {
-        fullName: payload.fullName,
-        firstName: payload.prenom || firstName,
-        lastName: [payload.nom, payload.postnom].filter(Boolean).join(" ") || lastName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        physicalAddress: payload.physicalAddress || null
-      });
-      await syncOrbitRegistryMirror(req.user!.schoolId);
     }
+
 
     const classIdResolution = await resolveStudentClassIds(req.user!.schoolId, payload.students);
     const currentStudents = await prisma.student.findMany({
@@ -1199,25 +1263,76 @@ parentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentic
     });
 
     if (updatedStudentAssignments.length > 0) {
-      await assignOnboardingFinance({
-        schoolId: req.user!.schoolId,
-        parentId: id,
-        students: updatedStudentAssignments
-      });
+      try {
+        await assignOnboardingFinance({
+          schoolId: req.user!.schoolId,
+          parentId: id,
+          students: updatedStudentAssignments
+        });
+      } catch (financeError) {
+        console.error("[PARENT_UPDATE_FINANCE_SYNC] Parent updated, finance reassignment deferred", financeError);
+      }
     }
 
     const parent = await prisma.parent.findUnique({
       where: { id },
       include: parentInclude
     });
-    return res.json(enrichParent({ ...parent, nom: payload.nom, postnom: payload.postnom, prenom: payload.prenom }));
+    if (!parent) {
+      return res.status(404).json({ message: "Parent non trouvé après mise à jour." });
+    }
+
+    const persistedPhone = parent.phone.replace(/\s+/g, "");
+    if (parent.fullName !== payload.fullName || parent.email !== normalizedEmail || persistedPhone !== normalizedPhone) {
+      return res.status(409).json({
+        message: "La modification parent n'a pas été confirmée en base. Rechargez la page et réessayez."
+      });
+    }
+
+    const notificationStatus = parent
+      ? await notifyParentEntityChange({
+        schoolId: req.user!.schoolId,
+        parentId: parent.id,
+        subject: "Mise à jour du dossier parent EduPay",
+        body: [
+          `Le dossier de ${payload.fullName} vient d'être modifié dans EduPay.`,
+          "Les informations synchronisées sont maintenant partagées avec les applications de l'écosystème.",
+          `Téléphone : ${normalizedPhone}`,
+          `E-mail : ${normalizedEmail}`,
+        ].join("\n"),
+      })
+      : undefined;
+    return res.json({ ...enrichParent({ ...parent, nom: payload.nom, postnom: payload.postnom, prenom: payload.prenom }), notificationStatus });
   } catch (error) {
     console.error("DB unavailable on parent update", error);
     if (error instanceof Error && error.message.includes("classes sont introuvables")) {
       return res.status(404).json({ message: error.message });
     }
+    if (orbitUpdateSucceeded) {
+      try {
+        const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+        const parent = mirrored.parents.find((entry) => matchesSharedParentIdentifier(entry, id))
+          ?? mirrored.parents.find((entry) => entry.fullName === payload.fullName || entry.email === normalizedEmail || entry.phone === normalizedPhone);
+        if (parent) {
+          const notificationStatus = await notifyParentEntityChange({
+            schoolId: req.user!.schoolId,
+            parentId: parent.id,
+            subject: "Mise à jour du dossier parent EduPay",
+            body: [
+              `Le dossier de ${payload.fullName} vient d'être modifié dans le registre partagé.`,
+              "EduPay a resynchronisé le miroir local et les autres applications peuvent reprendre ces informations.",
+              `Téléphone : ${normalizedPhone}`,
+              `E-mail : ${normalizedEmail}`,
+            ].join("\n"),
+          });
+          return res.json({ ...enrichParent({ ...parent, nom: payload.nom, postnom: payload.postnom, prenom: payload.prenom }), notificationStatus, syncMode: "ORBIT_MIRROR" });
+        }
+      } catch (mirrorError) {
+        console.error("[PARENT_UPDATE_ORBIT_FALLBACK] Mirror refresh failed", mirrorError);
+      }
+    }
     if (!demoDataFallbackEnabled()) {
-      return res.status(503).json({ message: "Mise a jour parent temporairement indisponible." });
+      return res.status(503).json({ message: "Mise à jour parent temporairement indisponible." });
     }
     const idx = demoParents.findIndex((p) => p.id === id);
     if (idx !== -1) {
@@ -1229,7 +1344,7 @@ parentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentic
 });
 
 // DELETE parent
-parentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+parentRouter.delete("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   if (orbitRegistryIsEnabled()) {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
@@ -1245,9 +1360,50 @@ parentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authen
       });
     }
 
-    await deleteOrbitFamily(parent.orbitId);
-    await syncOrbitRegistryMirror(req.user!.schoolId);
-    return res.status(204).end();
+      await deleteOrbitFamily(parent.orbitId);
+
+        const localParent = await prisma.parent.findFirst({
+        where: {
+          id: parent.id,
+          schoolId: req.user!.schoolId
+        },
+        select: {
+          id: true,
+          userId: true
+        }
+      });
+
+      if (localParent) {
+        await prisma.$transaction(async (tx) => {
+          await tx.student.deleteMany({
+            where: {
+              parentId: localParent.id,
+              schoolId: req.user!.schoolId
+            }
+          });
+
+          await tx.parent.deleteMany({
+            where: {
+              id: localParent.id,
+              schoolId: req.user!.schoolId
+            }
+          });
+
+          if (localParent.userId) {
+            await tx.user.deleteMany({
+              where: {
+                id: localParent.userId,
+                role: "PARENT"
+              }
+            });
+          }
+        });
+      }
+
+      await syncOrbitRegistryMirror(req.user!.schoolId);
+      return res.status(204).end();
+
+
   }
 
   try {

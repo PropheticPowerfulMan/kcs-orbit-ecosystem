@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
 import { SearchField } from "../components/SearchField";
@@ -37,6 +37,44 @@ type Parent = {
   preferredLanguage?: "fr" | "en";
   students: Student[];
   createdAt: string;
+};
+
+type SharedDirectoryResponse = {
+  source?: string;
+  visibility?: string;
+  counts?: { families?: number; parents?: number; students?: number; teachers?: number };
+  parents?: Array<{
+    id: string;
+    displayId?: string;
+    fullName?: string;
+    firstName?: string;
+    middleName?: string | null;
+    lastName?: string;
+    phone?: string | null;
+    email?: string | null;
+    physicalAddress?: string | null;
+    students?: Array<Partial<Student> & {
+      id: string;
+      displayId?: string;
+      fullName?: string;
+      classId?: string;
+      className?: string;
+      annualFee?: number;
+      annualFeeDisplay?: number;
+      createdAt?: string;
+      paymentOptionType?: string | null;
+      tuitionPlanName?: string;
+    }>;
+  }>;
+  students?: Array<Partial<Student> & {
+    id: string;
+    parentId?: string;
+    fullName?: string;
+    classId?: string;
+    className?: string;
+    annualFee?: number;
+    annualFeeDisplay?: number;
+  }>;
 };
 
 type ParentCredentials = {
@@ -98,6 +136,259 @@ type ParentFinanceSnapshot = {
   debts: ParentFinanceDebt[];
 };
 
+function normalizeParentForUi(parent: Parent): Parent {
+  const parts = String(parent.fullName ?? "").split(" ");
+  return {
+    ...parent,
+    id: String(parent.id ?? ""),
+    displayId: parent.displayId ? String(parent.displayId) : undefined,
+    nom: String(parent.nom ?? parts[0] ?? ""),
+    postnom: String(parent.postnom ?? parts[1] ?? ""),
+    prenom: String(parent.prenom ?? parts[2] ?? ""),
+    fullName: String(parent.fullName ?? [parent.nom, parent.postnom, parent.prenom].filter(Boolean).join(" ") ?? ""),
+    phone: String(parent.phone ?? ""),
+    email: String(parent.email ?? ""),
+    physicalAddress: parent.physicalAddress ? String(parent.physicalAddress) : "",
+    photoUrl: parent.photoUrl ? String(parent.photoUrl) : "",
+    preferredLanguage: parent.preferredLanguage === "en" ? "en" : "fr",
+    createdAt: parent.createdAt || new Date(0).toISOString(),
+    students: Array.isArray(parent.students)
+      ? parent.students.filter(Boolean).map((student) => ({
+          ...student,
+          id: String(student.id ?? ""),
+          displayId: student.displayId ? String(student.displayId) : undefined,
+          fullName: String(student.fullName ?? ""),
+          classId: String(student.classId ?? ""),
+          className: String(student.className ?? ""),
+          annualFee: toSafeNumber(student.annualFee),
+          createdAt: student.createdAt || parent.createdAt || new Date(0).toISOString(),
+          paymentOptionType: student.paymentOptionType ? String(student.paymentOptionType) : undefined,
+          paymentOptionLabel: student.paymentOptionLabel ? String(student.paymentOptionLabel) : undefined,
+          tuitionPlanName: student.tuitionPlanName ? String(student.tuitionPlanName) : undefined,
+        })).sort((a, b) => compareByFullName(a, b))
+      : []
+  };
+}
+
+function compareByFullName(a: { fullName?: string; id?: string }, b: { fullName?: string; id?: string }) {
+  return String(a.fullName || a.id || "").localeCompare(String(b.fullName || b.id || ""), "fr", { sensitivity: "base" });
+}
+
+function sortParentsForUi(parents: Parent[]) {
+  return [...parents]
+    .map((parent) => ({ ...parent, students: [...(parent.students ?? [])].sort(compareByFullName) }))
+    .sort(compareByFullName);
+}
+
+function splitNameParts(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    nom: parts[0] ?? "",
+    postnom: parts.length > 2 ? parts.slice(1, -1).join(" ") : "",
+    prenom: parts.length > 1 ? parts[parts.length - 1] : "",
+  };
+}
+
+function normalizeSharedDirectoryForParents(directory: SharedDirectoryResponse): Parent[] {
+  const studentsByParent = new Map<string, Student[]>();
+  for (const student of directory.students ?? []) {
+    const parentId = String(student.parentId ?? "");
+    if (!parentId) continue;
+    const row: Student = {
+      id: String(student.id),
+      displayId: student.displayId ? String(student.displayId) : undefined,
+      fullName: String(student.fullName ?? ""),
+      gender: (student.gender as Student["gender"]) ?? "",
+      classId: String(student.classId ?? ""),
+      className: String(student.className ?? student.classId ?? ""),
+      annualFee: toSafeNumber(student.annualFeeDisplay ?? student.annualFee),
+      createdAt: student.createdAt ? String(student.createdAt) : new Date(0).toISOString(),
+      paymentOptionType: student.paymentOptionType ? String(student.paymentOptionType) : undefined,
+      tuitionPlanName: student.tuitionPlanName ? String(student.tuitionPlanName) : undefined,
+    };
+    studentsByParent.set(parentId, [...(studentsByParent.get(parentId) ?? []), row]);
+  }
+
+  return sortParentsForUi((directory.parents ?? []).map((parent) => {
+    const fullName = String(parent.fullName ?? [parent.firstName, parent.middleName, parent.lastName].filter(Boolean).join(" ") ?? "");
+    const parts = splitNameParts(fullName);
+    const directStudents = Array.isArray(parent.students) && parent.students.length > 0
+      ? parent.students.map((student) => ({
+          id: String(student.id),
+          displayId: student.displayId ? String(student.displayId) : undefined,
+          fullName: String(student.fullName ?? ""),
+          gender: (student.gender as Student["gender"]) ?? "",
+          classId: String(student.classId ?? ""),
+          className: String(student.className ?? student.classId ?? ""),
+          annualFee: toSafeNumber(student.annualFeeDisplay ?? student.annualFee),
+          createdAt: student.createdAt ? String(student.createdAt) : new Date(0).toISOString(),
+          paymentOptionType: student.paymentOptionType ? String(student.paymentOptionType) : undefined,
+          tuitionPlanName: student.tuitionPlanName ? String(student.tuitionPlanName) : undefined,
+        }))
+      : studentsByParent.get(String(parent.id)) ?? [];
+
+    return normalizeParentForUi({
+      id: String(parent.id),
+      displayId: parent.displayId ? String(parent.displayId) : undefined,
+      nom: parent.lastName ? String(parent.lastName) : parts.nom,
+      postnom: parts.postnom,
+      prenom: parent.firstName ? String(parent.firstName) : parts.prenom,
+      fullName,
+      phone: String(parent.phone ?? ""),
+      email: String(parent.email ?? ""),
+      physicalAddress: parent.physicalAddress ? String(parent.physicalAddress) : "",
+      students: directStudents,
+      createdAt: new Date(0).toISOString(),
+    });
+  }));
+}
+
+function toSafeNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function expandClassSearchTerms(value: unknown) {
+  const normalized = normalizeSearchText(value);
+  if (!normalized) return [];
+
+  const terms = new Set([normalized, normalized.replace(/\s+/g, "")]);
+  const gradeMatch = normalized.match(/\bgrade\s*0?([1-9]|1[0-2])\s*([a-z])?\b/);
+  if (gradeMatch) {
+    const grade = gradeMatch[1];
+    const section = gradeMatch[2] || "";
+    terms.add(`grade ${grade}`);
+    terms.add(`grade${grade}`);
+    terms.add(`g${grade}`);
+    terms.add(`classe grade ${grade}`);
+    if (section) {
+      terms.add(`grade ${grade}${section}`);
+      terms.add(`grade${grade}${section}`);
+      terms.add(`g${grade}${section}`);
+    }
+  }
+
+  const kindergartenMatch = normalized.match(/\bk\s*([3-5])\s*([a-z])?\b/);
+  if (kindergartenMatch) {
+    const level = kindergartenMatch[1];
+    const section = kindergartenMatch[2] || "";
+    terms.add(`k${level}`);
+    terms.add(`k ${level}`);
+    terms.add(`kindergarten ${level}`);
+    terms.add(`maternelle k${level}`);
+    terms.add(`classe k${level}`);
+    if (section) {
+      terms.add(`k${level}${section}`);
+      terms.add(`k ${level} ${section}`);
+    }
+  }
+
+  return Array.from(terms);
+}
+
+function buildSearchIndex(values: unknown[]) {
+  const terms = new Set<string>();
+  values.forEach((value) => {
+    expandClassSearchTerms(value).forEach((term) => terms.add(term));
+  });
+  return Array.from(terms).join(" ");
+}
+
+function searchIndexMatches(index: string, rawQuery: string) {
+  const query = normalizeSearchText(rawQuery);
+  if (!query) return true;
+  const compactQuery = query.replace(/\s+/g, "");
+  if (index.includes(query) || index.includes(compactQuery)) return true;
+  return query.split(" ").filter(Boolean).every((part) => index.includes(part));
+}
+
+function normalizeParentFinanceSnapshot(snapshot: ParentFinanceSnapshot | null | unknown): ParentFinanceSnapshot | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+
+  const rawSnapshot = snapshot as Partial<ParentFinanceSnapshot>;
+  const profile = rawSnapshot.profile ?? ({} as ParentFinanceSnapshot["profile"]);
+  const academicYear = rawSnapshot.academicYear ?? ({} as ParentFinanceSnapshot["academicYear"]);
+  return {
+    academicYear: {
+      id: String(academicYear.id ?? ""),
+      name: String(academicYear.name ?? "-"),
+      startDate: String(academicYear.startDate ?? ""),
+      endDate: String(academicYear.endDate ?? "")
+    },
+    profile: {
+      totalPaid: toSafeNumber(profile.totalPaid),
+      totalDebt: toSafeNumber(profile.totalDebt),
+      totalReduction: toSafeNumber(profile.totalReduction),
+      carriedOverDebt: toSafeNumber(profile.carriedOverDebt),
+      overdueInstallments: toSafeNumber(profile.overdueInstallments),
+      pendingPaymentsTotal: toSafeNumber(profile.pendingPaymentsTotal),
+      failedPaymentsTotal: toSafeNumber(profile.failedPaymentsTotal),
+      paymentBehaviorScore: toSafeNumber(profile.paymentBehaviorScore),
+      lastPaymentAt: profile.lastPaymentAt ?? null,
+      childrenLinkedToAccount: toSafeNumber(profile.childrenLinkedToAccount),
+      expectedNetRevenue: toSafeNumber(profile.expectedNetRevenue),
+      completionRate: toSafeNumber(profile.completionRate),
+    },
+    students: Array.isArray(rawSnapshot.students)
+      ? rawSnapshot.students.filter(Boolean).map((student, index) => ({
+          ...student,
+          id: String(student.id ?? `finance-student-${index}`),
+          fullName: String(student.fullName ?? "Élève non renseigné"),
+          className: student.className ? String(student.className) : null,
+          paid: toSafeNumber(student.paid),
+          balance: toSafeNumber(student.balance),
+          expectedTotal: toSafeNumber(student.expectedTotal),
+          overdueInstallments: toSafeNumber(student.overdueInstallments),
+          completionRate: toSafeNumber(student.completionRate),
+        }))
+      : [],
+    debts: Array.isArray(rawSnapshot.debts)
+      ? rawSnapshot.debts.filter(Boolean).map((debt, index) => ({
+          ...debt,
+          id: String(debt.id ?? `finance-debt-${index}`),
+          title: String(debt.title ?? "Dette non renseignée"),
+          reason: debt.reason ? String(debt.reason) : null,
+          status: String(debt.status ?? "OPEN"),
+          academicYearId: String(debt.academicYearId ?? ""),
+          academicYearName: debt.academicYearName ? String(debt.academicYearName) : null,
+          carriedOverFromYearId: debt.carriedOverFromYearId ? String(debt.carriedOverFromYearId) : null,
+          carriedOverFromYearName: debt.carriedOverFromYearName ? String(debt.carriedOverFromYearName) : null,
+          dueDate: debt.dueDate ? String(debt.dueDate) : null,
+          settledAt: debt.settledAt ? String(debt.settledAt) : null,
+          createdAt: String(debt.createdAt ?? ""),
+          originalAmount: toSafeNumber(debt.originalAmount),
+          amountRemaining: toSafeNumber(debt.amountRemaining),
+        }))
+      : [],
+  };
+}
+
 type SchoolClass = { id: string; name: string };
 
 type TuitionPlan = {
@@ -136,6 +427,9 @@ type FinanceCatalog = {
 
 type StudentFormState = {
   id?: string;
+  lastName: string;
+  middleName: string;
+  firstName: string;
   fullName: string;
   gender: "F" | "M" | "O" | "";
   classId: string;
@@ -198,7 +492,7 @@ const EMPTY_FORM: FormState = {
   students: []
 };
 
-const EMPTY_STUDENT: StudentFormState = { fullName: "", gender: "", classId: "", annualFee: "", paymentOptionType: "STANDARD_MONTHLY" };
+const EMPTY_STUDENT: StudentFormState = { lastName: "", middleName: "", firstName: "", fullName: "", gender: "", classId: "", annualFee: "", paymentOptionType: "STANDARD_MONTHLY" };
 
 const EMPTY_SPECIAL_AGREEMENT: SpecialAgreementDraft = {
   title: "",
@@ -352,20 +646,20 @@ function Badge({ text, color }: { text: string; color: string }) {
 }
 
 function formatMoney(amount: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(amount);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(toSafeNumber(amount));
 }
 
-function formatDateLabel(value?: string | null) {
+function formatDateLabel(value?: unknown) {
   if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) return String(value);
   return parsed.toLocaleDateString();
 }
 
-function formatDateTimeLabel(value?: string | null) {
+function formatDateTimeLabel(value?: unknown) {
   if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) return String(value);
   return parsed.toLocaleString("fr-FR", {
     year: "numeric",
     month: "2-digit",
@@ -376,8 +670,9 @@ function formatDateTimeLabel(value?: string | null) {
   });
 }
 
-function getDebtStatusLabel(status: string) {
-  switch (status) {
+function getDebtStatusLabel(status: string | null | undefined) {
+  const safeStatus = status || "OPEN";
+  switch (safeStatus) {
     case "OPEN":
       return "Ouverte";
     case "PARTIALLY_PAID":
@@ -389,12 +684,12 @@ function getDebtStatusLabel(status: string) {
     case "WRITTEN_OFF":
       return "Radiée";
     default:
-      return status;
+      return safeStatus;
   }
 }
 
-function getDebtStatusTone(status: string) {
-  switch (status) {
+function getDebtStatusTone(status: string | null | undefined) {
+  switch (status || "OPEN") {
     case "CLEARED":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
     case "PARTIALLY_PAID":
@@ -407,16 +702,16 @@ function getDebtStatusTone(status: string) {
   }
 }
 
-function getDebtReferenceYear(debt: ParentFinanceDebt) {
-  return debt.carriedOverFromYearName
-    || debt.carriedOverFromYearId
-    || debt.academicYearName
-    || debt.academicYearId
+function getDebtReferenceYear(debt: ParentFinanceDebt | null | undefined) {
+  return debt?.carriedOverFromYearName
+    || debt?.carriedOverFromYearId
+    || debt?.academicYearName
+    || debt?.academicYearId
     || "Année non renseignée";
 }
 
-function escapeHtml(value: string) {
-  return value
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -435,46 +730,67 @@ function slugify(value: string) {
 
 function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSnapshot | null) {
   const brand = schoolBranding;
+  const parentStudents = Array.isArray(parent.students) ? parent.students : [];
+  const safeFinanceSnapshot = normalizeParentFinanceSnapshot(financeSnapshot);
   const generatedAt = new Date();
   const documentReference = escapeHtml(`KCS-PAR-${generatedAt.toISOString().slice(0, 10)}-${(parent.displayId || parent.id).replace(/[^A-Za-z0-9-]/g, "")}`);
   const logoSrc = escapeHtml(new URL(brand.logoSrc, window.location.href).toString());
-  const studentRows = parent.students.map((student) => {
-    const financeRow = financeSnapshot?.students.find((entry) => entry.id === student.id);
+  const getStudentPlanLabel = (student: Student, financeRow?: ParentFinanceStudent) =>
+    student.tuitionPlanName
+    || student.paymentOptionLabel
+    || student.paymentOptionType
+    || (financeRow ? "Plan financier actif" : "-");
+  const studentRows = parentStudents.map((student) => {
+    const financeRow = safeFinanceSnapshot?.students.find((entry) => entry.id === student.id);
+    const planLabel = getStudentPlanLabel(student, financeRow);
     return `
       <tr>
         <td>${escapeHtml(student.fullName)}</td>
         <td>${escapeHtml(student.className || student.classId)}</td>
-        <td>${escapeHtml(student.tuitionPlanName || student.paymentOptionLabel || "-")}</td>
+        <td>${escapeHtml(planLabel)}</td>
         <td>${escapeHtml(formatDateTimeLabel(student.createdAt))}</td>
-        <td>$ ${student.annualFee.toFixed(2)}</td>
-        <td>${financeRow ? `$ ${financeRow.expectedTotal.toFixed(2)}` : "-"}</td>
-        <td>${financeRow ? `$ ${financeRow.paid.toFixed(2)}` : "-"}</td>
-        <td>${financeRow ? `$ ${financeRow.balance.toFixed(2)}` : "-"}</td>
+        <td>${formatMoney(student.annualFee)}</td>
+        <td>${financeRow ? formatMoney(financeRow.expectedTotal) : "-"}</td>
+        <td>${financeRow ? formatMoney(financeRow.paid) : "-"}</td>
+        <td>${financeRow ? formatMoney(financeRow.balance) : "-"}</td>
       </tr>`;
   }).join("");
 
-  const debtRows = financeSnapshot?.debts.length
-    ? financeSnapshot.debts.map((debt) => `
+  const debtRows = safeFinanceSnapshot?.debts.length
+    ? safeFinanceSnapshot.debts.map((debt) => `
       <tr>
         <td>${escapeHtml(debt.title)}</td>
         <td>${escapeHtml(getDebtReferenceYear(debt))}</td>
-        <td>$ ${debt.originalAmount.toFixed(2)}</td>
-        <td>$ ${debt.amountRemaining.toFixed(2)}</td>
+        <td>${formatMoney(debt.originalAmount)}</td>
+        <td>${formatMoney(debt.amountRemaining)}</td>
         <td>${escapeHtml(getDebtStatusLabel(debt.status))}</td>
         <td>${escapeHtml(formatDateLabel(debt.dueDate))}</td>
       </tr>`).join("")
     : `<tr><td colspan="6">Aucune dette détaillée enregistrée.</td></tr>`;
 
-  const summarySection = financeSnapshot ? `
+  const summarySection = safeFinanceSnapshot ? `
     <section class="panel">
       <h2>Synthèse financière</h2>
       <div class="summary-grid">
-        <div><span>Année académique</span><strong>${escapeHtml(financeSnapshot.academicYear.name)}</strong></div>
-        <div><span>Total payé</span><strong>$ ${financeSnapshot.profile.totalPaid.toFixed(2)}</strong></div>
-        <div><span>Dette totale</span><strong>$ ${financeSnapshot.profile.totalDebt.toFixed(2)}</strong></div>
-        <div><span>Réductions</span><strong>$ ${financeSnapshot.profile.totalReduction.toFixed(2)}</strong></div>
-        <div><span>Dette reportée</span><strong>$ ${financeSnapshot.profile.carriedOverDebt.toFixed(2)}</strong></div>
-        <div><span>Taux de couverture</span><strong>${financeSnapshot.profile.completionRate.toFixed(1)}%</strong></div>
+        <div><span>Année académique</span><strong>${escapeHtml(safeFinanceSnapshot.academicYear.name)}</strong></div>
+        <div><span>Total payé</span><strong>${formatMoney(safeFinanceSnapshot.profile.totalPaid)}</strong></div>
+        <div><span>Dette totale</span><strong>${formatMoney(safeFinanceSnapshot.profile.totalDebt)}</strong></div>
+        <div><span>Réductions</span><strong>${formatMoney(safeFinanceSnapshot.profile.totalReduction)}</strong></div>
+        <div><span>Dette reportée</span><strong>${formatMoney(safeFinanceSnapshot.profile.carriedOverDebt)}</strong></div>
+        <div><span>Taux de couverture</span><strong>${toSafeNumber(safeFinanceSnapshot.profile.completionRate).toFixed(1)}%</strong></div>
+      </div>
+    </section>` : "";
+
+  const financeDetailsSection = safeFinanceSnapshot ? `
+    <section class="panel">
+      <h2>Analyse financière détaillée</h2>
+      <div class="summary-grid">
+        <div><span>Revenu net attendu</span><strong>${formatMoney(safeFinanceSnapshot.profile.expectedNetRevenue)}</strong></div>
+        <div><span>Paiements en attente</span><strong>${formatMoney(safeFinanceSnapshot.profile.pendingPaymentsTotal)}</strong></div>
+        <div><span>Paiements échoués</span><strong>${formatMoney(safeFinanceSnapshot.profile.failedPaymentsTotal)}</strong></div>
+        <div><span>Échéances en retard</span><strong>${safeFinanceSnapshot.profile.overdueInstallments}</strong></div>
+        <div><span>Score comportement</span><strong>${toSafeNumber(safeFinanceSnapshot.profile.paymentBehaviorScore).toFixed(1)}%</strong></div>
+        <div><span>Dernier paiement</span><strong>${escapeHtml(formatDateLabel(safeFinanceSnapshot.profile.lastPaymentAt))}</strong></div>
       </div>
     </section>` : "";
 
@@ -484,6 +800,7 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
       <meta charset="utf-8" />
       <title>${escapeHtml(brand.schoolName)} - Rapport parent - ${escapeHtml(parent.fullName)}</title>
       <style>
+        @page { size: A4; margin: 8mm; }
         :root {
           --brand-primary: ${brand.colors.primary};
           --brand-secondary: ${brand.colors.secondary};
@@ -498,7 +815,7 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           position: relative;
           font-family: "Segoe UI", Arial, sans-serif;
           margin: 0;
-          padding: 28px;
+          padding: 12px;
           color: var(--ink);
           background:
             radial-gradient(circle at top right, rgba(143, 183, 232, 0.32), transparent 24%),
@@ -539,8 +856,8 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           justify-content: space-between;
           gap: 24px;
           align-items: flex-start;
-          padding: 20px 22px;
-          border-radius: 20px;
+          padding: 14px 16px;
+          border-radius: 16px;
           background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
           color: white;
           box-shadow: 0 20px 45px rgba(11, 46, 89, 0.18);
@@ -563,12 +880,12 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           z-index: 1;
         }
         .header-logo {
-          width: 76px;
-          height: 76px;
+          width: 58px;
+          height: 58px;
           object-fit: contain;
-          border-radius: 22px;
+          border-radius: 16px;
           background: white;
-          padding: 8px;
+          padding: 6px;
           border: 1px solid rgba(255,255,255,0.25);
           box-shadow: 0 8px 22px rgba(0,0,0,0.16);
         }
@@ -579,63 +896,63 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           color: rgba(255,255,255,0.72);
           margin-bottom: 6px;
         }
-        .school-name { font-size: 28px; font-weight: 800; line-height: 1.1; }
+        .school-name { font-size: 22px; font-weight: 800; line-height: 1.05; }
         .school-meta { margin-top: 6px; font-size: 12px; color: rgba(255,255,255,0.86); }
         .report-box {
-          min-width: 220px;
+          min-width: 190px;
           position: relative;
           z-index: 1;
-          padding: 14px 16px;
-          border-radius: 16px;
+          padding: 10px 12px;
+          border-radius: 14px;
           background: rgba(255,255,255,0.1);
           border: 1px solid rgba(255,255,255,0.16);
           backdrop-filter: blur(10px);
         }
-        .report-box strong { display: block; font-size: 20px; margin-top: 8px; }
+        .report-box strong { display: block; font-size: 16px; margin-top: 6px; }
         .meta-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
-          margin-top: 18px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 10px;
         }
         .panel {
           position: relative;
           border: 1px solid rgba(148, 163, 184, 0.28);
-          border-radius: 18px;
-          padding: 18px;
-          margin-top: 18px;
+          border-radius: 12px;
+          padding: 10px;
+          margin-top: 10px;
           background: rgba(255,255,255,0.92);
           box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
         }
         .panel h2 {
-          font-size: 15px;
+          font-size: 11px;
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 0.14em;
           color: var(--brand-primary);
-          margin-bottom: 12px;
+          margin-bottom: 6px;
         }
-        .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
         .summary-grid div {
           border: 1px solid rgba(143, 183, 232, 0.42);
-          border-radius: 14px;
-          padding: 12px;
+          border-radius: 10px;
+          padding: 8px;
           background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(232, 241, 252, 0.88));
         }
-        .summary-grid span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
-        .summary-grid strong { display: block; margin-top: 6px; font-size: 16px; }
-        .muted { color: var(--muted); font-size: 12px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid var(--line); padding: 9px; text-align: left; font-size: 12px; vertical-align: top; }
+        .summary-grid span { display: block; font-size: 8px; color: var(--muted); text-transform: uppercase; }
+        .summary-grid strong { display: block; margin-top: 4px; font-size: 11px; }
+        .muted { color: var(--muted); font-size: 9px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; }
+        th, td { border: 1px solid var(--line); padding: 5px; text-align: left; font-size: 9px; vertical-align: top; word-break: break-word; }
         th {
           background: linear-gradient(180deg, rgba(11, 46, 89, 0.08), rgba(31, 79, 143, 0.04));
           color: var(--brand-primary);
           text-transform: uppercase;
           letter-spacing: 0.08em;
-          font-size: 11px;
+          font-size: 8px;
         }
         .footer {
-          margin-top: 18px;
+          margin-top: 10px;
           display: flex;
           justify-content: space-between;
           gap: 12px;
@@ -643,28 +960,28 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           color: var(--muted);
         }
         .compliance {
-          margin-top: 16px;
+          margin-top: 10px;
           border: 1px solid rgba(15, 118, 110, 0.2);
           border-left: 5px solid #0f766e;
           border-radius: 14px;
           background: rgba(240, 253, 250, 0.96);
-          padding: 12px 14px;
+          padding: 8px 10px;
           color: #134e4a;
           font-size: 11px;
           line-height: 1.5;
         }
         .signatures {
-          margin-top: 16px;
+          margin-top: 10px;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
+          gap: 10px;
         }
         .signature-box {
-          min-height: 82px;
+          min-height: 50px;
           border: 1px dashed rgba(11, 46, 89, 0.24);
-          border-radius: 14px;
+          border-radius: 10px;
           background: rgba(255,255,255,0.88);
-          padding: 12px;
+          padding: 8px;
         }
         .signature-title {
           font-size: 10px;
@@ -674,7 +991,7 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           color: var(--muted);
         }
         .signature-line {
-          margin-top: 38px;
+          margin-top: 18px;
           border-top: 1px solid rgba(11, 46, 89, 0.24);
           padding-top: 6px;
           font-size: 11px;
@@ -682,7 +999,7 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
           font-weight: 700;
         }
         @media print {
-          body { padding: 12px; }
+          body { padding: 0; }
           .panel, .header { break-inside: avoid; }
         }
       </style>
@@ -721,16 +1038,29 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
             <strong>${escapeHtml(parent.email || "-")}</strong>
           </div>
           <div>
+            <p class="muted">Nom complet administratif</p>
+            <strong>${escapeHtml([parent.nom, parent.postnom, parent.prenom].filter(Boolean).join(" ") || parent.fullName)}</strong>
+          </div>
+          <div>
+            <p class="muted">Adresse physique</p>
+            <strong>${escapeHtml(parent.physicalAddress || "-")}</strong>
+          </div>
+          <div>
+            <p class="muted">Langue préférée</p>
+            <strong>${escapeHtml((parent.preferredLanguage || "fr").toUpperCase())}</strong>
+          </div>
+          <div>
             <p class="muted">Inscription</p>
             <strong>${escapeHtml(formatDateTimeLabel(parent.createdAt))}</strong>
           </div>
           <div>
             <p class="muted">Nombre d'enfants liés</p>
-            <strong>${parent.students.length}</strong>
+            <strong>${parentStudents.length}</strong>
           </div>
         </div>
       </section>
       ${summarySection}
+      ${financeDetailsSection}
       <section class="panel">
         <h2>Enfants rattachés</h2>
         <table>
@@ -834,7 +1164,9 @@ function printParentReport(parent: Parent, financeSnapshot: ParentFinanceSnapsho
 }
 
 function exportParentReportExcel(parent: Parent, financeSnapshot: ParentFinanceSnapshot | null) {
-  const financeStudents = new Map((financeSnapshot?.students ?? []).map((student) => [student.id, student]));
+  const parentStudents = Array.isArray(parent.students) ? parent.students : [];
+  const safeFinanceSnapshot = normalizeParentFinanceSnapshot(financeSnapshot);
+  const financeStudents = new Map((safeFinanceSnapshot?.students ?? []).map((student) => [student.id, student]));
   exportWorkbook(`rapport-parent-${slugify(parent.fullName)}-${new Date().toISOString().slice(0, 10)}`, [
     {
       name: "Parent",
@@ -847,17 +1179,17 @@ function exportParentReportExcel(parent: Parent, financeSnapshot: ParentFinanceS
         "Téléphone": parent.phone,
         "Email": parent.email,
         "Date inscription exacte": formatDateTimeLabel(parent.createdAt),
-        "Enfants liés": parent.students.length,
-        "Année académique": financeSnapshot?.academicYear.name ?? "-",
-        "Total payé": financeSnapshot?.profile.totalPaid ?? null,
-        "Dette totale": financeSnapshot?.profile.totalDebt ?? null,
-        "Réductions": financeSnapshot?.profile.totalReduction ?? null,
-        "Dette reportée": financeSnapshot?.profile.carriedOverDebt ?? null,
+        "Enfants liés": parentStudents.length,
+        "Année académique": safeFinanceSnapshot?.academicYear.name ?? "-",
+        "Total payé": safeFinanceSnapshot?.profile.totalPaid ?? null,
+        "Dette totale": safeFinanceSnapshot?.profile.totalDebt ?? null,
+        "Réductions": safeFinanceSnapshot?.profile.totalReduction ?? null,
+        "Dette reportée": safeFinanceSnapshot?.profile.carriedOverDebt ?? null,
       }]
     },
     {
       name: "Enfants",
-      rows: parent.students.map((student) => {
+      rows: parentStudents.map((student) => {
         const financeRow = financeStudents.get(student.id);
         return {
           "ID Élève": student.displayId || student.id,
@@ -876,7 +1208,7 @@ function exportParentReportExcel(parent: Parent, financeSnapshot: ParentFinanceS
     },
     {
       name: "Dettes",
-      rows: (financeSnapshot?.debts ?? []).map((debt) => ({
+      rows: (safeFinanceSnapshot?.debts ?? []).map((debt) => ({
         "Ligne": debt.title,
         "Motif": debt.reason || "-",
         "Année de référence": getDebtReferenceYear(debt),
@@ -1166,6 +1498,41 @@ function AccessNotificationModal({
   );
 }
 
+class ParentDetailBoundary extends Component<
+  { children: ReactNode; onClose: () => void },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("[PARENT_DETAIL_MODAL_RENDER]", error);
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={this.props.onClose} />
+        <section className="relative w-full max-w-lg rounded-2xl border border-red-400/30 bg-slate-950 p-6 shadow-2xl">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-red-200">Suivi parent indisponible</p>
+          <h2 className="mt-2 font-display text-2xl font-bold text-white">Le dossier n'a pas pu être affiché.</h2>
+          <p className="mt-3 text-sm leading-6 text-ink-dim">
+            Une donnée du parent ou de son profil financier est incohérente. La liste reste disponible, et l'erreur est maintenant isolée au lieu de casser toute la page.
+          </p>
+          <button type="button" onClick={this.props.onClose} className="mt-5 w-full rounded-xl bg-red-400 px-4 py-3 text-sm font-black text-slate-950">
+            Fermer
+          </button>
+        </section>
+      </div>
+    );
+  }
+}
+
 function DetailModal({
   parent,
   financeSnapshot,
@@ -1182,11 +1549,13 @@ function DetailModal({
   t: (k: string) => string;
 }) {
   const [pdfExporting, setPdfExporting] = useState(false);
+  const parentStudents = Array.isArray(parent.students) ? parent.students : [];
+  const safeFinanceSnapshot = useMemo(() => normalizeParentFinanceSnapshot(financeSnapshot), [financeSnapshot]);
   const debtHistory = useMemo(() => {
-    if (!financeSnapshot) return [] as Array<{ year: string; amountRemaining: number; originalAmount: number; count: number }>;
+    if (!safeFinanceSnapshot) return [] as Array<{ year: string; amountRemaining: number; originalAmount: number; count: number }>;
 
     const grouped = new Map<string, { year: string; amountRemaining: number; originalAmount: number; count: number }>();
-    for (const debt of financeSnapshot.debts) {
+    for (const debt of safeFinanceSnapshot.debts) {
       const year = getDebtReferenceYear(debt);
       const current = grouped.get(year) || { year, amountRemaining: 0, originalAmount: 0, count: 0 };
       current.amountRemaining += debt.amountRemaining;
@@ -1196,10 +1565,10 @@ function DetailModal({
     }
 
     return Array.from(grouped.values()).sort((left, right) => right.year.localeCompare(left.year));
-  }, [financeSnapshot]);
+  }, [safeFinanceSnapshot]);
   const financeStudentsById = useMemo(
-    () => new Map((financeSnapshot?.students ?? []).map((student) => [student.id, student])),
-    [financeSnapshot]
+    () => new Map((safeFinanceSnapshot?.students ?? []).map((student) => [student.id, student])),
+    [safeFinanceSnapshot]
   );
 
   const exportDisabled = financeLoading || Boolean(financeError) || pdfExporting;
@@ -1207,7 +1576,7 @@ function DetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-3 py-4 sm:px-5 sm:py-6" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="edupay-parent-modal relative flex max-h-[calc(100dvh-2rem)] w-full max-w-7xl flex-col overflow-hidden glass rounded-2xl animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
+      <div className="edupay-parent-modal relative flex max-h-[calc(100dvh-1rem)] min-h-[82vh] w-full max-w-[min(98vw,104rem)] flex-col overflow-hidden glass rounded-2xl animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-slate-950/90 px-4 py-4 backdrop-blur-xl sm:px-6">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-brand-300">{t("pmParentId")}: {parent.displayId || parent.id}</p>
@@ -1218,7 +1587,7 @@ function DetailModal({
               type="button"
               onClick={() => {
                 setPdfExporting(true);
-                void exportParentReportPdf(parent, financeSnapshot)
+                void exportParentReportPdf(parent, safeFinanceSnapshot)
                   .finally(() => setPdfExporting(false));
               }}
               disabled={exportDisabled}
@@ -1229,7 +1598,7 @@ function DetailModal({
             </button>
             <button
               type="button"
-              onClick={() => printParentReport(parent, financeSnapshot)}
+              onClick={() => printParentReport(parent, safeFinanceSnapshot)}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               title="Imprimer le rapport"
@@ -1238,7 +1607,7 @@ function DetailModal({
             </button>
             <button
               type="button"
-              onClick={() => exportParentReportExcel(parent, financeSnapshot)}
+              onClick={() => exportParentReportExcel(parent, safeFinanceSnapshot)}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               title="Exporter le rapport en Excel"
@@ -1294,13 +1663,13 @@ function DetailModal({
 
             <div>
               <p className="text-sm font-bold text-ink-dim uppercase tracking-[0.1em] mb-3">
-                {t("pmChildren")} ({parent.students.length})
+                {t("pmChildren")} ({parentStudents.length})
               </p>
-              {parent.students.length === 0 ? (
+              {parentStudents.length === 0 ? (
                 <p className="text-sm text-ink-dim italic">{t("pmNoChildren")}</p>
               ) : (
                 <div className="space-y-2">
-                  {parent.students.map((st) => {
+                  {parentStudents.map((st) => {
                     const financeRow = financeStudentsById.get(st.id);
                     const expectedAmount = Number(financeRow?.expectedTotal ?? st.annualFee ?? 0);
                     const enrolledAt = st.createdAt || parent.createdAt;
@@ -1343,7 +1712,7 @@ function DetailModal({
                   </p>
                 </div>
                 <span className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-red-200">
-                  {financeSnapshot?.debts.length ?? 0} ligne(s)
+                  {safeFinanceSnapshot?.debts.length ?? 0} ligne(s)
                 </span>
               </div>
 
@@ -1355,24 +1724,24 @@ function DetailModal({
                 <div className="mt-5 rounded-xl border border-danger/40 bg-danger/10 px-4 py-5 text-sm text-danger">
                   {financeError}
                 </div>
-              ) : financeSnapshot ? (
+              ) : safeFinanceSnapshot ? (
                 <div className="mt-5 space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Dette totale</p>
-                      <p className="mt-2 text-xl font-black text-red-200">{formatMoney(financeSnapshot.profile.totalDebt)}</p>
+                      <p className="mt-2 text-xl font-black text-red-200">{formatMoney(safeFinanceSnapshot.profile.totalDebt)}</p>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Dette reportée</p>
-                      <p className="mt-2 text-xl font-black text-amber-200">{formatMoney(financeSnapshot.profile.carriedOverDebt)}</p>
+                      <p className="mt-2 text-xl font-black text-amber-200">{formatMoney(safeFinanceSnapshot.profile.carriedOverDebt)}</p>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Paiements cumulés</p>
-                      <p className="mt-2 text-xl font-black text-emerald-200">{formatMoney(financeSnapshot.profile.totalPaid)}</p>
+                      <p className="mt-2 text-xl font-black text-emerald-200">{formatMoney(safeFinanceSnapshot.profile.totalPaid)}</p>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Échéances en retard</p>
-                      <p className="mt-2 text-xl font-black text-white">{financeSnapshot.profile.overdueInstallments}</p>
+                      <p className="mt-2 text-xl font-black text-white">{safeFinanceSnapshot.profile.overdueInstallments}</p>
                     </div>
                   </div>
 
@@ -1382,7 +1751,7 @@ function DetailModal({
                         <p className="text-sm font-bold text-white">Synthèse par année concernée</p>
                         <p className="mt-1 text-xs text-ink-dim">Les dettes reportées sont rattachées à leur année d'origine pour éviter toute confusion.</p>
                       </div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-300">{financeSnapshot.academicYear.name}</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-300">{safeFinanceSnapshot.academicYear.name}</p>
                     </div>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {debtHistory.length === 0 ? (
@@ -1407,9 +1776,9 @@ function DetailModal({
                   <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <p className="text-sm font-bold text-white">Détail ligne par ligne</p>
                     <div className="mt-4 space-y-3">
-                      {financeSnapshot.debts.length === 0 ? (
+                      {safeFinanceSnapshot.debts.length === 0 ? (
                         <p className="text-sm text-ink-dim">Aucune ligne de dette enregistrée.</p>
-                      ) : financeSnapshot.debts.map((debt) => (
+                      ) : safeFinanceSnapshot.debts.map((debt) => (
                         <div key={debt.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0">
@@ -1453,9 +1822,9 @@ function DetailModal({
                   <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <p className="text-sm font-bold text-white">État financier par enfant</p>
                     <div className="mt-4 space-y-3">
-                      {financeSnapshot.students.length === 0 ? (
+                      {safeFinanceSnapshot.students.length === 0 ? (
                         <p className="text-sm text-ink-dim">Aucun élève lié à ce parent.</p>
-                      ) : financeSnapshot.students.map((student) => (
+                      ) : safeFinanceSnapshot.students.map((student) => (
                         <div key={student.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
@@ -1477,7 +1846,7 @@ function DetailModal({
                               </div>
                               <div>
                                 <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Complétion</p>
-                                <p className="mt-1 font-bold text-white">{student.completionRate.toFixed(1)}%</p>
+                                <p className="mt-1 font-bold text-white">{toSafeNumber(student.completionRate).toFixed(1)}%</p>
                               </div>
                             </div>
                           </div>
@@ -1542,7 +1911,7 @@ function DuplicateParentDialog({ message, onClose }: { message: string; onClose:
             !
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Famille deja existante</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Famille déjà existante</p>
             <h3 className="mt-2 font-display text-2xl font-bold text-white">Enregistrement refuse</h3>
             <p className="mt-3 text-sm leading-6 text-ink-dim">{message}</p>
           </div>
@@ -1580,7 +1949,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
       notifySms: true,
       students: initial.students.map((s) => ({
         id: s.id,
-        fullName: s.fullName,
+        ...(() => { const parts = splitNameParts(s.fullName); return { lastName: parts.nom, middleName: parts.postnom, firstName: parts.prenom, fullName: s.fullName }; })(),
         gender: s.gender || "",
         classId: s.classId,
         annualFee: String(s.annualFee),
@@ -1646,7 +2015,11 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
   const setStudent = (idx: number, key: string, value: string) => {
     setForm((f) => {
       const students = [...f.students];
-      students[idx] = { ...students[idx], [key]: value };
+      const updated = { ...students[idx], [key]: value };
+      if (["lastName", "middleName", "firstName"].includes(key)) {
+        updated.fullName = [updated.lastName, updated.middleName, updated.firstName].filter(Boolean).join(" ").trim();
+      }
+      students[idx] = updated;
       return { ...f, students };
     });
   };
@@ -1823,6 +2196,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
     const normalizedForm: FormState = {
       ...form,
       students: form.students.map((student) => {
+        student = { ...student, fullName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(" ").trim() };
         if (student.paymentOptionType !== "SPECIAL_OWNER_AGREEMENT") {
           return { ...student, specialAgreement: undefined };
         }
@@ -1846,7 +2220,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
   return (
     <div className="edupay-scrollbar fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="edupay-scrollbar relative my-4 max-h-[98vh] w-full max-w-7xl overflow-y-auto glass rounded-2xl p-5 space-y-6 animate-fadeInUp sm:p-7">
+      <div className="edupay-scrollbar relative my-4 max-h-[calc(100dvh-1rem)] min-h-[82vh] w-full max-w-[min(98vw,104rem)] overflow-y-auto glass rounded-2xl p-5 space-y-6 animate-fadeInUp sm:p-7">
         <button onClick={onClose} className="absolute top-4 right-4 text-ink-dim hover:text-white transition-colors">
           <XIcon />
         </button>
@@ -2029,11 +2403,12 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.1fr_0.55fr_0.9fr]">
-                <div className="space-y-1">
-                  <label className="text-xs text-ink-dim">{t("pmChildName")}</label>
-                  <input value={st.fullName} onChange={(e) => setStudent(idx, "fullName", e.target.value)} className="w-full" placeholder={t("pmChildNamePlaceholder")} />
-                </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-1"><label className="text-xs text-ink-dim">Nom *</label><input value={st.lastName} onChange={(e) => setStudent(idx, "lastName", e.target.value)} className="w-full" placeholder="Nom de l??l?ve" required /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">Postnom</label><input value={st.middleName} onChange={(e) => setStudent(idx, "middleName", e.target.value)} className="w-full" placeholder="Postnom de l??l?ve" /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">Pr?nom *</label><input value={st.firstName} onChange={(e) => setStudent(idx, "firstName", e.target.value)} className="w-full" placeholder="Pr?nom de l??l?ve" required /></div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.55fr_0.9fr]">
                 <div className="space-y-1">
                   <label className="text-xs text-ink-dim">Sexe</label>
                   <select value={st.gender} onChange={(e) => setStudent(idx, "gender", e.target.value)} className="w-full">
@@ -2415,6 +2790,7 @@ export function ParentsManagementPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [mutationNotice, setMutationNotice] = useState<string | null>(null);
 
   // modals
   const [showForm, setShowForm] = useState(false);
@@ -2433,16 +2809,23 @@ export function ParentsManagementPage() {
     setLoading(true);
     setApiError(null);
     let nextApiError: string | null = null;
-    const [parentsResult, classesResult, catalogResult] = await Promise.allSettled([
+    const [directoryResult, parentsResult, classesResult, catalogResult] = await Promise.allSettled([
+      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 4500, "shared-directory"),
       api<Parent[]>("/api/parents"),
       api<SchoolClass[]>("/api/classes"),
       api<FinanceCatalog>("/api/finance/catalog")
     ]);
 
-    if (parentsResult.status === "fulfilled") {
-      setParents(parentsResult.value);
+    if (directoryResult.status === "fulfilled") {
+      setParents(normalizeSharedDirectoryForParents(directoryResult.value));
+    } else if (parentsResult.status === "fulfilled") {
+      setParents(sortParentsForUi(parentsResult.value.map(normalizeParentForUi)));
     } else {
-      const message = parentsResult.reason instanceof Error ? parentsResult.reason.message : "Erreur API";
+      const message = directoryResult.reason instanceof Error
+        ? directoryResult.reason.message
+        : parentsResult.reason instanceof Error
+          ? parentsResult.reason.message
+          : "Erreur API";
       nextApiError = message;
     }
 
@@ -2500,29 +2883,34 @@ export function ParentsManagementPage() {
   }, [viewTarget]);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q) return parents;
 
     return parents.filter((parent) => {
-      const studentsHaystack = parent.students
-        .flatMap((student) => [student.id, student.displayId, student.fullName, student.className, student.classId])
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      const haystack = [
+      const parentStudents = Array.isArray(parent.students) ? parent.students : [];
+      const searchIndex = buildSearchIndex([
         parent.fullName,
         parent.id,
         parent.displayId || "",
         parent.phone,
         parent.email,
         parent.physicalAddress || "",
-        studentsHaystack,
-      ]
-        .join(" ")
-        .toLowerCase();
+        parent.nom,
+        parent.postnom,
+        parent.prenom,
+        ...parentStudents.flatMap((student) => [
+          student.id,
+          student.displayId,
+          student.fullName,
+          student.className,
+          student.classId,
+          student.paymentOptionLabel,
+          student.paymentOptionType,
+          student.tuitionPlanName,
+        ]),
+      ]);
 
-      return haystack.includes(q);
+      return searchIndexMatches(searchIndex, q);
     });
   }, [parents, search]);
 
@@ -2532,19 +2920,43 @@ export function ParentsManagementPage() {
     try {
       setApiError(null);
       if (id) {
-        await api(`/api/parents/${id}`, { method: "PUT", body: JSON.stringify(body) });
+        const updated = await api<Parent & { notificationStatus?: { dashboard?: string; email?: string; sms?: string; adminEmail?: string }; syncMode?: string }>(`/api/parents/${id}`, { method: "PUT", body: JSON.stringify(body) });
+        const normalizedUpdated = normalizeParentForUi(updated);
+        setParents((current) => sortParentsForUi(current.map((parent) => parent.id === id ? normalizedUpdated : parent)));
+        setViewTarget((current) => current?.id === id ? normalizedUpdated : current);
+        setEditTarget((current) => current?.id === id ? normalizedUpdated : current);
+        setMutationNotice([
+          `Le dossier parent de ${fullName} a été modifié avec succès.`,
+          updated.syncMode === "ORBIT_MIRROR" ? "La modification a été reprise depuis le registre partagé." : "EduPay a enregistré la modification localement.",
+          `Compte parent : ${updated.notificationStatus?.dashboard ?? "OPEN"}`,
+          `E-mail parent : ${updated.notificationStatus?.email ?? "SKIPPED"}`,
+          `SMS parent : ${updated.notificationStatus?.sms ?? "SKIPPED"}`,
+          `E-mail administrateur : ${updated.notificationStatus?.adminEmail ?? "SKIPPED"}`,
+        ].join("\n"));
       } else {
-        const created = await api<Parent & { temporaryPassword?: string; accessCode?: string; notificationStatus?: ParentCredentials["notificationStatus"] }>("/api/parents", { method: "POST", body: JSON.stringify(body) });
-        if (created.temporaryPassword) {
-          setCredentials({
-            parentId: created.id,
-            parentName: created.fullName,
-            email: created.email,
-            accessCode: created.accessCode,
-            temporaryPassword: created.temporaryPassword,
-            notificationStatus: created.notificationStatus
-          });
-        }
+            const created = await api<
+              Parent & {
+                temporaryPassword?: string;
+                accessCode?: string;
+                notificationStatus?: ParentCredentials["notificationStatus"];
+              }
+            >("/api/parents", {
+              method: "POST",
+              body: JSON.stringify(body)
+            });
+
+            if (created.temporaryPassword) {
+              setCredentials({
+                parentId: created.id,
+                parentName: created.fullName || fullName,
+                email: created.email || body.email,
+                accessCode: created.accessCode || created.id,
+                temporaryPassword: created.temporaryPassword,
+                notificationStatus: created.notificationStatus
+              });
+            } else {
+              setApiError("Parent créé, mais l'API n'a pas retourné le mot de passe temporaire.");
+            }
       }
       setShowForm(false);
       setEditTarget(null);
@@ -2552,7 +2964,7 @@ export function ParentsManagementPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur API";
       setApiError(message);
-      if (!id && /existe deja|already exists|PARENT_ALREADY_EXISTS|famille existe/i.test(message)) {
+      if (!id && /existe déjà|already exists|PARENT_ALREADY_EXISTS|famille existe/i.test(message)) {
         setDuplicateParentMessage(message);
       }
     }
@@ -2600,21 +3012,34 @@ export function ParentsManagementPage() {
 
   const stats = useMemo(() => ({
     total: parents.length,
-    totalStudents: parents.reduce((s, p) => s + p.students.length, 0)
+    totalStudents: parents.reduce((s, p) => s + (Array.isArray(p.students) ? p.students.length : 0), 0)
   }), [parents]);
 
   return (
     <div className="edupay-parent-admin space-y-6 pb-8">
       {/* Modals */}
+      {mutationNotice && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setMutationNotice(null)}>
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+          <section className="relative w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Modification synchronisée</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">Notification envoyée</h2>
+            <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-slate-900/70 p-4 text-sm text-emerald-50">{mutationNotice}</pre>
+            <button type="button" onClick={() => setMutationNotice(null)} className="mt-5 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950">Compris</button>
+          </section>
+        </div>
+      )}
       {viewTarget && (
-        <DetailModal
-          parent={viewTarget}
-          financeSnapshot={financeSnapshot}
-          financeLoading={financeLoading}
-          financeError={financeError}
-          onClose={() => setViewTarget(null)}
-          t={t}
-        />
+        <ParentDetailBoundary onClose={() => setViewTarget(null)}>
+          <DetailModal
+            parent={normalizeParentForUi(viewTarget)}
+            financeSnapshot={financeSnapshot}
+            financeLoading={financeLoading}
+            financeError={financeError}
+            onClose={() => setViewTarget(null)}
+            t={t}
+          />
+        </ParentDetailBoundary>
       )}
       {credentials && <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />}
       {duplicateParentMessage && <DuplicateParentDialog message={duplicateParentMessage} onClose={() => setDuplicateParentMessage(null)} />}
@@ -2646,7 +3071,7 @@ export function ParentsManagementPage() {
         </div>
         <button
           onClick={() => { setEditTarget(null); setShowForm(true); }}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition-all hover:shadow-brand-500/50 active:scale-95 sm:px-5"
+          className="hidden shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition-all hover:shadow-brand-500/50 active:scale-95 sm:px-5"
         >
           <PlusIcon /> {t("pmAddParent")}
         </button>
@@ -2702,7 +3127,9 @@ export function ParentsManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((parent, idx) => (
+                {filtered.map((parent, idx) => {
+                  const parentStudents = Array.isArray(parent.students) ? parent.students : [];
+                  return (
                   <tr
                     key={parent.id}
                     className="border-b border-slate-700/30 hover:bg-slate-800/30 transition-colors"
@@ -2732,8 +3159,8 @@ export function ParentsManagementPage() {
                     <td className="py-4 px-5 text-ink-dim hidden lg:table-cell truncate max-w-[180px]">{parent.email || "-"}</td>
                     <td className="py-4 px-5 text-center">
                       <Badge
-                        text={`${parent.students.length} ${parent.students.length === 1 ? t("pmChild") : t("pmChildrenCount")}`}
-                        color={parent.students.length > 0 ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "bg-slate-700/50 text-ink-dim"}
+                        text={`${parentStudents.length} ${parentStudents.length === 1 ? t("pmChild") : t("pmChildrenCount")}`}
+                        color={parentStudents.length > 0 ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "bg-slate-700/50 text-ink-dim"}
                       />
                     </td>
                     <td className="py-4 px-5">
@@ -2743,21 +3170,21 @@ export function ParentsManagementPage() {
                           <EyeIcon />
                         </button>
                         <button onClick={() => openEdit(parent)}
-                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-brand-500/20 text-brand-300 transition-all hover:bg-brand-500/30 active:scale-90" title={t("pmEdit")}>
+                          className="hidden h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-brand-500/20 text-brand-300 transition-all hover:bg-brand-500/30 active:scale-90" title={t("pmEdit")}>
                           <EditIcon />
                         </button>
                         <button onClick={() => setNotificationTarget(parent)}
-                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 transition-all hover:bg-amber-500/30 active:scale-90" title="Envoyer les accès">
+                          className="hidden h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 transition-all hover:bg-amber-500/30 active:scale-90" title="Envoyer les accès">
                           <KeyIcon />
                         </button>
                         <button onClick={() => setDeleteTarget(parent)}
-                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-danger/20 text-danger transition-all hover:bg-danger/30 active:scale-90" title={t("pmDelete")}>
+                          className="hidden h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-danger/20 text-danger transition-all hover:bg-danger/30 active:scale-90" title={t("pmDelete")}>
                           <TrashIcon />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>

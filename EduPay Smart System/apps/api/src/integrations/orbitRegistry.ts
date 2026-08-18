@@ -309,6 +309,7 @@ async function orbitRegistryRequest<T>(path: string, init: RequestInit): Promise
 export async function createOrbitParent(payload: {
   fullName: string;
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   email?: string;
   phone?: string;
@@ -320,15 +321,16 @@ export async function createOrbitParent(payload: {
   const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
   const students = payload.students || [];
   if (students.length > 0) {
-    const [parentFirstName, ...parentLastNameParts] = payload.fullName.trim().split(/\s+/);
+    const parentNameParts = payload.fullName.trim().split(/\s+/);
     return orbitRegistryRequest<{ orbitId: string; parentExternalId: string; externalId: string }>("/api/integration/registry/family", {
       method: "POST",
       body: JSON.stringify({
         organizationId,
         parent: {
           fullName: payload.fullName,
-          firstName: payload.firstName || parentFirstName,
-          lastName: payload.lastName || parentLastNameParts.join(" ") || "Parent",
+          firstName: payload.firstName || parentNameParts[parentNameParts.length - 1] || "Parent",
+          middleName: payload.middleName || (parentNameParts.length > 2 ? parentNameParts.slice(1, -1).join(" ") : undefined),
+          lastName: payload.lastName || parentNameParts[0] || "Parent",
           email: payload.email,
           phone: payload.phone,
           physicalAddress: payload.physicalAddress,
@@ -336,10 +338,11 @@ export async function createOrbitParent(payload: {
           mustChangePassword: payload.mustChangePassword ?? true,
         },
         students: students.map((student) => {
-          const [firstName, ...lastNameParts] = student.fullName.trim().split(/\s+/);
+          const nameParts = student.fullName.trim().split(/\s+/);
           return {
-            firstName: firstName || "Student",
-            lastName: lastNameParts.join(" ") || "Student",
+            firstName: nameParts[nameParts.length - 1] || "Student",
+            middleName: nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : undefined,
+            lastName: nameParts[0] || "Student",
             gender: "O",
             className: student.className || "Non renseignee",
             accessCode: student.accessCode,
@@ -390,6 +393,25 @@ export async function updateOrbitTeacher(identifier: string, payload: {
   mustChangePassword?: boolean;
 }) {
   return orbitRegistryRequest<{ orbitId: string; updated: boolean }>(`/api/integration/registry/teacher/${encodeURIComponent(identifier)}?identifierType=orbitId`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateOrbitStudent(identifier: string, payload: {
+  fullName?: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  dateOfBirth?: Date | string | null;
+  gender?: string | null;
+  className?: string | null;
+  studentNumber?: string | null;
+  mustChangePassword?: boolean;
+}) {
+  return orbitRegistryRequest<{ orbitId: string; updated: boolean }>(`/api/integration/registry/student/${encodeURIComponent(identifier)}?identifierType=orbitId`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
@@ -485,6 +507,9 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
         continue;
       }
 
+      const studentAnnualFee = Number(student.annualFee || 0);
+      const annualFeeUpdate = studentAnnualFee > 0 ? { annualFee: studentAnnualFee } : {};
+
       if (student.externalStudentId) {
         await prisma.student.upsert({
           where: { schoolId_externalStudentId: { schoolId, externalStudentId: student.externalStudentId } },
@@ -492,7 +517,7 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
             fullName: student.fullName,
             parentId: savedParent.id,
             classId,
-            annualFee: student.annualFee,
+            ...annualFeeUpdate,
           },
           create: {
             schoolId,
@@ -500,7 +525,7 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
             classId,
             externalStudentId: student.externalStudentId,
             fullName: student.fullName,
-            annualFee: student.annualFee,
+            annualFee: studentAnnualFee,
           },
         });
         continue;
@@ -518,8 +543,9 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
         await prisma.student.update({
           where: { id: existingStudent.id },
           data: {
+            fullName: student.fullName,
             classId,
-            annualFee: student.annualFee,
+            ...annualFeeUpdate,
           },
         });
       } else {
@@ -529,7 +555,7 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
             parentId: savedParent.id,
             classId,
             fullName: student.fullName,
-            annualFee: student.annualFee,
+            annualFee: studentAnnualFee,
           },
         });
       }
@@ -625,10 +651,12 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
         mustChangePassword: orbitParent?.mustChangePassword,
         students: parent.students.map((student) => ({
           id: student.id,
+          orbitId: orbitParent?.students.find((entry) => entry.externalStudentId === (student.externalStudentId || undefined) || entry.fullName === student.fullName)?.orbitId,
           displayId: student.externalStudentId || student.id,
           externalStudentId: student.externalStudentId || undefined,
           studentNumber: student.externalStudentId || undefined,
           accessCode: orbitParent?.students.find((entry) => entry.externalStudentId === (student.externalStudentId || undefined) || entry.fullName === student.fullName)?.accessCode,
+          mustChangePassword: orbitParent?.students.find((entry) => entry.externalStudentId === (student.externalStudentId || undefined) || entry.fullName === student.fullName)?.mustChangePassword,
           fullName: student.fullName,
           classId: student.classId,
           className: student.class.name,

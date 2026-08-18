@@ -35,7 +35,7 @@ import {
   X
 } from "lucide-react";
 import { schoolBranding } from "../config/branding";
-import { api } from "../services/api";
+import { api, getCachedApiResponse } from "../services/api";
 import { useI18n } from "../i18n";
 import { exportWorkbook } from "../utils/financeExcel";
 import { printHtmlDocument } from "../utils/printDocument";
@@ -58,7 +58,7 @@ type RevenueOverviewResponse = {
     expected: number;
     collected: number;
     debt: number;
-    reductions: number;
+    réductions: number;
     students: number;
     collectionRate: number;
   }>;
@@ -82,7 +82,7 @@ type RevenueOverviewResponse = {
     byGradeGroup: Array<{ gradeGroup: string; amount: number }>;
     byPaymentOption: Array<{ paymentOptionType: string; amount: number }>;
     scholarships?: Array<{ id: string; title: string; amount: number; parentName?: string | null; studentName?: string | null; scope?: string | null; source?: string | null; gradeGroup?: string | null; paymentOptionType?: string | null; percentage?: number | null; effectiveDate?: string }>;
-    reductions?: Array<{ id: string; title: string; amount: number; parentName?: string | null; studentName?: string | null; scope?: string | null; source?: string | null; gradeGroup?: string | null; paymentOptionType?: string | null; percentage?: number | null; effectiveDate?: string }>;
+    réductions?: Array<{ id: string; title: string; amount: number; parentName?: string | null; studentName?: string | null; scope?: string | null; source?: string | null; gradeGroup?: string | null; paymentOptionType?: string | null; percentage?: number | null; effectiveDate?: string }>;
     periodLabel: string;
   };
   financialHealthIndicators: {
@@ -220,7 +220,7 @@ const EMPTY_EXPENSE_OVERVIEW: ExpenseOverviewResponse = {
 };
 
 type FinanceErpModule = "health" | "forecast" | "revenue" | "scholarships" | "expenses" | "budgets" | "payroll";
-type ScholarshipRow = NonNullable<RevenueOverviewResponse["reductionStatistics"]["reductions"]>[number];
+type ScholarshipRow = NonNullable<RevenueOverviewResponse["reductionStatistics"]["réductions"]>[number];
 
 function uniqueReductionRows<T extends { parentName?: string | null; studentName?: string | null; scope?: string | null; paymentOptionType?: string | null; amount: number; title: string }>(rows: T[]) {
   return Array.from(rows.reduce((acc, row) => {
@@ -328,7 +328,7 @@ function FinanceErpDialog({
 }) {
   return (
     <div className="edupay-finance-erp-dialog fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/82 px-3 py-4 backdrop-blur-md sm:px-6 sm:py-8">
-      <div className="edupay-finance-erp-modal w-full max-w-8xl rounded-2xl border border-brand-300/15 bg-slate-950/96 p-6 shadow-2xl sm:p-8">
+      <div className="edupay-finance-erp-modal w-full max-w-[min(98vw,112rem)] rounded-2xl border border-brand-300/15 bg-slate-950/96 p-6 shadow-2xl sm:min-h-[82vh] sm:p-8">
         <div className="flex flex-col gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">Tableau financier EduPay</p>
@@ -755,7 +755,7 @@ function exportScholarshipRowsExcel(filename: string, rows: ScholarshipRow[], sc
         "Lignes visibles": rows.length,
         "Montant visible": total,
         "Montant visible formatte": money.format(total),
-        "Genere le": new Date().toLocaleString(locale)
+        "Généré le": new Date().toLocaleString(locale)
       }]
     },
     {
@@ -787,6 +787,7 @@ export function FinanceDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [expenseOverviewError, setExpenseOverviewError] = useState<string | null>(null);
   const [activeModule, setActiveModule] = useState<FinanceErpModule | null>(null);
+  const [financeModuleSearch, setFinanceModuleSearch] = useState("");
   const [scholarshipSearch, setScholarshipSearch] = useState("");
   const [scholarshipScopeFilter, setScholarshipScopeFilter] = useState("ALL");
   const [scholarshipOriginFilter, setScholarshipOriginFilter] = useState("ALL");
@@ -795,6 +796,17 @@ export function FinanceDashboardPage() {
 
   useEffect(() => {
     let active = true;
+    const cachedRevenue = getCachedApiResponse<RevenueOverviewResponse>("/api/finance/overview");
+    const cachedExpenses = getCachedApiResponse<ExpenseOverviewResponse>("/api/expenses/overview");
+    if (cachedRevenue) {
+      setRevenueOverview(cachedRevenue);
+      setLoading(false);
+    }
+    if (cachedExpenses) {
+      setExpenseOverview(cachedExpenses);
+      setExpenseOverviewReady(true);
+    }
+
     api<RevenueOverviewResponse>("/api/finance/overview")
       .then((revenueResult) => {
         if (!active) return;
@@ -846,7 +858,7 @@ export function FinanceDashboardPage() {
 
   const reductionStatistics = revenueOverview?.reductionStatistics ?? null;
   const scholarshipRows = useMemo(
-    () => uniqueReductionRows(reductionStatistics?.reductions ?? reductionStatistics?.scholarships ?? []),
+    () => uniqueReductionRows(reductionStatistics?.réductions ?? reductionStatistics?.scholarships ?? []),
     [reductionStatistics]
   );
   const manualScholarshipRows = useMemo(
@@ -979,7 +991,7 @@ export function FinanceDashboardPage() {
   const scholarshipCount = revenueOverview.reductionStatistics.scholarshipCount ?? revenueOverview.reductionStatistics.reductionCount;
   const manualScholarshipTotal = revenueOverview.reductionStatistics.manualScholarshipTotal ?? manualScholarshipRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const manualScholarshipCount = revenueOverview.reductionStatistics.manualScholarshipCount ?? manualScholarshipRows.length;
-  const reductionsByOrigin = Array.from(scholarshipRows.reduce<Map<string, { origin: string; amount: number; count: number }>>((acc, row) => {
+  const réductionsByOrigin = Array.from(scholarshipRows.reduce<Map<string, { origin: string; amount: number; count: number }>>((acc, row) => {
     const origin = reductionOrigin(row.scope, row.title);
     const current = acc.get(origin) ?? { origin, amount: 0, count: 0 };
     current.amount += Number(row.amount || 0);
@@ -996,6 +1008,99 @@ export function FinanceDashboardPage() {
     scholarshipDateFrom ? `Du: ${new Date(`${scholarshipDateFrom}T00:00:00`).toLocaleDateString(locale)}` : "Du: début",
     scholarshipDateTo ? `Au: ${new Date(`${scholarshipDateTo}T00:00:00`).toLocaleDateString(locale)}` : "Au: fin"
   ].join(" | ");
+
+  function printFinancialStateReport() {
+    const overview = revenueOverview;
+    if (!overview) return;
+    const generatedAt = new Date();
+    const logoSrc = plainPrintText(new URL(schoolBranding.logoSrc, window.location.href).toString());
+    const rows = [
+      ["Revenu attendu net", money.format(overview.expectedRevenue), "Base annuelle après réductions et accords connus."],
+      ["Revenu encaissé", money.format(overview.collectedRevenue), "Somme des paiements validés dans EduPay."],
+      ["Dette parentale", money.format(overview.totalDebt), `${overview.overdueParents} parent(s) en retard.`],
+      ["Cash disponible", money.format(expenseOverview.cashflow.availableCash), "Trésorerie après dépenses approuvées et paie traitée."],
+      ["Dépenses + paie", money.format(expenseOverview.expenses.totalExpenses + expenseOverview.payroll.totalPayroll), "Charges institutionnelles reconnues."],
+      ["Marge opérationnelle", formatPercent(operatingMargin), "Profit/perte rapporté aux encaissements."],
+      ["Couverture liquidité", formatPercent(liquidityCoverage), "Cash disponible face aux passifs connus."],
+      ["Score santé", `${healthScore.toFixed(1)}/100`, healthLabel]
+    ];
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8" /><title>État financier global</title><style>
+      @page { size: A4; margin: 14mm; }
+      body { font-family: Arial, Helvetica, sans-serif; margin:0; padding:18px; background:#f8fbff; color:#0f172a; }
+      .watermark { position: fixed; inset: 0; display:grid; place-items:center; opacity:.07; pointer-events:none; }
+      .watermark img { width: 330px; height:330px; object-fit:contain; }
+      .sheet { position:relative; z-index:1; width:100%; max-width:100%; background:#fff; border:1px solid #cbd5e1; border-radius:18px; overflow:hidden; }
+      .hero { display:flex; justify-content:space-between; gap:16px; padding:22px; background:linear-gradient(135deg,#0b2e59,#1f4f8f); color:#fff; }
+      .brand { display:flex; min-width:0; gap:14px; align-items:center; }
+      .logo { width:64px; height:64px; object-fit:contain; background:#fff; border-radius:16px; padding:6px; }
+      h1 { margin:0; font-size:24px; } p { margin:6px 0 0; color:#dbeafe; }
+      .score { flex:0 0 120px; max-width:120px; text-align:right; font-weight:800; font-size:24px; overflow-wrap:anywhere; }
+      .metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:18px 20px 8px; }
+      .metric { min-width:0; border:1px solid #dbeafe; border-radius:14px; padding:11px; background:#f8fbff; overflow:hidden; }
+      .label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.12em; font-weight:800; }
+      .value { margin-top:7px; color:#0b2e59; font-size:16px; font-weight:900; overflow-wrap:anywhere; }
+      table { width:calc(100% - 40px); margin:18px 20px; border-collapse:collapse; table-layout:fixed; }
+      th,td { border-bottom:1px solid #e2e8f0; padding:10px; text-align:left; font-size:12px; }
+      th { background:#eff6ff; color:#0b2e59; text-transform:uppercase; font-size:10px; letter-spacing:.08em; }
+      .note { margin:0 20px 18px; border-left:5px solid #0f766e; background:#f0fdfa; border-radius:12px; padding:12px; color:#134e4a; font-size:11px; line-height:1.55; }
+      .sign { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0 20px 20px; }
+      .box { min-height:78px; border:1px dashed rgba(11,46,89,.25); border-radius:14px; padding:12px; }
+      .line { margin-top:36px; border-top:1px solid rgba(11,46,89,.25); padding-top:6px; color:#0b2e59; font-weight:800; font-size:11px; }
+      @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    </style></head><body>
+      <div class="watermark"><img src="${logoSrc}" alt="" /></div>
+      <div class="sheet">
+        <div class="hero"><div class="brand"><img class="logo" src="${logoSrc}" alt="Logo ${plainPrintText(schoolBranding.schoolName)}" /><div><h1>État financier global</h1><p>${plainPrintText(schoolBranding.schoolName)} - document administratif EduPay</p><p>Généré le ${plainPrintText(generatedAt.toLocaleString(locale))}</p></div></div><div class="score">${healthScore.toFixed(1)}/100<br/><span style="font-size:13px">${plainPrintText(healthLabel)}</span></div></div>
+        <div class="metrics">
+          <div class="metric"><div class="label">Encaissé</div><div class="value">${plainPrintText(money.format(overview.collectedRevenue))}</div></div>
+          <div class="metric"><div class="label">Dette</div><div class="value">${plainPrintText(money.format(overview.totalDebt))}</div></div>
+          <div class="metric"><div class="label">Cash</div><div class="value">${plainPrintText(money.format(expenseOverview.cashflow.availableCash))}</div></div>
+          <div class="metric"><div class="label">Risque</div><div class="value">${plainPrintText(formatPercent(riskIndex))}</div></div>
+        </div>
+        <table><thead><tr><th>Indicateur</th><th>Valeur réelle</th><th>Lecture administrative</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${plainPrintText(row[0])}</td><td>${plainPrintText(row[1])}</td><td>${plainPrintText(row[2])}</td></tr>`).join("")}</tbody></table>
+        <div class="note">Ce document reprend les chiffres calculés depuis les paiements, les dettes, les réductions, les dépenses, la paie et les passifs visibles dans EduPay au moment de l'impression. Il respecte la charte administrative ${plainPrintText(schoolBranding.shortName)}.</div>
+        <div class="sign"><div class="box"><div class="label">Contrôle financier</div><div class="line">Service financier</div></div><div class="box"><div class="label">Visa direction</div><div class="line">Direction administrative</div></div></div>
+      </div>
+    </body></html>`;
+    printHtmlDocument(html);
+  }
+
+  function exportFinancialStateExcel() {
+    const overview = revenueOverview;
+    if (!overview) return;
+    exportWorkbook(`etat-financier-global-${new Date().toISOString().slice(0, 10)}`, [
+      {
+        name: "Etat global",
+        rows: [{
+          "Score santé": Number(healthScore.toFixed(2)),
+          "Risque global %": Number(riskIndex.toFixed(2)),
+          "Revenu attendu": overview.expectedRevenue,
+          "Revenu encaisse": overview.collectedRevenue,
+          "Dette parentale": overview.totalDebt,
+          "Cash disponible": expenseOverview.cashflow.availableCash,
+          "Dépenses": expenseOverview.expenses.totalExpenses,
+          "Paie": expenseOverview.payroll.totalPayroll,
+          "Marge opérationnelle %": Number(operatingMargin.toFixed(2)),
+          "Couverture liquidité %": Number(liquidityCoverage.toFixed(2)),
+          "Parents suivis": overview.parentsTracked,
+          "Parents en retard": overview.overdueParents
+        }]
+      },
+      {
+        name: "Classes",
+        rows: overview.classAnalytics.map((row) => ({
+          "Classe": row.className,
+          "Eleves": row.students,
+          "Attendu": row.expected,
+          "Encaisse": row.collected,
+          "Dette": row.debt,
+          "Reductions": row.réductions,
+          "Taux recouvrement %": Number(row.collectionRate.toFixed(2))
+        }))
+      }
+    ]);
+  }
+
   const activeModuleMeta = activeModule ? {
     health: {
       title: L("Santé financière globale", "Global financial health"),
@@ -1010,8 +1115,8 @@ export function FinanceDashboardPage() {
       subtitle: L("Lecture des encaissements, des dettes parentales, des réductions et des segments scolaires.", "View collections, parent debts, discounts and school segments.")
     },
     scholarships: {
-      title: L("Bourses et reductions detaillees", "Scholarships and detailed reductions"),
-      subtitle: L("Rubrique visible pour le financier: reductions familiales, individuelles, options de paiement, accords owner-parent et toutes les provenances.", "Finance-visible section: family reductions, individual reductions, payment-option reductions, owner-parent agreements and all sources.")
+      title: L("Bourses et réductions détaillées", "Scholarships and detailed réductions"),
+      subtitle: L("Rubrique visible pour le financier : réductions familiales, individuelles, options de paiement, accords owner-parent et toutes les provenances.", "Finance-visible section: family réductions, individual réductions, payment-option réductions, owner-parent agreements and all sources.")
     },
     expenses: {
       title: L("Dépenses et contrôle opérationnel", "Expenses and operational control"),
@@ -1026,6 +1131,165 @@ export function FinanceDashboardPage() {
       subtitle: L("Masse salariale, cycles de paie et dette institutionnelle restante.", "Payroll mass, payroll runs and remaining institutional liabilities.")
     }
   }[activeModule] : null;
+
+  type FinanceReportRow = Record<string, string | number>;
+  const moduleSearchNeedle = financeModuleSearch.trim().toLowerCase();
+  const matchesFinanceSearch = (row: FinanceReportRow) => !moduleSearchNeedle
+    || Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(moduleSearchNeedle));
+
+  function getFinanceModuleReportRows(module: FinanceErpModule): FinanceReportRow[] {
+    const overview = revenueOverview;
+    if (!overview) return [];
+    if (module === "health") {
+      return [
+        { Indicateur: "Score santé", Valeur: `${healthScore.toFixed(1)}/100`, Lecture: healthLabel },
+        { Indicateur: "Recouvrement", Valeur: formatPercent(overview.financialHealthIndicators.collectionEfficiency), Lecture: "Encaissement compare au revenu attendu" },
+        { Indicateur: "Dette", Valeur: money.format(overview.totalDebt), Lecture: `Exposition ${formatPercent(overview.financialHealthIndicators.debtExposure)}` },
+        { Indicateur: "Reductions", Valeur: money.format(overview.totalReduction), Lecture: `Charge ${formatPercent(overview.financialHealthIndicators.reductionLoad)}` },
+        { Indicateur: "Trésorerie disponible", Valeur: money.format(expenseOverview.cashflow.availableCash), Lecture: `Couverture ${formatPercent(liquidityCoverage)}` },
+        { Indicateur: "Passifs institutionnels", Valeur: money.format(totalInstitutionalLiabilities), Lecture: "Fournisseurs, paie et obligations" }
+      ];
+    }
+    if (module === "forecast") {
+      return performanceChart.map((row) => ({
+        Période: row.label,
+        Revenus: money.format(row.revenue),
+        Dépenses: money.format(row.expenses),
+        Resultat: money.format(row.profitLoss)
+      }));
+    }
+    if (module === "revenue") {
+      return [
+        ...overview.parentDebtAnalytics.map((row) => ({
+          Type: "Parent",
+          Nom: row.parentName,
+          Dette: money.format(row.totalDebt),
+          Paye: money.format(row.totalPaid),
+          Retard: row.overdueInstallments,
+          Score: formatPercent(row.paymentBehaviorScore)
+        })),
+        ...overview.classAnalytics.map((row) => ({
+          Type: "Classe",
+          Nom: row.className,
+          Attendu: money.format(row.expected),
+          Encaisse: money.format(row.collected),
+          Dette: money.format(row.debt),
+          Taux: formatPercent(row.collectionRate)
+        }))
+      ];
+    }
+    if (module === "expenses") {
+      return expenseOverview.recentExpenses.map((expense) => ({
+        Titre: expense.title,
+        Departement: expense.department,
+        Categorie: expense.categoryName,
+        Statut: expense.status,
+        Montant: money.format(expense.amount)
+      }));
+    }
+    if (module === "budgets") {
+      return expenseOverview.budgets.map((budget) => ({
+        Budget: budget.name,
+        Departement: budget.department,
+        Période: budget.periodName,
+        Categorie: budget.categoryName ?? "Global",
+        Statut: budget.status,
+        Prevu: money.format(budget.plannedAmount),
+        Consomme: money.format(budget.consumedAmount),
+        Reste: money.format(budget.remainingAmount),
+        Utilisation: formatPercent(budget.utilization)
+      }));
+    }
+    if (module === "payroll") {
+      return expenseOverview.recentPayrollRuns.map((run) => ({
+        Run: run.title,
+        Departement: run.department ?? "RH",
+        Période: run.periodName ?? "Période non definie",
+        Statut: run.status,
+        Net: money.format(run.totalNet)
+      }));
+    }
+    return [];
+  }
+
+  const activeFinanceModuleRows = activeModule ? getFinanceModuleReportRows(activeModule).filter(matchesFinanceSearch) : [];
+  const filteredRevenueParents = revenueOverview.parentDebtAnalytics.filter((row) => matchesFinanceSearch({
+    Nom: row.parentName,
+    Dette: row.totalDebt,
+    Paye: row.totalPaid,
+    Retard: row.overdueInstallments,
+    Score: row.paymentBehaviorScore
+  }));
+  const filteredRevenueClasses = revenueOverview.classAnalytics.filter((row) => matchesFinanceSearch({
+    Classe: row.className,
+    Attendu: row.expected,
+    Encaisse: row.collected,
+    Dette: row.debt,
+    Taux: row.collectionRate
+  }));
+  const filteredErpExpenses = expenseOverview.recentExpenses.filter((expense) => matchesFinanceSearch({
+    Titre: expense.title,
+    Departement: expense.department,
+    Categorie: expense.categoryName,
+    Statut: expense.status,
+    Montant: expense.amount
+  }));
+  const filteredErpBudgets = expenseOverview.budgets.filter((budget) => matchesFinanceSearch({
+    Budget: budget.name,
+    Departement: budget.department,
+    Période: budget.periodName,
+    Categorie: budget.categoryName ?? "Global",
+    Statut: budget.status,
+    Utilisation: budget.utilization
+  }));
+  const filteredErpPayrollRuns = expenseOverview.recentPayrollRuns.filter((run) => matchesFinanceSearch({
+    Run: run.title,
+    Departement: run.department ?? "RH",
+    Période: run.periodName ?? "Période non definie",
+    Statut: run.status,
+    Net: run.totalNet
+  }));
+
+  function buildFinanceModuleReportHtml(module: FinanceErpModule) {
+    const meta = activeModuleMeta;
+    const rows = getFinanceModuleReportRows(module).filter(matchesFinanceSearch);
+    const generatedAt = new Date();
+    const headers = Object.keys(rows[0] ?? { Information: "Aucune ligne" });
+    const bodyRows = rows.length
+      ? rows.map((row) => `<tr>${headers.map((header) => `<td>${plainPrintText(String(row[header] ?? ""))}</td>`).join("")}</tr>`).join("")
+      : `<tr><td colspan="${headers.length}">Aucune donnee ne correspond au filtre actuel.</td></tr>`;
+    const logoSrc = plainPrintText(new URL(schoolBranding.logoSrc, window.location.href).toString());
+    return `<!doctype html><html><head><meta charset="utf-8" /><title>${plainPrintText(meta?.title ?? "Rapport financier")}</title><style>
+      @page{size:A4;margin:14mm}body{font-family:Inter,Arial,sans-serif;color:#0f172a}header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid ${schoolBranding.colors.primary};padding-bottom:14px;margin-bottom:18px}.brand{display:flex;align-items:center;gap:12px}.logo{width:58px;height:58px;object-fit:contain}.kicker{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#64748b}.title{font-size:22px;font-weight:800;margin:2px 0}.meta{text-align:right;font-size:12px;color:#475569}.scope{margin:12px 0 18px;padding:10px 12px;border:1px solid #cbd5e1;background:#f8fafc;font-size:12px}table{width:100%;border-collapse:collapse;font-size:11px}th{background:#0f172a;color:white;text-align:left;padding:8px;border:1px solid #0f172a}td{padding:7px;border:1px solid #cbd5e1;vertical-align:top}footer{margin-top:18px;border-top:1px solid #cbd5e1;padding-top:8px;font-size:10px;color:#64748b}</style></head><body>
+      <header><div class="brand"><img class="logo" src="${logoSrc}" alt="Logo ${plainPrintText(schoolBranding.schoolName)}" /><div><div class="kicker">${plainPrintText(schoolBranding.appName)}</div><div class="title">${plainPrintText(meta?.title ?? "Rapport financier")}</div><div>${plainPrintText(schoolBranding.schoolName)}</div></div></div><div class="meta">Document administratif<br/>${plainPrintText(generatedAt.toLocaleString(locale))}<br/>${plainPrintText(schoolBranding.shortName)}</div></header>
+      <div class="scope">${plainPrintText(meta?.subtitle ?? "")}<br/>Filtre : ${plainPrintText(financeModuleSearch.trim() || "Toutes les données")}</div>
+      <table><thead><tr>${headers.map((header) => `<th>${plainPrintText(header)}</th>`).join("")}</tr></thead><tbody>${bodyRows}</tbody></table>
+      <footer>Rapport genere depuis EduPay avec les données visibles au moment de l'impression.</footer>
+    </body></html>`;
+  }
+
+  function printFinanceModuleReport(module: FinanceErpModule) {
+    printHtmlDocument(buildFinanceModuleReportHtml(module));
+  }
+
+  function exportFinanceModuleExcel(module: FinanceErpModule) {
+    const meta = activeModuleMeta;
+    exportWorkbook(`${module}-finance-${new Date().toISOString().slice(0, 10)}`, [
+      {
+        name: "Rapport",
+        rows: getFinanceModuleReportRows(module).filter(matchesFinanceSearch)
+      },
+      {
+        name: "Portee",
+        rows: [{
+          Module: meta?.title ?? module,
+          Filtre: financeModuleSearch || "Toutes les données",
+          Generation: new Date().toLocaleString(locale),
+          Lignes: getFinanceModuleReportRows(module).filter(matchesFinanceSearch).length
+        }]
+      }
+    ]);
+  }
 
   const erpModules: Array<{
     id: FinanceErpModule;
@@ -1066,7 +1330,7 @@ export function FinanceDashboardPage() {
     {
       id: "scholarships",
       title: L("Bourses", "Scholarships"),
-      description: L("Toutes les reductions accordees: familiales, individuelles, plans, arrangements et bourses.", "All granted reductions: family, individual, plans, arrangements and scholarships."),
+      description: L("Toutes les réductions accordées : familiales, individuelles, plans, arrangements et bourses.", "All granted réductions: family, individual, plans, arrangements and scholarships."),
       metric: money.format(scholarshipTotal),
       signal: L(`${scholarshipCount} reduction(s)`, `${scholarshipCount} reduction(s)`),
       icon: HandCoins,
@@ -1128,14 +1392,14 @@ export function FinanceDashboardPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 backdrop-blur-sm">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Periode active</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Période active</p>
               <p className="mt-1 font-display text-2xl font-bold text-white">{revenueOverview.academicYear.name}</p>
-              <p className="mt-1 text-xs text-cyan-100">Mise a jour {new Date().toLocaleDateString(locale)}</p>
+              <p className="mt-1 text-xs text-cyan-100">Mise à jour {new Date().toLocaleDateString(locale)}</p>
             </div>
             <div className="rounded-2xl border border-brand-500/25 bg-brand-500/10 px-4 py-3 backdrop-blur-sm">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Sante operationnelle</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Santé opérationnelle</p>
               <p className="mt-1 font-display text-2xl font-bold text-white">{money.format(expenseOverview.cashflow.operationalBalance)}</p>
-              <p className="mt-1 text-xs text-brand-100">Cash disponible apres depenses et paie</p>
+              <p className="mt-1 text-xs text-brand-100">Cash disponible après dépenses et paie</p>
             </div>
           </div>
         </div>
@@ -1152,19 +1416,19 @@ export function FinanceDashboardPage() {
         <MetricCard
           label="Bourses"
           value={money.format(scholarshipTotal)}
-          detail={`${scholarshipCount} reduction(s), dont ${manualScholarshipCount} accord(s) manuel(s)`}
+          detail={`${scholarshipCount} réduction(s), dont ${manualScholarshipCount} accord(s) manuel(s)`}
           icon={HandCoins}
           tone="border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
         />
         <MetricCard
-          label="Depenses approuvees"
+          label="Dépenses approuvées"
           value={money.format(expenseOverview.expenses.totalExpenses)}
-          detail={`${expenseOverview.expenses.approvedExpenses} depenses validees`}
+          detail={`${expenseOverview.expenses.approvedExpenses} dépenses validées`}
           icon={BadgeDollarSign}
           tone="border-red-500/30 bg-red-500/10 text-red-300"
         />
         <MetricCard
-          label="Tresorerie disponible"
+          label="Trésorerie disponible"
           value={money.format(expenseOverview.cashflow.availableCash)}
           detail={`${formatPercent(Math.max(0, 100 - spendCoverage))} de marge sur les encaissements`}
           icon={Landmark}
@@ -1173,14 +1437,14 @@ export function FinanceDashboardPage() {
         <MetricCard
           label="Masse salariale"
           value={money.format(expenseOverview.payroll.totalPayroll)}
-          detail={`${expenseOverview.payroll.activeProfiles} profils salaries actifs`}
+          detail={`${expenseOverview.payroll.activeProfiles} profils salariés actifs`}
           icon={TrendingUp}
           tone="border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
         />
         <MetricCard
           label="Passifs"
           value={money.format(expenseOverview.liabilities.supplierDebt + expenseOverview.liabilities.payrollLiability)}
-          detail={`${expenseOverview.expenses.pendingApprovalSteps} etapes d'approbation en attente`}
+          detail={`${expenseOverview.expenses.pendingApprovalSteps} étapes d'approbation en attente`}
           icon={ShieldAlert}
           tone="border-amber-500/30 bg-amber-500/10 text-amber-300"
         />
@@ -1191,12 +1455,20 @@ export function FinanceDashboardPage() {
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">Indice scientifique</p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-white">Sante financiere de l'ecole</h2>
+              <h2 className="mt-2 font-display text-2xl font-bold text-white">Santé financière de l'école</h2>
               <p className="mt-2 text-sm text-ink-dim">
                 Score composite sur revenus, dettes, cash, passifs, alertes et comportement parent.
               </p>
             </div>
-            <Activity className={`h-7 w-7 shrink-0 ${healthTone}`} />
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              <button type="button" onClick={printFinancialStateReport} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20">
+                <Printer className="h-4 w-4" /> PDF
+              </button>
+              <button type="button" onClick={exportFinancialStateExcel} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20">
+                <FileSpreadsheet className="h-4 w-4" /> Excel
+              </button>
+              <Activity className={`h-7 w-7 ${healthTone}`} />
+            </div>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-[150px_1fr]">
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-center">
@@ -1205,10 +1477,10 @@ export function FinanceDashboardPage() {
               <p className="mt-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">{healthLabel}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <ScienceIndicator label="Marge operationnelle" value={formatPercent(operatingMargin)} detail="Profit/perte rapporte aux encaissements." tone={operatingMargin >= 0 ? "text-emerald-300" : "text-red-300"} />
-              <ScienceIndicator label="Couverture liquidite" value={formatPercent(liquidityCoverage)} detail="Cash disponible face aux passifs connus." tone={liquidityCoverage >= 100 ? "text-emerald-300" : "text-amber-300"} />
-              <ScienceIndicator label="Risque global" value={formatPercent(riskIndex)} detail="Inverse du score de sante financiere." tone={riskIndex <= 30 ? "text-emerald-300" : riskIndex <= 55 ? "text-amber-300" : "text-red-300"} />
-              <ScienceIndicator label="Cash 30 jours" value={money.format(predictedCash30)} detail="Projection: cash + revenus prevus - charges prevues." tone={predictedCash30 >= 0 ? "text-emerald-300" : "text-red-300"} />
+              <ScienceIndicator label="Marge opérationnelle" value={formatPercent(operatingMargin)} detail="Profit/perte rapporté aux encaissements." tone={operatingMargin >= 0 ? "text-emerald-300" : "text-red-300"} />
+              <ScienceIndicator label="Couverture liquidité" value={formatPercent(liquidityCoverage)} detail="Cash disponible face aux passifs connus." tone={liquidityCoverage >= 100 ? "text-emerald-300" : "text-amber-300"} />
+              <ScienceIndicator label="Risque global" value={formatPercent(riskIndex)} detail="Inverse du score de santé financière." tone={riskIndex <= 30 ? "text-emerald-300" : riskIndex <= 55 ? "text-amber-300" : "text-red-300"} />
+              <ScienceIndicator label="Cash 30 jours" value={money.format(predictedCash30)} detail="Projection : cash + revenus prévus - charges prévues." tone={predictedCash30 >= 0 ? "text-emerald-300" : "text-red-300"} />
             </div>
           </div>
         </div>
@@ -1286,17 +1558,17 @@ export function FinanceDashboardPage() {
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Recettes</p>
               <p className="mt-2 text-2xl font-bold text-white">{money.format(revenueOverview.expectedRevenue)}</p>
-              <p className="mt-1 text-sm text-emerald-100">Attendu annuel net avec reductions et accords.</p>
+              <p className="mt-1 text-sm text-emerald-100">Attendu annuel net avec réductions et accords.</p>
             </div>
             <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Depenses</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dépenses</p>
               <p className="mt-2 text-2xl font-bold text-white">{money.format(expenseOverview.expenses.totalExpenses)}</p>
-              <p className="mt-1 text-sm text-red-100">Operations, achats, maintenance et paie inclus.</p>
+              <p className="mt-1 text-sm text-red-100">Opérations, achats, maintenance et paie inclus.</p>
             </div>
             <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Cash disponible</p>
               <p className="mt-2 text-2xl font-bold text-white">{money.format(expenseOverview.cashflow.availableCash)}</p>
-              <p className="mt-1 text-sm text-brand-100">Solde operationnel mobilisable en temps reel.</p>
+              <p className="mt-1 text-sm text-brand-100">Solde opérationnel mobilisable en temps réel.</p>
             </div>
           </div>
         </div>
@@ -1305,15 +1577,15 @@ export function FinanceDashboardPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="font-display text-2xl font-bold text-white">Workflow d'approbation</h2>
-              <p className="mt-1 text-sm text-ink-dim">Validation, approbation administrative et arbitrage proprietaire si necessaire.</p>
+              <p className="mt-1 text-sm text-ink-dim">Validation, approbation administrative et arbitrage propriétaire si nécessaire.</p>
             </div>
             <CheckCircle2 className="h-6 w-6 text-emerald-300" />
           </div>
           <div className="mt-5 space-y-3">
             {[
-              ["1", "Officier financier", "Controle categorie, budget, piece justificative et periode comptable."],
-              ["2", "Administration", "Autorise la sortie de fonds et la coherence departementale."],
-              ["3", "Owner / Direction", "Valide les depenses sensibles, urgentes ou strategiques."]
+              ["1", "Officier financier", "Contrôle catégorie, budget, pièce justificative et période comptable."],
+              ["2", "Administration", "Autorise la sortie de fonds et la cohérence départementale."],
+              ["3", "Owner / Direction", "Valide les dépenses sensibles, urgentes ou stratégiques."]
             ].map(([step, label, detail]) => (
               <div key={step} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <div className="flex gap-3">
@@ -1328,11 +1600,11 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Depenses en attente</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dépenses en attente</p>
               <p className="mt-2 text-2xl font-bold text-white">{expenseOverview.expenses.pendingExpenses}</p>
             </div>
             <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Etapes a traiter</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Étapes à traiter</p>
               <p className="mt-2 text-2xl font-bold text-white">{expenseOverview.expenses.pendingApprovalSteps}</p>
             </div>
           </div>
@@ -1344,7 +1616,7 @@ export function FinanceDashboardPage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="font-display text-2xl font-bold text-white">Cashflow et performance mensuelle</h2>
-              <p className="mt-1 text-sm text-ink-dim">Comparaison recettes vs depenses pour lire la marge operationnelle de l'institution.</p>
+              <p className="mt-1 text-sm text-ink-dim">Comparaison recettes vs dépenses pour lire la marge opérationnelle de l'institution.</p>
             </div>
             <CalendarClock className="h-6 w-6 text-brand-200" />
           </div>
@@ -1365,11 +1637,11 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Revenus comptabilises</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Revenus comptabilisés</p>
               <p className="mt-2 text-xl font-bold text-emerald-300">{money.format(expenseOverview.revenue.totalRevenue)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Charges engagees</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Charges engagées</p>
               <p className="mt-2 text-xl font-bold text-red-300">{money.format(expenseOverview.expenses.totalExpenses)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -1384,8 +1656,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Analyse des depenses</h2>
-              <p className="mt-1 text-sm text-ink-dim">Postes dominants et ventilation par categorie pour detecter les poches de consommation.</p>
+              <h2 className="font-display text-2xl font-bold text-white">Analyse des dépenses</h2>
+              <p className="mt-1 text-sm text-ink-dim">Postes dominants et ventilation par catégorie pour détecter les poches de consommation.</p>
             </div>
             <AlertTriangle className="h-6 w-6 text-amber-300" />
           </div>
@@ -1492,7 +1764,7 @@ export function FinanceDashboardPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-white">{run.title}</p>
-                      <p className="mt-1 text-xs text-ink-dim">{run.department ?? "RH"} • {run.periodName ?? "Periode non definie"}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{run.department ?? "RH"} • {run.periodName ?? "Période non definie"}</p>
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${payrollStatusTone[run.status] ?? payrollStatusTone.DRAFT}`}>
                       {run.status}
@@ -1510,7 +1782,7 @@ export function FinanceDashboardPage() {
           <div className="card glass border border-white/10 shadow-lg">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-2xl font-bold text-white">Depenses recentes</h2>
+                <h2 className="font-display text-2xl font-bold text-white">Dépenses recentes</h2>
                 <p className="mt-1 text-sm text-ink-dim">Pieces a valider, achats traces et statut d'execution comptable.</p>
               </div>
               <AlertTriangle className="h-6 w-6 text-amber-300" />
@@ -1553,7 +1825,7 @@ export function FinanceDashboardPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{row.parentName}</p>
-                    <p className="mt-1 text-xs text-ink-dim">{row.overdueInstallments} echeances en retard</p>
+                    <p className="mt-1 text-xs text-ink-dim">{row.overdueInstallments} échéances en retard</p>
                   </div>
                   <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-200">
                     {money.format(row.totalDebt)}
@@ -1581,7 +1853,7 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Analytique scolaire et reductions</h2>
+              <h2 className="font-display text-2xl font-bold text-white">Analytique scolaire et réductions</h2>
               <p className="mt-1 text-sm text-ink-dim">Encaissement par classe, charge de reduction et pression dette par segment academique.</p>
             </div>
             <HandCoins className="h-6 w-6 text-cyan-300" />
@@ -1592,7 +1864,7 @@ export function FinanceDashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{row.className}</p>
-                    <p className="text-xs text-ink-dim">{row.students} eleves suivis</p>
+                    <p className="text-xs text-ink-dim">{row.students} élèves suivis</p>
                   </div>
                   <p className="font-mono font-bold text-emerald-300">{money.format(row.collected)}</p>
                 </div>
@@ -1610,14 +1882,14 @@ export function FinanceDashboardPage() {
                   </div>
                   <div>
                     <p className="text-ink-dim">Reductions</p>
-                    <p className="font-semibold text-cyan-300">{money.format(row.reductions)}</p>
+                    <p className="font-semibold text-cyan-300">{money.format(row.réductions)}</p>
                   </div>
                 </div>
               </div>
             ))}
           </div>
           <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Periode d'analyse reductions</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Période d'analyse réductions</p>
             <p className="mt-2 font-display text-2xl font-bold text-white">{revenueOverview.reductionStatistics.periodLabel}</p>
             <p className="mt-1 text-sm text-cyan-100">{revenueOverview.reductionStatistics.reductionCount} reduction(s) tracee(s) pour {money.format(revenueOverview.reductionStatistics.totalReductions)}.</p>
           </div>
@@ -1633,14 +1905,14 @@ export function FinanceDashboardPage() {
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-ink-dim">
-            Le dashboard ERP n'expose pas les cas d'inscription en detail; il consolide seulement leurs effets sur les encaissements, ajustements, reductions et echeances.
+            Le dashboard ERP n'expose pas les cas d'inscription en detail; il consolide seulement leurs effets sur les encaissements, ajustements, réductions et échéances.
           </div>
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-brand-300">Role du referentiel</p>
             <p className="mt-3 text-sm text-ink-dim">
-              Il alimente les calculs de tuition, reductions, echeances et reports sans surcharger l'interface operationnelle.
+              Il alimente les calculs de tuition, réductions, échéances et reports sans surcharger l'interface opérationnelle.
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -1652,7 +1924,7 @@ export function FinanceDashboardPage() {
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-brand-300">Vision ERP</p>
             <p className="mt-3 text-sm text-ink-dim">
-              Le cockpit conserve une vue de pilotage: dettes, encaissements, reductions et impacts sur la tresorerie, sans exposer la mecanique d'inscription.
+              Le cockpit conserve une vue de pilotage: dettes, encaissements, réductions et impacts sur la trésorerie, sans exposer la mécanique d'inscription.
             </p>
           </div>
         </div>
@@ -1660,6 +1932,30 @@ export function FinanceDashboardPage() {
 
       {activeModule && activeModuleMeta && (
         <FinanceErpDialog title={activeModuleMeta.title} subtitle={activeModuleMeta.subtitle} onClose={() => setActiveModule(null)}>
+          {activeModule !== "scholarships" && (
+            <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-slate-950/45 p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <label className="min-w-0 flex-1 space-y-1.5">
+                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Recherche du module</span>
+                  <input
+                    value={financeModuleSearch}
+                    onChange={(event) => setFinanceModuleSearch(event.target.value)}
+                    placeholder="Rechercher par parent, classe, budget, departement, statut, montant ou indicateur"
+                    className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => printFinanceModuleReport(activeModule)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
+                    <Printer className="h-4 w-4" /> PDF / Imprimer
+                  </button>
+                  <button type="button" onClick={() => exportFinanceModuleExcel(activeModule)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
+                    <FileSpreadsheet className="h-4 w-4" /> Excel
+                  </button>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-ink-dim">{activeFinanceModuleRows.length} ligne(s) retenue(s) pour le rapport.</p>
+            </div>
+          )}
           {activeModule === "health" && (
             <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-5">
@@ -1669,16 +1965,16 @@ export function FinanceDashboardPage() {
                 <p className="mt-3 text-sm leading-relaxed text-ink-dim">
                   L'indice combine la performance de recouvrement, l'exposition aux dettes, la pression budgetaire, les alertes,
                   la liquidite et le comportement de paiement des parents. Il donne une lecture rapide de la capacite de l'ecole
-                  a financer ses operations sans tension excessive.
+                  a financer ses opérations sans tension excessive.
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <ScienceIndicator label="Collection efficiency" value={formatPercent(revenueOverview.financialHealthIndicators.collectionEfficiency)} detail="Capacite a transformer le revenu attendu en cash reel." tone="text-emerald-300" />
                 <ScienceIndicator label="Debt exposure" value={formatPercent(revenueOverview.financialHealthIndicators.debtExposure)} detail="Poids des dettes parentales dans le revenu attendu." tone="text-red-300" />
-                <ScienceIndicator label="Reduction load" value={formatPercent(revenueOverview.financialHealthIndicators.reductionLoad)} detail="Impact des reductions sur le revenu net." tone="text-cyan-300" />
+                <ScienceIndicator label="Reduction load" value={formatPercent(revenueOverview.financialHealthIndicators.reductionLoad)} detail="Impact des réductions sur le revenu net." tone="text-cyan-300" />
                 <ScienceIndicator label="Alert pressure" value={formatPercent(revenueOverview.financialHealthIndicators.alertPressure)} detail="Densite des alertes ouvertes dans le portefeuille parents." tone="text-amber-300" />
                 <ScienceIndicator label="Average behavior score" value={formatPercent(revenueOverview.financialHealthIndicators.averageBehaviorScore)} detail="Qualite moyenne de paiement des familles suivies." tone="text-brand-100" />
-                <ScienceIndicator label="Spend coverage" value={formatPercent(spendCoverage)} detail="Part des encaissements deja consommee par les depenses." tone={spendCoverage <= 70 ? "text-emerald-300" : "text-amber-300"} />
+                <ScienceIndicator label="Spend coverage" value={formatPercent(spendCoverage)} detail="Part des encaissements déjà consommée par les depenses." tone={spendCoverage <= 70 ? "text-emerald-300" : "text-amber-300"} />
               </div>
             </div>
           )}
@@ -1687,8 +1983,8 @@ export function FinanceDashboardPage() {
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <ScienceIndicator label="Revenus prevus" value={money.format(forecastRevenue)} detail="Moyenne mobile des derniers mois disponibles." tone="text-emerald-300" />
-                <ScienceIndicator label="Charges prevues" value={money.format(forecastExpenses)} detail="Projection des sorties recurrentes." tone="text-red-300" />
-                <ScienceIndicator label="Cash projete J+30" value={money.format(predictedCash30)} detail="Tresorerie si la tendance continue." tone={predictedCash30 >= 0 ? "text-emerald-300" : "text-red-300"} />
+                <ScienceIndicator label="Charges prevues" value={money.format(forecastExpenses)} detail="Projection des sorties reçurrentes." tone="text-red-300" />
+                <ScienceIndicator label="Cash projete J+30" value={money.format(predictedCash30)} detail="Trésorerie si la tendance continue." tone={predictedCash30 >= 0 ? "text-emerald-300" : "text-red-300"} />
                 <ScienceIndicator label="Runway" value={`${runwayMonths.toFixed(1)} mois`} detail="Mois couverts par le cash actuel." tone={runwayMonths >= 2 ? "text-emerald-300" : "text-amber-300"} />
               </div>
               <div className="h-80 rounded-2xl border border-white/10 bg-slate-950/35 p-3">
@@ -1710,12 +2006,12 @@ export function FinanceDashboardPage() {
           {activeModule === "revenue" && (
             <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
               <div className="space-y-3">
-                {revenueOverview.parentDebtAnalytics.slice(0, 8).map((row) => (
+                {filteredRevenueParents.slice(0, 8).map((row) => (
                   <div key={row.parentId} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{row.parentName}</p>
-                        <p className="text-xs text-ink-dim">{row.overdueInstallments} echeance(s) en retard · score {formatPercent(row.paymentBehaviorScore)}</p>
+                        <p className="text-xs text-ink-dim">{row.overdueInstallments} échéance(s) en retard · score {formatPercent(row.paymentBehaviorScore)}</p>
                       </div>
                       <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-200">{money.format(row.totalDebt)}</span>
                     </div>
@@ -1728,12 +2024,12 @@ export function FinanceDashboardPage() {
                 ))}
               </div>
               <div className="space-y-3">
-                {revenueOverview.classAnalytics.slice(0, 8).map((row) => (
+                {filteredRevenueClasses.slice(0, 8).map((row) => (
                   <div key={row.className} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{row.className}</p>
-                        <p className="text-xs text-ink-dim">{row.students} eleves · attendu {money.format(row.expected)}</p>
+                        <p className="text-xs text-ink-dim">{row.students} élèves · attendu {money.format(row.expected)}</p>
                       </div>
                       <p className="font-mono text-sm font-bold text-emerald-300">{formatPercent(row.collectionRate)}</p>
                     </div>
@@ -1788,7 +2084,7 @@ export function FinanceDashboardPage() {
                       type="button"
                       onClick={() => printScholarshipReport(buildScholarshipReportHtml({
                         rows: filteredScholarshipRows,
-                        title: "Etat filtré des bourses et reductions",
+                        title: "Etat filtré des bourses et réductions",
                         scopeLabel: scholarshipFilterScopeLabel,
                         locale
                       }))}
@@ -1798,7 +2094,7 @@ export function FinanceDashboardPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => exportScholarshipRowsExcel(`bourses-filtrees-${slugifyScholarshipFilename(scholarshipSearch || scholarshipOriginFilter || scholarshipScopeFilter)}-${new Date().toISOString().slice(0, 10)}`, filteredScholarshipRows, scholarshipFilterScopeLabel, locale)}
+                      onClick={() => exportScholarshipRowsExcel(`bourses-filtrées-${slugifyScholarshipFilename(scholarshipSearch || scholarshipOriginFilter || scholarshipScopeFilter)}-${new Date().toISOString().slice(0, 10)}`, filteredScholarshipRows, scholarshipFilterScopeLabel, locale)}
                       className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15"
                     >
                       <FileSpreadsheet className="h-4 w-4" /> Excel
@@ -1825,7 +2121,7 @@ export function FinanceDashboardPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <ScienceIndicator label="Total bourses" value={money.format(scholarshipTotal)} detail="Somme de toutes les reductions du systeme." tone="text-cyan-300" />
+                <ScienceIndicator label="Total bourses" value={money.format(scholarshipTotal)} detail="Somme de toutes les réductions du systeme." tone="text-cyan-300" />
                 <ScienceIndicator label="Lignes visibles" value={String(filteredScholarshipRows.length)} detail={`Sur ${scholarshipCount} reduction(s) analysee(s).`} tone="text-brand-100" />
                 <ScienceIndicator label="Accords manuels visibles" value={money.format(filteredManualScholarshipRows.reduce((sum, row) => sum + Number(row.amount || 0), 0))} detail={`${filteredManualScholarshipRows.length} arrangement(s) owner-parent.`} tone="text-emerald-300" />
                 <ScienceIndicator label="Impact revenu filtre" value={formatPercent(revenueOverview.expectedRevenue > 0 ? (filteredScholarshipTotal / revenueOverview.expectedRevenue) * 100 : 0)} detail="Poids du sous-ensemble visible sur le revenu attendu." tone="text-amber-300" />
@@ -1910,7 +2206,7 @@ export function FinanceDashboardPage() {
                 </ResponsiveContainer>
               </div>
               <div className="space-y-3">
-                {expenseOverview.recentExpenses.slice(0, 8).map((expense) => (
+                {filteredErpExpenses.slice(0, 8).map((expense) => (
                   <div key={expense.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
@@ -1928,7 +2224,7 @@ export function FinanceDashboardPage() {
 
           {activeModule === "budgets" && (
             <div className="space-y-3">
-              {expenseOverview.budgets.map((budget) => (
+              {filteredErpBudgets.map((budget) => (
                 <div key={budget.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -1960,12 +2256,12 @@ export function FinanceDashboardPage() {
                 <ScienceIndicator label="Passifs institutionnels" value={money.format(totalInstitutionalLiabilities)} detail="Fournisseurs, paie et obligations cumulees." tone="text-red-300" />
               </div>
               <div className="space-y-3">
-                {expenseOverview.recentPayrollRuns.slice(0, 8).map((run) => (
+                {filteredErpPayrollRuns.slice(0, 8).map((run) => (
                   <div key={run.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{run.title}</p>
-                        <p className="text-xs text-ink-dim">{run.department ?? "RH"} · {run.periodName ?? "Periode non definie"}</p>
+                        <p className="text-xs text-ink-dim">{run.department ?? "RH"} · {run.periodName ?? "Période non definie"}</p>
                       </div>
                       <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${payrollStatusTone[run.status] ?? payrollStatusTone.DRAFT}`}>{run.status}</span>
                     </div>

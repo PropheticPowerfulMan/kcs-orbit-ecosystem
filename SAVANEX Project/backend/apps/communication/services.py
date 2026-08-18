@@ -6,6 +6,7 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -173,6 +174,25 @@ def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE
     ]
 
 
+def deliver_direct_parent_contact(name='', email='', phone='', subject='', body='', channels=None):
+    enabled_channels = set(channels or ['email', 'sms'])
+    contact = SimpleNamespace(email=email or '', phone=phone or '')
+    label = name or 'Parent'
+    results = []
+
+    if 'email' in enabled_channels:
+        results.append(_send_user_email(contact, subject, body, label))
+    else:
+        results.append(DeliveryResult('email', 'skipped', 'Email channel disabled.'))
+
+    if 'sms' in enabled_channels:
+        results.append(_send_user_sms(contact, _short_sms(subject, body), label))
+    else:
+        results.append(DeliveryResult('sms', 'skipped', 'SMS channel disabled.'))
+
+    return results
+
+
 def summarize_student_evolution(student):
     from apps.attendance.models import Attendance
     from apps.grades.models import Grade
@@ -243,9 +263,9 @@ def notify_parent_about_student_evolution(student, trigger_label, notif_type=Not
 
     body, summary = build_evolution_message(student, trigger_label)
     should_notify = force
-    if summary['attendance_rate'] is not None and summary['attendance_rate'] < 75:
+    if summary['attendance_rate'] is not None and summary['attendance_rate'] < 70:
         should_notify = True
-    if summary['recent_average'] is not None and summary['recent_average'] < 75:
+    if summary['recent_average'] is not None and summary['recent_average'] < 70:
         should_notify = True
     if summary['trend'] is not None and abs(summary['trend']) >= 1:
         should_notify = True
@@ -263,7 +283,7 @@ def notify_parent_about_grade(grade):
     return notify_parent_about_student_evolution(
         grade.student,
         trigger,
-        notif_type=Notification.TYPE_GRADE if percentage >= 75 else Notification.TYPE_WARNING,
+        notif_type=Notification.TYPE_GRADE if percentage >= 70 else Notification.TYPE_WARNING,
         force=True,
     )
 

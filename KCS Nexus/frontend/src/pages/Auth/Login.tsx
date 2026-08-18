@@ -12,6 +12,7 @@ import type { User, UserRole } from '@/types'
 const loginSchema = z.object({
   email: z.string().min(1, 'Email ou code d\'accès requis'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
+  twoFactorCode: z.string().regex(/^\d{6}$/, 'Enter the 6-digit authenticator code').optional(),
 })
 
 type LoginFormValues = z.infer<typeof loginSchema>
@@ -87,6 +88,7 @@ const LoginPage = () => {
   const { login, logout, user, isAuthenticated, setLoading, isLoading } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false)
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -107,7 +109,7 @@ const LoginPage = () => {
   }
 
   const handleApiLogin = async (values: LoginFormValues) => {
-    const response = await authAPI.login(values.email.trim(), values.password)
+    const response = await authAPI.login(values.email.trim(), values.password, values.twoFactorCode)
     const data = response.data?.data
     if (!data?.user || !data?.token || !data?.refreshToken) {
       throw new Error('Invalid authentication response')
@@ -136,6 +138,11 @@ const LoginPage = () => {
     try {
       await handleApiLogin(values)
     } catch (err: any) {
+      if (err?.response?.status === 428) {
+        setRequiresTwoFactor(true)
+        setErrorMessage(err.response.data?.message || 'Enter your authenticator code to continue.')
+        return
+      }
       const demoAccount = findDemoAccount(values)
       if (demoAccount) {
         handleDemoLogin(buildDemoUser(demoAccount))
@@ -251,6 +258,17 @@ const LoginPage = () => {
                   </div>
                   {form.formState.errors.password && <p className="mt-1 text-xs text-red-500">{form.formState.errors.password.message}</p>}
                 </div>
+
+                {requiresTwoFactor && (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-600 dark:text-gray-300">Authenticator code</label>
+                    <div className="relative">
+                      <ShieldCheck size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input {...form.register('twoFactorCode')} inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="input-kcs pl-11 tracking-[0.35em]" placeholder="000000" autoFocus />
+                    </div>
+                    {form.formState.errors.twoFactorCode && <p className="mt-1 text-xs text-red-500">{form.formState.errors.twoFactorCode.message}</p>}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between pt-1 text-sm">
                   <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400">

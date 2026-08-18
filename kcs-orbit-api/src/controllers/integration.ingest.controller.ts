@@ -844,7 +844,7 @@ export async function ingestSavanexParent(req: Request, res: Response) {
 
   const { organizationId, externalId, occurredAt, payload } = contract;
   const fullName = buildCanonicalFullName(payload);
-  const { firstName, middleName, lastName, phone, email, mustChangePassword } = payload;
+  const { firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword } = payload;
   const metadata = rawBody.metadata;
   const sourceEventKey = buildSourceEventKey({ entityType: "parent", externalId, occurredAt });
 
@@ -887,10 +887,10 @@ export async function ingestSavanexParent(req: Request, res: Response) {
   const parent = targetParentId
     ? await prisma.parent.update({
       where: { id: targetParentId },
-      data: { fullName, firstName, middleName, lastName, phone, email, mustChangePassword: mustChangePassword ?? false, organizationId }
+      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword: mustChangePassword ?? false, organizationId }
     })
     : await prisma.parent.create({
-      data: { fullName, firstName, middleName, lastName, phone, email, mustChangePassword: mustChangePassword ?? false, organizationId }
+      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, mustChangePassword: mustChangePassword ?? false, organizationId }
     });
 
   await upsertExternalLink({
@@ -946,7 +946,7 @@ export async function ingestSavanexTeacher(req: Request, res: Response) {
   const { organizationId, externalId, occurredAt, payload } = contract;
   const fullName = buildCanonicalFullName(payload);
   const subject = payload.subject || payload.subjects?.[0];
-  const { firstName, middleName, lastName, phone, email, employeeId, employeeType, department, jobTitle, mustChangePassword } = payload;
+  const { firstName, middleName, lastName, phone, email, physicalAddress, employeeId, employeeType, department, jobTitle, mustChangePassword } = payload;
   const metadata = rawBody.metadata;
   const sourceEventKey = buildSourceEventKey({ entityType: "teacher", externalId, occurredAt });
 
@@ -976,10 +976,10 @@ export async function ingestSavanexTeacher(req: Request, res: Response) {
   const teacher = existingLink
     ? await prisma.teacher.update({
       where: { id: existingLink.nexusEntityId },
-      data: { fullName, firstName, middleName, lastName, phone, email, subject, employeeId, employeeType, department, jobTitle, mustChangePassword: mustChangePassword ?? false, organizationId }
+      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, subject, employeeId, employeeType, department, jobTitle, mustChangePassword: mustChangePassword ?? false, organizationId }
     })
     : await prisma.teacher.create({
-      data: { fullName, firstName, middleName, lastName, phone, email, subject, employeeId, employeeType, department, jobTitle, mustChangePassword: mustChangePassword ?? false, organizationId }
+      data: { fullName, firstName, middleName, lastName, phone, email, physicalAddress, subject, employeeId, employeeType, department, jobTitle, mustChangePassword: mustChangePassword ?? false, organizationId }
     });
 
   await upsertExternalLink({

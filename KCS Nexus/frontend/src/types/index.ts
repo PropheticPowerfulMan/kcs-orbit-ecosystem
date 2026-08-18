@@ -10,12 +10,14 @@ export interface User {
   email: string;
   accessCode?: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
   role: UserRole;
   staffFunction?: 'principal' | 'academic_coordinator' | 'registrar' | 'accountant' | 'discipline' | 'communications' | 'admissions' | 'office';
   permissions?: string[];
   avatar?: string;
   phone?: string;
+  twoFactorEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

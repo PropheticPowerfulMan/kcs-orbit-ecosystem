@@ -54,6 +54,10 @@ type SalaryProfile = {
   defaultDeduction: number;
   advanceBalance?: number;
   debtRecoveryRate: number;
+  deductionMode?: string;
+  maxDeductionRate?: number;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
   notes?: string;
   isActive: boolean;
   createdAt?: string;
@@ -104,6 +108,49 @@ type EmployeeFinanceSnapshot = {
     totalDebtRecovered: number;
     totalAdvancesRecovered: number;
   };
+  salaryProjection?: {
+    mode: string;
+    grossSalary: number;
+    netSalary: number;
+    totalDeductions: number;
+    advancesRecovered: number;
+    debtRecovered: number;
+    salaryPressure: number;
+    maxDeductionRate: number;
+    recommendation: string;
+  };
+  communicationHistory?: Array<{ id: string; channel: string; subject?: string | null; content: string; status: string; createdAt: string }>;
+};
+
+type EmployeeRepayment = {
+  id: string;
+  method: string;
+  expectedAmount: number;
+  paidAmount: number;
+  currency: string;
+  dueDate: string;
+  paidAt?: string | null;
+  status: string;
+  reference?: string | null;
+};
+
+type EmployeeObligation = {
+  id: string;
+  type: string;
+  title: string;
+  principalAmount: number;
+  amountPaid: number;
+  balance: number;
+  currency: string;
+  repaymentMethod: string;
+  installmentAmount: number;
+  startDate: string;
+  dueDate: string;
+  status: string;
+  riskLevel: string;
+  riskScore: number;
+  notes?: string | null;
+  repayments: EmployeeRepayment[];
 };
 
 const EMPTY_FORM: EmployeeFormState = {
@@ -119,6 +166,83 @@ const EMPTY_FORM: EmployeeFormState = {
   jobTitle: "",
   mustChangePassword: false,
 };
+
+function sortEmployeesByName(employees: Employee[]) {
+  return [...employees].sort((a, b) =>
+    String(a.fullName || a.employeeId || a.id || "").localeCompare(String(b.fullName || b.employeeId || b.id || ""), "fr", { sensitivity: "base" })
+  );
+}
+
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function employeeSearchAliases(employee: Employee) {
+  const normalizedRole = normalizeSearchText([
+    employee.employeeType,
+    employee.department,
+    employee.jobTitle,
+    employee.subject,
+  ].join(" "));
+  const aliases = new Set<string>();
+
+  if (/\b(teacher|teaching|enseignant|professeur|academic|academique)\b/.test(normalizedRole)) {
+    ["professeur", "enseignant", "teacher", "teaching", "academique", "academic"].forEach((alias) => aliases.add(alias));
+  }
+  if (/\b(driver|chauffeur|transport|logistique|logistics|operations?)\b/.test(normalizedRole)) {
+    ["chauffeur", "driver", "transport", "logistique", "operations", "bureau transport"].forEach((alias) => aliases.add(alias));
+  }
+  if (/\b(accountant|finance|comptable|cashier|caissier)\b/.test(normalizedRole)) {
+    ["finance", "comptable", "accountant", "cashier", "caissier", "bureau finance"].forEach((alias) => aliases.add(alias));
+  }
+  if (/\b(admin|administration|registrar|secretariat|secretary)\b/.test(normalizedRole)) {
+    ["administration", "admin", "registrar", "secretariat", "bureau administratif"].forEach((alias) => aliases.add(alias));
+  }
+  if (/\b(security|securite|guard|garde)\b/.test(normalizedRole)) {
+    ["securite", "security", "garde", "guard"].forEach((alias) => aliases.add(alias));
+  }
+
+  return Array.from(aliases);
+}
+
+function buildEmployeeSearchIndex(employee: Employee) {
+  const values = [
+    employee.fullName,
+    employee.displayId,
+    employee.employeeId,
+    employee.id,
+    employee.email,
+    employee.phone,
+    employee.physicalAddress,
+    employee.department,
+    employee.jobTitle,
+    employee.employeeType,
+    employee.subject,
+    ...(employee.externalIds || []).flatMap((item) => [item.appSlug, item.externalId]),
+    ...employeeSearchAliases(employee),
+  ];
+
+  const terms = values
+    .map(normalizeSearchText)
+    .filter(Boolean)
+    .flatMap((value) => [value, value.replace(/\s+/g, "")]);
+
+  return Array.from(new Set(terms)).join(" ");
+}
+
+function searchIndexMatches(index: string, rawQuery: string) {
+  const query = normalizeSearchText(rawQuery);
+  if (!query) return true;
+  const compactQuery = query.replace(/\s+/g, "");
+  if (index.includes(query) || index.includes(compactQuery)) return true;
+  return query.split(" ").filter(Boolean).every((part) => index.includes(part));
+}
 
 function EyeIcon() {
   return (
@@ -244,6 +368,30 @@ function labelizeFrequency(value?: string | null) {
       return "Trimestrielle";
     case "ANNUAL":
       return "Annuelle";
+    default:
+      return infoValue(value);
+  }
+}
+
+function labelizeObligationType(value?: string | null) {
+  switch (String(value ?? "").toUpperCase()) {
+    case "SALARY_ADVANCE":
+      return "Avance sur salaire";
+    case "SCHOOL_DEBT":
+      return "Dette envers l'ecole";
+    default:
+      return "Autre dette";
+  }
+}
+
+function labelizeRepaymentMethod(value?: string | null) {
+  switch (String(value ?? "").toUpperCase()) {
+    case "SALARY_DEDUCTION":
+      return "Deduction salaire";
+    case "EXTERNAL_PAYMENT":
+      return "Paiement hors salaire";
+    case "MIXED":
+      return "Mixte";
     default:
       return infoValue(value);
   }
@@ -558,17 +706,23 @@ export function EmployeesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeFormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [mutationNotice, setMutationNotice] = useState<string | null>(null);
   const [employeeFinanceLoading, setEmployeeFinanceLoading] = useState(false);
   const [employeeFinanceError, setEmployeeFinanceError] = useState<string | null>(null);
   const [employeeFinanceSnapshot, setEmployeeFinanceSnapshot] = useState<EmployeeFinanceSnapshot | null>(null);
+  const [employeeObligations, setEmployeeObligations] = useState<EmployeeObligation[]>([]);
+  const [employeeFinanceQuery, setEmployeeFinanceQuery] = useState("");
+  const [employeeFinanceDateFrom, setEmployeeFinanceDateFrom] = useState("");
+  const [employeeFinanceDateTo, setEmployeeFinanceDateTo] = useState("");
   const [employeePdfExporting, setEmployeePdfExporting] = useState(false);
+  const [employeeNoticeSending, setEmployeeNoticeSending] = useState(false);
 
   async function loadEmployees() {
     setLoading(true);
     setError(null);
     try {
       const data = await api<Employee[]>("/api/shared-directory/teachers");
-      setEmployees(Array.isArray(data) ? data : []);
+      setEmployees(sortEmployeesByName(Array.isArray(data) ? data : []));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger les employés.");
     } finally {
@@ -583,6 +737,7 @@ export function EmployeesPage() {
   useEffect(() => {
     if (!selectedEmployee) {
       setEmployeeFinanceSnapshot(null);
+      setEmployeeObligations([]);
       setEmployeeFinanceError(null);
       setEmployeeFinanceLoading(false);
       setEmployeePdfExporting(false);
@@ -593,13 +748,29 @@ export function EmployeesPage() {
     setEmployeeFinanceLoading(true);
     setEmployeeFinanceError(null);
 
+    const params = new URLSearchParams();
+    const employeeCode = selectedEmployee.employeeId || selectedEmployee.displayId || selectedEmployee.id;
+    if (employeeCode) params.set("employeeCode", employeeCode);
+    if (employeeFinanceQuery.trim()) params.set("query", employeeFinanceQuery.trim());
+    if (employeeFinanceDateFrom) params.set("dateFrom", employeeFinanceDateFrom);
+    if (employeeFinanceDateTo) params.set("dateTo", employeeFinanceDateTo);
+    const snapshotParams = new URLSearchParams(params);
+    snapshotParams.delete("query");
+
     void Promise.all([
       api<SalaryProfile[]>("/api/expenses/payroll/profiles"),
       api<PayrollRun[]>("/api/expenses/payroll/runs"),
+      api<EmployeeObligation[]>(`/api/expenses/employee-finance/obligations?${params.toString()}`),
+      api<{ salaryProjection?: EmployeeFinanceSnapshot["salaryProjection"]; communicationHistory?: EmployeeFinanceSnapshot["communicationHistory"] }>(`/api/expenses/employee-finance/snapshot?${snapshotParams.toString()}`),
     ])
-      .then(([profiles, runs]) => {
+      .then(([profiles, runs, obligations, enrichedSnapshot]) => {
         if (!active) return;
-        setEmployeeFinanceSnapshot(buildEmployeeFinanceSnapshot(selectedEmployee, Array.isArray(profiles) ? profiles : [], Array.isArray(runs) ? runs : []));
+        setEmployeeFinanceSnapshot({
+          ...buildEmployeeFinanceSnapshot(selectedEmployee, Array.isArray(profiles) ? profiles : [], Array.isArray(runs) ? runs : []),
+          salaryProjection: enrichedSnapshot.salaryProjection,
+          communicationHistory: enrichedSnapshot.communicationHistory ?? []
+        });
+        setEmployeeObligations(Array.isArray(obligations) ? obligations : []);
       })
       .catch((err) => {
         if (!active) return;
@@ -613,23 +784,13 @@ export function EmployeesPage() {
     return () => {
       active = false;
     };
-  }, [selectedEmployee]);
+  }, [selectedEmployee, employeeFinanceQuery, employeeFinanceDateFrom, employeeFinanceDateTo]);
 
   const filteredEmployees = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = search.trim();
     if (!term) return employees;
 
-    return employees.filter((employee) => [
-      employee.fullName,
-      employee.displayId,
-      employee.employeeId,
-      employee.email,
-      employee.phone,
-      employee.physicalAddress,
-      employee.department,
-      employee.jobTitle,
-      employee.subject,
-    ].some((value) => value?.toLowerCase().includes(term)));
+    return employees.filter((employee) => searchIndexMatches(buildEmployeeSearchIndex(employee), term));
   }, [employees, search]);
 
   const stats = useMemo(() => {
@@ -641,6 +802,62 @@ export function EmployeesPage() {
       withAccessCode,
     };
   }, [employees]);
+
+  const employeeObligationTotals = useMemo(() => {
+    const active = employeeObligations.filter((item) => !["PAID", "CANCELLED", "WRITTEN_OFF"].includes(item.status));
+    return {
+      totalBalance: active.reduce((sum, item) => sum + Number(item.balance || 0), 0),
+      salaryAdvances: active.filter((item) => item.type === "SALARY_ADVANCE").reduce((sum, item) => sum + Number(item.balance || 0), 0),
+      schoolDebts: active.filter((item) => item.type === "SCHOOL_DEBT").reduce((sum, item) => sum + Number(item.balance || 0), 0),
+      overdue: active.flatMap((item) => item.repayments || []).filter((repayment) => repayment.status !== "PAID" && new Date(repayment.dueDate).getTime() < Date.now()).length,
+    };
+  }, [employeeObligations]);
+
+  async function handleSendEmployeeTransparencyNotice() {
+    const profile = employeeFinanceSnapshot?.primaryProfile;
+    if (!profile) return;
+    setEmployeeNoticeSending(true);
+    setMutationNotice(null);
+    try {
+      await api("/api/expenses/employee-finance/notify", {
+        method: "POST",
+        body: JSON.stringify({
+          salaryProfileId: profile.id,
+          channels: ["DASHBOARD", "EMAIL", "SMS"],
+          subject: "Mise a jour de votre situation salariale EduPay"
+        })
+      });
+      setMutationNotice("Avis de transparence envoye a l'employe et ajoute dans son dashboard.");
+      const params = new URLSearchParams();
+      const employeeCode = selectedEmployee?.employeeId || selectedEmployee?.displayId || selectedEmployee?.id;
+      if (employeeCode) params.set("employeeCode", employeeCode);
+      const enrichedSnapshot = await api<{ salaryProjection?: EmployeeFinanceSnapshot["salaryProjection"]; communicationHistory?: EmployeeFinanceSnapshot["communicationHistory"] }>(`/api/expenses/employee-finance/snapshot?${params.toString()}`);
+      setEmployeeFinanceSnapshot((current) => current ? { ...current, salaryProjection: enrichedSnapshot.salaryProjection, communicationHistory: enrichedSnapshot.communicationHistory ?? [] } : current);
+    } catch (err) {
+      setEmployeeFinanceError(err instanceof Error ? err.message : "Impossible d'envoyer l'avis de transparence.");
+    } finally {
+      setEmployeeNoticeSending(false);
+    }
+  }
+
+  async function handleUpdateEmployeeDeductionMode(mode: string) {
+    const profile = employeeFinanceSnapshot?.primaryProfile;
+    if (!profile) return;
+    setEmployeeNoticeSending(true);
+    setEmployeeFinanceError(null);
+    try {
+      const updated = await api<SalaryProfile>(`/api/expenses/payroll/profiles/${profile.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ deductionMode: mode })
+      });
+      setEmployeeFinanceSnapshot((current) => current ? { ...current, primaryProfile: { ...current.primaryProfile!, ...updated } } : current);
+      setMutationNotice(`Mode de deduction mis a jour: ${mode}.`);
+    } catch (err) {
+      setEmployeeFinanceError(err instanceof Error ? err.message : "Impossible de modifier le mode de deduction.");
+    } finally {
+      setEmployeeNoticeSending(false);
+    }
+  }
 
   function openEditModal(employee: Employee) {
     setEditingEmployee(employee);
@@ -660,7 +877,7 @@ export function EmployeesPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api(`/api/shared-directory/teachers/${encodeURIComponent(identifier)}`, {
+      const result = await api<{ notificationStatus?: { email?: string; sms?: string; adminEmail?: string } }>(`/api/shared-directory/teachers/${encodeURIComponent(identifier)}`, {
         method: "PUT",
         body: JSON.stringify({
           fullName: form.fullName.trim(),
@@ -675,6 +892,12 @@ export function EmployeesPage() {
           mustChangePassword: form.mustChangePassword,
         }),
       });
+      setMutationNotice([
+        "Les informations de l'employé ont été synchronisées dans le répertoire commun de l'écosystème.",
+        `Notification email employé : ${result.notificationStatus?.email ?? "non disponible"}.`,
+        `Notification SMS employé : ${result.notificationStatus?.sms ?? "non disponible"}.`,
+        `Notification administrateurs : ${result.notificationStatus?.adminEmail ?? "non disponible"}.`,
+      ].join("\n"));
       closeEditModal();
       await loadEmployees();
     } catch (err) {
@@ -707,6 +930,25 @@ export function EmployeesPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      {mutationNotice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-5 text-white shadow-2xl">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Modification synchronisée</p>
+            <h2 className="mt-2 font-display text-2xl font-bold">Notification envoyée</h2>
+            <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-ink-dim">{mutationNotice}</pre>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMutationNotice(null)}
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-400"
+              >
+                Compris
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
         <div className="min-w-0">
           <h1 className="font-display text-3xl font-bold text-white">Répertoire des employés</h1>
@@ -750,7 +992,7 @@ export function EmployeesPage() {
       <SearchField
         value={search}
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="Rechercher un employé, un matricule, un département, un poste ou un contact..."
+        placeholder="Rechercher un employe, matricule, departement, bureau, poste, professeur, chauffeur ou contact..."
         wrapperClassName="animate-fadeInUp"
       />
 
@@ -819,14 +1061,14 @@ export function EmployeesPage() {
                           <>
                             <button
                               onClick={() => openEditModal(employee)}
-                              className="rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30"
+                              className="hidden rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30"
                               title="Modifier"
                             >
                               <EditIcon />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(employee)}
-                              className="rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30"
+                              className="hidden rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30"
                               title="Supprimer"
                             >
                               <TrashIcon />
@@ -948,6 +1190,110 @@ export function EmployeesPage() {
 
               {employeeFinanceSnapshot ? (
                 <div className="mt-4 space-y-4">
+                  <div className="rounded-2xl border border-brand-300/20 bg-brand-500/10 p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-brand-200">Avances, dettes et echeances</p>
+                        <h3 className="mt-1 text-lg font-semibold text-white">Registre financier employe</h3>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <input className="h-10" value={employeeFinanceQuery} onChange={(event) => setEmployeeFinanceQuery(event.target.value)} placeholder="Recherche: avance, dette, retard..." />
+                        <input className="h-10" type="date" value={employeeFinanceDateFrom} onChange={(event) => setEmployeeFinanceDateFrom(event.target.value)} />
+                        <input className="h-10" type="date" value={employeeFinanceDateTo} onChange={(event) => setEmployeeFinanceDateTo(event.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Solde total</p>
+                        <p className="mt-2 text-lg font-semibold text-white">{formatCurrency(employeeObligationTotals.totalBalance, employeeFinanceSnapshot.currency)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Avances ouvertes</p>
+                        <p className="mt-2 text-lg font-semibold text-cyan-300">{formatCurrency(employeeObligationTotals.salaryAdvances, employeeFinanceSnapshot.currency)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dettes ecole</p>
+                        <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(employeeObligationTotals.schoolDebts, employeeFinanceSnapshot.currency)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Echeances en retard</p>
+                        <p className="mt-2 text-lg font-semibold text-rose-300">{employeeObligationTotals.overdue}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-slate-950/50 text-left text-xs uppercase tracking-[0.14em] text-ink-dim">
+                            <th className="px-4 py-3">Engagement</th>
+                            <th className="px-4 py-3">Mode</th>
+                            <th className="px-4 py-3">Solde</th>
+                            <th className="px-4 py-3">Echeance</th>
+                            <th className="px-4 py-3">Risque</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {employeeObligations.length > 0 ? employeeObligations.map((obligation) => (
+                            <tr key={obligation.id} className="border-b border-white/5 last:border-b-0">
+                              <td className="px-4 py-3">
+                                <p className="font-medium text-white">{obligation.title}</p>
+                                <p className="text-xs text-ink-dim">{labelizeObligationType(obligation.type)} - {obligation.status}</p>
+                              </td>
+                              <td className="px-4 py-3 text-ink-dim">{labelizeRepaymentMethod(obligation.repaymentMethod)}</td>
+                              <td className="px-4 py-3 font-semibold text-white">{formatCurrency(Number(obligation.balance || 0), obligation.currency)}</td>
+                              <td className="px-4 py-3 text-ink-dim">{formatDateTimeLabel(obligation.dueDate)}</td>
+                              <td className="px-4 py-3 text-ink-dim">{obligation.riskLevel} ({Number(obligation.riskScore || 0).toFixed(0)})</td>
+                            </tr>
+                          )) : (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-6 text-center text-ink-dim">Aucune avance ou dette trouvee pour cette periode.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Net mensuel prevu</p>
+                      <p className="mt-2 text-lg font-semibold text-emerald-300">{formatCurrency(Number(employeeFinanceSnapshot.salaryProjection?.netSalary ?? employeeFinanceSnapshot.primaryProfile?.baseSalary ?? 0), employeeFinanceSnapshot.currency)}</p>
+                      <p className="mt-1 text-xs text-ink-dim">Mode {employeeFinanceSnapshot.salaryProjection?.mode || employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}</p>
+                      <select
+                        className="mt-3 h-10 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 text-sm text-white"
+                        value={employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}
+                        onChange={(event) => void handleUpdateEmployeeDeductionMode(event.target.value)}
+                        disabled={employeeNoticeSending || !employeeFinanceSnapshot.primaryProfile}
+                      >
+                        <option value="AUTOMATIC">Automatique</option>
+                        <option value="MANUAL">Manuel</option>
+                        <option value="HYBRID">Hybride</option>
+                      </select>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Deductions du mois</p>
+                      <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(Number(employeeFinanceSnapshot.salaryProjection?.totalDeductions ?? 0), employeeFinanceSnapshot.currency)}</p>
+                      <p className="mt-1 text-xs text-ink-dim">Pression {Number(employeeFinanceSnapshot.salaryProjection?.salaryPressure ?? 0).toFixed(1)}%</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Avis envoyes</p>
+                      <p className="mt-2 text-lg font-semibold text-cyan-300">{employeeFinanceSnapshot.communicationHistory?.length ?? 0}</p>
+                      <p className="mt-1 text-xs text-ink-dim">Dashboard / email / SMS</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Action transparence</p>
+                      <button
+                        type="button"
+                        onClick={() => void handleSendEmployeeTransparencyNotice()}
+                        disabled={employeeNoticeSending || !employeeFinanceSnapshot.primaryProfile}
+                        className="mt-2 w-full rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {employeeNoticeSending ? "Envoi..." : "Notifier"}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="grid gap-3 md:grid-cols-4">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Salaire de base</p>

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
-import { authenticate, requireRoles } from '../middleware/auth.js'
+import { authenticate, requireRoles, requireSuperAdmin } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 
 function generateAccessCode(role: string) {
@@ -191,7 +191,7 @@ async function updateRegistryEntityInOrbit(entityType: RegistryEntityType, ident
   return data
 }
 
-async function updateLocalParentEntity(identifier: string, payload: { firstName?: string; lastName?: string; email?: string; phone?: string | null }) {
+async function updateLocalParentEntity(identifier: string, payload: { firstName?: string; middleName?: string | null; lastName?: string; email?: string; phone?: string | null }) {
   const parent = await prisma.user.findFirst({
     where: { id: identifier, role: 'PARENT' },
     select: { id: true },
@@ -205,6 +205,7 @@ async function updateLocalParentEntity(identifier: string, payload: { firstName?
     where: { id: identifier },
     data: {
       ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
+      ...(payload.middleName !== undefined ? { middleName: payload.middleName || null } : {}),
       ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
       ...(payload.email !== undefined && payload.email !== null ? { email: payload.email } : {}),
       ...(payload.phone !== undefined ? { phone: payload.phone || null } : {}),
@@ -212,6 +213,7 @@ async function updateLocalParentEntity(identifier: string, payload: { firstName?
     select: {
       id: true,
       firstName: true,
+      middleName: true,
       lastName: true,
       email: true,
       phone: true,
@@ -247,9 +249,14 @@ const schoolLevels = [
   'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12',
 ] as const
 
+function composeAdministrativeName(person: { firstName?: string | null; middleName?: string | null; lastName?: string | null }) {
+  return [person.lastName, person.middleName, person.firstName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
+}
+
 const registerFamilySchema = z.object({
   parent: z.object({
     firstName: z.string().min(1),
+    middleName: z.string().optional(),
     lastName: z.string().min(1),
     email: z.string().email(),
     phone: z.string().optional(),
@@ -257,6 +264,7 @@ const registerFamilySchema = z.object({
   }),
   student: z.object({
     firstName: z.string().min(1),
+    middleName: z.string().optional(),
     lastName: z.string().min(1),
     email: z.string().email().optional(),
     studentNumber: z.string().min(2),
@@ -271,6 +279,8 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
     const orbitData = await getFamiliesFromOrbit()
     return success(res, orbitData, 'Families loaded from Orbit')
   }
+
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
 
   const students = await prisma.studentProfile.findMany({
     include: {
@@ -310,9 +320,9 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
           relation: item.relation,
           parent: {
             firstName: item.parent.firstName,
-            middleName: null,
+            middleName: item.parent.middleName,
             lastName: item.parent.lastName,
-            fullName: `${item.parent.firstName} ${item.parent.lastName}`.trim(),
+            fullName: composeAdministrativeName(item.parent),
             email: item.parent.email,
             phone: item.parent.phone,
           },
@@ -329,9 +339,9 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
       status: student.status,
       student: {
         firstName: student.user.firstName,
-        middleName: null,
+        middleName: student.user.middleName,
         lastName: student.user.lastName,
-        fullName: `${student.user.firstName} ${student.user.lastName}`.trim(),
+        fullName: composeAdministrativeName(student.user),
         email: student.user.email,
       },
     })
@@ -351,6 +361,8 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
     const orbitData = await getSharedDirectoryFromOrbit()
     return success(res, orbitData, 'Shared directory loaded from Orbit')
   }
+
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
 
   const [students, teachers] = await Promise.all([
     prisma.studentProfile.findMany({
@@ -373,9 +385,9 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
       if (!parentsMap.has(link.parent.id)) {
         parentsMap.set(link.parent.id, {
           id: link.parent.id,
-          fullName: `${link.parent.firstName} ${link.parent.lastName}`.trim(),
+          fullName: composeAdministrativeName(link.parent),
           firstName: link.parent.firstName,
-          middleName: null,
+          middleName: link.parent.middleName,
           lastName: link.parent.lastName,
           phone: link.parent.phone,
           email: link.parent.email,
@@ -396,12 +408,18 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
   return success(res, {
     source: 'local' as const,
     visibility: 'shared-directory' as const,
+    counts: {
+      families: parentsMap.size,
+      parents: parentsMap.size,
+      students: students.length,
+      teachers: teachers.length,
+    },
     parents: Array.from(parentsMap.values()).sort((left, right) => left.fullName.localeCompare(right.fullName)),
     students: students.map((student) => ({
       id: student.id,
-      fullName: `${student.user.firstName} ${student.user.lastName}`.trim(),
+      fullName: composeAdministrativeName(student.user),
       firstName: student.user.firstName,
-      middleName: null,
+      middleName: student.user.middleName,
       lastName: student.user.lastName,
       studentNumber: student.studentNumber,
       email: student.user.email,
@@ -417,9 +435,9 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
     })),
     teachers: teachers.map((teacher) => ({
       id: teacher.id,
-      fullName: `${teacher.user.firstName} ${teacher.user.lastName}`.trim(),
+      fullName: composeAdministrativeName(teacher.user),
       firstName: teacher.user.firstName,
-      middleName: null,
+      middleName: teacher.user.middleName,
       lastName: teacher.user.lastName,
       phone: teacher.user.phone,
       email: teacher.user.email,
@@ -435,7 +453,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
   }, 'Shared directory loaded locally')
 }))
 
-registryRouter.post('/entities/:entityType', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   if (!orbitRegistryIsEnabled()) {
     throw new ApiError(409, 'Orbit registry mode must be enabled to create shared entities from KCS Nexus.')
   }
@@ -446,7 +464,7 @@ registryRouter.post('/entities/:entityType', authenticate, requireRoles('admin')
   return success(res, created, 'Shared entity created through Orbit', 201)
 }))
 
-registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
 
@@ -461,6 +479,7 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireR
 
   const payload = z.object({
     firstName: z.string().min(1).optional(),
+    middleName: z.string().nullable().optional(),
     lastName: z.string().min(1).optional(),
     email: z.string().email().optional(),
     phone: z.string().nullable().optional(),
@@ -470,7 +489,7 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireR
   return success(res, updated, 'Parent updated in local registry')
 }))
 
-registryRouter.delete('/entities/:entityType/:identifier', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+registryRouter.delete('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
 
@@ -487,7 +506,7 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   return success(res, deleted, 'Shared entity deleted through Orbit')
 }))
 
-registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   if (orbitRegistryIsEnabled()) {
     const { parent, student } = registerFamilySchema.parse(req.body)
     const organizationId = env.KCS_ORBIT_ORGANIZATION_ID!
@@ -495,6 +514,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
     const parentResult = await sendRegistryEntityToOrbit('parent', {
       organizationId,
       firstName: parent.firstName,
+      middleName: parent.middleName,
       lastName: parent.lastName,
       email: parent.email,
       phone: parent.phone,
@@ -517,6 +537,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
     const createdStudent = await createRegistryEntityInOrbit('student', {
       organizationId,
       firstName: student.firstName,
+      middleName: student.middleName,
       lastName: student.lastName,
       email: student.email,
       gender: student.gender,
@@ -551,6 +572,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
       where: { email: parent.email },
       update: {
         firstName: parent.firstName,
+        middleName: parent.middleName || null,
         lastName: parent.lastName,
         phone: parent.phone,
         role: 'PARENT',
@@ -559,6 +581,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
         email: parent.email,
         accessCode: await generateUniqueAccessCode(tx as typeof prisma, 'parent'),
         firstName: parent.firstName,
+        middleName: parent.middleName || null,
         lastName: parent.lastName,
         phone: parent.phone,
         role: 'PARENT',
@@ -570,6 +593,7 @@ registryRouter.post('/families', authenticate, requireRoles('admin'), asyncHandl
         email: student.email ?? `${student.studentNumber.toLowerCase()}@students.kcs.local`,
         accessCode: await generateUniqueAccessCode(tx as typeof prisma, 'student'),
         firstName: student.firstName,
+        middleName: student.middleName || null,
         lastName: student.lastName,
         role: 'STUDENT',
         studentProfile: {

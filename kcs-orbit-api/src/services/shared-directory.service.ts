@@ -21,6 +21,10 @@ function buildFullName(...parts: Array<unknown>) {
   return parts.map((part) => normalizeText(part)).filter(Boolean).join(" ");
 }
 
+function composeCanonicalFullName(person: { firstName?: unknown; middleName?: unknown; lastName?: unknown; fullName?: unknown }) {
+  return buildFullName(person.lastName, person.middleName, person.firstName) || normalizeText(person.fullName);
+}
+
 export type SharedDirectoryStudent = {
   id: string;
   displayId: string;
@@ -264,7 +268,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
   const families = parents.map((parent) => {
     const externalIds = familyExternalIds.get(parent.id) || [];
     const parts = splitFullName(parent.fullName);
-    const familyName = normalizeText(parts.lastName) || normalizeText(parent.lastName) || normalizeText(parent.fullName) || parent.id;
+    const familyName = normalizeText(parent.lastName) || normalizeText(parts.lastName) || normalizeText(parent.fullName) || parent.id;
     return {
       id: parent.id,
       displayId: pickEntityDisplayId(externalIds, "family", parent.id),
@@ -289,7 +293,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
     students: students.map((student) => {
       const externalIds = studentExternalIds.get(student.id) || [];
       const displayId = pickEntityDisplayId(externalIds, "student", student.studentNumber || student.id);
-      const fullName = buildFullName(student.firstName, student.lastName) || displayId;
+      const fullName = composeCanonicalFullName(student) || displayId;
       return {
         id: student.id,
         displayId,
@@ -320,7 +324,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       return {
         id: parent.id,
         displayId: pickEntityDisplayId(externalIds, "parent", parent.id),
-        fullName: normalizeText(parent.fullName) || buildFullName(firstName, middleName, lastName) || parent.id,
+        fullName: composeCanonicalFullName(parent) || parent.id,
         firstName,
         middleName,
         lastName,
@@ -343,7 +347,7 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
       return {
         id: teacher.id,
         displayId: pickEntityDisplayId(externalIds, "teacher", teacher.employeeId || teacher.id),
-        fullName: normalizeText(teacher.fullName) || buildFullName(firstName, middleName, lastName) || teacher.id,
+        fullName: composeCanonicalFullName(teacher) || teacher.id,
         firstName,
         middleName,
         lastName,

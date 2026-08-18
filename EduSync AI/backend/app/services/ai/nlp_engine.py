@@ -20,6 +20,16 @@ class NLPEngine:
 
     def __init__(self):
         self.intent_definitions: dict[str, IntentDefinition] = {
+            "greeting_query": IntentDefinition(
+                keywords=("hi", "hello", "hey", "bonjour", "salut", "bonsoir", "how are you", "comment ca va"),
+                actions_en=("greet_user", "offer_direct_help", "listen_for_request"),
+                actions_fr=("saluer_utilisateur", "proposer_aide_directe", "attendre_demande"),
+            ),
+            "language_preference": IntentDefinition(
+                keywords=("speak french", "speak in french", "parle francais", "parle en francais", "parle moi en francais", "reponds en francais"),
+                actions_en=("switch_reply_language", "confirm_language_preference"),
+                actions_fr=("basculer_langue_reponse", "confirmer_preference_langue"),
+            ),
             "ecosystem_status_query": IntentDefinition(
                 keywords=(
                     "ecosystem", "ecosysteme", "system", "systeme", "etat", "status",
@@ -54,9 +64,11 @@ class NLPEngine:
                 keywords=(
                     "liste parents", "liste des parents", "tous les parents", "parents de l ecole",
                     "liste eleves", "liste des eleves", "tous les eleves", "eleves de l ecole",
+                    "liste elve", "liste elves", "tous les elves", "elve de l ecole", "elves de l ecole",
+                    "eleves de k", "elves de k", "eleves de grade", "students in k", "students in grade",
                     "liste enseignants", "liste des enseignants", "tous les enseignants",
                     "repertoire", "annuaire", "directory", "list parents", "all parents",
-                    "list students", "all students", "list teachers", "all teachers",
+                    "list students", "all students", "list teachers", "all teachers", "class list",
                 ),
                 actions_en=("read_shared_directory", "return_directory_table", "verify_orbit_source"),
                 actions_fr=("lire_repertoire_partage", "retourner_tableau_repertoire", "verifier_source_orbit"),
@@ -124,6 +136,10 @@ class NLPEngine:
         text = self._normalize(message)
         if not text:
             return "capability_query", 0.65
+        if self._is_language_preference(text):
+            return "language_preference", 0.96
+        if self._is_greeting(text):
+            return "greeting_query", 0.94
 
         scores: dict[str, float] = {}
         for intent, definition in self.intent_definitions.items():
@@ -161,6 +177,8 @@ class NLPEngine:
             response = self._compose_french_response(intent, message, details)
             response = self._apply_spokesperson_frame(response, context, "fr")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_fr)
+            if intent == "finance_query" and details.get("payment_status") == "impayes":
+                actions = ["ouvrir_module_finance", "filtrer_eleves_impayes", "exporter_liste_impayes", "verifier_soldes"]
         else:
             response = self._compose_english_response(intent, message, details)
             response = self._apply_spokesperson_frame(response, context, "en")
@@ -171,6 +189,19 @@ class NLPEngine:
     def _compose_french_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
         if intent == "ecosystem_status_query":
             return self._compose_ecosystem_status("fr", details)
+
+        if intent == "greeting_query":
+            return (
+                "Bonjour, je vais bien et je suis pret a t'aider. "
+                "Je peux te donner directement une liste, un etat de l'ecosysteme, une annonce, un rapport, une alerte ou une action a lancer. "
+                "Pose simplement la demande, par exemple: donne-moi les eleves de K3."
+            )
+
+        if intent == "language_preference":
+            return (
+                "D'accord. Je continue en francais. "
+                "Tu peux me demander directement une liste, un rapport, une annonce, une alerte ou l'etat reel de l'ecosysteme."
+            )
 
         if intent == "announcement_request":
             audience = details.get("audience", "le public concerne")
@@ -200,15 +231,17 @@ class NLPEngine:
         if intent == "finance_query":
             paid_status = details.get("payment_status", "payes")
             audience = self._localized_audience(details.get("audience", "students"), "fr")
+            status_label = "impayes" if paid_status == "impayes" else "partiellement payes" if paid_status == "partiellement payes" else "qui ont paye"
+            filter_label = "Impaye" if paid_status == "impayes" else "Partiel" if paid_status == "partiellement payes" else "Paye"
             return "\n".join([
-                f"Tu demandes une liste financiere: les {audience} qui ont ete {paid_status}.",
+                f"Tu demandes une liste financiere: les {audience} {status_label}.",
                 "",
                 "Reponse correcte: ce n'est pas une annonce a rediger. Il faut interroger le module paiement/frais, puis retourner un tableau.",
                 "",
                 "Colonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.",
-                "Filtres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.",
+                f"Filtres utiles: annee scolaire, trimestre, classe, statut {filter_label}.",
                 "",
-                "Action suivante: ouvre EduPay ou le module Finance SAVANEX, filtre le statut Paye, puis exporte la liste. Si tu me donnes la classe ou la periode, je prepare le filtre exact.",
+                f"Action suivante: ouvre EduPay ou le module Finance SAVANEX, filtre le statut {filter_label}, puis exporte la liste. Si tu me donnes la classe ou la periode, je prepare le filtre exact.",
             ])
 
         if intent == "directory_query":
@@ -264,6 +297,16 @@ class NLPEngine:
     def _compose_english_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
         if intent == "ecosystem_status_query":
             return self._compose_ecosystem_status("en", details)
+
+        if intent == "greeting_query":
+            return (
+                "Hi, I am doing well and ready to help. "
+                "Ask me directly for a list, ecosystem status, announcement, report, alert, or workflow action. "
+                "For example: list the K3 students."
+            )
+
+        if intent == "language_preference":
+            return "Understood. I will answer in French when you ask in French."
 
         if intent == "announcement_request":
             audience = details.get("audience", "the target audience")
@@ -380,6 +423,35 @@ class NLPEngine:
         )
         return any(self._contains_term(text, verb) for verb in verbs)
 
+    def _is_greeting(self, text: str) -> bool:
+        normalized = re.sub(r"[,!?\.]+", " ", text).strip()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized in {
+            "hi",
+            "hello",
+            "hey",
+            "bonjour",
+            "salut",
+            "bonsoir",
+            "how are you",
+            "hi how are you",
+            "hello how are you",
+            "comment ca va",
+        }
+
+    def _is_language_preference(self, text: str) -> bool:
+        return any(
+            phrase in text
+            for phrase in (
+                "parle moi en francais",
+                "parle en francais",
+                "parle francais",
+                "reponds en francais",
+                "speak french",
+                "speak in french",
+            )
+        )
+
     def _is_payment_question(self, text: str) -> bool:
         payment_terms = (
             "paye", "payes", "payee", "payees", "paiement", "paiements",
@@ -400,7 +472,8 @@ class NLPEngine:
         list_terms = ("liste", "lister", "affiche", "afficher", "donne", "voir", "show", "list", "display", "all")
         directory_terms = (
             "parent", "parents", "eleve", "eleves", "student", "students",
-            "enseignant", "enseignants", "teacher", "teachers", "employe", "employes",
+            "elve", "elves", "enseignant", "enseignants", "teacher", "teachers",
+            "employe", "employes", "k3", "k4", "k5", "grade",
         )
         return (
             any(self._contains_term(text, term) for term in list_terms)
@@ -413,7 +486,8 @@ class NLPEngine:
             "je ", "tu ", "nous ", "vous ", "pour ", "avec ", "demande",
             "annonce", "conge", "reunion", "rapport", "enseignant", "ecole",
             "classe", "eleves", "parents", "peux", "faire", "aide",
-            "etat", "ecosysteme", "donne", "general",
+            "etat", "ecosysteme", "donne", "general", "francais", "parle",
+            "qui", "pas", "paye", "impaye",
         )
         return "fr" if any(marker in text for marker in french_markers) else "en"
 
@@ -430,7 +504,12 @@ class NLPEngine:
             details["priority"] = "normal"
 
         has_paid = any(self._contains_term(text, term) for term in ("paye", "payes", "payee", "payees", "paid"))
-        has_unpaid = any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid"))
+        has_unpaid = (
+            any(self._contains_term(text, term) for term in ("impaye", "impayes", "unpaid"))
+            or "pas paye" in text
+            or "pas payer" in text
+            or "non paye" in text
+        )
 
         if has_unpaid:
             details["payment_status"] = "impayes"
@@ -456,8 +535,12 @@ class NLPEngine:
                 details["directory_entity"] = "parents"
             elif any(self._contains_term(text, term) for term in ("enseignant", "enseignants", "teacher", "teachers")):
                 details["directory_entity"] = "teachers"
-            elif any(self._contains_term(text, term) for term in ("eleve", "eleves", "student", "students")):
+            elif any(self._contains_term(text, term) for term in ("eleve", "eleves", "elve", "elves", "student", "students", "k3", "k4", "k5", "grade")):
                 details["directory_entity"] = "students"
+
+            class_match = re.search(r"\b(k[3-5]|kg\s*[3-5]|grade\s*\d{1,2}|class\s*\d{1,2}|g\d{1,2})\b", text)
+            if class_match:
+                details["class_filter"] = re.sub(r"\s+", " ", class_match.group(1)).upper().replace("KG ", "K")
 
         date_match = re.search(
             r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
@@ -475,6 +558,12 @@ class NLPEngine:
         directory = ecosystem.get("shared_directory", {})
         entity = details.get("directory_entity", "parents")
         rows = directory.get(entity, []) if directory.get("available") else []
+        class_filter = details.get("class_filter")
+        if entity == "students" and class_filter:
+            rows = [
+                item for item in rows
+                if self._class_matches(item.get("className") or item.get("grade") or item.get("section"), class_filter)
+            ]
 
         if not directory.get("available"):
             if language == "fr":
@@ -491,22 +580,24 @@ class NLPEngine:
 
         if not rows:
             label = self._localized_audience(entity, language)
+            class_suffix = f" de {class_filter}" if language == "fr" and class_filter else f" in {class_filter}" if class_filter else ""
             return (
-                f"Repertoire Orbit disponible, mais aucun enregistrement {label} n'est visible."
+                f"Repertoire Orbit disponible, mais aucun enregistrement {label}{class_suffix} n'est visible."
                 if language == "fr"
-                else f"Orbit directory is available, but no {label} record is visible."
+                else f"Orbit directory is available, but no {label}{class_suffix} record is visible."
             )
 
         if language == "fr":
+            student_title = f"Liste des eleves de {class_filter}" if class_filter else "Liste des eleves de l'ecole"
             title = {
                 "parents": "Liste des parents de l'ecole",
-                "students": "Liste des eleves de l'ecole",
+                "students": student_title,
                 "teachers": "Liste des enseignants/employes de l'ecole",
             }.get(entity, "Liste du repertoire")
             lines = [
                 f"{title} ({len(rows)} visible(s) dans le contexte charge):",
                 "",
-                "Nom | Identifiant | Email | Telephone | Eleves lies",
+                "Nom | Identifiant | Email | Telephone | Classe/Relation",
             ]
             for item in rows[:30]:
                 lines.append(self._format_directory_row(item, entity))
@@ -518,13 +609,13 @@ class NLPEngine:
 
         title = {
             "parents": "School parent list",
-            "students": "School student list",
+            "students": f"School student list{(' for ' + class_filter) if class_filter else ''}",
             "teachers": "School teacher/employee list",
         }.get(entity, "Directory list")
         lines = [
             f"{title} ({len(rows)} visible in the loaded context):",
             "",
-            "Name | ID | Email | Phone | Linked students",
+            "Name | ID | Email | Phone | Class/Relation",
         ]
         for item in rows[:30]:
             lines.append(self._format_directory_row(item, entity))
@@ -541,13 +632,20 @@ class NLPEngine:
         phone = item.get("phone") or item.get("parentPhone") or "-"
         linked = item.get("studentIds") or item.get("childrenExternalIds") or []
         if entity == "students":
-            linked = item.get("parentId") or item.get("parentExternalId") or "-"
+            linked = item.get("className") or item.get("grade") or item.get("section") or item.get("parentId") or item.get("parentExternalId") or "-"
         elif entity == "teachers":
             linked = item.get("department") or item.get("jobTitle") or "-"
         linked_label = ", ".join(str(value) for value in linked[:4]) if isinstance(linked, list) else str(linked)
         if isinstance(linked, list) and len(linked) > 4:
             linked_label += f", +{len(linked) - 4}"
         return f"- {name} | {identifier} | {email} | {phone} | {linked_label or '-'}"
+
+    def _class_matches(self, class_name: str | None, class_filter: str) -> bool:
+        class_name = self._normalize(class_name or "").replace(" ", "")
+        class_filter = self._normalize(class_filter or "").replace(" ", "")
+        if not class_name or not class_filter:
+            return False
+        return class_name == class_filter.lower() or class_name.startswith(class_filter.lower())
 
     def _apply_spokesperson_frame(self, response: str, context: dict, language: str) -> str:
         ecosystem = context.get("ecosystem_context")

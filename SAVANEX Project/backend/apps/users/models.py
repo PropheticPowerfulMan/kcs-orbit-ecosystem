@@ -44,7 +44,9 @@ class User(AbstractUser):
         default=ROLE_STUDENT,
         verbose_name=_('Role'),
     )
+    middle_name = models.CharField(max_length=150, blank=True, verbose_name=_('Middle name / Postnom'))
     phone = models.CharField(max_length=20, blank=True, verbose_name=_('Phone'))
+    address = models.TextField(blank=True, verbose_name=_('Physical address'))
     avatar = models.ImageField(
         upload_to='avatars/',
         blank=True,
@@ -91,6 +93,10 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.get_full_name() or self.username} ({self.get_role_display()})"
+
+    def get_full_name(self):
+        """Return the ecosystem administrative order: Nom, Postnom, Prenom."""
+        return ' '.join(part.strip() for part in (self.last_name, self.middle_name, self.first_name) if part and part.strip())
 
     @property
     def is_admin(self):

@@ -6,10 +6,13 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Download,
+  Eye,
   FilePlus2,
   Landmark,
+  Pencil,
   Printer,
   ReceiptText,
+  Trash2,
   UserPlus,
   Users,
   WalletCards,
@@ -35,6 +38,8 @@ type ExpenseCategory = {
   id: string;
   name: string;
   type: string;
+  accountCode?: string | null;
+  accountClass?: number | null;
   parentCategoryId: string | null;
   ownerApprovalRequired?: boolean;
 };
@@ -71,12 +76,21 @@ type Expense = {
   amount: number;
   currency: string;
   paymentMethod?: string;
+  cashAccountCode?: string | null;
+  metadata?: {
+    debitAccountCode?: string;
+    creditAccountCode?: string;
+    debitEffect?: string;
+    creditEffect?: string;
+    cancelledAt?: string;
+    cancellationReason?: string;
+  } | null;
   supplierName?: string;
   status: string;
   financialPeriodLabel: string;
   expenseDate: string;
   comments?: string;
-  category: { id: string; name: string; type: string; parentCategoryId: string | null };
+  category: { id: string; name: string; type: string; parentCategoryId: string | null; accountCode?: string | null; accountClass?: number | null };
   vendor?: Vendor | null;
   budget?: Budget | null;
   attachments?: ExpenseAttachment[];
@@ -107,6 +121,41 @@ type SalaryProfile = {
   isActive: boolean;
 };
 
+type EmployeeRepayment = {
+  id: string;
+  method: string;
+  expectedAmount: number;
+  paidAmount: number;
+  currency: string;
+  dueDate: string;
+  paidAt?: string | null;
+  status: string;
+  reference?: string | null;
+  notes?: string | null;
+};
+
+type EmployeeObligation = {
+  id: string;
+  salaryProfileId: string;
+  type: string;
+  title: string;
+  principalAmount: number;
+  amountPaid: number;
+  balance: number;
+  currency: string;
+  repaymentMethod: string;
+  installmentAmount: number;
+  startDate: string;
+  dueDate: string;
+  status: string;
+  riskLevel: string;
+  riskScore: number;
+  notes?: string | null;
+  receipt?: { receiptNumber: string; fileUrl?: string; mimeType?: string } | null;
+  salaryProfile?: Pick<SalaryProfile, "id" | "employeeCode" | "fullName" | "department" | "position"> | null;
+  repayments: EmployeeRepayment[];
+};
+
 type PayrollRun = {
   id: string;
   title: string;
@@ -122,6 +171,11 @@ type PayrollRun = {
   period?: { id: string; name: string } | null;
   items: Array<{
     id: string;
+    baseSalary: number;
+    bonuses: number;
+    deductions: number;
+    advancesRecovered: number;
+    debtRecovered: number;
     netSalary: number;
     salarySlipNumber: string;
     salaryProfile: SalaryProfile;
@@ -138,6 +192,7 @@ type AccountingEntry = {
   entryDate: string;
   department?: string | null;
   createdAt?: string;
+  metadata?: { debitAccountCode?: string; debitAccountLabel?: string; creditAccountCode?: string; accountingFramework?: string } | null;
   expense?: { id: string; title: string; department?: string | null; status?: string | null } | null;
   payrollRun?: { id: string; title: string; department?: string | null; status?: string | null } | null;
   payrollItem?: {
@@ -155,7 +210,7 @@ type CashflowEntry = {
   amount: number;
   currency: string;
   method?: string | null;
-  referenceDate: string;
+  référenceDate: string;
   notes?: string | null;
   createdAt?: string;
   expense?: { id: string; title: string; department?: string | null; status?: string | null } | null;
@@ -201,8 +256,14 @@ type ExpenseFormState = {
   department: string;
   amount: string;
   paymentMethod: string;
+  debitAccountCode: string;
+  creditAccountCode: string;
   expenseDate: string;
   supplierName: string;
+  beneficiaryName: string;
+  beneficiaryContact: string;
+  beneficiaryAccount: string;
+  beneficiaryRéférence: string;
   comments: string;
   attachmentName: string;
   attachmentUrl: string;
@@ -246,6 +307,28 @@ type PayrollFormState = {
   notes: string;
 };
 
+type EmployeeObligationFormState = {
+  salaryProfileId: string;
+  type: string;
+  title: string;
+  principalAmount: string;
+  currency: string;
+  disbursementMethod: string;
+  repaymentMethod: string;
+  installmentAmount: string;
+  startDate: string;
+  dueDate: string;
+  notes: string;
+};
+
+type EmployeeRepaymentFormState = {
+  repaymentId: string;
+  paidAmount: string;
+  paymentMethod: string;
+  reference: string;
+  notes: string;
+};
+
 const EMPTY_EXPENSE_OVERVIEW: ExpenseOverview = {
   expenses: {
     totalExpenses: 0,
@@ -272,9 +355,57 @@ const EMPTY_EXPENSE_OVERVIEW: ExpenseOverview = {
 };
 
 const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "MPESA", "AIRTEL_MONEY", "ORANGE_MONEY", "CHEQUE", "INTERNAL_TRANSFER"];
+const SCHOOL_ACCOUNT_CLASSES = [
+  ["1", "Ressources durables / capitaux", "Fonds associatifs, réserves, résultat"],
+  ["2", "Immobilisations", "Terrains, bâtiments, mobilier, ordinateurs, bus"],
+  ["3", "Stocks", "Fournitures scolaires, entretien, uniformes"],
+  ["4", "Tiers", "Élèves/parents, fournisseurs, personnel, État"],
+  ["5", "Trésorerie", "Caisse, banques, mobile money"],
+  ["6", "Charges", "Salaires, fournitures, eau, électricité, transport"],
+  ["7", "Produits", "Frais scolaires, inscriptions, dons, subventions"],
+  ["8", "Autres charges et produits", "Éléments exceptionnels"],
+  ["9", "Comptabilité analytique / budgétaire", "Activités et départements"]
+] as const;
+const SCHOOL_KEY_ACCOUNTS = [
+  ["Classe 4 - Élèves et parents", ["411 - Élèves/parents débiteurs", "4111 - Frais scolaires à recevoir", "4112 - Frais d'inscription à recevoir", "4113 - Transport scolaire à recevoir", "4114 - Cantine à recevoir", "419 - Avances et acomptes reçus des parents"]],
+  ["Classe 5 - Trésorerie", ["521 - Banque", "5211 - Equity Bank", "5212 - Autres banques", "571 - Caisse principale", "572 - Caisses secondaires", "58 - Virements internes"]],
+  ["Classe 6 - Charges", ["601 - Achats de fournitures", "602 - Fournitures scolaires", "603 - Produits d'entretien", "605 - Autres achats", "61 - Transports", "62 - Services extérieurs", "63 - Impôts et taxes", "64 - Charges de personnel", "65 - Autres charges", "66 - Charges financières", "68 - Dotations aux amortissements"]],
+  ["Classe 7 - Produits", ["701 - Frais scolaires", "702 - Frais d'inscription", "703 - Frais de réinscription", "704 - Transport scolaire", "705 - Cantine", "706 - Activités scolaires", "71 - Subventions d'exploitation", "72 - Dons et contributions", "75 - Autres produits", "77 - Produits financiers"]]
+] as const;
+const SCHOOL_ACCOUNT_OPTIONS = [
+  {
+    group: "Classes générales",
+    accounts: SCHOOL_ACCOUNT_CLASSES.map(([code, label]) => ({ code, label }))
+  },
+  ...SCHOOL_KEY_ACCOUNTS.map(([group, accounts]) => ({
+    group,
+    accounts: accounts.map((account) => {
+      const [code, ...labelParts] = account.split(" - ");
+      return { code, label: labelParts.join(" - ") };
+    })
+  }))
+];
+const ALL_SCHOOL_ACCOUNTS = SCHOOL_ACCOUNT_OPTIONS.flatMap((group) => group.accounts);
+
+function expenseDebitAccountCode(expense: Expense) {
+  return expense.metadata?.debitAccountCode || expense.category.accountCode || "";
+}
+
+function expenseCreditAccountCode(expense: Expense) {
+  return expense.metadata?.creditAccountCode || expense.cashAccountCode || "";
+}
 const PAYROLL_FREQUENCIES = ["MONTHLY", "BI_MONTHLY", "QUARTERLY", "ANNUAL"];
+const PERIOD_FILTERS = [
+  { value: "ALL", label: "Toute periode" },
+  { value: "TODAY", label: "Aujourd'hui" },
+  { value: "WEEK", label: "Cette semaine" },
+  { value: "MONTH", label: "Ce mois" },
+  { value: "QUARTER", label: "Ce trimestre" },
+  { value: "YEAR", label: "Cette année" },
+  { value: "CUSTOM", label: "Intervalle precis" }
+];
 type OperationTab = "expenses" | "budgets" | "payroll" | "accounting" | "cashflow" | "documents";
-type OperationSubDialog = "expense-create" | "vendor-create" | "budget-create" | "salary-profile-create" | "payroll-run-create";
+type OperationSubDialog = "expense-create" | "vendor-create" | "vendor-registry" | "budget-create" | "salary-profile-create" | "payroll-run-create" | "payslip-preview" | "employee-advance-create" | "employee-debt-create" | "employee-repayment-create";
 
 const EMPTY_EXPENSE_FORM: ExpenseFormState = {
   title: "",
@@ -284,8 +415,14 @@ const EMPTY_EXPENSE_FORM: ExpenseFormState = {
   department: "",
   amount: "",
   paymentMethod: "",
+  debitAccountCode: "",
+  creditAccountCode: "",
   expenseDate: "",
   supplierName: "",
+  beneficiaryName: "",
+  beneficiaryContact: "",
+  beneficiaryAccount: "",
+  beneficiaryRéférence: "",
   comments: "",
   attachmentName: "",
   attachmentUrl: ""
@@ -326,6 +463,28 @@ const EMPTY_PAYROLL_FORM: PayrollFormState = {
   title: "",
   department: "",
   frequency: "MONTHLY",
+  notes: ""
+};
+
+const EMPTY_EMPLOYEE_OBLIGATION_FORM: EmployeeObligationFormState = {
+  salaryProfileId: "",
+  type: "SALARY_ADVANCE",
+  title: "",
+  principalAmount: "",
+  currency: "USD",
+  disbursementMethod: "CASH",
+  repaymentMethod: "SALARY_DEDUCTION",
+  installmentAmount: "",
+  startDate: new Date().toISOString().slice(0, 10),
+  dueDate: "",
+  notes: ""
+};
+
+const EMPTY_EMPLOYEE_REPAYMENT_FORM: EmployeeRepaymentFormState = {
+  repaymentId: "",
+  paidAmount: "",
+  paymentMethod: "CASH",
+  reference: "",
   notes: ""
 };
 
@@ -379,10 +538,19 @@ function ActionNodeCard({
   );
 }
 
+function InfoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
 function StatusBadge({ value }: { value: string }) {
   const tone = value === "APPROVED" || value === "PAID"
     ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
-    : value === "REJECTED" || value === "EXCEEDED"
+    : value === "REJECTED" || value === "EXCEEDED" || value === "CANCELLED"
       ? "border-red-500/25 bg-red-500/10 text-red-200"
       : value === "PENDING" || value === "DRAFT"
         ? "border-amber-500/25 bg-amber-500/10 text-amber-200"
@@ -494,6 +662,67 @@ function ratioPercent(part: number, total: number) {
   return (part / total) * 100;
 }
 
+function getPeriodRange(period: string, from: string, to: string) {
+  if (period === "CUSTOM") {
+    return {
+      start: from ? new Date(`${from}T00:00:00`) : null,
+      end: to ? new Date(`${to}T23:59:59`) : null
+    };
+  }
+  if (period === "ALL") return { start: null, end: null };
+
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  if (period === "TODAY") {
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "WEEK") {
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "MONTH") {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "QUARTER") {
+    start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "YEAR") {
+    start.setMonth(0, 1);
+    start.setHours(0, 0, 0, 0);
+  }
+
+  return { start, end };
+}
+
+function isWithinPeriod(value: string, period: string, from: string, to: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const { start, end } = getPeriodRange(period, from, to);
+  return (!start || date >= start) && (!end || date <= end);
+}
+
+function periodLabel(period: string, from: string, to: string) {
+  if (period === "CUSTOM") {
+    const start = from ? new Date(from).toLocaleDateString("fr-FR") : "debut libre";
+    const end = to ? new Date(to).toLocaleDateString("fr-FR") : "fin libre";
+    return `${start} - ${end}`;
+  }
+  return PERIOD_FILTERS.find((item) => item.value === period)?.label ?? "Toute periode";
+}
+
+function buildBeneficiaryNotes(form: ExpenseFormState) {
+  const rows = [
+    form.beneficiaryName && `Beneficiaire: ${form.beneficiaryName}`,
+    form.beneficiaryContact && `Contact beneficiaire: ${form.beneficiaryContact}`,
+    form.beneficiaryAccount && `Compte / wallet beneficiaire: ${form.beneficiaryAccount}`,
+    form.beneficiaryRéférence && `Référence paiement: ${form.beneficiaryRéférence}`
+  ].filter(Boolean);
+
+  return [form.comments.trim(), rows.join("\n")].filter(Boolean).join("\n\n");
+}
+
 export function FinancialOperationsPage() {
   const { lang } = useI18n();
   const role = useAuthStore((state) => state.role);
@@ -509,6 +738,7 @@ export function FinancialOperationsPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [salaryProfiles, setSalaryProfiles] = useState<SalaryProfile[]>([]);
+  const [employeeObligations, setEmployeeObligations] = useState<EmployeeObligation[]>([]);
   const [payrollRuns, setPayrollRuns] = useState<PayrollRun[]>([]);
   const [accountingEntries, setAccountingEntries] = useState<AccountingEntry[]>([]);
   const [cashflowEntries, setCashflowEntries] = useState<CashflowEntry[]>([]);
@@ -519,17 +749,30 @@ export function FinancialOperationsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [expensePeriodFilter, setExpensePeriodFilter] = useState("ALL");
+  const [expenseDateFrom, setExpenseDateFrom] = useState("");
+  const [expenseDateTo, setExpenseDateTo] = useState("");
   const [accountingSearch, setAccountingSearch] = useState("");
   const [accountingDepartmentFilter, setAccountingDepartmentFilter] = useState("ALL");
   const [cashflowSearch, setCashflowSearch] = useState("");
   const [cashflowSourceFilter, setCashflowSourceFilter] = useState("ALL");
+  const [cashflowPeriodFilter, setCashflowPeriodFilter] = useState("ALL");
+  const [cashflowDateFrom, setCashflowDateFrom] = useState("");
+  const [cashflowDateTo, setCashflowDateTo] = useState("");
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(EMPTY_EXPENSE_FORM);
   const [pendingAttachments, setPendingAttachments] = useState<ExpenseAttachment[]>([]);
   const [vendorForm, setVendorForm] = useState<VendorFormState>(EMPTY_VENDOR_FORM);
+  const [vendorSearch, setVendorSearch] = useState("");
+  const [selectedVendorId, setSelectedVendorId] = useState<string | null>(null);
+  const [editingVendorId, setEditingVendorId] = useState<string | null>(null);
+  const [vendorEditForm, setVendorEditForm] = useState<VendorFormState>(EMPTY_VENDOR_FORM);
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(EMPTY_BUDGET_FORM);
   const [salaryForm, setSalaryForm] = useState<SalaryFormState>(EMPTY_SALARY_FORM);
   const [payrollForm, setPayrollForm] = useState<PayrollFormState>(EMPTY_PAYROLL_FORM);
+  const [selectedPayslip, setSelectedPayslip] = useState<{ run: PayrollRun; item: PayrollRun["items"][number] } | null>(null);
+  const [employeeObligationForm, setEmployeeObligationForm] = useState<EmployeeObligationFormState>(EMPTY_EMPLOYEE_OBLIGATION_FORM);
+  const [employeeRepaymentForm, setEmployeeRepaymentForm] = useState<EmployeeRepaymentFormState>(EMPTY_EMPLOYEE_REPAYMENT_FORM);
   const availableCash = overview?.cashflow.availableCash ?? 0;
   const safeOverview = overview ?? EMPTY_EXPENSE_OVERVIEW;
 
@@ -541,18 +784,20 @@ export function FinancialOperationsPage() {
       api<Budget[]>("/api/expenses/budgets"),
       api<Expense[]>("/api/expenses"),
       api<SalaryProfile[]>("/api/expenses/payroll/profiles"),
+      api<EmployeeObligation[]>("/api/expenses/employee-finance/obligations"),
       api<PayrollRun[]>("/api/expenses/payroll/runs"),
       api<AccountingEntry[]>("/api/expenses/accounting-entries"),
       api<CashflowEntry[]>("/api/expenses/cashflow-entries"),
       api<ExpenseOverview>("/api/expenses/overview")
     ])
-      .then(([nextCategories, nextVendors, nextBudgets, nextExpenses, nextSalaryProfiles, nextPayrollRuns, nextAccountingEntries, nextCashflowEntries, nextOverview]) => {
+      .then(([nextCategories, nextVendors, nextBudgets, nextExpenses, nextSalaryProfiles, nextEmployeeObligations, nextPayrollRuns, nextAccountingEntries, nextCashflowEntries, nextOverview]) => {
         if (!active) return;
         setCategories(nextCategories);
         setVendors(nextVendors);
         setBudgets(nextBudgets);
         setExpenses(nextExpenses);
         setSalaryProfiles(nextSalaryProfiles);
+        setEmployeeObligations(nextEmployeeObligations);
         setPayrollRuns(nextPayrollRuns);
         setAccountingEntries(nextAccountingEntries);
         setCashflowEntries(nextCashflowEntries);
@@ -561,7 +806,7 @@ export function FinancialOperationsPage() {
       })
       .catch((loadError) => {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : "Impossible de charger les operations financieres.");
+        setError(loadError instanceof Error ? loadError.message : "Impossible de charger les opérations financières.");
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -574,8 +819,16 @@ export function FinancialOperationsPage() {
 
   const leafCategories = useMemo(() => {
     const parentIds = new Set(categories.map((category) => category.parentCategoryId).filter(Boolean));
-    return categories.filter((category) => !parentIds.has(category.id));
+    return categories
+      .filter((category) => !parentIds.has(category.id) && Boolean(category.accountCode) && [2, 3, 6, 8].includes(Number(category.accountClass)))
+      .sort((left, right) => String(left.accountCode).localeCompare(String(right.accountCode), "fr", { numeric: true }));
   }, [categories]);
+  const selectedExpenseCategory = useMemo(() => leafCategories.find((category) => category.id === expenseForm.categoryId), [expenseForm.categoryId, leafCategories]);
+  const selectedDebitAccount = useMemo(() => ALL_SCHOOL_ACCOUNTS.find((account) => account.code === expenseForm.debitAccountCode), [expenseForm.debitAccountCode]);
+  const selectedCreditAccount = useMemo(() => ALL_SCHOOL_ACCOUNTS.find((account) => account.code === expenseForm.creditAccountCode), [expenseForm.creditAccountCode]);
+  const activeSalaryProfiles = useMemo(() => salaryProfiles.filter((profile) => profile.isActive), [salaryProfiles]);
+  const payrollDepartments = useMemo(() => Array.from(new Set(activeSalaryProfiles.map((profile) => profile.department).filter(Boolean))).sort((left, right) => left.localeCompare(right, "fr")), [activeSalaryProfiles]);
+  const eligiblePayrollProfiles = useMemo(() => activeSalaryProfiles.filter((profile) => !payrollForm.department || profile.department === payrollForm.department), [activeSalaryProfiles, payrollForm.department]);
 
   const expenseStats = useMemo(() => ({
     pending: expenses.filter((expense) => expense.status === "PENDING").length,
@@ -688,17 +941,19 @@ export function FinancialOperationsPage() {
   const filteredCashflowEntries = useMemo(() => {
     const needle = cashflowSearch.trim().toLowerCase();
     return cashflowEntries.filter((entry) => {
-      const reference = entry.expense?.title || entry.payrollRun?.title || entry.payrollItem?.salarySlipNumber || "";
+      const référence = entry.expense?.title || entry.payrollRun?.title || entry.payrollItem?.salarySlipNumber || "";
       const matchesSource = cashflowSourceFilter === "ALL" || entry.sourceType === cashflowSourceFilter;
+      const matchesPeriod = isWithinPeriod(entry.référenceDate, cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo);
       const matchesSearch = !needle
         || entry.sourceType.toLowerCase().includes(needle)
         || entry.direction.toLowerCase().includes(needle)
         || (entry.method || "").toLowerCase().includes(needle)
-        || reference.toLowerCase().includes(needle)
+        || référence.toLowerCase().includes(needle)
+        || (entry.expense?.department || entry.payrollRun?.department || entry.payrollItem?.salaryProfile.department || "").toLowerCase().includes(needle)
         || (entry.notes || "").toLowerCase().includes(needle);
-      return matchesSource && matchesSearch;
+      return matchesSource && matchesPeriod && matchesSearch;
     });
-  }, [cashflowEntries, cashflowSearch, cashflowSourceFilter]);
+  }, [cashflowDateFrom, cashflowDateTo, cashflowEntries, cashflowPeriodFilter, cashflowSearch, cashflowSourceFilter]);
 
   const cashflowBreakdown = useMemo(() => {
     const grouped = filteredCashflowEntries.reduce<Record<string, { count: number; volume: number }>>((acc, entry) => {
@@ -723,15 +978,84 @@ export function FinancialOperationsPage() {
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       const matchesStatus = statusFilter === "ALL" || expense.status === statusFilter;
+      const matchesPeriod = isWithinPeriod(expense.expenseDate, expensePeriodFilter, expenseDateFrom, expenseDateTo);
       const needle = search.trim().toLowerCase();
       const matchesSearch = !needle
         || expense.title.toLowerCase().includes(needle)
         || expense.department.toLowerCase().includes(needle)
         || expense.category.name.toLowerCase().includes(needle)
-        || (expense.vendor?.name ?? "").toLowerCase().includes(needle);
-      return matchesStatus && matchesSearch;
+        || expenseDebitAccountCode(expense).toLowerCase().includes(needle)
+        || expenseCreditAccountCode(expense).toLowerCase().includes(needle)
+        || expense.status.toLowerCase().includes(needle)
+        || (expense.paymentMethod ?? "").toLowerCase().includes(needle)
+        || (expense.supplierName ?? "").toLowerCase().includes(needle)
+        || (expense.vendor?.name ?? "").toLowerCase().includes(needle)
+        || (expense.vendor?.contactName ?? "").toLowerCase().includes(needle)
+        || (expense.vendor?.phone ?? "").toLowerCase().includes(needle)
+        || (expense.vendor?.email ?? "").toLowerCase().includes(needle)
+        || (expense.comments ?? "").toLowerCase().includes(needle);
+      return matchesStatus && matchesPeriod && matchesSearch;
     });
-  }, [expenses, search, statusFilter]);
+  }, [expenseDateFrom, expenseDateTo, expensePeriodFilter, expenses, search, statusFilter]);
+
+  const vendorUsage = useMemo(() => {
+    return expenses.reduce<Record<string, { count: number; total: number; departments: Set<string>; lastExpenseDate?: string }>>((acc, expense) => {
+      const vendorId = expense.vendor?.id;
+      if (!vendorId) return acc;
+      const current = acc[vendorId] ?? { count: 0, total: 0, departments: new Set<string>() };
+      current.count += 1;
+      current.total += expense.amount;
+      current.departments.add(expense.department || "Non renseigne");
+      if (!current.lastExpenseDate || new Date(expense.expenseDate).getTime() > new Date(current.lastExpenseDate).getTime()) {
+        current.lastExpenseDate = expense.expenseDate;
+      }
+      acc[vendorId] = current;
+      return acc;
+    }, {});
+  }, [expenses]);
+
+  const filteredVendors = useMemo(() => {
+    const needle = vendorSearch.trim().toLowerCase();
+    return vendors.filter((vendor) => {
+      const usage = vendorUsage[vendor.id];
+      const haystack = [
+        vendor.name,
+        vendor.contactName,
+        vendor.phone,
+        vendor.email,
+        vendor.address,
+        vendor.notes,
+        usage ? Array.from(usage.departments).join(" ") : "",
+        usage ? String(usage.count) : "",
+        usage ? String(usage.total) : ""
+      ].filter(Boolean).join(" ").toLowerCase();
+      return !needle || haystack.includes(needle);
+    });
+  }, [vendorSearch, vendorUsage, vendors]);
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
+
+  const activeEmployeeObligations = useMemo(
+    () => employeeObligations.filter((obligation) => !["PAID", "CANCELLED", "WRITTEN_OFF"].includes(obligation.status)),
+    [employeeObligations]
+  );
+
+  const openEmployeeRepayments = useMemo(() => {
+    return activeEmployeeObligations.flatMap((obligation) =>
+      (obligation.repayments ?? [])
+        .filter((repayment) => repayment.status !== "PAID")
+        .map((repayment) => ({ obligation, repayment }))
+    );
+  }, [activeEmployeeObligations]);
+
+  const employeeFinanceTotals = useMemo(() => {
+    return activeEmployeeObligations.reduce((acc, obligation) => {
+      const balance = Number(obligation.balance || 0);
+      acc.totalBalance += balance;
+      if (obligation.type === "SALARY_ADVANCE") acc.advances += balance;
+      if (obligation.type === "SCHOOL_DEBT" || obligation.type === "OTHER_DEBT") acc.debts += balance;
+      return acc;
+    }, { totalBalance: 0, advances: 0, debts: 0 });
+  }, [activeEmployeeObligations]);
 
   const documentEntries = useMemo<DocumentEntry[]>(() => {
     return expenses
@@ -762,21 +1086,71 @@ export function FinancialOperationsPage() {
     setCashflowEntries(nextCashflowEntries);
   }
 
+  async function refreshEmployeeObligations() {
+    const nextObligations = await api<EmployeeObligation[]>("/api/expenses/employee-finance/obligations");
+    setEmployeeObligations(nextObligations);
+  }
+
+  function openOperationsModule(module: OperationTab) {
+    setActiveTab(module);
+    setActiveDialog(module);
+    setActiveSubDialog(null);
+  }
+
+  function openEmployeeObligationDialog(type: "SALARY_ADVANCE" | "SCHOOL_DEBT" | "OTHER_DEBT") {
+    const firstProfile = salaryProfiles[0];
+    setActiveTab("payroll");
+    setActiveDialog("payroll");
+    setActionError(null);
+    setSuccess(null);
+    setEmployeeObligationForm({
+      ...EMPTY_EMPLOYEE_OBLIGATION_FORM,
+      salaryProfileId: firstProfile?.id ?? "",
+      type,
+      title: type === "SALARY_ADVANCE" ? "Avance sur salaire" : type === "SCHOOL_DEBT" ? "Dette envers l'école" : "Dette employé",
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      repaymentMethod: type === "SALARY_ADVANCE" ? "SALARY_DEDUCTION" : "EXTERNAL_PAYMENT"
+    });
+    setActiveSubDialog(type === "SALARY_ADVANCE" ? "employee-advance-create" : "employee-debt-create");
+  }
+
+  function openEmployeeRepaymentDialog() {
+    const firstOpenRepayment = openEmployeeRepayments[0];
+    setActiveTab("payroll");
+    setActiveDialog("payroll");
+    setActionError(null);
+    setSuccess(null);
+    setEmployeeRepaymentForm({
+      ...EMPTY_EMPLOYEE_REPAYMENT_FORM,
+      repaymentId: firstOpenRepayment?.repayment.id ?? "",
+      paidAmount: firstOpenRepayment ? String(Math.max(Number(firstOpenRepayment.repayment.expectedAmount || 0) - Number(firstOpenRepayment.repayment.paidAmount || 0), 0)) : "",
+      reference: `EMP-PAY-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`
+    });
+    setActiveSubDialog("employee-repayment-create");
+  }
+
   function printHtmlDocument(html: string) {
     setActionError(null);
     sharedPrintHtmlDocument(html);
+  }
+
+  function openPayslipPreview(run: PayrollRun, item: PayrollRun["items"][number]) {
+    setSelectedPayslip({ run, item });
+    setActiveSubDialog("payslip-preview");
   }
 
   function printSalarySlip(run: PayrollRun, item: PayrollRun["items"][number]) {
     const brand = schoolBranding;
     const logoSrc = escapeHtml(new URL(brand.logoSrc, window.location.href).toString());
     const generatedAt = new Date();
+    const grossSalary = Number(item.baseSalary || 0) + Number(item.bonuses || 0);
+    const totalDeductions = Number(item.deductions || 0) + Number(item.advancesRecovered || 0) + Number(item.debtRecovered || 0);
     const documentReference = escapeHtml(`KCS-PAYROLL-${generatedAt.toISOString().slice(0, 10)}-${item.salarySlipNumber}`);
     const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Fiche salariale ${item.salarySlipNumber}</title>
+  <title>Bulletin de paie ${item.salarySlipNumber}</title>
   <style>
     @page { size: A4; margin: 16mm; }
     body { position: relative; font-family: Arial, Helvetica, sans-serif; background: #f8fafc; color: #0f172a; padding: 24px; }
@@ -811,15 +1185,15 @@ export function FinancialOperationsPage() {
 <body>
   <div class="watermark-text">${escapeHtml(brand.shortName)}</div>
   <img class="watermark-logo" src="${logoSrc}" alt="" />
-  <div class="topbar"><span><strong>${escapeHtml(brand.shortName)}</strong> · fiche salariale officielle</span><span>Référence ${documentReference}</span></div>
+  <div class="topbar"><span><strong>${escapeHtml(brand.shortName)}</strong> · bulletin de paie officiel</span><span>Référence ${documentReference}</span></div>
   <div class="sheet">
     <div class="hero">
       <div class="hero-main">
         <img class="hero-logo" src="${logoSrc}" alt="Logo ${escapeHtml(brand.schoolName)}" />
         <div>
           <div class="label" style="color:${escapeHtml(brand.colors.accent)}">${escapeHtml(brand.appName)}</div>
-          <h1>Fiche salariale</h1>
-          <p>${item.salaryProfile.fullName} • ${item.salaryProfile.position} • ${run.period?.name ?? "Periode active"}</p>
+          <h1>Bulletin de paie</h1>
+          <p>${item.salaryProfile.fullName} • ${item.salaryProfile.position} • ${run.period?.name ?? "Période active"}</p>
         </div>
       </div>
       <div class="hero-meta">
@@ -843,16 +1217,20 @@ export function FinancialOperationsPage() {
           <tr><th>Element</th><th>Valeur</th></tr>
         </thead>
         <tbody>
-          <tr><td>Salaire de base</td><td>${currency.format(item.salaryProfile.baseSalary)}</td></tr>
-          <tr><td>Bonus par defaut</td><td>${currency.format(item.salaryProfile.defaultBonus)}</td></tr>
-          <tr><td>Deductions par defaut</td><td>${currency.format(item.salaryProfile.defaultDeduction)}</td></tr>
-          <tr><td>Taux de recouvrement</td><td>${item.salaryProfile.debtRecoveryRate.toFixed(2)}%</td></tr>
+          <tr><td>Salaire de base</td><td>${currency.format(item.baseSalary)}</td></tr>
+          <tr><td>Primes et bonus</td><td>${currency.format(item.bonuses)}</td></tr>
+          <tr><td>Salaire brut</td><td>${currency.format(grossSalary)}</td></tr>
+          <tr><td>Retenues ordinaires</td><td>${currency.format(item.deductions)}</td></tr>
+          <tr><td>Avances recuperees</td><td>${currency.format(item.advancesRecovered)}</td></tr>
+          <tr><td>Dettes recuperees</td><td>${currency.format(item.debtRecovered)}</td></tr>
+          <tr><td>Total des retenues</td><td>${currency.format(totalDeductions)}</td></tr>
+          <tr><td><strong>Net a payer</strong></td><td><strong>${currency.format(item.netSalary)}</strong></td></tr>
           <tr><td>Frequence</td><td>${labelizeFrequency(item.salaryProfile.frequency)}</td></tr>
           <tr><td>Statut du run</td><td>${run.status}</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="compliance">Cette fiche salariale est éditée selon la charte ${escapeHtml(brand.shortName)} pour consultation, archivage et validation interne. Le montant net correspond au run de paie affiché sur ce document.</div>
+    <div class="compliance">Ce bulletin de paie est édité selon la charte ${escapeHtml(brand.shortName)} pour consultation, archivage et validation interne. Le montant net correspond au run de paie affiché sur ce document.</div>
     <div class="signatures">
       <div class="signature-box"><div class="signature-title">Validation RH</div><div class="signature-line">Ressources humaines</div></div>
       <div class="signature-box"><div class="signature-title">Visa financier</div><div class="signature-line">Service paie / comptabilité</div></div>
@@ -866,22 +1244,25 @@ export function FinancialOperationsPage() {
   }
 
   function exportSalarySlipExcel(run: PayrollRun, item: PayrollRun["items"][number]) {
-    exportWorkbook(`fiche-salariale-${item.salarySlipNumber}`, [
+    exportWorkbook(`bulletin-de-paie-${item.salarySlipNumber}`, [
       {
-        name: "Fiche salariale",
+        name: "Bulletin de paie",
         rows: [{
           "Numero de fiche": item.salarySlipNumber,
           "Run": run.title,
-          "Periode": run.period?.name ?? "Periode active",
+          "Période": run.period?.name ?? "Période active",
           "Employe": item.salaryProfile.fullName,
           "Code employe": item.salaryProfile.employeeCode,
           "Departement": item.salaryProfile.department,
           "Poste": item.salaryProfile.position,
           "Frequence": labelizeFrequency(item.salaryProfile.frequency),
-          "Salaire de base": item.salaryProfile.baseSalary,
-          "Bonus par defaut": item.salaryProfile.defaultBonus,
-          "Deductions par defaut": item.salaryProfile.defaultDeduction,
-          "Taux de recouvrement %": Number(item.salaryProfile.debtRecoveryRate.toFixed(2)),
+          "Salaire de base": item.baseSalary,
+          "Primes et bonus": item.bonuses,
+          "Salaire brut": Number(item.baseSalary || 0) + Number(item.bonuses || 0),
+          "Retenues ordinaires": item.deductions,
+          "Avances recuperees": item.advancesRecovered,
+          "Dettes recuperees": item.debtRecovered,
+          "Total des retenues": Number(item.deductions || 0) + Number(item.advancesRecovered || 0) + Number(item.debtRecovered || 0),
           "Net a payer": item.netSalary,
           "Statut du run": run.status
         }]
@@ -889,17 +1270,164 @@ export function FinancialOperationsPage() {
     ]);
   }
 
-  function openDocument(fileUrl: string) {
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
+  function findExpenseForAttachment(file: ExpenseAttachment | DocumentEntry) {
+    if ("expenseId" in file) {
+      return expenses.find((expense) => expense.id === file.expenseId) ?? null;
+    }
+    return expenses.find((expense) =>
+      (expense.attachments ?? []).some((attachment) =>
+        attachment.id === file.id ||
+        (attachment.fileName === file.fileName && attachment.fileUrl === file.fileUrl)
+      )
+    ) ?? null;
   }
 
-  function downloadDocument(file: ExpenseAttachment) {
+  function buildExpenseSupportDocumentHtml(file: ExpenseAttachment | DocumentEntry) {
+    const expense = findExpenseForAttachment(file);
+    const brand = schoolBranding;
+    const logoSrc = escapeHtml(new URL(brand.logoSrc, window.location.href).toString());
+    const generatedAt = new Date();
+    const documentReference = `KCS-EXP-${generatedAt.toISOString().slice(0, 10)}-${expense?.id ?? ("expenseId" in file ? file.expenseId : "UNLINKED")}-${file.id}`.replace(/[^A-Z0-9-]/gi, "-");
+    const sourceIsImage = /^data:image\//i.test(file.fileUrl) || /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.fileUrl.split("?")[0] ?? "");
+    const sourceIsPdf = /^data:application\/pdf/i.test(file.fileUrl) || /\.pdf$/i.test(file.fileUrl.split("?")[0] ?? "");
+    const sourceLabel = file.fileUrl?.startsWith("data:")
+      ? "Fichier charge dans EduPay"
+      : (file.fileUrl || "Reference non renseignee");
+    const approvalRows = (expense?.approvalSteps ?? []).map((step) => `
+      <tr>
+        <td>${escapeHtml(step.stage)}</td>
+        <td>${escapeHtml(step.role)}</td>
+        <td>${escapeHtml(step.status)}</td>
+        <td>${escapeHtml(step.comments || "-")}</td>
+      </tr>
+    `).join("");
+    const sourcePreview = sourceIsImage
+      ? `<img class="attachment-preview" src="${escapeHtml(file.fileUrl)}" alt="Piece justificative ${escapeHtml(file.fileName)}" />`
+      : sourceIsPdf
+        ? `<iframe class="attachment-frame" src="${escapeHtml(file.fileUrl)}" title="Piece justificative ${escapeHtml(file.fileName)}"></iframe>`
+        : `<div class="source-box"><div class="label">Source / reference</div><div class="source-text">${escapeHtml(sourceLabel)}</div></div>`;
+
+    return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Piece justificative ${escapeHtml(file.fileName)}</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    body { position: relative; margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, Helvetica, sans-serif; padding: 22px; }
+    .watermark-text { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 86px; font-weight: 900; letter-spacing: 14px; color: rgba(11,46,89,0.055); transform: rotate(-22deg); pointer-events: none; user-select: none; }
+    .watermark-logo { position: fixed; left: 50%; top: 50%; width: 300px; height: 300px; opacity: 0.075; transform: translate(-50%, -50%); object-fit: contain; filter: grayscale(100%) contrast(1.05); pointer-events: none; user-select: none; }
+    .topbar { display:flex; justify-content:space-between; gap:12px; padding: 0 2px 10px; color:#64748b; font-size:10px; text-transform:uppercase; letter-spacing:0.14em; }
+    .topbar strong { color:#0b2e59; }
+    .sheet { position: relative; z-index: 2; max-width: 820px; margin: 0 auto; background: white; border: 1px solid #cbd5e1; border-radius: 18px; overflow: hidden; box-shadow: 0 20px 60px rgba(15,23,42,0.08); }
+    .hero { padding: 26px; background: linear-gradient(135deg, #082f49, #1f4f8f); color: white; display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+    .hero-main { display:flex; align-items:center; gap:15px; min-width: 0; }
+    .hero-logo { width: 62px; height: 62px; object-fit: contain; border-radius: 999px; background: white; padding: 6px; border: 1px solid rgba(255,255,255,0.2); }
+    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.13em; color: #64748b; font-weight: 800; }
+    .hero .label { color: ${escapeHtml(brand.colors.accent)}; }
+    h1 { margin: 7px 0 0; font-size: 27px; line-height: 1.12; }
+    .hero p { margin: 6px 0 0; color: #dbeafe; overflow-wrap: anywhere; }
+    .hero-meta { text-align:right; font-size:12px; color: rgba(255,255,255,0.88); min-width: 180px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 22px 26px 12px; }
+    .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; min-width: 0; }
+    .value { margin-top: 8px; font-size: 16px; font-weight: 800; color: #0b2e59; overflow-wrap: anywhere; }
+    .amount { color: #0f766e; font-size: 19px; }
+    .table-wrap { padding: 8px 26px 22px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 12px; vertical-align: top; }
+    th { color: #475569; text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; }
+    .attachment { margin: 0 26px 18px; border: 1px solid #dbeafe; border-radius: 16px; overflow: hidden; background: #f8fafc; }
+    .attachment-head { padding: 12px 14px; border-bottom: 1px solid #dbeafe; display:flex; justify-content:space-between; gap:12px; color:#0b2e59; font-weight:800; }
+    .attachment-preview { display:block; width: 100%; max-height: 420px; object-fit: contain; background:white; }
+    .attachment-frame { display:block; width: 100%; height: 430px; border:0; background:white; }
+    .source-box { padding: 16px; }
+    .source-text { margin-top:8px; color:#0f172a; font-weight:700; overflow-wrap:anywhere; }
+    .compliance { margin: 0 26px 18px; border: 1px solid rgba(15,118,110,0.22); border-left: 5px solid #0f766e; border-radius: 14px; background: rgba(240,253,250,0.96); padding: 12px 14px; color: #134e4a; font-size: 11px; line-height: 1.5; }
+    .signatures { display:grid; grid-template-columns: 1fr 1fr; gap:14px; padding: 0 26px 20px; }
+    .signature-box { min-height: 74px; border:1px dashed rgba(11,46,89,0.24); border-radius:14px; background: rgba(255,255,255,0.88); padding:12px; }
+    .signature-title { font-size:10px; text-transform:uppercase; letter-spacing:0.14em; font-weight:800; color:#64748b; }
+    .signature-line { margin-top:32px; border-top:1px solid rgba(11,46,89,0.24); padding-top:6px; font-size:11px; color:#0b2e59; font-weight:700; }
+    .foot { padding: 14px 26px 24px; font-size: 11px; color: #475569; display:flex; justify-content:space-between; gap:12px; border-top: 1px solid #e2e8f0; }
+    @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .sheet { box-shadow: none; } }
+  </style>
+</head>
+<body>
+  <div class="watermark-text">${escapeHtml(brand.shortName)}</div>
+  <img class="watermark-logo" src="${logoSrc}" alt="" />
+  <div class="topbar"><span><strong>${escapeHtml(brand.shortName)}</strong> · piece justificative officielle</span><span>Reference ${escapeHtml(documentReference)}</span></div>
+  <div class="sheet">
+    <div class="hero">
+      <div class="hero-main">
+        <img class="hero-logo" src="${logoSrc}" alt="Logo ${escapeHtml(brand.schoolName)}" />
+        <div>
+          <div class="label">${escapeHtml(brand.appName)}</div>
+          <h1>Piece justificative de depense</h1>
+          <p>${escapeHtml(file.fileName)} · ${escapeHtml(expense?.title ?? ("expenseTitle" in file ? file.expenseTitle : "Depense non liee"))}</p>
+        </div>
+      </div>
+      <div class="hero-meta">
+        <div style="font-weight:700;">${escapeHtml(brand.schoolName)}</div>
+        <div style="margin-top:4px;">${escapeHtml(brand.tagline)}</div>
+        <div style="margin-top:10px;">${escapeHtml(generatedAt.toLocaleDateString("fr-FR"))}</div>
+        <div>${escapeHtml(generatedAt.toLocaleTimeString("fr-FR"))}</div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="label">Reference document</div><div class="value">${escapeHtml(documentReference)}</div></div>
+      <div class="card"><div class="label">Statut workflow</div><div class="value">${escapeHtml(expense?.status ?? ("status" in file ? file.status : "Non renseigne"))}</div></div>
+      <div class="card"><div class="label">Depense</div><div class="value">${escapeHtml(expense?.title ?? ("expenseTitle" in file ? file.expenseTitle : "-"))}</div></div>
+      <div class="card"><div class="label">Montant</div><div class="value amount">${escapeHtml(expense ? currency.format(expense.amount) : "-")}</div></div>
+      <div class="card"><div class="label">Departement</div><div class="value">${escapeHtml(expense?.department ?? ("department" in file ? file.department : "-"))}</div></div>
+      <div class="card"><div class="label">Beneficiaire</div><div class="value">${escapeHtml(expense?.vendor?.name ?? expense?.supplierName ?? "-")}</div></div>
+      <div class="card"><div class="label">Categorie</div><div class="value">${escapeHtml(expense?.category?.name ?? "-")}</div></div>
+      <div class="card"><div class="label">Date depense</div><div class="value">${escapeHtml(new Date(expense?.expenseDate ?? ("expenseDate" in file ? file.expenseDate : Date.now())).toLocaleDateString("fr-FR"))}</div></div>
+    </div>
+    <div class="attachment">
+      <div class="attachment-head"><span>Piece source</span><span>${escapeHtml(file.mimeType || "type non precise")}</span></div>
+      ${sourcePreview}
+    </div>
+    <div class="table-wrap">
+      <div class="label">Workflow de validation</div>
+      <table>
+        <thead><tr><th>Etape</th><th>Role</th><th>Statut</th><th>Commentaire</th></tr></thead>
+        <tbody>${approvalRows || `<tr><td colspan="4">Aucune etape de validation renseignee.</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="compliance">Ce document encapsule la piece justificative et le contexte de depense dans le format administratif ${escapeHtml(brand.shortName)}. La reference, le statut, le montant et le workflow permettent de verifier la trace sans dependre uniquement du fichier brut.</div>
+    <div class="signatures">
+      <div class="signature-box"><div class="signature-title">Controle operationnel</div><div class="signature-line">Responsable departement</div></div>
+      <div class="signature-box"><div class="signature-title">Visa finance</div><div class="signature-line">Comptabilite / Direction</div></div>
+    </div>
+    <div class="foot"><span>Document officiel ${escapeHtml(brand.appName)} genere pour ${escapeHtml(brand.schoolName)}.</span><span>${escapeHtml(generatedAt.toLocaleString("fr-FR"))}</span></div>
+  </div>
+</body>
+</html>`;
+  }
+
+  function openExpenseSupportDocument(file: ExpenseAttachment | DocumentEntry) {
+    const html = buildExpenseSupportDocumentHtml(file);
+    const opened = window.open("", "_blank");
+    if (!opened) {
+      printHtmlDocument(html);
+      return;
+    }
+    opened.opener = null;
+    opened.document.open();
+    opened.document.write(html);
+    opened.document.close();
+  }
+
+  function downloadExpenseSupportDocument(file: ExpenseAttachment | DocumentEntry) {
+    const html = buildExpenseSupportDocumentHtml(file);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = file.fileUrl;
-    link.download = file.fileName;
+    link.href = url;
+    link.download = `piece-justificative-${file.fileName.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-") || file.id}.html`;
     document.body.appendChild(link);
     link.click();
     link.remove();
+    window.URL.revokeObjectURL(url);
   }
 
   function readFileAsAttachment(file: File) {
@@ -1119,10 +1647,10 @@ export function FinancialOperationsPage() {
 
   function exportCashflowCsv() {
     downloadCsv(
-      `journal-tresorerie-${new Date().toISOString().slice(0, 10)}.csv`,
-      ["Date", "Source", "Direction", "Methode", "Montant", "Devise", "Reference", "Notes"],
+      `journal-trésorerie-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Date", "Source", "Direction", "Méthode", "Montant", "Devise", "Référence", "Notes"],
       filteredCashflowEntries.map((entry) => [
-        new Date(entry.referenceDate).toLocaleDateString("fr-FR"),
+        new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
         entry.sourceType,
         entry.direction,
         entry.method || "",
@@ -1135,7 +1663,7 @@ export function FinancialOperationsPage() {
   }
 
   function exportCashflowExcel() {
-    exportWorkbook(`journal-tresorerie-${new Date().toISOString().slice(0, 10)}`, [
+    exportWorkbook(`journal-trésorerie-${new Date().toISOString().slice(0, 10)}`, [
       {
         name: "Synthese",
         rows: [{
@@ -1158,19 +1686,80 @@ export function FinancialOperationsPage() {
         }))
       },
       {
-        name: "Journal tresorerie",
+        name: "Journal trésorerie",
         rows: filteredCashflowEntries.map((entry) => ({
-          "Date": new Date(entry.referenceDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
           "Source": entry.sourceType,
           "Direction": entry.direction,
-          "Methode": entry.method || "",
+          "Méthode": entry.method || "",
           "Montant": entry.amount,
           "Devise": entry.currency,
-          "Reference": entry.expense?.title || entry.payrollRun?.title || entry.payrollItem?.salarySlipNumber || "",
+          "Référence": entry.expense?.title || entry.payrollRun?.title || entry.payrollItem?.salarySlipNumber || "",
           "Notes": entry.notes || ""
         }))
       }
     ]);
+  }
+
+  function exportExpensesExcel() {
+    exportWorkbook(`registre-depenses-${new Date().toISOString().slice(0, 10)}`, [
+      {
+        name: "Synthese",
+        rows: [{
+          "Dépenses filtrées": filteredExpenses.length,
+          "Période": periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo),
+          "Statut": statusFilter === "ALL" ? "Tous" : statusFilter,
+          "Total": filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+          "Approuvees": filteredExpenses.filter((expense) => expense.status === "APPROVED").length,
+          "En attente": filteredExpenses.filter((expense) => expense.status === "PENDING").length
+        }]
+      },
+      {
+        name: "Registre depenses",
+        rows: filteredExpenses.map((expense) => ({
+          "Date": new Date(expense.expenseDate).toLocaleDateString("fr-FR"),
+          "Titre ou motif": expense.title,
+          "Beneficiaire": expense.vendor?.name || expense.supplierName || "",
+          "Contact beneficiaire": expense.vendor?.phone || expense.vendor?.email || expense.vendor?.contactName || "",
+          "Departement": expense.department,
+          "Categorie": expense.category.name,
+          "Compte débité": expenseDebitAccountCode(expense),
+          "Classe": expense.category.accountClass || "",
+          "Compte crédité": expenseCreditAccountCode(expense),
+          "Statut": expense.status,
+          "Mode": expense.paymentMethod || "",
+          "Montant": expense.amount,
+          "Devise": expense.currency,
+          "Budget": expense.budget?.name || "",
+          "Commentaires": expense.comments || "",
+          "Pieces": expense.attachments?.length || 0
+        }))
+      }
+    ]);
+  }
+
+  function printExpensesReport() {
+    printLedgerReport(
+      "Registre des depenses",
+      `Recherche strategique des depenses filtrées. Période: ${periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo)}.`,
+      ["Date", "Titre ou motif", "Beneficiaire", "Departement", "Compte débité", "Compte crédité", "Statut", "Montant"],
+      filteredExpenses.map((expense) => [
+        new Date(expense.expenseDate).toLocaleDateString("fr-FR"),
+        expense.title,
+        expense.vendor?.name || expense.supplierName || "",
+        expense.department,
+        expenseDebitAccountCode(expense) || "-",
+        expenseCreditAccountCode(expense) || "-",
+        expense.status,
+        currency.format(expense.amount)
+      ]),
+      [
+        { label: "Dépenses filtrées", value: String(filteredExpenses.length), detail: `Statut: ${statusFilter === "ALL" ? "Tous" : statusFilter}` },
+        { label: "Volume filtre", value: currency.format(filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)), detail: "Somme des depenses correspondant aux critères" },
+        { label: "Période", value: periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo), detail: "Intervalle d'analyse applique au registre" },
+        { label: "Taux approuve", value: formatPercent(ratioPercent(filteredExpenses.filter((expense) => expense.status === "APPROVED").length, filteredExpenses.length)), detail: "Dépenses approuvees / lignes filtrées" }
+      ]
+    );
   }
 
   function printAccountingReport() {
@@ -1178,7 +1767,7 @@ export function FinancialOperationsPage() {
       "Journal comptable",
       "Vue consolidee des ecritures issues des depenses et de la paie.",
       ["Date", "Type", "Direction", "Titre", "Departement", "Montant", "Source"],
-      accountingEntries.map((entry) => [
+      filteredAccountingEntries.map((entry) => [
         new Date(entry.entryDate).toLocaleDateString("fr-FR"),
         entry.entryType,
         entry.direction,
@@ -1198,11 +1787,11 @@ export function FinancialOperationsPage() {
 
   function printCashflowReport() {
     printLedgerReport(
-      "Journal de tresorerie",
-      "Vue consolidee des sorties et references de cash liees aux operations financieres.",
-      ["Date", "Source", "Direction", "Methode", "Montant", "Reference", "Notes"],
-      cashflowEntries.map((entry) => [
-        new Date(entry.referenceDate).toLocaleDateString("fr-FR"),
+      "Journal de trésorerie",
+      `Vue consolidée des sorties et références de cash liées aux opérations financières. Période : ${periodLabel(cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo)}.`,
+      ["Date", "Source", "Direction", "Méthode", "Montant", "Référence", "Notes"],
+      filteredCashflowEntries.map((entry) => [
+        new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
         entry.sourceType,
         entry.direction,
         entry.method || "",
@@ -1219,28 +1808,53 @@ export function FinancialOperationsPage() {
     );
   }
 
+  function printOperationsReport() {
+    if (!overview) return;
+    printLedgerReport(
+      "Rapport général des opérations",
+      "Document officiel EduPay consolidant dépenses, budgets, paie, comptabilité, trésorerie et pièces justificatives.",
+      ["Module", "Lignes", "Volume / indicateur", "Observation"],
+      [
+        ["Dépenses", String(expenses.length), currency.format(overview.expenses.totalExpenses), `${expenseStats.pending} en attente`],
+        ["Budgets", String(budgets.length), currency.format(budgets.reduce((sum, budget) => sum + budget.plannedAmount, 0)), `${budgets.filter((budget) => budget.status === "EXCEEDED").length} depassement(s)`],
+        ["Paie", String(payrollRuns.length), currency.format(overview.payroll.totalPayroll), `${salaryProfiles.length} profil(s)`],
+        ["Comptabilité", String(accountingEntries.length), currency.format(accountingMetrics.totalVolume), accountingMetrics.topDepartmentName],
+        ["Trésorerie", String(cashflowEntries.length), currency.format(overview.cashflow.availableCash), `Variation ${currency.format(cashflowMetrics.netMovement)}`],
+        ["Documents", String(documentEntries.length), String(documentEntries.length), "Pieces justificatives indexees"]
+      ],
+      [
+        { label: "Cash disponible", value: currency.format(overview.cashflow.availableCash), detail: "Solde opérationnel après charges reconnues" },
+        { label: "Passifs", value: currency.format(overview.liabilities.supplierDebt + overview.liabilities.payrollLiability), detail: "Fournisseurs et paie non soldes" },
+        { label: "Approbations", value: String(overview.expenses.pendingApprovalSteps), detail: "Etapes de validation en attente" },
+        { label: "Profit / perte", value: currency.format(overview.cashflow.profitLoss), detail: "Lecture consolidee EduPay" }
+      ]
+    );
+  }
+
   function exportOperationsWorkbook() {
     if (!overview) return;
-    exportWorkbook(`pack-financier-operations-${new Date().toISOString().slice(0, 10)}`, [
+    exportWorkbook(`pack-financier-opérations-${new Date().toISOString().slice(0, 10)}`, [
       {
         name: "Synthese",
         rows: [{
-          "Depenses": overview.expenses.totalExpenses,
+          "Dépenses": overview.expenses.totalExpenses,
           "Budgets": budgets.length,
           "Paies": payrollRuns.length,
-          "Comptabilite": accountingEntries.length,
-          "Tresorerie": cashflowEntries.length,
+          "Comptabilité": accountingEntries.length,
+          "Trésorerie": cashflowEntries.length,
           "Documents": documentEntries.length,
           "Cash disponible": overview.cashflow.availableCash
         }]
       },
       {
-        name: "Depenses",
+        name: "Dépenses",
         rows: expenses.map((expense) => ({
           "Date": new Date(expense.expenseDate).toLocaleDateString("fr-FR"),
           "Titre": expense.title,
           "Departement": expense.department,
           "Categorie": expense.category.name,
+          "Compte débité": expenseDebitAccountCode(expense),
+          "Compte crédité": expenseCreditAccountCode(expense),
           "Statut": expense.status,
           "Montant": expense.amount,
           "Budget": expense.budget?.name || "",
@@ -1273,7 +1887,7 @@ export function FinancialOperationsPage() {
         }))
       },
       {
-        name: "Comptabilite",
+        name: "Comptabilité",
         rows: accountingEntries.map((entry) => ({
           "Date": new Date(entry.entryDate).toLocaleDateString("fr-FR"),
           "Type": entry.entryType,
@@ -1285,14 +1899,14 @@ export function FinancialOperationsPage() {
         }))
       },
       {
-        name: "Tresorerie",
+        name: "Trésorerie",
         rows: cashflowEntries.map((entry) => ({
-          "Date": new Date(entry.referenceDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
           "Source": entry.sourceType,
           "Direction": entry.direction,
           "Montant": entry.amount,
-          "Methode": entry.method || "",
-          "Reference": entry.expense?.title || entry.payrollRun?.title || entry.payrollItem?.salarySlipNumber || "",
+          "Méthode": entry.method || "",
+          "Référence": entry.expense?.title || entry.payrollRun?.title || entry.payrollItem?.salarySlipNumber || "",
           "Notes": entry.notes || ""
         }))
       },
@@ -1320,9 +1934,66 @@ export function FinancialOperationsPage() {
       setVendors((current) => [created, ...current]);
       setVendorForm(EMPTY_VENDOR_FORM);
       setActiveSubDialog(null);
-      setSuccess("Fournisseur ajoute.");
+      setSuccess("Fournisseur ajouté.");
     } catch (submitError) {
       setActionError(submitError instanceof Error ? submitError.message : "Impossible de creer le fournisseur.");
+    } finally {
+      setSubmittingKey(null);
+    }
+  }
+
+  function beginVendorEdit(vendor: Vendor) {
+    setSelectedVendorId(vendor.id);
+    setEditingVendorId(vendor.id);
+    setVendorEditForm({
+      name: vendor.name,
+      contactName: vendor.contactName ?? "",
+      phone: vendor.phone ?? "",
+      email: vendor.email ?? "",
+      address: vendor.address ?? "",
+      notes: vendor.notes ?? ""
+    });
+  }
+
+  async function handleUpdateVendor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingVendorId) return;
+    setActionError(null);
+    setSuccess(null);
+    setSubmittingKey("vendor-update");
+    try {
+      const updated = await api<Vendor>(`/api/expenses/vendors/${editingVendorId}`, {
+        method: "PUT",
+        body: JSON.stringify(vendorEditForm)
+      });
+      setVendors((current) => current.map((vendor) => vendor.id === updated.id ? updated : vendor).sort((left, right) => left.name.localeCompare(right.name)));
+      setSelectedVendorId(updated.id);
+      setEditingVendorId(null);
+      setVendorEditForm(EMPTY_VENDOR_FORM);
+      setSuccess("Fournisseur modifié.");
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Impossible de modifier le fournisseur.");
+    } finally {
+      setSubmittingKey(null);
+    }
+  }
+
+  async function handleDeleteVendor(vendor: Vendor) {
+    const usage = vendorUsage[vendor.id];
+    const confirmed = window.confirm(`Supprimer ${vendor.name} ?${usage?.count ? ` ${usage.count} depense(s) seront conservees mais detachees de ce fournisseur.` : ""}`);
+    if (!confirmed) return;
+    setActionError(null);
+    setSuccess(null);
+    setSubmittingKey(`vendor-delete-${vendor.id}`);
+    try {
+      await api(`/api/expenses/vendors/${vendor.id}`, { method: "DELETE" });
+      setVendors((current) => current.filter((item) => item.id !== vendor.id));
+      setExpenses((current) => current.map((expense) => expense.vendor?.id === vendor.id ? { ...expense, vendor: null } : expense));
+      if (selectedVendorId === vendor.id) setSelectedVendorId(null);
+      if (editingVendorId === vendor.id) setEditingVendorId(null);
+      setSuccess("Fournisseur supprimé sans effacer les dépenses historiques.");
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Impossible de supprimer le fournisseur.");
     } finally {
       setSubmittingKey(null);
     }
@@ -1348,7 +2019,7 @@ export function FinancialOperationsPage() {
       setBudgets((current) => [created, ...current]);
       setBudgetForm(EMPTY_BUDGET_FORM);
       setActiveSubDialog(null);
-      setSuccess("Budget enregistre.");
+      setSuccess("Budget enregistré.");
       await refreshOverview();
       await refreshLedgers();
     } catch (submitError) {
@@ -1379,9 +2050,12 @@ export function FinancialOperationsPage() {
           department: expenseForm.department,
           amount: Number(expenseForm.amount || 0),
           paymentMethod: expenseForm.paymentMethod,
+          debitAccountCode: expenseForm.debitAccountCode,
+          creditAccountCode: expenseForm.creditAccountCode,
+          cashAccountCode: expenseForm.creditAccountCode,
           expenseDate: expenseForm.expenseDate,
-          supplierName: expenseForm.supplierName,
-          comments: expenseForm.comments,
+          supplierName: expenseForm.beneficiaryName || expenseForm.supplierName,
+          comments: buildBeneficiaryNotes(expenseForm),
           attachments: [
             ...(expenseForm.attachmentName && expenseForm.attachmentUrl
               ? [{ kind: "EXPENSE_SUPPORT", fileName: expenseForm.attachmentName, fileUrl: expenseForm.attachmentUrl }]
@@ -1400,7 +2074,7 @@ export function FinancialOperationsPage() {
       setExpenseForm(EMPTY_EXPENSE_FORM);
       setPendingAttachments([]);
       setActiveSubDialog(null);
-      setSuccess("Depense soumise au workflow d'approbation.");
+      setSuccess("Dépense soumise au workflow d'approbation.");
       await refreshOverview();
       await refreshLedgers();
     } catch (submitError) {
@@ -1420,11 +2094,41 @@ export function FinancialOperationsPage() {
         body: JSON.stringify({ status })
       });
       setExpenses((current) => current.map((expense) => expense.id === expenseId ? updated : expense));
-      setSuccess(status === "APPROVED" ? "Etape d'approbation validee." : "Depense rejetee.");
+      setSuccess(status === "APPROVED" ? "Étape d'approbation validée." : "Dépense rejetée.");
       await refreshOverview();
       await refreshLedgers();
     } catch (submitError) {
       setActionError(submitError instanceof Error ? submitError.message : "Impossible de traiter l'approbation.");
+    } finally {
+      setSubmittingKey(null);
+    }
+  }
+
+  async function handleCancelExpense(expense: Expense) {
+    const reason = window.prompt(
+      expense.status === "APPROVED"
+        ? "Motif de l'annulation. Une écriture inverse sera créée automatiquement :"
+        : "Motif de l'annulation de cette opération :",
+      "Annulation demandée"
+    );
+    if (reason === null) return;
+
+    setActionError(null);
+    setSuccess(null);
+    setSubmittingKey(`cancel-${expense.id}`);
+    try {
+      const updated = await api<Expense>(`/api/expenses/${expense.id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() || "Annulation demandée" })
+      });
+      setExpenses((current) => current.map((item) => item.id === expense.id ? updated : item));
+      setSuccess(expense.status === "APPROVED"
+        ? "Opération annulée : le débit et le crédit ont été inversés dans le journal."
+        : "Opération annulée avant approbation.");
+      await refreshOverview();
+      await refreshLedgers();
+    } catch (cancelError) {
+      setActionError(cancelError instanceof Error ? cancelError.message : "Impossible d'annuler cette opération.");
     } finally {
       setSubmittingKey(null);
     }
@@ -1454,7 +2158,7 @@ export function FinancialOperationsPage() {
       setSalaryProfiles((current) => [created, ...current]);
       setSalaryForm(EMPTY_SALARY_FORM);
       setActiveSubDialog(null);
-      setSuccess("Profil salarial ajoute.");
+      setSuccess("Profil salarial ajouté.");
       await refreshOverview();
       await refreshLedgers();
     } catch (submitError) {
@@ -1465,28 +2169,139 @@ export function FinancialOperationsPage() {
   }
 
   function openSalaryProfileDialog() {
+    setActiveTab("payroll");
+    setActiveDialog("payroll");
+    setActionError(null);
+    setSuccess(null);
     setSalaryForm(EMPTY_SALARY_FORM);
     setActiveSubDialog("salary-profile-create");
+  }
+
+  function openPayrollRunDialog() {
+    const monthLabel = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date());
+    setActionError(null);
+    setSuccess(null);
+    setPayrollForm({
+      ...EMPTY_PAYROLL_FORM,
+      title: `Paie ${monthLabel.charAt(0).toUpperCase()}${monthLabel.slice(1)}`
+    });
+    setActiveSubDialog("payroll-run-create");
   }
 
   async function handleCreatePayrollRun(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setActionError(null);
     setSuccess(null);
+    if (!activeSalaryProfiles.length) {
+      setActionError("Ajoutez d'abord au moins un profil salarial actif avant de lancer la paie.");
+      return;
+    }
+    if (!eligiblePayrollProfiles.length) {
+      setActionError("Aucun profil salarial actif ne correspond au département sélectionné.");
+      return;
+    }
     setSubmittingKey("payroll");
     try {
       const created = await api<PayrollRun>("/api/expenses/payroll/runs", {
         method: "POST",
-        body: JSON.stringify(payrollForm)
+        body: JSON.stringify({
+          title: payrollForm.title.trim(),
+          department: payrollForm.department || undefined,
+          frequency: payrollForm.frequency || undefined,
+          notes: payrollForm.notes.trim() || undefined
+        })
       });
       setPayrollRuns((current) => [created, ...current]);
       setPayrollForm(EMPTY_PAYROLL_FORM);
+      if (created.items.length > 0) {
+        setSelectedPayslip({ run: created, item: created.items[0] });
+        setActiveSubDialog("payslip-preview");
+      } else {
+        setActiveSubDialog(null);
+      }
+      setSuccess(`${created.items.length} bulletin(s) de paie généré(s).`);
+      await Promise.allSettled([refreshOverview(), refreshLedgers()]);
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Impossible de lancer la paie.");
+    } finally {
+      setSubmittingKey(null);
+    }
+  }
+
+  async function handleCreateEmployeeObligation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    setSuccess(null);
+    if (!salaryProfiles.length) {
+      setActionError("Ajoutez d'abord un profil salarial avant d'enregistrer une avance ou une dette.");
+      return;
+    }
+    if (!employeeObligationForm.salaryProfileId) {
+      setActionError("Selectionnez l'employe concerne par cette operation.");
+      return;
+    }
+    setSubmittingKey("employee-obligation");
+    try {
+      const created = await api<EmployeeObligation>("/api/expenses/employee-finance/obligations", {
+        method: "POST",
+        body: JSON.stringify({
+          salaryProfileId: employeeObligationForm.salaryProfileId,
+          type: employeeObligationForm.type,
+          title: employeeObligationForm.title,
+          principalAmount: Number(employeeObligationForm.principalAmount || 0),
+          currency: employeeObligationForm.currency || "USD",
+          disbursementMethod: employeeObligationForm.disbursementMethod,
+          repaymentMethod: employeeObligationForm.repaymentMethod,
+          installmentAmount: Number(employeeObligationForm.installmentAmount || employeeObligationForm.principalAmount || 0),
+          startDate: employeeObligationForm.startDate,
+          dueDate: employeeObligationForm.dueDate,
+          notes: employeeObligationForm.notes
+        })
+      });
+      setEmployeeObligations((current) => [created, ...current]);
+      setEmployeeObligationForm(EMPTY_EMPLOYEE_OBLIGATION_FORM);
       setActiveSubDialog(null);
-      setSuccess("Run de paie genere.");
+      setSuccess(`Opération employé enregistrée. Reçu : ${created.receipt?.receiptNumber ?? "généré"}.`);
       await refreshOverview();
       await refreshLedgers();
     } catch (submitError) {
-      setActionError(submitError instanceof Error ? submitError.message : "Impossible de lancer la paie.");
+      setActionError(submitError instanceof Error ? submitError.message : "Impossible d'enregistrer l'opération employé.");
+    } finally {
+      setSubmittingKey(null);
+    }
+  }
+
+  async function handleRecordEmployeeRepayment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setActionError(null);
+    setSuccess(null);
+    if (!openEmployeeRepayments.length) {
+      setActionError("Aucune echeance ouverte n'est disponible pour un remboursement.");
+      return;
+    }
+    if (!employeeRepaymentForm.repaymentId) {
+      setActionError("Selectionnez l'echeance a encaisser.");
+      return;
+    }
+    setSubmittingKey("employee-repayment");
+    try {
+      const updated = await api<EmployeeRepayment & { receipt?: { receiptNumber: string } | null }>(`/api/expenses/employee-finance/repayments/${employeeRepaymentForm.repaymentId}/pay`, {
+        method: "POST",
+        body: JSON.stringify({
+          paidAmount: Number(employeeRepaymentForm.paidAmount || 0),
+          paymentMethod: employeeRepaymentForm.paymentMethod,
+          reference: employeeRepaymentForm.reference,
+          notes: employeeRepaymentForm.notes
+        })
+      });
+      await refreshEmployeeObligations();
+      setEmployeeRepaymentForm(EMPTY_EMPLOYEE_REPAYMENT_FORM);
+      setActiveSubDialog(null);
+      setSuccess(`Remboursement enregistré. Reçu : ${updated.receipt?.receiptNumber ?? "généré"}.`);
+      await refreshOverview();
+      await refreshLedgers();
+    } catch (submitError) {
+      setActionError(submitError instanceof Error ? submitError.message : "Impossible d'enregistrer le remboursement.");
     } finally {
       setSubmittingKey(null);
     }
@@ -1496,9 +2311,9 @@ export function FinancialOperationsPage() {
     return (
       <div className="flex min-h-[65vh] items-center justify-center px-4">
         <div className="glass max-w-xl rounded-2xl border border-red-500/20 p-8 text-center shadow-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-300">{L("Operations indisponibles", "Operations unavailable")}</p>
-          <h1 className="mt-3 font-display text-3xl font-bold text-white">{L("Les operations financieres ne sont pas disponibles", "Financial operations are unavailable")}</h1>
-          <p className="mt-3 text-sm text-ink-dim">{error ?? L("Aucune donnee n'a ete renvoyee.", "No data was returned.")}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-red-300">{L("Opérations indisponibles", "Operations unavailable")}</p>
+          <h1 className="mt-3 font-display text-3xl font-bold text-white">{L("Les opérations financières ne sont pas disponibles", "Financial Operations are unavailable")}</h1>
+          <p className="mt-3 text-sm text-ink-dim">{error ?? L("Aucune donnée n'a été renvoyée.", "No data was returned.")}</p>
         </div>
       </div>
     );
@@ -1610,7 +2425,10 @@ export function FinancialOperationsPage() {
               <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Étapes en attente", "Pending steps")}</p>
               <p className="mt-1 font-display text-xl font-bold text-white sm:text-2xl">{safeOverview.expenses.pendingApprovalSteps}</p>
             </div>
-            <button onClick={exportOperationsWorkbook} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-white hover:bg-cyan-400/20 sm:col-span-2">
+            <button onClick={printOperationsReport} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-brand-300/25 bg-brand-500/10 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-500/20">
+              <Printer className="h-4 w-4" /> {L("PDF / Imprimer", "PDF / Print")}
+            </button>
+            <button onClick={exportOperationsWorkbook} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-white hover:bg-cyan-400/20">
               <Download className="h-4 w-4" /> {L("Exporter le pack Excel", "Export Excel pack")}
             </button>
           </div>
@@ -1668,9 +2486,7 @@ export function FinancialOperationsPage() {
               key={module.value}
               type="button"
               onClick={() => {
-                setActiveTab(module.value);
-                setActiveDialog(module.value);
-                setActiveSubDialog(null);
+                openOperationsModule(module.value);
               }}
               className="group min-w-0 rounded-2xl border border-white/10 bg-white/[0.045] p-4 text-left shadow-lg transition hover:border-brand-300/30 hover:bg-white/[0.075]"
             >
@@ -1697,7 +2513,7 @@ export function FinancialOperationsPage() {
 
       {!canWrite && (
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Votre role est en lecture seule. Les formulaires de creation restent masques, mais les journaux et statuts restent consultables.
+          Votre role est en lecture seule. Les formulaires de création restent masques, mais les journaux et statuts restent consultables.
         </div>
       )}
 
@@ -1708,17 +2524,48 @@ export function FinancialOperationsPage() {
         <OperationsDialog title={activeModule.title} subtitle={activeModule.description} onClose={handleCloseOperationsDialog}>
       {activeTab === "expenses" && (
         <div className="space-y-6">
+          <SectionCard title="Plan comptable scolaire" subtitle="Référentiel complet des classes 1 à 9. Le compte débité ajoute le montant ; le compte crédité le soustrait, selon la convention EduPay.">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {SCHOOL_ACCOUNT_CLASSES.map(([code, title, examples]) => (
+                <div key={code} className={`rounded-2xl border p-4 ${["2", "3", "5", "6", "8"].includes(code) ? "border-brand-300/25 bg-brand-500/10" : "border-white/10 bg-slate-950/35"}`}>
+                  <div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 font-mono text-lg font-black text-white">{code}</span><div><p className="font-semibold text-white">{title}</p><p className="mt-1 text-xs text-ink-dim">{examples}</p></div></div>
+                </div>
+              ))}
+            </div>
+            <details className="mt-4 rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+              <summary className="cursor-pointer font-semibold text-white">Afficher les comptes clés du plan scolaire</summary>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">{SCHOOL_KEY_ACCOUNTS.map(([group, accounts]) => <div key={group} className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="font-semibold text-brand-100">{group}</p><div className="mt-3 flex flex-wrap gap-2">{accounts.map((account) => <span key={account} className="rounded-lg bg-slate-950/60 px-2.5 py-1.5 text-xs text-ink-dim">{account}</span>)}</div></div>)}</div>
+            </details>
+          </SectionCard>
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <SectionCard title="Workflow des depenses" subtitle="Recherche, suivi de statut et traitement des approbations en cours.">
-              <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-                <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher une depense, un service, un fournisseur..." />
+              <div className="grid gap-3 xl:grid-cols-[minmax(220px,0.9fr)_auto_auto_auto]">
+                <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Recherche precise: motif, beneficiaire, service, mode..." />
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="input min-w-[180px]">
                   <option value="ALL">Tous les statuts</option>
                   <option value="PENDING">Pending</option>
                   <option value="APPROVED">Approved</option>
                   <option value="REJECTED">Rejected</option>
+                  <option value="CANCELLED">Annulée</option>
                 </select>
+                <select value={expensePeriodFilter} onChange={(event) => setExpensePeriodFilter(event.target.value)} className="input min-w-[180px]">
+                  {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{period.label}</option>)}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={printExpensesReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-300/25 bg-brand-500/10 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-500/20">
+                    <Printer className="h-4 w-4" /> PDF
+                  </button>
+                  <button onClick={exportExpensesExcel} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20">
+                    <Download className="h-4 w-4" /> Excel
+                  </button>
+                </div>
               </div>
+              {expensePeriodFilter === "CUSTOM" && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <input className="input" type="date" value={expenseDateFrom} onChange={(event) => setExpenseDateFrom(event.target.value)} aria-label="Date debut depenses" />
+                  <input className="input" type="date" value={expenseDateTo} onChange={(event) => setExpenseDateTo(event.target.value)} aria-label="Date fin depenses" />
+                </div>
+              )}
 
               <div className="mt-5 space-y-3">
                 {filteredExpenses.map((expense) => {
@@ -1728,7 +2575,7 @@ export function FinancialOperationsPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-white">{expense.title}</p>
-                          <p className="mt-1 text-xs text-ink-dim">{expense.department} • {expense.category.name} • {new Date(expense.expenseDate).toLocaleDateString("fr-FR")}</p>
+                          <p className="mt-1 text-xs text-ink-dim">{expense.department} • {expense.category.accountCode || "-"} - {expense.category.name} • {new Date(expense.expenseDate).toLocaleDateString("fr-FR")}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusBadge value={expense.status} />
@@ -1737,16 +2584,20 @@ export function FinancialOperationsPage() {
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-3 text-sm">
                         <div>
+                          <p className="text-ink-dim">Écriture comptable</p>
+                          <p className="font-semibold text-white">Débit {expenseDebitAccountCode(expense) || "-"} / Crédit {expenseCreditAccountCode(expense) || "-"}</p>
+                        </div>
+                        <div>
                           <p className="text-ink-dim">Budget</p>
                           <p className="font-semibold text-white">{expense.budget?.name ?? "Hors budget"}</p>
                         </div>
                         <div>
-                          <p className="text-ink-dim">Fournisseur</p>
-                          <p className="font-semibold text-white">{expense.vendor?.name ?? expense.supplierName ?? "Non precise"}</p>
+                          <p className="text-ink-dim">Beneficiaire</p>
+                          <p className="font-semibold text-white">{expense.vendor?.name ?? expense.supplierName ?? "Non précisé"}</p>
                         </div>
                         <div>
-                          <p className="text-ink-dim">Etape courante</p>
-                          <p className="font-semibold text-white">{currentStep ? `${currentStep.role} / stage ${currentStep.stage}` : "Workflow termine"}</p>
+                          <p className="text-ink-dim">Mode / etape</p>
+                          <p className="font-semibold text-white">{expense.paymentMethod || "Mode non precise"} - {currentStep ? `${currentStep.role} / stage ${currentStep.stage}` : "Workflow termine"}</p>
                         </div>
                       </div>
                       {expense.comments && <p className="mt-3 text-sm text-ink-dim">{expense.comments}</p>}
@@ -1755,7 +2606,7 @@ export function FinancialOperationsPage() {
                           {expense.attachments.map((attachment) => (
                             <button
                               key={attachment.id}
-                              onClick={() => openDocument(attachment.fileUrl)}
+                              onClick={() => openExpenseSupportDocument(attachment)}
                               className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 hover:border-brand-300/25 hover:text-white"
                             >
                               Piece: {attachment.fileName}
@@ -1781,20 +2632,31 @@ export function FinancialOperationsPage() {
                           </button>
                         </div>
                       )}
+                      {canWrite && (expense.status === "PENDING" || expense.status === "APPROVED") && (
+                        <div className="mt-4">
+                          <button
+                            onClick={() => void handleCancelExpense(expense)}
+                            disabled={submittingKey === `cancel-${expense.id}`}
+                            className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-60"
+                          >
+                            Annuler l'opération
+                          </button>
+                        </div>
+                      )}
                     </article>
                   );
                 })}
-                {!filteredExpenses.length && <p className="text-sm text-ink-dim">Aucune depense ne correspond au filtre actuel.</p>}
+                {!filteredExpenses.length && <p className="text-sm text-ink-dim">Aucune dépense ne correspond au filtre actuel.</p>}
               </div>
             </SectionCard>
 
-            <SectionCard title="Arborescence des actions" subtitle="Choisissez une branche, puis travaillez dans une boite de dialogue dediee.">
+            <SectionCard title="Arborescence des actions" subtitle="Choisissez une branche, puis travaillez dans une boite de dialogue dédiée.">
               <div className="grid gap-3">
                 <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
                     <div>
-                      <p className="font-semibold text-white">Depenses</p>
+                      <p className="font-semibold text-white">Dépenses</p>
                       <p className="mt-1 text-sm text-ink-dim">Workflow principal: consulter, filtrer, valider ou rejeter les demandes.</p>
                     </div>
                   </div>
@@ -1811,7 +2673,7 @@ export function FinancialOperationsPage() {
                     />
                     <ActionNodeCard
                       title="Nouveau fournisseur"
-                      subtitle="Creer un tiers payable avant de lier une depense."
+                      subtitle="Créer un tiers payable avant de lier une depense."
                       detail={`${vendors.length} fournisseurs actifs`}
                       icon={UserPlus}
                       tone="border-brand-300/25 bg-brand-500/10 text-brand-100"
@@ -1819,6 +2681,14 @@ export function FinancialOperationsPage() {
                     />
                   </>
                 )}
+                <ActionNodeCard
+                  title="Base fournisseurs"
+                  subtitle="Voir, rechercher, modifier et supprimer les tiers payables."
+                  detail={`${filteredVendors.length}/${vendors.length} fournisseur(s)`}
+                  icon={Users}
+                  tone="border-emerald-300/25 bg-emerald-500/10 text-emerald-100"
+                  onClick={() => setActiveSubDialog("vendor-registry")}
+                />
                 <ActionNodeCard
                   title="Justificatifs"
                   subtitle="Voir les pieces indexees dans la branche Documents."
@@ -1835,36 +2705,74 @@ export function FinancialOperationsPage() {
             <OperationsSubDialog title="Nouvelle depense" subtitle="Soumettre une sortie de cash avec categorie, budget et piece justificative." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-3" onSubmit={handleCreateExpense}>
                     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                      Titre
+                      Titre ou motif de la depense
                       <input className="input" value={expenseForm.title} onChange={(event) => setExpenseForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ex: Achat de fournitures" required />
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Categorie
+                        Catégorie de dépense
                         <select className="input" value={expenseForm.categoryId} onChange={(event) => setExpenseForm((current) => ({ ...current, categoryId: event.target.value }))} required>
-                          <option value="">Choisir la categorie de la sortie</option>
-                          {leafCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                          <option value="">Choisir la catégorie analytique</option>
+                          {leafCategories.map((category) => <option key={category.id} value={category.id}>{category.accountCode} — {category.name}</option>)}
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
                         Budget associe
                         <select className="input" value={expenseForm.budgetId} onChange={(event) => setExpenseForm((current) => ({ ...current, budgetId: event.target.value }))}>
-                          <option value="">Aucun budget lie</option>
+                          <option value="">Aucun budget li?</option>
                           {budgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.name}</option>)}
                         </select>
                       </label>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Fournisseur existant
+                        Compte à débiter — ajouter
+                        <select className="input" value={expenseForm.debitAccountCode} onChange={(event) => setExpenseForm((current) => ({ ...current, debitAccountCode: event.target.value }))} required>
+                          <option value="">Choisir le compte à débiter</option>
+                          {SCHOOL_ACCOUNT_OPTIONS.map((group) => (
+                            <optgroup key={`debit-${group.group}`} label={group.group}>
+                              {group.accounts.map((account) => <option key={`debit-${group.group}-${account.code}`} value={account.code}>{account.code} — {account.label}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        Compte à créditer — soustraire
+                        <select className="input" value={expenseForm.creditAccountCode} onChange={(event) => setExpenseForm((current) => ({ ...current, creditAccountCode: event.target.value }))} required>
+                          <option value="">Choisir le compte à créditer</option>
+                          {SCHOOL_ACCOUNT_OPTIONS.map((group) => (
+                            <optgroup key={`credit-${group.group}`} label={group.group}>
+                              {group.accounts.map((account) => <option key={`credit-${group.group}-${account.code}`} value={account.code}>{account.code} — {account.label}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        Beneficiaire repertorie
                         <select className="input" value={expenseForm.vendorId} onChange={(event) => setExpenseForm((current) => ({ ...current, vendorId: event.target.value }))}>
-                          <option value="">Aucun fournisseur existant</option>
+                          <option value="">Aucun beneficiaire existant</option>
                           {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Fournisseur libre
-                        <input className="input" value={expenseForm.supplierName} onChange={(event) => setExpenseForm((current) => ({ ...current, supplierName: event.target.value }))} placeholder="Nom si le fournisseur n'existe pas encore" />
+                        Beneficiaire libre
+                        <input className="input" value={expenseForm.beneficiaryName} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryName: event.target.value, supplierName: event.target.value }))} placeholder="Nom de la personne, societe ou compte paye" />
+                      </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        Contact beneficiaire
+                        <input className="input" value={expenseForm.beneficiaryContact} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryContact: event.target.value }))} placeholder="Telephone, email ou contact" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        Compte / wallet
+                        <input className="input" value={expenseForm.beneficiaryAccount} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryAccount: event.target.value }))} placeholder="IBAN, compte, MPESA, Airtel..." />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        Référence paiement
+                        <input className="input" value={expenseForm.beneficiaryRéférence} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryRéférence: event.target.value }))} placeholder="Cheque, facture, transaction" />
                       </label>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1881,7 +2789,7 @@ export function FinancialOperationsPage() {
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
                         Mode de paiement
                         <select className="input" value={expenseForm.paymentMethod} onChange={(event) => setExpenseForm((current) => ({ ...current, paymentMethod: event.target.value }))}>
-                          <option value="">Non precise</option>
+                          <option value="">Non précisé</option>
                           {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
                         </select>
                       </label>
@@ -1890,14 +2798,19 @@ export function FinancialOperationsPage() {
                         <input className="input" type="date" value={expenseForm.expenseDate} onChange={(event) => setExpenseForm((current) => ({ ...current, expenseDate: event.target.value }))} required />
                       </label>
                     </div>
+                    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">Prévisualisation de l'écriture</p>
+                      <p className="mt-2 text-xs text-cyan-100">Convention EduPay : débiter ajoute le montant au compte ; créditer soustrait le montant du compte.</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2"><p className="rounded-xl bg-slate-950/40 p-3 text-white"><span className="text-ink-dim">Débit · + {expenseForm.amount || "0"}</span><br/><strong>{selectedDebitAccount?.code || "—"} · {selectedDebitAccount?.label || "Compte à débiter à sélectionner"}</strong></p><p className="rounded-xl bg-slate-950/40 p-3 text-white"><span className="text-ink-dim">Crédit · − {expenseForm.amount || "0"}</span><br/><strong>{selectedCreditAccount?.code || "—"} · {selectedCreditAccount?.label || "Compte à créditer à sélectionner"}</strong></p></div>
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
                         Nom de la piece
                         <input className="input" value={expenseForm.attachmentName} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentName: event.target.value }))} placeholder="Ex: Facture, bon de livraison" />
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Reference document
-                        <input className="input" value={expenseForm.attachmentUrl} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentUrl: event.target.value }))} placeholder="URL, numero ou reference interne" />
+                        Référence document
+                        <input className="input" value={expenseForm.attachmentUrl} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentUrl: event.target.value }))} placeholder="URL, numéro ou référence interne" />
                       </label>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -1936,9 +2849,10 @@ export function FinancialOperationsPage() {
           )}
 
           {activeSubDialog === "vendor-create" && canWrite && (
-            <OperationsSubDialog title="Nouveau fournisseur" subtitle="Creer un tiers payable pour les achats, abonnements et utilities." onClose={() => setActiveSubDialog(null)}>
+            <OperationsSubDialog title="Nouveau fournisseur" subtitle="Créer un tiers payable pour les achats, abonnements et utilities." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-3" onSubmit={handleCreateVendor}>
                     <input className="input" value={vendorForm.name} onChange={(event) => setVendorForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nom fournisseur" required />
+                    <input className="input" value={vendorForm.contactName} onChange={(event) => setVendorForm((current) => ({ ...current, contactName: event.target.value }))} placeholder="Personne contact" />
                     <input className="input" value={vendorForm.phone} onChange={(event) => setVendorForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Telephone" />
                     <input className="input" value={vendorForm.email} onChange={(event) => setVendorForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" />
                     <input className="input" value={vendorForm.address} onChange={(event) => setVendorForm((current) => ({ ...current, address: event.target.value }))} placeholder="Adresse" />
@@ -1949,13 +2863,102 @@ export function FinancialOperationsPage() {
               </form>
             </OperationsSubDialog>
           )}
+
+          {activeSubDialog === "vendor-registry" && (
+            <OperationsSubDialog title="Base fournisseurs" subtitle="Registre consultable des tiers payables, avec lecture, modification, suppression et recherche strategique." onClose={() => { setActiveSubDialog(null); setEditingVendorId(null); }}>
+              <div className="grid gap-4">
+                <SearchField
+                  value={vendorSearch}
+                  onChange={(event) => setVendorSearch(event.target.value)}
+                  placeholder="Recherche fournisseur, contact, telephone, email, departement, montant ou note"
+                />
+                <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+                  <div className="max-h-[56vh] space-y-2 overflow-auto pr-1">
+                    {filteredVendors.map((vendor) => {
+                      const usage = vendorUsage[vendor.id];
+                      const isSelected = selectedVendorId === vendor.id;
+                      return (
+                        <div key={vendor.id} className={`rounded-2xl border p-3 transition ${isSelected ? "border-brand-300/40 bg-brand-500/10" : "border-white/10 bg-slate-950/35 hover:border-white/20"}`}>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-white">{vendor.name}</p>
+                              <p className="mt-1 text-xs text-ink-dim">{vendor.contactName || vendor.phone || vendor.email || "Contact non renseigne"}</p>
+                            </div>
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-semibold text-ink-dim">{usage?.count ?? 0} depense(s)</span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button type="button" onClick={() => { setSelectedVendorId(vendor.id); setEditingVendorId(null); }} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10">
+                              <Eye className="h-3.5 w-3.5" /> Voir
+                            </button>
+                            {canWrite && (
+                              <>
+                                <button type="button" onClick={() => beginVendorEdit(vendor)} className="inline-flex items-center gap-1 rounded-lg border border-cyan-300/20 bg-cyan-500/10 px-2 py-1 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20">
+                                  <Pencil className="h-3.5 w-3.5" /> Modifier
+                                </button>
+                                <button type="button" disabled={submittingKey === `vendor-delete-${vendor.id}`} onClick={() => void handleDeleteVendor(vendor)} className="inline-flex items-center gap-1 rounded-lg border border-red-300/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-100 hover:bg-red-500/20 disabled:opacity-60">
+                                  <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!filteredVendors.length && <p className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-ink-dim">Aucun fournisseur ne correspond a cette recherche.</p>}
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    {editingVendorId ? (
+                      <form className="grid gap-3" onSubmit={handleUpdateVendor}>
+                        <p className="text-sm font-semibold text-white">Modification fournisseur</p>
+                        <input className="input" value={vendorEditForm.name} onChange={(event) => setVendorEditForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nom fournisseur" required />
+                        <input className="input" value={vendorEditForm.contactName} onChange={(event) => setVendorEditForm((current) => ({ ...current, contactName: event.target.value }))} placeholder="Personne contact" />
+                        <input className="input" value={vendorEditForm.phone} onChange={(event) => setVendorEditForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Telephone" />
+                        <input className="input" value={vendorEditForm.email} onChange={(event) => setVendorEditForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" />
+                        <input className="input" value={vendorEditForm.address} onChange={(event) => setVendorEditForm((current) => ({ ...current, address: event.target.value }))} placeholder="Adresse" />
+                        <textarea className="input min-h-24" value={vendorEditForm.notes} onChange={(event) => setVendorEditForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes fournisseur" />
+                        <div className="flex flex-wrap gap-2">
+                          <button type="submit" disabled={submittingKey === "vendor-update"} className="btn-primary px-4 py-2 text-sm font-semibold disabled:opacity-60">Enregistrer</button>
+                          <button type="button" onClick={() => setEditingVendorId(null)} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">Annuler</button>
+                        </div>
+                      </form>
+                    ) : selectedVendor ? (
+                      <div className="grid gap-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-dim">Fiche fournisseur</p>
+                          <h3 className="mt-1 text-2xl font-bold text-white">{selectedVendor.name}</h3>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <InfoPill label="Contact" value={selectedVendor.contactName || "Non renseigne"} />
+                          <InfoPill label="Telephone" value={selectedVendor.phone || "Non renseigne"} />
+                          <InfoPill label="Email" value={selectedVendor.email || "Non renseigne"} />
+                          <InfoPill label="Adresse" value={selectedVendor.address || "Non renseigne"} />
+                          <InfoPill label="Dépenses liees" value={String(vendorUsage[selectedVendor.id]?.count ?? 0)} />
+                          <InfoPill label="Volume total" value={currency.format(vendorUsage[selectedVendor.id]?.total ?? 0)} />
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">Departements touches</p>
+                          <p className="mt-2 text-sm text-white">{vendorUsage[selectedVendor.id] ? Array.from(vendorUsage[selectedVendor.id].departments).join(", ") : "Aucun historique"}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">Notes</p>
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-ink-dim">{selectedVendor.notes || "Aucune note."}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-ink-dim">Sélectionnez un fournisseur pour afficher sa fiche détaillée.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </OperationsSubDialog>
+          )}
         </div>
       )}
 
       {activeTab === "budgets" && (
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           {canWrite && (
-            <SectionCard title="Arborescence budgetaire" subtitle="Les actions d'ecriture s'ouvrent dans une boite dediee, le suivi reste visible.">
+            <SectionCard title="Arborescence budgétaire" subtitle="Les actions d'écriture s'ouvrent dans une boîte dédiée, le suivi reste visible.">
               <div className="grid gap-3">
                 <ActionNodeCard
                   title="Nouveau budget"
@@ -1984,7 +2987,7 @@ export function FinancialOperationsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-white">{budget.name}</p>
-                      <p className="mt-1 text-xs text-ink-dim">{budget.department} • {budget.period?.name ?? "Periode active"} • {budget.category?.name ?? "Budget global"}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{budget.department} • {budget.period?.name ?? "Période active"} • {budget.category?.name ?? "Budget global"}</p>
                     </div>
                     <StatusBadge value={budget.status} />
                   </div>
@@ -2029,11 +3032,35 @@ export function FinancialOperationsPage() {
                   />
                   <ActionNodeCard
                     title="Lancer une paie"
-                    subtitle="Generer un run depuis les profils salariaux actifs."
+                    subtitle="Générer un run depuis les profils salariaux actifs."
                     detail={`${payrollRuns.length} run(s)`}
                     icon={CircleDollarSign}
                     tone="border-emerald-300/25 bg-emerald-500/10 text-emerald-100"
-                    onClick={() => setActiveSubDialog("payroll-run-create")}
+                    onClick={openPayrollRunDialog}
+                  />
+                  <ActionNodeCard
+                    title="Avance sur salaire"
+                    subtitle="Décaisser une avance à un employé et générer le reçu."
+                    detail={currency.format(employeeFinanceTotals.advances)}
+                    icon={WalletCards}
+                    tone="border-cyan-300/25 bg-cyan-500/10 text-cyan-100"
+                    onClick={() => openEmployeeObligationDialog("SALARY_ADVANCE")}
+                  />
+                  <ActionNodeCard
+                    title="Dette employé"
+                    subtitle="Enregistrer une dette ou une obligation envers l'école."
+                    detail={currency.format(employeeFinanceTotals.debts)}
+                    icon={FilePlus2}
+                    tone="border-amber-300/25 bg-amber-500/10 text-amber-100"
+                    onClick={() => openEmployeeObligationDialog("SCHOOL_DEBT")}
+                  />
+                  <ActionNodeCard
+                    title="Remboursement"
+                    subtitle="Encaisser une échéance et produire un reçu de paiement."
+                    detail={`${openEmployeeRepayments.length} échéance(s) ouverte(s)`}
+                    icon={ReceiptText}
+                    tone="border-violet-300/25 bg-violet-500/10 text-violet-100"
+                    onClick={openEmployeeRepaymentDialog}
                   />
                 </div>
               </SectionCard>
@@ -2057,17 +3084,43 @@ export function FinancialOperationsPage() {
                 ))}
               </div>
             </SectionCard>
+            <SectionCard title="Finance employé" subtitle="Avances, dettes, remboursements et reçus liés à la paie.">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <InfoPill label="Solde ouvert" value={currency.format(employeeFinanceTotals.totalBalance)} />
+                <InfoPill label="Avances" value={currency.format(employeeFinanceTotals.advances)} />
+                <InfoPill label="Dettes" value={currency.format(employeeFinanceTotals.debts)} />
+              </div>
+              <div className="mt-4 space-y-3">
+                {employeeObligations.slice(0, 5).map((obligation) => (
+                  <div key={obligation.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">{obligation.title}</p>
+                        <p className="mt-1 text-xs text-ink-dim">
+                          {obligation.salaryProfile?.fullName ?? salaryProfiles.find((profile) => profile.id === obligation.salaryProfileId)?.fullName ?? "Employé"} • {obligation.type} • {obligation.status}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm font-bold text-white">{currency.format(Number(obligation.balance || 0))}</p>
+                        <p className="text-xs text-ink-dim">{obligation.receipt?.receiptNumber ?? "Reçu disponible après création"}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!employeeObligations.length && <p className="text-sm text-ink-dim">Aucune avance, dette ou échéance employé n'est encore enregistrée.</p>}
+              </div>
+            </SectionCard>
           </div>
 
           <div className="space-y-6">
-            <SectionCard title="Historique de paie" subtitle="Runs generes, masse nette et nombre de bulletins salaries.">
+            <SectionCard title="Fiches de paie disponibles" subtitle="Chaque salarié d'un run possède ici son bulletin consultable, imprimable en PDF et exportable en Excel.">
               <div className="space-y-3">
                 {payrollRuns.map((run) => (
                   <article key={run.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{run.title}</p>
-                        <p className="mt-1 text-xs text-ink-dim">{run.department || "Tous departements"} • {run.period?.name ?? "Periode active"} • {labelizeFrequency(run.frequency)}</p>
+                        <p className="mt-1 text-xs text-ink-dim">{run.department || "Tous departements"} • {run.period?.name ?? "Période active"} • {labelizeFrequency(run.frequency)}</p>
                       </div>
                       <StatusBadge value={run.status} />
                     </div>
@@ -2085,27 +3138,42 @@ export function FinancialOperationsPage() {
                         <p className="font-semibold text-cyan-200">{run.items.length}</p>
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink-dim">
-                      {run.items.slice(0, 4).map((item) => (
-                        <div key={item.id} className="flex flex-wrap items-center gap-2">
+                    <div className="mt-4 grid gap-2">
+                      {run.items.map((item) => (
+                        <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{item.salaryProfile.fullName}</p>
+                            <p className="mt-1 text-xs text-ink-dim">{item.salarySlipNumber} • Net {currency.format(item.netSalary)}</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
                           <button
-                            onClick={() => printSalarySlip(run, item)}
-                            className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 hover:border-brand-300/25 hover:text-white"
+                            type="button"
+                            onClick={() => openPayslipPreview(run, item)}
+                            className="inline-flex items-center gap-1 rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
                           >
-                            {item.salaryProfile.fullName} • {item.salarySlipNumber}
+                            <Eye className="h-3.5 w-3.5" /> Bulletin de paie
                           </button>
                           <button
+                            type="button"
+                            onClick={() => printSalarySlip(run, item)}
+                            className="inline-flex items-center gap-1 rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-500/20"
+                          >
+                            <Printer className="h-3.5 w-3.5" /> Imprimer / PDF
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => exportSalarySlipExcel(run, item)}
-                            className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-emerald-200 hover:bg-emerald-500/20"
+                            className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
                           >
                             <Download className="h-3.5 w-3.5" /> Excel
                           </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </article>
                 ))}
-                {!payrollRuns.length && <p className="text-sm text-ink-dim">Aucun run de paie genere pour l'instant.</p>}
+                {!payrollRuns.length && <p className="text-sm text-ink-dim">Aucun run de paie généré pour l'instant.</p>}
               </div>
             </SectionCard>
           </div>
@@ -2187,19 +3255,194 @@ export function FinancialOperationsPage() {
           )}
 
           {activeSubDialog === "payroll-run-create" && canWrite && (
-            <OperationsSubDialog title="Lancer une paie" subtitle="Genere un run avec calcul net et sorties de cash correspondantes." onClose={() => setActiveSubDialog(null)}>
-              <form className="grid gap-3" onSubmit={handleCreatePayrollRun}>
-                <input className="input" value={payrollForm.title} onChange={(event) => setPayrollForm((current) => ({ ...current, title: event.target.value }))} placeholder="Titre du run" required />
+            <OperationsSubDialog title="Générer la paie" subtitle="Calcule la paie, crée les écritures et produit immédiatement une fiche par salarié." onClose={() => setActiveSubDialog(null)}>
+              <form className="grid gap-4" onSubmit={handleCreatePayrollRun}>
+                {actionError && <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">{actionError}</div>}
+                <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                  Intitulé de la paie
+                  <input className="input" value={payrollForm.title} onChange={(event) => setPayrollForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ex : Paie Août 2026" required />
+                </label>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <input className="input" value={payrollForm.department} onChange={(event) => setPayrollForm((current) => ({ ...current, department: event.target.value }))} placeholder="Departement cible (optionnel)" />
-                  <select className="input" value={payrollForm.frequency} onChange={(event) => setPayrollForm((current) => ({ ...current, frequency: event.target.value }))}>
-                    {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency)}</option>)}
-                  </select>
+                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                    Département
+                    <select className="input" value={payrollForm.department} onChange={(event) => setPayrollForm((current) => ({ ...current, department: event.target.value }))}>
+                      <option value="">Tous les départements</option>
+                      {payrollDepartments.map((department) => <option key={department} value={department}>{department}</option>)}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                    Fréquence
+                    <select className="input" value={payrollForm.frequency} onChange={(event) => setPayrollForm((current) => ({ ...current, frequency: event.target.value }))}>
+                      {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency)}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+                  {eligiblePayrollProfiles.length} salarié(s) actif(s) seront inclus et recevront chacun une fiche de paie.
                 </div>
                 <textarea className="input min-h-24" value={payrollForm.notes} onChange={(event) => setPayrollForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes du run" />
-                <button type="submit" disabled={submittingKey === "payroll"} className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-500/20 disabled:opacity-60">
-                  Generer la paie
+                <button type="submit" disabled={submittingKey === "payroll" || !eligiblePayrollProfiles.length} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
+                  {submittingKey === "payroll" ? "Génération en cours..." : `Générer la paie et ${eligiblePayrollProfiles.length} fiche(s)`}
                 </button>
+              </form>
+            </OperationsSubDialog>
+          )}
+          {activeSubDialog === "payslip-preview" && selectedPayslip && (
+            <OperationsSubDialog
+              title={`Bulletin de paie • ${selectedPayslip.item.salaryProfile.fullName}`}
+              subtitle={`${selectedPayslip.item.salarySlipNumber} • ${selectedPayslip.run.period?.name ?? "Période active"}`}
+              onClose={() => { setActiveSubDialog(null); setSelectedPayslip(null); }}
+            >
+              <div className="grid gap-5">
+                <div className="rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-cyan-500/15 to-blue-600/10 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Bulletin de paie officiel</p>
+                      <h4 className="mt-2 font-display text-2xl font-bold text-white">{selectedPayslip.item.salaryProfile.fullName}</h4>
+                      <p className="mt-1 text-sm text-ink-dim">{selectedPayslip.item.salaryProfile.employeeCode} • {selectedPayslip.item.salaryProfile.position} • {selectedPayslip.item.salaryProfile.department}</p>
+                    </div>
+                    <StatusBadge value={selectedPayslip.run.status} />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    { label: "Salaire de base", value: currency.format(selectedPayslip.item.baseSalary), tone: "text-white" },
+                    { label: "Primes et bonus", value: currency.format(selectedPayslip.item.bonuses), tone: "text-emerald-200" },
+                    { label: "Total retenues", value: currency.format(Number(selectedPayslip.item.deductions || 0) + Number(selectedPayslip.item.advancesRecovered || 0) + Number(selectedPayslip.item.debtRecovered || 0)), tone: "text-amber-200" },
+                    { label: "Net à payer", value: currency.format(selectedPayslip.item.netSalary), tone: "text-cyan-200" }
+                  ].map((metric) => (
+                    <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{metric.label}</p>
+                      <p className={`mt-2 text-lg font-black ${metric.tone}`}>{metric.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-white/10">
+                  <table className="w-full text-sm">
+                    <tbody className="divide-y divide-white/10">
+                      <tr><td className="px-4 py-3 text-ink-dim">Salaire brut</td><td className="px-4 py-3 text-right font-semibold text-white">{currency.format(Number(selectedPayslip.item.baseSalary || 0) + Number(selectedPayslip.item.bonuses || 0))}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">Retenues ordinaires</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.deductions)}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">Avances récupérées</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.advancesRecovered)}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">Dettes récupérées</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.debtRecovered)}</td></tr>
+                      <tr className="bg-cyan-500/10"><td className="px-4 py-4 font-bold text-white">Net à payer</td><td className="px-4 py-4 text-right text-lg font-black text-cyan-200">{currency.format(selectedPayslip.item.netSalary)}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button type="button" onClick={() => exportSalarySlipExcel(selectedPayslip.run, selectedPayslip.item)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20">
+                    <Download className="h-4 w-4" /> Exporter Excel
+                  </button>
+                  <button type="button" onClick={() => printSalarySlip(selectedPayslip.run, selectedPayslip.item)} className="btn-primary justify-center px-5 py-3 text-sm font-semibold">
+                    <Printer className="h-4 w-4" /> Imprimer / enregistrer en PDF
+                  </button>
+                </div>
+              </div>
+            </OperationsSubDialog>
+          )}
+          {(activeSubDialog === "employee-advance-create" || activeSubDialog === "employee-debt-create") && canWrite && (
+            <OperationsSubDialog
+              title={activeSubDialog === "employee-advance-create" ? "Avance sur salaire" : "Dette employé"}
+              subtitle="Cette opération crée une écriture comptable, une ligne de trésorerie et un reçu."
+              onClose={() => setActiveSubDialog(null)}
+            >
+              <form className="grid gap-5" onSubmit={handleCreateEmployeeObligation}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                    Employé
+                    <select className="input" value={employeeObligationForm.salaryProfileId} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, salaryProfileId: event.target.value }))} required>
+                      <option value="">Sélectionner un profil salarial</option>
+                      {salaryProfiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>{profile.fullName} - {profile.employeeCode}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                    Type
+                    <select className="input" value={employeeObligationForm.type} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, type: event.target.value }))}>
+                      <option value="SALARY_ADVANCE">Avance sur salaire</option>
+                      <option value="SCHOOL_DEBT">Dette envers l'école</option>
+                      <option value="OTHER_DEBT">Autre dette</option>
+                    </select>
+                  </label>
+                </div>
+
+                <input className="input" value={employeeObligationForm.title} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, title: event.target.value }))} placeholder="Titre de l'opération" required />
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <input className="input" type="number" min="0" step="0.01" value={employeeObligationForm.principalAmount} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, principalAmount: event.target.value }))} placeholder="Montant" required />
+                  <input className="input" type="number" min="0" step="0.01" value={employeeObligationForm.installmentAmount} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, installmentAmount: event.target.value }))} placeholder="Échéance" required />
+                  <select className="input" value={employeeObligationForm.disbursementMethod} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, disbursementMethod: event.target.value }))}>
+                    {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
+                  </select>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <select className="input" value={employeeObligationForm.repaymentMethod} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, repaymentMethod: event.target.value }))}>
+                    <option value="SALARY_DEDUCTION">Déduction sur salaire</option>
+                    <option value="EXTERNAL_PAYMENT">Paiement hors salaire</option>
+                    <option value="MIXED">Mixte</option>
+                  </select>
+                  <input className="input" type="date" value={employeeObligationForm.startDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, startDate: event.target.value }))} required />
+                  <input className="input" type="date" value={employeeObligationForm.dueDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, dueDate: event.target.value }))} required />
+                </div>
+
+                <textarea className="input min-h-24" value={employeeObligationForm.notes} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes de validation, motif ou référence interne" />
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button type="button" onClick={() => setActiveSubDialog(null)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white hover:border-brand-300/30 hover:bg-brand-500/10">
+                    Annuler
+                  </button>
+                  <button type="submit" disabled={submittingKey === "employee-obligation"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
+                    Enregistrer et générer le reçu
+                  </button>
+                </div>
+              </form>
+            </OperationsSubDialog>
+          )}
+
+          {activeSubDialog === "employee-repayment-create" && canWrite && (
+            <OperationsSubDialog title="Remboursement employé" subtitle="Encaisser une échéance ouverte et générer le reçu de paiement." onClose={() => setActiveSubDialog(null)}>
+              <form className="grid gap-5" onSubmit={handleRecordEmployeeRepayment}>
+                <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                  Échéance à encaisser
+                  <select className="input" value={employeeRepaymentForm.repaymentId} onChange={(event) => {
+                    const selected = openEmployeeRepayments.find((entry) => entry.repayment.id === event.target.value);
+                    setEmployeeRepaymentForm((current) => ({
+                      ...current,
+                      repaymentId: event.target.value,
+                      paidAmount: selected ? String(Math.max(Number(selected.repayment.expectedAmount || 0) - Number(selected.repayment.paidAmount || 0), 0)) : current.paidAmount
+                    }));
+                  }} required>
+                    <option value="">Sélectionner une échéance</option>
+                    {openEmployeeRepayments.map(({ obligation, repayment }) => (
+                      <option key={repayment.id} value={repayment.id}>
+                        {(obligation.salaryProfile?.fullName ?? salaryProfiles.find((profile) => profile.id === obligation.salaryProfileId)?.fullName ?? "Employé")} - {obligation.title} - {currency.format(Math.max(Number(repayment.expectedAmount || 0) - Number(repayment.paidAmount || 0), 0))}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <input className="input" type="number" min="0" step="0.01" value={employeeRepaymentForm.paidAmount} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder="Montant payé" required />
+                  <select className="input" value={employeeRepaymentForm.paymentMethod} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, paymentMethod: event.target.value }))}>
+                    {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
+                  </select>
+                  <input className="input" value={employeeRepaymentForm.reference} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Référence paiement" />
+                </div>
+
+                <textarea className="input min-h-24" value={employeeRepaymentForm.notes} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes de caisse ou observation" />
+
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button type="button" onClick={() => setActiveSubDialog(null)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white hover:border-brand-300/30 hover:bg-brand-500/10">
+                    Annuler
+                  </button>
+                  <button type="submit" disabled={submittingKey === "employee-repayment"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
+                    Encaisser et générer le reçu
+                  </button>
+                </div>
               </form>
             </OperationsSubDialog>
           )}
@@ -2304,13 +3547,14 @@ export function FinancialOperationsPage() {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink-dim">
+                    {entry.metadata?.debitAccountCode && <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-1 text-cyan-100">Débit {entry.metadata.debitAccountCode} · Crédit {entry.metadata.creditAccountCode || "-"}</span>}
                     {entry.expense && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Depense: {entry.expense.title}</span>}
                     {entry.payrollRun && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Run: {entry.payrollRun.title}</span>}
                     {entry.payrollItem && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Fiche: {entry.payrollItem.salarySlipNumber}</span>}
                   </div>
                 </article>
               ))}
-              {!filteredAccountingEntries.length && <p className="text-sm text-ink-dim">Aucune ecriture comptable disponible pour le filtre actuel.</p>}
+              {!filteredAccountingEntries.length && <p className="text-sm text-ink-dim">Aucune écriture comptable disponible pour le filtre actuel.</p>}
             </div>
           </SectionCard>
         </div>
@@ -2318,10 +3562,10 @@ export function FinancialOperationsPage() {
 
       {activeTab === "cashflow" && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <SectionCard title="Tresorerie" subtitle="Journal des sorties et mouvements de cash relies aux operations financieres.">
+          <SectionCard title="Trésorerie" subtitle="Journal des sorties et mouvements de cash reliés aux opérations financières.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Lignes de tresorerie</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Lignes de trésorerie</p>
                 <p className="mt-2 text-2xl font-bold text-white">{cashflowEntries.length}</p>
                 <p className="mt-2 text-xs text-ink-dim">Nombre d'enregistrements utilisés pour la lecture de cashflow.</p>
               </div>
@@ -2358,14 +3602,32 @@ export function FinancialOperationsPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Journal de cashflow" subtitle="Reference, source, moyen de paiement et notes operationnelles.">
-            <div className="mb-4 flex flex-wrap gap-3">
-              <SearchField value={cashflowSearch} onChange={(event) => setCashflowSearch(event.target.value)} placeholder="Rechercher une source, une méthode, une référence ou une note..." />
-              <select value={cashflowSourceFilter} onChange={(event) => setCashflowSourceFilter(event.target.value)} className="input min-w-[220px]">
+          <SectionCard title="Journal de cashflow" subtitle="Référence, source, moyen de paiement et notes opérationnelles.">
+            <div className="mb-4 grid gap-2 xl:grid-cols-[minmax(180px,0.7fr)_auto_auto]">
+              <SearchField
+                value={cashflowSearch}
+                onChange={(event) => setCashflowSearch(event.target.value)}
+                placeholder="Recherche fine..."
+                wrapperClassName="max-w-xl"
+                inputClassName="h-9 text-xs"
+              />
+              <select value={cashflowSourceFilter} onChange={(event) => setCashflowSourceFilter(event.target.value)} className="input h-9 min-w-[180px] text-xs">
                 <option value="ALL">Toutes les sources</option>
                 {cashflowSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
               </select>
+              <select value={cashflowPeriodFilter} onChange={(event) => setCashflowPeriodFilter(event.target.value)} className="input h-9 min-w-[180px] text-xs">
+                {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{period.label}</option>)}
+              </select>
             </div>
+            {cashflowPeriodFilter === "CUSTOM" && (
+              <div className="mb-4 grid gap-2 sm:grid-cols-2">
+                <input className="input h-9 text-xs" type="date" value={cashflowDateFrom} onChange={(event) => setCashflowDateFrom(event.target.value)} aria-label="Date début trésorerie" />
+                <input className="input h-9 text-xs" type="date" value={cashflowDateTo} onChange={(event) => setCashflowDateTo(event.target.value)} aria-label="Date fin trésorerie" />
+              </div>
+            )}
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">
+              Periodicite appliquee: {periodLabel(cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo)} - {filteredCashflowEntries.length} ligne(s)
+            </p>
             <div className="mb-4 grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">Répartition par source</p>
@@ -2406,7 +3668,7 @@ export function FinancialOperationsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-white">{entry.sourceType}</p>
-                      <p className="mt-1 text-xs text-ink-dim">{new Date(entry.referenceDate).toLocaleDateString("fr-FR")} • {entry.method || "Sans methode"}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{new Date(entry.référenceDate).toLocaleDateString("fr-FR")} • {entry.method || "Sans methode"}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge value={entry.direction} />
@@ -2421,7 +3683,7 @@ export function FinancialOperationsPage() {
                   {entry.notes && <p className="mt-3 text-sm text-ink-dim">{entry.notes}</p>}
                 </article>
               ))}
-              {!filteredCashflowEntries.length && <p className="text-sm text-ink-dim">Aucun mouvement de tresorerie disponible pour le filtre actuel.</p>}
+              {!filteredCashflowEntries.length && <p className="text-sm text-ink-dim">Aucun mouvement de trésorerie disponible pour le filtre actuel.</p>}
             </div>
           </SectionCard>
         </div>
@@ -2429,18 +3691,18 @@ export function FinancialOperationsPage() {
 
       {activeTab === "documents" && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <SectionCard title="Depot documentaire" subtitle="Toutes les pieces justificatives attachees aux depenses sont visibles ici.">
+          <SectionCard title="Depot documentaire" subtitle="Toutes les pieces justificatives attachées aux depenses sont visibles ici.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Documents indexes</p>
                 <p className="mt-2 text-2xl font-bold text-white">{documentEntries.length}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Depenses documentees</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Dépenses documentees</p>
                 <p className="mt-2 text-2xl font-bold text-white">{expenses.filter((expense) => (expense.attachments?.length ?? 0) > 0).length}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-ink-dim">
-                Ajoutez des justificatifs depuis l'onglet Depenses avec un vrai upload de fichiers ou une reference URL.
+                Ajoutez des justificatifs depuis l'onglet Dépenses avec un vrai upload de fichiers ou une référence URL.
               </div>
             </div>
           </SectionCard>
@@ -2457,11 +3719,11 @@ export function FinancialOperationsPage() {
                     <StatusBadge value={entry.status} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button onClick={() => openDocument(entry.fileUrl)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">
+                    <button onClick={() => openExpenseSupportDocument(entry)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">
                       Ouvrir
                     </button>
-                    <button onClick={() => downloadDocument(entry)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">
-                      Telecharger
+                    <button onClick={() => downloadExpenseSupportDocument(entry)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">
+                      Télécharger
                     </button>
                   </div>
                 </article>

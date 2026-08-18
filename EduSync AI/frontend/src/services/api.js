@@ -50,24 +50,62 @@ const demoState = {
   directory: {
     parents: [
       {
-        id: "demo-parent-1",
+        id: "parent-kabongo",
         displayId: "PAR-DEMO-001",
-        fullName: "Parent Demo Alpha",
-        email: "parent.alpha@school.demo",
-        phone: "+243000001",
-        studentIds: ["STU-DEMO-001"],
+        fullName: "Rachel Kabongo",
+        email: "rachel.kabongo@kcs.local",
+        phone: "+243812450221",
+        studentIds: ["stu-elise", "stu-david"],
       },
       {
-        id: "demo-parent-2",
+        id: "parent-mbuyi",
         displayId: "PAR-DEMO-002",
-        fullName: "Parent Demo Beta",
-        email: "parent.beta@school.demo",
-        phone: "+243000002",
-        studentIds: ["STU-DEMO-002"],
+        fullName: "Mireille Mbuyi",
+        email: "mireille.mbuyi@kcs.local",
+        phone: "+243899120882",
+        studentIds: ["stu-amani"],
+      },
+      {
+        id: "parent-ilunga",
+        displayId: "PAR-DEMO-003",
+        fullName: "Patrick Ilunga",
+        email: "patrick.ilunga@kcs.local",
+        phone: "+243843774101",
+        studentIds: ["stu-naomi"],
+      },
+      {
+        id: "parent-kalala",
+        displayId: "PAR-DEMO-004",
+        fullName: "Claire Kalala",
+        email: "claire.kalala@kcs.local",
+        phone: "+243815330477",
+        studentIds: ["stu-sarah"],
+      },
+      {
+        id: "parent-banza",
+        displayId: "PAR-DEMO-005",
+        fullName: "Beatrice Banza",
+        email: "beatrice.banza@kcs.local",
+        phone: "+243817444909",
+        studentIds: ["stu-joel"],
       },
     ],
-    students: [],
-    teachers: [],
+    students: [
+      { id: "stu-jeremie", fullName: "Jeremie Lumbu", studentNumber: "K3-001", className: "K3", parentId: "parent-lumbu" },
+      { id: "stu-malia", fullName: "Malia Tshibangu", studentNumber: "K3-002", className: "K3", parentId: "parent-tshibangu" },
+      { id: "stu-elise", fullName: "Elise Kabongo", className: "Grade 11A", parentId: "parent-kabongo" },
+      { id: "stu-david", fullName: "David Kabongo", className: "Grade 8B", parentId: "parent-kabongo" },
+      { id: "stu-amani", fullName: "Amani Mbuyi", className: "Grade 10A", parentId: "parent-mbuyi" },
+      { id: "stu-naomi", fullName: "Naomi Ilunga", className: "Grade 7A", parentId: "parent-ilunga" },
+      { id: "stu-sarah", fullName: "Sarah Kalala", className: "Grade 6", parentId: "parent-kalala" },
+      { id: "stu-joel", fullName: "Joel Banza", className: "Grade 10B", parentId: "parent-banza" },
+    ],
+    teachers: [
+      { id: "teacher-lukusa", fullName: "M. Alain Lukusa", subject: "Mathematiques", employeeType: "teacher" },
+      { id: "teacher-moke", fullName: "Mme Chantal Moke", subject: "Francais", employeeType: "teacher" },
+      { id: "teacher-ngalula", fullName: "Dr. Peter Ngalula", subject: "Sciences", employeeType: "teacher" },
+      { id: "teacher-kalala", fullName: "Mme Esther Kalala", subject: "Anglais", employeeType: "teacher" },
+    ],
   },
 };
 
@@ -164,7 +202,7 @@ function demoResponse(path, method, body) {
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
-    const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe|systeme|ecosysteme|etat)\b/.test(
+    const isFrench = /\b(je|nous|vous|pour|avec|annonce|conge|reunion|rapport|enseignant|classe|systeme|ecosysteme|etat|francais|parle|donne|eleve|eleves|elve|elves)\b/.test(
       normalized
     );
     const ecosystemFacts = {
@@ -176,6 +214,10 @@ function demoResponse(path, method, body) {
     const spokespersonPrefix = isFrench
       ? `Voix officielle EduSync AI: je parle au nom de l'ecosysteme et je me base uniquement sur les donnees disponibles.\nEtat verifie: ${ecosystemFacts.announcements} annonces, ${ecosystemFacts.workflows} workflows en attente, ${ecosystemFacts.unread} notifications non lues. Source: donnees demo EduSync; Orbit/SAVANEX/EduPay/Nexus non confirmes dans ce mode.\n\n`
       : `Official EduSync AI voice: I speak for the ecosystem and use only available data.\nVerified state: ${ecosystemFacts.announcements} announcements, ${ecosystemFacts.workflows} pending workflows, ${ecosystemFacts.unread} unread notifications. Source: EduSync demo data; Orbit/SAVANEX/EduPay/Nexus not confirmed in this mode.\n\n`;
+    const compactGreeting = normalized.replace(/[,!?\.]/g, "").trim();
+    const isGreeting = ["hi", "hello", "hey", "bonjour", "salut", "bonsoir", "how are you", "hi how are you", "hello how are you", "comment ca va"].includes(compactGreeting);
+    const isLanguagePreference = /parle( moi)?( en)? francais|reponds en francais|speak( in)? french/.test(normalized);
+    const isUnpaidFinance = /\b(impaye|impayes|unpaid)\b|pas paye|non paye/.test(normalized);
     const details = {
       audience: normalized.includes("parent")
         ? "parents"
@@ -189,21 +231,79 @@ function demoResponse(path, method, body) {
     };
     const isDirectoryList =
       /\b(liste|lister|affiche|afficher|donne|voir|show|list|display|all)\b/.test(normalized) &&
-      /\b(parent|parents|eleve|eleves|student|students|enseignant|enseignants|teacher|teachers)\b/.test(normalized) &&
+      /\b(parent|parents|eleve|eleves|elve|elves|student|students|enseignant|enseignants|teacher|teachers|k3|k4|k5|grade)\b/.test(normalized) &&
       !/\b(paye|payes|payee|paiement|frais|solde|scolarite|finance|paid|payment|fees|balance)\b/.test(normalized);
+    const classFilter = normalized.match(/\b(k[3-5]|kg\s*[3-5]|grade\s*\d{1,2}|class\s*\d{1,2}|g\d{1,2})\b/)?.[1]
+      ?.replace(/\s+/g, " ")
+      .toUpperCase()
+      .replace("KG ", "K");
+    const directoryEntity = /\b(parent|parents)\b/.test(normalized)
+      ? "parents"
+      : /\b(enseignant|enseignants|teacher|teachers)\b/.test(normalized)
+        ? "teachers"
+        : "students";
+    const classMatches = (className = "") => {
+      if (!classFilter) return true;
+      const left = String(className).toLowerCase().replace(/\s+/g, "");
+      const right = classFilter.toLowerCase().replace(/\s+/g, "");
+      return left === right || left.startsWith(right);
+    };
     const directoryResponse = () => {
-      const rows = demoState.directory.parents;
+      const rows = (demoState.directory[directoryEntity] || [])
+        .filter((item) => directoryEntity !== "students" || classMatches(item.className));
+      const title = isFrench
+        ? directoryEntity === "parents"
+          ? "Liste des parents de l'ecole"
+          : directoryEntity === "teachers"
+            ? "Liste des enseignants/employes de l'ecole"
+            : `Liste des eleves ${classFilter ? `de ${classFilter}` : "de l'ecole"}`
+        : directoryEntity === "parents"
+          ? "School parent list"
+          : directoryEntity === "teachers"
+            ? "School teacher/employee list"
+            : `School student list${classFilter ? ` for ${classFilter}` : ""}`;
+      if (!rows.length) {
+        return isFrench
+          ? `Repertoire demo disponible, mais aucun enregistrement ${directoryEntity === "students" ? "eleve" : directoryEntity}${classFilter ? ` de ${classFilter}` : ""} n'est visible.\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
+          : `Demo directory is available, but no ${directoryEntity}${classFilter ? ` in ${classFilter}` : ""} record is visible.\n\nSource: EduSync demo data. I did not invent names.`;
+      }
       const table = rows
-        .map((parent) => `- ${parent.fullName} | ${parent.displayId} | ${parent.email} | ${parent.phone} | ${parent.studentIds.join(", ")}`)
+        .map((item) => {
+          const id = item.displayId || item.studentNumber || item.employeeId || item.id || "-";
+          const email = item.email || "-";
+          const phone = item.phone || "-";
+          const relation = directoryEntity === "students"
+            ? item.className || "-"
+            : directoryEntity === "teachers"
+              ? item.subject || item.department || item.jobTitle || "-"
+              : (item.studentIds || []).join(", ");
+          return `- ${item.fullName} | ${id} | ${email} | ${phone} | ${relation || "-"}`;
+        })
         .join("\n");
       return isFrench
-        ? `Liste des parents de l'ecole (${rows.length} visible(s) dans le contexte demo):\n\nNom | Identifiant | Email | Telephone | Eleves lies\n${table}\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
-        : `School parent list (${rows.length} visible in demo context):\n\nName | ID | Email | Phone | Linked students\n${table}\n\nSource: EduSync demo data. I did not invent names.`;
+        ? `${title} (${rows.length} visible(s) dans le contexte demo):\n\nNom | Identifiant | Email | Telephone | Classe/Relation\n${table}\n\nSource: donnees demo EduSync. Je n'ai pas invente de noms.`
+        : `${title} (${rows.length} visible in demo context):\n\nName | ID | Email | Phone | Class/Relation\n${table}\n\nSource: EduSync demo data. I did not invent names.`;
     };
     const intents = [
       {
+        intent: "language_preference",
+        terms: [],
+        response: "D'accord. Je continue en francais. Tu peux me demander directement une liste, un rapport, une annonce, une alerte ou l'etat reel de l'ecosysteme.",
+        actions: ["basculer_langue_reponse", "confirmer_preference_langue"],
+      },
+      {
+        intent: "greeting_query",
+        terms: [],
+        response: isFrench
+          ? "Bonjour, je vais bien et je suis pret a t'aider. Pose directement ta demande, par exemple: donne-moi les eleves de K3."
+          : "Hi, I am doing well and ready to help. Ask me directly for a list, ecosystem status, announcement, report, alert, or workflow action.",
+        actions: isFrench
+          ? ["saluer_utilisateur", "proposer_aide_directe", "attendre_demande"]
+          : ["greet_user", "offer_direct_help", "listen_for_request"],
+      },
+      {
         intent: "directory_query",
-        terms: ["liste des parents", "tous les parents", "parents de l ecole", "list parents", "all parents"],
+        terms: ["liste des parents", "tous les parents", "parents de l ecole", "liste des eleves", "tous les eleves", "liste de tous les elves", "eleves de k", "elves de k", "list parents", "all parents", "list students", "students in k"],
         response: directoryResponse(),
         actions: isFrench
           ? ["lire_repertoire_partage", "retourner_tableau_repertoire", "verifier_source_orbit"]
@@ -222,12 +322,14 @@ function demoResponse(path, method, body) {
       {
         intent: "finance_query",
         terms: ["paye", "payes", "payee", "paiement", "frais", "solde", "scolarite", "finance", "paid", "payment", "payments", "fees", "balance", "balances", "export"],
-        response: isFrench
-          ? `Tu demandes une liste financiere: les eleves qui ont paye.\n\nCe n'est pas une annonce. Il faut interroger le module paiement/frais et retourner un tableau.\n\nColonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.\nFiltres utiles: annee scolaire, trimestre, classe, statut Paye/Partiel/Impaye.\n\nAction suivante: ouvre EduPay ou Finance SAVANEX, filtre statut Paye, puis exporte la liste.`
-          : `Finance command understood: list paid students, check balances, and prepare export.\n\nCorrect handling: open the finance/payment module, not announcements or messaging.\n\nApply filters: status = Paid, entity = Students. Add class, academic year, or term if provided.\nTable columns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nExport: generate CSV/XLSX with the visible filtered rows.\n\nNext step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.`,
+        response: (() => {
+          return isFrench
+            ? `Tu demandes une liste financiere: les eleves ${isUnpaidFinance ? "impayes" : "qui ont paye"}.\n\nCe n'est pas une annonce. Il faut interroger le module paiement/frais et retourner un tableau.\n\nColonnes a afficher: nom eleve, classe, parent, montant paye, solde restant, date du dernier paiement, statut.\nFiltres utiles: annee scolaire, trimestre, classe, statut ${isUnpaidFinance ? "Impaye" : "Paye"}.\n\nAction suivante: ouvre EduPay ou Finance SAVANEX, applique ce filtre, puis exporte la liste.`
+            : `Finance command understood: list ${isUnpaidFinance ? "unpaid" : "paid"} students, check balances, and prepare export.\n\nCorrect handling: open the finance/payment module, not announcements or messaging.\n\nApply filters: status = ${isUnpaidFinance ? "Unpaid" : "Paid"}, entity = Students. Add class, academic year, or term if provided.\nTable columns: student name, class, parent, amount paid, remaining balance, last payment date, status.\nExport: generate CSV/XLSX with the visible filtered rows.\n\nNext step: connect this action to EduPay/Orbit data so I can return the table directly instead of only the workflow.`;
+        })(),
         actions: isFrench
-          ? ["ouvrir_module_finance", "filtrer_eleves_payes", "exporter_liste_paiements"]
-          : ["open_finance_module", "filter_paid_students", "export_payment_list", "check_balances"],
+          ? ["ouvrir_module_finance", isUnpaidFinance ? "filtrer_eleves_impayes" : "filtrer_eleves_payes", "exporter_liste_paiements"]
+          : ["open_finance_module", isUnpaidFinance ? "filter_unpaid_students" : "filter_paid_students", "export_payment_list", "check_balances"],
       },
       {
         intent: "announcement_request",
@@ -271,6 +373,8 @@ function demoResponse(path, method, body) {
       },
     ];
     const match =
+      (isLanguagePreference ? intents.find((item) => item.intent === "language_preference") : null) ||
+      (isGreeting ? intents.find((item) => item.intent === "greeting_query") : null) ||
       (isDirectoryList ? intents.find((item) => item.intent === "directory_query") : null) ||
       intents.find((item) => item.terms.some((term) => normalized.includes(term))) ||
       {

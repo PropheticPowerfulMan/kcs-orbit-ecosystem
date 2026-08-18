@@ -13,6 +13,7 @@ export const buildSafeUser = (user: User) => ({
   role: user.role.toLowerCase(),
   avatar: user.avatar,
   phone: user.phone,
+  twoFactorEnabled: user.twoFactorEnabled,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 })

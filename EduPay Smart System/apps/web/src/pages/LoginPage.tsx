@@ -54,10 +54,13 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
     setLoading(true);
     setError("");
     try {
-      const result = await api<{ message?: string }>("/api/auth/forgot-password", {
+      const result = await api<{ message?: string; resetToken?: string }>("/api/auth/forgot-password", {
         method: "POST",
         body: JSON.stringify({ identifier: identifier.trim() })
       });
+      if (result.resetToken) {
+        setResetToken(result.resetToken);
+      }
       setSuccessMessage(result.message || "Si ce compte existe, un code vient d'être envoyé.");
     } catch {
       // Even on error we show success to not leak account existence
@@ -70,6 +73,10 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (identifier.trim().length < 3) {
+      setError("Entrez l'e-mail ou le code d'accès du compte.");
+      return;
+    }
     if (resetToken.trim().length < 24) {
       setError("Entrez le code de réinitialisation reçu par e-mail.");
       return;
@@ -88,9 +95,9 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
     try {
       const result = await api<{ message?: string }>("/api/auth/reset-password", {
         method: "POST",
-        body: JSON.stringify({ token: resetToken.trim(), newPassword })
+        body: JSON.stringify({ identifier: identifier.trim(), token: resetToken.trim(), newPassword })
       });
-      setSuccessMessage(result.message || "Mot de passe reinitialise. Vous pouvez vous connecter.");
+      setSuccessMessage(result.message || "Mot de passe réinitialisé. Vous pouvez vous connecter.");
       setResetToken("");
       setNewPassword("");
       setConfirmPassword("");
@@ -240,6 +247,13 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
               <p className="text-sm text-ink-dim">{successMessage || "Si ce compte existe, un code vient d'être envoyé. Collez ce code ci-dessous pour choisir un nouveau mot de passe."}</p>
             </div>
             <form onSubmit={handleResetPassword} className="space-y-4">
+              <input
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="E-mail ou code d'accès du compte"
+                className="w-full"
+              />
               <textarea
                 value={resetToken}
                 onChange={(e) => setResetToken(e.target.value)}
@@ -267,20 +281,6 @@ const loginSchema = z.object({
   password: z.string().min(8)
 });
 
-const demoCredentials: LoginInput = {
-  email: "admin@school.com",
-  password: "password123"
-};
-
-const parentDemoCredentials: LoginInput = {
-  email: "parent@school.com",
-  password: "password123"
-};
-
-const SHOW_DEMO_LOGIN =
-  (import.meta.env.VITE_ENABLE_DEMO_FALLBACK ?? "").trim().toLowerCase() === "true" ||
-  ["demo", "github-pages", "pages"].includes((import.meta.env.VITE_ENVIRONMENT ?? "").trim().toLowerCase());
-
 type LoginInput = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
@@ -290,7 +290,7 @@ export function LoginPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgot, setShowForgot] = useState(Boolean(resetTokenFromUrl));
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<LoginInput>({
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
@@ -303,7 +303,7 @@ export function LoginPage() {
     const result = await api<{ token: string; role?: string; fullName: string; parentId?: string; photoUrl?: string | null; mustChangePassword?: boolean }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({
-        email: values.email.trim().toLowerCase(),
+        identifier: values.email.trim(),
         password: values.password
       })
     });
@@ -321,13 +321,6 @@ export function LoginPage() {
       const message = error instanceof Error ? error.message : t("loginFailedHint");
       setApiError(message);
     }
-  };
-
-  const fillDemoCredentials = (role: "ADMIN" | "PARENT") => {
-    const creds = role === "PARENT" ? parentDemoCredentials : demoCredentials;
-    setApiError(null);
-    setValue("email", creds.email, { shouldValidate: true });
-    setValue("password", creds.password, { shouldValidate: true });
   };
 
   return (
@@ -378,28 +371,6 @@ export function LoginPage() {
                 <LanguageSwitch />
               </div>
             </div>
-
-            {/* Credential fill buttons */}
-            {SHOW_DEMO_LOGIN && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => fillDemoCredentials("ADMIN")}
-                  disabled={isSubmitting}
-                  className="w-full p-3 rounded-lg border border-brand-500/30 bg-brand-500/10 text-brand-300 hover:bg-brand-500/20 hover:border-brand-500/50 active:scale-95 active:brightness-90 active:shadow-inner transition-all duration-150 text-sm font-semibold select-none disabled:opacity-60"
-                >
-                  {t("fillDemoAdmin")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoCredentials("PARENT")}
-                  disabled={isSubmitting}
-                  className="w-full p-3 rounded-lg border border-accent/40 bg-accent/10 text-pink-300 hover:bg-accent/20 hover:border-accent/60 active:scale-95 active:brightness-90 active:shadow-inner transition-all duration-150 text-sm font-semibold select-none disabled:opacity-60"
-                >
-                  {t("fillDemoParent")}
-                </button>
-              </div>
-            )}
 
             {/* Form */}
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>

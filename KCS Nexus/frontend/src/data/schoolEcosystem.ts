@@ -203,6 +203,12 @@ export const transcripts = [
   { student: 'David Kabongo', years: '2025-2026', credits: 8, cumulativeGpa: 3.1, status: 'In progress' },
 ]
 
+export const diagnosticTests = [
+  { id: 'diag-001', teacher: 'Mr. Belanger', className: 'Grade 8B', subject: 'Pre-Algebra', title: 'Numeracy baseline', submittedAt: 'Apr 22, 8:40 AM', score: '76% class mastery', summary: 'Fractions and multi-step equations require a targeted support group.', status: 'Pending approval' },
+  { id: 'diag-002', teacher: 'Dr. Mukendi', className: 'Grade 11A', subject: 'AP Biology', title: 'Scientific reasoning diagnostic', submittedAt: 'Apr 21, 3:15 PM', score: '88% class mastery', summary: 'Students are ready for the genetics unit; two learners need data interpretation support.', status: 'Pending approval' },
+  { id: 'diag-003', teacher: 'Mrs. Diallo', className: 'Grade 11A', subject: 'English Literature', title: 'Academic writing diagnostic', submittedAt: 'Apr 20, 1:05 PM', score: '84% class mastery', summary: 'Argument structure is secure; citations and evidence integration need a refresher.', status: 'Approved' },
+]
+
 export const feeAccounts = [
   { family: 'Kabongo Family', student: 'Elise Kabongo', invoice: 'KCS-INV-2026-041', balance: 420, status: 'partially paid', dueDate: 'May 5', lastPayment: 600 },
   { family: 'Kabongo Family', student: 'David Kabongo', invoice: 'KCS-INV-2026-042', balance: 0, status: 'paid', dueDate: 'May 5', lastPayment: 980 },

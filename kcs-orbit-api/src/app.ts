@@ -3,12 +3,37 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import authRoutes from "./routes/auth.routes";
+import academicYearRoutes from "./routes/academic-year.routes";
 import coreRoutes from "./routes/core.routes";
 import integrationIngestRoutes from "./routes/integration.ingest.routes";
 import integrationRegistryRoutes from "./routes/integration.registry.routes";
 import integrationReadRoutes from "./routes/integration.read.routes";
 import integrationRoutes from "./routes/integration.routes";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
+
+const authAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function authRateLimit(windowMs: number, maxAttempts: number): express.RequestHandler {
+  return (req, res, next) => {
+    const now = Date.now();
+    const identifier = String(req.body?.email || req.body?.identifier || "").toLowerCase();
+    const key = `${req.ip}:${req.path}:${identifier}`;
+    const current = authAttempts.get(key);
+
+    if (!current || current.resetAt <= now) {
+      authAttempts.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+
+    if (current.count >= maxAttempts) {
+      return res.status(429).json({ message: "Too many authentication attempts. Please wait and try again." });
+    }
+
+    current.count += 1;
+    authAttempts.set(key, current);
+    return next();
+  };
+}
 
 export function createApp() {
   const app = express();
@@ -46,8 +71,9 @@ export function createApp() {
     });
   });
 
-  app.use("/api/auth", authRoutes);
+  app.use("/api/auth", authRateLimit(15 * 60 * 1000, 20), authRoutes);
   app.use("/api", coreRoutes);
+  app.use("/api/integration/academic-year", academicYearRoutes);
   app.use("/api/integration", integrationRoutes);
   app.use("/api/integration/read", integrationReadRoutes);
   app.use("/api/integration/registry", integrationRegistryRoutes);

@@ -51,3 +51,12 @@ export const requireAdmin = () => {
     next()
   }
 }
+
+export const requireSuperAdmin = () => {
+  return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+    if (!req.user || req.user.sub !== 'configured-superadmin') {
+      return next(new ApiError(403, 'KCS Nexus superadministrator permissions required'))
+    }
+    next()
+  }
+}

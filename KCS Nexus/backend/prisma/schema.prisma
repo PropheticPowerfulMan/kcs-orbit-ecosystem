@@ -93,6 +93,7 @@ model User {
   accessCode         String               @unique
   passwordHash       String?
   firstName          String
+  middleName         String?
   lastName           String
   role               UserRole
   staffFunction      String?
@@ -121,6 +122,36 @@ model User {
   sentMessages        InternalMessage[]     @relation("MessageSender")
   receivedMessages    InternalMessage[]     @relation("MessageRecipient")
   approvedReportCards ReportCard[]          @relation("ReportCardApprover")
+  teacherWorkspace    TeacherWorkspace?
+  suggestions         Suggestion[]           @relation("SuggestionAuthor")
+  twoFactorEnabled    Boolean                @default(false)
+  twoFactorSecret     String?
+  twoFactorVerifiedAt DateTime?
+}
+
+model TeacherWorkspace {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  state     Json
+  revision  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Suggestion {
+  id            String   @id @default(cuid())
+  authorId      String
+  anonymousRole UserRole
+  category      String
+  message       String
+  status        String   @default("New")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  author        User     @relation("SuggestionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([status])
 }
 
 model StaffProfile {
@@ -424,6 +455,7 @@ model AdmissionApplication {
   id                 String              @id @default(cuid())
   applicationNumber  String              @unique
   firstName          String
+  middleName         String?
   lastName           String
   dateOfBirth        DateTime
   gender             String
@@ -573,6 +605,9 @@ model StudentForumPost {
   status       String                @default("open")
   sentiment    String                @default("neutral")
   priority     String                @default("normal")
+  attachmentType String?
+  attachmentData String?
+  attachmentName String?
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
   author       User                  @relation("StudentForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)

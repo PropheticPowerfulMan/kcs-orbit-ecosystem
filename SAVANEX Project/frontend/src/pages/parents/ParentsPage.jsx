@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
@@ -40,12 +41,14 @@ const splitClassName = (value) => {
 const splitFullName = (value) => {
   const parts = normalizeLabel(value, '').split(/\s+/).filter(Boolean);
   return {
-    first_name: parts[0] || '',
-    last_name: parts.slice(1).join(' ') || '',
+    last_name: parts[0] || '',
+    middle_name: parts.slice(1, -1).join(' ') || '',
+    first_name: parts.length > 1 ? parts[parts.length - 1] : '',
   };
 };
 
 const ParentsPage = () => {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [classLevelFilter, setClassLevelFilter] = useState('all');
   const [classSuffixFilter, setClassSuffixFilter] = useState('all');
@@ -56,7 +59,7 @@ const ParentsPage = () => {
   const [error, setError] = useState('');
   const [selectedParent, setSelectedParent] = useState(null);
   const [editingParent, setEditingParent] = useState(null);
-  const [editForm, setEditForm] = useState({ first_name: '', last_name: '', email: '', phone: '' });
+  const [editForm, setEditForm] = useState({ last_name: '', middle_name: '', first_name: '', email: '', phone: '', address: '' });
   const [submitting, setSubmitting] = useState(false);
 
   const loadStudents = async () => {
@@ -111,6 +114,7 @@ const ParentsPage = () => {
             family_name: parent.fullName || parent.displayId || 'Parent Orbit',
             full_name: parent.fullName || parent.displayId || 'Parent Orbit',
             first_name: parent.firstName || splitFullName(parent.fullName || '').first_name,
+            middle_name: parent.middleName || splitFullName(parent.fullName || '').middle_name,
             last_name: parent.lastName || splitFullName(parent.fullName || '').last_name,
             access_code: parent.accessCode || '',
             students_label: linkedStudents.length
@@ -125,6 +129,7 @@ const ParentsPage = () => {
             parent_external_id: parent.displayId,
             email: parent.email || '',
             phone: parent.phone || '',
+            address: parent.physicalAddress || '',
             photo_data: '',
             left_fingerprint_data: '',
             right_fingerprint_data: '',
@@ -145,6 +150,7 @@ const ParentsPage = () => {
         family_name: familyName,
         full_name: familyName,
         first_name: splitFullName(familyName).first_name,
+        middle_name: splitFullName(familyName).middle_name,
         last_name: splitFullName(familyName).last_name,
         access_code: '',
         students: [],
@@ -155,6 +161,7 @@ const ParentsPage = () => {
         parent_external_id: student.parent_external_id,
         email: student.parent_email,
         phone: student.parent_phone,
+        address: student.parent_address,
         photo_data: student.parent_photo_data,
         left_fingerprint_data: student.parent_left_fingerprint_data,
         right_fingerprint_data: student.parent_right_fingerprint_data,
@@ -182,6 +189,7 @@ const ParentsPage = () => {
         family_name: group.family_name,
         full_name: group.full_name,
         first_name: group.first_name,
+        middle_name: group.middle_name,
         last_name: group.last_name,
         access_code: group.access_code,
         students_label: group.students.join(', '),
@@ -269,10 +277,12 @@ const ParentsPage = () => {
   const openEdit = (row) => {
     setEditingParent(row);
     setEditForm({
-      first_name: row.first_name || '',
       last_name: row.last_name || '',
+      middle_name: row.middle_name || '',
+      first_name: row.first_name || '',
       email: row.email || '',
       phone: row.phone || '',
+      address: row.address || '',
     });
   };
 
@@ -341,9 +351,9 @@ const ParentsPage = () => {
       label: 'Action',
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setSelectedParent({ ...row, full_name: row.family_name, role: 'Parent' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
-          <button type="button" onClick={() => openEdit(row)} className="rounded-lg border border-amber-400/30 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10">Modifier</button>
-          <button type="button" onClick={() => void handleDelete(row)} className="rounded-lg border border-rose-400/30 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/10">Supprimer</button>
+          <button type="button" onClick={() => navigate(`/parents/${encodeURIComponent(row.id)}`, { state: { entity: { ...row, full_name: row.family_name, role: 'Parent' } } })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
+          <button type="button" onClick={() => navigate(`/parents/${encodeURIComponent(row.id)}/edit`, { state: { entity: row } })} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+          <button type="button" onClick={() => void handleDelete(row)} className="savanex-entity-action savanex-entity-action-danger">Supprimer</button>
         </div>
       )
     },
@@ -429,8 +439,8 @@ const ParentsPage = () => {
       <EntityDetailPanel entity={selectedParent} type="parent" onClose={() => setSelectedParent(null)} />
 
       {editingParent ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-github-border bg-slate-950 p-6 shadow-2xl">
+        <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8">
+          <section role="dialog" aria-modal="true" aria-label="Modifier un parent" className="savanex-modal-panel savanex-entity-edit-panel w-full overflow-y-auto p-5 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Gestion parent</p>
@@ -442,20 +452,24 @@ const ParentsPage = () => {
             <div className="mt-6 space-y-4">
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Identité du parent</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Nom
+                    <input value={editForm.last_name} onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })} placeholder="Nom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                    Postnom
+                    <input value={editForm.middle_name} onChange={(event) => setEditForm({ ...editForm, middle_name: event.target.value })} placeholder="Postnom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  </label>
                   <label className="grid gap-1 text-xs font-semibold text-slate-400">
                     Prénom
                     <input value={editForm.first_name} onChange={(event) => setEditForm({ ...editForm, first_name: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                  </label>
-                  <label className="grid gap-1 text-xs font-semibold text-slate-400">
-                    Nom / postnom
-                    <input value={editForm.last_name} onChange={(event) => setEditForm({ ...editForm, last_name: event.target.value })} placeholder="Nom ou postnom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
                   </label>
                 </div>
               </section>
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Coordonnées</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <label className="grid gap-1 text-xs font-semibold text-slate-400">
                     Email
                     <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
@@ -468,7 +482,7 @@ const ParentsPage = () => {
               </section>
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Enfants liés</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <div className="rounded-xl bg-slate-950/55 p-3">
                     <p className="text-xs text-slate-500">Élèves</p>
                     <p className="mt-1 text-sm font-semibold text-slate-100">{editingParent.students_label || 'Aucun élève lié'}</p>
@@ -487,7 +501,7 @@ const ParentsPage = () => {
                 {submitting ? 'Enregistrement...' : 'Enregistrer'}
               </button>
             </div>
-          </div>
+          </section>
         </div>
       ) : null}
 

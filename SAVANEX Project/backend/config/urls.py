@@ -7,7 +7,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenBlacklistView,
 )
-from apps.users.views import CustomTokenObtainPairView
+from apps.users.views import CustomTokenObtainPairView, forgot_password, reset_password
 
 urlpatterns = [
     # Admin
@@ -17,6 +17,8 @@ urlpatterns = [
     path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/logout/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    path('api/auth/forgot-password/', forgot_password, name='forgot_password'),
+    path('api/auth/reset-password/', reset_password, name='reset_password'),
 
     # API modules
     path('api/users/', include('apps.users.urls')),

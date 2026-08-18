@@ -247,6 +247,7 @@ def sync_student(student) -> None:
         "metadata": metadata,
         "payload": _compact({
             "firstName": student.user.first_name,
+            "middleName": student.user.middle_name or None,
             "lastName": student.user.last_name,
             "accessCode": student.user.access_code,
             "gender": student.gender,
@@ -279,11 +280,13 @@ def sync_parent(parent) -> None:
         "metadata": metadata,
         "payload": _compact({
             "firstName": parent.first_name or None,
+            "middleName": parent.middle_name or None,
             "lastName": parent.last_name or None,
             "fullName": parent.get_full_name() or parent.username,
             "accessCode": parent.access_code,
             "email": parent.email or None,
             "phone": parent.phone or None,
+            "physicalAddress": parent.address or None,
             "mustChangePassword": parent.must_change_password,
         }),
     }
@@ -300,10 +303,12 @@ def sync_teacher(teacher) -> None:
         "payload": _compact({
             "fullName": teacher.user.get_full_name(),
             "firstName": teacher.user.first_name or None,
+            "middleName": teacher.user.middle_name or None,
             "lastName": teacher.user.last_name or None,
             "accessCode": teacher.user.access_code,
             "email": teacher.user.email or None,
             "phone": teacher.user.phone or None,
+            "physicalAddress": teacher.user.address or None,
             "employeeId": teacher.employee_id,
             "employeeType": teacher.employee_type,
             "gender": teacher.gender or None,
@@ -404,10 +409,9 @@ def update_registry_entity(entity_type: str, identifier: str, payload: dict, ide
 
 
 def delete_registry_entity(entity_type: str, identifier: str, identifier_type: str = "orbitId") -> dict:
-    registry_entity_type = "family" if entity_type == "parent" else entity_type
     return _request_json(
         "DELETE",
-        f"/api/integration/registry/{quote(registry_entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
+        f"/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(KCS_ORBIT_ORGANIZATION_ID)}&identifierType={quote(identifier_type)}",
     )
 
 
@@ -420,6 +424,6 @@ def delete_student(student) -> None:
 
 def delete_parent(parent) -> None:
     try:
-        delete_registry_entity("family", _parent_external_id(parent), "externalId")
+        delete_registry_entity("parent", _parent_external_id(parent), "externalId")
     except Exception as exc:  # pragma: no cover - defensive integration boundary
         logger.warning("Orbit parent delete failed for %s: %s", parent.pk, exc)

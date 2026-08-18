@@ -1,8 +1,9 @@
-import { Router } from "express";
+import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
-import { orbitRegistryIsEnabled, syncOrbitRegistryMirror } from "../../integrations/orbitRegistry";
+import { orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
+import { notifyParentEntityChange } from "../notifications/entityChange";
 
 const createStudentSchema = z.object({
   parentId: z.string().min(1),
@@ -24,16 +25,29 @@ const updateStudentSchema = z.object({
   parentId: z.string().min(1),
   classId: z.string().min(1),
   fullName: z.string().min(3),
-  annualFee: z.number().nonnegative()
+  firstName: z.string().trim().min(1).optional(),
+  middleName: z.string().trim().min(1).nullable().optional(),
+  lastName: z.string().trim().min(1).optional(),
+  email: z.string().trim().email().nullable().optional(),
+  phone: z.string().trim().min(6).nullable().optional(),
+  dateOfBirth: z.coerce.date().nullable().optional(),
+  gender: z.string().trim().min(1).nullable().optional(),
+  annualFee: z.number().nonnegative(),
+  studentNumber: z.string().trim().min(1).nullable().optional(),
+  mustChangePassword: z.boolean().optional()
 });
 
 export const studentRouter = Router();
+const denyEntityMutation = (_req: Request, res: Response, _next: NextFunction) => res.status(403).json({
+  message: 'EduPay dispose d’un accès en lecture seule aux entités. Utilisez Savanex ou le superadministrateur KCS Nexus pour toute modification.',
+});
+
 studentRouter.use(authGuard);
 
-studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+studentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
     return res.status(409).json({
-      message: "La creation locale d'eleves est desactivee dans EduPay quand le registre Orbit est actif. Creez d'abord l'eleve dans SAVANEX."
+      message: "La création locale d'élèves est désactivée dans EduPay quand le registre Orbit est actif. Créez d'abord l'élève dans SAVANEX."
     });
   }
 
@@ -65,7 +79,7 @@ studentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
   res.json(students);
 });
 
-studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+studentRouter.put("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   const payload = updateStudentSchema.parse(req.body);
 
   const [parent, classRow] = await Promise.all([
@@ -78,9 +92,39 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
 
   const existing = await prisma.student.findFirst({
     where: { id: req.params.id, schoolId: req.user!.schoolId },
-    select: { id: true }
+    select: { id: true, externalStudentId: true }
   });
   if (!existing) return res.status(404).json({ message: "Eleve introuvable." });
+
+  if (orbitRegistryIsEnabled()) {
+    try {
+      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+      const mirroredStudent = mirrored.parents
+        .flatMap((parent) => parent.students)
+        .find((student) => student.id === req.params.id
+          || student.orbitId === req.params.id
+          || student.externalStudentId === existing.externalStudentId
+          || student.displayId === existing.externalStudentId);
+      const className = await prisma.class.findUnique({ where: { id: payload.classId }, select: { name: true } });
+      const nameParts = payload.fullName.trim().split(/\s+/);
+      await updateOrbitStudent(mirroredStudent?.orbitId || req.params.id, {
+        fullName: payload.fullName,
+        firstName: payload.firstName || nameParts[nameParts.length - 1] || null,
+        middleName: payload.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null),
+        lastName: payload.lastName || nameParts[0] || null,
+        email: payload.email ?? undefined,
+        phone: payload.phone ?? undefined,
+        dateOfBirth: payload.dateOfBirth ?? undefined,
+        gender: payload.gender ?? undefined,
+        className: className?.name ?? payload.classId,
+        studentNumber: payload.studentNumber ?? undefined,
+        mustChangePassword: payload.mustChangePassword
+      });
+      await syncOrbitRegistryMirror(req.user!.schoolId);
+    } catch (error) {
+      console.error("[STUDENT_UPDATE_ORBIT] Orbit sync failed but local update will continue", error);
+    }
+  }
 
   const student = await prisma.student.update({
     where: { id: req.params.id },
@@ -97,10 +141,22 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
     }
   });
 
-  return res.json(student);
+  const notificationStatus = await notifyParentEntityChange({
+    schoolId: req.user!.schoolId,
+    parentId: student.parentId,
+    subject: "Mise à jour du dossier élève EduPay",
+    body: [
+      `Le dossier de l'élève ${student.fullName} vient d'être modifié dans EduPay.`,
+      `Classe : ${student.class?.name ?? payload.classId}`,
+      `Frais annuels affichés : ${student.annualFee}`,
+      "La mise à jour est synchronisée avec le registre partagé de l'écosystème quand celui-ci est actif.",
+    ].join("\n"),
+  });
+
+  return res.json({ ...student, notificationStatus });
 });
 
-studentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+studentRouter.delete("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
   const existing = await prisma.student.findFirst({
     where: { id: req.params.id, schoolId: req.user!.schoolId },
     select: { id: true }

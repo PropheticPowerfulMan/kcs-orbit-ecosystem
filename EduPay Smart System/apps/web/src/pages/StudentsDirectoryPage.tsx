@@ -9,10 +9,18 @@ import { printHtmlDocument } from "../utils/printDocument";
 
 type SharedDirectoryStudent = {
   id: string;
+  orbitId?: string;
   displayId?: string;
   studentNumber?: string;
   externalStudentId?: string;
   fullName: string;
+  firstName?: string;
+  middleName?: string | null;
+  lastName?: string;
+  email?: string | null;
+  phone?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
   classId?: string;
   className?: string;
   createdAt?: string;
@@ -189,11 +197,42 @@ type SharedDirectoryResponse = {
 type SchoolClass = { id: string; name: string };
 
 type StudentFormState = {
-  fullName: string;
+  lastName: string;
+  middleName: string;
+  firstName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  gender: string;
   classId: string;
   parentId: string;
   annualFee: string;
 };
+
+function resolveStudentIdentity(student: SharedDirectoryStudent) {
+  if (student.firstName || student.middleName || student.lastName) {
+    return {
+      lastName: student.lastName || "",
+      middleName: student.middleName || "",
+      firstName: student.firstName || "",
+    };
+  }
+
+  const parts = student.fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return { lastName: parts[0] || "", middleName: "", firstName: "" };
+  return {
+    lastName: parts[parts.length - 1],
+    middleName: parts.slice(1, -1).join(" "),
+    firstName: parts[0],
+  };
+}
+
+function composeAdministrativeFullName(identity: Pick<StudentFormState, "lastName" | "middleName" | "firstName">) {
+  return [identity.lastName, identity.middleName, identity.firstName]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+}
 
 const SCHOOL_SECTIONS: SchoolClass[] = [
   ...Array.from({ length: 3 }, (_v, index) => {
@@ -226,9 +265,55 @@ function getSchoolClassOptions(classes: SchoolClass[]) {
   }
 
   return [...byName.values()].sort((a, b) => {
-    const rank = (name: string) => name.startsWith("K") ? Number(name.slice(1)) : 10 + Number(name.slice(1));
+    const rank = (name: string) => {
+      if (name.startsWith("K")) return Number(name.slice(1));
+      const grade = name.match(/^Grade\s+([1-9]|1[0-2])$/);
+      return grade ? 10 + Number(grade[1]) : 100;
+    };
     return rank(a.name) - rank(b.name);
   });
+}
+
+function sortByFullName<T extends { fullName?: string; id?: string }>(items: T[] = []) {
+  return [...items].sort((a, b) =>
+    String(a.fullName || a.id || "").localeCompare(String(b.fullName || b.id || ""), "fr", { sensitivity: "base" })
+  );
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function normalizeDirectoryForUi(directory: SharedDirectoryResponse): SharedDirectoryResponse {
+  const students = sortByFullName(directory.students ?? []);
+  const parents = sortByFullName(directory.parents ?? []).map((parent) => ({
+    ...parent,
+    students: sortByFullName(parent.students ?? [])
+  }));
+
+  return {
+    ...directory,
+    parents,
+    students,
+    counts: {
+      families: directory.counts?.families ?? parents.length,
+      parents: directory.counts?.parents ?? parents.length,
+      students: directory.counts?.students ?? students.length,
+      teachers: directory.counts?.teachers ?? 0
+    }
+  };
 }
 
 function formatDateLabel(value?: string | null) {
@@ -271,7 +356,7 @@ function slugify(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "dossier-eleve";
+    .replace(/^-+|-+$/g, "") || "dossier-élève";
 }
 
 function getInstallmentStatusTone(status: string, isOverdue: boolean) {
@@ -537,7 +622,7 @@ async function exportStudentReportPdf(student: SharedDirectoryStudent, parent: S
     if (!body) throw new Error("Document PDF élève introuvable.");
 
     await exportElementToPdf(body, {
-      filename: `dossier-eleve-${slugify(student.fullName)}-${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `dossier-élève-${slugify(student.fullName)}-${new Date().toISOString().slice(0, 10)}.pdf`,
       backgroundColor: "#ffffff",
       width: Math.max(body.scrollWidth, 1024),
       height: body.scrollHeight,
@@ -555,7 +640,7 @@ function printStudentReport(student: SharedDirectoryStudent, parent: SharedDirec
 
 function exportStudentReportExcel(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null) {
   const { financeStudent, installments, reductions, debts, agreements, paymentHistory, alerts } = getStudentFinanceData(snapshot, student);
-  exportWorkbook(`dossier-eleve-${slugify(student.fullName)}-${new Date().toISOString().slice(0, 10)}`, [
+  exportWorkbook(`dossier-élève-${slugify(student.fullName)}-${new Date().toISOString().slice(0, 10)}`, [
     {
       name: "Résumé",
       rows: [{
@@ -696,15 +781,27 @@ function StudentDetailModal({ student, parent, onClose }: { student: SharedDirec
   const exportDisabled = financeLoading || Boolean(financeError) || !financeStudent || pdfExporting;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="edupay-scrollbar relative w-full max-w-8xl max-h-[98vh] rounded-2xl border border-white/10 glass p-5 shadow-2xl">
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-ink-dim hover:bg-white/10 hover:text-white">
-          <X className="h-4 w-4" />
-        </button>
-        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 pr-10 sm:flex-row sm:items-start sm:justify-between">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-3 py-4 sm:px-5 sm:py-6"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+      <div
+        className="edupay-dialog-panel-xl relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-white/10 glass shadow-2xl animate-fadeInUp"
+        onClick={(event) => event.stopPropagation()}
+      >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute right-3 top-5 z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/80 text-ink-dim shadow-lg backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white"
+        aria-label="Fermer"
+      >
+        <X className="h-5 w-5" />
+      </button>
+        <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/10 bg-slate-950/90 px-6 py-5 pr-14 backdrop-blur-xl sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Fiche eleve</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Fiche élève</p>
             <h2 className="mt-2 font-display text-2xl font-bold text-white">{student.fullName}</h2>
             <p className="mt-1 text-sm text-ink-dim">Traçabilité complète du dossier financier, des échéances, des paiements et des alertes.</p>
           </div>
@@ -738,9 +835,10 @@ function StudentDetailModal({ student, parent, onClose }: { student: SharedDirec
             </button>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 lg:grid-cols-4">
+        <div className="edupay-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="grid gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">ID eleve</p>
+            <p className="text-xs text-ink-dim">ID élève</p>
             <p className="mt-1 break-words font-mono text-sm font-bold text-cyan-200">{student.displayId || student.studentNumber || student.id}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
@@ -749,7 +847,7 @@ function StudentDetailModal({ student, parent, onClose }: { student: SharedDirec
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs text-ink-dim">Parent</p>
-            <p className="mt-1 font-semibold text-white">{parent?.fullName || "Parent non retrouve"}</p>
+            <p className="mt-1 font-semibold text-white">{parent?.fullName || "Parent non retrouvé"}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs text-ink-dim">Inscription</p>
@@ -928,6 +1026,7 @@ function StudentDetailModal({ student, parent, onClose }: { student: SharedDirec
             </>
           )}
         </div>
+        </div>
       </div>
     </div>
   );
@@ -951,8 +1050,13 @@ function StudentEditModal({
   onClose: () => void;
 }) {
   const classOptions = useMemo(() => getSchoolClassOptions(classes), [classes]);
+  const identity = resolveStudentIdentity(student);
   const [form, setForm] = useState<StudentFormState>({
-    fullName: student.fullName,
+    ...identity,
+    email: student.email || '',
+    phone: student.phone || '',
+    dateOfBirth: student.dateOfBirth ? student.dateOfBirth.slice(0, 10) : '',
+    gender: student.gender || '',
     classId: student.classId || "",
     parentId: parent?.id || student.parentId || "",
     annualFee: typeof student.annualFee === "number" ? String(student.annualFee) : ""
@@ -965,9 +1069,19 @@ function StudentEditModal({
         <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-ink-dim hover:bg-white/10 hover:text-white">
           <X className="h-4 w-4" />
         </button>
-        <h2 className="pr-10 font-display text-2xl font-bold text-white">Modifier l'eleve</h2>
+        <h2 className="pr-10 font-display text-2xl font-bold text-white">Modifier l'élève</h2>
         <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
-          <input className="input" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Nom complet" required />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Nom *" aria-label="Nom" required />
+            <input className="input" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Postnom" aria-label="Postnom" />
+            <input className="input" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Prénom *" aria-label="Prénom" required />
+          </div>
+<div className="grid gap-3 sm:grid-cols-2">
+            <input className="input" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email de l’élève" aria-label="Email de l’élève" />
+            <input className="input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Téléphone de l’élève" aria-label="Téléphone de l’élève" />
+            <input className="input" type="date" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} aria-label="Date de naissance" />
+            <select className="input" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))} aria-label="Genre"><option value="">Genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <select className="input" value={form.classId} onChange={(event) => setForm((current) => ({ ...current, classId: event.target.value }))} required>
               <option value="">Classe</option>
@@ -1001,8 +1115,8 @@ function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="edupay-dialog-panel-sm relative w-full rounded-2xl border border-danger/30 glass p-6 shadow-2xl sm:p-7">
-        <h2 className="font-display text-xl font-bold text-white">Supprimer l'eleve</h2>
-        <p className="mt-3 text-sm text-ink-dim">Cette action supprimera {student.fullName} de la liste des eleves.</p>
+        <h2 className="font-display text-xl font-bold text-white">Supprimer l'élève</h2>
+        <p className="mt-3 text-sm text-ink-dim">Cette action supprimera {student.fullName} de la liste des élèves.</p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">Annuler</button>
           <button type="button" onClick={() => void onConfirm()} disabled={deleting} className="flex-1 rounded-xl bg-danger px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
@@ -1020,6 +1134,7 @@ export function StudentsDirectoryPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [mutationNotice, setMutationNotice] = useState<string | null>(null);
   const [viewTarget, setViewTarget] = useState<SharedDirectoryStudent | null>(null);
   const [editTarget, setEditTarget] = useState<SharedDirectoryStudent | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SharedDirectoryStudent | null>(null);
@@ -1031,14 +1146,14 @@ export function StudentsDirectoryPage() {
     setApiError(null);
 
     const [directoryResult, classesResult] = await Promise.allSettled([
-      api<SharedDirectoryResponse>("/api/shared-directory"),
+      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 4500, "shared-directory"),
       api<SchoolClass[]>("/api/classes")
     ]);
 
     if (directoryResult.status === "fulfilled") {
-      setDirectory(directoryResult.value);
+      setDirectory(normalizeDirectoryForUi(directoryResult.value));
     } else {
-      setApiError(directoryResult.reason instanceof Error ? directoryResult.reason.message : "Impossible de charger l'annuaire des eleves.");
+      setApiError(directoryResult.reason instanceof Error ? directoryResult.reason.message : "Impossible de charger l'annuaire des élèves.");
     }
 
     setClasses(classesResult.status === "fulfilled" && classesResult.value.length ? classesResult.value : SCHOOL_SECTIONS);
@@ -1090,19 +1205,36 @@ export function StudentsDirectoryPage() {
     try {
       setSaving(true);
       setApiError(null);
-      await api(`/api/students/${editTarget.id}`, {
+      const fullName = composeAdministrativeFullName(state);
+      const updated = await api<{ notificationStatus?: { dashboard?: string; email?: string; sms?: string; adminEmail?: string } }>(`/api/students/${editTarget.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          fullName: state.fullName,
+          fullName,
+          lastName: state.lastName.trim(),
+          middleName: state.middleName.trim() || null,
+          firstName: state.firstName.trim(),
+          email: state.email.trim() || null,
+          phone: state.phone.trim() || null,
+          dateOfBirth: state.dateOfBirth || null,
+          gender: state.gender || null,
           classId: state.classId,
+          className: getSchoolClassOptions(classes).find((item) => item.id === state.classId)?.name || "",
           parentId: state.parentId,
           annualFee: Number(state.annualFee)
         })
       });
+      setMutationNotice([
+        `Le dossier élève de ${fullName} a été modifié avec succès.`,
+        "EduPay a synchronisé le registre partagé quand il est actif.",
+        `Compte parent : ${updated.notificationStatus?.dashboard ?? "OPEN"}`,
+        `E-mail parent : ${updated.notificationStatus?.email ?? "SKIPPED"}`,
+        `SMS parent : ${updated.notificationStatus?.sms ?? "SKIPPED"}`,
+        `E-mail administrateur : ${updated.notificationStatus?.adminEmail ?? "SKIPPED"}`,
+      ].join("\n"));
       setEditTarget(null);
       await load();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Impossible de modifier l'eleve.");
+      setApiError(error instanceof Error ? error.message : "Impossible de modifier l'élève.");
     } finally {
       setSaving(false);
     }
@@ -1117,7 +1249,7 @@ export function StudentsDirectoryPage() {
       setDeleteTarget(null);
       await load();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : "Impossible de supprimer l'eleve.");
+      setApiError(error instanceof Error ? error.message : "Impossible de supprimer l'élève.");
     } finally {
       setDeleting(false);
     }
@@ -1125,6 +1257,17 @@ export function StudentsDirectoryPage() {
 
   return (
     <div className="space-y-6 pb-8">
+      {mutationNotice && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setMutationNotice(null)}>
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
+          <section className="relative w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Modification synchronisée</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">Notification envoyée</h2>
+            <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-slate-900/70 p-4 text-sm text-emerald-50">{mutationNotice}</pre>
+            <button type="button" onClick={() => setMutationNotice(null)} className="mt-5 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950">Compris</button>
+          </section>
+        </div>
+      )}
       {viewTarget && <StudentDetailModal student={viewTarget} parent={parentByStudentId.get(viewTarget.id)} onClose={() => setViewTarget(null)} />}
       {editTarget && (
         <StudentEditModal
@@ -1141,9 +1284,9 @@ export function StudentsDirectoryPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
         <div>
-          <h1 className="font-display text-3xl font-bold text-white">Annuaire des eleves</h1>
+          <h1 className="font-display text-3xl font-bold text-white">Annuaire des élèves</h1>
           <p className="mt-1 text-ink-dim">
-            Liste centralisee des eleves venant du registre partage Orbit via Savanex, comme pour les parents.
+            Liste centralisée des élèves venant du registre partage Orbit via Savanex, comme pour les parents.
           </p>
         </div>
         <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
@@ -1171,7 +1314,7 @@ export function StudentsDirectoryPage() {
         </div>
       </div>
 
-      <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un eleve, une classe, un parent ou un identifiant..." wrapperClassName="animate-fadeInUp" />
+      <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un élève, une classe, un parent ou un identifiant..." wrapperClassName="animate-fadeInUp" />
 
       {apiError && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -1185,13 +1328,13 @@ export function StudentsDirectoryPage() {
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-brand-500/30 border-t-brand-500" />
           </div>
         ) : filteredStudents.length === 0 ? (
-          <div className="p-12 text-center text-ink-dim">Aucun eleve trouve.</div>
+          <div className="p-12 text-center text-ink-dim">Aucun élève trouvé.</div>
         ) : (
           <div className="edupay-scrollbar overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700/50 bg-slate-900/40">
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">ID eleve</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">ID élève</th>
                   <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Nom complet</th>
                   <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Classe</th>
                   <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Parent</th>
@@ -1217,7 +1360,7 @@ export function StudentsDirectoryPage() {
                       </td>
                       <td className="px-5 py-4 text-ink-dim">{student.className || student.classId || "Classe non renseignee"}</td>
                       <td className="px-5 py-4">
-                        <p className="font-medium text-white">{parent?.fullName || "Parent non retrouve"}</p>
+                        <p className="font-medium text-white">{parent?.fullName || "Parent non retrouvé"}</p>
                         <p className="text-xs text-ink-dim">{parent?.phone || parent?.email || "Aucun contact"}</p>
                       </td>
                       <td className="px-5 py-4 text-right font-mono font-bold text-emerald-300">
@@ -1228,10 +1371,10 @@ export function StudentsDirectoryPage() {
                           <button type="button" onClick={() => setViewTarget(student)} className="rounded-lg bg-slate-700/50 p-2 text-ink-dim transition-all hover:bg-slate-600/50 hover:text-white" title="Voir">
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button type="button" onClick={() => setEditTarget(student)} className="rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title="Modifier">
+                          <button type="button" onClick={() => setEditTarget(student)} className="hidden rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title="Modifier">
                             <Edit3 className="h-4 w-4" />
                           </button>
-                          <button type="button" onClick={() => setDeleteTarget(student)} className="rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title="Supprimer">
+                          <button type="button" onClick={() => setDeleteTarget(student)} className="hidden rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title="Supprimer">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>

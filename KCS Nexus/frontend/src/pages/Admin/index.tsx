@@ -12,10 +12,8 @@ import {
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import { useAuthStore } from '@/store/authStore'
-import { useUIStore } from '@/store/uiStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
-import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
-import { registryAPI, studentsAPI } from '@/services/api'
+import { financeAPI, registryAPI, studentsAPI } from '@/services/api'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -25,6 +23,7 @@ import {
   attendance,
   auditLogs,
   communicationFlows,
+  diagnosticTests,
   disciplineReports,
   feeAccounts,
   financeReadiness,
@@ -89,7 +88,6 @@ const recentActivity = [
 
 const SCHOOL_NAME = 'Kinshasa Christian School'
 
-const SCHOOL_LOGO_SRC = getAssetUrl('images/kcs-logo.png')
 const SCHOOL_SEAL_SRC = getAssetUrl('images/kcs.jpg')
 
 const liveEventControls = [
@@ -146,6 +144,7 @@ type AdminParentRecord = {
   name: string
   email: string
   phone: string
+  physicalAddress: string
   students: AdminStudentRecord[]
   studentCount: number
   classes: string[]
@@ -160,6 +159,7 @@ type SharedDirectoryParent = {
   fullName: string
   email?: string | null
   phone?: string | null
+  physicalAddress?: string | null
   studentIds?: string[]
   externalIds?: Array<{ appSlug?: string; externalId?: string }>
 }
@@ -177,6 +177,7 @@ type SharedDirectoryPayload = {
 
 type AdminStudentEditForm = {
   firstName: string
+  middleName: string
   lastName: string
   studentNumber: string
   email: string
@@ -187,12 +188,17 @@ type AdminStudentEditForm = {
 
 type AdminParentEditForm = {
   firstName: string
+  middleName: string
   lastName: string
   email: string
   phone: string
+  physicalAddress: string
 }
 
 type AdminStudentDraft = {
+  firstName: string
+  middleName: string
+  lastName: string
   name: string
   studentNumber: string
   grade: string
@@ -200,7 +206,23 @@ type AdminStudentDraft = {
   email: string
 }
 
+type EduPayFinanceSummary = {
+  source: string
+  synchronizedAt: string
+  totals: {
+    expectedRevenue: number
+    collectedRevenue: number
+    outstandingDebt: number
+    totalReduction: number
+    paymentCompletionRate: number
+  }
+  parentAccounts: Array<{ parentName?: string; totalDebt?: number; totalPaid?: number; studentCount?: number }>
+}
+
 const createAdminStudentDraft = (grade = 'Grade 1', section = ''): AdminStudentDraft => ({
+  firstName: '',
+  middleName: '',
+  lastName: '',
   name: '',
   studentNumber: '',
   grade,
@@ -211,13 +233,15 @@ const createAdminStudentDraft = (grade = 'Grade 1', section = ''): AdminStudentD
 const splitPersonName = (value = '') => {
   const parts = value.trim().split(/\s+/).filter(Boolean)
   return {
-    firstName: parts[0] ?? '',
-    lastName: parts.slice(1).join(' '),
+    lastName: parts[0] ?? '',
+    middleName: parts.slice(1, -1).join(' '),
+    firstName: parts.length > 1 ? parts[parts.length - 1] : '',
   }
 }
 
 const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminStudentEditForm => ({
   firstName: splitPersonName(student?.name).firstName,
+  middleName: splitPersonName(student?.name).middleName,
   lastName: splitPersonName(student?.name).lastName,
   studentNumber: student?.studentNumber ?? '',
   email: student?.email ?? '',
@@ -228,9 +252,11 @@ const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminSt
 
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
   firstName: splitPersonName(parent?.name).firstName,
+  middleName: splitPersonName(parent?.name).middleName,
   lastName: splitPersonName(parent?.name).lastName,
   email: parent?.email === 'Email non renseigne' ? '' : (parent?.email ?? ''),
   phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
+  physicalAddress: parent?.physicalAddress ?? '',
 })
 
 type AdminAdmissionRequest = {
@@ -623,6 +649,7 @@ const buildAdminParentRecords = (roster: AdminStudentRecord[]): AdminParentRecor
       name: firstStudent.parent || 'Parent record pending',
       email: firstStudent.parentEmail || 'Email non renseigne',
       phone: firstStudent.parentPhone || 'Telephone non renseigne',
+      physicalAddress: 'Adresse non renseignee',
       students: familyStudents.sort((left, right) => left.name.localeCompare(right.name)),
       studentCount: familyStudents.length,
       classes,
@@ -657,6 +684,7 @@ const buildAdminParentRecordsFromDirectory = (
       name: parent.fullName || 'Parent record pending',
       email: parent.email || 'Email non renseigne',
       phone: parent.phone || 'Telephone non renseigne',
+      physicalAddress: parent.physicalAddress || 'Adresse non renseignee',
       students: linkedStudents,
       studentCount: linkedStudents.length,
       classes,
@@ -1119,13 +1147,37 @@ const AdminSectionView = ({
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
   const [showCreateStudent, setShowCreateStudent] = useState(false)
   const [selectedTranscriptId, setSelectedTranscriptId] = useState('')
+  const [transcriptQuery, setTranscriptQuery] = useState('')
+  const [transcriptClassFilter, setTranscriptClassFilter] = useState('All')
+  const [communicationRecipient, setCommunicationRecipient] = useState('All parents, students, teachers, and staff')
+  const [communicationSubject, setCommunicationSubject] = useState('')
+  const [communicationBody, setCommunicationBody] = useState('')
+  const [communicationHistory, setCommunicationHistory] = useState(() => messages.map((message, index) => ({
+    id: `message-${index}`,
+    direction: 'Sent',
+    audience: message.toRole,
+    subject: message.subject,
+    body: message.body,
+    sender: message.from,
+    timestamp: `Apr ${22 - index}, 9:${10 + index} AM`,
+    status: message.requiresResponse ? 'Response requested' : 'Delivered',
+  })))
+  const [detailDialog, setDetailDialog] = useState<{ title: string; subtitle: string; details: Array<[string, string]> } | null>(null)
+  const [diagnosticStatuses, setDiagnosticStatuses] = useState<Record<string, string>>(() => Object.fromEntries(diagnosticTests.map((test) => [test.id, test.status])))
+  const [financeSummary, setFinanceSummary] = useState<EduPayFinanceSummary | null>(null)
+  const [financeSyncError, setFinanceSyncError] = useState('')
+  const [financeLoading, setFinanceLoading] = useState(false)
   const [reportCadence, setReportCadence] = useState<AdminReportCadence>('weekly')
   const [reportCategory, setReportCategory] = useState<AdminReportCategory>('executive')
   const [editingStudent, setEditingStudent] = useState<AdminStudentRecord | null>(null)
   const [studentEditForm, setStudentEditForm] = useState<AdminStudentEditForm>(() => createAdminStudentEditForm(null))
   const [savingStudentEdit, setSavingStudentEdit] = useState(false)
   const [newFamily, setNewFamily] = useState({
+    parentFirstName: '',
+    parentMiddleName: '',
+    parentLastName: '',
     parent: '',
+    parentAddress: '',
     parentEmail: '',
     parentPhone: '',
     advisor: '',
@@ -1133,6 +1185,33 @@ const AdminSectionView = ({
   })
 
   const shouldLoadRoster = adminRosterSegments.has(segment)
+
+  const refreshEduPayFinance = async () => {
+    setFinanceLoading(true)
+    setFinanceSyncError('')
+    try {
+      const response = await financeAPI.getEduPaySummary()
+      setFinanceSummary(response.data.data as EduPayFinanceSummary)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'EduPay finance synchronization is unavailable.'
+      setFinanceSyncError(message)
+    } finally {
+      setFinanceLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (segment === 'finance') void refreshEduPayFinance()
+  }, [segment])
+
+  const detailModal = detailDialog ? (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-kcs-blue-950/70 p-4" role="dialog" aria-modal="true" aria-label={detailDialog.title} onClick={() => setDetailDialog(null)}>
+      <section className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-4 dark:border-kcs-blue-800"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">Detailed record</p><h2 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{detailDialog.title}</h2><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{detailDialog.subtitle}</p></div><button type="button" onClick={() => setDetailDialog(null)} className="rounded-xl p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-kcs-blue-800" aria-label="Close detail window"><X size={20} /></button></div>
+        <dl className="mt-5 space-y-4">{detailDialog.details.map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><dt className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</dt><dd className="mt-1 whitespace-pre-wrap text-sm leading-6 text-kcs-blue-900 dark:text-white">{value}</dd></div>)}</dl>
+      </section>
+    </div>
+  ) : null
 
   const refreshOfficialRoster = async () => {
     const [response, directoryResponse] = await Promise.all([
@@ -1211,8 +1290,9 @@ const AdminSectionView = ({
   }, [setOfficialRoster, shouldLoadRoster])
 
   const registerOfficialStudent = async () => {
-    const readyStudents = newFamily.students.filter((student) => student.name.trim())
-    if (readyStudents.length === 0 || !newFamily.parent.trim()) {
+    const parentName = [newFamily.parentLastName, newFamily.parentMiddleName, newFamily.parentFirstName].filter(Boolean).join(' ').trim()
+    const readyStudents = newFamily.students.map((student) => ({ ...student, name: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ').trim() })).filter((student) => student.lastName.trim() && student.firstName.trim())
+    if (readyStudents.length === 0 || !newFamily.parentLastName.trim() || !newFamily.parentFirstName.trim()) {
       setStudentNotice('Le parent et au moins un élève sont requis avant l’enregistrement.')
       return
     }
@@ -1235,8 +1315,7 @@ const AdminSectionView = ({
       return
     }
 
-    const [parentFirst, ...parentLastParts] = newFamily.parent.trim().split(/\s+/)
-    const parentEmail = newFamily.parentEmail.trim() || `${newFamily.parent.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`
+    const parentEmail = newFamily.parentEmail.trim() || `${parentName.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`
     const parentPhone = newFamily.parentPhone.trim() || '+243 810 000 000'
     const fallbackTimestamp = Date.now().toString().slice(-5)
     const localRecords = readyStudents.map((student, index): AdminStudentRecord => {
@@ -1247,7 +1326,7 @@ const AdminSectionView = ({
         studentNumber,
         grade: student.grade,
         section: student.section,
-        parent: newFamily.parent.trim(),
+        parent: parentName,
         parentEmail,
         parentPhone,
         status: 'Active',
@@ -1261,18 +1340,20 @@ const AdminSectionView = ({
     try {
       const response = await studentsAPI.create({
         parent: {
-          firstName: parentFirst,
-          lastName: parentLastParts.join(' ') || 'Guardian',
+          firstName: newFamily.parentFirstName.trim(),
+          middleName: newFamily.parentMiddleName.trim() || undefined,
+          lastName: newFamily.parentLastName.trim(),
+          physicalAddress: newFamily.parentAddress.trim() || undefined,
           email: parentEmail,
           phone: parentPhone,
           relationship: 'Parent',
         },
         students: readyStudents.map((student, index) => {
-          const [firstName, ...lastParts] = student.name.trim().split(/\s+/)
           const studentNumber = localRecords[index].studentNumber!
           return {
-            firstName,
-            lastName: lastParts.join(' ') || 'Student',
+            firstName: student.firstName.trim(),
+            middleName: student.middleName.trim() || undefined,
+            lastName: student.lastName.trim(),
             studentNumber,
             grade: student.grade,
             section: student.section,
@@ -1303,7 +1384,7 @@ const AdminSectionView = ({
     setDivisionFilter(getDivisionForGrade(focusStudent.grade).id)
     setGradeFilter(focusStudent.grade)
     setClassSuffixFilter(focusStudent.section as typeof SEARCH_CLASS_SUFFIXES[number] || 'All')
-    setNewFamily({ parent: '', parentEmail: '', parentPhone: '', advisor: '', students: [createAdminStudentDraft()] })
+    setNewFamily({ parentFirstName: '', parentMiddleName: '', parentLastName: '', parent: '', parentAddress: '', parentEmail: '', parentPhone: '', advisor: '', students: [createAdminStudentDraft()] })
   }
 
   const openEditStudent = (student: AdminStudentRecord) => {
@@ -1316,7 +1397,7 @@ const AdminSectionView = ({
   const saveEditedStudent = async () => {
     if (!editingStudent) return
 
-    const normalizedName = `${studentEditForm.firstName} ${studentEditForm.lastName}`.trim()
+    const normalizedName = `${studentEditForm.lastName} ${studentEditForm.middleName} ${studentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
     if (!normalizedName) {
       setStudentNotice('Le prénom et le nom de l’élève sont obligatoires pour enregistrer les modifications.')
       return
@@ -1331,6 +1412,7 @@ const AdminSectionView = ({
     try {
       const response = await studentsAPI.update(editingStudent.id, {
         firstName: studentEditForm.firstName.trim(),
+        middleName: studentEditForm.middleName.trim() || null,
         lastName: studentEditForm.lastName.trim() || 'Student',
         email: studentEditForm.email.trim() || undefined,
         studentNumber: studentEditForm.studentNumber.trim(),
@@ -1383,7 +1465,7 @@ const AdminSectionView = ({
   const saveEditedParent = async () => {
     if (!editingParent) return
 
-    const normalizedName = `${parentEditForm.firstName} ${parentEditForm.lastName}`.trim()
+    const normalizedName = `${parentEditForm.lastName} ${parentEditForm.middleName} ${parentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
     if (!normalizedName) {
       setParentNotice('Le prénom et le nom du parent sont obligatoires pour enregistrer les modifications.')
       return
@@ -1393,9 +1475,11 @@ const AdminSectionView = ({
     try {
       const response = await registryAPI.updateEntity('parent', editingParent.id, {
         firstName: parentEditForm.firstName.trim(),
+        middleName: parentEditForm.middleName.trim() || null,
         lastName: parentEditForm.lastName.trim() || 'Parent',
         email: parentEditForm.email.trim() || undefined,
         phone: parentEditForm.phone.trim() || null,
+        physicalAddress: parentEditForm.physicalAddress.trim() || null,
       }, editingParent.identifierType)
       const roster = await refreshOfficialRoster()
       const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
@@ -1467,6 +1551,16 @@ const AdminSectionView = ({
     [officialRoster]
   )
 
+  const transcriptClasses = useMemo(() => Array.from(new Set(grade9to12.map((student) => formatClassName(student.grade, student.section)))).sort(), [grade9to12])
+  const filteredTranscriptStudents = useMemo(() => {
+    const query = transcriptQuery.trim().toLowerCase()
+    return grade9to12.filter((student) => {
+      const className = formatClassName(student.grade, student.section)
+      return (transcriptClassFilter === 'All' || className === transcriptClassFilter)
+        && (!query || `${student.name} ${student.studentNumber ?? ''}`.toLowerCase().includes(query))
+    })
+  }, [grade9to12, transcriptClassFilter, transcriptQuery])
+
   const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0] ?? adminRosterSeed[0]
   const officialTranscript = buildOfficialTranscript(transcriptStudent)
 
@@ -1520,6 +1614,7 @@ const AdminSectionView = ({
       parent.name,
       parent.email,
       parent.phone,
+      parent.physicalAddress,
       parent.status,
       parent.syncSource,
       parent.classes.join(' '),
@@ -1673,6 +1768,7 @@ const AdminSectionView = ({
                       ['ID parent', selectedParent.displayId || selectedParent.id],
                       ['Email', selectedParent.email],
                       ['Telephone', selectedParent.phone],
+                      ['Adresse physique', selectedParent.physicalAddress],
                       ['Enfants', String(selectedParent.studentCount)],
                       ['Classes', selectedParent.classes.join(', ') || 'Non assignee'],
                       ['Statut', selectedParent.status],
@@ -1728,12 +1824,16 @@ const AdminSectionView = ({
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Prénom
-                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent" />
+                      Nom
+                      <input value={parentEditForm.lastName} onChange={(event) => setParentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Nom / postnom
-                      <input value={parentEditForm.lastName} onChange={(event) => setParentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom ou postnom du parent" />
+                      Postnom
+                      <input value={parentEditForm.middleName} onChange={(event) => setParentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Prénom
+                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent" />
                     </label>
                   </div>
                 </section>
@@ -1748,6 +1848,7 @@ const AdminSectionView = ({
                       Téléphone
                       <input value={parentEditForm.phone} onChange={(event) => setParentEditForm((current) => ({ ...current, phone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Téléphone du parent" />
                     </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
                   </div>
                 </section>
               </div>
@@ -1770,6 +1871,7 @@ const AdminSectionView = ({
 
     return (
       <div className="space-y-6">
+        {detailModal}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -1838,9 +1940,12 @@ const AdminSectionView = ({
                 <button type="button" className="w-fit rounded-lg px-3 py-1.5 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setShowCreateStudent(false)}>Close</button>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <input value={newFamily.parent} onChange={(event) => setNewFamily((item) => ({ ...item, parent: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parent / guardian full name" required />
+                <input value={newFamily.parentLastName} onChange={(event) => setNewFamily((item) => ({ ...item, parentLastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent *" required />
+                <input value={newFamily.parentMiddleName} onChange={(event) => setNewFamily((item) => ({ ...item, parentMiddleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
+                <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom du parent *" required />
                 <input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parent email" />
                 <input value={newFamily.parentPhone} onChange={(event) => setNewFamily((item) => ({ ...item, parentPhone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parent phone" />
+                <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
                 <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Advisor, optional" />
               </div>
               <div className="mt-5 space-y-3">
@@ -1857,7 +1962,9 @@ const AdminSectionView = ({
                       ) : null}
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
-                      <input value={student.name} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, name: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Student full name" required />
+                      <input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required />
+                      <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
+                      <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />
                       <input value={student.studentNumber} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, studentNumber: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Student number, optional" />
                       <input value={student.email} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, email: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Student email, optional" />
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
@@ -1872,7 +1979,7 @@ const AdminSectionView = ({
               </div>
               <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
                 <button type="submit" className={`${adminButton} w-full sm:w-auto`}><UserPlus size={16} className="inline" /> Enregistrer la famille</button>
-                <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">Élèves prêts: {newFamily.students.filter((student) => student.name.trim()).length}</span>
+                <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">Élèves prêts: {newFamily.students.filter((student) => student.lastName.trim() && student.firstName.trim()).length}</span>
               </div>
               {studentNotice && <p className="mt-3 rounded-xl bg-white p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{studentNotice}</p>}
             </form>
@@ -1948,14 +2055,14 @@ const AdminSectionView = ({
             </div>
             <div className="mt-4 space-y-3">
               {Object.entries(rosterByClass).map(([className, classStudents]) => (
-                <div key={className} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                <button type="button" onClick={() => setDetailDialog({ title: className || 'Unassigned class', subtitle: 'Official class grouping', details: classStudents.map((student) => [student.name, `${student.studentNumber ?? student.id} · ${student.parent} · ${student.status}`]) })} key={className} className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-kcs-blue-300 hover:shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{className || 'Non assignée'}</p>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{classStudents.length} élève(s)</span>
                   </div>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Familles : {Array.from(new Set(classStudents.map((student) => student.parent))).join(', ')}</p>
                   <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">{classStudents.map((student) => student.name).join(', ')}</p>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -1970,14 +2077,14 @@ const AdminSectionView = ({
             </div>
             <div className="mt-4 space-y-3">
               {Object.entries(rosterByFamily).map(([familyName, familyStudents]) => (
-                <div key={familyName} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                <button type="button" onClick={() => setDetailDialog({ title: familyName, subtitle: 'Official family grouping', details: familyStudents.map((student) => [student.name, `${formatClassName(student.grade, student.section)} · ${student.studentNumber ?? student.id} · ${student.status}`]) })} key={familyName} className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-kcs-blue-300 hover:shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{familyName}</p>
                     <span className="text-xs text-gray-500 dark:text-gray-400">{familyStudents.length} élève(s)</span>
                   </div>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Classes : {Array.from(new Set(familyStudents.map((student) => formatClassName(student.grade, student.section)))).join(', ')}</p>
                   <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">{familyStudents.map((student) => student.name).join(', ')}</p>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -2087,12 +2194,16 @@ const AdminSectionView = ({
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Prénom
-                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève" />
+                      Nom
+                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Nom / postnom
-                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom ou postnom de l’élève" />
+                      Postnom
+                      <input value={studentEditForm.middleName} onChange={(event) => setStudentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Prénom
+                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
                       Email élève
@@ -2163,7 +2274,7 @@ const AdminSectionView = ({
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <img src={SCHOOL_LOGO_SRC} alt={`${SCHOOL_NAME} logo`} className="h-12 w-12 rounded-xl object-contain ring-1 ring-kcs-blue-100 dark:ring-kcs-blue-800" />
+              <img src={SCHOOL_SEAL_SRC} alt={`${SCHOOL_NAME} official seal`} className="h-28 w-28 rounded-2xl border border-kcs-blue-100 bg-white p-1 object-contain shadow-md dark:border-kcs-blue-800" />
               <div>
               <h2 className="font-bold text-kcs-blue-900 dark:text-white">{SCHOOL_NAME} Transcript Center</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">Official high-school transcript generated from Grade 9-12 bulletin averages, credits, GPA, rank, and graduation status.</p>
@@ -2181,8 +2292,13 @@ const AdminSectionView = ({
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">Eligible Students</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Only Grade 9 to Grade 12 students appear here because official transcripts begin in high school.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_11rem]">
+                <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><Search size={16} className="text-gray-400" /><input value={transcriptQuery} onChange={(event) => setTranscriptQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Search by student name or ID..." /></label>
+                <select value={transcriptClassFilter} onChange={(event) => setTranscriptClassFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="All">All classes</option>{transcriptClasses.map((className) => <option key={className}>{className}</option>)}</select>
+              </div>
+              <p className="mt-3 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{filteredTranscriptStudents.length} student(s) match the current criteria.</p>
             </div>
-            {grade9to12.map((student) => {
+            {filteredTranscriptStudents.map((student) => {
               const transcript = transcripts.find((item) => item.student === student.name)
               const generated = buildOfficialTranscript(student)
               return (
@@ -2203,15 +2319,16 @@ const AdminSectionView = ({
                 </button>
               )
             })}
+            {filteredTranscriptStudents.length === 0 ? <p className="rounded-xl border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-kcs-blue-700 dark:text-gray-300">No eligible student matches these criteria.</p> : null}
           </div>
 
           <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <img src={SCHOOL_LOGO_SRC} alt="" aria-hidden="true" className="pointer-events-none absolute right-6 top-28 hidden h-48 w-48 object-contain opacity-[0.04] sm:block" />
+            <img src={SCHOOL_SEAL_SRC} alt="" aria-hidden="true" className="pointer-events-none absolute right-6 top-28 hidden h-64 w-64 object-contain opacity-[0.055] sm:block" />
             <div className="border-b border-gray-100 pb-5 dark:border-kcs-blue-800">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-kcs-blue-100 bg-white p-2 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:h-20 sm:w-20">
-                    <img src={SCHOOL_LOGO_SRC} alt={`${SCHOOL_NAME} logo`} className="h-full w-full object-contain" />
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-kcs-blue-100 bg-white p-1 shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:h-28 sm:w-28">
+                    <img src={SCHOOL_SEAL_SRC} alt={`${SCHOOL_NAME} official seal`} className="h-full w-full object-contain" />
                   </div>
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">Official Academic Transcript</p>
@@ -2317,6 +2434,7 @@ const AdminSectionView = ({
 
   if (segment === 'communications') {
     return (
+      <>
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Communication Flows</h2>
@@ -2333,19 +2451,26 @@ const AdminSectionView = ({
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Send School Communication</h2>
           <div className="grid gap-3">
-            <select className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+            <select value={communicationRecipient} onChange={(event) => setCommunicationRecipient(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
               <option>All parents, students, teachers, and staff</option>
               <option>Parents only</option>
               <option>Grade 9-12 families</option>
               <option>Staff only</option>
             </select>
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Subject" />
-            <textarea className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email, SMS, and portal message..." />
-            <button className={adminButton} onClick={() => setSentNotice('Communication queued for email, SMS, and in-site inbox.')}>Send communication</button>
+            <input value={communicationSubject} onChange={(event) => setCommunicationSubject(event.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Subject" />
+            <textarea value={communicationBody} onChange={(event) => setCommunicationBody(event.target.value)} className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email, SMS, and portal message..." />
+            <button className={adminButton} onClick={() => {
+              if (!communicationSubject.trim() || !communicationBody.trim()) { setSentNotice('Enter a subject and a message before sending.'); return }
+              setCommunicationHistory((items) => [{ id: `message-${Date.now()}`, direction: 'Sent', audience: communicationRecipient, subject: communicationSubject.trim(), body: communicationBody.trim(), sender: 'Administration', timestamp: new Date().toLocaleString(), status: 'Queued for delivery' }, ...items])
+              setCommunicationSubject(''); setCommunicationBody(''); setSentNotice('Communication queued for email, SMS, and in-site inbox.')
+            }}>Send communication</button>
             {sentNotice && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{sentNotice}</p>}
           </div>
+          <div className="mt-6 border-t border-gray-100 pt-5 dark:border-kcs-blue-800"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Traceable message history</h3><div className="mt-3 space-y-2">{communicationHistory.map((message) => <button key={message.id} type="button" onClick={() => setDetailDialog({ title: message.subject, subtitle: `${message.direction} to ${message.audience}`, details: [['From', message.sender], ['Sent', message.timestamp], ['Status', message.status], ['Message', message.body]] })} className="w-full rounded-xl bg-gray-50 p-3 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800"><p className="font-semibold text-kcs-blue-900 dark:text-white">{message.subject}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{message.direction} · {message.audience} · {message.status}</p></button>)}</div></div>
         </div>
       </div>
+      {detailModal}
+      </>
     )
   }
 
@@ -2386,6 +2511,7 @@ const AdminSectionView = ({
 
   if (segment === 'discipline') {
     return (
+      <>
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2397,7 +2523,7 @@ const AdminSectionView = ({
           </div>
           <div className="space-y-3">
             {disciplineReports.map((report) => (
-              <div key={report.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+              <button key={report.id} type="button" onClick={() => setDetailDialog({ title: `${report.student} - ${report.category}`, subtitle: `Discipline report · ${report.date}`, details: [['Status', report.status], ['Incident', report.incident], ['Context', report.context], ['Action taken', report.actionTaken], ['Follow-up', report.followUp], ['Parent contact', report.parentContact]] })} className="w-full rounded-xl bg-gray-50 p-4 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-semibold text-kcs-blue-900 dark:text-white">{report.student}</p>
                   <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(report.status)}`}>{report.status}</span>
@@ -2405,7 +2531,7 @@ const AdminSectionView = ({
                 <p className="mt-2 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{report.category} - {report.date}</p>
                 <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{report.incident}</p>
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Parent contact: {report.parentContact}</p>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -2421,23 +2547,26 @@ const AdminSectionView = ({
           </div>
         </div>
       </div>
+      {detailModal}
+      </>
     )
   }
 
   if (segment === 'teachers') {
     return (
+      <>
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Teachers & Load</h2>
           <div className="grid gap-3 md:grid-cols-2">
             {staffLoad.map((teacher) => (
-              <div key={teacher.teacher} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+              <button key={teacher.teacher} type="button" onClick={() => setDetailDialog({ title: teacher.teacher, subtitle: 'Teacher workload record', details: [['Teaching load', teacher.load], ['AI support', teacher.aiSupport], ['Related subjects', subjects.filter((subject) => subject.teacher === teacher.teacher).map((subject) => `${subject.name} (${subject.className})`).join(', ') || 'Not assigned']] })} className="w-full rounded-xl bg-gray-50 p-4 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-kcs-blue-900 dark:text-white">{teacher.teacher}</p>
                   <span className="rounded-full bg-kcs-blue-100 px-2.5 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{teacher.load}</span>
                 </div>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">AI support: {teacher.aiSupport}</p>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -2445,14 +2574,16 @@ const AdminSectionView = ({
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Staff Operations</h2>
           <div className="space-y-3">
             {staffOperations.map((item) => (
-              <div key={item.function} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+              <button type="button" onClick={() => setDetailDialog({ title: item.function, subtitle: 'Teacher operations detail', details: [['Current value', String(item.value)], ['Operational metric', item.metric], ['Status', item.status]] })} key={item.function} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
                 <div className="flex items-center justify-between"><p className="font-semibold text-kcs-blue-900 dark:text-white">{item.function}</p><span className="font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{item.value}</span></div>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.metric} - {item.status}</p>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       </div>
+      {detailModal}
+      </>
     )
   }
 
@@ -2469,6 +2600,11 @@ const AdminSectionView = ({
         ))}
       </div>
     )
+  }
+
+  if (segment === 'diagnostics') {
+    const pendingDiagnostics = diagnosticTests.filter((test) => diagnosticStatuses[test.id] !== 'Approved')
+    return <>{detailModal}<div className="space-y-6"><div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">Administrator review</p><h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Diagnostic Approval Center</h2><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Centralized diagnostic-test reports submitted by every teacher. Approve a report only after reviewing its results and recommended follow-up.</p></div><div className="grid gap-4 md:grid-cols-3">{[['Total reports', diagnosticTests.length], ['Pending approval', pendingDiagnostics.length], ['Approved', diagnosticTests.length - pendingDiagnostics.length]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p></div>)}</div><div className="space-y-3">{diagnosticTests.map((test) => { const status = diagnosticStatuses[test.id]; return <article key={test.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><button type="button" onClick={() => setDetailDialog({ title: test.title, subtitle: `${test.subject} · ${test.className}`, details: [['Submitted by', test.teacher], ['Submitted at', test.submittedAt], ['Class mastery', test.score], ['Teacher summary', test.summary], ['Approval status', status]] })} className="text-left"><p className="font-semibold text-kcs-blue-900 dark:text-white">{test.title}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{test.teacher} · {test.subject} · {test.className}</p><p className="mt-2 text-sm text-kcs-blue-700 dark:text-kcs-blue-300">{test.score}</p></button><div className="flex items-center gap-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${pillTone(status)}`}>{status}</span>{status !== 'Approved' ? <button type="button" className={adminButton} onClick={() => setDiagnosticStatuses((items) => ({ ...items, [test.id]: 'Approved' }))}>Approve report</button> : null}</div></div></article> })}</div></div></>
   }
 
   if (segment === 'admissions') {
@@ -2515,23 +2651,15 @@ const AdminSectionView = ({
   }
 
   if (segment === 'finance') {
+    const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+    const totals = financeSummary?.totals
     return (
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          {feeAccounts.map((fee) => (
-            <div key={fee.invoice} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="flex items-center justify-between gap-3"><p className="font-semibold text-kcs-blue-900 dark:text-white">{fee.invoice}</p><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(fee.status)}`}>{fee.status}</span></div>
-              <p className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">${fee.balance}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{fee.family} - last payment ${fee.lastPayment}</p>
-              <button className="mt-4 w-full rounded-xl bg-kcs-gold-500 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Receipt / statement</button>
-            </div>
-          ))}
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">EduPay source of truth</p><h2 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Synchronized Finance</h2><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{financeSummary ? `Last synchronized ${new Date(financeSummary.synchronizedAt).toLocaleString()}` : 'Loading the financial source...'}</p></div><button type="button" className={adminButton} onClick={() => void refreshEduPayFinance()} disabled={financeLoading}>{financeLoading ? 'Synchronizing...' : 'Refresh EduPay data'}</button></div>{financeSyncError ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{financeSyncError}</p> : null}</div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[['Expected revenue', totals?.expectedRevenue ?? 0], ['Collected revenue', totals?.collectedRevenue ?? 0], ['Outstanding debt', totals?.outstandingDebt ?? 0], ['Reductions', totals?.totalReduction ?? 0]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{currency.format(Number(value))}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p></div>)}
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          {financeReadiness.map((item) => (
-            <div key={item.feature} className="rounded-xl bg-green-50 p-4 dark:bg-green-900/10"><p className="font-semibold text-green-800 dark:text-green-300">{item.feature}</p><p className="mt-1 text-sm text-green-700 dark:text-green-400">{item.note}</p></div>
-          ))}
-        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex items-center justify-between gap-3"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Family finance follow-up</h3><span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">Collection rate: {totals?.paymentCompletionRate ?? 0}%</span></div><div className="mt-4 grid gap-3 md:grid-cols-2">{financeSummary?.parentAccounts.map((account, index) => <div key={`${account.parentName}-${index}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? 'Parent account'}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Paid {currency.format(account.totalPaid ?? 0)} · Debt {currency.format(account.totalDebt ?? 0)} · {account.studentCount ?? 0} student(s)</p></div>) ?? <p className="text-sm text-gray-500 dark:text-gray-400">No EduPay family account is available yet.</p>}</div></div>
       </div>
     )
   }
@@ -2748,12 +2876,37 @@ const AdminSectionView = ({
 
 const AdminDashboard = () => {
   const { user } = useAuthStore()
-  const { language } = useUIStore()
+  const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
   const location = useLocation()
   const activeSegment = getAdminSegment(location.pathname)
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
   const [admissionRequests, setAdmissionRequests] = useState<AdminAdmissionRequest[]>(readStoredAdmissions)
+  const [dashboardFinance, setDashboardFinance] = useState<EduPayFinanceSummary | null>(null)
+  const [dashboardFinanceError, setDashboardFinanceError] = useState('')
+  const [dashboardAction, setDashboardAction] = useState('')
+  const [reportCardControl, setReportCardControl] = useState<any>(null)
   const pendingAdmissions = admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW')
+
+  const refreshDashboardFinance = async () => {
+    setDashboardFinanceError('')
+    try { const response = await financeAPI.getEduPaySummary(); setDashboardFinance(response.data.data as EduPayFinanceSummary) }
+    catch (error: any) { setDashboardFinanceError(error?.response?.data?.message ?? 'EduPay synchronization is unavailable.') }
+  }
+
+  useEffect(() => { if (activeSegment === 'dashboard') void refreshDashboardFinance() }, [activeSegment])
+
+  const openEmailAction = () => {
+    const recipients = Array.from(new Set(officialRoster.map((student) => student.parentEmail).filter(Boolean))).slice(0, 40).join(',')
+    window.location.href = `mailto:${recipients}?subject=${encodeURIComponent('KCS Super Admin communication')}`
+    setDashboardAction('The system email composer was opened with synchronized family recipients.')
+  }
+
+  const openSmsAction = () => {
+    const recipient = officialRoster.find((student) => student.parentPhone)?.parentPhone
+    if (!recipient) return setDashboardAction('No synchronized family phone number is available.')
+    window.location.href = `sms:${recipient}?body=${encodeURIComponent('KCS Super Admin communication: ')}`
+    setDashboardAction('The SMS composer was opened for the selected synchronized family contact.')
+  }
 
   return (
     <div className="portal-shell flex">
@@ -2764,10 +2917,10 @@ const AdminDashboard = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                {getLocalizedGreeting(language)}, {user?.firstName}
+                {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {getLocalizedPortalDate(language)} - A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
+                {new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())} - A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
               </p>
             </div>
             <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">
@@ -2789,6 +2942,10 @@ const AdminDashboard = () => {
             <>
           <PortalSectionPanel />
           <SuggestionBox />
+          <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Super Admin quick actions</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Communication and reporting</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> Email</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> SMS</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> Report</button></div></div>
+            {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dashboardAction}</p>}
+          </section>
 
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
             {[
@@ -3057,18 +3214,19 @@ const AdminDashboard = () => {
             <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="font-bold text-kcs-blue-900 dark:text-white">Finance Control</h2>
-                <span className="badge-blue text-xs">Invoices • receipts • exports</span>
+                <button type="button" onClick={() => void refreshDashboardFinance()} className="badge-blue text-xs">Refresh EduPay</button>
               </div>
               <div className="space-y-3">
-                {feeAccounts.map((fee) => (
-                  <div key={fee.invoice} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                {dashboardFinance?.parentAccounts.slice(0, 6).map((account, index) => (
+                  <button type="button" key={`${account.parentName}-${index}`} onClick={() => setDashboardAction(`${account.parentName ?? 'Family account'}: paid ${currency.format(account.totalPaid ?? 0)}, outstanding ${currency.format(account.totalDebt ?? 0)}.`)} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{fee.invoice}</p>
-                      <span className="text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-300">${fee.balance}</span>
+                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? 'Family account'}</p>
+                      <span className="text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{currency.format(account.totalDebt ?? 0)}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{fee.family} • {fee.status} • last payment ${fee.lastPayment}</p>
-                  </div>
-                ))}
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">EduPay synchronized • Paid {currency.format(account.totalPaid ?? 0)} • {account.studentCount ?? 0} student(s)</p>
+                  </button>
+                )) ?? <p className="text-sm text-gray-500 dark:text-gray-400">Loading synchronized EduPay accounts...</p>}
+                {dashboardFinanceError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{dashboardFinanceError}</p>}
               </div>
             </div>
 
@@ -3078,13 +3236,13 @@ const AdminDashboard = () => {
                 <span className="badge-gold text-xs">Principal workflow</span>
               </div>
               <div className="space-y-3">
-                {[...reportCards, ...transcripts].map((item: any) => (
-                  <div key={`${item.student}-${item.term ?? item.years}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                {[...reportCards, ...transcripts].slice(0, 6).map((item: any) => (
+                  <button type="button" onClick={() => setReportCardControl(item)} key={`${item.student}-${item.term ?? item.years}`} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-gold-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.student}</p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {item.term ?? item.years} • {item.principalStatus ?? item.status}
                     </p>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -3193,6 +3351,24 @@ const AdminDashboard = () => {
               ))}
             </div>
           </div>
+          {reportCardControl && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4" role="dialog" aria-modal="true" aria-label="Report card control">
+              <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900">
+                <div className="flex items-start justify-between gap-4">
+                  <div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Super Admin report card control</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{reportCardControl.student}</h2></div>
+                  <button type="button" onClick={() => setReportCardControl(null)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-kcs-blue-800" aria-label="Close"><X size={18}/></button>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">Academic period</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.term ?? reportCardControl.years}</p></div>
+                  <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">Workflow status</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{reportCardControl.principalStatus ?? reportCardControl.status}</p></div>
+                </div>
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={() => { exportAdminReport('academic', 'monthly', 'pdf', officialRoster.filter((student) => student.name === reportCardControl.student), admissionRequests); setDashboardAction(`Academic document generated for ${reportCardControl.student}.`) }} className={adminButton}><Download size={16}/> Download</button>
+                  <button type="button" onClick={() => { setDashboardAction(`${reportCardControl.student}'s academic document was approved for publication.`); setReportCardControl(null) }} className={adminButton}><CheckCircle2 size={16}/> Approve and publish</button>
+                </div>
+              </div>
+            </div>
+          )}
             </>
           )}
         </div>

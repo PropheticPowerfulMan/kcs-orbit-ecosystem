@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Grade(models.Model):
-    EXCELLENCE_PASS_PERCENT = 75.0
+    EXCELLENCE_PASS_PERCENT = 70.0
     EXCELLENCE_CRITICAL_PERCENT = 60.0
     EXCELLENCE_STRONG_PERCENT = 90.0
 
@@ -110,7 +110,7 @@ class Grade(models.Model):
     def classical_equivalent_percentage(self):
         """
         Excellence scale used by the school:
-        75% excellence equals 50% in a classical grading scale.
+        70% excellence equals 50% in a classical grading scale.
         """
         excellence = self.excellence_percentage
         if excellence <= self.EXCELLENCE_PASS_PERCENT:

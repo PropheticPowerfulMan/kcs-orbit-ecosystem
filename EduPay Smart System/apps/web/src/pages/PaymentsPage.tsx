@@ -71,7 +71,7 @@ function n2wEn(n: number): string {
   if (n === 0) return "zero";
   const u = [
     "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "ten", "élèven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
     "seventeen", "eighteen", "nineteen",
   ];
   const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
@@ -211,7 +211,7 @@ function analyzeReceiptRisk(r: Pick<PaymentRecord, "parentFullName" | "paymentSu
   const flags: string[] = [];
   if (r.amount >= 5000) flags.push("Montant élevé : double validation conseillée");
   if (r.status !== "COMPLETED") flags.push("Statut non réglé : ne pas libérer de quittance définitive");
-  if (getPaymentSubjectName(r).trim().split(/\s+/).length < 2) flags.push("Identité courte : vérifier le dossier eleve");
+  if (getPaymentSubjectName(r).trim().split(/\s+/).length < 2) flags.push("Identité courte : vérifier le dossier élève");
   if (r.reason.trim().length < 8) flags.push("Motif trop court pour un audit robuste");
   if (r.method === "BANK_TRANSFER") flags.push("Virement bancaire : vérifier la référence et le compte bénéficiaire");
   else if (r.method !== "CASH") flags.push("Paiement mobile : vérifier la référence opérateur");
@@ -589,7 +589,7 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
         ${safe.detailNote ? `<div class="compact-note">${safe.detailNote}</div>` : ""}
       </div>
       <div class="warning">
-        Toute modification du montant, de l'eleve, du statut ou du motif invalide le code de vérification. Reçu valable uniquement avec signature du caissier et sceau de l'école.
+        Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification. Reçu valable uniquement avec signature du caissier et sceau de l'école.
       </div>
       <div class="seal-row">
         <div class="box">
@@ -598,7 +598,7 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
         </div>
         <div class="box stamp">
           <div class="box-title">Sceau de l'école</div>
-          <div class="stamp-circle">Emplacement reserve</div>
+          <div class="stamp-circle">Emplacement réservé</div>
         </div>
       </div>
     </div>
@@ -618,6 +618,7 @@ type PaymentExportScope = {
   search?: string;
   status?: string;
   method?: string;
+  className?: string;
   dateFrom?: string;
   dateTo?: string;
 };
@@ -677,6 +678,7 @@ function buildPaymentScopeLabel(scope?: PaymentExportScope) {
   if (!scope) return "";
   return [
     scope.search?.trim() ? `Recherche : ${scope.search.trim()}` : "Recherche : toutes categories",
+    scope.className && scope.className !== "ALL" ? `Classe : ${scope.className}` : "Classe : toutes",
     scope.status && scope.status !== "ALL" ? `Statut : ${getStatusLabel(scope.status)}` : "Statut : tous",
     scope.method && scope.method !== "ALL" ? `Mode : ${getMethodLabel(scope.method as PaymentRecord["method"])}` : "Mode : tous",
     scope.dateFrom ? `Du : ${new Date(`${scope.dateFrom}T00:00:00`).toLocaleDateString("fr-FR")}` : "",
@@ -686,10 +688,11 @@ function buildPaymentScopeLabel(scope?: PaymentExportScope) {
 
 function buildPaymentExportFilename(prefix: string, scope: PaymentExportScope) {
   const category = normalizeSearchText(scope.search || "toutes-categories").replace(/\s+/g, "-") || "toutes-categories";
+  const className = scope.className && scope.className !== "ALL" ? normalizeSearchText(scope.className).replace(/\s+/g, "-") : "toutes-classes";
   const status = scope.status && scope.status !== "ALL" ? scope.status.toLowerCase() : "tous-statuts";
   const method = scope.method && scope.method !== "ALL" ? scope.method.toLowerCase().replace(/_/g, "-") : "tous-modes";
   const period = `${scope.dateFrom || "debut"}-${scope.dateTo || "fin"}`;
-  return `${prefix}-${category}-${status}-${method}-${period}-${new Date().toISOString().slice(0, 10)}`;
+  return `${prefix}-${category}-${className}-${status}-${method}-${period}-${new Date().toISOString().slice(0, 10)}`;
 }
 
 /* --- État financier HTML (général ou par parent) -------------------------- */
@@ -799,7 +802,7 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
 
   const title = scope?.title
     ? plainPrintText(scope.title)
-    : filterParent ? `Etat financier - ${plainPrintText(filterParent)}` : "Etat general des paiements";
+    : filterParent ? `État financier - ${plainPrintText(filterParent)}` : "État général des paiements";
   const scopeLabel = plainPrintText(buildPaymentScopeLabel(scope));
 
   return `<!DOCTYPE html>
@@ -986,7 +989,7 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
       </table>
     </div>` : ""}
 
-    ${parentBlocks || '<p style="color:#64748b; text-align:center; padding:40px">Aucun paiement trouve.</p>'}
+    ${parentBlocks || '<p style="color:#64748b; text-align:center; padding:40px">Aucun paiement trouvé.</p>'}
 
     <div style="border-top:3px double #1e3a5f; padding-top:16px; display:flex; justify-content:flex-end; align-items:center; gap:20px; margin-top:12px;">
       <span style="font-size:14px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">TOTAL GENERAL (USD)</span>
@@ -1028,14 +1031,14 @@ async function printReceiptDocument(payment: PaymentRecord, lang: string) {
 }
 
 function exportReceiptExcel(payment: PaymentRecord) {
-  exportWorkbook(`recu-${payment.transactionNumber}`, [
+  exportWorkbook(`reçu-${payment.transactionNumber}`, [
     {
       name: "Recu",
       rows: [{
         "No Transaction": payment.transactionNumber,
         "Date": payment.date,
         "Paiement pour": getPaymentSubjectName(payment),
-        "Parent concerne": getPaymentParentCaption(payment) || payment.parentFullName,
+        "Parent concerné": getPaymentParentCaption(payment) || payment.parentFullName,
         "Motif": payment.reason,
         "Montant USD": payment.amount,
         "Montant en lettres": payment.amountWords,
@@ -1074,13 +1077,13 @@ function exportPaymentsExcel(filename: string, records: PaymentRecord[], parentF
     {
       name: "Synthese",
       rows: [{
-        "Portee": parentFilter || "Globale",
-        "Filtres appliques": buildPaymentScopeLabel(scope) || "Aucun filtre specifique",
-        "Periode du": scope?.dateFrom || "-",
-        "Periode au": scope?.dateTo || "-",
+        "Portée": parentFilter || "Globale",
+        "Filtres appliqués": buildPaymentScopeLabel(scope) || "Aucun filtre spécifique",
+        "Période du": scope?.dateFrom || "-",
+        "Période au": scope?.dateTo || "-",
         "Paiements": filtered.length,
         "Total USD": total,
-        "Regles USD": completed.reduce((sum, payment) => sum + payment.amount, 0),
+        "Réglés USD": completed.reduce((sum, payment) => sum + payment.amount, 0),
         "En attente USD": pending.reduce((sum, payment) => sum + payment.amount, 0),
         "Echoues USD": failed.reduce((sum, payment) => sum + payment.amount, 0),
         "Annules USD": cancelled.reduce((sum, payment) => sum + payment.amount, 0)
@@ -1092,13 +1095,13 @@ function exportPaymentsExcel(filename: string, records: PaymentRecord[], parentF
         "No Transaction": payment.transactionNumber,
         "Date": payment.date,
         "Paiement pour": getPaymentSubjectName(payment),
-        "Parent concerne": getPaymentParentCaption(payment) || payment.parentFullName,
+        "Parent concerné": getPaymentParentCaption(payment) || payment.parentFullName,
         "Motif": payment.reason,
         "Mode": getMethodLabel(payment.method),
         "Montant USD": payment.amount,
         "Statut": getStatusLabel(payment.status),
         "Categorie recherche": scope?.search || "-",
-        "Periode export": scope?.dateFrom || scope?.dateTo ? `${scope?.dateFrom || "debut"} - ${scope?.dateTo || "fin"}` : "Toutes dates",
+        "Période export": scope?.dateFrom || scope?.dateTo ? `${scope?.dateFrom || "debut"} - ${scope?.dateTo || "fin"}` : "Toutes dates",
         "Code verification": buildReceiptSecurity(payment).verificationCode
       }))
     },
@@ -1151,6 +1154,7 @@ type PaymentRecord = {
 };
 
 type FormState = {
+  paymentScope: "TUITION" | "SERVICE";
   parentId: string;
   studentIds: string[];
   parentFullName: string;
@@ -1337,17 +1341,55 @@ function buildAllocationNarrative(preview: TuitionAllocationPreview, mode: Alloc
 type View = "form" | "receipt" | "history" | "report";
 
 const EMPTY_FORM: FormState = {
-  parentId: "", studentIds: [], parentFullName: "", reason: "", amount: "", method: "CASH", status: "COMPLETED", bankName: "", transferReference: "", transferDate: "", senderAccountNumber: "", beneficiaryAccountNumber: "",
+  paymentScope: "TUITION", parentId: "", studentIds: [], parentFullName: "", reason: "", amount: "", method: "CASH", status: "COMPLETED", bankName: "", transferReference: "", transferDate: "", senderAccountNumber: "", beneficiaryAccountNumber: "",
 };
 
 const PAYMENT_NOTIFICATION_STORAGE_KEY = "edupay-payment-notifications-enabled";
 const PAYMENT_PARENT_NOTIFICATION_STORAGE_KEY = "edupay-parent-payment-notifications-v1";
 
-const STORAGE_KEY = "edupay_payments_v2";
+const STORAGE_KEY = "edupay_payments_v3";
+const LEGACY_STORAGE_KEYS = ["edupay_payments_v2"];
+
+function normalizeParentStudentOption(student: Partial<ParentStudentOption> | null | undefined, index: number): ParentStudentOption {
+  const id = String(student?.id || student?.externalStudentId || `student-${index + 1}`);
+  return {
+    id,
+    externalStudentId: student?.externalStudentId ? String(student.externalStudentId) : id,
+    fullName: String(student?.fullName || "Eleve non renseigne"),
+    classId: String(student?.classId || ""),
+    className: String(student?.className || student?.classId || ""),
+    annualFee: Number.isFinite(Number(student?.annualFee)) ? Number(student?.annualFee) : 0
+  };
+}
+
+function normalizeParentOption(parent: Partial<ParentOption> | null | undefined, index: number): ParentOption {
+  const id = String(parent?.id || `parent-${index + 1}`);
+  return {
+    id,
+    fullName: String(parent?.fullName || id),
+    phone: parent?.phone ? String(parent.phone) : "",
+    email: parent?.email ? String(parent.email) : "",
+    students: Array.isArray(parent?.students)
+      ? parent.students.map(normalizeParentStudentOption).filter((student) => student.id && student.fullName)
+      : []
+  };
+}
 
 function loadPayments(): PaymentRecord[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]"); }
-  catch { return []; }
+  try {
+    const current = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as PaymentRecord[];
+    if (Array.isArray(current) && current.length > 0) return current;
+
+    for (const legacyKey of LEGACY_STORAGE_KEYS) {
+      const legacy = JSON.parse(localStorage.getItem(legacyKey) ?? "[]") as PaymentRecord[];
+      if (Array.isArray(legacy) && legacy.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));
+        return legacy;
+      }
+    }
+
+    return Array.isArray(current) ? current : [];
+  } catch { return []; }
 }
 function savePayments(ps: PaymentRecord[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(ps));
@@ -1436,21 +1478,39 @@ const HISTORY_PRODUCT_FILTERS = [
   "uniforme",
   "transport",
   "cantine",
-  "bibliotheque",
+  "bibliothèque",
   "examen"
 ];
 
+const SERVICE_PAYMENT_REASON_SUGGESTIONS = [
+  "Abonnement bus scolaire",
+  "Frais d'uniforme",
+  "Frais de cantine",
+  "Frais de bibliothèque",
+  "Frais d'examen",
+  "Frais de bulletin",
+  "Frais d'activités parascolaires",
+  "Sortie pédagogique"
+];
+
+const KCS_CLASS_ORDER = [
+  "K3",
+  "K4",
+  "K5",
+  ...Array.from({ length: 12 }, (_, index) => `Grade ${index + 1}`)
+];
+
 const SCHOOL_PRODUCT_ALIASES: Record<string, string[]> = {
-  "frais scolaires": ["frais scolaires", "frais scolaire", "scolarite", "scolarité", "trimestre", "tuition"],
+  "frais scolaires": ["frais scolaires", "frais scolaire", "scolarité", "scolarité", "trimestre", "tuition"],
   inscription: ["inscription", "admission", "nouvelle inscription"],
   reinscription: ["reinscription", "réinscription", "renouvellement"],
   uniforme: ["uniforme", "tenue", "kit scolaire"],
   transport: ["transport", "bus", "ramassage"],
   cantine: ["cantine", "restauration", "repas"],
-  bibliotheque: ["bibliotheque", "bibliothèque", "livre", "manuels"],
+  bibliothèque: ["bibliothèque", "bibliothèque", "livre", "manuels"],
   examen: ["examen", "epreuve", "épreuve", "test"],
   bulletin: ["bulletin", "rapport scolaire"],
-  activites: ["activites", "activités", "parascolaire", "club", "sport"],
+  activités: ["activités", "activités", "parascolaire", "club", "sport"],
   sortie: ["sortie", "pedagogique", "pédagogique", "voyage"],
   arrieres: ["arrieres", "arriérés", "retard", "rattrapage"],
 };
@@ -1462,6 +1522,15 @@ function normalizeSearchText(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function normalizeClassName(value: string) {
+  const normalized = normalizeSearchText(value).replace(/[\s_-]+/g, "");
+  const kindergarten = normalized.match(/^k(?:inder)?([345])$/);
+  if (kindergarten) return `K${kindergarten[1]}`;
+  const grade = normalized.match(/^(?:grade|g)(\d{1,2})$/);
+  if (grade) return `Grade ${Number(grade[1])}`;
+  return value.trim();
 }
 
 function getProductSearchTags(reason: string) {
@@ -1700,7 +1769,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
           </div>
 
           <div className="mt-3 border-l-4 border-amber-600 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-            Toute modification du montant, de l'eleve, du statut ou du motif invalide le code de vérification.
+            Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification.
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1711,7 +1780,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
             <div className="flex min-h-24 flex-col items-center justify-between border border-slate-600 p-3 text-center">
               <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Sceau de l'école</p>
               <div className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-slate-900 bg-white p-2 text-[9px] font-black uppercase tracking-wide text-slate-400">
-                Emplacement reserve
+                Emplacement réservé
               </div>
             </div>
           </div>
@@ -1756,6 +1825,7 @@ export function PaymentsPage() {
   const [searchQuery, setSearchQuery]       = useState("");
   const [filterStatus, setFilterStatus]     = useState("ALL");
   const [filterMethod, setFilterMethod]     = useState("ALL");
+  const [filterClass, setFilterClass]       = useState("ALL");
   const [historyDateFrom, setHistoryDateFrom] = useState("");
   const [historyDateTo, setHistoryDateTo] = useState("");
   const [historyNotificationPanelOpen, setHistoryNotificationPanelOpen] = useState(false);
@@ -1778,7 +1848,12 @@ export function PaymentsPage() {
 
   useEffect(() => {
     api<ParentOption[]>("/api/parents")
-      .then((items) => setParents(items))
+      .then((items) => {
+        const normalizedParents = Array.isArray(items)
+          ? items.map(normalizeParentOption).sort((left, right) => left.fullName.localeCompare(right.fullName, "fr", { sensitivity: "base" }))
+          : [];
+        setParents(normalizedParents);
+      })
       .catch(() => setParents([]));
   }, []);
 
@@ -1811,24 +1886,35 @@ export function PaymentsPage() {
     setManualAllocations({});
   }, [form.parentId, form.amount, tuitionPlan, allocationMode]);
 
+  const historyClassOptions = useMemo(() => {
+    const existing = new Set(payments.flatMap((payment) => payment.studentClassNames ?? []).filter(Boolean).map(normalizeClassName));
+    const extras = Array.from(existing)
+      .filter((className) => !KCS_CLASS_ORDER.includes(className))
+      .sort((left, right) => left.localeCompare(right));
+    return [...KCS_CLASS_ORDER, ...extras];
+  }, [payments]);
+
   const filteredPayments = useMemo(() => payments.filter((p) => {
     const query = normalizeSearchText(searchQuery);
     const searchableText = buildPaymentSearchText(p);
     const matchQ = !query || query.split(/\s+/).every((token) => searchableText.includes(token));
+    const matchClass = filterClass === "ALL" || (p.studentClassNames ?? []).some((className) => normalizeClassName(className) === filterClass);
     return matchQ
+      && matchClass
       && (filterStatus === "ALL" || p.status === filterStatus)
       && (filterMethod === "ALL" || p.method === filterMethod)
       && paymentMatchesDateRange(p, historyDateFrom, historyDateTo);
-  }), [payments, searchQuery, filterStatus, filterMethod, historyDateFrom, historyDateTo]);
+  }), [payments, searchQuery, filterClass, filterStatus, filterMethod, historyDateFrom, historyDateTo]);
 
   const historyExportScope = useMemo<PaymentExportScope>(() => ({
-    title: "Historique des paiements filtre",
+    title: "Historique des paiements filtr?",
     search: searchQuery,
     status: filterStatus,
     method: filterMethod,
+    className: filterClass,
     dateFrom: historyDateFrom,
     dateTo: historyDateTo
-  }), [filterMethod, filterStatus, historyDateFrom, historyDateTo, searchQuery]);
+  }), [filterClass, filterMethod, filterStatus, historyDateFrom, historyDateTo, searchQuery]);
 
   const stats = useMemo(() => ({
     total:     payments.filter((p) => p.status === "COMPLETED").reduce((s, p) => s + p.amount, 0),
@@ -1869,7 +1955,7 @@ export function PaymentsPage() {
   const validate = () => {
     const errs: Partial<Record<keyof FormState, string>> = {};
     if (paymentNotificationsEnabled && !form.parentId) errs.parentId = "Choisissez le parent qui recevra l'email et le SMS.";
-    if (selectedParent && (selectedParent.students?.length ?? 0) > 0 && form.studentIds.length === 0) errs.studentIds = "Selectionnez au moins un eleve pour synchroniser ce paiement.";
+    if (form.paymentScope === "TUITION" && selectedParent && (selectedParent.students?.length ?? 0) > 0 && form.studentIds.length === 0) errs.studentIds = "Sélectionnez au moins un élève pour synchroniser ce paiement.";
     if (!form.parentFullName.trim()) errs.parentFullName = t("pmRequired");
     if (!form.reason.trim())         errs.reason         = t("pmRequired");
     if (!form.amount || parseFloat(form.amount) <= 0) errs.amount = t("pmRequired");
@@ -1922,11 +2008,12 @@ export function PaymentsPage() {
   const parentLookupResults = useMemo(() => {
     const query = normalizeSearchText(parentLookupQuery);
     const tokens = query.split(/\s+/).filter(Boolean);
+    const hasSearch = tokens.length > 0;
 
     return parents
       .map((parent) => {
         const matchedStudents = (parent.students ?? []).filter((student) => {
-          if (tokens.length === 0) return false;
+          if (!hasSearch) return false;
           const studentText = normalizeSearchText([
             student.fullName,
             student.className,
@@ -1944,10 +2031,10 @@ export function PaymentsPage() {
             student.externalStudentId
           ])
         ].filter(Boolean).join(" "));
-        const matches = tokens.length === 0 || tokens.every((token) => familyText.includes(token));
+        const matches = !hasSearch || tokens.every((token) => familyText.includes(token));
         return { parent, matchedStudents, matches };
       })
-      .filter((item) => item.matches || item.parent.id === form.parentId)
+      .filter((item) => item.matches || (!hasSearch && item.parent.id === form.parentId))
       .sort((left, right) => {
         if (left.parent.id === form.parentId) return -1;
         if (right.parent.id === form.parentId) return 1;
@@ -1997,6 +2084,10 @@ export function PaymentsPage() {
     [selectedStudents]
   );
 
+  const activePaymentReasonSuggestions = form.paymentScope === "SERVICE"
+    ? SERVICE_PAYMENT_REASON_SUGGESTIONS
+    : PAYMENT_REASON_SUGGESTIONS;
+
   useEffect(() => {
     const officialOptions = new Set<PaymentOptionType>(["FULL_PRESEPTEMBER", "TWO_INSTALLMENTS", "THREE_INSTALLMENTS", "STANDARD_MONTHLY", "SPECIAL_OWNER_AGREEMENT"]);
     const selectedIds = form.studentIds.length > 0 ? new Set(form.studentIds) : null;
@@ -2016,6 +2107,7 @@ export function PaymentsPage() {
   const lastAutoReasonRef = useRef("");
 
   useEffect(() => {
+    if (form.paymentScope !== "TUITION") return;
     const nextAutoReason = selectedStudentDisplayName
       ? buildReasonForStudents("Paiement scolaire", selectedStudentDisplayName)
       : "";
@@ -2031,7 +2123,7 @@ export function PaymentsPage() {
       if (currentReason === nextAutoReason) return prev;
       return { ...prev, reason: nextAutoReason };
     });
-  }, [selectedStudentDisplayName]);
+  }, [form.paymentScope, selectedStudentDisplayName]);
 
   const financeInstallmentSuggestions = useMemo(() => {
     if (!selectedParentFinance) return [];
@@ -2162,11 +2254,11 @@ export function PaymentsPage() {
 
   const previewTuitionAllocation = async () => {
     if (!form.parentId || amountNum <= 0) {
-      setApiError("Choisissez un parent et entrez un montant avant la previsualisation tuition.");
+      setApiError("Choisissez un parent et entrez un montant avant la prévisualisation tuition.");
       return;
     }
     if (selectedParent && (selectedParent.students?.length ?? 0) > 0 && form.studentIds.length === 0) {
-      setApiError("Selectionnez au moins un enfant avant la previsualisation tuition.");
+      setApiError("Sélectionnez au moins un enfant avant la prévisualisation tuition.");
       return;
     }
     setTuitionEngineBusy(true);
@@ -2268,6 +2360,8 @@ export function PaymentsPage() {
   };
 
   const shouldUseTuitionEngineForFamilyPayment = Boolean(
+    form.paymentScope === "TUITION"
+    &&
     form.parentId
     && selectedParent
     && (selectedParent.students?.length ?? 0) > 0
@@ -2281,7 +2375,7 @@ export function PaymentsPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    if (tuitionPreview || shouldUseTuitionEngineForFamilyPayment) {
+    if (form.paymentScope === "TUITION" && (tuitionPreview || shouldUseTuitionEngineForFamilyPayment)) {
       await confirmTuitionPayment();
       return;
     }
@@ -2323,9 +2417,10 @@ export function PaymentsPage() {
     };
 
     try {
-      const created = await api<{ payment: Partial<PaymentRecord> & { id: string }; notificationStatus?: { email?: string; sms?: string } }>("/api/payments", {
+      const created = await api<{ payment: Partial<PaymentRecord> & { id: string }; notificationStatus?: { dashboard?: string; email?: string; sms?: string } }>("/api/payments", {
         method: "POST",
         body: JSON.stringify({
+          paymentCategory: form.paymentScope,
           parentFullName: record.parentFullName,
           parentId: record.parentId,
           studentDisplayName: paymentSubjectName,
@@ -2337,7 +2432,7 @@ export function PaymentsPage() {
           transactionNumber: txNumber,
           status: record.status,
           bankTransferDetails: record.bankTransferDetails,
-          notifyParent: effectivePaymentNotificationsEnabled && Boolean(record.parentId),
+          notifyParent: true,
         }),
       });
       record.id = created?.payment?.id ?? record.id;
@@ -2347,7 +2442,7 @@ export function PaymentsPage() {
       record.parentFullName = created?.payment?.parentFullName ?? record.parentFullName;
       record.bankTransferDetails = created?.payment?.bankTransferDetails ?? record.bankTransferDetails;
       if (created?.notificationStatus) {
-        setNotificationStatus(`${record.parentFullName} - Email: ${created.notificationStatus.email ?? "SKIPPED"} | SMS: ${created.notificationStatus.sms ?? "SKIPPED"}`);
+        setNotificationStatus(`${record.parentFullName} - Compte parent: ${created.notificationStatus.dashboard ?? "OPEN"} | Email: ${created.notificationStatus.email ?? "SKIPPED"} | SMS: ${created.notificationStatus.sms ?? "SKIPPED"}`);
       }
     } catch { /* Mode démo - reçu généré même sans base de données */ }
 
@@ -2375,7 +2470,7 @@ export function PaymentsPage() {
           : item
       )));
       setApiError("");
-      setNotificationStatus(`Paiement ${payment.transactionNumber} annule. Les compteurs parent, eleve et finance ont ete recalcules.`);
+      setNotificationStatus(`Paiement ${payment.transactionNumber} annulé. Les compteurs parent, élève et finance ont été recalculés.`);
       if (currentReceipt?.id === payment.id) {
         setCurrentReceipt((current) => current ? { ...current, ...result.payment, status: "CANCELLED" } : current);
       }
@@ -2390,6 +2485,19 @@ export function PaymentsPage() {
   const setField = <K extends keyof FormState>(k: K, v: FormState[K]) => {
     setForm((prev) => ({ ...prev, [k]: v }));
     if (fieldErrors[k]) setFieldErrors((prev) => ({ ...prev, [k]: undefined }));
+  };
+
+  const setPaymentScope = (scope: FormState["paymentScope"]) => {
+    setForm((prev) => ({
+      ...prev,
+      paymentScope: scope,
+      reason: scope === "SERVICE" && (!prev.reason.trim() || prev.reason === lastAutoReasonRef.current)
+        ? "Abonnement bus scolaire"
+        : prev.reason
+    }));
+    setTuitionPreview(null);
+    setApiError(null);
+    setFieldErrors((prev) => ({ ...prev, paymentScope: undefined, studentIds: undefined, reason: undefined }));
   };
 
   /* -- Barre de navigation ----------------------------------------------- */
@@ -2656,7 +2764,7 @@ export function PaymentsPage() {
 
         {/* Filtres */}
         <div className="card">
-          <div className="grid gap-4 md:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(118px,1fr))] xl:items-start">
             <div>
               <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Recherche</label>
               <SearchField
@@ -2682,7 +2790,7 @@ export function PaymentsPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-ink-dim">
-                Recherche intelligente par eleve, parent, classe, statut paye/non paye, numero, motif ou produit scolaire.
+                Recherche intelligente par élève, parent, classe, statut payé/non payé, numéro, motif ou produit scolaire.
               </p>
             </div>
             <div>
@@ -2690,6 +2798,13 @@ export function PaymentsPage() {
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full">
                 <option value="ALL">Tous les statuts</option>
                 {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Classe</label>
+              <select value={filterClass} onChange={(e) => setFilterClass(e.target.value)} className="w-full">
+                <option value="ALL">Toutes les classes</option>
+                {historyClassOptions.map((className) => <option key={className} value={className}>{className}</option>)}
               </select>
             </div>
             <div>
@@ -2880,11 +2995,11 @@ export function PaymentsPage() {
         <div className="card flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1">
             <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">
-              Filtrer par eleve (laisser vide = état général)
+              Filtrer par élève (laisser vide = état général)
             </label>
             <input
               type="text"
-              placeholder="Nom de l'eleve..."
+              placeholder="Nom de l'élève..."
               value={reportSearch}
               onChange={(e) => setReportSearch(e.target.value)}
               className="w-full"
@@ -2906,7 +3021,7 @@ export function PaymentsPage() {
           </button>
         </div>
 
-        {/* Cartes par eleve */}
+        {/* Cartes par élève */}
         {Object.keys(bySubject).length === 0 ? (
           <div className="card text-center py-12 text-ink-dim">Aucun paiement enregistré.</div>
         ) : (
@@ -2919,7 +3034,7 @@ export function PaymentsPage() {
 
             return (
               <div key={subject} className="card">
-                {/* En-tete eleve */}
+                {/* En-tete élève */}
                 <div className="flex items-center justify-between border-b border-slate-700 pb-4 mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-brand-600/30 flex items-center justify-center text-brand-300 font-bold text-lg">
@@ -3059,7 +3174,7 @@ export function PaymentsPage() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-200">{t("paymentDetails")}</p>
           <h2 className="mt-2 font-display text-xl font-bold text-white">{t("newPaymentBtn")}</h2>
-          <p className="mt-1 text-sm text-ink-dim">Le formulaire de paiement s'ouvre dans une boite dediee au centre de l'ecran.</p>
+          <p className="mt-1 text-sm text-ink-dim">Le formulaire de paiement s'ouvre dans une boîte dédiée au centre de l'écran.</p>
         </div>
         <button
           type="button"
@@ -3170,16 +3285,40 @@ export function PaymentsPage() {
                 </div>
               </div>
               <p className="text-xs text-ink-dim">
-                Cherchez par parent ou par enfant; choisir une famille remplit le parent cible et selectionne les enfants correspondants.
+                Cherchez par parent ou par enfant; choisir une famille remplit le parent cible et sélectionne les enfants correspondants.
               </p>
               {fieldErrors.parentId && <p className="text-xs text-danger">{fieldErrors.parentId}</p>}
+            </div>
+
+            <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Type de paiement</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {([
+                  { value: "TUITION" as const, title: "Scolarité / tuition plan", detail: "Plans officiels, arrangement spécial, répartition sur échéances et suivi de dette." },
+                  { value: "SERVICE" as const, title: "Service ou autre frais", detail: "Bus scolaire, uniformes, cantine, documents, activités: reçu officiel sans toucher au plan tuition." }
+                ]).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPaymentScope(option.value)}
+                    className={`rounded-xl border p-4 text-left transition-all ${
+                      form.paymentScope === option.value
+                        ? "border-brand-300 bg-brand-500/20 text-white"
+                        : "border-slate-700 bg-slate-900/60 text-ink-dim hover:border-brand-400/50 hover:text-white"
+                    }`}
+                  >
+                    <span className="block text-sm font-black">{option.title}</span>
+                    <span className="mt-2 block text-xs leading-5">{option.detail}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {selectedParent && (selectedParent.students?.length ?? 0) > 0 && (
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">
-                    Eleves concernes <span className="text-danger">*</span>
+                    Eleves concernes {form.paymentScope === "TUITION" && <span className="text-danger">*</span>}
                   </label>
                   <div className="flex gap-2">
                     <button
@@ -3209,6 +3348,11 @@ export function PaymentsPage() {
                   <p className="text-xs font-semibold text-ink-dim">
                     {form.studentIds.length} sur {selectedParent.students?.length ?? 0} enfant(s) sélectionné(s). Le paiement, les échéances, la répartition manuelle et le reçu seront limités à cette sélection.
                   </p>
+                  {form.paymentScope === "SERVICE" && (
+                    <p className="text-xs font-semibold text-amber-100/80">
+                      Pour un service, la sélection sert seulement à préciser le reçu. Le plan tuition, les échéances et la dette restent inchangés.
+                    </p>
+                  )}
                   {selectedParent.students?.map((student) => {
                     const active = form.studentIds.includes(student.id);
                     return (
@@ -3235,7 +3379,7 @@ export function PaymentsPage() {
               </div>
             )}
 
-            {selectedParentFinance && (
+            {form.paymentScope === "TUITION" && selectedParentFinance && (
               <div className="lg:col-span-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -3286,7 +3430,7 @@ export function PaymentsPage() {
               </div>
             )}
 
-            {selectedParent && (
+            {form.paymentScope === "TUITION" && selectedParent && (
               <div className="lg:col-span-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0">
@@ -3501,8 +3645,8 @@ export function PaymentsPage() {
                                 return (
                                   <div key={summary.studentName} className="rounded-md border border-white/10 bg-slate-950/40 p-2 text-xs">
                                     <p className="font-semibold text-white">{summary.studentName}</p>
-                                    <p className="mt-1 text-cyan-100">Du avant paiement {fmtUsd(summary.before)}</p>
-                                    <p className="mt-1 text-emerald-100">Applique {fmtUsd(summary.allocated)}</p>
+                                    <p className="mt-1 text-cyan-100">D? avant paiement {fmtUsd(summary.before)}</p>
+                                    <p className="mt-1 text-emerald-100">Appliqu? {fmtUsd(summary.allocated)}</p>
                                     <p className="text-amber-100">Reste {fmtUsd(summary.remaining)}</p>
                                   </div>
                                 );
@@ -3519,7 +3663,7 @@ export function PaymentsPage() {
                               </div>
                               <div className="text-right text-xs">
                                 <p className="font-mono text-cyan-100">Avant {fmtUsd(line.outstandingBefore)}</p>
-                                <p className="font-mono text-emerald-100">Applique {fmtUsd(line.allocated)}</p>
+                                <p className="font-mono text-emerald-100">Appliqu? {fmtUsd(line.allocated)}</p>
                                 <p className="font-mono text-ink-dim">Reste {fmtUsd(line.outstandingAfter)}</p>
                               </div>
                             </div>
@@ -3555,17 +3699,17 @@ export function PaymentsPage() {
             </div>
 
             <div className="lg:col-span-2 rounded-2xl border border-brand-500/20 bg-gradient-to-r from-brand-500/10 via-slate-950/60 to-transparent p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand-200">Identite du paiement</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand-200">Identité du paiement</p>
               <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-dim">Paiement pour</p>
                   <p className="mt-1 truncate font-display text-2xl font-bold text-white">
-                    {selectedStudentDisplayName || "Selectionnez l'eleve concerne"}
+                    {selectedStudentDisplayName || "Sélectionnez l'élève concerné"}
                   </p>
                   <p className="mt-2 text-sm text-ink-dim">
                     {form.parentFullName.trim()
-                      ? `Parent concerne: ${form.parentFullName.trim()}`
-                      : "Le parent lie au paiement apparaitra ici comme information secondaire."}
+                      ? `Parent concern? : ${form.parentFullName.trim()}`
+                      : "Le parent lie au paiement apparaîtra ici comme information secondaire."}
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-ink-dim">
@@ -3590,16 +3734,16 @@ export function PaymentsPage() {
               type="text"
               value={form.reason}
               onChange={(e) => setField("reason", e.target.value)}
-              placeholder="Ex. Frais scolaires 1er trimestre 2026"
+              placeholder={form.paymentScope === "SERVICE" ? "Ex. Abonnement bus scolaire - juin" : "Ex. Frais scolaires 1er trimestre 2026"}
               className={`w-full ${fieldErrors.reason ? "border-danger" : ""}`}
             />
             <datalist id="payment-reason-suggestions">
-              {PAYMENT_REASON_SUGGESTIONS.map((reason) => (
+              {activePaymentReasonSuggestions.map((reason) => (
                 <option key={reason} value={reason} />
               ))}
             </datalist>
             <div className="flex flex-wrap gap-2 pt-1">
-              {PAYMENT_REASON_SUGGESTIONS.slice(0, 8).map((reason) => (
+              {activePaymentReasonSuggestions.slice(0, 8).map((reason) => (
                 <button
                   key={reason}
                   type="button"

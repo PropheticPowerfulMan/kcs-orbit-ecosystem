@@ -17,6 +17,10 @@
 
 Pour reduire les divergences entre SAVANEX, EduPay, KCS Nexus, EduSync AI et Orbit, le noyau canonique adopte les regles suivantes:
 
+- tous les formulaires affichent les champs dans l'ordre administratif Nom, Postnom, Prenom
+- Nom correspond toujours a lastName, Postnom a middleName (facultatif) et Prenom a firstName
+- fullName est compose dans l'ordre lastName middleName firstName; les champs structures ont priorite sur les anciens noms complets ambigus
+- les compteurs d'effectifs proviennent de la meme projection Orbit et correspondent toujours aux tableaux retournes: parents.length, students.length et teachers.length
 - `student` expose toujours `firstName`, `lastName`, `fullName`, `studentNumber`, `email`, `phone`, `dateOfBirth`, `status`, `mustChangePassword`, `classId|className`, `parentId`, `organizationId`, `externalIds[]`
 - `parent` expose toujours `fullName`, `phone`, `email`, `physicalAddress`, `accessCode`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName` quand l'application sait les reconstruire
 - `teacher` expose toujours `fullName`, `phone`, `email`, `physicalAddress`, `subject`, `mustChangePassword`, et idealement aussi `firstName`, `middleName`, `lastName`, `employeeId`, `employeeType`, `department`, `jobTitle`
@@ -114,7 +118,7 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
   "students": [
     {
       "id": "std_001",
-      "fullName": "Grace Mbuyi Ilunga",
+      "fullName": "Ilunga Mbuyi Grace",
       "firstName": "Grace",
       "middleName": "Mbuyi",
       "lastName": "Ilunga",
@@ -136,7 +140,7 @@ Projection canonique recommandee pour `GET /api/integration/read/shared-director
   "parents": [
     {
       "id": "par_033",
-      "fullName": "Jean Pierre Ilunga",
+      "fullName": "Ilunga Pierre Jean",
       "firstName": "Jean",
       "middleName": "Pierre",
       "lastName": "Ilunga",

@@ -3,16 +3,17 @@ import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bell, BookOpen, Brain, Calendar, CheckCircle2, ChevronRight,
-  Clock, FileText, GraduationCap, MessageSquare, TrendingUp, Users, AlertTriangle, ClipboardCheck
+  Clock, Download, FileText, GraduationCap, LibraryBig, MessageSquare, Printer, Settings, TrendingUp, Upload, Users, AlertTriangle, ClipboardCheck, X
 } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
-import { studentsAPI } from '@/services/api'
+import { aiAPI, authAPI, messagesAPI, studentsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
+import { printOfficialPdf } from '@/utils/officialPdf'
 import {
   aiSignals,
   aiRecommendations,
@@ -85,12 +86,40 @@ const gradingScaleRows = [
   ['70', '71', 'C-'], ['68', '69', 'D+'], ['62', '67', 'D'], ['60', '61', 'D-'], ['0', '60', 'F'],
 ]
 
+const downloadTeacherFile = (fileName: string, content: string, type = 'text/plain;charset=utf-8') => {
+  const url = URL.createObjectURL(new Blob([content], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 type GradebookColumn = {
   id: string
   title: string
   type: string
   date: string
   maxPoints: number
+}
+
+type ProfileDraft = {
+  firstName: string
+  middleName: string
+  lastName: string
+  email: string
+  phone: string
+  avatar: string
+}
+
+type TeacherAiTask = 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary'
+
+type TeacherAiTool = {
+  task: TeacherAiTask
+  title: string
+  detail: string
 }
 
 type RegistryStudent = {
@@ -157,6 +186,7 @@ const mapRegistryStudent = (student: StudentProfileResponse, index: number): Reg
 }
 
 const TeacherSectionView = ({ segment }: { segment: string }) => {
+  const { user, updateUser } = useAuthStore()
   const sectionTitles: Record<string, { title: string; subtitle: string; icon: React.ElementType }> = {
     courses: { title: 'My Courses', subtitle: 'Assigned classes, rooms, schedules, and teaching load.', icon: BookOpen },
     students: { title: 'Students', subtitle: 'Academic profile, risk level, strengths, and support needs for each learner.', icon: Users },
@@ -165,8 +195,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     grades: { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
     'report-card': { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
     reports: { title: 'Reports', subtitle: 'Report cards, AI comments, exports, and principal approval status.', icon: GraduationCap },
+    timetable: { title: 'Timetable', subtitle: 'Your synchronized teaching schedule, rooms, and class details.', icon: Calendar },
+    resources: { title: 'Learning Resources', subtitle: 'Search, review, and manage resources shared with your classes.', icon: LibraryBig },
     discipline: { title: 'Detailed Student Discipline Report', subtitle: 'Incident context, action taken, parent contact, and follow-up plan.', icon: AlertTriangle },
     messages: { title: 'Messages', subtitle: 'Teacher inbox, parent threads, and internal coordination messages.', icon: MessageSquare },
+    settings: { title: 'Settings', subtitle: 'Manage your teacher profile, contact details, and profile photo.', icon: Settings },
   }
 
   const meta = sectionTitles[segment] ?? sectionTitles.reports
@@ -179,6 +212,24 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   ))
 
   const [actionMessage, setActionMessage] = useState('')
+  const [actionIsError, setActionIsError] = useState(false)
+  const [resourceQuery, setResourceQuery] = useState('')
+  const [selectedResource, setSelectedResource] = useState<(typeof lmsResources)[number] | null>(null)
+  const [selectedSchedule, setSelectedSchedule] = useState<(typeof ecosystemSchedules)[number] | null>(null)
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => ({ firstName: user?.firstName ?? '', middleName: user?.middleName ?? '', lastName: user?.lastName ?? '', email: user?.email ?? '', phone: user?.phone ?? '', avatar: user?.avatar ?? '' }))
+  const [profileDialog, setProfileDialog] = useState('')
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [twoFactorSecret, setTwoFactorSecret] = useState('')
+  const [twoFactorCode, setTwoFactorCode] = useState('')
+  const [twoFactorSetupUrl, setTwoFactorSetupUrl] = useState('')
+  const [workspaceRevision, setWorkspaceRevision] = useState<number | undefined>()
+  const [workspaceStatus, setWorkspaceStatus] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
+  const [reportPeriod, setReportPeriod] = useState<'Daily' | 'Weekly' | 'Annual'>('Daily')
+  const [selectedAiStudent, setSelectedAiStudent] = useState<RegistryStudent | null>(null)
+  const [studentQuery, setStudentQuery] = useState('')
+  const [studentClassFilter, setStudentClassFilter] = useState('All')
+  const [studentDetail, setStudentDetail] = useState<RegistryStudent | null>(null)
   const [courses, setCourses] = useState(() =>
     subjects.map((subject, index) => {
       const gradeLevel = inferGradeLabel(subject.className)
@@ -238,6 +289,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       requiresResponse: message.requiresResponse,
     })),
   ])
+  const [messageContacts, setMessageContacts] = useState<Array<{ id: string; firstName: string; lastName: string; role: string }>>([])
+  const [submittedTeacherReports, setSubmittedTeacherReports] = useState<Array<Record<string, unknown>>>([])
 
   const [courseDraft, setCourseDraft] = useState({
     name: 'Integrated Science Lab',
@@ -287,7 +340,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     level: 'medium',
   })
   const [messageDraft, setMessageDraft] = useState({
-    to: 'Academic Coordinator',
+    to: '',
     subject: 'Student support update',
     body: 'Please review the new intervention note and confirm next steps.',
   })
@@ -298,8 +351,60 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     maxPoints: 100,
   })
 
+  useEffect(() => {
+    if (!user?.id) return
+    let active = true
+    setWorkspaceStatus('loading')
+    teacherWorkspaceAPI.get().then((response) => {
+      if (!active) return
+      const workspace = response.data?.data
+      const state = workspace?.state as Record<string, any> | undefined
+      if (state) {
+        if (Array.isArray(state.courses)) setCourses(state.courses)
+        if (Array.isArray(state.teacherStudents)) setTeacherStudents(state.teacherStudents)
+        if (Array.isArray(state.attendanceEntries)) setAttendanceEntries(state.attendanceEntries)
+        if (Array.isArray(state.assignmentList)) setAssignmentList(state.assignmentList)
+        if (Array.isArray(state.gradeEntries)) setGradeEntries(state.gradeEntries)
+        if (Array.isArray(state.reportList)) setReportList(state.reportList)
+        if (Array.isArray(state.disciplineList)) setDisciplineList(state.disciplineList)
+        if (Array.isArray(state.reportCardRows)) setReportCardRows(state.reportCardRows)
+        if (Array.isArray(state.generatedReportCards)) setGeneratedReportCards(state.generatedReportCards)
+        if (Array.isArray(state.inbox)) setInbox(state.inbox)
+        if (Array.isArray(state.submittedTeacherReports)) setSubmittedTeacherReports(state.submittedTeacherReports)
+        if (state.gradebookColumnsByCourse && typeof state.gradebookColumnsByCourse === 'object') setGradebookColumnsByCourse(state.gradebookColumnsByCourse)
+        if (state.gradebookScores && typeof state.gradebookScores === 'object') setGradebookScores(state.gradebookScores)
+      }
+      setWorkspaceRevision(workspace?.revision)
+      setWorkspaceStatus('ready')
+    }).catch(() => {
+      if (active) setWorkspaceStatus('error')
+    })
+    return () => { active = false }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) return
+    let active = true
+    Promise.all([messagesAPI.getContacts(), messagesAPI.getAll({ box: 'all' })]).then(([contactsResponse, messagesResponse]) => {
+      if (!active) return
+      const contacts = contactsResponse.data?.data ?? []
+      setMessageContacts(contacts)
+      setMessageDraft((draft) => ({ ...draft, to: draft.to || contacts[0]?.id || '' }))
+      const liveMessages = (messagesResponse.data?.data ?? []).map((message: any) => ({
+        id: message.id,
+        from: message.senderId === user.id ? `To ${message.recipient?.firstName ?? ''} ${message.recipient?.lastName ?? ''}`.trim() : `${message.sender?.firstName ?? ''} ${message.sender?.lastName ?? ''}`.trim(),
+        subject: message.subject,
+        body: message.body,
+        time: new Date(message.createdAt).toLocaleString(),
+        requiresResponse: !message.readAt && message.recipientId === user.id,
+      }))
+      setInbox(liveMessages)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [user?.id])
+
   const findStudent = (studentId: string) => superAdminStudentPool.find((student) => student.id === studentId)
-  const runAction = (message: string) => setActionMessage(message)
+  const runAction = (message: string, isError = false) => { setActionMessage(message); setActionIsError(isError) }
 
   useEffect(() => {
     let active = true
@@ -314,7 +419,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         setRegistryStatus('ready')
       } catch {
         if (!active) return
-        setSuperAdminStudentPool([])
+        // Keep the teacher portal usable offline while clearly recording that the live registry was unavailable.
+        setSuperAdminStudentPool(ecosystemStudents)
         setRegistryStatus('error')
       }
     }
@@ -360,6 +466,116 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setReportCardRows((current) => current.map((row) => row.id === rowId ? { ...row, [field]: value } : row))
   }
 
+  const getWorkspaceState = (overrides: Record<string, unknown> = {}) => ({
+    courses, teacherStudents, attendanceEntries, assignmentList, gradeEntries, reportList, disciplineList,
+    reportCardRows, generatedReportCards, inbox, submittedTeacherReports, gradebookColumnsByCourse, gradebookScores, ...overrides,
+  })
+
+  const persistWorkspace = async (overrides: Record<string, unknown> = {}, successMessage?: string) => {
+    setWorkspaceStatus('saving')
+    try {
+      const response = await teacherWorkspaceAPI.save(getWorkspaceState(overrides), workspaceRevision)
+      setWorkspaceRevision(response.data?.data?.revision)
+      setWorkspaceStatus('ready')
+      if (successMessage) runAction(successMessage)
+      return true
+    } catch (error: any) {
+      setWorkspaceStatus('error')
+      runAction(error?.response?.data?.message || 'The operation was not saved. Check your session and connection, then try again.', true)
+      return false
+    }
+  }
+
+  const readProfilePhoto = (file?: File) => {
+    if (!file || !file.type.startsWith('image/')) return setProfileDialog('Please select a valid image file.')
+    if (file.size > 1024 * 1024) return setProfileDialog('The profile photo must be smaller than 1 MB.')
+    const reader = new FileReader()
+    reader.onload = () => { setProfileDraft((draft) => ({ ...draft, avatar: String(reader.result) })); setProfileDialog('Profile photo loaded. Save changes to confirm this update.') }
+    reader.readAsDataURL(file)
+  }
+
+  const saveTeacherProfile = async () => {
+    if (!profileDraft.firstName.trim() || !profileDraft.lastName.trim()) return setProfileDialog('First name and last name are required.')
+    if (!/^\S+@\S+\.\S+$/.test(profileDraft.email)) return setProfileDialog('Enter a valid email address.')
+    setProfileSaving(true)
+    try {
+      let updatedUser = user
+      if (profileDraft.email.trim().toLowerCase() !== user?.email?.toLowerCase()) {
+        const emailResponse = await authAPI.updateEmail({ newEmail: profileDraft.email.trim(), currentPassword })
+        updatedUser = emailResponse.data?.data
+      }
+      const profileResponse = await authAPI.updateProfile({ firstName: profileDraft.firstName.trim(), middleName: profileDraft.middleName.trim() || null, lastName: profileDraft.lastName.trim(), phone: profileDraft.phone.trim(), avatar: profileDraft.avatar })
+      updatedUser = { ...updatedUser, ...profileResponse.data?.data }
+      updateUser(updatedUser ?? profileDraft)
+      setCurrentPassword('')
+      window.dispatchEvent(new CustomEvent('kcs-profile-updated', { detail: { userId: user?.id, profile: updatedUser } }))
+      setProfileDialog('Your profile was saved to KCS Nexus and will remain available after refresh or reconnection.')
+    } catch (error: any) {
+      setProfileDialog(error?.response?.data?.message || 'The profile could not be saved. No success was recorded.')
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  const startTwoFactorSetup = async () => {
+    try {
+      const response = await authAPI.setup2FA()
+      setTwoFactorSecret(response.data?.data?.secret ?? '')
+      setTwoFactorSetupUrl(response.data?.data?.otpauthUrl ?? '')
+      setProfileDialog('A new authenticator secret was created. Add it to your authenticator app, then verify a current code.')
+    } catch (error: any) {
+      setProfileDialog(error?.response?.data?.message || 'Two-factor authentication setup failed.')
+    }
+  }
+
+  const verifyTwoFactorSetup = async () => {
+    try {
+      await authAPI.verify2FA(twoFactorCode)
+      updateUser({ twoFactorEnabled: true })
+      setTwoFactorCode('')
+      setTwoFactorSecret('')
+      setTwoFactorSetupUrl('')
+      setProfileDialog('Two-factor authentication is enabled and will be required at the next sign-in.')
+    } catch (error: any) {
+      setProfileDialog(error?.response?.data?.message || 'The authenticator code could not be verified.')
+    }
+  }
+
+  const disableTwoFactor = async () => {
+    try {
+      await authAPI.toggle2FA(false)
+      updateUser({ twoFactorEnabled: false })
+      setProfileDialog('Two-factor authentication was disabled on your account.')
+    } catch (error: any) {
+      setProfileDialog(error?.response?.data?.message || 'Two-factor authentication could not be disabled.')
+    }
+  }
+
+  const printTeacherReport = () => window.print()
+  const saveWorkspace = () => { void persistWorkspace({}, `${meta.title} changes were saved to KCS Nexus.`) }
+  const exportWorkspacePdf = () => {
+    const exportData = (() => {
+      if (segment === 'courses') return { columns: ['Subject', 'Class', 'Room', 'Credit hours', 'Enrolled'], rows: courses.map((course) => [course.name, course.gradeLevels.join(', '), course.room, course.creditHours, course.studentIds.length]), narrative: 'Official teaching-load and subject-enrolment register.' }
+      if (segment === 'attendance') return { columns: ['Student', 'Date', 'Class', 'Status'], rows: attendanceEntries.map((record) => [findStudent(record.studentId)?.name ?? 'Student', record.date, record.className, record.status]), narrative: 'Homeroom daily attendance register, generated from the current teacher record.' }
+      if (segment === 'assignments') return { columns: ['Assignment', 'Student', 'Subject', 'Due date', 'Status', 'Priority'], rows: assignmentList.map((item) => [item.title, findStudent(item.studentId)?.name ?? 'Student', item.subject, item.due, item.status, item.priority]), narrative: 'Assignment register and learner follow-up status.' }
+      if (segment === 'reports' || segment === 'report-card') return { columns: ['Student', 'Cycle', 'Average', 'Conduct', 'Approval'], rows: reportList.map((item) => [item.student, item.term, `${item.average}%`, item.conduct, item.principalStatus]), narrative: 'Teacher report-card register for administrative review.' }
+      if (segment === 'discipline') return { columns: ['Reference', 'Student', 'Date', 'Category', 'Level', 'Status'], rows: disciplineList.map((item) => [item.id, item.student, item.date, item.category, item.level, item.status]), narrative: 'Confidential discipline-report register. Distribution is restricted to authorized staff.' }
+      if (segment === 'messages') return { columns: ['From / To', 'Subject', 'Time', 'Response'], rows: inbox.map((item) => [item.from, item.subject, item.time, item.requiresResponse ? 'Required' : 'No']), narrative: 'Confidential teacher communication register.' }
+      if (segment === 'settings') return { columns: ['Field', 'Recorded value'], rows: [['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim()], ['Email', profileDraft.email], ['Phone', profileDraft.phone]], narrative: 'Teacher profile record. This document does not include the profile photo.' }
+      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: teacherStudents.map((student) => [student.name, `${student.grade}${student.section}`, `${student.average ?? '—'}%`, `${student.attendance ?? '—'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
+    })()
+    if (!printOfficialPdf({ title: `Teacher ${meta.title} Export`, subtitle: 'KCS Nexus AI — Kinshasa Christian School', metadata: [['Document', meta.title], ['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim() || 'Teacher'], ['Academic year', '2025–2026'], ['Records', exportData.rows.length]], ...exportData, orientation: exportData.columns.length > 5 ? 'landscape' : 'portrait' })) return runAction('Allow pop-ups to generate the official printable PDF.')
+    runAction(`${meta.title} contextual official PDF was generated.`)
+  }
+  const submitTeacherReport = async () => {
+    const report = { id: `TR-${Date.now()}`, period: reportPeriod, teacher: `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim(), submittedAt: new Date().toISOString(), students: teacherStudents.length, attendance: Math.round(teacherStudents.reduce((sum, student) => sum + (student.attendance ?? 0), 0) / Math.max(teacherStudents.length, 1)), status: 'Submitted to administrative staff' }
+    const nextReports = [report, ...submittedTeacherReports]
+    if (await persistWorkspace({ submittedTeacherReports: nextReports }, `${reportPeriod} report submitted to Administrative Staff.`)) {
+      setSubmittedTeacherReports(nextReports)
+      downloadTeacherFile(`kcs-${reportPeriod.toLowerCase()}-teacher-report-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(report, null, 2), 'application/json')
+    }
+  }
+
   const addReportCardCourse = () => {
     setReportCardRows((current) => [
       ...current,
@@ -394,7 +610,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     })
   }
 
-  const generateReportCard = () => {
+  const generateReportCard = async () => {
     const studentName = reportCardStudent?.name ?? 'Selected student'
     const summary = `${studentName} earned ${reportCardAverage}% for ${reportCardTerm}. Mention: ${reportCardMention}. Decision: ${reportCardDecision}.`
     const nextReport = {
@@ -406,8 +622,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       rows: reportCardRows,
       summary,
     }
-    setGeneratedReportCards((current) => [nextReport, ...current])
-    setReportList((current) => [{
+    const nextGenerated = [nextReport, ...generatedReportCards]
+    const nextReportList = [{
       student: studentName,
       term: reportCardTerm,
       average: reportCardAverage,
@@ -415,11 +631,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       teacherComment: summary,
       principalStatus: 'Pending review',
       download: 'Report card draft',
-    }, ...current])
-    runAction(`${studentName}'s report card was generated with an automatic ${reportCardAverage}% average.`)
+    }, ...reportList]
+    if (await persistWorkspace({ generatedReportCards: nextGenerated, reportList: nextReportList }, `${studentName}'s report card was generated and saved with an automatic ${reportCardAverage}% average.`)) {
+      setGeneratedReportCards(nextGenerated)
+      setReportList(nextReportList)
+    }
   }
 
-  const createCourse = () => {
+  const createCourse = async () => {
     const selectedGrade = courseDraft.gradeLevels[0] ?? '10th Grade'
     const roster = getRosterForClass(courseDraft.className || selectedGrade)
     const nextCourse = {
@@ -434,13 +653,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       studentIds: roster.map((student) => student.id),
       status: editingCourseId ? 'updated' : 'draft',
     }
-    setCourses((current) => editingCourseId ? current.map((course) => course.id === editingCourseId ? { ...course, ...nextCourse } : course) : [nextCourse, ...current])
-    setTeacherStudents((current) => {
-      const existingIds = new Set(current.map((student) => student.id))
-      return [...roster.filter((student) => !existingIds.has(student.id)), ...current]
-    })
+    const nextCourses = editingCourseId ? courses.map((course) => course.id === editingCourseId ? { ...course, ...nextCourse } : course) : [nextCourse, ...courses]
+    const existingIds = new Set(teacherStudents.map((student) => student.id))
+    const nextStudents = [...roster.filter((student) => !existingIds.has(student.id)), ...teacherStudents]
+    if (!await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, `${nextCourse.name} ${editingCourseId ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) enrolled.`)) return
+    setCourses(nextCourses)
+    setTeacherStudents(nextStudents)
     setSelectedGradebookCourseId(nextCourse.id)
-    runAction(`${nextCourse.name} ${editingCourseId ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) were enrolled and sent to Grade Book.`)
     setEditingCourseId(null)
   }
 
@@ -460,12 +679,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     runAction(`${course.name} loaded for editing.`)
   }
 
-  const deleteCourse = (courseId: string) => {
+  const deleteCourse = async (courseId: string) => {
     const course = courses.find((item) => item.id === courseId)
-    setCourses((current) => current.filter((item) => item.id !== courseId))
+    const nextCourses = courses.filter((item) => item.id !== courseId)
+    if (!await persistWorkspace({ courses: nextCourses }, `${course?.name ?? 'Subject'} removed and saved.`)) return
+    setCourses(nextCourses)
     if (editingCourseId === courseId) resetCourseDraft()
     if (selectedEnrollmentCourseId === courseId) setSelectedEnrollmentCourseId(courses.find((item) => item.id !== courseId)?.id ?? '')
-    runAction(`${course?.name ?? 'Subject'} removed from this teacher workspace.`)
   }
 
   const filteredCourses = courses.filter((course) => {
@@ -482,6 +702,17 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setSelectedEnrollmentCourseId(courseId)
     setCourseTab('enrollment')
     runAction(`${course?.name ?? 'Subject'} enrollment opened.`)
+  }
+
+  const toggleCourseEnrollment = async (courseId: string, student: RegistryStudent) => {
+    const course = courses.find((item) => item.id === courseId)
+    if (!course) return
+    const enrolled = course.studentIds.includes(student.id)
+    const nextCourses = courses.map((item) => item.id === courseId ? { ...item, studentIds: enrolled ? item.studentIds.filter((id) => id !== student.id) : [...item.studentIds, student.id] } : item)
+    const nextStudents = !enrolled && !teacherStudents.some((item) => item.id === student.id) ? [student, ...teacherStudents] : teacherStudents
+    if (!await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, `${student.name} ${enrolled ? 'removed from' : 'enrolled in'} ${course.name}; enrollment saved.`)) return
+    setCourses(nextCourses)
+    setTeacherStudents(nextStudents)
   }
 
   const selectedGradebookCourse = courses.find((course) => course.id === selectedGradebookCourseId) ?? courses[0]
@@ -518,10 +749,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setGradebookScores((current) => ({ ...current, [getGradebookScoreKey(columnId, studentId)]: score }))
   }
 
-  const createGradebookColumn = () => {
+  const createGradebookColumn = async () => {
     const title = gradebookColumnDraft.title.trim()
     if (!title) {
-      runAction('Add a column name before creating a gradebook column.')
+      runAction('Add a column name before creating a gradebook column.', true)
       return
     }
     const nextColumn = {
@@ -531,66 +762,71 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       date: gradebookColumnDraft.date.trim() || '04/30/2026',
       maxPoints: Math.max(1, Number(gradebookColumnDraft.maxPoints) || 100),
     }
-    setGradebookColumnsByCourse((current) => ({
-      ...current,
-      [selectedGradebookCourse.id]: [...(current[selectedGradebookCourse.id] ?? []), nextColumn],
-    }))
+    const nextColumns = {
+      ...gradebookColumnsByCourse,
+      [selectedGradebookCourse.id]: [...(gradebookColumnsByCourse[selectedGradebookCourse.id] ?? []), nextColumn],
+    }
+    if (!await persistWorkspace({ gradebookColumnsByCourse: nextColumns }, `${nextColumn.title} column added and saved. Final grades recalculated.`)) return
+    setGradebookColumnsByCourse(nextColumns)
     setGradebookColumnDraft((draft) => ({ ...draft, title: '', maxPoints: 100 }))
-    runAction(`${nextColumn.title} column added. Final grades will recalculate automatically.`)
   }
 
-  const deleteGradebookColumn = (columnId: string) => {
-    setGradebookColumnsByCourse((current) => ({
-      ...current,
-      [selectedGradebookCourse.id]: (current[selectedGradebookCourse.id] ?? []).filter((column) => column.id !== columnId),
-    }))
-    setGradebookScores((current) => {
-      const next = { ...current }
-      Object.keys(next).forEach((key) => {
-        if (key.includes(`-${columnId}-`)) delete next[key]
+  const deleteGradebookColumn = async (columnId: string) => {
+    const nextColumns = { ...gradebookColumnsByCourse, [selectedGradebookCourse.id]: (gradebookColumnsByCourse[selectedGradebookCourse.id] ?? []).filter((column) => column.id !== columnId) }
+    const nextScores = { ...gradebookScores }
+      Object.keys(nextScores).forEach((key) => {
+        if (key.includes(`-${columnId}-`)) delete nextScores[key]
       })
-      return next
-    })
-    runAction('Gradebook column removed and final grades recalculated.')
+    if (!await persistWorkspace({ gradebookColumnsByCourse: nextColumns, gradebookScores: nextScores }, 'Gradebook column removed, saved, and final grades recalculated.')) return
+    setGradebookColumnsByCourse(nextColumns)
+    setGradebookScores(nextScores)
   }
 
-  const importStudent = () => {
+  const importStudent = async () => {
     const student = findStudent(selectedStudentId)
     if (!student) return
-    setTeacherStudents((current) => current.some((item) => item.id === student.id) ? current : [student, ...current])
-    runAction(`${student.name} imported from the Super Admin student registry.`)
+    const nextStudents = teacherStudents.some((item) => item.id === student.id) ? teacherStudents : [student, ...teacherStudents]
+    if (!await persistWorkspace({ teacherStudents: nextStudents }, `${student.name} imported from the Super Admin registry and saved.`)) return
+    setTeacherStudents(nextStudents)
   }
 
-  const addAttendance = () => {
+  const addAttendance = async () => {
     const student = findStudent(attendanceDraft.studentId)
-    setAttendanceEntries((current) => [{ ...attendanceDraft }, ...current])
-    runAction(`${student?.name ?? 'Student'} marked ${attendanceDraft.status}; parent/admin visibility queued.`)
+    const nextEntries = [{ ...attendanceDraft, date: attendanceDraft.date || new Date().toISOString().slice(0, 10) }, ...attendanceEntries]
+    if (!await persistWorkspace({ attendanceEntries: nextEntries }, `${student?.name ?? 'Student'} marked ${attendanceDraft.status}; the saved workspace is available to authorized staff.`)) return
+    setAttendanceEntries(nextEntries)
   }
 
-  const createAssignment = () => {
+  const createAssignment = async () => {
     const student = findStudent(assignmentDraft.studentId)
-    setAssignmentList((current) => [{ id: `asg-${Date.now()}`, ...assignmentDraft }, ...current])
-    runAction(`${assignmentDraft.title} assigned to ${student?.name ?? 'selected student'}.`)
+    const nextAssignments = [{ id: `asg-${Date.now()}`, ...assignmentDraft }, ...assignmentList]
+    if (!await persistWorkspace({ assignmentList: nextAssignments }, `${assignmentDraft.title} assigned to ${student?.name ?? 'selected student'} and saved.`)) return
+    setAssignmentList(nextAssignments)
   }
 
-  const addGrade = () => {
+  const addGrade = async () => {
     const student = findStudent(gradeDraft.studentId)
-    setGradeEntries((current) => [{ ...gradeDraft, teacher: 'Dr. Mukendi' }, ...current])
-    runAction(`${gradeDraft.assessment} saved for ${student?.name ?? 'selected student'} and ready for report cards.`)
+    const nextGrades = [{ ...gradeDraft, teacher: `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || 'Teacher' }, ...gradeEntries]
+    if (!await persistWorkspace({ gradeEntries: nextGrades }, `${gradeDraft.assessment} saved for ${student?.name ?? 'selected student'} and synchronized with report data.`)) return
+    setGradeEntries(nextGrades)
   }
 
-  const createReport = () => {
-    setReportList((current) => [{ ...reportDraft, principalStatus: 'Pending review', download: 'Draft' }, ...current])
-    runAction(`${reportDraft.student}'s report draft created for principal approval.`)
+  const createReport = async () => {
+    const nextReports = [{ ...reportDraft, createdAt: new Date().toISOString(), principalStatus: 'Pending review', download: 'Draft' }, ...reportList]
+    if (!await persistWorkspace({ reportList: nextReports }, `${reportDraft.student}'s report draft saved for principal approval.`)) return
+    setReportList(nextReports)
   }
 
-  const createDisciplineReport = () => {
+  const createDisciplineReport = async () => {
     const student = findStudent(disciplineDraft.studentId)
-    setDisciplineList((current) => [{
-      id: `disc-${String(current.length + 1).padStart(3, '0')}`,
+    const timestamp = new Date()
+    const nextReport = {
+      id: `disc-${String(disciplineList.length + 1).padStart(3, '0')}`,
       studentId: disciplineDraft.studentId,
       student: student?.name ?? 'Selected student',
-      date: 'Apr 29',
+      date: timestamp.toLocaleDateString(),
+      time: timestamp.toLocaleTimeString(),
+      createdAt: timestamp.toISOString(),
       level: disciplineDraft.level,
       category: disciplineDraft.category,
       incident: disciplineDraft.incident,
@@ -599,20 +835,23 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       followUp: disciplineDraft.followUp,
       parentContact: 'Draft message prepared',
       status: 'Open',
-    }, ...current])
-    runAction(`Detailed discipline report opened for ${student?.name ?? 'selected student'}.`)
+    }
+    const nextReports = [nextReport, ...disciplineList]
+    if (!await persistWorkspace({ disciplineList: nextReports }, `Detailed discipline report saved for ${student?.name ?? 'selected student'}.`)) return
+    setDisciplineList(nextReports)
   }
 
-  const sendMessage = () => {
-    setInbox((current) => [{
-      id: Date.now(),
-      from: `To ${messageDraft.to}`,
-      subject: messageDraft.subject,
-      body: messageDraft.body,
-      time: 'Just now',
-      requiresResponse: false,
-    }, ...current])
-    runAction(`Message sent to ${messageDraft.to} and logged in the teacher thread.`)
+  const sendMessage = async () => {
+    const recipient = messageContacts.find((contact) => contact.id === messageDraft.to)
+    if (!recipient) return runAction('Select a valid recipient from the KCS Nexus directory.', true)
+    try {
+      const response = await messagesAPI.send({ recipientId: recipient.id, subject: messageDraft.subject, body: messageDraft.body })
+      const message = response.data?.data
+      setInbox((current) => [{ id: message.id, from: `To ${recipient.firstName} ${recipient.lastName}`, subject: message.subject, body: message.body, time: new Date(message.createdAt).toLocaleString(), requiresResponse: false }, ...current])
+      runAction(`Message sent to ${recipient.firstName} ${recipient.lastName} and stored in KCS Nexus.`)
+    } catch (error: any) {
+      runAction(error?.response?.data?.message || 'The message was not sent.', true)
+    }
   }
 
   const inputClass = 'input-kcs py-2 text-sm'
@@ -636,14 +875,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => runAction('Gradebook saved locally and queued for backend sync.')} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
-              <button onClick={() => runAction('Advanced gradebook export prepared.')} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
+              <button onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
+              <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
             </div>
           </div>
         </div>
 
         {actionMessage && (
-          <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300">
+          <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${actionIsError ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300' : 'border-green-100 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300'}`}>
             {actionMessage}
           </div>
         )}
@@ -673,14 +912,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => runAction('Workspace saved locally and queued for backend sync.')} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
-            <button onClick={() => runAction(`${meta.title} export prepared.`)} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
+            <button onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm"><CheckCircle2 size={16} /> Save updates</button>
+            <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
           </div>
         </div>
       </div>
 
       {actionMessage && (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300">
+        <div className={`rounded-xl border px-4 py-3 text-sm font-medium ${actionIsError ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-300'}`}>
           {actionMessage}
         </div>
       )}
@@ -771,8 +1010,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={createCourse} className={compactButton}>{editingCourseId ? 'Save subject' : 'Add subject'}</button>
-                      {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 dark:border-kcs-blue-700 dark:text-gray-300 dark:hover:bg-kcs-blue-800/40">Cancel edit</button>}
+                      <button onClick={createCourse} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">{editingCourseId ? 'Save subject' : 'Add subject'}</button>
+                      {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>
                 </div>
@@ -845,7 +1084,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   </div>
                 )}
                 {courses.map((subject) => (
-                  <div key={subject.id} className={`rounded-xl border p-4 ${selectedEnrollmentCourse?.id === subject.id ? 'border-kcs-blue-300 bg-white shadow-sm dark:border-kcs-blue-600 dark:bg-kcs-blue-900/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
+                  <div role="button" tabIndex={0} onClick={() => setSelectedEnrollmentCourseId(subject.id)} key={subject.id} className={`cursor-pointer rounded-xl border p-4 ${selectedEnrollmentCourse?.id === subject.id ? 'border-kcs-blue-300 bg-white shadow-sm dark:border-kcs-blue-600 dark:bg-kcs-blue-900/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase text-kcs-blue-500">{subject.gradeLevels.join(', ')}</p>
@@ -855,16 +1094,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <span className="badge-blue text-xs">{subject.studentIds.length} enrolled</span>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" onClick={(event) => { event.stopPropagation(); editCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-kcs-gold-100 px-3 py-1 text-xs font-bold text-kcs-blue-800">Modify subject</button>
+                      <button type="button" onClick={(event) => { event.stopPropagation(); deleteCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">Delete subject</button>
                       {superAdminStudentPool.map((student) => {
                         const enrolled = subject.studentIds.includes(student.id)
                         return (
                           <button
                             key={student.id}
-                            onClick={() => {
-                              setCourses((current) => current.map((course) => course.id === subject.id ? { ...course, studentIds: enrolled ? course.studentIds.filter((id) => id !== student.id) : [...course.studentIds, student.id] } : course))
-                              if (!enrolled && !teacherStudents.some((item) => item.id === student.id)) setTeacherStudents((current) => [student, ...current])
-                              runAction(`${student.name} ${enrolled ? 'removed from' : 'enrolled in'} ${subject.name}.`)
-                            }}
+                            onClick={() => void toggleCourseEnrollment(subject.id, student)}
                             className={`rounded-full px-3 py-1 text-xs font-semibold ${enrolled ? 'bg-kcs-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-kcs-blue-50 hover:text-kcs-blue-700 dark:bg-kcs-blue-950/50 dark:text-gray-300'}`}
                           >
                             {enrolled ? '✓' : '+'} {student.name}
@@ -881,6 +1118,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'students' && (
+        <div className="space-y-6">
+          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">Detailed student search</h3><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, class, advisor, risk, strengths, weaknesses..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{Array.from(new Set(teacherStudents.map((student) => `${student.grade}${student.section}`))).sort().map((className) => <option key={className}>{className}</option>)}</select></div></div>
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Import from Super Admin registry</h3>
@@ -896,8 +1135,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-          {teacherStudents.map((student) => (
-            <div key={student.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          {teacherStudents.filter((student) => { const text = `${student.name} ${student.grade}${student.section} ${student.advisor} ${student.risk} ${student.strengths?.join(' ')} ${student.weaknesses?.join(' ')}`.toLowerCase(); return (studentClassFilter === 'All' || `${student.grade}${student.section}` === studentClassFilter) && text.includes(studentQuery.toLowerCase()) }).map((student) => (
+            <button type="button" onClick={() => setStudentDetail(student)} key={student.id} className="rounded-2xl border border-gray-100 bg-white p-5 text-left transition hover:border-kcs-blue-300 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-kcs-blue-900 dark:text-white">{student.name}</h3>
@@ -911,9 +1150,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <div><p className="font-bold text-kcs-blue-900 dark:text-white">#{student.rank}</p><p className="text-xs text-gray-500">Rank</p></div>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{student.aiInsight}</p>
-            </div>
+            </button>
           ))}
           </div>
+        </div>
+        {studentDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button onClick={() => setStudentDetail(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', `${studentDetail.grade}${studentDetail.section}`], ['Average', `${studentDetail.average ?? 'N/A'}%`], ['Attendance', `${studentDetail.attendance ?? 'N/A'}%`], ['Rank', `#${studentDetail.rank ?? 'N/A'}`], ['Risk', studentDetail.risk ?? 'low'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
         </div>
       )}
 
@@ -926,7 +1167,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
               </select>
               <div className="grid gap-2 sm:grid-cols-3">
-                <input className={inputClass} value={attendanceDraft.date} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, date: event.target.value }))} />
+                <input type="date" className={`${inputClass} attendance-date-field`} value={attendanceDraft.date} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, date: event.target.value }))} />
                 <select className={inputClass} value={attendanceDraft.status} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, status: event.target.value }))}>
                   <option value="present">Present</option>
                   <option value="late">Late</option>
@@ -1308,7 +1549,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'reports' && (
-        <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <div className="space-y-6">
+          <div className={panelClass}><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Operational report generator</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Administrative Staff submission</h3></div><div className="flex flex-wrap gap-2"><select value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value as 'Daily' | 'Weekly' | 'Annual')} className={inputClass}><option>Daily</option><option>Weekly</option><option>Annual</option></select><button type="button" onClick={printTeacherReport} className={compactButton}><Printer size={16}/> Print / PDF</button><button type="button" onClick={submitTeacherReport} className={compactButton}><Upload size={16}/> Submit to staff</button></div></div><div className="mt-5 grid gap-3 md:grid-cols-4">{[['Period', reportPeriod], ['Students', teacherStudents.length], ['Classes', courses.length], ['Generated', new Date().toLocaleDateString()]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs uppercase text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div>{actionMessage && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}</div>
+          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{student.grade}{student.section} · Average {student.average ?? 'N/A'} · Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
+          <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Draft report card</h3>
             <div className="mt-4 grid gap-3">
@@ -1339,6 +1583,60 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           ))}
           </div>
+          </div>
+          {selectedAiStudent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI learner report</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedAiStudent.name}</h3></div><button onClick={() => setSelectedAiStudent(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Average', `${selectedAiStudent.average ?? 'N/A'}%`], ['Attendance', `${selectedAiStudent.attendance ?? 'N/A'}%`], ['Risk', selectedAiStudent.risk ?? 'Not classified']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="mt-4 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">AI analysis</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedAiStudent.aiInsight || `${selectedAiStudent.name} requires continued monitoring based on academic performance and attendance trends.`}</p><p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">Recommendation: reinforce {selectedAiStudent.weaknesses?.join(', ') || 'the lowest-performing competencies'}, maintain family follow-up, and review progress within two weeks.</p></div><button type="button" onClick={printTeacherReport} className={`${compactButton} mt-5`}><Download size={16}/> Print / Download PDF</button></div></div>}
+        </div>
+      )}
+
+      {segment === 'timetable' && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {ecosystemSchedules.filter((item) => item.role === 'teacher').map((item) => (
+            <button type="button" key={`${item.time}-${item.title}`} onClick={() => setSelectedSchedule(item)} className={`${panelClass} text-left transition hover:-translate-y-0.5 hover:border-kcs-blue-300 hover:shadow-lg`}>
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{item.time}</p><h3 className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{item.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{item.room} · {item.teacher}</p></div><Calendar className="text-kcs-blue-600 dark:text-kcs-blue-300"/></div>
+              <p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">Open class window →</p>
+            </button>
+          ))}
+          {selectedSchedule && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Teaching period</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedSchedule.title}</h3></div><button type="button" onClick={() => setSelectedSchedule(null)} aria-label="Close"><X/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{[['Time', selectedSchedule.time], ['Room', selectedSchedule.room], ['Teacher', selectedSchedule.teacher], ['Synchronization', 'Administrative timetable']].map(([label,value]) => <div key={label} className="rounded-xl bg-white/80 p-4 dark:bg-kcs-blue-800/50"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div></div></div>}
+        </div>
+      )}
+
+      {segment === 'resources' && (
+        <div className="space-y-5"><div className={panelClass}><label className="text-sm font-semibold text-kcs-blue-900 dark:text-white" htmlFor="resource-search">Search learning resources</label><input id="resource-search" value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} className={`${inputClass} mt-3 w-full`} placeholder="Title, subject, type or status..." /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lmsResources.filter((resource) => `${resource.title} ${resource.subject} ${resource.type} ${resource.status}`.toLowerCase().includes(resourceQuery.toLowerCase())).map((resource) => <button type="button" key={resource.title} onClick={() => setSelectedResource(resource)} className={`${panelClass} text-left transition hover:border-kcs-blue-300 hover:shadow-lg`}><div className="flex justify-between gap-3"><LibraryBig className="text-kcs-blue-600 dark:text-kcs-blue-300"/><span className="badge-blue capitalize">{resource.type}</span></div><h3 className="mt-4 font-bold text-kcs-blue-900 dark:text-white">{resource.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{resource.subject} · {resource.status}</p><p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">View resource →</p></button>)}</div>{selectedResource && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedResource.type}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedResource.title}</h3></div><button type="button" onClick={() => setSelectedResource(null)} aria-label="Close"><X/></button></div><p className="mt-5 text-sm text-gray-600 dark:text-gray-300">Subject: {selectedResource.subject}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Visibility: {selectedResource.audience.join(', ')}</p><button type="button" onClick={() => { setActionMessage(`${selectedResource.title} opened successfully.`); setSelectedResource(null) }} className={`${compactButton} mt-5 w-full`}><BookOpen size={16}/> Open resource</button></div></div>}</div>
+      )}
+
+      {segment === 'settings' && (
+        <div className="space-y-6">
+          <div className={panelClass}>
+            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+              <div className="text-center">
+                <img src={profileDraft.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`)}`} alt="Teacher profile" className="mx-auto h-40 w-40 rounded-3xl border-4 border-white object-cover shadow-lg dark:border-kcs-blue-800"/>
+                <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800 focus-within:ring-2 focus-within:ring-kcs-gold-400">
+                  <Upload size={16}/> Upload photo
+                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => readProfilePhoto(event.target.files?.[0])}/>
+                </label>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">PNG, JPEG or WebP, maximum 1 MB.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <input className={inputClass} value={profileDraft.lastName} onChange={(event) => setProfileDraft((draft) => ({ ...draft, lastName: event.target.value }))} placeholder="Last name"/>
+                <input className={inputClass} value={profileDraft.middleName} onChange={(event) => setProfileDraft((draft) => ({ ...draft, middleName: event.target.value }))} placeholder="Middle name / Postnom"/>
+                <input className={inputClass} value={profileDraft.firstName} onChange={(event) => setProfileDraft((draft) => ({ ...draft, firstName: event.target.value }))} placeholder="First name"/>
+                <input className={inputClass} type="email" value={profileDraft.email} onChange={(event) => setProfileDraft((draft) => ({ ...draft, email: event.target.value }))} placeholder="Email"/>
+                <input className={inputClass} value={profileDraft.phone} onChange={(event) => setProfileDraft((draft) => ({ ...draft, phone: event.target.value }))} placeholder="Phone"/>
+                {profileDraft.email.trim().toLowerCase() !== user?.email?.toLowerCase() && <input className={`${inputClass} sm:col-span-2`} type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password required to change email" autoComplete="current-password"/>}
+                <button type="button" disabled={profileSaving} onClick={() => void saveTeacherProfile()} className={`${compactButton} sm:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}>{profileSaving ? 'Saving to KCS Nexus…' : 'Save changes'}</button>
+              </div>
+            </div>
+          </div>
+          <div className={panelClass}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div><h3 className="font-bold text-kcs-blue-900 dark:text-white">Two-factor authentication</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Protect this account with a standards-based authenticator code.</p></div>
+              <span className={`rounded-full px-3 py-1 text-xs font-bold ${user?.twoFactorEnabled ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-kcs-blue-800 dark:text-gray-300'}`}>{user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}</span>
+            </div>
+            {!user?.twoFactorEnabled && !twoFactorSecret && <button type="button" onClick={() => void startTwoFactorSetup()} className={`${compactButton} mt-4`}>Set up authenticator</button>}
+            {twoFactorSecret && <div className="mt-4 space-y-3 rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-800/30"><p className="text-sm text-kcs-blue-900 dark:text-white">Add this secret to your authenticator app:</p><code className="block break-all rounded-lg bg-white p-3 text-sm font-bold tracking-wider text-kcs-blue-900 dark:bg-kcs-blue-950 dark:text-kcs-gold-300">{twoFactorSecret}</code><a href={twoFactorSetupUrl} className="text-xs font-semibold text-kcs-blue-600 underline dark:text-kcs-blue-300">Open authenticator setup link</a><div className="flex flex-col gap-2 sm:flex-row"><input className={inputClass} inputMode="numeric" maxLength={6} value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, ''))} placeholder="6-digit code"/><button type="button" disabled={twoFactorCode.length !== 6} onClick={() => void verifyTwoFactorSetup()} className={`${compactButton} disabled:opacity-60`}>Verify and enable</button></div></div>}
+            {user?.twoFactorEnabled && <button type="button" onClick={() => void disableTwoFactor()} className="mt-4 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/20">Disable 2FA</button>}
+          </div>
+          {profileDialog && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Teacher settings</h3><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{profileDialog}</p><button type="button" onClick={() => setProfileDialog('')} className={`${compactButton} mt-5 w-full`}>OK</button></div></div>}
         </div>
       )}
 
@@ -1413,7 +1711,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <h3 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Compose and active threads</h3>
             <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-              <input className={inputClass} value={messageDraft.to} onChange={(event) => setMessageDraft((draft) => ({ ...draft, to: event.target.value }))} />
+              <select className={inputClass} value={messageDraft.to} onChange={(event) => setMessageDraft((draft) => ({ ...draft, to: event.target.value }))}>
+                <option value="">Select a recipient…</option>
+                {messageContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.firstName} {contact.lastName} · {contact.role.toLowerCase()}</option>)}
+              </select>
               <input className={inputClass} value={messageDraft.subject} onChange={(event) => setMessageDraft((draft) => ({ ...draft, subject: event.target.value }))} />
               <textarea className={inputClass} value={messageDraft.body} onChange={(event) => setMessageDraft((draft) => ({ ...draft, body: event.target.value }))} rows={3} />
               <button onClick={sendMessage} className={compactButton}>Send message</button>
@@ -1434,6 +1735,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 }
 
 const TeacherDashboardHome = () => {
+  const [activeAiTool, setActiveAiTool] = useState<TeacherAiTool | null>(null)
+  const [aiResult, setAiResult] = useState('')
+  const [aiInstruction, setAiInstruction] = useState('')
+  const [isAiGenerating, setIsAiGenerating] = useState(false)
+  const [aiError, setAiError] = useState('')
   const metricCards = [
     { label: 'Assigned Students', value: '83', sub: 'Across 4 active classes', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
     { label: 'Pending Actions', value: '56', sub: 'Grades, comments, follow-ups', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
@@ -1448,13 +1754,31 @@ const TeacherDashboardHome = () => {
     { to: '/portal/teacher/messages', label: 'Notify Parents', icon: MessageSquare },
   ]
 
-  const aiTools = [
-    ['Lesson plan', 'Create a differentiated 45-minute lesson from today schedule.'],
-    ['Quiz builder', 'Generate questions from the current subject and class level.'],
-    ['Smart feedback', 'Improve comments for report cards and parent meetings.'],
-    ['Risk intervention', 'Suggest support plans for struggling students.'],
-    ['Meeting summary', 'Prepare parent-teacher conference notes.'],
+  const aiTools: TeacherAiTool[] = [
+    { task: 'lesson-plan', title: 'Lesson plan', detail: 'Create a differentiated 45-minute lesson from today’s schedule.' },
+    { task: 'quiz', title: 'Quiz builder', detail: 'Generate questions from the current subject and class level.' },
+    { task: 'feedback', title: 'Smart feedback', detail: 'Improve comments for report cards and parent meetings.' },
+    { task: 'intervention', title: 'Risk intervention', detail: 'Suggest support plans for struggling students.' },
+    { task: 'meeting-summary', title: 'Meeting summary', detail: 'Prepare parent-teacher conference notes.' },
   ]
+
+  const generateTeacherAi = async (tool: TeacherAiTool, context = '') => {
+    setActiveAiTool(tool)
+    setAiInstruction(context)
+    setAiResult('')
+    setAiError('')
+    setIsAiGenerating(true)
+    try {
+      const response = await aiAPI.teacherAssistant(tool.task, context)
+      const result = response.data?.data?.response
+      if (!result) throw new Error('The AI assistant returned no draft.')
+      setAiResult(result)
+    } catch {
+      setAiError('The AI assistant could not generate a draft. Check your connection and try again.')
+    } finally {
+      setIsAiGenerating(false)
+    }
+  }
 
   return (
     <>
@@ -1575,15 +1899,16 @@ const TeacherDashboardHome = () => {
             <Brain size={20} className="text-kcs-gold-500" />
           </div>
           <div className="grid gap-2">
-            {aiTools.map(([title, detail]) => (
-              <button key={title} className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-left transition-colors hover:border-kcs-blue-200 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
-                <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{title}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{detail}</p>
+            {aiTools.map((tool) => (
+              <button type="button" onClick={() => void generateTeacherAi(tool)} key={tool.task} className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-left transition-colors hover:border-kcs-blue-200 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
+                <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{tool.title}</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{tool.detail}</p>
               </button>
             ))}
           </div>
         </div>
       </div>
+      {activeAiTool && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI Teacher Assistant</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{activeAiTool.title}</h3></div><button type="button" onClick={() => setActiveAiTool(null)} aria-label="Close AI teacher assistant"><X size={18}/></button></div><p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{activeAiTool.detail}</p><div className="mt-4 min-h-24 rounded-xl bg-kcs-blue-50 p-4 text-sm leading-relaxed text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-kcs-blue-100" style={{ whiteSpace: 'pre-line' }}>{isAiGenerating ? 'Generating a teacher-review draft…' : aiError || aiResult}</div><textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} className="input-kcs mt-4 min-h-24" placeholder="Add class context or instructions to refine this output..." disabled={isAiGenerating}/><p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Review the draft before sharing it with students or families.</p><div className="mt-4 flex justify-end gap-2"><button type="button" disabled={isAiGenerating} onClick={() => void generateTeacherAi(activeAiTool, aiInstruction)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{isAiGenerating ? 'Generating…' : 'Regenerate and improve'}</button></div></div></div>}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">

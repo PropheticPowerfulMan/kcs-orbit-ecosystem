@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, BarChart3, FileText, Calendar, Brain,
   Bell, BookOpen, TrendingUp, Award, Clock, CheckCircle2,
-  AlertCircle, ChevronRight, MessageSquare, User
+  AlertCircle, ChevronRight, MessageSquare, User, Search, Download, RefreshCw, Upload, X, PlayCircle, ArrowLeft, Mail, Inbox, Send
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -12,6 +12,8 @@ import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
+import { financeAPI, messagesAPI, notificationsAPI, studentsAPI } from '@/services/api'
+import type { Notification as PortalNotification } from '@/types'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar
 } from 'recharts'
@@ -93,10 +95,162 @@ const getStudentSegment = (pathname: string) => {
 
 const studentActionButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-kcs-blue-800'
 
+type StudentAssignment = {
+  id: string | number
+  title: string
+  course: string
+  due: string
+  status: string
+  priority: string
+  description?: string
+  maxScore?: number
+}
+
+type FinancialClearance = {
+  source: string
+  synchronizedAt: string
+  accountMatched: boolean
+  parentName: string | null
+  balance: number
+  totalPaid: number
+  overdueInstallments: number
+  eligible: boolean
+  reason: string
+}
+
 const StudentSectionView = ({ segment }: { segment: string }) => {
-  const [localAssignments, setLocalAssignments] = useState(assignments)
+  const { user } = useAuthStore()
+  const [localAssignments, setLocalAssignments] = useState<StudentAssignment[]>(assignments)
   const [messageSent, setMessageSent] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [clearance, setClearance] = useState<FinancialClearance | null>(null)
+  const [clearanceLoading, setClearanceLoading] = useState(false)
+  const [assignmentLoading, setAssignmentLoading] = useState(false)
+  const [assignmentQuery, setAssignmentQuery] = useState('')
+  const [assignmentStatus, setAssignmentStatus] = useState('all')
+  const [assignmentCourse, setAssignmentCourse] = useState('all')
+  const [assignmentSort, setAssignmentSort] = useState('due')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [submissionTarget, setSubmissionTarget] = useState<string | number | null>(null)
+  const [selectedSchedule, setSelectedSchedule] = useState<any>(null)
+  const [liveSchedule, setLiveSchedule] = useState<any[]>([])
+  const [messagesList, setMessagesList] = useState<any[]>([])
+  const [selectedMessage, setSelectedMessage] = useState<any>(null)
+  const [messageQuery, setMessageQuery] = useState('')
+  const [messageBox, setMessageBox] = useState('all')
+  const [contacts, setContacts] = useState<any[]>([])
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [messageDraft, setMessageDraft] = useState({ recipientId: '', subject: '', body: '' })
+  const [diagnosticSubject, setDiagnosticSubject] = useState('Mathematics')
+  const [diagnosticStarted, setDiagnosticStarted] = useState(false)
+  const [diagnosticAnswers, setDiagnosticAnswers] = useState<Record<number, number>>({})
+  const [diagnosticResult, setDiagnosticResult] = useState<number | null>(null)
+
+  const refreshClearance = async () => {
+    setClearanceLoading(true)
+    setActionError('')
+    try {
+      const response = await financeAPI.getStudentClearance()
+      setClearance(response.data.data as FinancialClearance)
+    } catch (error: any) {
+      setActionError(error?.response?.data?.message ?? 'EduPay financial clearance is temporarily unavailable.')
+    } finally {
+      setClearanceLoading(false)
+    }
+  }
+
+  const refreshAssignments = async () => {
+    setAssignmentLoading(true)
+    setActionError('')
+    try {
+      const response = await studentsAPI.getMyAssignments()
+      const records = Array.isArray(response.data.data) ? response.data.data : []
+      if (records.length) {
+        setLocalAssignments(records.map((record: any) => ({
+          id: record.id,
+          title: record.assignment.title,
+          course: record.assignment.course?.name ?? record.assignment.course?.code ?? 'Course',
+          due: new Date(record.assignment.dueDate).toLocaleString(),
+          status: String(record.status).toLowerCase(),
+          priority: new Date(record.assignment.dueDate).getTime() < Date.now() ? 'high' : 'medium',
+          description: record.assignment.description,
+          maxScore: record.assignment.maxScore,
+        })))
+      }
+    } catch (error: any) {
+      setActionError(error?.response?.data?.message ?? 'Live assignments could not be loaded; cached assignments remain visible.')
+    } finally {
+      setAssignmentLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (segment === 'grades') void refreshClearance()
+    if (segment === 'assignments') void refreshAssignments()
+  }, [segment])
+
+  const downloadReportCard = () => {
+    if (!clearance?.eligible) return
+    const reportCard = reportCards.find((card) => card.student === 'Elise Kabongo')
+    const rows = subjectGrades.map((grade) => `<tr><td>${grade.subject}</td><td>${grade.grade}/100</td><td>${grade.letter}</td></tr>`).join('')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>KCS Report Card</title><style>body{font-family:Arial,sans-serif;color:#102552;padding:36px}header{border-bottom:4px solid #c99a2e;padding-bottom:18px}h1{margin-bottom:4px}table{width:100%;border-collapse:collapse;margin-top:24px}th,td{padding:12px;border-bottom:1px solid #dbe3ef;text-align:left}.seal{margin-top:28px;padding:16px;background:#f4f7fb}.ok{color:#167445;font-weight:bold}</style></head><body><header><h1>Kinshasa Christian School</h1><p>Official Student Report Card</p></header><h2>${user?.firstName ?? 'Elise'} ${user?.lastName ?? 'Kabongo'}</h2><p>${reportCard?.term ?? 'Current term'} · Final average: <strong>${reportCard?.average ?? 0}%</strong></p><table><thead><tr><th>Subject</th><th>Score</th><th>Grade</th></tr></thead><tbody>${rows}</tbody></table><p>Teacher comment: ${reportCard?.teacherComment ?? ''}</p><div class="seal"><p class="ok">Financial clearance verified by EduPay</p><p>Account: ${clearance.parentName ?? 'Family account'} · Balance: $${clearance.balance.toFixed(2)} · Synchronized: ${new Date(clearance.synchronizedAt).toLocaleString()}</p></div></body></html>`
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `KCS-report-card-${user?.firstName ?? 'student'}.html`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setActionMessage('Official report card downloaded with current EduPay clearance.')
+  }
+
+  const assignmentCourses = useMemo(() => Array.from(new Set(localAssignments.map((item) => item.course))).sort(), [localAssignments])
+  const filteredAssignments = useMemo(() => {
+    const query = assignmentQuery.trim().toLocaleLowerCase()
+    return localAssignments
+      .filter((item) => assignmentStatus === 'all' || item.status === assignmentStatus)
+      .filter((item) => assignmentCourse === 'all' || item.course === assignmentCourse)
+      .filter((item) => !query || `${item.title} ${item.course} ${item.description ?? ''} ${item.due}`.toLocaleLowerCase().includes(query))
+      .sort((left, right) => assignmentSort === 'title' ? left.title.localeCompare(right.title) : assignmentSort === 'status' ? left.status.localeCompare(right.status) : String(left.due).localeCompare(String(right.due)))
+  }, [assignmentCourse, assignmentQuery, assignmentSort, assignmentStatus, localAssignments])
+
+  const diagnosticQuestions = useMemo(() => ({
+    Mathematics: [
+      { q: 'Solve 3x + 5 = 20.', choices: ['x = 3', 'x = 5', 'x = 8', 'x = 15'], answer: 1 },
+      { q: 'Which fraction equals 0.75?', choices: ['1/2', '2/3', '3/4', '4/5'], answer: 2 },
+      { q: 'What is the slope between (1,2) and (3,6)?', choices: ['1', '2', '3', '4'], answer: 1 },
+    ],
+    Science: [
+      { q: 'Where does photosynthesis mainly occur?', choices: ['Nucleus', 'Chloroplast', 'Mitochondrion', 'Ribosome'], answer: 1 },
+      { q: 'What carries genetic information?', choices: ['ATP', 'DNA', 'Water', 'Glucose'], answer: 1 },
+      { q: 'A controlled variable is...', choices: ['Measured', 'Changed', 'Kept constant', 'Ignored'], answer: 2 },
+    ],
+    English: [
+      { q: 'A thesis statement primarily...', choices: ['Lists sources', 'States the central claim', 'Ends a paragraph', 'Defines every word'], answer: 1 },
+      { q: 'Which is a complete sentence?', choices: ['Because it rained.', 'Running quickly.', 'The class began on time.', 'After the bell.'], answer: 2 },
+      { q: 'Evidence in an argument should be...', choices: ['Unrelated', 'Relevant and credible', 'Only emotional', 'Anonymous'], answer: 1 },
+    ],
+  }), [])
+
+  const loadTimetable = async () => {
+    setAssignmentLoading(true)
+    try { const response = await studentsAPI.getMyTimetable(); setLiveSchedule(Array.isArray(response.data.data) ? response.data.data : []) }
+    catch { setActionError('The administrative timetable is temporarily unavailable; the published cached schedule is shown.') }
+    finally { setAssignmentLoading(false) }
+  }
+
+  const loadMessages = async () => {
+    setAssignmentLoading(true)
+    try {
+      const [messagesResponse, contactsResponse] = await Promise.all([messagesAPI.getAll({ q: messageQuery || undefined, box: messageBox }), messagesAPI.getContacts()])
+      setMessagesList(Array.isArray(messagesResponse.data.data) ? messagesResponse.data.data : [])
+      setContacts(Array.isArray(contactsResponse.data.data) ? contactsResponse.data.data : [])
+    } catch { setActionError('Messages could not be synchronized.') }
+    finally { setAssignmentLoading(false) }
+  }
+
+  useEffect(() => { if (segment === 'timetable') void loadTimetable() }, [segment])
+  useEffect(() => { if (segment === 'messages') { const timer = window.setTimeout(() => void loadMessages(), 250); return () => window.clearTimeout(timer) } }, [segment, messageQuery, messageBox])
 
   if (segment === 'grades') {
     const reportCard = reportCards.find((card) => card.student === 'Elise Kabongo')
@@ -125,9 +279,25 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="font-bold text-kcs-blue-900 dark:text-white">Current Grades</h2>
-              <button className={`${studentActionButton} w-full sm:w-auto`} onClick={() => setActionMessage('Report card download prepared for your student file.')}>Download report card</button>
+              <button className={`${studentActionButton} flex w-full items-center justify-center gap-2 sm:w-auto`} disabled={!clearance?.eligible || clearanceLoading} onClick={downloadReportCard}>
+                {clearanceLoading ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />}
+                {clearanceLoading ? 'Checking EduPay...' : 'Download report card'}
+              </button>
             </div>
             {actionMessage && <p className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}
+            {actionError && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">{actionError}</p>}
+            <div className={`mb-4 rounded-xl border p-4 ${clearance?.eligible ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' : 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20'}`}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-kcs-blue-900 dark:text-white">EduPay financial clearance</p>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{clearanceLoading ? 'Synchronizing the family account...' : clearance?.reason ?? 'Waiting for EduPay verification.'}</p>
+                  {clearance && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Balance: ${clearance.balance.toFixed(2)} · Overdue installments: {clearance.overdueInstallments} · {new Date(clearance.synchronizedAt).toLocaleString()}</p>}
+                </div>
+                <button type="button" onClick={() => void refreshClearance()} disabled={clearanceLoading} className="rounded-xl border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-white disabled:opacity-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200">
+                  Refresh
+                </button>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-[620px] w-full text-sm">
                 <thead className="text-left text-xs text-gray-400">
@@ -178,33 +348,60 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
               <h2 className="font-bold text-kcs-blue-900 dark:text-white">Assignment Center</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400">Submit work, track deadlines, and keep teachers updated.</p>
             </div>
-            <button
-              className={`${studentActionButton} w-full sm:w-auto`}
-              onClick={() => {
-                const nextAssignment = {
-                  id: Date.now(),
-                  title: 'Uploaded student file',
-                  course: 'Teacher review',
-                  due: 'Submitted now',
-                  status: 'submitted',
-                  priority: 'low',
-                }
-                setLocalAssignments((items) => [nextAssignment, ...items])
-                setActionMessage('File uploaded and added to the assignment center for teacher review.')
-              }}
-            >
-              Upload new file
+            <button className={`${studentActionButton} flex w-full items-center justify-center gap-2 sm:w-auto`} onClick={() => void refreshAssignments()} disabled={assignmentLoading}>
+              <RefreshCw size={16} className={assignmentLoading ? 'animate-spin' : ''} /> Refresh assignments
             </button>
           </div>
           {actionMessage && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}
+          {actionError && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">{actionError}</p>}
+          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(240px,1fr)_180px_180px_160px]">
+            <label className="relative">
+              <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input value={assignmentQuery} onChange={(event) => setAssignmentQuery(event.target.value)} placeholder="Search title, course, instructions, deadline..." className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-10 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
+              {assignmentQuery && <button type="button" onClick={() => setAssignmentQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"><X size={16} /></button>}
+            </label>
+            <select value={assignmentStatus} onChange={(event) => setAssignmentStatus(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="all">All statuses</option><option value="pending">Pending</option><option value="submitted">Submitted</option><option value="graded">Graded</option><option value="late">Late</option>
+            </select>
+            <select value={assignmentCourse} onChange={(event) => setAssignmentCourse(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="all">All courses</option>{assignmentCourses.map((course) => <option key={course} value={course}>{course}</option>)}
+            </select>
+            <select value={assignmentSort} onChange={(event) => setAssignmentSort(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="due">Sort by deadline</option><option value="title">Sort by title</option><option value="status">Sort by status</option>
+            </select>
+          </div>
+          <p className="mt-3 text-xs font-semibold text-gray-500 dark:text-gray-400">{filteredAssignments.length} of {localAssignments.length} assignments shown</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt"
+            onChange={async (event) => {
+              const file = event.target.files?.[0]
+              if (!file || submissionTarget === null) return
+              setActionError('')
+              try {
+                if (typeof submissionTarget === 'string') await studentsAPI.submitMyAssignment(submissionTarget, file.name)
+                setLocalAssignments((items) => items.map((item) => item.id === submissionTarget ? { ...item, status: 'submitted' } : item))
+                setActionMessage(`${file.name} submitted successfully for teacher review.`)
+              } catch (error: any) {
+                setActionError(error?.response?.data?.message ?? 'The assignment could not be submitted.')
+              } finally {
+                event.target.value = ''
+                setSubmissionTarget(null)
+              }
+            }}
+          />
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {localAssignments.map((assignment) => (
+          {filteredAssignments.map((assignment) => (
             <div key={assignment.id} className={`rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 border-l-4 ${priorityColors[assignment.priority]}`}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <p className="font-semibold text-kcs-blue-900 dark:text-white">{assignment.title}</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">{assignment.course} - {assignment.due}</p>
+                  {assignment.description && <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{assignment.description}</p>}
+                  {assignment.maxScore !== undefined && <p className="mt-2 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">Maximum score: {assignment.maxScore} points</p>}
                 </div>
                 <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${statusColors[assignment.status]}`}>{assignment.status}</span>
               </div>
@@ -212,42 +409,46 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
                 <button
                   className={studentActionButton}
                   disabled={assignment.status === 'submitted' || assignment.status === 'graded'}
-                  onClick={() => {
-                    setLocalAssignments((items) => items.map((item) => item.id === assignment.id ? { ...item, status: 'submitted' } : item))
-                    setActionMessage(`${assignment.title} submitted successfully.`)
-                  }}
+                  onClick={() => { setSubmissionTarget(assignment.id); fileInputRef.current?.click() }}
                 >
-                  Submit work
+                  <Upload size={15} className="mr-2 inline" /> Select file & submit
                 </button>
                 <button
                   className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-kcs-blue-700 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"
                   onClick={() => {
-                    setLocalAssignments((items) => items.map((item) => item.id === assignment.id ? { ...item, status: 'graded' } : item))
-                    setActionMessage(`${assignment.title} marked as reviewed.`)
+                    setActionMessage(`${assignment.title}: ${assignment.description ?? 'No additional teacher instructions.'}`)
                   }}
                 >
-                  Mark reviewed
+                  View instructions
                 </button>
               </div>
             </div>
           ))}
+          {!filteredAssignments.length && <div className="rounded-2xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-500 dark:border-kcs-blue-700 dark:text-gray-400 lg:col-span-2">No assignment matches the current search and filters.</div>}
         </div>
       </div>
     )
   }
 
+  if (segment === 'diagnostics') {
+    const questions = diagnosticQuestions[diagnosticSubject as keyof typeof diagnosticQuestions]
+    if (diagnosticResult !== null) return <div className="mx-auto max-w-2xl rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><CheckCircle2 size={52} className="mx-auto text-green-500" /><h2 className="mt-4 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">Diagnostic complete</h2><p className="mt-3 text-5xl font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{diagnosticResult}%</p><p className="mt-4 text-gray-600 dark:text-gray-300">{diagnosticResult >= 80 ? 'Strong mastery. Continue with advanced practice.' : diagnosticResult >= 60 ? 'Developing mastery. AI Tutor will reinforce the missed skills.' : 'Foundational support recommended. A personalized revision plan is ready.'}</p><button className={`${studentActionButton} mt-6`} onClick={() => { setDiagnosticResult(null); setDiagnosticStarted(false); setDiagnosticAnswers({}) }}>Take another diagnostic</button></div>
+    return <div className="space-y-6"><div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">KCS Nexus AI</p><h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Diagnostic Test Center</h2><p className="mt-2 text-sm text-gray-500">Choose a subject, answer every question, and receive an immediate mastery score and learning recommendation.</p></div>{!diagnosticStarted ? <div className="grid gap-4 md:grid-cols-3">{Object.keys(diagnosticQuestions).map((subject) => <button key={subject} onClick={() => { setDiagnosticSubject(subject); setDiagnosticStarted(true); setDiagnosticAnswers({}) }} className="rounded-2xl border border-gray-100 bg-white p-6 text-left transition hover:-translate-y-1 hover:border-kcs-blue-300 hover:shadow-kcs dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><Brain className="text-kcs-blue-600" /><h3 className="mt-4 text-lg font-bold text-kcs-blue-900 dark:text-white">{subject}</h3><p className="mt-2 text-sm text-gray-500">3 adaptive baseline questions</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-kcs-blue-600"><PlayCircle size={17} /> Take diagnostic test</span></button>)}</div> : <div className="space-y-4"><button onClick={() => setDiagnosticStarted(false)} className="inline-flex items-center gap-2 text-sm font-bold text-kcs-blue-600"><ArrowLeft size={16} /> Subjects</button>{questions.map((question, index) => <section key={question.q} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="text-xs font-bold text-kcs-gold-600">Question {index + 1} of {questions.length}</p><h3 className="mt-2 font-bold text-kcs-blue-900 dark:text-white">{question.q}</h3><div className="mt-4 grid gap-2 sm:grid-cols-2">{question.choices.map((choice, choiceIndex) => <button key={choice} onClick={() => setDiagnosticAnswers((current) => ({ ...current, [index]: choiceIndex }))} className={`rounded-xl border p-3 text-left text-sm ${diagnosticAnswers[index] === choiceIndex ? 'border-kcs-blue-600 bg-kcs-blue-50 text-kcs-blue-800 dark:bg-kcs-blue-800' : 'border-gray-200 dark:border-kcs-blue-700'}`}>{choice}</button>)}</div></section>)}<button disabled={Object.keys(diagnosticAnswers).length !== questions.length} onClick={() => setDiagnosticResult(Math.round((questions.filter((question, index) => diagnosticAnswers[index] === question.answer).length / questions.length) * 100))} className={`${studentActionButton} w-full`}>Submit diagnostic test</button></div>}</div>
+  }
+
   if (segment === 'timetable') {
+    const displayedSchedule = liveSchedule.length ? liveSchedule : schedule.map((item, index) => ({ id: `cached-${index}`, day: 'Today', startTime: item.time, endTime: '', room: item.room, teacher: item.teacher, course: { name: item.subject, description: 'Published school schedule.' } }))
     return (
       <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Full Timetable</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {schedule.map((item, index) => (
-              <div key={`${item.time}-${item.subject}`} className={`rounded-xl border p-4 ${index === 1 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/50' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
-                <p className="text-xs font-semibold text-gray-400">{item.time}</p>
-                <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.subject}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{item.room}{item.teacher ? ` - ${item.teacher}` : ''}</p>
-              </div>
+            {displayedSchedule.map((item: any, index: number) => (
+              <button type="button" onClick={() => setSelectedSchedule(item)} key={item.id ?? index} className={`rounded-xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md ${index === 1 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/50' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
+                <p className="text-xs font-semibold text-gray-400">{item.day} · {item.startTime}{item.endTime ? `–${item.endTime}` : ''}</p>
+                <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course?.name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{item.room}{item.teacher ? ` · ${item.teacher}` : ''}</p>
+              </button>
             ))}
           </div>
         </div>
@@ -262,41 +463,20 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
             ))}
           </div>
         </div>
+        {selectedSchedule && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/55 p-4 backdrop-blur-sm" onClick={() => setSelectedSchedule(null)}><section onClick={(event) => event.stopPropagation()} className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedSchedule.day} · {selectedSchedule.startTime}–{selectedSchedule.endTime}</p><h2 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{selectedSchedule.course?.name}</h2></div><button onClick={() => setSelectedSchedule(null)}><X /></button></div><div className="mt-5 space-y-3 text-sm text-gray-600 dark:text-gray-300"><p><strong>Teacher:</strong> {selectedSchedule.teacher || 'Administrative assignment pending'}</p><p><strong>Room:</strong> {selectedSchedule.room}</p><p><strong>Course details:</strong> {selectedSchedule.course?.description || 'No additional details.'}</p><p className="rounded-xl bg-kcs-blue-50 p-3 dark:bg-kcs-blue-900">This slot is synchronized with the general timetable published by administrative staff.</p></div></section></div>}
       </div>
     )
   }
 
   if (segment === 'messages') {
     return (
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Inbox</h2>
-          <div className="space-y-3">
-            {internalThreads.slice(0, 4).map((thread) => (
-              <button key={thread.subject} className="w-full rounded-xl bg-gray-50 p-4 text-left transition-colors hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{thread.subject}</p>
-                  <span className="rounded-full bg-kcs-blue-100 px-2 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{thread.unread}</span>
-                </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{thread.channel} - {thread.participants.join(', ')}</p>
-              </button>
-            ))}
-          </div>
+      <div className="space-y-5">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-col gap-3 lg:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17}/><input value={messageQuery} onChange={(event) => setMessageQuery(event.target.value)} placeholder="Search old messages by subject, content, sender..." className="w-full rounded-xl border border-gray-200 py-3 pl-10 pr-4 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/></label><select value={messageBox} onChange={(event) => setMessageBox(event.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="all">All messages</option><option value="inbox">Inbox</option><option value="sent">Sent</option></select><button onClick={() => setComposeOpen(true)} className={`${studentActionButton} flex items-center justify-center gap-2`}><Send size={16}/> New message</button></div></div>
+        <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
+          <section className="max-h-[650px] space-y-2 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">{assignmentLoading && <p className="p-5 text-center text-sm text-gray-500">Synchronizing...</p>}{messagesList.map((message) => <button key={message.id} onClick={async () => { setSelectedMessage(message); if (!message.readAt && message.recipientId === user?.id) { const response = await messagesAPI.markRead(message.id); setSelectedMessage(response.data.data); setMessagesList((current) => current.map((item) => item.id === message.id ? response.data.data : item)) } }} className={`w-full rounded-xl border p-4 text-left transition hover:border-kcs-blue-300 ${selectedMessage?.id === message.id ? 'border-kcs-blue-500 bg-kcs-blue-50 dark:bg-kcs-blue-800' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40'}`}><div className="flex justify-between gap-3"><p className="truncate font-bold text-kcs-blue-900 dark:text-white">{message.subject}</p>{!message.readAt && message.recipientId === user?.id && <span className="h-2.5 w-2.5 rounded-full bg-red-500"/>}</div><p className="mt-1 truncate text-xs text-gray-500">{message.sender ? `${message.sender.firstName} ${message.sender.lastName}` : 'School broadcast'} · {new Date(message.createdAt).toLocaleString()}</p><p className="mt-2 line-clamp-2 text-sm text-gray-600 dark:text-gray-300">{message.body}</p></button>)}{!assignmentLoading && !messagesList.length && <p className="p-8 text-center text-sm text-gray-500">No message matches your search.</p>}</section>
+          <section className="min-h-[420px] rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">{selectedMessage ? <><div className="border-b border-gray-100 pb-4 dark:border-kcs-blue-800"><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedMessage.priority} priority</p><h2 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{selectedMessage.subject}</h2><p className="mt-2 text-sm text-gray-500">From {selectedMessage.sender ? `${selectedMessage.sender.firstName} ${selectedMessage.sender.lastName}` : 'School'} · To {selectedMessage.recipient ? `${selectedMessage.recipient.firstName} ${selectedMessage.recipient.lastName}` : selectedMessage.targetRole ?? 'Audience'} · {new Date(selectedMessage.createdAt).toLocaleString()}</p></div><p className="whitespace-pre-wrap py-6 leading-7 text-gray-700 dark:text-gray-200">{selectedMessage.body}</p><button onClick={() => { setMessageDraft({ recipientId: selectedMessage.senderId ?? '', subject: `Re: ${selectedMessage.subject}`, body: '' }); setComposeOpen(true) }} className={studentActionButton}>Reply in dedicated window</button></> : <div className="flex h-full flex-col items-center justify-center text-center text-gray-500"><Mail size={48} className="mb-4 text-gray-300"/><p>Select a message to open its dedicated window.</p></div>}</section>
         </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">New Message</h2>
-          <div className="grid gap-3">
-            <select className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>Academic Office</option>
-              <option>Mrs. Diallo - English</option>
-              <option>Mr. Belanger - AP Calculus</option>
-            </select>
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Subject" />
-            <textarea className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Write your message..." />
-            <button className={studentActionButton} onClick={() => setMessageSent(true)}>Send message</button>
-            {messageSent && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">Message prepared and saved in the portal thread.</p>}
-          </div>
-        </div>
+        {composeOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/55 p-4 backdrop-blur-sm"><form onSubmit={async (event) => { event.preventDefault(); await messagesAPI.send(messageDraft); setComposeOpen(false); setMessageDraft({ recipientId:'', subject:'', body:'' }); setActionMessage('Message sent successfully.'); await loadMessages() }} className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950"><div className="flex justify-between"><h2 className="text-xl font-bold text-kcs-blue-900 dark:text-white">New message</h2><button type="button" onClick={() => setComposeOpen(false)}><X/></button></div><div className="mt-5 grid gap-3"><select required value={messageDraft.recipientId} onChange={(event) => setMessageDraft({...messageDraft,recipientId:event.target.value})} className="input-kcs"><option value="">Select recipient</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.firstName} {contact.lastName} · {contact.role}</option>)}</select><input required value={messageDraft.subject} onChange={(event) => setMessageDraft({...messageDraft,subject:event.target.value})} placeholder="Subject" className="input-kcs"/><textarea required value={messageDraft.body} onChange={(event) => setMessageDraft({...messageDraft,body:event.target.value})} placeholder="Write your message..." className="input-kcs min-h-44"/><button className={studentActionButton}>Send message</button></div></form></div>}
       </div>
     )
   }
@@ -345,6 +525,37 @@ const StudentPortal = () => {
   const location = useLocation()
   const activeSegment = getStudentSegment(location.pathname)
   const [activeView, setActiveView] = useState<'dashboard' | 'grades' | 'assignments' | 'schedule' | 'ai-tutor'>('dashboard')
+  const [notificationOpen, setNotificationOpen] = useState(false)
+  const [portalNotifications, setPortalNotifications] = useState<PortalNotification[]>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const notificationPanelRef = useRef<HTMLDivElement>(null)
+  const unreadNotifications = portalNotifications.filter((item) => !item.isRead).length
+
+  const loadNotifications = async () => {
+    setNotificationsLoading(true)
+    try {
+      const response = await notificationsAPI.getAll()
+      setPortalNotifications(Array.isArray(response.data.data) ? response.data.data : [])
+    } finally {
+      setNotificationsLoading(false)
+    }
+  }
+
+  useEffect(() => { void loadNotifications() }, [])
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (notificationPanelRef.current && !notificationPanelRef.current.contains(event.target as Node)) setNotificationOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [])
+
+  const markNotificationRead = async (item: PortalNotification) => {
+    if (!item.isRead) {
+      await notificationsAPI.markRead(item.id)
+      setPortalNotifications((current) => current.map((notification) => notification.id === item.id ? { ...notification, isRead: true } : notification))
+    }
+  }
 
   return (
     <div className="portal-shell flex">
@@ -366,11 +577,29 @@ const StudentPortal = () => {
               <Link to="/portal/student/ai-tutor" className="btn-gold flex flex-1 items-center justify-center gap-2 py-2 text-sm sm:flex-none">
                 <Brain size={16} /> AI Tutor
               </Link>
-              <div className="relative">
-                <button className="rounded-xl bg-gray-100 p-2 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-kcs-blue-800 dark:text-gray-300 dark:hover:bg-kcs-blue-700">
+              <div className="relative" ref={notificationPanelRef}>
+                <button type="button" onClick={() => setNotificationOpen((open) => !open)} aria-label={`Notifications, ${unreadNotifications} unread`} aria-expanded={notificationOpen} className="rounded-xl bg-gray-100 p-2 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-kcs-blue-800 dark:text-gray-300 dark:hover:bg-kcs-blue-700">
                   <Bell size={18} />
-                  <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full text-xs" />
+                  {unreadNotifications > 0 && <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
                 </button>
+                {notificationOpen && (
+                  <div className="absolute right-0 top-12 z-50 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+                    <div className="flex items-center justify-between border-b border-gray-100 p-4 dark:border-kcs-blue-800">
+                      <div><p className="font-bold text-kcs-blue-900 dark:text-white">Notifications</p><p className="text-xs text-gray-500">{unreadNotifications} unread</p></div>
+                      <button type="button" disabled={!unreadNotifications} onClick={async () => { await notificationsAPI.markAllRead(); setPortalNotifications((current) => current.map((item) => ({ ...item, isRead: true }))) }} className="text-xs font-bold text-kcs-blue-600 disabled:text-gray-400 dark:text-kcs-blue-300">Mark all read</button>
+                    </div>
+                    <div className="max-h-[420px] overflow-y-auto p-2">
+                      {notificationsLoading && <p className="p-5 text-center text-sm text-gray-500">Loading notifications...</p>}
+                      {!notificationsLoading && !portalNotifications.length && <p className="p-5 text-center text-sm text-gray-500">No notifications yet.</p>}
+                      {portalNotifications.map((item) => (
+                        <button key={item.id} type="button" onClick={() => void markNotificationRead(item)} className={`mb-1 w-full rounded-xl p-3 text-left transition-colors ${item.isRead ? 'hover:bg-gray-50 dark:hover:bg-kcs-blue-900' : 'bg-kcs-blue-50 hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/60'}`}>
+                          <div className="flex items-start gap-3"><span className={`mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full ${item.isRead ? 'bg-gray-300' : 'bg-red-500'}`} /><div><p className="text-sm font-bold text-kcs-blue-900 dark:text-white">{item.title}</p><p className="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{item.message}</p><p className="mt-1 text-[11px] text-gray-400">{new Date(item.createdAt).toLocaleString()}</p></div></div>
+                        </button>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => void loadNotifications()} className="flex w-full items-center justify-center gap-2 border-t border-gray-100 p-3 text-xs font-bold text-kcs-blue-600 dark:border-kcs-blue-800 dark:text-kcs-blue-300"><RefreshCw size={14} /> Refresh</button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

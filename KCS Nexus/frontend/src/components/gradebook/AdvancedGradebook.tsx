@@ -5,6 +5,7 @@ import {
   Bell,
   Brain,
   CheckCircle2,
+  Eye,
   Download,
   FileSpreadsheet,
   FileText,
@@ -29,6 +30,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { printOfficialPdf } from '@/utils/officialPdf'
 
 type Course = {
   id: string
@@ -65,6 +67,7 @@ type GradebookColumn = {
   description: string
 }
 
+
 type Category = {
   id: string
   name: string
@@ -77,11 +80,12 @@ type Props = {
   selectedCourseId: string
   onSelectCourse: (courseId: string) => void
   onAction: (message: string) => void
+  onCategoryWeightsChange?: (categories: Category[]) => void
 }
 
 const assignmentTypes: AssignmentType[] = ['homework', 'quiz', 'test', 'exam', 'project', 'participation']
-const terms = ['Term 1', 'Term 2', 'Final']
-const scoreScales = [20, 100, 50]
+const terms = ['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3', 'Annual final']
+const scoreScales = [20, 50, 100]
 
 const defaultPointsByType: Record<AssignmentType, number> = {
   homework: 20,
@@ -101,11 +105,11 @@ const defaultCategories: Category[] = [
 ]
 
 const defaultAssignments: GradebookColumn[] = [
-  { id: 'gb-lab', title: 'Lab Report', type: 'project', category: 'test', maxPoints: 100, date: '2026-04-18', term: 'Term 2', description: 'Research, evidence, and lab conclusion.' },
-  { id: 'gb-quiz', title: 'Genetics Quiz', type: 'quiz', category: 'quiz', maxPoints: 20, date: '2026-04-22', term: 'Term 2', description: 'Fast check on heredity vocabulary.' },
-  { id: 'gb-homework', title: 'Problem Set', type: 'homework', category: 'homework', maxPoints: 50, date: '2026-04-25', term: 'Term 2', description: 'Independent practice submitted online.' },
-  { id: 'gb-exam', title: 'Unit Exam', type: 'exam', category: 'exam', maxPoints: 100, date: '2026-05-03', term: 'Final', description: 'Cumulative unit performance.' },
-  { id: 'gb-participation', title: 'Seminar', type: 'participation', category: 'participation', maxPoints: 10, date: '2026-05-08', term: 'Final', description: 'Discussion preparedness and collaboration.' },
+  { id: 'gb-lab', title: 'Lab Report', type: 'project', category: 'test', maxPoints: 100, date: '2026-04-18', term: 'Semester 2 · Trimester 3', description: 'Research, evidence, and lab conclusion.' },
+  { id: 'gb-quiz', title: 'Genetics Quiz', type: 'quiz', category: 'quiz', maxPoints: 20, date: '2026-04-22', term: 'Semester 2 · Trimester 3', description: 'Fast check on heredity vocabulary.' },
+  { id: 'gb-homework', title: 'Problem Set', type: 'homework', category: 'homework', maxPoints: 50, date: '2026-04-25', term: 'Semester 2 · Trimester 3', description: 'Independent practice submitted online.' },
+  { id: 'gb-exam', title: 'Unit Exam', type: 'exam', category: 'exam', maxPoints: 100, date: '2026-05-03', term: 'Annual final', description: 'Cumulative unit performance.' },
+  { id: 'gb-participation', title: 'Seminar', type: 'participation', category: 'participation', maxPoints: 10, date: '2026-05-08', term: 'Annual final', description: 'Discussion preparedness and collaboration.' },
 ]
 
 const buildInitialScores = (students: GradebookStudent[]) => {
@@ -158,16 +162,57 @@ const parseScore = (value: string, maxPoints: number) => {
 
 const formatPercent = (value: number | null) => value === null ? 'I' : `${Math.round(value)}%`
 
+const internationalGrade = (value: number | null) => {
+  if (value === null) return 'I'
+  if (value >= 97) return 'A+'
+  if (value >= 93) return 'A'
+  if (value >= 90) return 'A-'
+  if (value >= 87) return 'B+'
+  if (value >= 83) return 'B'
+  if (value >= 80) return 'B-'
+  if (value >= 77) return 'C+'
+  if (value >= 73) return 'C'
+  if (value >= 70) return 'C-'
+  if (value >= 67) return 'D+'
+  if (value >= 63) return 'D'
+  if (value >= 60) return 'D-'
+  return 'F'
+}
+
+const downloadFile = (fileName: string, content: string, type: string) => {
+  const url = URL.createObjectURL(new Blob([content], { type }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction }: Props) => {
+  const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
+  const [cellDialog, setCellDialog] = useState<{ mode: 'ai' | 'note'; assignment: GradebookColumn; student: GradebookStudent } | null>(null)
+  const [cellNoteDraft, setCellNoteDraft] = useState('')
   const [assignments, setAssignments] = useState(defaultAssignments)
   const [categories, setCategories] = useState(defaultCategories)
-  const [scores, setScores] = useState(() => buildInitialScores(students))
+  const [scores, setScores] = useState<Record<string, string>>(() => {
+    try { return (JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}').scores as Record<string, string> | undefined) ?? buildInitialScores(students) } catch { return buildInitialScores(students) }
+  })
+  const saveSpreadsheet = () => {
+    const savedAt = new Date().toISOString()
+    localStorage.setItem(`kcs-live-gradebook-${selectedCourseId}`, JSON.stringify({ scores, comments, assignments, categories, savedAt }))
+    window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt } }))
+    setSaveNotice(`Saved at ${new Date().toLocaleTimeString()}`)
+    onAction('All Live Spreadsheet scores, comments, and assignments were saved successfully.')
+  }
   const [comments, setComments] = useState<Record<string, string>>({})
-  const [term, setTerm] = useState('Term 2')
+  const [term, setTerm] = useState('Semester 2 · Trimester 3')
   const [scale, setScale] = useState(100)
   const [query, setQuery] = useState('')
   const [bulkValue, setBulkValue] = useState('')
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(defaultAssignments[0].id)
+  const [saveNotice, setSaveNotice] = useState('')
   const [draft, setDraft] = useState({
     title: 'Concept Check',
     type: 'quiz' as AssignmentType,
@@ -178,6 +223,31 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   })
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0]
+  const selectedBulkAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId)
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<{ scores: Record<string, string>; comments: Record<string, string>; assignments: GradebookColumn[]; categories: Category[] }>
+      setAssignments(saved.assignments?.length ? saved.assignments : defaultAssignments)
+      setCategories(saved.categories?.length ? saved.categories : defaultCategories)
+      setComments(saved.comments ?? {})
+      setScores(saved.scores ?? buildInitialScores(students))
+      setSelectedAssignmentId(saved.assignments?.[0]?.id ?? defaultAssignments[0].id)
+    } catch {
+      setAssignments(defaultAssignments); setCategories(defaultCategories); setComments({}); setScores(buildInitialScores(students))
+    }
+  }, [selectedCourseId, students])
+
+  useEffect(() => {
+    if (!spreadsheetOpen) return
+    const handleSaveShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 's' || event.key.toLowerCase() === 'c')) {
+        event.preventDefault(); saveSpreadsheet(); setSaveNotice('Saved successfully')
+      }
+    }
+    window.addEventListener('keydown', handleSaveShortcut)
+    return () => window.removeEventListener('keydown', handleSaveShortcut)
+  }, [spreadsheetOpen, scores, comments, assignments, selectedCourseId])
   const courseStudents = useMemo(() => {
     const roster = selectedCourse?.studentIds?.length
       ? selectedCourse.studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as GradebookStudent[]
@@ -186,7 +256,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     return roster.filter((student) => `${student.name} ${student.grade} ${student.section}`.toLowerCase().includes(query.toLowerCase()))
   }, [query, selectedCourse, students])
 
-  const visibleAssignments = assignments.filter((assignment) => assignment.term === term || term === 'Final')
+  const visibleAssignments = assignments.filter((assignment) => assignment.term === term || term === 'Annual final')
 
   const scoreKey = (assignmentId: string, studentId: string) => `${assignmentId}:${studentId}`
 
@@ -286,7 +356,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const applyBulkScore = () => {
-    if (!selectedAssignmentId) return
+    if (!selectedAssignmentId || !selectedBulkAssignment) return onAction('Select an assignment before applying a bulk score.')
+    const numericScore = Number(bulkValue)
+    if (!bulkValue.trim() || !Number.isFinite(numericScore) || numericScore < 0 || numericScore > selectedBulkAssignment.maxPoints) return onAction(`Enter a score between 0 and ${selectedBulkAssignment.maxPoints}.`)
     setScores((current) => {
       const next = { ...current }
       courseStudents.forEach((student) => {
@@ -294,12 +366,34 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       })
       return next
     })
-    onAction('Bulk grade entry applied, real-time sync events queued, and audit trail updated.')
+    onAction(`${bulkValue}/${selectedBulkAssignment.maxPoints} applied to ${courseStudents.length} student(s) for ${selectedBulkAssignment.title}.`)
+    setSaveNotice('Bulk score applied — click Save to persist')
   }
 
   const suggestGrade = (assignment: GradebookColumn, student: GradebookStudent) => {
     const average = getWeightedAverage(student.id) ?? student.average ?? classAverage
     return String(Math.round((Math.max(0, Math.min(100, average + 2)) / 100) * assignment.maxPoints))
+  }
+
+  const openCellDialog = (mode: 'ai' | 'note', assignment: GradebookColumn, student: GradebookStudent) => {
+    setCellDialog({ mode, assignment, student })
+    setCellNoteDraft(comments[scoreKey(assignment.id, student.id)] ?? '')
+  }
+
+  const applyAiSuggestion = () => {
+    if (!cellDialog) return
+    const suggestion = suggestGrade(cellDialog.assignment, cellDialog.student)
+    updateScore(cellDialog.assignment.id, cellDialog.student.id, suggestion)
+    setComments((current) => ({ ...current, [scoreKey(cellDialog.assignment.id, cellDialog.student.id)]: `AI suggestion accepted after teacher review: ${suggestion}/${cellDialog.assignment.maxPoints}.` }))
+    onAction(`AI suggestion applied for ${cellDialog.student.name}; teacher review remains recorded.`)
+    setCellDialog(null)
+  }
+
+  const saveCellNote = () => {
+    if (!cellDialog) return
+    setComments((current) => ({ ...current, [scoreKey(cellDialog.assignment.id, cellDialog.student.id)]: cellNoteDraft.trim() }))
+    onAction(`Teacher note saved for ${cellDialog.student.name} in ${cellDialog.assignment.title}.`)
+    setCellDialog(null)
   }
 
   const generateFeedback = (student: GradebookStudent) => {
@@ -315,7 +409,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const exportGradebook = (format: 'PDF' | 'Excel' | 'CSV') => {
-    onAction(`${format} export prepared with gradebook table, report-card comments, and audit metadata.`)
+    const rows = studentAnalytics.map(({ student, average, projected, missing, risk }) => [student.name, `${student.grade}${student.section}`, formatPercent(average), internationalGrade(average), formatPercent(projected), String(missing), risk])
+    const heading = ['Student', 'Class', 'Average', 'International grade', 'Prediction', 'Missing work', 'Risk']
+    const csv = [heading, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const safeName = (selectedCourse?.name ?? 'gradebook').replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+    if (format === 'CSV') downloadFile(`${safeName}-gradebook.csv`, csv, 'text/csv;charset=utf-8')
+    else if (format === 'Excel') downloadFile(`${safeName}-gradebook.xls`, `<table><thead><tr>${heading.map((cell) => `<th>${cell}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`, 'application/vnd.ms-excel')
+    else {
+      if (!printOfficialPdf({ title: 'Official Gradebook Export', subtitle: `${selectedCourse?.name ?? 'Gradebook'} · ${term}`, metadata: [['Academic cycle', term], ['Class average', `${Math.round(classAverage)}%`], ['Students', courseStudents.length], ['Missing work', missingCount]], columns: heading, rows, orientation: 'landscape' })) return onAction('Allow pop-ups to generate the printable PDF.')
+    }
+    onAction(`${format} export created with the current calculations and international grading scale.`)
   }
 
   const updateCategoryWeight = (categoryId: string, weight: number) => {
@@ -435,22 +538,27 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-        <div className="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between">
+      {spreadsheetOpen && <div className="fixed inset-0 z-40 bg-kcs-blue-950/85 backdrop-blur-sm" aria-hidden="true" />}
+      <div className={spreadsheetOpen ? "gradebook-focus-window fixed inset-4 z-50 flex flex-col overflow-hidden rounded-3xl border border-kcs-blue-300 bg-[#e8f1fc] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:inset-8" : "overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"}>
+        <div className={`flex flex-col gap-3 border-b p-4 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9]' : 'border-gray-100'}`}>
           <div>
             <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <select className="input-kcs py-2 text-sm" value={selectedAssignmentId} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
+            <button type="button" onClick={saveSpreadsheet} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
+            <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Eye size={15}/> Dedicated window</button>
+            {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white">Close</button>}
+            <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
               {visibleAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
-            </select>
-            <input className="input-kcs w-24 py-2 text-sm" value={bulkValue} onChange={(event) => setBulkValue(event.target.value)} placeholder="Score" />
-            <button onClick={applyBulkScore} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800">Bulk apply</button>
+            </select></label>
+            <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500"><span>Score / {selectedBulkAssignment?.maxPoints ?? '—'}</span><input aria-label="Bulk score value" type="number" min={0} max={selectedBulkAssignment?.maxPoints} className="input-kcs w-28 py-2 text-sm" value={bulkValue} onChange={(event) => setBulkValue(event.target.value)} placeholder="Enter score" /></label>
+            <button type="button" onClick={applyBulkScore} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800">Apply to all students</button>
           </div>
+          {saveNotice && <p className="text-xs font-bold text-green-700 dark:text-green-300">{saveNotice}</p>}
         </div>
 
-        <div className="max-h-[680px] overflow-auto">
+        <div className={spreadsheetOpen ? "flex-1 overflow-auto" : "max-h-[680px] overflow-auto"}>
           <table className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm">
             <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm dark:bg-kcs-blue-900 dark:text-gray-300">
               <tr>
@@ -463,6 +571,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                   </th>
                 ))}
                 <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Average</th>
+                <th className="min-w-28 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Intl. grade</th>
                 <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Prediction</th>
                 <th className="min-w-40 border-l border-gray-100 px-3 py-3 text-left dark:border-kcs-blue-800">AI status</th>
               </tr>
@@ -486,10 +595,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                             placeholder="I"
                           />
                           <div className="flex justify-center gap-1">
-                            <button className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => updateScore(assignment.id, student.id, suggestGrade(assignment, student))}>
+                            <button type="button" className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('ai', assignment, student)}>
                               AI
                             </button>
-                            <button className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => setComments((current) => ({ ...current, [scoreKey(assignment.id, student.id)]: current[scoreKey(assignment.id, student.id)] || 'Teacher note pending.' }))}>
+                            <button type="button" className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('note', assignment, student)}>
                               Note
                             </button>
                           </div>
@@ -500,6 +609,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                   <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
                     <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(average)}`}>{formatPercent(average)}</span>
                   </td>
+                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800"><span className={`inline-flex min-w-14 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(average)}`}>{internationalGrade(average)}</span></td>
                   <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
                     <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(projected)}`}>{formatPercent(projected)}</span>
                   </td>
@@ -526,6 +636,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                   <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
                     {formatPercent(studentAnalytics.some((item) => item.average !== null) ? classAverage : null)}
                   </td>
+                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">{internationalGrade(studentAnalytics.some((item) => item.average !== null) ? classAverage : null)}</td>
                   <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
                     {formatPercent(studentAnalytics.some((item) => item.projected !== null)
                       ? studentAnalytics.reduce((sum, item) => sum + (item.projected ?? 0), 0) / Math.max(1, studentAnalytics.filter((item) => item.projected !== null).length)
@@ -538,7 +649,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               )}
               {!studentAnalytics.length && (
                 <tr>
-                  <td colSpan={visibleAssignments.length + 4} className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                  <td colSpan={visibleAssignments.length + 5} className="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                     Select a class with students from the Super Admin registry to start entering grades.
                   </td>
                 </tr>
@@ -547,6 +658,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </table>
         </div>
       </div>
+      {cellDialog && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-kcs-blue-950/75 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-bold uppercase text-kcs-gold-600">{cellDialog.mode === 'ai' ? 'AI grade suggestion' : 'Teacher cell note'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{cellDialog.student.name} · {cellDialog.assignment.title}</h3>{cellDialog.mode === 'ai' ? <><div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-sm text-gray-600 dark:text-gray-300">Current score: <strong>{getRawScore(cellDialog.assignment.id, cellDialog.student.id) || 'Not entered'}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Suggested score: <strong>{suggestGrade(cellDialog.assignment, cellDialog.student)}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-xs text-gray-500">Based on the learner's weighted average and class trend. It is never applied without teacher confirmation.</p></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Keep current score</button><button type="button" onClick={applyAiSuggestion} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Apply suggestion</button></div></> : <><textarea autoFocus value={cellNoteDraft} onChange={(event) => setCellNoteDraft(event.target.value)} className="input-kcs mt-5 min-h-32" placeholder="Write an observation, correction note, accommodation, or follow-up..."/><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Cancel</button><button type="button" onClick={saveCellNote} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white">Save note</button></div></>}</div></div>}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="grid gap-6 lg:grid-cols-2">

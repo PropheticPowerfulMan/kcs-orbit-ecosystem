@@ -8,6 +8,7 @@ import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
 import { ensureUserAccessCodeColumn, isMissingAccessCodeColumnError } from '../utils/userAccessCode.js'
+import { generateTotpSecret, verifyTotp } from '../utils/totp.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -97,6 +98,7 @@ const loginSchema = z.object({
   identifier: z.string().min(1).optional(),
   email: z.string().min(1).optional(),
   password: z.string().min(6),
+  twoFactorCode: z.string().regex(/^\d{6}$/).optional(),
 }).refine((value) => Boolean(value.identifier?.trim() || value.email?.trim()), {
   message: 'Email or access code is required',
   path: ['identifier'],
@@ -410,6 +412,11 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   if (user?.passwordHash) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
+      if (user.twoFactorEnabled) {
+        if (!user.twoFactorSecret || !payload.twoFactorCode || !verifyTotp(user.twoFactorSecret, payload.twoFactorCode)) {
+          throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
+        }
+      }
       const token = signAccessToken(user)
       const refreshToken = signRefreshToken(user)
 
@@ -536,4 +543,106 @@ authRouter.put('/access-code', authenticate, asyncHandler(async (req: Authentica
   })
 
   return success(res, buildSafeUser(updated), 'Access code updated')
+}))
+
+authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const profileSchema = z.object({
+    firstName: z.string().min(1).optional(),
+    middleName: z.string().nullable().optional(),
+    lastName: z.string().min(1).optional(),
+    phone: z.string().optional(),
+    avatar: z.string().optional(),
+    bio: z.string().optional(),
+  })
+  const data = profileSchema.parse(req.body)
+
+  if (isConfiguredSuperAdminUser(req.user!.sub)) {
+    const adminUser = buildConfiguredSuperAdminUser()
+    const updated = { ...adminUser, ...data }
+    return success(res, updated, 'Profile updated successfully')
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.user!.sub },
+    data: {
+      ...(data.firstName ? { firstName: data.firstName.trim() } : {}),
+      ...(data.middleName !== undefined ? { middleName: data.middleName?.trim() || null } : {}),
+      ...(data.lastName ? { lastName: data.lastName.trim() } : {}),
+      ...(data.phone !== undefined ? { phone: data.phone.trim() } : {}),
+      ...(data.avatar !== undefined ? { avatar: data.avatar } : {}),
+    },
+  })
+
+  if (data.bio && updated.role === 'TEACHER') {
+    await prisma.teacherProfile.updateMany({
+      where: { userId: updated.id },
+      data: { bio: data.bio.trim() },
+    })
+  }
+
+  return success(res, buildSafeUser(updated), 'Profile updated successfully')
+}))
+
+authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const schema = z.object({
+    newEmail: z.string().email(),
+    currentPassword: z.string().min(1).optional(),
+  })
+  const { newEmail, currentPassword } = schema.parse(req.body)
+
+  if (isConfiguredSuperAdminUser(req.user!.sub)) {
+    throw new ApiError(403, 'Configured super admin email cannot be modified from the API')
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!user) throw new ApiError(404, 'User not found')
+
+  if (user.passwordHash) {
+    if (!currentPassword) throw new ApiError(400, 'Current password is required to change the email address')
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!valid) throw new ApiError(400, 'Invalid current password')
+  }
+
+  const duplicate = await prisma.user.findFirst({
+    where: { email: newEmail.toLowerCase().trim(), NOT: { id: user.id } },
+  })
+  if (duplicate) throw new ApiError(409, 'This email address is already registered')
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { email: newEmail.toLowerCase().trim() },
+  })
+
+  return success(res, buildSafeUser(updated), 'Email address updated successfully')
+}))
+
+authRouter.post('/2fa/setup', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (isConfiguredSuperAdminUser(req.user!.sub)) throw new ApiError(403, 'Configured super admin 2FA is managed through deployment settings')
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!user) throw new ApiError(404, 'User not found')
+  const secret = generateTotpSecret()
+  await prisma.user.update({ where: { id: user.id }, data: { twoFactorSecret: secret, twoFactorEnabled: false, twoFactorVerifiedAt: null } })
+  const label = encodeURIComponent(`KCS Nexus:${user.email}`)
+  const issuer = encodeURIComponent('KCS Nexus')
+  return success(res, { secret, otpauthUrl: `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}` }, 'Two-factor authentication setup created')
+}))
+
+authRouter.post('/2fa/toggle', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const schema = z.object({ enabled: z.boolean() })
+  const { enabled } = schema.parse(req.body)
+  if (enabled) throw new ApiError(400, 'Use the 2FA setup and verification flow before enabling protection')
+  if (isConfiguredSuperAdminUser(req.user!.sub)) throw new ApiError(403, 'Configured super admin 2FA is managed through deployment settings')
+  await prisma.user.update({ where: { id: req.user!.sub }, data: { twoFactorEnabled: false, twoFactorSecret: null, twoFactorVerifiedAt: null } })
+  return success(res, { enabled: false, status: 'DISABLED' }, 'Two-factor authentication disabled')
+}))
+
+authRouter.post('/2fa/verify', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const schema = z.object({ code: z.string().min(6).max(6) })
+  const { code } = schema.parse(req.body)
+  if (isConfiguredSuperAdminUser(req.user!.sub)) throw new ApiError(403, 'Configured super admin 2FA is managed through deployment settings')
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!user?.twoFactorSecret) throw new ApiError(400, 'Start two-factor authentication setup first')
+  if (!verifyTotp(user.twoFactorSecret, code)) throw new ApiError(400, 'Invalid or expired two-factor authentication code')
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { twoFactorEnabled: true, twoFactorVerifiedAt: new Date() } })
+  return success(res, { verified: true, enabled: updated.twoFactorEnabled }, 'Two-factor authentication enabled successfully')
 }))

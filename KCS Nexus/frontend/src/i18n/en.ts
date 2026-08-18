@@ -190,6 +190,12 @@ const en = {
   },
 
   // Common
+  portalNav: {
+    dashboard: 'Dashboard', myGrades: 'My Grades', assignments: 'Assignments', timetable: 'Timetable', aiTutor: 'AI Tutor', studentForum: 'Student Forum', messages: 'Messages', myProfile: 'My Profile',
+    performance: 'Performance', parentForum: 'Parent Forum', calendar: 'Calendar', fees: 'Fees & Payments', profile: 'Profile', myCourses: 'My Courses', students: 'Students', attendance: 'Attendance', gradebook: 'Gradebook', reportCards: 'Report Cards', resources: 'Resources', reports: 'Reports', disciplineReport: 'Discipline Report',
+    records: 'School Records', admissions: 'Admissions', announcements: 'Announcements', feeTracking: 'Fee Tracking', permissions: 'Permissions', parents: 'Parents', transcripts: 'Transcripts', diagnosticControl: 'Diagnostic Test Control', communications: 'Communications', staffAttendance: 'Staff Attendance', discipline: 'Discipline', teachers: 'Teachers', courses: 'Courses', finance: 'Finance', newsEvents: 'News & Events', media: 'Media Library', parentAiReport: 'Parent Forum AI Report', studentAiReport: 'Student Forum AI Report', aiAnalytics: 'AI Analytics', settings: 'Settings',
+  },
+
   common: {
     loading: 'Loading...',
     error: 'An error occurred',

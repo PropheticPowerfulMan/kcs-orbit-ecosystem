@@ -18,7 +18,7 @@ Build a smart, adaptive, and evolving communication ecosystem powered by AI to i
 ## Tech Stack
 
 - Backend: FastAPI + SQLAlchemy
-- AI/NLP: Modular NLP service (ready for spaCy/Transformers extension)
+- AI/NLP: deterministic verified-data spokesperson engine with optional OpenAI-compatible external AI polishing
 - Database: SQLite by default (easy switch to PostgreSQL)
 - Frontend: React + Vite
 - Containerization: Docker + Compose
@@ -69,6 +69,19 @@ Default seeded admin:
 If you want EduSync AI to accept admin or finance/staff credentials created in EduPay, set `EDUPAY_API_URL` in `backend/.env`. EduSync AI will then accept the same email or shared access code and provision the local shadow account on first successful login.
 
 If you want EduSync AI to accept employee or teacher credentials created in SAVANEX, set `SAVANEX_API_URL` in `backend/.env`. EduSync AI will then accept the same email or shared access code and provision the local shadow account on first successful login.
+
+### Optional External AI Partner
+
+EduSync AI can use an external OpenAI-compatible model to polish the final wording, while keeping the deterministic local engine as the source of truth. The external model receives only the verified response and must not add names, counts, payments, grades, classes, or facts that are not already present.
+
+```env
+EXTERNAL_AI_ENABLED=true
+EXTERNAL_AI_BASE_URL=https://api.openai.com/v1
+EXTERNAL_AI_API_KEY=your_api_key
+EXTERNAL_AI_MODEL=your_preferred_model
+```
+
+Keep `EXTERNAL_AI_ENABLED=false` when you want fully local deterministic behavior.
 
 ## API Highlights
 

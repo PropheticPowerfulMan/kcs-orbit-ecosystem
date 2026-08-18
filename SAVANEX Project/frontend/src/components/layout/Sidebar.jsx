@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   UserRoundCheck,
+  UserCog,
   Users,
   X,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const Sidebar = ({ role = 'admin', isOpen = false, isCollapsed = false, onClose 
     { to: '/timetable', icon: CalendarClock, label: t('nav.timetable') },
     { to: '/communication', icon: MessageSquare, label: t('nav.communication') },
     { to: '/analytics', icon: BarChart3, label: t('nav.analytics') },
+    { to: '/profile', icon: UserCog, label: 'Mon profil' },
   ];
 
   const navigation = (

@@ -90,8 +90,8 @@ class UserMeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                  'full_name', 'role', 'phone', 'avatar', 'kcs_card_id', 'access_code',
+        fields = ['id', 'username', 'email', 'first_name', 'middle_name', 'last_name',
+                  'full_name', 'role', 'phone', 'address', 'avatar', 'kcs_card_id', 'access_code',
                   'photo_data', 'photo_source', 'has_photo',
                   'left_fingerprint_data', 'right_fingerprint_data', 'has_biometrics',
                   'language', 'dark_mode', 'must_change_password',
@@ -114,8 +114,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name',
-                  'password', 'role', 'phone', 'kcs_card_id', 'access_code', 'photo_data',
+        fields = ['id', 'username', 'email', 'first_name', 'middle_name', 'last_name',
+                  'password', 'role', 'phone', 'address', 'kcs_card_id', 'access_code', 'photo_data',
                   'photo_source', 'left_fingerprint_data', 'right_fingerprint_data',
                   'language', 'must_change_password', 'password_generated_by_system',
                   'generated_password']
@@ -124,6 +124,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             'role': {'required': False},
             'email': {'required': False, 'allow_blank': True, 'allow_null': True},
             'phone': {'required': False, 'allow_blank': True},
+            'address': {'required': False, 'allow_blank': True},
             'kcs_card_id': {'required': False, 'allow_blank': True},
             'access_code': {'required': False, 'allow_blank': True},
             'photo_data': {'required': False, 'allow_blank': True},
@@ -171,7 +172,7 @@ class UserListSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'full_name', 'role', 'phone',
+            'id', 'username', 'email', 'first_name', 'middle_name', 'last_name', 'full_name', 'role', 'phone', 'address',
             'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics', 'is_active',

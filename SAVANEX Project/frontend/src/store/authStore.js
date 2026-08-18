@@ -21,6 +21,11 @@ export const useAuthStore = create((set) => ({
     set({ accessToken: access, refreshToken: refresh, user });
   },
 
+  updateUser: (user) => {
+    localStorage.setItem('savanex_user', JSON.stringify(user));
+    set({ user });
+  },
+
   clearAuth: () => {
     localStorage.removeItem('savanex_access');
     localStorage.removeItem('savanex_refresh');

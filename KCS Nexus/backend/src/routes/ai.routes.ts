@@ -3,7 +3,7 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
-import { authenticate } from '../middleware/auth.js'
+import { authenticate, requireRoles } from '../middleware/auth.js'
 import { asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 
@@ -116,6 +116,48 @@ const buildLocalSchoolAnswer = (question: string, language?: string) => {
     : `I can help with admissions, fees, programs, calendar items, contact details, and KCS Nexus portal questions.\n\nFor a precise answer, ask something like: "How do I enroll my child in Grade 6?" or "Where is the school located?"\n\nDirect contact: ${schoolFacts.phone} | ${schoolFacts.email}`
 }
 
+const teacherAssistantFallback = (
+  task: 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
+  context: string,
+) => {
+  const contextLine = context.trim() ? `\nContext supplied by the teacher: ${context.trim()}` : ''
+  const plans = {
+    'lesson-plan': [
+      'Learning objective: state one observable outcome and success criteria.',
+      'Launch (5 min): activate prior knowledge with one diagnostic question.',
+      'Model and guided practice (15 min): demonstrate the target skill, then check every learner.',
+      'Differentiated practice (15 min): provide a supported route, a core task, and an extension.',
+      'Exit ticket (5 min): collect one piece of evidence to plan the next lesson.',
+    ],
+    quiz: [
+      'Use 5 questions: two recall, two application, and one explanation question.',
+      'Publish the expected answer or rubric before students begin.',
+      'Include one accessible alternative for learners who need language or processing support.',
+      'Review results by skill, then reteach the lowest-scoring skill in the next class.',
+    ],
+    feedback: [
+      'Start with one specific strength supported by observed work.',
+      'Name one priority skill to improve; avoid broad labels such as “try harder”.',
+      'Give one concrete next action the student can complete this week.',
+      'Close with a family-friendly progress checkpoint and date for review.',
+    ],
+    intervention: [
+      'Define the target skill and record a baseline using recent work and attendance.',
+      'Plan two short, targeted practice sessions each week for the next two weeks.',
+      'Provide an accommodation or scaffold and a measurable success criterion.',
+      'Contact the family with a strengths-first update, then review progress with the support team.',
+    ],
+    'meeting-summary': [
+      'Open with the student’s strengths and current progress.',
+      'Share only verified attendance, assignment, and assessment evidence.',
+      'Agree on one school action, one home action, and a review date.',
+      'Record the family’s questions and send a concise follow-up summary.',
+    ],
+  }
+
+  return `${plans[task].map((step, index) => `${index + 1}. ${step}`).join('\n')}${contextLine}\n\nReview and adapt this draft before sharing it with students or families.`
+}
+
 const buildSystemPrompt = (language: ChatLanguage) => {
   const languageInstruction = language === 'fr'
     ? 'Réponds en français naturel avec les accents, apostrophes, espaces et ponctuation corrects, sauf si le visiteur demande explicitement l’anglais.'
@@ -173,6 +215,53 @@ aiRouter.post('/chat', asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('[ai/chat] OpenAI request failed, using local school answer:', error)
     return success(res, { response: localAnswer, source: 'local-school-knowledge' })
+  }
+}))
+
+aiRouter.post('/teacher-assistant', authenticate, requireRoles('teacher', 'staff', 'admin'), asyncHandler(async (req, res) => {
+  const schema = z.object({
+    task: z.enum(['lesson-plan', 'quiz', 'feedback', 'intervention', 'meeting-summary']),
+    context: z.string().max(4000).default(''),
+  })
+  const { task, context } = schema.parse(req.body)
+  const fallback = teacherAssistantFallback(task, context)
+
+  if (!openai) {
+    return success(res, { response: fallback, source: 'teacher-guidance-fallback' })
+  }
+
+  const taskLabels = {
+    'lesson-plan': 'a differentiated lesson plan',
+    quiz: 'a short formative quiz with answers or a marking guide',
+    feedback: 'constructive report-card or parent-meeting feedback',
+    intervention: 'a measurable learner intervention plan',
+    'meeting-summary': 'a concise parent-teacher meeting summary',
+  }
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are KCS Nexus AI Teacher Assistant. Produce practical drafts for a teacher. Do not invent student records, grades, attendance, family details, policies, or completed actions. State assumptions clearly, use concise sections and actionable next steps, and require teacher review before sharing.',
+        },
+        {
+          role: 'user',
+          content: `Create ${taskLabels[task]}. Teacher context:\n${context || 'No additional context was supplied.'}`,
+        },
+      ],
+      temperature: 0.35,
+      max_tokens: 700,
+    })
+
+    return success(res, {
+      response: completion.choices[0]?.message?.content?.trim() || fallback,
+      source: 'openai-teacher-assistant',
+    })
+  } catch (error) {
+    console.error('[ai/teacher-assistant] OpenAI request failed, using fallback:', error)
+    return success(res, { response: fallback, source: 'teacher-guidance-fallback' })
   }
 }))
 

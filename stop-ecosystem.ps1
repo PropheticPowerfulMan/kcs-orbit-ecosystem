@@ -118,6 +118,23 @@ function Stop-ProcessesByPort {
       $stoppedItems.Add($label) | Out-Null
     }
   }
+
+  # Get-NetTCPConnection can return no result from a non-elevated shell even
+  # while a listener exists. Netstat provides a reliable read-only fallback.
+  $netstatLines = & netstat.exe -ano -p tcp 2>$null
+  foreach ($port in $servicePorts) {
+    $processIds = @($netstatLines | ForEach-Object {
+      if ($_ -match "^\s*TCP\s+\S+:$port\s+\S+\s+LISTENING\s+(\d+)\s*$") { [int]$matches[1] }
+    } | Where-Object { $_ -gt 0 } | Select-Object -Unique)
+
+    foreach ($processId in $processIds) {
+      $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+      if (-not $process) { continue }
+      $label = "$($process.ProcessName) pid=$processId port=$port (netstat)"
+      Stop-Process -Id $processId -Force:$Force -ErrorAction SilentlyContinue
+      $stoppedItems.Add($label) | Out-Null
+    }
+  }
 }
 
 Write-Step 'Stopping ecosystem PowerShell windows'
@@ -132,6 +149,16 @@ Start-Sleep -Milliseconds 300
 
 Write-Step 'Stopping any remaining listeners on ecosystem ports'
 Stop-ProcessesByPort
+
+# Give Windows time to release sockets before the launcher chooses ports.
+$deadline = (Get-Date).AddSeconds(8)
+do {
+  $remaining = @($servicePorts | Where-Object {
+    (& netstat.exe -ano -p tcp 2>$null) -match "^\s*TCP\s+\S+:$_\s+\S+\s+LISTENING\s+\d+\s*$"
+  })
+  if ($remaining.Count -eq 0) { break }
+  Start-Sleep -Milliseconds 400
+} while ((Get-Date) -lt $deadline)
 
 Write-Host ''
 if ($stoppedItems.Count -eq 0) {

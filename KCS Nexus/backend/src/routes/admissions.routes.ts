@@ -18,6 +18,7 @@ const upload = multer({
 
 const admissionSchema = z.object({
   firstName: z.string().min(2),
+  middleName: z.string().optional(),
   lastName: z.string().min(2),
   dateOfBirth: z.coerce.date(),
   gender: z.string().default('Not specified'),
@@ -63,6 +64,7 @@ const buildAdmissionEmail = (
   const studentRows: Array<[string, string | Date | undefined]> = [
     ['Application number', applicationNumber],
     ['Student first name', payload.firstName],
+    ['Student middle name / Postnom', payload.middleName || 'Not provided'],
     ['Student last name', payload.lastName],
     ['Date of birth', payload.dateOfBirth],
     ['Gender', payload.gender],
@@ -90,6 +92,7 @@ const buildAdmissionEmail = (
     '',
     'STUDENT INFORMATION',
     `First name: ${payload.firstName}`,
+    `Middle name / Postnom: ${payload.middleName || 'Not provided'}`,
     `Last name: ${payload.lastName}`,
     `Date of birth: ${payload.dateOfBirth.toISOString().slice(0, 10)}`,
     `Gender: ${payload.gender}`,
@@ -180,6 +183,7 @@ admissionsRouter.post('/', upload.array('documents', 6), asyncHandler(async (req
   const application = await prisma.admissionApplication.create({
     data: {
       firstName: payload.firstName,
+      middleName: payload.middleName || null,
       lastName: payload.lastName,
       dateOfBirth: payload.dateOfBirth,
       gender: payload.gender,

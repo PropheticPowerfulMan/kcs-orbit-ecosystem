@@ -273,3 +273,101 @@ export const DomainEventSchemas = {
   gradeUpsert: GradeUpsertSchema,
   attendanceUpsert: AttendanceUpsertSchema
 };
+
+/** Shared, deterministic academic-year progression rules used by Orbit and the portals. */
+export type AcademicProgressionOverride = {
+  studentId: string;
+  decision: "PROMOTE" | "REPEAT" | "GRADUATE" | "MANUAL_TRANSFER";
+  targetClassId?: string;
+  reason?: string;
+};
+
+export const AcademicProgressionOverrideSchema = z.object({
+  studentId: z.string().min(1),
+  decision: z.enum(["PROMOTE", "REPEAT", "GRADUATE", "MANUAL_TRANSFER"]),
+  targetClassId: z.string().min(1).optional(),
+  reason: z.string().trim().optional()
+});
+
+export type CanonicalIdentity = {
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
+};
+
+/** Administrative display: Nom, Postnom, Prenom. */
+export function composeCanonicalFullName(identity: CanonicalIdentity) {
+  const structured = [identity.lastName, identity.middleName, identity.firstName]
+    .map((part) => part?.trim().replace(/\s+/g, " ") || "")
+    .filter(Boolean)
+    .join(" ");
+
+  return structured || identity.fullName?.trim().replace(/\s+/g, " ") || "";
+}
+
+type AcademicStudent = { id: string; firstName: string; lastName: string; classId?: string | null; className?: string | null; status?: string | null; averagePercent?: number | null };
+type AcademicClass = { id: string; name: string; gradeLevel?: string | null; suffix?: string | null };
+
+const numericGrade = (value?: string | null) => Number((value || "").match(/\d+/)?.[0] || 0);
+const academicYearFor = (date: Date) => {
+  const year = date.getUTCFullYear();
+  const startsThisYear = date.getUTCMonth() >= 8;
+  return `${startsThisYear ? year : year - 1}-${startsThisYear ? year + 1 : year}`;
+};
+
+export function getAcademicYearWindow(date = new Date()) {
+  const month = date.getUTCMonth();
+  const endYear = month >= 8 ? date.getUTCFullYear() + 1 : date.getUTCFullYear();
+  return { academicYear: academicYearFor(date), startDate: `${endYear - 1}-09-01`, endDate: `${endYear}-06-30`, rolloverDate: `${endYear}-07-01`, isRolloverWindow: month >= 6 && month <= 7 };
+}
+
+export function getNextAcademicClassName(className: string) {
+  const match = className.trim().match(/^(K4|K5|Grade\s*(\d+))(?:\s+(.+))?$/i);
+  if (!match) return null;
+  const suffix = match[3] ? ` ${match[3]}` : "";
+  if (/^K4$/i.test(match[1])) return `K5${suffix}`;
+  if (/^K5$/i.test(match[1])) return `Grade 1${suffix}`;
+  const grade = Number(match[2]);
+  return grade >= 12 ? null : `Grade ${grade + 1}${suffix}`;
+}
+
+export function buildAcademicProgressionPlan(input: {
+  students: AcademicStudent[];
+  classes: AcademicClass[];
+  overrides?: AcademicProgressionOverride[];
+  effectiveDate: Date;
+  passThreshold?: number;
+}) {
+  const passThreshold = input.passThreshold ?? 70;
+  const window = getAcademicYearWindow(input.effectiveDate);
+  const byStudent = new Map((input.overrides || []).map((override) => [override.studentId, override]));
+  const items = input.students.map((student) => {
+    const override = byStudent.get(student.id);
+    const currentClass = input.classes.find((item) => item.id === student.classId) || input.classes.find((item) => item.name === student.className);
+    const currentGrade = numericGrade(currentClass?.gradeLevel || currentClass?.name || student.className);
+    const passed = student.averagePercent !== null && student.averagePercent !== undefined && student.averagePercent >= passThreshold;
+    const defaultDecision = !currentGrade ? "HOLD" : student.averagePercent === null || student.averagePercent === undefined ? "HOLD" : currentGrade >= 12 ? "GRADUATE" : passed ? "PROMOTE" : "REPEAT";
+    const decision = override?.decision || defaultDecision;
+    const nextClassName = decision === "PROMOTE" ? getNextAcademicClassName(currentClass?.name || student.className || "") : null;
+    const targetGrade = decision === "PROMOTE" ? currentGrade + 1 : currentGrade;
+    const target = override?.targetClassId
+      ? input.classes.find((item) => item.id === override.targetClassId)
+      : nextClassName
+        ? input.classes.find((item) => item.name.toLowerCase() === nextClassName.toLowerCase())
+        : input.classes.find((item) => numericGrade(item.gradeLevel || item.name) === targetGrade && (item.suffix || "") === (currentClass?.suffix || ""));
+    const warnings = !currentGrade ? ["CLASS_LEVEL_COULD_NOT_BE_PARSED"] : student.averagePercent === null || student.averagePercent === undefined ? ["PASS_AVERAGE_MISSING"] : decision === "REPEAT" && !override ? ["PASS_THRESHOLD_NOT_MET"] : decision === "MANUAL_TRANSFER" && !target ? ["MANUAL_TRANSFER_REQUIRES_TARGET_CLASS"] : decision === "PROMOTE" && !target ? ["TARGET_CLASS_NOT_FOUND"] : [];
+    return {
+      studentId: student.id,
+      studentName: `${student.firstName} ${student.lastName}`.trim(),
+      action: decision, decision,
+      eventType: `academic_year.${decision.toLowerCase()}`,
+      status: decision === "GRADUATE" ? "GRADUATED" : student.status || "ACTIVE",
+      fromClassId: currentClass?.id || null, fromClassName: currentClass?.name || student.className || null,
+      toClassId: decision === "GRADUATE" ? null : decision === "HOLD" ? currentClass?.id || null : target?.id || currentClass?.id || null,
+      toClassName: decision === "GRADUATE" ? null : decision === "HOLD" ? currentClass?.name || student.className || null : target?.name || currentClass?.name || student.className || null,
+      averagePercent: student.averagePercent, passThreshold, warnings
+    };
+  });
+  return { ...window, nextAcademicYear: academicYearFor(new Date(Date.UTC(input.effectiveDate.getUTCFullYear() + 1, 8, 1))), effectiveDate: input.effectiveDate.toISOString(), passThreshold, items, warnings: items.flatMap((item) => item.warnings), counts: { PROMOTE: items.filter((item) => item.decision === "PROMOTE").length, REPEAT: items.filter((item) => item.decision === "REPEAT").length, MANUAL_TRANSFER: items.filter((item) => item.decision === "MANUAL_TRANSFER").length, HOLD: items.filter((item) => item.decision === "HOLD").length, GRADUATE: items.filter((item) => item.decision === "GRADUATE").length } };
+}

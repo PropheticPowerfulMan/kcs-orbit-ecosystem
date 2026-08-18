@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
@@ -42,7 +43,7 @@ const formatApiError = (value) => {
 
 const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const modalBackdropClass = 'savanex-modal-backdrop fixed inset-0 z-[999] grid place-items-center overflow-y-auto px-4 py-8';
-const modalPanelClass = 'savanex-modal-panel w-full max-w-5xl overflow-y-auto p-5 sm:p-6';
+const modalPanelClass = 'savanex-modal-panel savanex-entity-edit-panel w-full overflow-y-auto p-5 sm:p-6';
 const standardClassLevels = [
   'K3', 'K4', 'K5',
   ...Array.from({ length: 12 }, (_item, index) => `Grade ${index + 1}`),
@@ -67,13 +68,13 @@ const splitClassName = (value) => {
 
 const createStudentDraft = () => ({
   firstName: '',
+  middleName: '',
   lastName: '',
   email: '',
   classLevel: '',
   classSuffix: '',
   dateOfBirth: '',
   gender: 'F',
-  address: '',
   identity: { ...emptyIdentityCapture },
 });
 
@@ -82,20 +83,21 @@ const createEditForm = (student) => {
   const classParts = splitClassName(student?.class_name || '');
 
   return {
-    firstName: nameParts[0] || '',
-    lastName: nameParts.slice(1).join(' '),
+    lastName: nameParts[0] || '',
+    middleName: nameParts.slice(1, -1).join(' '),
+    firstName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
     email: student?.email || '',
     classLevel: standardClassLevels.includes(classParts.level) ? classParts.level : '',
     classSuffix: classParts.suffix || '',
     dateOfBirth: student?.date_of_birth || '',
     gender: student?.gender || 'F',
-    address: student?.address || '',
     notes: student?.notes || '',
   };
 };
 
-const StudentsPage = () => {
+const StudentsPage = ({ familyWorkspace = false }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [classLevelFilter, setClassLevelFilter] = useState('all');
   const [classSuffixFilter, setClassSuffixFilter] = useState('all');
@@ -106,17 +108,31 @@ const StudentsPage = () => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [familyDialogOpen, setFamilyDialogOpen] = useState(false);
+  const [familyDialogOpen, setFamilyDialogOpen] = useState(familyWorkspace);
   const [editingStudent, setEditingStudent] = useState(null);
   const [editForm, setEditForm] = useState(createEditForm(null));
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
+
+  useEffect(() => {
+    setFamilyDialogOpen(familyWorkspace);
+  }, [familyWorkspace]);
+  const closeFamilyWorkspace = () => {
+    if (familyWorkspace) {
+      navigate('/students');
+      return;
+    }
+    setFamilyDialogOpen(false);
+  };
+
   const [form, setForm] = useState({
     parentFirstName: '',
+    parentMiddleName: '',
     parentLastName: '',
     parentEmail: '',
     parentPhone: '',
+    parentAddress: '',
     parentIdentity: { ...emptyIdentityCapture },
     students: [createStudentDraft()],
   });
@@ -267,10 +283,10 @@ const StudentsPage = () => {
     try {
       const payload = {
         first_name: editForm.firstName,
+        middle_name: editForm.middleName,
         last_name: editForm.lastName,
         user_email: editForm.email,
         gender: editForm.gender,
-        address: editForm.address,
         class_level: editForm.classLevel,
         class_suffix: editForm.classSuffix,
         notes: editForm.notes,
@@ -333,13 +349,13 @@ const StudentsPage = () => {
       label: 'Action',
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="rounded-lg border border-cyan-400/30 px-3 py-1 text-xs text-cyan-200 hover:bg-cyan-400/10">Voir</button>
+          <button type="button" onClick={() => navigate(`/students/${encodeURIComponent(row.id)}`, { state: { entity: { ...row, role: 'Élève' } } })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
           {row.is_read_only ? (
-            <span className="rounded-lg border border-slate-600/60 bg-slate-900/70 px-3 py-1 text-xs font-semibold text-slate-300">Lecture seule</span>
+            <span className="savanex-entity-action savanex-entity-action-muted">Lecture seule</span>
           ) : (
             <>
-              <button type="button" onClick={() => openEditDialog(row)} className="rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-300/20">Modifier</button>
-              <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="rounded-lg border border-rose-300/40 bg-rose-300/10 px-3 py-1 text-xs font-semibold text-rose-200 hover:bg-rose-300/20 disabled:opacity-50">
+              <button type="button" onClick={() => navigate(`/students/${encodeURIComponent(row.id)}/edit`, { state: { entity: row } })} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+              <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="savanex-entity-action savanex-entity-action-danger disabled:opacity-50">
                 {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
               </button>
             </>
@@ -374,14 +390,17 @@ const StudentsPage = () => {
       const payload = {
         parent: {
           first_name: form.parentFirstName,
+          middle_name: form.parentMiddleName,
           last_name: form.parentLastName,
           email: form.parentEmail,
           phone: form.parentPhone,
+          address: form.parentAddress,
           ...form.parentIdentity,
         },
         students: form.students.map((student) => ({
           user: {
             first_name: student.firstName,
+            middle_name: student.middleName,
             last_name: student.lastName,
             email: student.email,
             ...student.identity,
@@ -390,7 +409,6 @@ const StudentsPage = () => {
           gender: student.gender,
           class_level: student.classLevel,
           class_suffix: student.classSuffix,
-          address: student.address,
         })),
       };
 
@@ -412,13 +430,15 @@ const StudentsPage = () => {
       setFeedback(`Famille enregistrée avec ${response.studentCount || form.students.length} élève(s). Mot de passe temporaire à changer: ${credentialSummary || 'déjà défini'}.`);
       setForm({
         parentFirstName: '',
+        parentMiddleName: '',
         parentLastName: '',
         parentEmail: '',
         parentPhone: '',
+    parentAddress: '',
         parentIdentity: { ...emptyIdentityCapture },
         students: [createStudentDraft()],
       });
-      setFamilyDialogOpen(false);
+      if (!familyWorkspace) setFamilyDialogOpen(false);
     } catch (submissionError) {
       const responseData = submissionError?.response?.data;
       setError(
@@ -482,34 +502,36 @@ const StudentsPage = () => {
             </section>
           ) : null}
 
-          <div className="savanex-family-launcher flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-github-border bg-github-panel/80 p-4 shadow-glass backdrop-blur-xl">
+          <div className={`${familyWorkspace ? 'hidden' : 'savanex-family-launcher flex'} flex-wrap items-center justify-between gap-3 rounded-2xl border border-github-border bg-github-panel/80 p-4 shadow-glass backdrop-blur-xl`}>
             <p className="max-w-2xl text-sm text-slate-300">Tout l'enregistrement se fait maintenant dans une seule fenêtre dédiée : parent, enfants, biométrie et validation finale.</p>
-            <button type="button" onClick={() => setFamilyDialogOpen(true)} className="savanex-primary-family-button">
+            <button type="button" onClick={() => { setError(''); setFamilyDialogOpen(true); }} className="savanex-primary-family-button">
               Ajouter une nouvelle famille
             </button>
           </div>
 
           {familyDialogOpen ? createPortal((
-            <div className={modalBackdropClass}>
+            <div className={`${modalBackdropClass} ${familyWorkspace ? 'savanex-family-route' : ''}`}>
               <section role="dialog" aria-modal="true" aria-label="Nouvelle famille" className={`${modalPanelClass} savanex-family-modal`}>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Famille complète</p>
                     <h4 className="mt-1 font-display text-xl font-semibold text-slate-100">Nouvelle famille</h4>
                   </div>
-                  <button type="button" onClick={() => setFamilyDialogOpen(false)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
+                  <button type="button" onClick={closeFamilyWorkspace} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
                 </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <input value={form.parentLastName} onChange={(event) => setForm({ ...form, parentLastName: event.target.value })} placeholder="Nom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input value={form.parentMiddleName} onChange={(event) => setForm({ ...form, parentMiddleName: event.target.value })} placeholder="Postnom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <input type="email" value={form.parentEmail} onChange={(event) => setForm({ ...form, parentEmail: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <input value={form.parentAddress} onChange={(event) => setForm({ ...form, parentAddress: event.target.value })} placeholder="Adresse physique du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2 xl:col-span-3" />
                 </div>
 
                 <div className="mt-4">
                   <IdentityCapturePanel
                     value={form.parentIdentity}
-                    subjectName={`${form.parentFirstName} ${form.parentLastName}`}
+                    subjectName={`${form.parentLastName} ${form.parentMiddleName} ${form.parentFirstName}`}
                     onChange={(identity) => setForm({ ...form, parentIdentity: identity })}
                   />
                 </div>
@@ -519,9 +541,10 @@ const StudentsPage = () => {
                     <p className="mt-1 text-xs text-slate-400">La photo et les empreintes capturées ici alimentent la carte KCS officielle.</p>
                   </div>
                   <KcsIdCard entity={{
-                    full_name: `${form.parentFirstName} ${form.parentLastName}`.trim() || 'Parent KCS',
+                    full_name: `${form.parentLastName} ${form.parentMiddleName} ${form.parentFirstName}`.replace(/\s+/g, ' ').trim() || 'Parent KCS',
                     role: 'Parent',
                     phone: form.parentPhone,
+          address: form.parentAddress,
                     email: form.parentEmail,
                     ...form.parentIdentity,
                   }} />
@@ -544,9 +567,10 @@ const StudentsPage = () => {
                     <button type="button" onClick={() => removeStudentDraft(index)} className="text-xs text-rose-300 hover:text-rose-200">Retirer</button>
                   ) : null}
                 </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <input value={student.firstName} onChange={(event) => updateStudentDraft(index, 'firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   <input value={student.lastName} onChange={(event) => updateStudentDraft(index, 'lastName', event.target.value)} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input value={student.middleName} onChange={(event) => updateStudentDraft(index, 'middleName', event.target.value)} placeholder="Postnom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <input value={student.firstName} onChange={(event) => updateStudentDraft(index, 'firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <input type="email" value={student.email} onChange={(event) => updateStudentDraft(index, 'email', event.target.value)} placeholder="Email élève" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <select value={student.classLevel} onChange={(event) => updateStudentDraft(index, 'classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
                     <option value="">Classe non assignée</option>
@@ -561,12 +585,11 @@ const StudentsPage = () => {
                     <option value="M">Garçon</option>
                     <option value="O">Autre</option>
                   </select>
-                  <input value={student.address} onChange={(event) => updateStudentDraft(index, 'address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2" />
                 </div>
                 <div className="mt-4">
                   <IdentityCapturePanel
                     value={student.identity}
-                    subjectName={`${student.firstName} ${student.lastName}`}
+                    subjectName={`${student.lastName} ${student.middleName} ${student.firstName}`}
                     onChange={(identity) => updateStudentDraft(index, 'identity', identity)}
                     compact
                   />
@@ -577,7 +600,7 @@ const StudentsPage = () => {
                     <p className="mt-1 text-xs text-slate-400">La carte utilise l'identité visuelle KCS, la photo et les empreintes reliées au lecteur.</p>
                   </div>
                   <KcsIdCard entity={{
-                    full_name: `${student.firstName} ${student.lastName}`.trim() || `Élève ${index + 1}`,
+                    full_name: `${student.lastName} ${student.middleName} ${student.firstName}`.replace(/\s+/g, ' ').trim() || `Élève ${index + 1}`,
                     role: 'Élève',
                     class_name: [student.classLevel, student.classSuffix].filter(Boolean).join(' '),
                     email: student.email,
@@ -591,7 +614,7 @@ const StudentsPage = () => {
 
                 {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
                 <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-github-border pt-4">
-                  <button type="button" onClick={() => setFamilyDialogOpen(false)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
+                  <button type="button" onClick={closeFamilyWorkspace} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
                   <button type="button" onClick={() => void submitFamily()} disabled={submitting} className="rounded-xl bg-kcs-blue px-5 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
                     {submitting ? 'Enregistrement en cours...' : 'Enregistrer la famille'}
                   </button>
@@ -626,14 +649,18 @@ const StudentsPage = () => {
                 <div className="space-y-4">
                   <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Identité de l'élève</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Nom
+                        <input value={editForm.lastName} onChange={(event) => setEditField('lastName', event.target.value)} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
+                        Postnom
+                        <input value={editForm.middleName} onChange={(event) => setEditField('middleName', event.target.value)} placeholder="Postnom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                      </label>
                       <label className="grid gap-1 text-xs font-semibold text-slate-400">
                         Prénom
                         <input value={editForm.firstName} onChange={(event) => setEditField('firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
-                      </label>
-                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
-                        Nom / postnom
-                        <input value={editForm.lastName} onChange={(event) => setEditField('lastName', event.target.value)} placeholder="Nom ou postnom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-slate-400">
                         Email élève
@@ -647,7 +674,7 @@ const StudentsPage = () => {
                   </section>
                   <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Classe et profil</p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       <label className="grid gap-1 text-xs font-semibold text-slate-400">
                         Niveau
                         <select value={editForm.classLevel} onChange={(event) => setEditField('classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
@@ -668,10 +695,6 @@ const StudentsPage = () => {
                           <option value="M">Garçon</option>
                           <option value="O">Autre</option>
                         </select>
-                      </label>
-                      <label className="grid gap-1 text-xs font-semibold text-slate-400">
-                        Adresse
-                        <input value={editForm.address} onChange={(event) => setEditField('address', event.target.value)} placeholder="Adresse" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
                       </label>
                     </div>
                   </section>

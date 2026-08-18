@@ -30,7 +30,6 @@ class Student(models.Model):
         choices=GENDER_CHOICES,
         verbose_name=_('Gender'),
     )
-    address = models.TextField(blank=True, verbose_name=_('Address'))
     parent = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

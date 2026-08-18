@@ -11,6 +11,9 @@ const postSchema = z.object({
   title: z.string().min(4),
   content: z.string().min(8),
   category: z.string().min(2),
+  attachmentType: z.enum(['image', 'video', 'audio']).optional(),
+  attachmentData: z.string().max(12_000_000).optional(),
+  attachmentName: z.string().max(255).optional(),
 })
 
 const commentSchema = z.object({

@@ -35,7 +35,17 @@ class Settings(BaseSettings):
     savanex_login_path: str = "/api/auth/login/"
     savanex_timeout_seconds: int = 5
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    external_ai_enabled: bool = False
+    external_ai_provider: str = "openai_compatible"
+    external_ai_base_url: str = ""
+    external_ai_api_key: str = ""
+    external_ai_model: str = ""
+    external_ai_timeout_seconds: int = 12
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8-sig", extra="ignore")
 
 
 settings = Settings()
+
+if settings.app_env.lower() in {"prod", "production"} and settings.jwt_secret in {"change-me", "dev-secret", "dev_secret"}:
+    raise RuntimeError("EduSync production configuration is unsafe. Set a strong JWT_SECRET.")

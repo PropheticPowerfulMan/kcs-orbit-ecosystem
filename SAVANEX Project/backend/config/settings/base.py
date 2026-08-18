@@ -11,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
 # ─── Application Definition ────────────────────────────────────────────────────
 DJANGO_APPS = [
@@ -151,6 +152,14 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': config('DRF_ANON_THROTTLE_RATE', default='120/hour'),
+        'user': config('DRF_USER_THROTTLE_RATE', default='1200/hour'),
+    },
 }
 
 # ─── JWT Settings ───────────────────────────────────────────────────────────────

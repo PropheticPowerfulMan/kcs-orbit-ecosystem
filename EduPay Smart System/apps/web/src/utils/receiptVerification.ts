@@ -12,8 +12,13 @@ function resolveReceiptBaseUrl(
   configuredBaseUrl: string,
   locationLike: Pick<Location, "origin">
 ) {
+  const configured = configuredBaseUrl.trim();
+  const origin = locationLike.origin;
+  const configuredLooksLikePlaceholder = /votredomaine|votre-site-public|mon-backend/i.test(configured);
+  const configuredIsUndeployedRenderDefault = /edupay-web\.onrender\.com/i.test(configured) && !/edupay-web\.onrender\.com/i.test(origin);
+  const safeConfiguredBaseUrl = configuredLooksLikePlaceholder || configuredIsUndeployedRenderDefault ? "" : configured;
   const baseCandidate = normalizeReceiptBaseUrl(
-    configuredBaseUrl || import.meta.env.BASE_URL || DEFAULT_RECEIPT_VERIFICATION_BASE_URL
+    safeConfiguredBaseUrl || import.meta.env.BASE_URL || DEFAULT_RECEIPT_VERIFICATION_BASE_URL
   );
 
   try {

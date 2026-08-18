@@ -141,11 +141,10 @@ function normalizeText(value: string) {
 }
 
 function buildCanonicalFullName(input: { fullName?: string | null; firstName?: string | null; middleName?: string | null; lastName?: string | null }) {
-  if (input.fullName?.trim()) {
-    return normalizeText(input.fullName);
-  }
-
-  return normalizeText([input.firstName, input.middleName, input.lastName].filter(Boolean).join(" "));
+  const structured = [input.lastName, input.middleName, input.firstName]
+    .filter(Boolean)
+    .join(" ");
+  return normalizeText(structured || input.fullName || "");
 }
 
 function buildGeneratedExternalId(appSlug: AppSlug, entityType: z.infer<typeof entityTypeSchema>) {

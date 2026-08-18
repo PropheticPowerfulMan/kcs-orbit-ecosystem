@@ -13,7 +13,7 @@ type SmsInput = {
   text: string;
 };
 
-type DeliveryStatus = "SENT" | "FAILED" | "SIMULATED" | "SKIPPED";
+type DeliveryStatus = "SENT" | "FAILED" | "FAILED_NETWORK" | "SIMULATED" | "SKIPPED";
 
 export type MessagingConfigStatus = {
   email: {
@@ -97,14 +97,14 @@ function formatEmailContent(text: string) {
 
 function inferAudience(subject: string, text: string) {
   const content = `${subject}\n${text}`.toLowerCase();
-  if (content.includes("parent") || content.includes("enfant") || content.includes("eleves concernes")) {
+  if (content.includes("parent") || content.includes("enfant") || content.includes("élèves concernés")) {
     return { label: "Espace parent", accent: BRAND_GOLD };
   }
-  if (content.includes("eleve") || content.includes("student")) {
-    return { label: "Espace eleve", accent: "#12aee8" };
+  if (content.includes("élève") || content.includes("student")) {
+    return { label: "Espace élève", accent: "#12aee8" };
   }
   if (content.includes("employ") || content.includes("enseign") || content.includes("staff")) {
-    return { label: "Espace employe", accent: "#16a34a" };
+    return { label: "Espace employé", accent: "#16a34a" };
   }
   return { label: "Notification EduPay", accent: BRAND_GOLD };
 }
@@ -173,7 +173,7 @@ function buildBrandedEmailHtml(input: EmailInput) {
             <td style="background:${BRAND_BLUE};border-radius:0 0 28px 28px;padding:20px 28px;text-align:center">
               <p style="margin:0;color:#ffffff;font-size:13px;font-weight:700">${SCHOOL_NAME}</p>
               <p style="margin:5px 0 0;color:#cfe2ff;font-size:12px">Macampagne, Ngaliema · ${SCHOOL_TAGLINE}</p>
-              <p style="margin:10px 0 0;color:#9fc2ea;font-size:11px">&copy; ${year} ${SCHOOL_SHORT_NAME}. Notification automatisee EduPay.</p>
+              <p style="margin:10px 0 0;color:#9fc2ea;font-size:11px">&copy; ${year} ${SCHOOL_SHORT_NAME}. Notification automatisée EduPay.</p>
             </td>
           </tr>
         </table>
@@ -189,12 +189,31 @@ function hasSmtpConfig() {
 }
 
 function hasSmsConfig() {
+  const username = getSmsUsername();
+  const apiKey = getSmsApiKey();
   return Boolean(
-    env.AFRIKTALK_API_URL &&
-    env.AFRIKTALK_USERNAME &&
-    env.AFRIKTALK_API_KEY &&
-    env.AFRIKTALK_API_KEY !== "CHANGE_ME"
+    getSmsApiUrl() &&
+    username &&
+    username !== "CHANGE_ME" &&
+    apiKey &&
+    apiKey !== "CHANGE_ME"
   );
+}
+
+function getSmsApiUrl() {
+  return env.AFRICASTALKING_API_URL || env.AFRIKTALK_API_URL || "https://api.africastalking.com/version1/messaging";
+}
+
+function getSmsUsername() {
+  return env.AFRICASTALKING_USERNAME || env.AFRIKTALK_USERNAME;
+}
+
+function getSmsApiKey() {
+  return env.AFRICASTALKING_API_KEY || env.AFRIKTALK_API_KEY;
+}
+
+function getSmsSender() {
+  return env.AFRICASTALKING_SENDER || env.AFRIKTALK_SENDER;
 }
 
 export function getMessagingConfigStatus(): MessagingConfigStatus {
@@ -208,9 +227,9 @@ export function getMessagingConfigStatus(): MessagingConfigStatus {
     },
     sms: {
       configured: hasSmsConfig(),
-      providerUrl: env.AFRIKTALK_API_URL,
-      usernameConfigured: Boolean(env.AFRIKTALK_USERNAME),
-      sender: env.AFRIKTALK_SENDER
+      providerUrl: getSmsApiUrl(),
+      usernameConfigured: Boolean(getSmsUsername()),
+      sender: getSmsSender()
     }
   };
 }
@@ -229,7 +248,10 @@ function smtpTransport() {
 }
 
 function normalizePhoneNumber(phone: string) {
-  return phone.replace(/[^\d+]/g, "");
+  const cleaned = phone.replace(/[^\d+]/g, "");
+  if (/^0\d{8,11}$/.test(cleaned)) return `+243${cleaned.slice(1)}`;
+  if (/^243\d{8,11}$/.test(cleaned)) return `+${cleaned}`;
+  return cleaned;
 }
 
 function isAfricaTalkingEndpoint(url: string) {
@@ -243,8 +265,50 @@ function isSuccessfulAfrikTalkResponse(body: unknown) {
 
   return recipients.some((recipient) => {
     const status = String(recipient.status ?? recipient.Status ?? "").toLowerCase();
-    return status.includes("success") || status.includes("sent") || status.includes("submitted");
+    const statusCode = String(recipient.statusCode ?? recipient.StatusCode ?? "").toLowerCase();
+    return status.includes("success") || status.includes("sent") || status.includes("submitted") || statusCode === "101";
   });
+}
+
+function africasTalkingResponseMentionsSenderIssue(responseText: string) {
+  return /sender|from|short.?code|alphanumeric|not.?allowed|not.?registered|invalid.?sender/i.test(responseText);
+}
+
+function parseJsonResponseText(responseText: string) {
+  try {
+    return responseText ? JSON.parse(responseText) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSmsNetworkError(error: unknown) {
+  const candidate = error as {
+    code?: string;
+    cause?: { code?: string };
+  };
+  const code = candidate?.cause?.code || candidate?.code;
+  return Boolean(
+    code &&
+    [
+      "ENOTFOUND",
+      "EAI_AGAIN",
+      "ECONNREFUSED",
+      "ETIMEDOUT",
+      "ECONNRESET",
+      "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+      "SELF_SIGNED_CERT_IN_CHAIN",
+      "CERT_HAS_EXPIRED"
+    ].includes(code)
+  );
+}
+
+async function parseSmsProviderResponse(response: Response) {
+  const responseText = await response.text();
+  return {
+    responseText,
+    responseBody: parseJsonResponseText(responseText)
+  };
 }
 
 export async function sendEmail(input: EmailInput): Promise<DeliveryStatus> {
@@ -283,45 +347,67 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
   }
 
   try {
-    const endpoint = env.AFRIKTALK_API_URL;
+    const endpoint = getSmsApiUrl();
+    const username = getSmsUsername();
+    const apiKey = getSmsApiKey();
+    const sender = getSmsSender();
     const isAfricaTalking = isAfricaTalkingEndpoint(endpoint);
+    const buildAfricaTalkingBody = (includeSender: boolean) => new URLSearchParams({
+      username,
+      to,
+      message: input.text,
+      ...(includeSender && sender ? { from: sender } : {})
+    });
     const body = isAfricaTalking
-      ? new URLSearchParams({
-        username: env.AFRIKTALK_USERNAME,
-        to,
-        message: input.text,
-        ...(env.AFRIKTALK_SENDER ? { from: env.AFRIKTALK_SENDER } : {})
-      })
+      ? buildAfricaTalkingBody(true)
       : JSON.stringify({
-        username: env.AFRIKTALK_USERNAME,
-        sender: env.AFRIKTALK_SENDER,
-        from: env.AFRIKTALK_SENDER,
+        username,
+        sender,
+        from: sender,
         to,
         message: input.text
       });
-
     const response = await fetch(endpoint, {
       method: "POST",
       headers: isAfricaTalking
         ? {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
-          apiKey: env.AFRIKTALK_API_KEY
+          apiKey,
+          apikey: apiKey
         }
         : {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${env.AFRIKTALK_API_KEY}`,
-          apiKey: env.AFRIKTALK_API_KEY
+          Authorization: `Bearer ${apiKey}`,
+          apiKey
         },
       body
     });
-    const responseText = await response.text();
-    let responseBody: unknown = null;
-    try {
-      responseBody = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      responseBody = null;
+    let { responseText, responseBody } = await parseSmsProviderResponse(response);
+    if (
+      isAfricaTalking
+      && sender
+      && (!response.ok || !isSuccessfulAfrikTalkResponse(responseBody))
+      && africasTalkingResponseMentionsSenderIssue(responseText)
+    ) {
+      const retryResponse = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+          apiKey,
+          apikey: apiKey
+        },
+        body: buildAfricaTalkingBody(false)
+      });
+      const retry = await parseSmsProviderResponse(retryResponse);
+      responseText = retry.responseText;
+      responseBody = retry.responseBody;
+      if (retryResponse.ok && isSuccessfulAfrikTalkResponse(responseBody)) {
+        console.warn("SMS sent through Africa's Talking after retrying without sender ID.");
+        return "SENT";
+      }
     }
     if (!response.ok) throw new Error(`SMS provider responded with ${response.status}: ${responseText}`);
     if (!isSuccessfulAfrikTalkResponse(responseBody)) {
@@ -330,6 +416,10 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
     return "SENT";
   } catch (error) {
     console.error("SMS delivery failed", error);
+    if (isSmsNetworkError(error)) {
+      console.error("SMS delivery failed because EduPay cannot reach the SMS provider network endpoint.");
+      return "FAILED_NETWORK";
+    }
     return "FAILED";
   }
 }

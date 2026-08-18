@@ -45,6 +45,9 @@ def shared_directory_view(_request):
                 'id': str(parent.pk),
                 'displayId': parent.username,
                 'fullName': parent.get_full_name() or parent.username,
+                'firstName': parent.first_name,
+                'middleName': parent.middle_name or None,
+                'lastName': parent.last_name,
                 'organizationId': None,
                 'studentIds': [str(student.pk) for student in parent.children.filter(is_active=True)],
                 'externalIds': [],
@@ -57,6 +60,7 @@ def shared_directory_view(_request):
                 'displayId': student.student_id,
                 'fullName': student.full_name,
                 'firstName': student.user.first_name,
+                'middleName': student.user.middle_name or None,
                 'lastName': student.user.last_name,
                 'classId': str(student.current_class_id) if student.current_class_id else None,
                 'parentId': str(student.parent_id) if student.parent_id else None,
@@ -69,6 +73,9 @@ def shared_directory_view(_request):
             {
                 'id': str(teacher.pk),
                 'fullName': teacher.full_name,
+                'firstName': teacher.user.first_name,
+                'middleName': teacher.user.middle_name or None,
+                'lastName': teacher.user.last_name,
                 'organizationId': None,
                 'externalIds': [],
             }

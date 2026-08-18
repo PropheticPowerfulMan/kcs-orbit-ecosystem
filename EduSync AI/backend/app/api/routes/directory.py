@@ -16,6 +16,12 @@ def shared_directory(_: User = Depends(get_current_user)):
     return {
         "source": "local",
         "visibility": "shared-directory",
+        "counts": {
+            "families": 0,
+            "parents": 0,
+            "students": 0,
+            "teachers": 0,
+        },
         "parents": [],
         "students": [],
         "teachers": [],

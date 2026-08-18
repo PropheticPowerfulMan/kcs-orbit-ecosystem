@@ -67,6 +67,7 @@ const DOCUMENT_FIELDS = [
 
 const studentSchema = z.object({
   firstName:      z.string().min(2, 'Required'),
+  middleName:     z.string().optional(),
   lastName:       z.string().min(2, 'Required'),
   gender:         z.enum(['female', 'male'], { required_error: 'Select gender' }),
   dateOfBirth:    z.string().min(1, 'Required'),
@@ -76,7 +77,9 @@ const studentSchema = z.object({
   languages:      z.string().optional(),
 })
 const parentSchema = z.object({
-  parentName:   z.string().min(2, 'Required'),
+  firstName:    z.string().min(2, 'Required'),
+  middleName:   z.string().optional(),
+  lastName:     z.string().min(2, 'Required'),
   relationship: z.string().min(2, 'Required'),
   email:        z.string().email('Valid email required'),
   phone:        z.string().min(8, 'Valid phone required'),
@@ -86,6 +89,9 @@ const parentSchema = z.object({
 
 type StudentData = z.infer<typeof studentSchema>
 type ParentData  = z.infer<typeof parentSchema>
+
+const composeIdentity = (identity: { firstName: string; middleName?: string; lastName: string }) =>
+  [identity.lastName, identity.middleName, identity.firstName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 
 const SCHOOL_ADMISSIONS_EMAIL = 'kinshasachristianschool@gmail.com'
 const ADMIN_ADMISSIONS_STORAGE_KEY = 'kcs-admin-admission-submissions'
@@ -105,6 +111,7 @@ const buildAdmissionEmailBody = (
     '',
     'STUDENT INFORMATION',
     `First name: ${studentData.firstName}`,
+    `Middle name / Postnom: ${studentData.middleName || 'Not provided'}`,
     `Last name: ${studentData.lastName}`,
     `Gender: ${studentData.gender}`,
     `Date of birth: ${studentData.dateOfBirth}`,
@@ -114,7 +121,7 @@ const buildAdmissionEmailBody = (
     `Languages spoken: ${studentData.languages || 'Not provided'}`,
     '',
     'PARENT / GUARDIAN INFORMATION',
-    `Name: ${parentData.parentName}`,
+    `Name: ${composeIdentity(parentData)}`,
     `Relationship: ${parentData.relationship}`,
     `Email: ${parentData.email}`,
     `Phone: ${parentData.phone}`,
@@ -136,7 +143,7 @@ const buildAdmissionMailtoHref = (
   notes: string,
   documents: Record<string, File | null>,
 ) => {
-  const subject = `New KCS online admission - ${applicationNumber} - ${studentData.firstName} ${studentData.lastName}`
+  const subject = `New KCS online admission - ${applicationNumber} - ${composeIdentity(studentData)}`
   const body = buildAdmissionEmailBody(applicationNumber, studentData, parentData, notes, documents)
   return `mailto:${SCHOOL_ADMISSIONS_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
@@ -155,15 +162,16 @@ const saveApplicationForAdmin = (
     id: applicationNumber,
     applicationNumber,
     firstName: studentData.firstName,
+    middleName: studentData.middleName ?? '',
     lastName: studentData.lastName,
-    studentName: `${studentData.firstName} ${studentData.lastName}`,
+    studentName: composeIdentity(studentData),
     dateOfBirth: studentData.dateOfBirth,
     gender: studentData.gender,
     nationality: studentData.nationality,
     gradeApplying: studentData.applyingGrade,
     previousSchool: studentData.currentSchool,
     languages: studentData.languages ?? '',
-    parentName: parentData.parentName,
+    parentName: composeIdentity(parentData),
     parentEmail: parentData.email,
     parentPhone: parentData.phone,
     relationship: parentData.relationship,
@@ -187,13 +195,14 @@ const sendAdmissionFallbackEmail = async (
   documents: Record<string, File | null>,
 ) => {
   const fallbackData = new FormData()
-  fallbackData.append('_subject', `New KCS online admission - ${applicationNumber} - ${studentData.firstName} ${studentData.lastName}`)
+  fallbackData.append('_subject', `New KCS online admission - ${applicationNumber} - ${composeIdentity(studentData)}`)
   fallbackData.append('_template', 'table')
   fallbackData.append('_captcha', 'false')
   fallbackData.append('_replyto', parentData.email)
   fallbackData.append('_autoresponse', `Thank you for applying to Kinshasa Christian School. Your application ID is ${applicationNumber}.`)
   fallbackData.append('Application number', applicationNumber)
   fallbackData.append('Student first name', studentData.firstName)
+  fallbackData.append('Student middle name / Postnom', studentData.middleName ?? '')
   fallbackData.append('Student last name', studentData.lastName)
   fallbackData.append('Student gender', studentData.gender)
   fallbackData.append('Date of birth', studentData.dateOfBirth)
@@ -201,7 +210,7 @@ const sendAdmissionFallbackEmail = async (
   fallbackData.append('Grade applying', studentData.applyingGrade)
   fallbackData.append('Previous/current school', studentData.currentSchool)
   fallbackData.append('Languages spoken', studentData.languages ?? 'Not provided')
-  fallbackData.append('Parent/guardian name', parentData.parentName)
+  fallbackData.append('Parent/guardian name', composeIdentity(parentData))
   fallbackData.append('Relationship', parentData.relationship)
   fallbackData.append('Parent email', parentData.email)
   fallbackData.append('Parent phone', parentData.phone)
@@ -276,6 +285,7 @@ const AdmissionsPage = () => {
 
       const formData = new FormData()
       formData.append('firstName', studentData.firstName)
+      formData.append('middleName', studentData.middleName ?? '')
       formData.append('lastName', studentData.lastName)
       formData.append('dateOfBirth', studentData.dateOfBirth)
       formData.append('gender', studentData.gender)
@@ -283,7 +293,7 @@ const AdmissionsPage = () => {
       formData.append('gradeApplying', studentData.applyingGrade)
       formData.append('previousSchool', studentData.currentSchool)
       formData.append('languages', studentData.languages ?? '')
-      formData.append('parentName', parentData.parentName)
+      formData.append('parentName', composeIdentity(parentData))
       formData.append('relationship', parentData.relationship)
       formData.append('parentEmail', parentData.email)
       formData.append('parentPhone', parentData.phone)
@@ -521,14 +531,18 @@ const AdmissionsPage = () => {
                         </h3>
                         <div className="grid sm:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">First Name *</label>
-                            <input {...studentForm.register('firstName')} className="input-kcs" placeholder="e.g. Grace" />
-                            {studentForm.formState.errors.firstName && <p className="text-xs text-red-500 mt-1">{studentForm.formState.errors.firstName.message}</p>}
-                          </div>
-                          <div>
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Last Name *</label>
                             <input {...studentForm.register('lastName')} className="input-kcs" placeholder="e.g. Mutombo" />
                             {studentForm.formState.errors.lastName && <p className="text-xs text-red-500 mt-1">{studentForm.formState.errors.lastName.message}</p>}
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Middle Name / Postnom</label>
+                            <input {...studentForm.register('middleName')} className="input-kcs" placeholder="e.g. Mbuyi" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">First Name *</label>
+                            <input {...studentForm.register('firstName')} className="input-kcs" placeholder="e.g. Grace" />
+                            {studentForm.formState.errors.firstName && <p className="text-xs text-red-500 mt-1">{studentForm.formState.errors.firstName.message}</p>}
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Date of Birth *</label>
@@ -585,9 +599,16 @@ const AdmissionsPage = () => {
                         </h3>
                         <div className="grid sm:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Full Name *</label>
-                            <input {...parentForm.register('parentName')} className="input-kcs" placeholder="Parent full name" />
-                            {parentForm.formState.errors.parentName && <p className="text-xs text-red-500 mt-1">{parentForm.formState.errors.parentName.message}</p>}
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Last Name *</label>
+                            <input {...parentForm.register('lastName')} className="input-kcs" placeholder="Parent last name" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Middle Name / Postnom</label>
+                            <input {...parentForm.register('middleName')} className="input-kcs" placeholder="Parent postnom" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">First Name *</label>
+                            <input {...parentForm.register('firstName')} className="input-kcs" placeholder="Parent first name" />
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Relationship to Student *</label>
@@ -687,7 +708,7 @@ const AdmissionsPage = () => {
                           <div className="p-4 rounded-xl bg-gray-50 dark:bg-kcs-blue-800/30 border border-gray-100 dark:border-kcs-blue-800">
                             <h4 className="font-semibold text-sm text-kcs-blue-900 dark:text-white mb-3 flex items-center gap-2"><User size={14} /> Student</h4>
                             {[
-                              ['Name', `${studentData.firstName} ${studentData.lastName}`],
+                              ['Name', composeIdentity(studentData)],
                               ['Gender', studentData.gender],
                               ['DOB', studentData.dateOfBirth],
                               ['Nationality', studentData.nationality],
@@ -703,7 +724,7 @@ const AdmissionsPage = () => {
                           <div className="p-4 rounded-xl bg-gray-50 dark:bg-kcs-blue-800/30 border border-gray-100 dark:border-kcs-blue-800">
                             <h4 className="font-semibold text-sm text-kcs-blue-900 dark:text-white mb-3 flex items-center gap-2"><Users size={14} /> Parent</h4>
                             {[
-                              ['Name', parentData.parentName],
+                              ['Name', composeIdentity(parentData)],
                               ['Relationship', parentData.relationship],
                               ['Email', parentData.email],
                               ['Phone', parentData.phone],

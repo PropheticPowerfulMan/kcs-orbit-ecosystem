@@ -6,7 +6,7 @@ import { randomInt } from 'node:crypto'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles } from '../middleware/auth.js'
+import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 
 function generateAccessCode(role: string) {
@@ -27,6 +27,9 @@ async function generateUniqueAccessCode(tx: typeof prisma, role: string) {
 import { getRouteParam } from '../utils/request.js'
 
 export const studentsRouter = Router()
+const assignmentSubmissionSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+})
 const hiddenStudentsPath = path.resolve(process.cwd(), '..', 'var', 'kcs-nexus-hidden-students.json')
 
 const schoolLevels = [
@@ -70,6 +73,7 @@ type HiddenStudentRegistry = {
 
 const studentUpdateSchema = z.object({
   firstName: z.string().min(1).optional(),
+  middleName: z.string().nullable().optional(),
   lastName: z.string().min(1).optional(),
   email: z.string().email().optional(),
   studentNumber: z.string().min(2).optional(),
@@ -307,6 +311,7 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory, hiddenStudentK
 const createStudentSchema = z.object({
   parent: z.object({
     firstName: z.string().min(1),
+    middleName: z.string().optional(),
     lastName: z.string().min(1),
     email: z.string().email(),
     phone: z.string().optional(),
@@ -314,6 +319,7 @@ const createStudentSchema = z.object({
   }),
   student: z.object({
     firstName: z.string().min(1),
+    middleName: z.string().optional(),
     lastName: z.string().min(1),
     email: z.string().email().optional(),
     studentNumber: z.string().min(2),
@@ -351,6 +357,8 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent')
     return success(res, orbitStudentsToProfiles(directory, hiddenStudentKeys), 'Students loaded from Orbit')
   }
 
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
+
   const students = await prisma.studentProfile.findMany({
     include: {
       user: true,
@@ -361,7 +369,7 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent')
   return success(res, students)
 }))
 
-studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const { parent, students } = normalizeCreateStudentPayload(req.body)
 
   const studentNumbers = students.map((student) => student.studentNumber)
@@ -382,6 +390,7 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
     const parentTemporaryPassword = generateTemporaryPassword('PAR')
     const parentResult = await createRegistryEntityInOrbit('parent', {
       firstName: parent.firstName,
+      middleName: parent.middleName,
       lastName: parent.lastName,
       email: parent.email,
       phone: parent.phone || undefined,
@@ -407,6 +416,7 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
       const studentEmail = student.email ?? `${student.studentNumber.toLowerCase()}@students.kcs.local`
       await createRegistryEntityInOrbit('student', {
         firstName: student.firstName,
+        middleName: student.middleName,
         lastName: student.lastName,
         gender: 'O',
         studentNumber: student.studentNumber,
@@ -558,6 +568,42 @@ studentsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async
   }, family.studentCount === 1 ? 'Student created' : 'Family registered', 201)
 }))
 
+studentsRouter.get('/me/assignments', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub } })
+  if (!student) throw new ApiError(404, 'Student profile not found')
+  const submissions = await prisma.assignmentSubmission.findMany({
+    where: { studentId: student.id },
+    include: { assignment: { include: { course: true } } },
+    orderBy: { assignment: { dueDate: 'asc' } },
+  })
+  return success(res, submissions)
+}))
+
+studentsRouter.get('/me/timetable', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const student = await prisma.studentProfile.findUnique({
+    where: { userId: req.user!.sub },
+    include: { enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } } },
+  })
+  if (!student) throw new ApiError(404, 'Student profile not found')
+  const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({ ...slot, course: { id: course.id, name: course.name, code: course.code, description: course.description }, teacher: `${course.teacher.user.firstName} ${course.teacher.user.lastName}` })))
+  return success(res, timetable)
+}))
+
+studentsRouter.patch('/me/assignments/:submissionId/submit', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const submissionId = getRouteParam(req.params.submissionId)
+  const payload = assignmentSubmissionSchema.parse(req.body)
+  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub } })
+  if (!student) throw new ApiError(404, 'Student profile not found')
+  const existing = await prisma.assignmentSubmission.findFirst({ where: { id: submissionId, studentId: student.id } })
+  if (!existing) throw new ApiError(404, 'Assignment submission not found')
+  const updated = await prisma.assignmentSubmission.update({
+    where: { id: submissionId },
+    data: { status: 'SUBMITTED', submittedAt: new Date(), feedback: `Student file: ${payload.fileName}` },
+    include: { assignment: { include: { course: true } } },
+  })
+  return success(res, updated, 'Assignment submitted')
+}))
+
 studentsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   const studentId = getRouteParam(req.params.id)
   const student = await prisma.studentProfile.findUnique({
@@ -634,7 +680,7 @@ studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req, res)
   })
 }))
 
-studentsRouter.put('/:id', authenticate, requireRoles('admin', 'teacher'), asyncHandler(async (req, res) => {
+studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const studentId = getRouteParam(req.params.id)
   const payload = studentUpdateSchema.parse(req.body)
 
@@ -694,11 +740,12 @@ studentsRouter.put('/:id', authenticate, requireRoles('admin', 'teacher'), async
   }
 
   const student = await prisma.$transaction(async (tx) => {
-    if (payload.firstName !== undefined || payload.lastName !== undefined || payload.email !== undefined) {
+    if (payload.firstName !== undefined || payload.middleName !== undefined || payload.lastName !== undefined || payload.email !== undefined) {
       await tx.user.update({
         where: { id: currentStudent.userId },
         data: {
           ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
+          ...(payload.middleName !== undefined ? { middleName: payload.middleName || null } : {}),
           ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
           ...(payload.email !== undefined ? { email: payload.email } : {}),
         },
@@ -723,7 +770,7 @@ studentsRouter.put('/:id', authenticate, requireRoles('admin', 'teacher'), async
   return success(res, student, 'Student updated successfully')
 }))
 
-studentsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const studentId = getRouteParam(req.params.id)
 
   if (orbitRegistryIsEnabled()) {

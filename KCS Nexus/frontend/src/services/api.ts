@@ -67,8 +67,8 @@ api.interceptors.response.use(
 
 // --- Auth API ---
 export const authAPI = {
-  login: (identifier: string, password: string) =>
-    api.post('/auth/login', { email: identifier, password }),
+  login: (identifier: string, password: string, twoFactorCode?: string) =>
+    api.post('/auth/login', { email: identifier, password, ...(twoFactorCode ? { twoFactorCode } : {}) }),
   register: (data: object) =>
     api.post('/auth/register', data),
   googleAuth: (token: string) =>
@@ -79,6 +79,15 @@ export const authAPI = {
     api.post('/auth/reset-password', { token, password }),
   me: () =>
     api.get('/auth/me'),
+  updateProfile: (data: { firstName?: string; middleName?: string | null; lastName?: string; phone?: string; avatar?: string; bio?: string }) =>
+    api.put('/auth/profile', data),
+  updateEmail: (data: { newEmail: string; currentPassword?: string }) =>
+    api.put('/auth/email', data),
+  toggle2FA: (enabled: boolean) =>
+    api.post('/auth/2fa/toggle', { enabled }),
+  setup2FA: () => api.post('/auth/2fa/setup'),
+  verify2FA: (code: string) =>
+    api.post('/auth/2fa/verify', { code }),
 }
 
 // --- News API ---
@@ -110,6 +119,9 @@ export const studentsAPI = {
   getAssignments: (id: string) => api.get(`/students/${id}/assignments`),
   getTimetable: (id: string) => api.get(`/students/${id}/timetable`),
   getAnalytics: (id: string) => api.get(`/students/${id}/analytics`),
+  getMyAssignments: () => api.get('/students/me/assignments'),
+  getMyTimetable: () => api.get('/students/me/timetable'),
+  submitMyAssignment: (submissionId: string, fileName: string) => api.patch(`/students/me/assignments/${submissionId}/submit`, { fileName }),
   update: (id: string, data: object) => api.put(`/students/${id}`, data),
   delete: (id: string) => api.delete(`/students/${id}`),
 }
@@ -146,6 +158,17 @@ export const teachersAPI = {
   getById: (id: string) => api.get(`/teachers/${id}`),
   create: (data: object) => api.post('/teachers', data),
   update: (id: string, data: object) => api.put(`/teachers/${id}`, data),
+}
+
+export const teacherWorkspaceAPI = {
+  get: () => api.get('/teachers/me/workspace'),
+  save: (state: Record<string, unknown>, revision?: number) => api.put('/teachers/me/workspace', { state, revision }),
+}
+
+export const suggestionsAPI = {
+  submit: (data: { category: string; message: string }) => api.post('/suggestions', data),
+  getAll: () => api.get('/suggestions'),
+  updateStatus: (id: string, status: 'New' | 'Under review' | 'Resolved') => api.patch(`/suggestions/${id}/status`, { status }),
 }
 
 // --- Courses API ---
@@ -199,6 +222,10 @@ export const notificationsAPI = {
 export const aiAPI = {
   chat: (messages: object[], language?: string) =>
     api.post('/ai/chat', { messages, language }),
+  teacherAssistant: (
+    task: 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
+    context?: string,
+  ) => api.post('/ai/teacher-assistant', { task, context }),
   tutor: (subject: string, question: string, studentId?: string) =>
     api.post('/ai/tutor', { subject, question, studentId }),
   generateQuiz: (subject: string, topic: string, difficulty: string) =>
@@ -214,4 +241,16 @@ export const adminAPI = {
   getDashboardStats: () => api.get('/admin/stats'),
   getAnalytics: (period?: string) => api.get('/admin/analytics', { params: { period } }),
   exportData: (type: string) => api.get(`/admin/export/${type}`, { responseType: 'blob' }),
+}
+
+export const financeAPI = {
+  getEduPaySummary: () => api.get('/finance/edupay-summary'),
+  getStudentClearance: () => api.get('/finance/student-clearance'),
+}
+
+export const messagesAPI = {
+  getAll: (params?: { q?: string; box?: string }) => api.get('/messages', { params }),
+  getContacts: () => api.get('/messages/contacts'),
+  send: (data: { recipientId: string; subject: string; body: string }) => api.post('/messages', data),
+  markRead: (id: string) => api.patch(`/messages/${id}/read`),
 }

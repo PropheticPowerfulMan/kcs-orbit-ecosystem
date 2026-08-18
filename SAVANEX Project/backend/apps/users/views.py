@@ -1,4 +1,12 @@
 from django.db import transaction
+from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -14,6 +22,9 @@ from .serializers import (
     PasswordChangeSerializer,
 )
 from .permissions import IsAdminUser
+
+
+PASSWORD_RESET_RESPONSE = {'detail': 'If an account exists, a reset link will be sent.'}
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -138,3 +149,66 @@ def change_password(request):
     elif request.user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(request.user, 'teacher_profile'):
         sync_teacher(request.user.teacher_profile)
     return Response({'detail': 'Password changed successfully.'})
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def forgot_password(request):
+    email = (request.data.get('email') or '').strip().lower()
+    try:
+        validate_email(email)
+    except ValidationError:
+        return Response({'email': ['Enter a valid email address.']}, status=status.HTTP_400_BAD_REQUEST)
+
+    user = User.objects.filter(email__iexact=email, is_active=True).first()
+    if user:
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+        reset_url = f'{frontend_url}/login?uid={uid}&resetToken={token}'
+        message = (
+            f'Bonjour {user.get_full_name() or user.username},\n\n'
+            'Une demande de reinitialisation de mot de passe a ete faite pour votre compte SAVANEX.\n'
+            f'Lien de reinitialisation: {reset_url}\n\n'
+            "Ignorez ce message si vous n'etes pas a l'origine de la demande."
+        )
+        try:
+            send_mail(
+                'SAVANEX password reset',
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
+        except Exception:
+            print(f'[auth] SAVANEX password reset link for {user.email}: {reset_url}')
+
+    return Response(PASSWORD_RESET_RESPONSE)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def reset_password(request):
+    uid = (request.data.get('uid') or '').strip()
+    token = (request.data.get('token') or '').strip()
+    password = request.data.get('password') or ''
+
+    try:
+        user_id = force_str(urlsafe_base64_decode(uid))
+        user = User.objects.get(pk=user_id, is_active=True)
+    except Exception:
+        user = None
+
+    if not user or not default_token_generator.check_token(user, token):
+        return Response({'detail': 'Password reset link is invalid or expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_password(password, user=user)
+    except ValidationError as exc:
+        return Response({'password': list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(password)
+    user.must_change_password = False
+    user.password_generated_by_system = False
+    user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
+    return Response({'detail': 'Password reset completed.'})

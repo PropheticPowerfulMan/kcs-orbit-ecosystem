@@ -20,6 +20,7 @@ const bankTransferDetailsSchema = z.object({
 });
 
 const createPaymentSchema = z.object({
+  paymentCategory: z.enum(["TUITION", "SERVICE"]).optional().default("TUITION"),
   parentFullName: z.string().optional().default(""),
   parentId: z.string().optional(),
   studentIds: z.array(z.string()).optional().default([]),
@@ -33,7 +34,7 @@ const createPaymentSchema = z.object({
   notifyParent: z.boolean().optional(),
   bankTransferDetails: bankTransferDetailsSchema.optional()
 }).superRefine((payload, context) => {
-  if (orbitRegistryIsEnabled() && payload.studentExternalIds.length === 0) {
+  if (payload.paymentCategory === "TUITION" && orbitRegistryIsEnabled() && payload.studentExternalIds.length === 0) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["studentExternalIds"],
@@ -461,9 +462,25 @@ async function sendPaymentNotifications(input: {
 }) {
   const messages = buildPaymentNotificationMessages(input);
   const status = {
+    dashboard: "OPEN",
     email: input.parent.email ? "PENDING" : "SKIPPED",
     sms: input.parent.phone ? "PENDING" : "SKIPPED"
   };
+
+  await prisma.notificationLog.create({
+    data: {
+      schoolId: input.schoolId,
+      parentId: input.parent.id,
+      type: "CONFIRMATION",
+      language: normalizeMessageLanguage(input.parent.preferredLanguage),
+      channel: "DASHBOARD",
+      content: messages.dashboardBody,
+      status: status.dashboard
+    }
+  }).catch((error) => {
+    status.dashboard = "FAILED";
+    console.error("Payment dashboard notification log failed", error);
+  });
 
   if (input.parent.email) {
     status.email = await sendEmail({
@@ -498,18 +515,6 @@ async function sendPaymentNotifications(input: {
       }
     }).catch((error) => console.error("Payment SMS notification log failed", error));
   }
-
-  await prisma.notificationLog.create({
-    data: {
-      schoolId: input.schoolId,
-      parentId: input.parent.id,
-      type: "CONFIRMATION",
-      language: normalizeMessageLanguage(input.parent.preferredLanguage),
-      channel: "DASHBOARD",
-      content: messages.dashboardBody,
-      status: "OPEN"
-    }
-  }).catch((error) => console.error("Payment dashboard notification log failed", error));
 
   return status;
 }
@@ -630,6 +635,23 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
     if (!parentId) {
       throw new Error("Parent introuvable pour ce paiement");
     }
+    if (payload.paymentCategory === "TUITION") {
+      const parentStudents = await prisma.student.findMany({
+        where: { parentId, schoolId: req.user!.schoolId },
+        select: { id: true }
+      });
+      const parentStudentIds = new Set(parentStudents.map((student) => student.id));
+      const requestedStudentIds = Array.from(new Set(payload.studentIds.filter(Boolean)));
+      const invalidStudentIds = requestedStudentIds.filter((studentId) => !parentStudentIds.has(studentId));
+
+      if (parentStudents.length > 0 && requestedStudentIds.length === 0) {
+        return res.status(400).json({ message: "Selectionnez au moins un eleve pour ce paiement de scolarite." });
+      }
+      if (invalidStudentIds.length > 0) {
+        return res.status(400).json({ message: "Un ou plusieurs eleves selectionnes ne sont pas rattaches a ce parent." });
+      }
+      payload.studentIds = requestedStudentIds;
+    }
 
     const payment = await prisma.payment.create({
       data: {
@@ -650,16 +672,18 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       include: { parent: true, students: { include: { class: true } } }
     });
 
-    await applyPaymentToFinanceLedger({
-      schoolId: req.user!.schoolId,
-      paymentId: payment.id,
-      parentId,
-      studentIds: payment.students.map((student) => student.id)
-    }).catch((error) => console.error("Finance ledger sync failed", error));
-    await runOverdueTuitionReminderSweep({
-      schoolId: req.user!.schoolId,
-      parentId
-    }).catch((error) => console.error("Overdue tuition reminder sweep failed", error));
+    if (payload.paymentCategory === "TUITION") {
+      await applyPaymentToFinanceLedger({
+        schoolId: req.user!.schoolId,
+        paymentId: payment.id,
+        parentId,
+        studentIds: payment.students.map((student) => student.id)
+      }).catch((error) => console.error("Finance ledger sync failed", error));
+      await runOverdueTuitionReminderSweep({
+        schoolId: req.user!.schoolId,
+        parentId
+      }).catch((error) => console.error("Overdue tuition reminder sweep failed", error));
+    }
 
     try {
       const syncedStudentExternalIds = payload.studentExternalIds.length > 0
@@ -670,7 +694,12 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
 
       const studentsMissingExternalIds = payment.students.filter((student) => !student.externalStudentId);
 
-      if (orbitRegistryIsEnabled() && (syncedStudentExternalIds.length === 0 || studentsMissingExternalIds.length > 0)) {
+      if (payload.paymentCategory !== "TUITION") {
+        console.info("Orbit tuition payment sync skipped for non-tuition payment", {
+          paymentId: payment.id,
+          paymentCategory: payload.paymentCategory
+        });
+      } else if (orbitRegistryIsEnabled() && (syncedStudentExternalIds.length === 0 || studentsMissingExternalIds.length > 0)) {
         console.warn("Orbit payment sync skipped: one or more EduPay students are not linked to a shared external student id", {
           paymentId: payment.id,
           localStudentIds: studentsMissingExternalIds.map((student) => student.id),
@@ -703,8 +732,7 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       select: { receiptNumber: true, pdfBase64: true }
     }).catch(() => null);
     const tuitionAllocationSummary = parseTuitionAllocationSummary(paymentReceipt, payment.amount);
-    const shouldNotify = payload.notifyParent ?? paymentNotificationsEnabled;
-    const notificationStatus = shouldNotify && payment.parent
+    const notificationStatus = payment.parent
       ? await sendPaymentNotifications({
         schoolId: req.user!.schoolId,
         parent: payment.parent,
@@ -718,7 +746,7 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
         students: payment.students,
         tuitionAllocationSummary
       })
-      : { email: shouldNotify ? "SKIPPED" : "DISABLED", sms: shouldNotify ? "SKIPPED" : "DISABLED" };
+      : { dashboard: "SKIPPED", email: "SKIPPED", sms: "SKIPPED" };
 
     return res.status(201).json({
       payment: serializePayment(payment as typeof payment & { parent?: { fullName: string } | null }, {
@@ -728,7 +756,6 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       notificationStatus
     });
   } catch (_dbErr) {
-    const shouldNotify = payload.notifyParent ?? paymentNotificationsEnabled;
     // Demo mode — no DB available
     return res.status(201).json({
       payment: {
@@ -744,7 +771,7 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
         status: payload.status,
         createdAt: new Date().toISOString()
       },
-      notificationStatus: { email: shouldNotify ? "SKIPPED" : "DISABLED", sms: shouldNotify ? "SKIPPED" : "DISABLED" }
+      notificationStatus: { dashboard: "SIMULATED", email: "SIMULATED", sms: "SIMULATED" }
     });
   }
 });

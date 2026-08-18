@@ -34,6 +34,7 @@ class StudentSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     first_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    middle_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     last_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     user_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
     class_level = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -53,6 +54,7 @@ class StudentSerializer(serializers.ModelSerializer):
     parent_name = serializers.SerializerMethodField()
     parent_email = serializers.SerializerMethodField()
     parent_phone = serializers.SerializerMethodField()
+    parent_address = serializers.SerializerMethodField()
     parent_external_id = serializers.SerializerMethodField()
     parent_kcs_card_id = serializers.SerializerMethodField()
     parent_access_code = serializers.SerializerMethodField()
@@ -64,14 +66,14 @@ class StudentSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'id', 'student_id', 'full_name', 'email', 'avatar',
-            'first_name', 'last_name', 'user_email',
+            'first_name', 'middle_name', 'last_name', 'user_email',
             'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics',
             'must_change_password', 'password_generated_by_system',
-            'date_of_birth', 'gender', 'address',
+            'date_of_birth', 'gender',
             'current_class', 'class_name', 'class_level', 'class_suffix',
-            'parent', 'parent_name', 'parent_email', 'parent_phone', 'parent_external_id',
+            'parent', 'parent_name', 'parent_email', 'parent_phone', 'parent_address', 'parent_external_id',
             'parent_kcs_card_id', 'parent_access_code', 'parent_photo_data',
             'parent_left_fingerprint_data', 'parent_right_fingerprint_data',
             'enrollment_date', 'is_active', 'notes',
@@ -80,6 +82,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         first_name = validated_data.pop('first_name', None)
+        middle_name = validated_data.pop('middle_name', None)
         last_name = validated_data.pop('last_name', None)
         user_email = validated_data.pop('user_email', None)
         class_level = validated_data.pop('class_level', None)
@@ -100,6 +103,9 @@ class StudentSerializer(serializers.ModelSerializer):
         if first_name is not None:
             instance.user.first_name = first_name
             user_update_fields.append('first_name')
+        if middle_name is not None:
+            instance.user.middle_name = middle_name
+            user_update_fields.append('middle_name')
         if last_name is not None:
             instance.user.last_name = last_name
             user_update_fields.append('last_name')
@@ -123,6 +129,9 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_parent_phone(self, obj):
         return obj.parent.phone if obj.parent else ''
+
+    def get_parent_address(self, obj):
+        return obj.parent.address if obj.parent else ''
 
     def get_parent_external_id(self, obj):
         return obj.parent.username if obj.parent else ''
@@ -161,7 +170,7 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'user', 'student_id', 'date_of_birth', 'gender',
-            'address', 'current_class', 'parent', 'notes',
+            'current_class', 'parent', 'notes',
         ]
         extra_kwargs = {
             'student_id': {'required': False, 'allow_blank': True},
@@ -195,11 +204,10 @@ class FamilyStudentSerializer(serializers.ModelSerializer):
         model = Student
         fields = [
             'user', 'student_id', 'date_of_birth', 'gender',
-            'address', 'current_class', 'class_level', 'class_suffix', 'notes',
+            'current_class', 'class_level', 'class_suffix', 'notes',
         ]
         extra_kwargs = {
             'student_id': {'required': False, 'allow_blank': True},
-            'address': {'required': False, 'allow_blank': True},
             'notes': {'required': False, 'allow_blank': True},
             'current_class': {'required': False, 'allow_null': True},
         }
@@ -291,7 +299,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             if existing_parent is not None:
                 parent = existing_parent
                 parent_update_fields = []
-                for field in ('first_name', 'last_name', 'email', 'phone'):
+                for field in ('first_name', 'middle_name', 'last_name', 'email', 'phone', 'address'):
                     if field not in parent_data:
                         continue
 

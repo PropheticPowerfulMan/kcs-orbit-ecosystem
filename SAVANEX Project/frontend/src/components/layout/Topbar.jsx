@@ -6,10 +6,18 @@ import LanguageToggle from '../ui/LanguageToggle';
 import { useAuthStore } from '../../store/authStore';
 import SchoolLogo from '../ui/SchoolLogo';
 
+const getGreeting = (hour) => {
+  if (hour < 12) return 'Bonjour';
+  if (hour < 18) return 'Bon après-midi';
+  return 'Bonsoir';
+};
+
 const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarToggle = () => {} }) => {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
+  const displayName = user?.first_name || user?.full_name || user?.username || 'Administrateur';
+  const greeting = getGreeting(new Date().getHours());
 
   return (
     <header className="savanex-topbar sticky top-0 z-20 flex items-center justify-between border-b border-github-border bg-github-canvas/72 px-4 py-3 backdrop-blur-xl lg:px-8">
@@ -25,7 +33,7 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
         <SchoolLogo size="sm" className="lg:hidden" />
         <div className="min-w-0">
           <h1 className="truncate font-display text-base font-semibold text-slate-100 sm:text-lg">{t('app.title')}</h1>
-          <p className="truncate text-xs text-slate-400">{user?.full_name || user?.username}</p>
+          <p className="truncate text-xs text-slate-400">{greeting}, {displayName}</p>
         </div>
       </div>
 
