@@ -372,6 +372,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             'studentCount': len(students),
             'temporaryCredentials': {
                 'parent': {
+                    'displayName': ' '.join(filter(None, [parent.last_name, parent.middle_name, parent.first_name])),
                     'username': parent.username,
                     'accessCode': parent.access_code,
                     'temporaryPassword': getattr(parent, '_generated_password', None),
@@ -379,6 +380,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                 },
                 'students': [
                     {
+                        'displayName': ' '.join(filter(None, [student.user.last_name, student.user.middle_name, student.user.first_name])),
                         'studentId': student.student_id,
                         'username': student.user.username,
                         'accessCode': student.user.access_code,

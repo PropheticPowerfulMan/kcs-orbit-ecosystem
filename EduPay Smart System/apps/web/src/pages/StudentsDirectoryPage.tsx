@@ -1371,10 +1371,10 @@ export function StudentsDirectoryPage() {
                           <button type="button" onClick={() => setViewTarget(student)} className="rounded-lg bg-slate-700/50 p-2 text-ink-dim transition-all hover:bg-slate-600/50 hover:text-white" title="Voir">
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button type="button" onClick={() => setEditTarget(student)} className="hidden rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title="Modifier">
+                          <button type="button" onClick={() => setEditTarget(student)} className="rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title="Modifier">
                             <Edit3 className="h-4 w-4" />
                           </button>
-                          <button type="button" onClick={() => setDeleteTarget(student)} className="hidden rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title="Supprimer">
+                          <button type="button" onClick={() => setDeleteTarget(student)} className="rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title="Supprimer">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>

@@ -355,7 +355,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
             <span className="savanex-entity-action savanex-entity-action-muted">Lecture seule</span>
           ) : (
             <>
-              <button type="button" onClick={() => navigate(`/students/${encodeURIComponent(row.id)}/edit`, { state: { entity: row } })} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+              <button type="button" onClick={() => openEditDialog(row)} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
               <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="savanex-entity-action savanex-entity-action-danger disabled:opacity-50">
                 {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
               </button>
@@ -521,6 +521,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                   {[lastTemporaryCredentials.parent, ...lastTemporaryCredentials.students].filter(Boolean).map((credential, index) => (
                     <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-300/25 bg-slate-950/80 p-4">
                       <p className="text-xs font-bold uppercase text-emerald-200">{index === 0 && lastTemporaryCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p>
+                      <p className="mt-3 text-base font-bold text-white">{credential.displayName || credential.studentId}</p>
                       <p className="mt-3 text-sm text-slate-200">Identifiant : <strong className="text-white">{credential.username}</strong></p>
                       <p className="mt-2 text-sm text-slate-200">Code d'accès : <strong className="text-sky-200">{credential.accessCode}</strong></p>
                       <p className="mt-2 text-sm text-slate-200">Mot de passe : <strong className="text-emerald-200">{credential.temporaryPassword}</strong></p>

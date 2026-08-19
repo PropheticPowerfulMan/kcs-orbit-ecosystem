@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
-import { orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { notifyParentEntityChange } from "../notifications/entityChange";
@@ -79,8 +79,29 @@ studentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
   res.json(students);
 });
 
-studentRouter.put("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   const payload = updateStudentSchema.parse(req.body);
+
+  if (orbitRegistryIsEnabled()) {
+    const className = String(req.body?.className || payload.classId);
+    await updateOrbitStudent(req.params.id, {
+      fullName: payload.fullName,
+      firstName: payload.firstName,
+      middleName: payload.middleName,
+      lastName: payload.lastName,
+      email: payload.email,
+      phone: payload.phone,
+      dateOfBirth: payload.dateOfBirth,
+      gender: payload.gender,
+      className,
+      studentNumber: payload.studentNumber,
+      mustChangePassword: payload.mustChangePassword
+    });
+    await syncOrbitRegistryMirror(req.user!.schoolId);
+    const directory = await readOrbitSharedOptions();
+    const updated = directory.students.find((student) => student.id === req.params.id || student.orbitId === req.params.id || student.displayId === req.params.id);
+    return res.json({ ...updated, notificationStatus: { dashboard: "SYNCED", email: "SKIPPED", sms: "SKIPPED", adminEmail: "SKIPPED" } });
+  }
 
   const [parent, classRow] = await Promise.all([
     prisma.parent.findFirst({ where: { id: payload.parentId, schoolId: req.user!.schoolId }, select: { id: true } }),
@@ -156,13 +177,25 @@ studentRouter.put("/:id", denyEntityMutation, async (req: AuthenticatedRequest, 
   return res.json({ ...student, notificationStatus });
 });
 
-studentRouter.delete("/:id", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+studentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+  if (orbitRegistryIsEnabled()) {
+    await deleteOrbitStudent(req.params.id);
+    await syncOrbitRegistryMirror(req.user!.schoolId);
+    return res.status(204).end();
+  }
   const existing = await prisma.student.findFirst({
     where: { id: req.params.id, schoolId: req.user!.schoolId },
-    select: { id: true }
+    select: { id: true, externalStudentId: true }
   });
   if (!existing) return res.status(404).json({ message: "Eleve introuvable." });
 
-  await prisma.student.delete({ where: { id: req.params.id } });
+  if (orbitRegistryIsEnabled()) {
+    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+    const mirroredStudent = mirrored.parents.flatMap((parent) => parent.students).find((student) => student.id === req.params.id || student.orbitId === req.params.id || student.externalStudentId === req.params.id || student.externalStudentId === existing.externalStudentId || student.displayId === existing.externalStudentId);
+    await deleteOrbitStudent(mirroredStudent?.orbitId || req.params.id);
+    await syncOrbitRegistryMirror(req.user!.schoolId);
+  } else {
+    await prisma.student.delete({ where: { id: req.params.id } });
+  }
   return res.status(204).end();
 });

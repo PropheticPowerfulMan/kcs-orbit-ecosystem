@@ -447,6 +447,12 @@ export async function updateOrbitStudent(identifier: string, payload: {
   });
 }
 
+export async function deleteOrbitStudent(identifier: string) {
+  return orbitRegistryRequest<{ orbitId: string; deleted: boolean }>(`/api/integration/registry/student/${encodeURIComponent(identifier)}?identifierType=orbitId`, {
+    method: "DELETE",
+  });
+}
+
 export async function deleteOrbitParent(identifier: string) {
   return orbitRegistryRequest<{ orbitId: string; deleted: boolean }>(`/api/integration/registry/parent/${encodeURIComponent(identifier)}?identifierType=orbitId`, {
     method: "DELETE",

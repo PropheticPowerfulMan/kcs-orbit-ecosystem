@@ -50,6 +50,7 @@ const createTeacherSchema = withCanonicalNameValidation({
 const createStudentSchema = z.object({
   organizationId: z.string().min(1),
   firstName: z.string().min(1),
+  middleName: z.string().min(1).optional(),
   lastName: z.string().min(1),
   gender: z.string().min(1),
   accessCode: z.string().min(6).max(24).optional(),
@@ -709,6 +710,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           data: {
             organizationId: payload.organizationId,
             firstName: normalizeText(studentPayload.firstName),
+            middleName: studentPayload.middleName ? normalizeText(studentPayload.middleName) : undefined,
             lastName: normalizeText(studentPayload.lastName),
             gender: studentPayload.gender,
             accessCode: studentAccessCode,
@@ -852,6 +854,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
       data: {
         organizationId: payload.organizationId,
         firstName: normalizeText(payload.firstName),
+        middleName: payload.middleName ? normalizeText(payload.middleName) : undefined,
         lastName: normalizeText(payload.lastName),
         gender: payload.gender,
         accessCode,

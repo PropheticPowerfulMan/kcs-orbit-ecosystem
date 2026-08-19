@@ -3170,15 +3170,15 @@ export function ParentsManagementPage() {
                           <EyeIcon />
                         </button>
                         <button onClick={() => openEdit(parent)}
-                          className="hidden h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-brand-500/20 text-brand-300 transition-all hover:bg-brand-500/30 active:scale-90" title={t("pmEdit")}>
+                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-brand-500/20 text-brand-300 transition-all hover:bg-brand-500/30 active:scale-90" title={t("pmEdit")}>
                           <EditIcon />
                         </button>
                         <button onClick={() => setNotificationTarget(parent)}
-                          className="hidden h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 transition-all hover:bg-amber-500/30 active:scale-90" title="Envoyer les accès">
+                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 transition-all hover:bg-amber-500/30 active:scale-90" title="Envoyer les accès">
                           <KeyIcon />
                         </button>
                         <button onClick={() => setDeleteTarget(parent)}
-                          className="hidden h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-danger/20 text-danger transition-all hover:bg-danger/30 active:scale-90" title={t("pmDelete")}>
+                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-danger/20 text-danger transition-all hover:bg-danger/30 active:scale-90" title={t("pmDelete")}>
                           <TrashIcon />
                         </button>
                       </div>

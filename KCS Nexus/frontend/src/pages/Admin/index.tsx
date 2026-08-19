@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -136,6 +137,7 @@ type AdminStudentRecord = {
   managingApp?: string | null
   isEditable?: boolean
   isDeletable?: boolean
+  dateOfBirth?: string | null
 }
 
 type AdminParentRecord = {
@@ -184,6 +186,7 @@ type AdminStudentEditForm = {
   grade: string
   section: string
   status: string
+  dateOfBirth: string
 }
 
 type AdminParentEditForm = {
@@ -204,6 +207,7 @@ type AdminStudentDraft = {
   grade: string
   section: string
   email: string
+  dateOfBirth: string
 }
 
 type EduPayFinanceSummary = {
@@ -228,6 +232,7 @@ const createAdminStudentDraft = (grade = 'Grade 1', section = ''): AdminStudentD
   grade,
   section,
   email: '',
+  dateOfBirth: '',
 })
 
 const splitPersonName = (value = '') => {
@@ -248,6 +253,7 @@ const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminSt
   grade: student?.grade ?? 'Grade 1',
   section: student?.section ?? '',
   status: student?.status ?? 'Active',
+  dateOfBirth: student?.dateOfBirth?.slice(0, 10) ?? '',
 })
 
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
@@ -333,7 +339,7 @@ const getAdminRoster = () => studentsAPI.getAll(undefined, {
 const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
   const parentLink = profile.parentLinks?.[0]
   const parent = parentLink?.parent
-  const fullName = [profile.user?.firstName, profile.user?.lastName].filter(Boolean).join(' ') || profile.studentNumber || 'Unnamed student'
+  const fullName = [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || profile.studentNumber || 'Unnamed student'
   const managingApp = typeof profile.managingApp === 'string'
     ? profile.managingApp
     : Array.isArray(profile.externalIds)
@@ -344,9 +350,10 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     name: fullName,
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
+    dateOfBirth: profile.dateOfBirth ?? null,
     grade: profile.grade,
     section: profile.section ?? '',
-    parent: parent ? [parent.firstName, parent.lastName].filter(Boolean).join(' ') : 'Parent record pending',
+    parent: parent ? [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') : 'Parent record pending',
     parentEmail: parent?.email ?? `${fullName.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`,
     parentPhone: parent?.phone ?? '+243 810 000 000',
     status: profile.status === 'active' ? 'Active' : profile.status,
@@ -1349,16 +1356,15 @@ const AdminSectionView = ({
           phone: parentPhone,
           relationship: 'Parent',
         },
-        students: readyStudents.map((student, index) => {
-          const studentNumber = localRecords[index].studentNumber!
+        students: readyStudents.map((student) => {
           return {
             firstName: student.firstName.trim(),
             middleName: student.middleName.trim() || undefined,
             lastName: student.lastName.trim(),
-            studentNumber,
             grade: student.grade,
             section: student.section,
-            email: student.email.trim() || `${studentNumber.toLowerCase()}@students.kcs.local`,
+            email: student.email.trim() || undefined,
+            dateOfBirth: student.dateOfBirth,
           }
         }),
       })
@@ -1421,6 +1427,7 @@ const AdminSectionView = ({
         grade: studentEditForm.grade,
         section: studentEditForm.section,
         status: studentEditForm.status,
+        dateOfBirth: studentEditForm.dateOfBirth || null,
       })
       const roster = await refreshOfficialRoster()
       const updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
@@ -1929,16 +1936,16 @@ const AdminSectionView = ({
               {familyDirectory.map((familyName) => <option key={familyName}>{familyName}</option>)}
             </select>
           </div>
-          {familyCredentials && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 p-4" role="dialog" aria-modal="true" aria-label="Identifiants générés">
-              <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950">
+          {familyCredentials && createPortal((
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+              <section className="relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-[0_30px_100px_rgba(0,0,0,0.45)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
                 <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Identifiants générés</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Accès de la nouvelle famille</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n'accèdent ni à SAVANEX ni à EduPay.</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
+                  {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-base font-bold text-kcs-blue-950 dark:text-white">{credential.displayName || credential.studentId || (index === 0 ? 'Parent' : 'Élève')}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
                 </div>
               </section>
             </div>
-          )}
+          ), document.body)}
           {showCreateStudent && (
             <form className="mt-5 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30" onSubmit={(event) => {
               event.preventDefault()
@@ -1977,7 +1984,8 @@ const AdminSectionView = ({
                       <input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required />
                       <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
                       <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />
-                      <input value={student.studentNumber} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, studentNumber: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Student number, optional" />
+                      <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-kcs-blue-200"><strong>ID eleve :</strong> genere automatiquement par le systeme</div>
+                      <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<input type="date" value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
                       <input value={student.email} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, email: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Student email, optional" />
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
@@ -2216,6 +2224,10 @@ const AdminSectionView = ({
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Prénom
                       <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève" />
+                    </label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                      Date de naissance
+                      <input type="date" value={studentEditForm.dateOfBirth} onChange={(event) => setStudentEditForm((current) => ({ ...current, dateOfBirth: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
                       Email élève

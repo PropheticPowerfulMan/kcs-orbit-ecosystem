@@ -15,7 +15,6 @@ const buildTeacherPayload = (form) => ({
   ...(form.lastName ? { last_name: form.lastName } : {}),
   ...(form.email ? { user_email: form.email } : { user_email: '' }),
   ...(form.phone !== undefined ? { phone: form.phone } : {}),
-  ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
   employee_type: form.employeeType,
   gender: form.gender,
   department: form.department,
@@ -46,7 +45,6 @@ const buildTeacherCreatePayload = (form) => ({
     phone: form.phone,
     ...form.identity,
   },
-  ...(form.teacherId ? { teacher_id: form.teacherId } : {}),
   employee_type: form.employeeType,
   gender: form.gender,
   department: form.department,
@@ -428,7 +426,7 @@ const TeachersPage = () => {
           <details className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
             <summary className="cursor-pointer text-sm font-semibold text-slate-100">Options avancees RH, paie et identifiants</summary>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <input value={form.teacherId} onChange={(event) => updateForm('teacherId', event.target.value)} placeholder="ID employé optionnel" className={inputClass} />
+              <div className={`${inputClass} cursor-not-allowed opacity-75`}><strong>ID employé :</strong> {form.teacherId || 'Généré automatiquement par le système'}</div>
               <input value={form.officePhoneExtension} onChange={(event) => updateForm('officePhoneExtension', event.target.value)} placeholder="Extension bureau" className={inputClass} />
               <input value={form.payrollReference} onChange={(event) => updateForm('payrollReference', event.target.value)} placeholder="Reference paie" className={inputClass} />
               <input value={form.nationalIdNumber} onChange={(event) => updateForm('nationalIdNumber', event.target.value)} placeholder="Numéro d'identité" className={inputClass} />

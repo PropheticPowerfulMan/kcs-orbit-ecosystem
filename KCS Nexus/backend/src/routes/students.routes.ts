@@ -39,6 +39,7 @@ type OrbitPerson = {
   id: string
   fullName: string
   firstName?: string | null
+  middleName?: string | null
   lastName?: string | null
   email?: string | null
   phone?: string | null
@@ -49,11 +50,14 @@ type OrbitStudent = {
   id: string
   fullName: string
   firstName?: string | null
+  middleName?: string | null
   lastName?: string | null
   studentNumber?: string | null
   email?: string | null
   phone?: string | null
   status?: string | null
+  dateOfBirth?: string | null
+  accessCode?: string | null
   className?: string | null
   parentId?: string | null
   externalIds?: Array<{ appSlug: string; externalId: string }>
@@ -73,6 +77,7 @@ const studentUpdateSchema = z.object({
   grade: z.enum(schoolLevels).optional(),
   section: z.string().max(10).optional(),
   status: z.string().min(1).optional(),
+  dateOfBirth: z.coerce.date().nullable().optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: 'At least one field must be provided for student update.',
 })
@@ -235,10 +240,12 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
       enrollmentDate: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      dateOfBirth: student.dateOfBirth ?? null,
       user: {
         id: student.id,
         email: student.email ?? '',
-        firstName: studentName.firstName,
+        firstName: student.firstName || studentName.firstName,
+        middleName: student.middleName ?? null,
         lastName: studentName.lastName,
         phone: student.phone ?? null,
         role: 'STUDENT',
@@ -281,9 +288,10 @@ const createStudentSchema = z.object({
     middleName: z.string().optional(),
     lastName: z.string().min(1),
     email: z.string().email().optional(),
-    studentNumber: z.string().min(2),
+    studentNumber: z.string().min(2).optional(),
     grade: z.enum(schoolLevels),
     section: z.string().default(''),
+    dateOfBirth: z.coerce.date(),
   }),
 })
 
@@ -326,7 +334,12 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent')
 }))
 
 studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
-  const { parent, students } = normalizeCreateStudentPayload(req.body)
+  const { parent, students: submittedStudents } = normalizeCreateStudentPayload(req.body)
+  const generatedAt = Date.now().toString(36).toUpperCase()
+  const students = submittedStudents.map((student, index) => ({
+    ...student,
+    studentNumber: student.studentNumber?.trim() || `KCS-STU-${generatedAt}-${String(index + 1).padStart(2, '0')}`,
+  }))
 
   const studentNumbers = students.map((student) => student.studentNumber)
   if (new Set(studentNumbers).size !== studentNumbers.length) {
@@ -367,10 +380,10 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
     })
 
     const temporaryCredentials: {
-      parent: { username: string; accessCode: string; temporaryPassword: string } | null
-      students: Array<{ studentId: string; username: string; accessCode: string; temporaryPassword: string }>
+      parent: { displayName: string; username: string; accessCode: string; temporaryPassword: string } | null
+      students: Array<{ displayName: string; studentId: string; username: string; accessCode: string; temporaryPassword: string }>
     } = {
-      parent: { username: parent.email, accessCode: parentAccessCode, temporaryPassword: parentTemporaryPassword },
+      parent: { displayName: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), username: parent.email, accessCode: parentAccessCode, temporaryPassword: parentTemporaryPassword },
       students: [],
     }
 
@@ -385,6 +398,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
         studentNumber: student.studentNumber,
         email: studentEmail,
         status: 'ACTIVE',
+        dateOfBirth: student.dateOfBirth,
         mustChangePassword: true,
         className: `${student.grade} ${student.section || ''}`.trim(),
         parentOrbitId,
@@ -406,7 +420,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
         update: { relation: parent.relationship },
         create: { parentId: localParentUser.id, studentId: localStudentProfile.id, relation: parent.relationship },
       })
-      temporaryCredentials.students.push({ studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
+      temporaryCredentials.students.push({ displayName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' '), studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
     }
 
     const directory = await getSharedDirectoryFromOrbit()
@@ -668,10 +682,12 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
     const currentClass = splitClassName(target.className)
     const updated = await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, {
       ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
+      ...(payload.middleName !== undefined ? { middleName: payload.middleName } : {}),
       ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
       ...(payload.email !== undefined ? { email: payload.email } : {}),
       ...(payload.studentNumber !== undefined ? { studentNumber: payload.studentNumber } : {}),
       ...(payload.status !== undefined ? { status: payload.status.toUpperCase() } : {}),
+      ...(payload.dateOfBirth !== undefined ? { dateOfBirth: payload.dateOfBirth } : {}),
       ...(payload.grade !== undefined || payload.section !== undefined
         ? { className: `${payload.grade ?? currentClass.grade} ${payload.section ?? currentClass.section}`.trim() }
         : {}),
