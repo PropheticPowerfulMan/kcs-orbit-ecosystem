@@ -35,8 +35,7 @@ const API_RESPONSE_CACHE_PREFIX = "edupay_api_cache_v1:";
 const OFFLINE_MUTATION_QUEUE_KEY = "edupay_offline_mutation_queue_v1";
 const DEMO_FALLBACK_ENABLED = (import.meta.env.VITE_ENABLE_DEMO_FALLBACK ?? "").trim().toLowerCase() === "true";
 const RUNTIME_STATIC_APP_FALLBACK_ENABLED = typeof window !== "undefined" && (
-  window.location.hostname.endsWith(".github.io") ||
-  window.location.pathname.startsWith("/EduPay-Smart-System/")
+  window.location.hostname.endsWith(".github.io")
 );
 const STATIC_APP_FALLBACK_ENABLED =
   RUNTIME_STATIC_APP_FALLBACK_ENABLED ||
@@ -49,6 +48,20 @@ const LOCAL_API_FALLBACK_ENABLED =
     STATIC_APP_FALLBACK_ENABLED ||
     PLACEHOLDER_API_URL
   );
+
+if (typeof window !== "undefined" && !LOCAL_API_FALLBACK_ENABLED) {
+  const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
+  if (storedToken.startsWith("local-") || storedToken.startsWith("demo-")) {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(ROLE_STORAGE_KEY);
+    localStorage.removeItem(NAME_STORAGE_KEY);
+    localStorage.removeItem(PARENT_ID_STORAGE_KEY);
+    localStorage.removeItem(SESSION_ACTIVE_KEY);
+  }
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith("edupay_demo_") || key.startsWith(API_RESPONSE_CACHE_PREFIX))
+    .forEach((key) => localStorage.removeItem(key));
+}
 const LOCAL_AUTH_RECOVERY_FALLBACK_PATHS = new Set([
   "/api/auth/login",
   "/api/auth/forgot-password",
@@ -3127,7 +3140,7 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   if (shouldUseDemoApi(path)) return demoApi<T>(path, init);
 
   const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-  if (isLocalSessionToken(storedToken) && canFallbackToDemo(path, init)) {
+  if (LOCAL_API_FALLBACK_ENABLED && isLocalSessionToken(storedToken) && canFallbackToDemo(path, init)) {
     return demoApi<T>(path, init);
   }
 
@@ -3227,6 +3240,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (method !== "GET" || !path.startsWith("/api/")) {
     const result = await requestApi<T>(path, init);
     invalidateApiMemoryCache();
+    if (["PUT", "PATCH", "DELETE"].includes(method)) {
+      const responseMessage = result && typeof result === "object" && "message" in result ? String((result as { message?: unknown }).message || "") : "";
+      window.dispatchEvent(new CustomEvent("ecosystem:mutation-success", { detail: { message: responseMessage || (method === "DELETE" ? "Entité supprimée dans tout l’écosystème." : "Modification enregistrée et synchronisée dans l’écosystème.") } }));
+    }
     return result;
   }
 

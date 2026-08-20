@@ -1,3 +1,4 @@
+import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
@@ -12,6 +13,7 @@ const inputClass = 'w-full rounded-xl border border-github-border bg-slate-950/7
 
 const buildTeacherPayload = (form) => ({
   ...(form.firstName ? { first_name: form.firstName } : {}),
+  ...(form.middleName !== undefined ? { middle_name: form.middleName } : {}),
   ...(form.lastName ? { last_name: form.lastName } : {}),
   ...(form.email ? { user_email: form.email } : { user_email: '' }),
   ...(form.phone !== undefined ? { phone: form.phone } : {}),
@@ -40,6 +42,7 @@ const buildTeacherPayload = (form) => ({
 const buildTeacherCreatePayload = (form) => ({
   user: {
     first_name: form.firstName,
+    middle_name: form.middleName,
     last_name: form.lastName,
     ...(form.email ? { email: form.email } : {}),
     phone: form.phone,
@@ -68,8 +71,9 @@ const buildTeacherCreatePayload = (form) => ({
 });
 
 const mapTeacherToForm = (teacher) => ({
-  firstName: teacher?.full_name?.split(' ')?.[0] || '',
-  lastName: teacher?.full_name?.split(' ')?.slice(1).join(' ') || '',
+  firstName: teacher?.first_name || '',
+  middleName: teacher?.middle_name || '',
+  lastName: teacher?.last_name || '',
   email: teacher?.email || '',
   phone: teacher?.contact_phone || teacher?.phone || '',
   teacherId: teacher?.teacher_id || teacher?.employee_id || '',
@@ -103,6 +107,7 @@ const mapTeacherToForm = (teacher) => ({
 
 const initialForm = {
   firstName: '',
+  middleName: '',
   lastName: '',
   email: '',
   phone: '',
@@ -388,8 +393,9 @@ const TeachersPage = () => {
           ) : null}
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prénom" className={inputClass} required />
             <input value={form.lastName} onChange={(event) => updateForm('lastName', event.target.value)} placeholder="Nom" className={inputClass} required />
+            <input value={form.middleName} onChange={(event) => updateForm('middleName', event.target.value)} placeholder="Postnom" className={inputClass} />
+            <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prénom" className={inputClass} required />
             <input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="Email personnel optionnel" className={inputClass} />
             <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="Téléphone" className={inputClass} />
             <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Département" className={inputClass} />
@@ -397,7 +403,7 @@ const TeachersPage = () => {
             <input value={form.specialization} onChange={(event) => updateForm('specialization', event.target.value)} placeholder="Spécialité / matière si enseignant" className={inputClass} />
             <label className="block">
               <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Date d'engagement / debut du contrat</span>
-              <input type="date" value={form.hireDate} onChange={(event) => updateForm('hireDate', event.target.value)} className={inputClass} required />
+              <DateSelect value={form.hireDate} onChange={(event) => updateForm('hireDate', event.target.value)} className={inputClass} required />
             </label>
             <select value={form.employeeType} onChange={(event) => updateForm('employeeType', event.target.value)} className={inputClass}>
               <option value="teacher">Teacher</option>
@@ -447,7 +453,7 @@ const TeachersPage = () => {
 
           <IdentityCapturePanel
             value={form.identity}
-            subjectName={`${form.firstName} ${form.lastName}`}
+            subjectName={`${form.lastName} ${form.middleName} ${form.firstName}`.replace(/\s+/g, ' ').trim()}
             onChange={(identity) => updateForm('identity', identity)}
           />
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
@@ -456,7 +462,7 @@ const TeachersPage = () => {
               <p className="mt-1 text-xs text-slate-400">La carte KCS reprend le logo de l'école, la photo, le poste et les empreintes liées au lecteur.</p>
             </div>
             <KcsIdCard entity={{
-              full_name: `${form.firstName} ${form.lastName}`.trim() || 'Employé KCS',
+              full_name: `${form.lastName} ${form.middleName} ${form.firstName}`.replace(/\s+/g, ' ').trim() || 'Employé KCS',
               role: form.employeeType === 'teacher' ? 'Enseignant' : 'Employé',
               employee_id: form.teacherId || 'Auto',
               gender: form.gender,

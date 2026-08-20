@@ -2,6 +2,10 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { User, UserRole } from '@/types'
 
+if (typeof window !== 'undefined' && localStorage.getItem('kcs-auth')?.includes('demo-access-token')) {
+  localStorage.removeItem('kcs-auth')
+}
+
 interface AuthState {
   user: User | null
   token: string | null

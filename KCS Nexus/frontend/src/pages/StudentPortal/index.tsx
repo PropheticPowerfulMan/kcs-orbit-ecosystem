@@ -76,6 +76,9 @@ const notifications = [
   { id: 3, type: 'info', message: 'Parent-Teacher Conference: May 20th, 1 PM — Parent notified', time: '1d ago' },
 ]
 
+;[performanceData, subjectGrades, assignments, schedule, notifications]
+  .forEach((collection) => collection.splice(0, collection.length))
+
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
   submitted: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',

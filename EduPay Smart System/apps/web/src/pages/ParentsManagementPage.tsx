@@ -2805,12 +2805,14 @@ export function ParentsManagementPage() {
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [duplicateParentMessage, setDuplicateParentMessage] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setApiError(null);
+  const load = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setApiError(null);
+    }
     let nextApiError: string | null = null;
     const [directoryResult, parentsResult, classesResult, catalogResult] = await Promise.allSettled([
-      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 4500, "shared-directory"),
+      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 15000, "shared-directory"),
       api<Parent[]>("/api/parents"),
       api<SchoolClass[]>("/api/classes"),
       api<FinanceCatalog>("/api/finance/catalog")
@@ -2846,10 +2848,19 @@ export function ParentsManagementPage() {
 
     setApiError(nextApiError);
 
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const refresh = () => void load(true);
+    const timer = window.setInterval(refresh, 3000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
 
   useEffect(() => {
     if (!viewTarget) {
@@ -3070,8 +3081,8 @@ export function ParentsManagementPage() {
           <p className="text-ink-dim mt-1">{t("pmSubtitle")}</p>
         </div>
         <button
-          onClick={() => { setEditTarget(null); setShowForm(true); }}
-          className="hidden shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition-all hover:shadow-brand-500/50 active:scale-95 sm:px-5"
+          onClick={() => { setCredentials(null); setEditTarget(null); setShowForm(true); }}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-500/30 transition-all hover:shadow-brand-500/50 active:scale-95 sm:px-5"
         >
           <PlusIcon /> {t("pmAddParent")}
         </button>

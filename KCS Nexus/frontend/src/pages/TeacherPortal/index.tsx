@@ -1,3 +1,4 @@
+import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -57,6 +58,9 @@ const messages = [
   { id: 2, from: 'Principal Carter', subject: 'Faculty meeting agenda for Friday', time: '2h ago' },
   { id: 3, from: 'Parent of Elise K.', subject: 'Question about AP exam preparation', time: '5h ago' },
 ]
+
+;[todayClasses, gradingQueue, studentAlerts, messages]
+  .forEach((collection) => collection.splice(0, collection.length))
 
 const getTeacherSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
@@ -1167,7 +1171,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
               </select>
               <div className="grid gap-2 sm:grid-cols-3">
-                <input type="date" className={`${inputClass} attendance-date-field`} value={attendanceDraft.date} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, date: event.target.value }))} />
+                <DateSelect className={`${inputClass} attendance-date-field`} value={attendanceDraft.date} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, date: event.target.value }))} />
                 <select className={inputClass} value={attendanceDraft.status} onChange={(event) => setAttendanceDraft((draft) => ({ ...draft, status: event.target.value }))}>
                   <option value="present">Present</option>
                   <option value="late">Late</option>
@@ -1741,10 +1745,10 @@ const TeacherDashboardHome = () => {
   const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [aiError, setAiError] = useState('')
   const metricCards = [
-    { label: 'Assigned Students', value: '83', sub: 'Across 4 active classes', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
-    { label: 'Pending Actions', value: '56', sub: 'Grades, comments, follow-ups', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-    { label: 'Risk Alerts', value: '3', sub: 'AI intervention required', icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
-    { label: 'Class Average', value: '87%', sub: '+4% vs last month', icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+    { label: 'Assigned Students', value: '0', sub: 'Super Admin registry', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
+    { label: 'Pending Actions', value: '0', sub: 'No pending action', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+    { label: 'Risk Alerts', value: '0', sub: 'No active alert', icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+    { label: 'Class Average', value: '0%', sub: 'No registered grade', icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
   ]
 
   const quickActions = [

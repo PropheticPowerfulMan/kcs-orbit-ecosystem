@@ -1,3 +1,4 @@
+import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
@@ -432,28 +433,7 @@ const buildOfficialTranscript = (student: AdminStudentRecord) => {
   }
 }
 
-const admissionSeed: AdminAdmissionRequest[] = admissionsQueue.map((item, index) => ({
-  id: `seed-adm-${index + 1}`,
-  applicationNumber: `KCS-SEED-${index + 1}`,
-  studentName: item.name,
-  firstName: item.name.split(' ')[0] ?? item.name,
-  lastName: item.name.split(' ').slice(1).join(' ') || 'Applicant',
-  dateOfBirth: '2012-01-01',
-  nationality: 'Congolese',
-  gradeApplying: item.grade,
-  previousSchool: 'Previous school pending verification',
-  languages: 'English, French',
-  parentName: `${item.name.split(' ')[0]} Parent`,
-  parentEmail: `${item.name.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`,
-  parentPhone: `+243 810 300 00${index + 1}`,
-  relationship: 'Guardian',
-  address: 'Kinshasa, DRC',
-  occupation: 'Pending',
-  notes: 'Seed application available for Super Admin workflow preview.',
-  documents: ['Application form', 'Transcript'],
-  status: item.status === 'Accepted' ? 'ACCEPTED' : item.status === 'Under Review' ? 'UNDER_REVIEW' : 'SUBMITTED',
-  submittedAt: new Date(2026, 3, 22 - index).toISOString(),
-}))
+const admissionSeed: AdminAdmissionRequest[] = []
 
 const readStoredAdmissions = () => {
   if (typeof window === 'undefined') return admissionSeed
@@ -1292,12 +1272,19 @@ const AdminSectionView = ({
         setApiSynced(false)
         setStudentNotice('La synchronisation du registre est indisponible. Verifiez que KCS Orbit API est bien lance pour voir les eleves provenant des autres applications.')
       })
+    const refresh = () => void refreshOfficialRoster().catch(() => undefined)
+    const timer = window.setInterval(refresh, 3000)
+    window.addEventListener('focus', refresh)
     return () => {
       mounted = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
     }
   }, [setOfficialRoster, shouldLoadRoster])
 
   const registerOfficialStudent = async () => {
+    setFamilyCredentials(null)
+    setStudentNotice('')
     const parentName = [newFamily.parentLastName, newFamily.parentMiddleName, newFamily.parentFirstName].filter(Boolean).join(' ').trim()
     const readyStudents = newFamily.students.map((student) => ({ ...student, name: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ').trim() })).filter((student) => student.lastName.trim() && student.firstName.trim())
     if (readyStudents.length === 0 || !newFamily.parentLastName.trim() || !newFamily.parentFirstName.trim()) {
@@ -1402,6 +1389,24 @@ const AdminSectionView = ({
     setStudentNotice('')
   }
 
+  const resetEntityAccess = async (entityType: 'parent' | 'student', entity: AdminParentRecord | AdminStudentRecord) => {
+    const identifier = entityType === 'parent'
+      ? ((entity as AdminParentRecord).displayId || entity.id)
+      : ((entity as AdminStudentRecord).studentNumber || entity.id)
+    try {
+      const response = await registryAPI.resetAccess(entityType, identifier)
+      const credential = response.data?.data
+      setFamilyCredentials(entityType === 'parent' ? { parent: credential, students: [] } : { parent: null, students: [{ ...credential, studentId: identifier }] })
+      const message = `Accès temporaire régénéré pour ${identifier}.`
+      if (entityType === 'parent') setParentNotice(message)
+      else setStudentNotice(message)
+    } catch (error) {
+      const message = extractStudentApiMessage(error, 'Impossible de réinitialiser cet accès.')
+      if (entityType === 'parent') setParentNotice(message)
+      else setStudentNotice(message)
+    }
+  }
+
   const saveEditedStudent = async () => {
     if (!editingStudent) return
 
@@ -1438,7 +1443,19 @@ const AdminSectionView = ({
         }
       }
       setEditingStudent(null)
-      setStudentNotice(response.data?.message || `${normalizedName} a été mis à jour avec succès.`)
+      const delivery = response.data?.data?.notificationDelivery
+      const successMessage = response.data?.message || `${normalizedName} a été mis à jour avec succès.`
+      setStudentNotice(successMessage)
+      setDetailDialog({
+        title: 'Modification enregistrée',
+        subtitle: normalizedName,
+        details: [
+          ['Résultat', successMessage],
+          ['Dashboard', delivery?.dashboard ? 'Message ajouté aux tableaux de bord concernés' : 'Notification interne en attente'],
+          ['E-mail', delivery?.email?.sent ? 'E-mail envoyé' : `Non envoyé (${delivery?.email?.reason || 'configuration indisponible'})`],
+          ['SMS', delivery?.sms?.sent ? 'SMS envoyé' : `Non envoyé (${delivery?.sms?.reason || 'configuration indisponible'})`],
+        ],
+      })
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, 'Impossible de modifier cet élève pour le moment.'))
     } finally {
@@ -1735,6 +1752,7 @@ const AdminSectionView = ({
                       <div className="flex justify-end gap-2">
                         <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>Voir</button>
                         <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)}>Modifier</button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)}>Reset accès</button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteParentRecord(parent)} aria-label={`Delete ${parent.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -1985,7 +2003,7 @@ const AdminSectionView = ({
                       <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
                       <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />
                       <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-kcs-blue-200"><strong>ID eleve :</strong> genere automatiquement par le systeme</div>
-                      <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<input type="date" value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
+                      <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
                       <input value={student.email} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, email: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Student email, optional" />
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
@@ -2051,6 +2069,7 @@ const AdminSectionView = ({
                           setViewingStudent(student)
                         }}>Voir</button>
                         <button type="button" className={`rounded-lg px-3 py-2 text-xs font-bold ${student.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(student)}>Modifier</button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)}>Reset accès</button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteOfficialStudent(student)} aria-label={`Delete ${student.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -2227,7 +2246,7 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Date de naissance
-                      <input type="date" value={studentEditForm.dateOfBirth} onChange={(event) => setStudentEditForm((current) => ({ ...current, dateOfBirth: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
+                      <DateSelect value={studentEditForm.dateOfBirth} onChange={(event) => setStudentEditForm((current) => ({ ...current, dateOfBirth: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
                       Email élève
@@ -2282,8 +2301,8 @@ const AdminSectionView = ({
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? 'Enregistrement...' : 'Enregistrer les modifications'}</button>
-                <button type="button" className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800" onClick={() => setEditingStudent(null)}>Annuler</button>
+                <button type="button" className="rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? 'Enregistrement...' : 'Enregistrer les modifications'}</button>
+                <button type="button" className="rounded-xl border-2 border-amber-500 bg-amber-100 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-200 dark:border-amber-300 dark:bg-amber-400 dark:text-kcs-blue-950 dark:hover:bg-amber-300" onClick={() => setEditingStudent(null)}>Annuler</button>
               </div>
             </section>
           </div>
@@ -2910,6 +2929,15 @@ const AdminDashboard = () => {
   const [dashboardAction, setDashboardAction] = useState('')
   const [reportCardControl, setReportCardControl] = useState<any>(null)
   const pendingAdmissions = admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW')
+  const hasOperationalData = officialRoster.length > 0 || admissionRequests.length > 0
+  const dashboardEnrollmentTrend = hasOperationalData
+    ? enrollmentTrend
+    : enrollmentTrend.map((item) => ({ ...item, students: 0, applications: 0 }))
+  const dashboardDepartmentPerformance = hasOperationalData ? departmentPerformance : []
+  const dashboardLiveEvents = hasOperationalData ? liveEventControls : []
+  const dashboardRiskAlerts = hasOperationalData ? riskAlerts : []
+  const dashboardStaffLoad = hasOperationalData ? staffLoad : []
+  const dashboardRecentActivity = hasOperationalData ? recentActivity : []
 
   const refreshDashboardFinance = async () => {
     setDashboardFinanceError('')
@@ -2918,6 +2946,23 @@ const AdminDashboard = () => {
   }
 
   useEffect(() => { if (activeSegment === 'dashboard') void refreshDashboardFinance() }, [activeSegment])
+
+  useEffect(() => {
+    window.localStorage.removeItem(ADMIN_ROSTER_STORAGE_KEY)
+    window.localStorage.removeItem(ADMIN_ADMISSIONS_STORAGE_KEY)
+    setAdmissionRequests([])
+    void getAdminRoster()
+      .then((response) => {
+        const records = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : []
+        const roster = records.map(apiProfileToRosterRecord)
+        setOfficialRoster(roster)
+        saveRoster(roster)
+      })
+      .catch(() => {
+        setOfficialRoster([])
+        saveRoster([])
+      })
+  }, [])
 
   const openEmailAction = () => {
     const recipients = Array.from(new Set(officialRoster.map((student) => student.parentEmail).filter(Boolean))).slice(0, 40).join(',')
@@ -2974,10 +3019,10 @@ const AdminDashboard = () => {
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
             {[
               { label: 'Official Registry', value: String(officialRoster.length), icon: GraduationCap, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300', sub: 'students controlled by Super Admin' },
-              { label: 'Faculty Members', value: '64', icon: Users, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', sub: '92% retention' },
+              { label: 'Faculty Members', value: '0', icon: Users, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', sub: 'no employee registered' },
               { label: 'Open Applications', value: String(pendingAdmissions.length), icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', sub: 'approval or refusal required' },
-              { label: 'AI Risk Alerts', value: '10', icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: '3 high severity' },
-              { label: 'Live Events', value: '4', icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: '1 currently live' },
+              { label: 'AI Risk Alerts', value: '0', icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no active alert' },
+              { label: 'Live Events', value: '0', icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no scheduled event' },
             ].map((item) => {
               const Icon = item.icon
               return (
@@ -3005,7 +3050,7 @@ const AdminDashboard = () => {
                 <span className="badge-blue text-xs">Rolling 8 months</span>
               </div>
               <ResponsiveContainer width="100%" height={290}>
-                <AreaChart data={enrollmentTrend}>
+                <AreaChart data={dashboardEnrollmentTrend}>
                   <defs>
                     <linearGradient id="studentsFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#1d4ed8" stopOpacity={0.25} />
@@ -3032,7 +3077,7 @@ const AdminDashboard = () => {
                 <span className="text-xs text-gray-400">AI synthesized</span>
               </div>
               <ResponsiveContainer width="100%" height={290}>
-                <BarChart data={departmentPerformance} layout="vertical" margin={{ left: 10, right: 10 }}>
+                <BarChart data={dashboardDepartmentPerformance} layout="vertical" margin={{ left: 10, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" horizontal={false} />
                   <XAxis type="number" hide />
                   <YAxis dataKey="name" type="category" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
@@ -3050,7 +3095,7 @@ const AdminDashboard = () => {
                 <Video size={18} className="text-red-500" />
               </div>
               <div className="space-y-3">
-                {liveEventControls.map((event) => (
+                {dashboardLiveEvents.map((event) => (
                   <div key={event.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
@@ -3117,7 +3162,7 @@ const AdminDashboard = () => {
                 <Brain size={18} className="text-kcs-gold-500" />
               </div>
               <div className="space-y-3">
-                {riskAlerts.map((alert) => (
+                {dashboardRiskAlerts.map((alert) => (
                   <div key={alert.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.title}</p>
@@ -3137,7 +3182,7 @@ const AdminDashboard = () => {
                 <BookOpen size={18} className="text-purple-500" />
               </div>
               <div className="space-y-3">
-                {staffLoad.map((staff) => (
+                {dashboardStaffLoad.map((staff) => (
                   <div key={staff.teacher} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/20">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{staff.teacher}</p>
@@ -3157,10 +3202,14 @@ const AdminDashboard = () => {
             <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
               <div>
                 <p className="mb-2 text-sm font-semibold text-kcs-gold-300">Operational Pulse</p>
-                <h2 className="font-display text-2xl font-bold">This week&apos;s strongest signals point to steady enrollment growth and higher AI engagement in senior grades.</h2>
+                <h2 className="font-display text-2xl font-bold">
+                  {hasOperationalData
+                    ? 'Operational indicators are calculated from the current official registry.'
+                    : 'No operational data is available yet. The indicators will populate after the first registrations.'}
+                </h2>
               </div>
               <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
-                {recentActivity.map((item) => (
+                {dashboardRecentActivity.map((item) => (
                   <div key={item} className="flex items-start gap-3 text-sm text-kcs-blue-100">
                     <ArrowUpRight size={16} className="mt-0.5 flex-shrink-0 text-kcs-gold-300" />
                     <span>{item}</span>
@@ -3260,7 +3309,7 @@ const AdminDashboard = () => {
                 <span className="badge-gold text-xs">Principal workflow</span>
               </div>
               <div className="space-y-3">
-                {[...reportCards, ...transcripts].slice(0, 6).map((item: any) => (
+                {(hasOperationalData ? [...reportCards, ...transcripts] : []).slice(0, 6).map((item: any) => (
                   <button type="button" onClick={() => setReportCardControl(item)} key={`${item.student}-${item.term ?? item.years}`} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-gold-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.student}</p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

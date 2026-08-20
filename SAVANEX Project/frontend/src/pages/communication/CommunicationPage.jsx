@@ -19,23 +19,6 @@ const initialDraft = {
   subject: 'Suivi scolaire SAVANEX',
   body: '',
 };
-const DIRECT_MESSAGE_STORAGE_KEY = 'savanex-direct-parent-messages';
-
-const readDirectMessageCache = () => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const value = JSON.parse(window.localStorage.getItem(DIRECT_MESSAGE_STORAGE_KEY) || '[]');
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveDirectMessageCache = (messages) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(DIRECT_MESSAGE_STORAGE_KEY, JSON.stringify(messages.slice(0, 250)));
-};
-
 const stableParentId = (student) => (
   student.parent
   || student.parent_external_id
@@ -99,8 +82,7 @@ const CommunicationPage = () => {
       ]);
       if (!alive) return;
 
-      const cachedDirectMessages = readDirectMessageCache();
-      setMessageList(messagesResult.status === 'fulfilled' ? [...cachedDirectMessages, ...messagesResult.value] : cachedDirectMessages);
+      setMessageList(messagesResult.status === 'fulfilled' ? messagesResult.value : []);
       setStudents(studentsResult.status === 'fulfilled' ? studentsResult.value : []);
 
       if (messagesResult.status === 'rejected') {
@@ -196,7 +178,14 @@ const CommunicationPage = () => {
 
   const sendMessage = async (event) => {
     event.preventDefault();
-    if (!selectedParents.length || !channels.length) return;
+    if (!selectedParents.length) {
+      setError('Selectionnez au moins un parent avant l\'envoi.');
+      return;
+    }
+    if (!channels.length) {
+      setError('Activez au moins un canal : email ou SMS.');
+      return;
+    }
 
     setSending(true);
     setError('');
@@ -211,7 +200,6 @@ const CommunicationPage = () => {
         channels,
       });
       setMessageList((current) => [...created, ...current]);
-      saveDirectMessageCache([...created, ...readDirectMessageCache()]);
       setNotice(`${created.length} message(s) parent envoye(s). ${created.map((item) => formatDelivery(item.delivery)).join(' | ')}`);
       setDraft(initialDraft);
       setSelectedParentIds([]);
@@ -331,9 +319,9 @@ const CommunicationPage = () => {
             <div className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-sm text-slate-300">
               {recommendedText}
             </div>
-            <button type="submit" disabled={sending || !selectedParents.length || !channels.length} className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-kcs-blue px-5 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">
-              <Send className="h-4 w-4" />
-              {sending ? 'Envoi...' : 'Envoyer aux parents'}
+            <button type="submit" disabled={sending} className="sticky bottom-3 z-10 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-2xl border border-cyan-200/60 bg-gradient-to-r from-cyan-300 via-sky-300 to-blue-400 px-6 py-4 text-base font-black text-slate-950 shadow-[0_16px_40px_rgba(14,165,233,0.38)] ring-2 ring-cyan-300/20 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:w-auto">
+              <Send className="h-5 w-5" />
+              {sending ? 'Envoi en cours...' : selectedParents.length > 1 ? `Envoyer aux ${selectedParents.length} parents` : 'Envoyer au parent'}
             </button>
           </form>
         </article>

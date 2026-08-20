@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
@@ -38,8 +38,10 @@ const demoAccounts: DemoAccount[] = [
 const superAdminAliases = ['superadmin@kcsnexus.com', 'superadmin@kcsnexus.edu', 'admin@kcsnexus.com']
 const superAdminPasswords = ['SuperAdmin123!', 'password123']
 const superAdminAccount = demoAccounts[0]
+const demoLoginEnabled = String(import.meta.env.VITE_ENABLE_DEMO_LOGIN || '').trim().toLowerCase() === 'true'
 
 const findDemoAccount = (values: LoginFormValues) => {
+  if (!demoLoginEnabled) return undefined
   const email = values.email.trim().toLowerCase()
   const password = values.password.trim()
 
@@ -89,6 +91,20 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false)
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
+  const [recoveryEmail, setRecoveryEmail] = useState('')
+  const [resetToken, setResetToken] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [recoveryMessage, setRecoveryMessage] = useState('')
+  const [recoveryError, setRecoveryError] = useState('')
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('resetToken') || ''
+    if (token) {
+      setResetToken(token)
+      setRecoveryOpen(true)
+    }
+  }, [])
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -124,13 +140,44 @@ const LoginPage = () => {
     setErrorMessage('')
     try {
       await handleApiLogin({ email: superAdminAccount.email, password: superAdminAccount.password })
-    } catch {
-      handleDemoLogin(buildDemoUser(superAdminAccount))
+    } catch (err: any) {
+      setErrorMessage(getLoginErrorMessage(err))
     } finally {
       setLoading(false)
     }
   }
 
+  const requestRecovery = async () => {
+    setLoading(true)
+    setRecoveryError('')
+    setRecoveryMessage('')
+    try {
+      const email = (recoveryEmail || form.getValues('email')).trim()
+      await authAPI.forgotPassword(email)
+      setRecoveryMessage('Si ce compte existe, un lien sécurisé a été envoyé par e-mail.')
+    } catch (error: any) {
+      setRecoveryError(error?.response?.data?.message || 'Récupération temporairement indisponible.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const completeRecovery = async () => {
+    setLoading(true)
+    setRecoveryError('')
+    setRecoveryMessage('')
+    try {
+      await authAPI.resetPassword(resetToken.trim(), newPassword)
+      setRecoveryMessage('Mot de passe réinitialisé. Vous pouvez maintenant vous connecter.')
+      setResetToken('')
+      setNewPassword('')
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } catch (error: any) {
+      setRecoveryError(error?.response?.data?.message || 'Lien invalide ou expiré.')
+    } finally {
+      setLoading(false)
+    }
+  }
   const onSubmit = async (values: LoginFormValues) => {
     setLoading(true)
     setErrorMessage('')
@@ -274,11 +321,29 @@ const LoginPage = () => {
                   <label className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                     <input type="checkbox" className="accent-kcs-blue-600" /> Remember me
                   </label>
-                  <button type="button" className="font-medium text-kcs-blue-600 dark:text-kcs-blue-400">
-                    Forgot password?
+                  <button type="button" onClick={() => { setRecoveryEmail(form.getValues('email')); setRecoveryOpen((current) => !current); setRecoveryError(''); setRecoveryMessage('') }} className="font-medium text-kcs-blue-600 dark:text-kcs-blue-400">
+                    Mot de passe oublié ?
                   </button>
                 </div>
 
+                {recoveryOpen && (
+                  <div className="rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30">
+                    <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Récupération des accès</p>
+                    {!resetToken ? (
+                      <div className="mt-3 space-y-3">
+                        <input type="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} className="input-kcs" placeholder="Adresse e-mail du compte" />
+                        <button type="button" onClick={() => void requestRecovery()} disabled={isLoading} className="btn-secondary w-full disabled:opacity-60">Envoyer le lien sécurisé</button>
+                      </div>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="input-kcs" placeholder="Nouveau mot de passe (8 caractères minimum)" minLength={8} />
+                        <button type="button" onClick={() => void completeRecovery()} disabled={isLoading || newPassword.length < 8} className="btn-secondary w-full disabled:opacity-60">Réinitialiser le mot de passe</button>
+                      </div>
+                    )}
+                    {recoveryMessage && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-300">{recoveryMessage}</p>}
+                    {recoveryError && <p className="mt-3 text-sm text-red-600 dark:text-red-300">{recoveryError}</p>}
+                  </div>
+                )}
                 <button type="submit" disabled={isLoading} className="btn-primary flex w-full items-center justify-center gap-2 py-3 disabled:opacity-60">
                   <LogIn size={16} /> {isLoading ? 'Signing in...' : 'Sign In'}
                 </button>

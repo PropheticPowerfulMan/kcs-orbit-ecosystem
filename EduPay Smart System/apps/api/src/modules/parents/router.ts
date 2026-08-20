@@ -3,7 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
-import { createOrbitParent, deleteOrbitFamily, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent } from "../../integrations/orbitRegistry";
+import { createOrbitParent, deleteOrbitParent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
@@ -627,7 +627,7 @@ parentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticate
   try {
     if (orbitRegistryIsEnabled()) {
       const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-      const mirroredParentIds = mirrored.parents.map((parent) => parent.id);
+      const mirroredParentIds = mirrored.parents.map((parent) => parent.localId).filter((id): id is string => Boolean(id));
       const localParents = mirroredParentIds.length
         ? await prisma.parent.findMany({
           where: { schoolId: req.user!.schoolId, id: { in: mirroredParentIds } },
@@ -1083,10 +1083,14 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   let orbitUpdateSucceeded = false;
   try {
     const parentExists = await prisma.parent.findFirst({
-      where: { id, schoolId: req.user!.schoolId },
-      select: { id: true, userId: true }
+      where: {
+        schoolId: req.user!.schoolId,
+        OR: [{ id }, { orbitId: id }],
+      },
+      select: { id: true, orbitId: true, userId: true }
     });
     if (!parentExists) return res.status(404).json({ message: "Parent non trouve" });
+    const localParentId = parentExists.id;
     // Suppression de la vérification d’unicité email/téléphone pour respecter la règle de l’écosystème
 
 
@@ -1120,7 +1124,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 
     const classIdResolution = await resolveStudentClassIds(req.user!.schoolId, payload.students);
     const currentStudents = await prisma.student.findMany({
-      where: { parentId: id, schoolId: req.user!.schoolId },
+      where: { parentId: localParentId, schoolId: req.user!.schoolId },
       select: {
         id: true,
         fullName: true,
@@ -1170,7 +1174,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     }> = [];
     await prisma.$transaction(async (tx) => {
       await tx.parent.update({
-        where: { id },
+        where: { id: localParentId },
         data: {
           fullName: payload.fullName,
           phone: normalizedPhone,
@@ -1192,17 +1196,23 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
       }
 
       const existingStudents = await tx.student.findMany({
-        where: { parentId: id, schoolId: req.user!.schoolId },
-        select: { id: true }
+        where: { parentId: localParentId, schoolId: req.user!.schoolId },
+        select: { id: true, orbitId: true }
       });
       const existingStudentIds = new Set(existingStudents.map((student) => student.id));
-      const requestedExistingIds = new Set(payload.students.map((student) => student.id).filter((studentId): studentId is string => Boolean(studentId)));
+      const localStudentIdByIdentifier = new Map(existingStudents.flatMap((student) => [
+        [student.id, student.id] as const,
+        ...(student.orbitId ? [[student.orbitId, student.id] as const] : []),
+      ]));
+      const requestedExistingIds = new Set(payload.students
+        .map((student) => student.id ? localStudentIdByIdentifier.get(student.id) : undefined)
+        .filter((studentId): studentId is string => Boolean(studentId)));
       const studentsToDelete = [...existingStudentIds].filter((studentId) => !requestedExistingIds.has(studentId));
 
       if (studentsToDelete.length) {
         await tx.student.deleteMany({
           where: {
-            parentId: id,
+            parentId: localParentId,
             schoolId: req.user!.schoolId,
             id: { in: studentsToDelete }
           }
@@ -1210,11 +1220,12 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
       }
 
       for (const student of payload.students) {
-        if (student.id && existingStudentIds.has(student.id)) {
+        const localStudentId = student.id ? localStudentIdByIdentifier.get(student.id) : undefined;
+        if (localStudentId && existingStudentIds.has(localStudentId)) {
           const resolvedClassId = classIdResolution.get(student.classId) ?? student.classId;
-          const currentStudent = currentStudentById.get(student.id);
+          const currentStudent = currentStudentById.get(localStudentId);
           const updatedStudent = await tx.student.update({
-            where: { id: student.id },
+            where: { id: localStudentId },
             data: {
               fullName: student.fullName,
               gender: student.gender || null,
@@ -1249,7 +1260,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
             gender: student.gender || null,
             classId: classIdResolution.get(student.classId) ?? student.classId,
             annualFee: student.annualFee,
-            parentId: id,
+            parentId: localParentId,
             schoolId: req.user!.schoolId
           },
           select: { id: true, fullName: true, annualFee: true }
@@ -1266,7 +1277,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
       try {
         await assignOnboardingFinance({
           schoolId: req.user!.schoolId,
-          parentId: id,
+          parentId: localParentId,
           students: updatedStudentAssignments
         });
       } catch (financeError) {
@@ -1275,7 +1286,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     }
 
     const parent = await prisma.parent.findUnique({
-      where: { id },
+      where: { id: localParentId },
       include: parentInclude
     });
     if (!parent) {
@@ -1292,7 +1303,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     const notificationStatus = parent
       ? await notifyParentEntityChange({
         schoolId: req.user!.schoolId,
-        parentId: parent.id,
+        parentId: localParentId,
         subject: "Mise à jour du dossier parent EduPay",
         body: [
           `Le dossier de ${payload.fullName} vient d'être modifié dans EduPay.`,
@@ -1360,12 +1371,15 @@ parentRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
       });
     }
 
-      await deleteOrbitFamily(parent.orbitId);
+      await deleteOrbitParent(parent.orbitId);
 
         const localParent = await prisma.parent.findFirst({
         where: {
-          id: parent.id,
-          schoolId: req.user!.schoolId
+          schoolId: req.user!.schoolId,
+          OR: [
+            ...(parent.localId ? [{ id: parent.localId }] : []),
+            { orbitId: parent.orbitId },
+          ],
         },
         select: {
           id: true,

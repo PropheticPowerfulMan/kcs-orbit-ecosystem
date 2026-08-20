@@ -6,6 +6,8 @@ import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { sendSchoolMail } from '../utils/mail.js'
+import { sendSchoolSms } from '../utils/sms.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -304,6 +306,67 @@ function generateTemporaryPassword(role: 'PAR' | 'STU' = 'STU') {
   return `KCS-${randomInt(0, 1_000_000).toString().padStart(6, '0')}`
 }
 
+type FamilyCredential = { displayName?: string; studentId?: string; username: string; accessCode?: string; temporaryPassword: string }
+
+async function deliverFamilyCredentials(input: {
+  parentUserId: string
+  parentName: string
+  parentEmail: string
+  parentPhone?: string | null
+  parentCredential: FamilyCredential | null
+  studentCredentials: Array<FamilyCredential & { userId: string }>
+}) {
+  const credentialLines = [
+    input.parentCredential ? `Parent — identifiant: ${input.parentCredential.username}; code: ${input.parentCredential.accessCode || 'non défini'}; mot de passe temporaire: ${input.parentCredential.temporaryPassword}` : null,
+    ...input.studentCredentials.map((student) => `${student.displayName || student.studentId || 'Élève'} — ID: ${student.studentId || 'non défini'}; identifiant: ${student.username}; code: ${student.accessCode || 'non défini'}; mot de passe temporaire: ${student.temporaryPassword}`),
+  ].filter(Boolean) as string[]
+  const title = 'Identifiants de votre famille KCS Nexus'
+  const message = `Bonjour ${input.parentName},\n\nVoici les accès de votre famille :\n${credentialLines.join('\n')}\n\nCes mots de passe doivent être changés à la première connexion.`
+
+  await prisma.notification.create({ data: { userId: input.parentUserId, title, message, type: 'MESSAGE', link: '/parent/messages' } })
+  await prisma.notification.createMany({
+    data: input.studentCredentials.map((student) => ({
+      userId: student.userId,
+      title: 'Vos identifiants KCS Nexus',
+      message: `Identifiant: ${student.username}\nCode: ${student.accessCode || 'non défini'}\nMot de passe temporaire: ${student.temporaryPassword}`,
+      type: 'MESSAGE' as const,
+      link: '/student/messages',
+    })),
+  })
+  const [email, sms] = await Promise.all([
+    sendSchoolMail({ to: input.parentEmail, subject: title, text: message, html: `<p>Bonjour ${input.parentName},</p><p>Voici les accès de votre famille :</p><ul>${credentialLines.map((line) => `<li>${line}</li>`).join('')}</ul><p>Ces mots de passe doivent être changés à la première connexion.</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+    sendSchoolSms(input.parentPhone, `KCS Nexus — accès famille:\n${credentialLines.join('\n')}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+  ])
+  return { email, sms, dashboard: { parent: true, students: input.studentCredentials.length } }
+}
+
+async function deliverStudentUpdate(input: {
+  studentUserId?: string
+  studentEmail?: string | null
+  studentName: string
+  parentUserIds: string[]
+  parentEmails: string[]
+  parentPhones: string[]
+}) {
+  const title = 'Dossier eleve modifie'
+  const message = `Le dossier de ${input.studentName} a ete modifie par le superadministrateur KCS Nexus.`
+  const userIds = Array.from(new Set([...(input.studentUserId ? [input.studentUserId] : []), ...input.parentUserIds]))
+  if (userIds.length) {
+    await prisma.notification.createMany({ data: userIds.map((userId) => ({ userId, title, message, type: 'MESSAGE' as const, link: '/messages' })) })
+  }
+  const emailResults = await Promise.all(Array.from(new Set([...(input.studentEmail ? [input.studentEmail] : []), ...input.parentEmails])).map((to) =>
+    sendSchoolMail({ to, subject: title, text: message, html: `<p>${message}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+  ))
+  const smsResults = await Promise.all(Array.from(new Set(input.parentPhones)).map((phone) =>
+    sendSchoolSms(phone, `KCS Nexus: ${message}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+  ))
+  return {
+    dashboard: userIds.length > 0,
+    email: emailResults.find((result) => result.sent) || emailResults[0] || { sent: false as const, reason: 'SMTP_SEND_FAILED' as const },
+    sms: smsResults.find((result) => result.sent) || smsResults[0] || { sent: false as const, reason: 'PHONE_MISSING' as const },
+  }
+}
+
 function normalizeCreateStudentPayload(payload: unknown) {
   const asFamily = createFamilySchema.safeParse(payload)
   if (asFamily.success) return asFamily.data
@@ -386,6 +449,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       parent: { displayName: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), username: parent.email, accessCode: parentAccessCode, temporaryPassword: parentTemporaryPassword },
       students: [],
     }
+    const studentDeliveryCredentials: Array<FamilyCredential & { userId: string }> = []
 
     for (const student of students) {
       const studentTemporaryPassword = generateTemporaryPassword('STU')
@@ -421,10 +485,19 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
         create: { parentId: localParentUser.id, studentId: localStudentProfile.id, relation: parent.relationship },
       })
       temporaryCredentials.students.push({ displayName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' '), studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
+      studentDeliveryCredentials.push({ userId: localStudentUser.id, displayName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' '), studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
     }
 
     const directory = await getSharedDirectoryFromOrbit()
     const createdStudents = orbitStudentsToProfiles(directory).filter((student) => studentNumbers.includes(student.studentNumber))
+    const delivery = await deliverFamilyCredentials({
+      parentUserId: localParentUser.id,
+      parentName: [parent.firstName, parent.middleName, parent.lastName].filter(Boolean).join(' '),
+      parentEmail: parent.email,
+      parentPhone: parent.phone,
+      parentCredential: temporaryCredentials.parent,
+      studentCredentials: studentDeliveryCredentials,
+    })
 
     return success(res, {
       parent: parentResult.entity ?? { id: parentOrbitId, email: parent.email, firstName: parent.firstName, lastName: parent.lastName },
@@ -432,6 +505,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       student: createdStudents[0] ?? null,
       studentCount: createdStudents.length,
       temporaryCredentials,
+      credentialDelivery: delivery,
       syncTarget: 'orbit',
     }, students.length === 1 ? 'Student created through Orbit' : 'Family registered through Orbit', 201)
   }
@@ -552,8 +626,22 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
     }
   })
 
+  const localStudentUsers = await prisma.user.findMany({ where: { email: { in: temporaryCredentials.students.map((credential) => credential.username) } }, select: { id: true, email: true, accessCode: true, firstName: true, lastName: true } })
+  const delivery = await deliverFamilyCredentials({
+    parentUserId: family.parent.id,
+    parentName: `${parent.firstName} ${parent.lastName}`.trim(),
+    parentEmail: parent.email,
+    parentPhone: parent.phone,
+    parentCredential: temporaryCredentials.parent ? { ...temporaryCredentials.parent, accessCode: family.parent.accessCode } : null,
+    studentCredentials: temporaryCredentials.students.map((credential) => {
+      const user = localStudentUsers.find((candidate) => candidate.email === credential.username)!
+      return { ...credential, userId: user.id, accessCode: user.accessCode || undefined, displayName: `${user.firstName} ${user.lastName}`.trim() }
+    }),
+  })
+
   return success(res, {
     ...family,
+    credentialDelivery: delivery,
     student: family.students[0] ?? null,
   }, family.studentCount === 1 ? 'Student created' : 'Family registered', 201)
 }))
@@ -692,8 +780,21 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
         ? { className: `${payload.grade ?? currentClass.grade} ${payload.section ?? currentClass.section}`.trim() }
         : {}),
     })
+    const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
+    const localUsers = await prisma.user.findMany({
+      where: { email: { in: [target.email, parent?.email].filter(Boolean) as string[] } },
+      select: { id: true, email: true, role: true },
+    })
+    const notificationDelivery = await deliverStudentUpdate({
+      studentUserId: localUsers.find((user) => user.role === 'STUDENT')?.id,
+      studentEmail: payload.email || target.email,
+      studentName: [payload.firstName ?? target.firstName, payload.middleName ?? target.middleName, payload.lastName ?? target.lastName].filter(Boolean).join(' '),
+      parentUserIds: localUsers.filter((user) => user.role === 'PARENT').map((user) => user.id),
+      parentEmails: parent?.email ? [parent.email] : [],
+      parentPhones: parent?.phone ? [parent.phone] : [],
+    })
 
-    return success(res, updated, 'Student updated through Orbit')
+    return success(res, { ...(updated as object), notificationDelivery }, 'Student updated through Orbit')
   }
 
   const currentStudent = await prisma.studentProfile.findUnique({
@@ -758,8 +859,16 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       },
     })
   })
+  const notificationDelivery = await deliverStudentUpdate({
+    studentUserId: student.userId,
+    studentEmail: student.user.email,
+    studentName: `${student.user.firstName} ${student.user.lastName}`.trim(),
+    parentUserIds: student.parentLinks.map((link) => link.parent.id),
+    parentEmails: student.parentLinks.map((link) => link.parent.email).filter(Boolean),
+    parentPhones: student.parentLinks.map((link) => link.parent.phone).filter(Boolean) as string[],
+  })
 
-  return success(res, student, 'Student updated successfully')
+  return success(res, { ...student, notificationDelivery }, 'Student updated successfully')
 }))
 
 studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {

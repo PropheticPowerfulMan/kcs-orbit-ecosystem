@@ -219,6 +219,22 @@ async function loadEntityForReplay(entityType: string, entityId: string) {
   }
 }
 
+async function findLiveExternalLink(params: {
+  organizationId: string;
+  appSlug: AppSlug;
+  entityType: string;
+  externalId: string;
+}) {
+  const link = await prisma.externalLink.findUnique({
+    where: { organizationId_appSlug_entityType_externalId: params },
+    select: { id: true, nexusEntityId: true },
+  });
+  if (!link) return null;
+  const entity = await loadEntityForReplay(params.entityType, link.nexusEntityId);
+  if (entity) return link;
+  await prisma.externalLink.delete({ where: { id: link.id } });
+  return null;
+}
 async function recordAudit(params: {
   organizationId: string;
   action: string;
@@ -599,7 +615,10 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
   const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
   if (replayedSync) {
     const student = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
-    return res.status(200).json({ student, replayed: true });
+    if (student) {
+      return res.status(200).json({ student, replayed: true });
+    }
+    await prisma.syncEvent.deleteMany({ where: { organizationId, appSlug: savanexAppSlug, direction: SyncDirection.INBOUND, sourceEventKey } });
   }
 
   const classId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "class", classExternalId);
@@ -623,17 +642,9 @@ export async function ingestSavanexStudent(req: Request, res: Response) {
     });
   }
 
-  const existingLink = await prisma.externalLink.findUnique({
-    where: {
-      organizationId_appSlug_entityType_externalId: {
-        organizationId,
-        appSlug: savanexAppSlug,
-        entityType: "student",
-        externalId
-      }
-    },
-    select: { nexusEntityId: true }
-  });
+
+  const existingLink = await findLiveExternalLink({ organizationId, appSlug: savanexAppSlug, entityType: "student", externalId });
+
 
   const matchingStudent = existingLink ? null : await prisma.student.findFirst({
     where: {
@@ -754,22 +765,17 @@ export async function ingestSavanexClass(req: Request, res: Response) {
   const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
   if (replayedSync) {
     const klass = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
-    return res.status(200).json({ class: klass, replayed: true });
+    if (klass) {
+      return res.status(200).json({ class: klass, replayed: true });
+    }
+    await prisma.syncEvent.deleteMany({ where: { organizationId, appSlug: savanexAppSlug, direction: SyncDirection.INBOUND, sourceEventKey } });
   }
 
   const teacherId = await resolveLinkedEntityId(organizationId, savanexAppSlug, "teacher", teacherExternalId);
 
-  const existingLink = await prisma.externalLink.findUnique({
-    where: {
-      organizationId_appSlug_entityType_externalId: {
-        organizationId,
-        appSlug: savanexAppSlug,
-        entityType: "class",
-        externalId
-      }
-    },
-    select: { nexusEntityId: true }
-  });
+
+  const existingLink = await findLiveExternalLink({ organizationId, appSlug: savanexAppSlug, entityType: "class", externalId });
+
 
   const klass = existingLink
     ? await prisma.class.update({
@@ -856,20 +862,15 @@ export async function ingestSavanexParent(req: Request, res: Response) {
   const replayedSync = await findInboundReplay({ organizationId, appSlug: savanexAppSlug, sourceEventKey });
   if (replayedSync) {
     const parent = await loadEntityForReplay(replayedSync.entityType, replayedSync.entityId);
-    return res.status(200).json({ parent, replayed: true });
+    if (parent) {
+      return res.status(200).json({ parent, replayed: true });
+    }
+    await prisma.syncEvent.deleteMany({ where: { organizationId, appSlug: savanexAppSlug, direction: SyncDirection.INBOUND, sourceEventKey } });
   }
 
-  const existingLink = await prisma.externalLink.findUnique({
-    where: {
-      organizationId_appSlug_entityType_externalId: {
-        organizationId,
-        appSlug: savanexAppSlug,
-        entityType: "parent",
-        externalId
-      }
-    },
-    select: { nexusEntityId: true }
-  });
+
+  const existingLink = await findLiveExternalLink({ organizationId, appSlug: savanexAppSlug, entityType: "parent", externalId });
+
 
   const matchingParent = existingLink ? null : await prisma.parent.findFirst({
     where: {

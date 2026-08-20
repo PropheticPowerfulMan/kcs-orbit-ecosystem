@@ -1263,7 +1263,9 @@ export async function getParentFinancialSnapshot(input: { schoolId: string; pare
     const assignment = assignmentsByStudent.get(student.id) ?? genericAssignment;
     const gradeGroup = assignment?.gradeGroup ?? resolveGradeGroup({ className: student.class?.name, level: student.class?.level, studentName: student.fullName });
     const paymentOptionType = assignment?.paymentOptionType ?? PaymentOptionType.STANDARD_MONTHLY;
-    const plan = assignment?.tuitionPlan ?? planLookup.get(`${gradeGroup}:${paymentOptionType}`) ?? planLookup.get(`${gradeGroup}:${PaymentOptionType.STANDARD_MONTHLY}`) ?? null;
+    const plan = assignment
+      ? assignment.tuitionPlan ?? planLookup.get(`${gradeGroup}:${paymentOptionType}`) ?? null
+      : null;
     const agreement = assignment?.financialAgreementId ? agreementLookup.get(assignment.financialAgreementId) ?? null : null;
     const persistedStudentInstallments = installments.filter((installment) => installment.academicYearId === academicYear.id && installment.studentId === student.id);
     const expectedTotal = roundCurrency(
@@ -1271,7 +1273,7 @@ export async function getParentFinancialSnapshot(input: { schoolId: string; pare
         ? Number(agreement.balanceDue || agreement.customTotal || 0)
         : assignment?.expectedTotal
           ? Number(assignment.expectedTotal)
-          : Number(plan?.finalAmount || student.annualFee || 0)
+          : assignment ? Number(plan?.finalAmount || student.annualFee || 0) : 0
     );
     const reductionTotal = roundCurrency(
       agreement
@@ -1339,12 +1341,12 @@ export async function getParentFinancialSnapshot(input: { schoolId: string; pare
       annualFee: roundCurrency(Number(student.annualFee || 0)),
       gradeGroup,
       paymentOptionType: agreement ? PaymentOptionType.SPECIAL_OWNER_AGREEMENT : (assignment?.paymentOptionType ?? plan?.paymentOptionType ?? PaymentOptionType.STANDARD_MONTHLY),
-      paymentOptionLabel: agreement ? "Special owner agreement" : getPaymentOptionLabel(assignment?.paymentOptionType ?? plan?.paymentOptionType ?? PaymentOptionType.STANDARD_MONTHLY),
+      paymentOptionLabel: agreement ? "Special owner agreement" : assignment ? getPaymentOptionLabel(assignment.paymentOptionType ?? plan?.paymentOptionType ?? PaymentOptionType.STANDARD_MONTHLY) : "Aucun plan de scolarité actif",
       expectedTotal,
       reductionTotal,
       originalAmount: roundCurrency(Number(plan?.originalAmount || expectedTotal + reductionTotal)),
       planCode: plan?.code ?? null,
-      planName: agreement?.title ?? plan?.name ?? "Custom plan",
+      planName: agreement?.title ?? plan?.name ?? "",
       agreementId: agreement?.id ?? null,
       installments: derivedSchedule as Array<ReturnType<typeof Object>>
     };

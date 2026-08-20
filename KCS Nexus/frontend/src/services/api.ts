@@ -29,7 +29,13 @@ api.interceptors.request.use(
 
 // Response interceptor — handle token refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = response.config.method?.toUpperCase()
+    if (method && ['PUT', 'PATCH', 'DELETE'].includes(method)) {
+      window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: response.data?.message || (method === 'DELETE' ? 'Entité supprimée dans le registre partagé.' : 'Modification répercutée dans le registre partagé.') } }))
+    }
+    return response
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
     const skipAuthLogout = originalRequest?.headers?.['x-skip-auth-logout'] === 'true'
@@ -134,6 +140,7 @@ export const registryAPI = {
   getDirectory: () => api.get('/registry/directory'),
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
+  resetAccess: (entityType: 'parent' | 'student', identifier: string) => api.post(`/registry/entities/${entityType}/${identifier}/reset-access`),
   deleteEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.delete(`/registry/entities/${entityType}/${identifier}`, { params: { identifierType } }),
   registerFamily: (data: object) => api.post('/registry/families', data),
 }

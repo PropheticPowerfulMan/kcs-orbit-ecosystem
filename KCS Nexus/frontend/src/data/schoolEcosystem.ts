@@ -426,3 +426,12 @@ const buildStudentTrackingProfile = (student: (typeof students)[number]) => {
 export const studentTrackingProfiles = students
   .map(buildStudentTrackingProfile)
   .sort((left, right) => right.riskScore - left.riskScore)
+
+// Operational data must come from the Super Admin registry and backend APIs.
+;[
+  parents, employees, students, subjects, grades, attendance, attendanceAnalytics,
+  assignments, lmsResources, schedules, scheduleConflicts, announcements, events,
+  messages, internalThreads, aiSignals, aiRecommendations, reportCards,
+  disciplineReports, transcripts, diagnosticTests, feeAccounts, auditLogs,
+  sensitiveActions, staffOperations, performanceTrend, studentTrackingProfiles,
+].forEach((collection) => collection.splice(0, collection.length))

@@ -20,6 +20,29 @@ import { startOrbitOutboxWorker } from "./integrations/orbit";
 
 const app = express();
 
+type ExpressLayer = { handle?: (...args: any[]) => any; route?: { stack?: ExpressLayer[] }; name?: string };
+
+function protectAsyncHandlers(router: { stack?: ExpressLayer[] }) {
+  const protect = (layer: ExpressLayer) => {
+    if (layer.route?.stack) layer.route.stack.forEach(protect);
+    if (!layer.handle || layer.handle.length === 4 || layer.name === 'router') return;
+    const original = layer.handle;
+    layer.handle = function protectedHandler(req: express.Request, res: express.Response, next: express.NextFunction) {
+      try {
+        const result = original.call(this, req, res, next);
+        if (result && typeof result.catch === 'function') result.catch(next);
+        return result;
+      } catch (error) {
+        return next(error);
+      }
+    };
+  };
+  router.stack?.forEach(protect);
+}
+
+[authRouter, parentRouter, studentRouter, paymentRouter, notificationRouter, analyticsRouter, aiRouter, classRouter, exportRouter, financeRouter, expenseRouter, sharedDirectoryRouter]
+  .forEach(protectAsyncHandlers);
+
 if (env.NODE_ENV === "production") {
   const weakJwtSecret = !env.JWT_SECRET || env.JWT_SECRET.includes("CHANGE_ME") || env.JWT_SECRET.includes("dev-secret");
   const missingDatabase = !env.DATABASE_URL;
@@ -79,6 +102,14 @@ app.use("/api/export", exportRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/expenses", expenseRouter);
 app.use("/api/shared-directory", sharedDirectoryRouter);
+
+app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[EDUPAY_API_ERROR]', error);
+  if (res.headersSent) return;
+  const status = typeof (error as { status?: unknown })?.status === 'number' ? Number((error as { status: number }).status) : 500;
+  const message = error instanceof Error ? error.message : 'Erreur interne EduPay.';
+  res.status(status).json({ message });
+});
 
 const stopOrbitOutboxWorker = startOrbitOutboxWorker();
 

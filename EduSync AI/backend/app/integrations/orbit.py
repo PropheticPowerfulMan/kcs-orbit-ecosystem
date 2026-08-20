@@ -242,6 +242,14 @@ def create_registry_entity(entity_type: str, payload: dict) -> dict:
     )
 
 
+def update_registry_entity(entity_type: str, identifier: str, payload: dict, identifier_type: str = 'orbitId') -> dict:
+    return _request_json(
+        'PUT',
+        f'/api/integration/registry/{quote(entity_type)}/{quote(identifier)}?organizationId={quote(settings.kcs_orbit_organization_id)}&identifierType={quote(identifier_type)}',
+        payload,
+    )
+
+
 def delete_registry_entity(entity_type: str, identifier: str, identifier_type: str = "orbitId") -> dict:
     registry_entity_type = "family" if entity_type == "parent" else entity_type
     return _request_json(

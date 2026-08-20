@@ -113,6 +113,9 @@ const eventTypeColor = {
   event:   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
 }
 
+;[children, performanceHistory, radarData, recentGrades, upcomingEvents, teacherMessages, notifications]
+  .forEach((collection) => collection.splice(0, collection.length))
+
 const getParentSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
   return !segment || segment === 'parent' || segment === 'dashboard' ? 'dashboard' : segment
@@ -364,6 +367,20 @@ const ParentPortal = () => {
   const location = useLocation()
   const activeSegment = getParentSegment(location.pathname)
   const [selectedChild, setSelectedChild] = useState(children[0])
+
+  if (!selectedChild) {
+    return (
+      <div className="portal-shell flex">
+        <PortalSidebar />
+        <main className="min-w-0 flex-1 p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+            <h1 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Aucun enfant enregistré</h1>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Ce dashboard sera alimenté après l’enregistrement de la famille par le Super Admin.</p>
+          </div>
+        </main>
+      </div>
+    )
+  }
 
   return (
     <div className="portal-shell flex">

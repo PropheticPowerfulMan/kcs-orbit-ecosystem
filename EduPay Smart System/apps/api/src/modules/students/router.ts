@@ -83,23 +83,41 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
   const payload = updateStudentSchema.parse(req.body);
 
   if (orbitRegistryIsEnabled()) {
-    const className = String(req.body?.className || payload.classId);
-    await updateOrbitStudent(req.params.id, {
+    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+    const mirroredStudent = mirrored.students.find((student) =>
+      student.localId === req.params.id
+      || student.id === req.params.id
+      || student.orbitId === req.params.id
+      || student.displayId === req.params.id
+      || student.externalStudentId === req.params.id
+    );
+    if (!mirroredStudent?.orbitId) {
+      return res.status(404).json({ message: "Eleve introuvable dans le registre partage." });
+    }
+    const localClass = await prisma.class.findFirst({
+      where: { id: payload.classId, schoolId: req.user!.schoolId },
+      select: { name: true },
+    });
+    const className = String(req.body?.className || localClass?.name || payload.classId);
+    const nameParts = payload.fullName.trim().split(String.fromCharCode(32)).filter(Boolean);
+    await updateOrbitStudent(mirroredStudent.orbitId, {
       fullName: payload.fullName,
-      firstName: payload.firstName,
-      middleName: payload.middleName,
-      lastName: payload.lastName,
+      firstName: payload.firstName || nameParts[nameParts.length - 1],
+      middleName: payload.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(String.fromCharCode(32)) : null),
+      lastName: payload.lastName || nameParts[0],
       email: payload.email,
       phone: payload.phone,
       dateOfBirth: payload.dateOfBirth,
-      gender: payload.gender,
+      // Orbit rejects `null` for this optional field. Omitting it preserves the
+      // current value and prevents the whole student update from failing.
+      gender: payload.gender ?? undefined,
       className,
       studentNumber: payload.studentNumber,
       mustChangePassword: payload.mustChangePassword
     });
     await syncOrbitRegistryMirror(req.user!.schoolId);
     const directory = await readOrbitSharedOptions();
-    const updated = directory.students.find((student) => student.id === req.params.id || student.orbitId === req.params.id || student.displayId === req.params.id);
+    const updated = directory.students.find((student) => student.orbitId === mirroredStudent.orbitId);
     return res.json({ ...updated, notificationStatus: { dashboard: "SYNCED", email: "SKIPPED", sms: "SKIPPED", adminEmail: "SKIPPED" } });
   }
 

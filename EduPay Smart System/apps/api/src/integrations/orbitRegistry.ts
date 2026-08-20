@@ -137,7 +137,10 @@ export function orbitRegistryIsEnabled() {
 
 export function matchesSharedParentIdentifier(parent: SharedParentOption, identifier: string) {
   const normalizedIdentifier = identifier.trim();
-  return parent.id === normalizedIdentifier || parent.displayId === normalizedIdentifier || parent.orbitId === normalizedIdentifier;
+  return parent.id === normalizedIdentifier
+    || parent.localId === normalizedIdentifier
+    || parent.displayId === normalizedIdentifier
+    || parent.orbitId === normalizedIdentifier;
 }
 
 function buildParentLookupKey(parent: { fullName: string; email?: string; phone?: string }) {
@@ -309,8 +312,20 @@ export async function fetchOrbitSharedDirectory(): Promise<OrbitSharedDirectory>
 }
 
 
-export async function readOrbitSharedOptions() {
-  const directory = await fetchOrbitSharedDirectory();
+export async function readOrbitSharedOptions(): Promise<ReturnType<typeof mapOrbitDirectoryToSharedOptions>> {
+  let directory: OrbitSharedDirectory;
+  try {
+    directory = await fetchOrbitSharedDirectory();
+  } catch (error) {
+    console.error('Orbit registry temporarily unavailable; continuing with an empty mirror.', error);
+    return {
+      parents: [],
+      students: [],
+      classes: [],
+      teachers: [],
+      counts: { families: 0, parents: 0, students: 0, teachers: 0 },
+    } as ReturnType<typeof mapOrbitDirectoryToSharedOptions>;
+  }
   return mapOrbitDirectoryToSharedOptions(directory);
 }async function orbitRegistryRequest<T>(path: string, init: RequestInit): Promise<T> {
   const baseUrl = (process.env.KCS_ORBIT_API_URL || "").replace(/\/$/, "");
@@ -471,7 +486,7 @@ export async function deleteOrbitTeacher(identifier: string) {
   });
 }
 
-export async function syncOrbitRegistryMirror(schoolId: string) {
+export async function syncOrbitRegistryMirror(schoolId: string, options: { pruneMissing?: boolean } = {}) {
   if (!orbitRegistryIsEnabled()) {
     return {
       parents: [] as SharedParentOption[],
@@ -482,9 +497,9 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
     };
   }
 
-  const directory = await fetchOrbitSharedDirectory();
-  const mapped = mapOrbitDirectoryToSharedOptions(directory);
-  const activeParentLookupKeys = new Set(mapped.parents.map((parent) => parent.lookupKey));
+  // Abort a mirror refresh when Orbit is unavailable. An empty fallback here
+  // would be indistinguishable from a real empty directory and trigger pruning.
+  const mapped = mapOrbitDirectoryToSharedOptions(await fetchOrbitSharedDirectory());
   const activeExternalStudentIds = new Set(
     mapped.parents
       .flatMap((parent) => parent.students)
@@ -508,25 +523,42 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
 
   const parentIdByLookupKey = new Map<string, string>();
   for (const parent of mapped.parents) {
-    const existingParent = parent.email
-      ? await prisma.parent.findFirst({ where: { schoolId, email: parent.email } })
-      : parent.phone
-        ? await prisma.parent.findFirst({ where: { schoolId, phone: parent.phone } })
-        : await prisma.parent.findFirst({ where: { schoolId, fullName: parent.fullName } });
+    // Contact details and names are editable. Use Orbit's immutable id first;
+    // the remaining branches only adopt legacy mirror rows once.
+    const existingParent = await prisma.parent.findFirst({
+      where: {
+        schoolId,
+        OR: [
+          { orbitId: parent.orbitId },
+          ...(parent.email ? [{ orbitId: null, email: parent.email }] : []),
+          ...(parent.phone ? [{ orbitId: null, phone: parent.phone }] : []),
+          { orbitId: null, fullName: parent.fullName },
+        ],
+      },
+    });
 
     const savedParent = existingParent
       ? await prisma.parent.update({
         where: { id: existingParent.id },
         data: {
+          orbitId: parent.orbitId,
           fullName: parent.fullName,
           phone: parent.phone,
           email: parent.email,
           physicalAddress: parent.physicalAddress || null,
         },
       })
-      : await prisma.parent.create({
-        data: {
+      : await prisma.parent.upsert({
+        where: { schoolId_orbitId: { schoolId, orbitId: parent.orbitId } },
+        update: {
+          fullName: parent.fullName,
+          phone: parent.phone,
+          email: parent.email,
+          physicalAddress: parent.physicalAddress || null,
+        },
+        create: {
           schoolId,
+          orbitId: parent.orbitId,
           fullName: parent.fullName,
           phone: parent.phone,
           email: parent.email,
@@ -547,23 +579,48 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
       const annualFeeUpdate = studentAnnualFee > 0 ? { annualFee: studentAnnualFee } : {};
 
       if (student.externalStudentId) {
-        await prisma.student.upsert({
-          where: { schoolId_externalStudentId: { schoolId, externalStudentId: student.externalStudentId } },
-          update: {
-            fullName: student.fullName,
-            parentId: savedParent.id,
-            classId,
-            ...annualFeeUpdate,
-          },
-          create: {
+        const existingStudent = await prisma.student.findFirst({
+          where: {
             schoolId,
-            parentId: savedParent.id,
-            classId,
-            externalStudentId: student.externalStudentId,
-            fullName: student.fullName,
-            annualFee: studentAnnualFee,
+            OR: [
+              { orbitId: student.orbitId },
+              { orbitId: null, externalStudentId: student.externalStudentId },
+            ],
           },
         });
+        if (existingStudent) {
+          await prisma.student.update({
+            where: { id: existingStudent.id },
+            data: {
+              orbitId: student.orbitId,
+              externalStudentId: student.externalStudentId,
+              fullName: student.fullName,
+              parentId: savedParent.id,
+              classId,
+              ...annualFeeUpdate,
+            },
+          });
+        } else {
+          await prisma.student.upsert({
+            where: { schoolId_orbitId: { schoolId, orbitId: student.orbitId } },
+            update: {
+              externalStudentId: student.externalStudentId,
+              fullName: student.fullName,
+              parentId: savedParent.id,
+              classId,
+              ...annualFeeUpdate,
+            },
+            create: {
+              schoolId,
+              orbitId: student.orbitId,
+              parentId: savedParent.id,
+              classId,
+              externalStudentId: student.externalStudentId,
+              fullName: student.fullName,
+              annualFee: studentAnnualFee,
+            },
+          });
+        }
         continue;
       }
 
@@ -598,35 +655,41 @@ export async function syncOrbitRegistryMirror(schoolId: string) {
     }
   }
 
-  const activeExternalStudentIdList = Array.from(activeExternalStudentIds);
-  await prisma.student.deleteMany({
-    where: {
-      schoolId,
-      externalStudentId: { not: null },
-      ...(activeExternalStudentIdList.length > 0
-        ? { NOT: { externalStudentId: { in: activeExternalStudentIdList } } }
-        : {}),
-    },
-  });
-
-  const mirroredParents = await prisma.parent.findMany({
-    where: { schoolId },
-    include: { students: { select: { id: true } } },
-  });
-
-  for (const parent of mirroredParents) {
-    const lookupKey = buildParentLookupKey({
-      fullName: parent.fullName,
-      email: parent.email,
-      phone: parent.phone,
+  if (options.pruneMissing !== false) {
+    const activeOrbitStudentIds = mapped.students
+      .map((student) => student.orbitId)
+      .filter((orbitId): orbitId is string => Boolean(orbitId));
+    const activeExternalStudentIdList = Array.from(activeExternalStudentIds);
+    await prisma.student.deleteMany({
+      where: {
+        schoolId,
+        OR: [
+          {
+            orbitId: { not: null },
+            ...(activeOrbitStudentIds.length > 0 ? { NOT: { orbitId: { in: activeOrbitStudentIds } } } : {}),
+          },
+          {
+            orbitId: null,
+            externalStudentId: { not: null },
+            ...(activeExternalStudentIdList.length > 0
+              ? { NOT: { externalStudentId: { in: activeExternalStudentIdList } } }
+              : {}),
+          },
+        ],
+      },
     });
-
-    if (!activeParentLookupKeys.has(lookupKey) && parent.students.length === 0) {
-      await prisma.parent.deleteMany({ where: { id: parent.id, schoolId } });
-    }
   }
 
   const activeParentIds = Array.from(parentIdByLookupKey.values());
+  if (options.pruneMissing !== false && activeParentIds.length > 0) {
+    await prisma.parent.deleteMany({
+      where: {
+        schoolId,
+        id: { notIn: activeParentIds },
+        students: { none: {} },
+      },
+    });
+  }
   const parents = activeParentIds.length > 0
     ? await prisma.parent.findMany({
       where: {

@@ -5,6 +5,7 @@ import { App } from "./App";
 import { I18nProvider } from "./i18n";
 import { applyLegacyReceiptVerificationRedirect } from "./utils/receiptLinkRecovery";
 import "./styles.css";
+import MutationFeedback from "./components/MutationFeedback";
 
 const applyStoredFont = () => {
   const saved = localStorage.getItem("edupay_font");
@@ -58,6 +59,7 @@ if (!isReceiptRedirecting) {
       <I18nProvider>
         <HashRouter>
           <App />
+          <MutationFeedback />
         </HashRouter>
       </I18nProvider>
     </React.StrictMode>

@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, Printer, Trash2, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
@@ -1079,7 +1080,7 @@ function StudentEditModal({
 <div className="grid gap-3 sm:grid-cols-2">
             <input className="input" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email de l’élève" aria-label="Email de l’élève" />
             <input className="input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Téléphone de l’élève" aria-label="Téléphone de l’élève" />
-            <input className="input" type="date" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} aria-label="Date de naissance" />
+            <DateSelect className="input"  value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} aria-label="Date de naissance" />
             <select className="input" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))} aria-label="Genre"><option value="">Genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1141,9 +1142,11 @@ export function StudentsDirectoryPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    setApiError(null);
+  const load = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setApiError(null);
+    }
 
     const [directoryResult, classesResult] = await Promise.allSettled([
       withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 4500, "shared-directory"),
@@ -1157,11 +1160,18 @@ export function StudentsDirectoryPage() {
     }
 
     setClasses(classesResult.status === "fulfilled" && classesResult.value.length ? classesResult.value : SCHOOL_SECTIONS);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
     void load();
+    const refresh = () => void load(true);
+    const timer = window.setInterval(refresh, 3000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
   }, []);
 
   const parentByStudentId = useMemo(() => {

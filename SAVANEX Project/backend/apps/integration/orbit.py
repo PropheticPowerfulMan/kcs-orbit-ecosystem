@@ -1,5 +1,6 @@
 import json
 import logging
+import sys
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 from threading import Lock
@@ -22,8 +23,14 @@ OUTBOX_FLUSH_BATCH_SIZE = 10
 _outbox_lock = Lock()
 
 
+def _running_tests() -> bool:
+    return any(argument == 'test' or 'pytest' in argument.lower() for argument in sys.argv)
+
+
 def orbit_sync_is_enabled() -> bool:
-    return bool(KCS_ORBIT_API_URL and KCS_ORBIT_API_KEY and KCS_ORBIT_ORGANIZATION_ID)
+    # Django's test runner inherits the developer's local integration secrets.
+    # Never let disposable test fixtures escape into the real shared registry.
+    return not _running_tests() and bool(KCS_ORBIT_API_URL and KCS_ORBIT_API_KEY and KCS_ORBIT_ORGANIZATION_ID)
 
 
 def _outbox_record(path: str, payload: dict, error_message: str, attempts: int = 0, record_id: str | None = None) -> dict:
@@ -192,6 +199,9 @@ def flush_outbox(max_items: int = OUTBOX_FLUSH_BATCH_SIZE) -> int:
 
 
 def _post_json(path: str, payload: dict) -> None:
+    if _running_tests():
+        return
+
     flushed = flush_outbox()
     if flushed:
         logger.info("Orbit outbox flushed %s pending event(s)", flushed)

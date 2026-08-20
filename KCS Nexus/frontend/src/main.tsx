@@ -7,6 +7,7 @@ import '@/index.css'
 import '@/i18n'
 import { getBasePath } from '@/utils/assets'
 import { registerPwa } from '@/registerPwa'
+import MutationFeedback from '@/components/shared/MutationFeedback'
 
 const queryClient = new QueryClient()
 const routerBasePath = getBasePath()
@@ -28,6 +29,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={routerBasePath}>
         <App />
+        <MutationFeedback />
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

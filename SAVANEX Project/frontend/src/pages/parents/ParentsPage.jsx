@@ -61,10 +61,13 @@ const ParentsPage = () => {
   const [editingParent, setEditingParent] = useState(null);
   const [editForm, setEditForm] = useState({ last_name: '', middle_name: '', first_name: '', email: '', phone: '', address: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [temporaryCredentials, setTemporaryCredentials] = useState(null);
 
-  const loadStudents = async () => {
-    setLoading(true);
-    setError('');
+  const loadStudents = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
 
     const [studentResult, directoryResult] = await Promise.allSettled([
         studentsService.getAll(),
@@ -73,25 +76,32 @@ const ParentsPage = () => {
 
     if (studentResult.status === 'fulfilled') {
       setStudents(Array.isArray(studentResult.value) ? studentResult.value : []);
-    } else {
+    } else if (!silent) {
       setStudents([]);
     }
 
     if (directoryResult.status === 'fulfilled') {
       setDirectory(directoryResult.value || null);
-    } else {
+    } else if (!silent) {
       setDirectory(null);
     }
 
-    if (studentResult.status === 'rejected' && directoryResult.status === 'rejected') {
+    if (!silent && studentResult.status === 'rejected' && directoryResult.status === 'rejected') {
       setError('Impossible de charger les familles pour le moment.');
     }
 
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
     void loadStudents();
+    const refresh = () => void loadStudents(true);
+    const timer = window.setInterval(refresh, 3000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
   }, []);
 
   const familyRows = useMemo(() => {
@@ -106,7 +116,22 @@ const ParentsPage = () => {
 
       return directory.parents
         .map((parent) => {
-          const linkedStudents = studentsByParent.get(parent.id) || [];
+          const orbitStudents = studentsByParent.get(parent.id) || [];
+          const savanexExternalId = (Array.isArray(parent.externalIds) ? parent.externalIds : [])
+            .map((entry) => typeof entry === 'string' ? { appSlug: '', externalId: entry } : entry)
+            .find((entry) => String(entry?.appSlug || '').toUpperCase() === 'SAVANEX')?.externalId || '';
+          const localFamilyStudents = students.filter((student) => (
+            savanexExternalId && student.parent_external_id === savanexExternalId && !String(student.id || '').startsWith('orbit:')
+          ));
+          const linkedStudents = orbitStudents.length ? orbitStudents : localFamilyStudents.map((student) => ({
+            id: student.id,
+            fullName: student.full_name,
+            displayId: student.student_id,
+            studentNumber: student.student_id,
+            className: student.class_name,
+            status: student.is_active ? 'ACTIVE' : 'INACTIVE',
+          }));
+          const localParentId = localFamilyStudents[0]?.parent || null;
           const classes = new Set(linkedStudents.map((student) => normalizeLabel(student.className, 'Non assignée')));
           const classParts = linkedStudents.map((student) => splitClassName(student.className || ''));
           return {
@@ -133,9 +158,9 @@ const ParentsPage = () => {
             photo_data: '',
             left_fingerprint_data: '',
             right_fingerprint_data: '',
-            management_id: parent.id,
-            management_source: 'orbit',
-            identifier_type: 'orbitId',
+            management_id: localParentId || parent.id,
+            management_source: localParentId ? 'local' : 'orbit',
+            identifier_type: localParentId ? 'local' : 'orbitId',
           };
         })
         .sort((left, right) => right.student_count - left.student_count || left.family_name.localeCompare(right.family_name));
@@ -338,8 +363,25 @@ const ParentsPage = () => {
     }
   };
 
+  const handleResetAccess = async (row) => {
+    const identifier = row.management_source === 'local'
+      ? row.management_id
+      : (row.parent_external_id || row.management_id);
+    if (!identifier) return setError('Compte utilisateur introuvable pour ce parent.');
+    setSubmitting(true);
+    setError('');
+    try {
+      setTemporaryCredentials(await parentsService.resetAccess(identifier, row.management_source === 'local' ? {} : { entityType: 'parent' }));
+    } catch (resetError) {
+      setError(resetError?.response?.data?.detail || 'Impossible de réinitialiser cet accès.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const columns = [
     { key: 'family_name', label: 'Famille / Parent' },
+    { key: 'parent_external_id', label: 'ID parent', render: (value) => value || 'Non défini' },
     { key: 'access_code', label: 'Code d\'accès', render: (value) => value || 'Non défini' },
     { key: 'students_label', label: 'Élèves liés' },
     { key: 'classes_label', label: 'Classes' },
@@ -353,6 +395,7 @@ const ParentsPage = () => {
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => navigate(`/parents/${encodeURIComponent(row.id)}`, { state: { entity: { ...row, full_name: row.family_name, role: 'Parent' } } })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
           <button type="button" onClick={() => navigate(`/parents/${encodeURIComponent(row.id)}/edit`, { state: { entity: row } })} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+          <button type="button" onClick={() => void handleResetAccess(row)} className="savanex-entity-action border border-amber-300/40 bg-amber-300/10 text-amber-100">Réinitialiser accès</button>
           <button type="button" onClick={() => void handleDelete(row)} className="savanex-entity-action savanex-entity-action-danger">Supprimer</button>
         </div>
       )
@@ -361,6 +404,7 @@ const ParentsPage = () => {
 
   return (
     <DashboardLayout>
+      {temporaryCredentials ? <section className="mb-5 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-50"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">Nouvel accès temporaire</p><p className="mt-2">Identifiant : <strong>{temporaryCredentials.username}</strong> · Code : <strong>{temporaryCredentials.accessCode || 'Non défini'}</strong> · Mot de passe : <strong>{temporaryCredentials.temporaryPassword}</strong></p><p className="mt-1 text-xs">À changer dès la prochaine connexion.</p></div><button type="button" onClick={() => setTemporaryCredentials(null)} className="rounded-lg border border-amber-200 px-3 py-2">Fermer</button></div></section> : null}
       <section className="mb-6 flex flex-col gap-4 page-enter lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Parent relationship management</p>

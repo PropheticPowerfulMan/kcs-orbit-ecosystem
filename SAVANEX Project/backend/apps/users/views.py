@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.db.models import Q
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
@@ -12,6 +13,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
+from apps.communication.services import deliver_direct_parent_contact
 from apps.teachers.services import deactivate_teacher
 from .models import User
 from .serializers import (
@@ -20,6 +22,7 @@ from .serializers import (
     UserCreateSerializer,
     UserListSerializer,
     PasswordChangeSerializer,
+    generate_temporary_password,
 )
 from .permissions import IsAdminUser
 
@@ -88,16 +91,17 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
             with transaction.atomic():
                 for child in children:
-                    if child.parent_id == user.pk:
-                        child.parent = None
-                        child.save(update_fields=['parent'])
+                    child.is_active = False
+                    child.save(update_fields=['is_active'])
+                    child.user.is_active = False
+                    child.user.save(update_fields=['is_active'])
 
                 user.is_active = False
                 user.save(update_fields=['is_active'])
 
                 def _sync_parent_deactivation():
                     for child in active_children:
-                        sync_student(child)
+                        delete_student(child)
                     delete_parent(user)
 
                 transaction.on_commit(_sync_parent_deactivation)
@@ -149,6 +153,82 @@ def change_password(request):
     elif request.user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(request.user, 'teacher_profile'):
         sync_teacher(request.user.teacher_profile)
     return Response({'detail': 'Password changed successfully.'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def reset_user_access(request, pk):
+    user = User.objects.filter(pk=pk, is_active=True).first()
+    if not user:
+        return Response({'detail': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(reset_user_access_credentials(user))
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def reset_entity_access(request, entity_type, identifier):
+    if entity_type == 'parent':
+        user = User.objects.filter(role=User.ROLE_PARENT, is_active=True).filter(
+            Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier)
+            | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
+        ).first()
+    elif entity_type == 'student':
+        from apps.students.models import Student
+        student = Student.objects.select_related('user').filter(is_active=True).filter(
+            Q(student_id__iexact=identifier) | Q(user__username__iexact=identifier)
+            | Q(user__kcs_card_id__iexact=identifier) | Q(user__access_code__iexact=identifier)
+            | Q(user__email__iexact=identifier)
+        ).first()
+        user = student.user if student else None
+    else:
+        return Response({'detail': 'Type d\'entite non pris en charge.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not user:
+        return Response({'detail': 'Compte utilisateur introuvable pour cette entite.'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(reset_user_access_credentials(user))
+
+
+def reset_user_access_credentials(user):
+    temporary_password = generate_temporary_password(user.role)
+    user.set_password(temporary_password)
+    user.must_change_password = True
+    user.password_generated_by_system = True
+    user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
+
+    if user.role == User.ROLE_PARENT:
+        sync_parent(user)
+    elif user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
+        sync_student(user.student_profile)
+    elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
+        sync_teacher(user.teacher_profile)
+
+    subject = 'Nouveaux identifiants temporaires KCS'
+    body = (
+        f'Bonjour {user.get_full_name() or user.username},\n\n'
+        'Votre mot de passe a ete reinitialise par un administrateur.\n'
+        f'Identifiant: {user.username}\n'
+        f"Code d'acces: {user.access_code or 'non defini'}\n"
+        f'Mot de passe temporaire: {temporary_password}\n\n'
+        'Changez ce mot de passe lors de votre prochaine connexion.'
+    )
+    delivery = deliver_direct_parent_contact(
+        name=user.get_full_name() or user.username,
+        email=user.email,
+        phone=user.phone,
+        subject=subject,
+        body=body,
+        channels=['email', 'sms'],
+    )
+
+    return {
+        'userId': user.pk,
+        'username': user.username,
+        'accessCode': user.access_code,
+        'temporaryPassword': temporary_password,
+        'mustChangePassword': True,
+        'delivery': [result.__dict__ for result in delivery],
+    }
 
 
 @api_view(['POST'])

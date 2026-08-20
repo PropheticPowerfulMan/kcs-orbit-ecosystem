@@ -8,6 +8,7 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 const DEMO_ACCESS_TOKEN = 'demo-access-token';
+const DEMO_MODE_ENABLED = String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
 const DIRECTORY_REQUEST_TIMEOUT_MS = 10000;
 
 const demoUser = {
@@ -135,7 +136,7 @@ const buildDemoLivingProfile = (studentId) => {
   };
 };
 
-const isDemoSession = () => useAuthStore.getState().accessToken === DEMO_ACCESS_TOKEN;
+const isDemoSession = () => DEMO_MODE_ENABLED && useAuthStore.getState().accessToken === DEMO_ACCESS_TOKEN;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -153,7 +154,13 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = response.config.method?.toUpperCase();
+    if (method && ['PUT', 'PATCH', 'DELETE'].includes(method)) {
+      window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: response.data?.detail || response.data?.message || (method === 'DELETE' ? "Entité supprimée dans tout l'écosystème." : "Modification enregistrée et synchronisée dans l'écosystème.") } }));
+    }
+    return response;
+  },
   async (error) => {
     const original = error.config;
     if (error.response?.status === 401 && !original._retry) {
@@ -297,6 +304,15 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
   );
   const visibleLocalStudents = safeLocalStudents;
 
+  const sharedStudentBySavanexId = new Map(
+    sharedStudents.flatMap((student) => {
+      const savanexId = student.external_ids
+        .find((entry) => entry.appSlug.toUpperCase() === 'SAVANEX')
+        ?.externalId?.trim()?.toLowerCase();
+      return savanexId ? [[savanexId, student]] : [];
+    })
+  );
+
   const localStudentIds = new Set(
     visibleLocalStudents
       .map((student) => typeof student?.student_id === 'string' ? student.student_id.trim().toLowerCase() : '')
@@ -310,12 +326,26 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
   });
 
   return [
-    ...visibleLocalStudents.map((student) => ({
-      ...student,
-      source: student?.source || 'local',
-      source_label: student?.source_label || 'SAVANEX',
-      is_read_only: Boolean(student?.is_read_only),
-    })),
+    ...visibleLocalStudents.map((student) => {
+      const localId = typeof student?.student_id === 'string'
+        ? student.student_id.trim().toLowerCase()
+        : '';
+      const sharedStudent = localId ? sharedStudentBySavanexId.get(localId) : null;
+
+      return {
+        ...student,
+        ...(sharedStudent ? {
+          parent_name: sharedStudent.parent_name || student.parent_name,
+          parent_email: sharedStudent.parent_email || student.parent_email,
+          parent_phone: sharedStudent.parent_phone || student.parent_phone,
+          parent_address: sharedStudent.parent_address || student.parent_address,
+          parent_external_id: sharedStudent.parent_external_id || student.parent_external_id,
+        } : {}),
+        source: student?.source || 'local',
+        source_label: student?.source_label || 'SAVANEX',
+        is_read_only: Boolean(student?.is_read_only),
+      };
+    }),
     ...dedupedSharedStudents,
   ];
 };
@@ -423,8 +453,14 @@ export const studentsService = {
       }));
     }
 
-    const sharedDirectory = await sharedDirectoryService.get();
-    return mergeLocalAndSharedStudents([], sharedDirectory);
+    const [localResponse, sharedDirectory] = await Promise.all([
+      api.get('/students/'),
+      sharedDirectoryService.get(),
+    ]);
+    const localStudents = Array.isArray(localResponse.data)
+      ? localResponse.data
+      : (localResponse.data?.results || []);
+    return mergeLocalAndSharedStudents(localStudents, sharedDirectory);
   },
 
   async registerFamily(data) {
@@ -470,6 +506,14 @@ export const studentsService = {
     const res = await api.delete(`/students/${id}/`);
     return res.data;
   },
+
+  async resetAccess(identifier, options = {}) {
+    const path = options.entityType
+      ? `/users/reset-access/${options.entityType}/${encodeURIComponent(identifier)}/`
+      : `/users/${identifier}/reset-access/`;
+    const res = await api.post(path);
+    return res.data;
+  },
 };
 
 export const sharedDirectoryService = {
@@ -480,6 +524,13 @@ export const sharedDirectoryService = {
 };
 
 export const parentsService = {
+  async resetAccess(identifier, options = {}) {
+    const path = options.entityType
+      ? `/users/reset-access/${options.entityType}/${encodeURIComponent(identifier)}/`
+      : `/users/${identifier}/reset-access/`;
+    const res = await api.post(path);
+    return res.data;
+  },
   async update(id, data, options = {}) {
     if (isDemoSession()) {
       useAuthStore.getState().clearAuth();

@@ -4,6 +4,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.integration.orbit import sync_class, sync_parent, sync_student
+from apps.communication.services import deliver_parent_communication, deliver_user_communication
 from apps.classes.utils import get_or_create_standard_class, normalize_class_level, normalize_class_suffix
 from apps.users.models import User
 from .models import Student
@@ -30,7 +31,21 @@ def _generate_parent_external_id() -> str:
     return _generate_ecosystem_id("PAR")
 
 
+def _deliver_family_credentials(parent, students):
+    lines = []
+    parent_password = getattr(parent, '_generated_password', None)
+    if parent_password:
+        lines.append(f"Parent - identifiant: {parent.username}; code: {parent.access_code or 'non defini'}; mot de passe temporaire: {parent_password}")
+    for student in students:
+        password = getattr(student.user, '_generated_password', None)
+        lines.append(f"{student.full_name} - ID: {student.student_id}; identifiant: {student.user.username}; code: {student.user.access_code or 'non defini'}; mot de passe temporaire: {password or 'deja defini'}")
+        if password:
+            deliver_user_communication(student.user, 'Vos identifiants SAVANEX', f"Identifiant: {student.user.username}\nCode: {student.user.access_code or 'non defini'}\nMot de passe temporaire: {password}\nChangez ce mot de passe a la premiere connexion.", link='/messages')
+    deliver_parent_communication(parent, 'Identifiants de votre famille SAVANEX', 'Voici les acces de votre famille :\n' + '\n'.join(lines) + '\n\nChangez les mots de passe temporaires a la premiere connexion.', link='/messages')
+
+
 class StudentSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     first_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -65,7 +80,7 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            'id', 'student_id', 'full_name', 'email', 'avatar',
+            'id', 'user_id', 'student_id', 'full_name', 'email', 'avatar',
             'first_name', 'middle_name', 'last_name', 'user_email',
             'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
@@ -355,6 +370,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                         sync_class(student.current_class)
                         synced_class_ids.add(student.current_class_id)
                     sync_student(student)
+                _deliver_family_credentials(parent, created_students)
 
             transaction.on_commit(_sync_family)
 

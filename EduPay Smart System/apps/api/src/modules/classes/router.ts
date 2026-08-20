@@ -47,13 +47,18 @@ classRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticate
 
 classRouter.get("/", authorize("ADMIN", "ACCOUNTANT", "PARENT"), async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
-    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-    return res.json(mirrored.classes);
+    try {
+      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+      return res.json(mirrored.classes);
+    } catch (error) {
+      console.error("Orbit unavailable on class list", error);
+      return res.json([]);
+    }
   }
 
   try {
     const rows = await prisma.class.findMany({ where: { schoolId: req.user!.schoolId } });
-    if (rows.length === 0) return res.json(schoolSections);
+    if (rows.length === 0) return res.json([]);
     return res.json(rows);
   } catch (error) {
     console.error("DB unavailable on class list, returning school sections", error);

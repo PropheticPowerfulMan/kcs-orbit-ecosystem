@@ -218,7 +218,7 @@ export const IdentityCapturePanel = ({ value, onChange, subjectName = '', compac
           <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full rounded-xl bg-black object-cover" />
           {cameraError ? <p className="mt-2 text-sm text-rose-300">{cameraError}</p> : null}
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={capturePhoto} className="rounded-xl bg-kcs-blue px-4 py-2 text-sm font-semibold text-slate-950">Prendre la photo</button>
+            <button type="button" onClick={capturePhoto} className="savanex-camera-button">Prendre la photo</button>
             <button type="button" onClick={() => setCameraOpen(false)} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200">Fermer</button>
           </div>
         </div>

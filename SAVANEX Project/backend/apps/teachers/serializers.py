@@ -16,6 +16,7 @@ class TeacherSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='user.get_full_name', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     first_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    middle_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     last_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     user_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
     phone = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -42,7 +43,7 @@ class TeacherSerializer(serializers.ModelSerializer):
             'payroll_reference', 'national_id_number', 'social_security_number',
             'tax_number', 'bank_name', 'bank_account_number', 'salary_grade',
             'base_salary', 'pay_frequency', 'supervisor_name', 'emergency_contact_name',
-            'emergency_contact_phone', 'full_name', 'email', 'first_name', 'last_name',
+            'emergency_contact_phone', 'full_name', 'email', 'first_name', 'middle_name', 'last_name',
             'user_email', 'phone', 'avatar', 'contact_phone',
             'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
@@ -55,6 +56,7 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         first_name = validated_data.pop('first_name', None)
+        middle_name = validated_data.pop('middle_name', None)
         last_name = validated_data.pop('last_name', None)
         user_email = validated_data.pop('user_email', None)
         phone = validated_data.pop('phone', None)
@@ -76,6 +78,9 @@ class TeacherSerializer(serializers.ModelSerializer):
         if first_name is not None:
             instance.user.first_name = first_name
             user_update_fields.append('first_name')
+        if middle_name is not None:
+            instance.user.middle_name = middle_name
+            user_update_fields.append('middle_name')
         if last_name is not None:
             instance.user.last_name = last_name
             user_update_fields.append('last_name')

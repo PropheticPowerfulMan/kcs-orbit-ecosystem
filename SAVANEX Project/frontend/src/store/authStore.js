@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 
+if (localStorage.getItem('savanex_access') === 'demo-access-token') {
+  localStorage.removeItem('savanex_access');
+  localStorage.removeItem('savanex_refresh');
+  localStorage.removeItem('savanex_user');
+}
+
 const getStoredUser = () => {
   try {
     const raw = localStorage.getItem('savanex_user');

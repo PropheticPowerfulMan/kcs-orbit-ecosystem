@@ -8,6 +8,7 @@ from apps.students.models import Student
 from apps.teachers.models import Teacher
 from apps.users.models import User
 from apps.users.serializers import UserMeSerializer
+from apps.users.views import reset_user_access_credentials
 from apps.users.permissions import IsAdminUser
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
 
@@ -128,3 +129,31 @@ def authenticate_ecosystem_identity_view(request):
         return Response({'detail': 'Identity is not federated.'}, status=403)
 
     return Response({'user': UserMeSerializer(user).data})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_ecosystem_identity_access_view(request, entity_type, identifier):
+    provided_key = request.headers.get('x-api-key', '')
+    trusted_keys = {settings.KCS_NEXUS_AUTH_KEY, settings.EDUPAY_AUTH_KEY, settings.EDUSYNC_AUTH_KEY} - {''}
+    if not provided_key or provided_key not in trusted_keys:
+        return Response({'detail': 'Unauthorized ecosystem reset request.'}, status=401)
+
+    if entity_type == 'parent':
+        user = User.objects.filter(role=User.ROLE_PARENT, is_active=True).filter(
+            Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier)
+            | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
+        ).first()
+    elif entity_type == 'student':
+        student = Student.objects.select_related('user').filter(is_active=True).filter(
+            Q(student_id__iexact=identifier) | Q(user__username__iexact=identifier)
+            | Q(user__kcs_card_id__iexact=identifier) | Q(user__access_code__iexact=identifier)
+            | Q(user__email__iexact=identifier)
+        ).first()
+        user = student.user if student else None
+    else:
+        return Response({'detail': 'Unsupported entity type.'}, status=400)
+
+    if not user:
+        return Response({'detail': 'Compte SAVANEX introuvable pour cette entite.'}, status=404)
+    return Response(reset_user_access_credentials(user))

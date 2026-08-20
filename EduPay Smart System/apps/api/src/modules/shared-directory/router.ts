@@ -143,7 +143,7 @@ sharedDirectoryRouter.use(authGuard);
 
 sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
-    const mirrored = await readOrbitSharedOptions();
+    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId, { pruneMissing: false });
     const mirroredStudentExternalIds = mirrored.students.map((student) => student.externalStudentId).filter((id): id is string => Boolean(id));
     const localStudents = mirroredStudentExternalIds.length
       ? await prisma.student.findMany({
@@ -157,7 +157,6 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
     const localStudentByExternalId = new Map(localStudents.filter((student) => student.externalStudentId).map((student) => [student.externalStudentId!, student]));
     const parents = mirrored.parents.map((parent) => ({
       ...parent,
-      localId: undefined,
       id: parent.orbitId || parent.id,
       students: parent.students.map((student) => {
         const localStudent = student.externalStudentId ? localStudentByExternalId.get(student.externalStudentId) : undefined;

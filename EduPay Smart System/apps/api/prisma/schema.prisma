@@ -331,6 +331,7 @@ model PasswordResetToken {
 model Parent {
   id                String   @id @default(cuid())
   schoolId          String
+  orbitId           String?
   userId            String?  @unique
   fullName          String
   phone             String
@@ -352,6 +353,8 @@ model Parent {
   debts             Debt[]
   agreements        FinancialAgreement[]
   financialAlerts   FinancialAlert[]
+
+  @@unique([schoolId, orbitId])
 }
 
 model Class {
@@ -369,6 +372,7 @@ model Class {
 model Student {
   id         String    @id @default(cuid())
   schoolId   String
+  orbitId    String?
   parentId   String
   classId    String
   externalStudentId String?
@@ -386,6 +390,7 @@ model Student {
   debts Debt[]
 
   @@unique([schoolId, externalStudentId])
+  @@unique([schoolId, orbitId])
 }
 
 model Payment {

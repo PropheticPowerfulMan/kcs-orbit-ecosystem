@@ -50,6 +50,29 @@ class Message(models.Model):
             self.save(update_fields=['is_read', 'read_at'])
 
 
+class DirectParentMessage(models.Model):
+    """Audit trail for email/SMS sent to a parent contact without a SAVANEX account."""
+
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='direct_parent_messages',
+    )
+    recipient_external_id = models.CharField(max_length=120, blank=True)
+    recipient_name = models.CharField(max_length=200)
+    recipient_email = models.EmailField(blank=True)
+    recipient_phone = models.CharField(max_length=40, blank=True)
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    channels = models.JSONField(default=list)
+    delivery = models.JSONField(default=list)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'direct_parent_messages'
+        ordering = ['-sent_at']
+
+
 class Notification(models.Model):
     TYPE_ATTENDANCE = 'attendance'
     TYPE_GRADE = 'grade'

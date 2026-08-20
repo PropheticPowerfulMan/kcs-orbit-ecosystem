@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.security import require_roles
-from app.integrations.orbit import create_registry_entity, delete_registry_entity, orbit_sync_is_enabled
+from app.integrations.orbit import create_registry_entity, delete_registry_entity, orbit_sync_is_enabled, update_registry_entity
 from app.models.user import Role, User
 
 
@@ -23,6 +23,14 @@ def create_entity(
       raise HTTPException(status_code=409, detail="Orbit registry mode must be enabled to create shared entities from EduSync AI")
 
     return create_registry_entity(entity_type, request_body.payload)
+
+
+@router.put('/entities/{entity_type}/{identifier}')
+@router.patch('/entities/{entity_type}/{identifier}')
+def update_entity(entity_type: str, identifier: str, request_body: RegistryEntityPayload, identifier_type: str = 'orbitId', _: User = Depends(require_roles(Role.ADMIN))):
+    if not orbit_sync_is_enabled():
+      raise HTTPException(status_code=409, detail='Orbit registry mode must be enabled to update shared entities from EduSync AI')
+    return update_registry_entity(entity_type, identifier, request_body.payload, identifier_type)
 
 
 @router.delete("/entities/{entity_type}/{identifier}")

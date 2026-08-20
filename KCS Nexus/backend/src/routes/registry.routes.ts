@@ -1,9 +1,13 @@
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
+import { randomInt } from 'node:crypto'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
 import { authenticate, requireRoles, requireSuperAdmin } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { sendSchoolMail } from '../utils/mail.js'
+import { sendSchoolSms } from '../utils/sms.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -22,6 +26,10 @@ async function generateUniqueAccessCode(tx: typeof prisma, role: string) {
 }
 
 export const registryRouter = Router()
+
+function generateTemporaryPassword() {
+  return `KCS-${randomInt(100000, 1000000)}`
+}
 
 type SharedDirectoryResponse = {
   source: 'orbit'
@@ -493,6 +501,74 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
 
   const updated = await updateLocalParentEntity(String(req.params.identifier), payload)
   return success(res, updated, 'Parent updated in local registry')
+}))
+
+registryRouter.post('/entities/:entityType/:identifier/reset-access', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+  const entityType = z.enum(['parent', 'student']).parse(req.params.entityType)
+  const identifier = String(req.params.identifier)
+  const directory = await getSharedDirectoryFromOrbit()
+  const entity = (entityType === 'parent' ? directory.parents : directory.students).find((item: any) =>
+    item.id === identifier || item.displayId === identifier || item.studentNumber === identifier
+      || item.externalIds?.some((link: any) => link.externalId === identifier)
+  ) as any
+
+  if (!entity) throw new ApiError(404, 'Entite introuvable dans le registre partage.')
+
+  const savanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
+  if (savanexExternalId && env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
+    const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
+    const resetResponse = await fetch(resetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY },
+      signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
+    })
+    const resetData = await resetResponse.json().catch(() => ({})) as Record<string, unknown>
+    if (resetResponse.ok) {
+      return success(res, resetData, 'Acces temporaire regenere dans SAVANEX et transmis par email/SMS')
+    }
+    if (resetResponse.status !== 404) {
+      throw new ApiError(resetResponse.status, String(resetData.detail || 'La reinitialisation SAVANEX a echoue.'))
+    }
+  }
+
+  let user = await prisma.user.findFirst({ where: { OR: [{ id: identifier }, ...(entity?.email ? [{ email: entity.email }] : [])] } })
+  if (!user && entityType === 'student') {
+    const profile = await prisma.studentProfile.findFirst({
+      where: { OR: [{ id: identifier }, { studentNumber: identifier }, ...(entity?.studentNumber ? [{ studentNumber: entity.studentNumber }] : [])] },
+      include: { user: true },
+    })
+    user = profile?.user ?? null
+  }
+  if (!user?.passwordHash) throw new ApiError(404, 'Compte de connexion introuvable dans KCS Nexus.')
+
+  const temporaryPassword = generateTemporaryPassword()
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(temporaryPassword, 10) } }),
+    prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+  ])
+
+  if (entity?.id && orbitRegistryIsEnabled()) {
+    await updateRegistryEntityInOrbit(entityType, entity.id, env.KCS_ORBIT_ORGANIZATION_ID!, { mustChangePassword: true }, 'orbitId')
+  }
+  const subject = 'Nouveaux identifiants temporaires KCS Nexus'
+  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a ete reinitialise par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'acces: ${user.accessCode || 'non defini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
+  const [emailDelivery, smsDelivery] = await Promise.all([
+    sendSchoolMail({ to: entity.email || user.email, subject, text: message, html: `<p>${message.replace(/\n/g, '<br>')}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+    sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non defini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+  ])
+  await prisma.notification.create({
+    data: { userId: user.id, title: subject, message, type: 'MESSAGE', link: entityType === 'parent' ? '/parent/messages' : '/student/messages' },
+  })
+  return success(res, {
+    username: user.email,
+    accessCode: user.accessCode,
+    temporaryPassword,
+    mustChangePassword: true,
+    delivery: [
+      { channel: 'email', status: emailDelivery.sent ? 'sent' : 'failed', detail: emailDelivery.sent ? entity.email || user.email : emailDelivery.reason },
+      { channel: 'sms', status: smsDelivery.sent ? 'sent' : 'failed', detail: smsDelivery.sent ? entity.phone : smsDelivery.reason },
+    ],
+  }, 'Acces temporaire regenere et transmis')
 }))
 
 registryRouter.delete('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {

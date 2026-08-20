@@ -171,9 +171,9 @@ class DeactivationSyncTests(TestCase):
         mock_delete_student.assert_called_once_with(student)
         mock_sync_parent.assert_called_once_with(parent)
 
-    @patch("apps.users.views.sync_student")
+    @patch("apps.users.views.delete_student")
     @patch("apps.users.views.delete_parent")
-    def test_parent_destroy_detaches_active_children_and_removes_orbit_parent(self, mock_delete_parent, mock_sync_student):
+    def test_parent_destroy_deactivates_children_and_removes_orbit_family(self, mock_delete_parent, mock_delete_student):
         parent = User.objects.create_user(
             username="parent-detach",
             email="parent.detach@example.com",
@@ -207,6 +207,8 @@ class DeactivationSyncTests(TestCase):
         parent.refresh_from_db()
         child.refresh_from_db()
         self.assertFalse(parent.is_active)
-        self.assertIsNone(child.parent)
-        mock_sync_student.assert_called_once_with(child)
+        self.assertFalse(child.is_active)
+        child_user.refresh_from_db()
+        self.assertFalse(child_user.is_active)
+        mock_delete_student.assert_called_once_with(child)
         mock_delete_parent.assert_called_once_with(parent)

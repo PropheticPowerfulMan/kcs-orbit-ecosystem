@@ -1,3 +1,4 @@
+import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -115,6 +116,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
   const [deletingId, setDeletingId] = useState(null);
   const [lastTemporaryCredentials, setLastTemporaryCredentials] = useState(null);
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
+  const [resettingId, setResettingId] = useState(null);
 
   useEffect(() => {
     setFamilyDialogOpen(familyWorkspace);
@@ -154,6 +156,13 @@ const StudentsPage = ({ familyWorkspace = false }) => {
     };
 
     void loadStudents();
+    const refresh = () => void studentsService.getAll().then(setStudents).catch(() => undefined);
+    const timer = window.setInterval(refresh, 3000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
   }, []);
 
   const familyOptions = useMemo(
@@ -327,6 +336,23 @@ const StudentsPage = ({ familyWorkspace = false }) => {
     }
   };
 
+  const resetStudentAccess = async (student) => {
+    const identifier = student.user_id || student.student_id || student.externalStudentId;
+    if (!identifier) return setError('Compte utilisateur introuvable pour cet élève.');
+    setResettingId(student.id);
+    setError('');
+    try {
+      const credentials = await studentsService.resetAccess(identifier, student.user_id ? {} : { entityType: 'student' });
+      setLastTemporaryCredentials({ parent: null, students: [{ studentId: student.student_id, ...credentials }] });
+      setCredentialsDialogOpen(true);
+      setFeedback('Un nouveau mot de passe temporaire a été généré.');
+    } catch (resetError) {
+      setError(resetError?.response?.data?.detail || 'Impossible de réinitialiser cet accès.');
+    } finally {
+      setResettingId(null);
+    }
+  };
+
   const columns = [
     { key: 'full_name', label: 'Élève' },
     { key: 'student_id', label: 'ID élève' },
@@ -356,6 +382,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
           ) : (
             <>
               <button type="button" onClick={() => openEditDialog(row)} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+              <button type="button" disabled={resettingId === row.id} onClick={() => void resetStudentAccess(row)} className="savanex-entity-action border border-amber-300/40 bg-amber-300/10 text-amber-100">{resettingId === row.id ? 'Reset...' : 'Réinitialiser accès'}</button>
               <button type="button" disabled={deletingId === row.id} onClick={() => void deleteStudentEntity(row)} className="savanex-entity-action savanex-entity-action-danger disabled:opacity-50">
                 {deletingId === row.id ? 'Suppression...' : 'Supprimer'}
               </button>
@@ -428,6 +455,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
         parent: parentCredential || null,
         students: studentCredentials,
       });
+      setCredentialsDialogOpen(true);
       setFeedback(`Famille enregistrée avec ${response.studentCount || form.students.length} élève(s). Mot de passe temporaire à changer: ${credentialSummary || 'déjà défini'}.`);
       setForm({
         parentFirstName: '',
@@ -601,7 +629,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                   <select value={student.classSuffix} onChange={(event) => updateStudentDraft(index, 'classSuffix', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" disabled={!student.classLevel}>
                     {classSuffixes.map((suffix) => <option key={suffix || 'none'} value={suffix}>{suffix ? `Suffixe ${suffix}` : 'Sans suffixe'}</option>)}
                   </select>
-                  <input type="date" value={student.dateOfBirth} onChange={(event) => updateStudentDraft(index, 'dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <DateSelect value={student.dateOfBirth} onChange={(event) => updateStudentDraft(index, 'dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <select value={student.gender} onChange={(event) => updateStudentDraft(index, 'gender', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
                     <option value="F">Fille</option>
                     <option value="M">Garçon</option>
@@ -635,9 +663,9 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                 </div>
 
                 {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
-                <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-github-border pt-4">
+                <div className="sticky bottom-0 z-20 -mx-5 mt-5 flex flex-wrap justify-end gap-3 border-t border-emerald-300/30 bg-slate-950/95 px-5 py-4 shadow-[0_-18px_35px_rgba(2,6,23,0.9)] backdrop-blur-xl sm:-mx-6 sm:px-6">
                   <button type="button" onClick={closeFamilyWorkspace} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Fermer</button>
-                  <button type="button" onClick={() => void submitFamily()} disabled={submitting} className="rounded-xl bg-kcs-blue px-5 py-3 text-sm font-semibold text-slate-950 disabled:opacity-60">
+                  <button type="button" onClick={() => void submitFamily()} disabled={submitting} className="savanex-primary-family-button disabled:cursor-not-allowed disabled:opacity-60">
                     {submitting ? 'Enregistrement en cours...' : 'Enregistrer la famille'}
                   </button>
                 </div>
@@ -690,7 +718,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-slate-400">
                         Date de naissance
-                        <input type="date" value={editForm.dateOfBirth || ''} onChange={(event) => setEditField('dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                        <DateSelect value={editForm.dateOfBirth || ''} onChange={(event) => setEditField('dateOfBirth', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
                       </label>
                     </div>
                   </section>
@@ -746,7 +774,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                 {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
                 <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-github-border pt-4">
                   <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Annuler</button>
-                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="rounded-xl bg-amber-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-amber-400/20 disabled:opacity-60">
+                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="min-w-64 rounded-xl border-2 border-white bg-emerald-300 px-7 py-3.5 text-base font-black text-slate-950 shadow-[0_0_28px_rgba(52,211,153,0.55)] transition hover:scale-[1.02] hover:bg-emerald-200 disabled:opacity-60">
                     {savingEdit ? 'Modification...' : 'Enregistrer les modifications'}
                   </button>
                 </div>
