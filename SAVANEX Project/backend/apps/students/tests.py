@@ -3,16 +3,22 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.throttling import ScopedRateThrottle
 
 from apps.integration.orbit import sync_parent, sync_student
 from apps.students.models import Student
 from apps.students.serializers import FamilyRegistrationSerializer
-from apps.students.views import StudentDetailView
+from apps.students.views import FamilyRegistrationView, StudentDetailView
 from apps.users.models import User
 from apps.users.views import UserDetailView
 
 
 class FamilyRegistrationSerializerTests(TestCase):
+    def test_family_registration_uses_an_independent_throttle_scope(self):
+        view = FamilyRegistrationView()
+
+        self.assertEqual(view.throttle_scope, "family_registration")
+        self.assertEqual(view.throttle_classes, [ScopedRateThrottle])
     @patch("apps.students.serializers.sync_student")
     @patch("apps.students.serializers.sync_parent")
     def test_registers_one_parent_with_multiple_children_and_generated_ids(self, mock_sync_parent, mock_sync_student):
@@ -70,6 +76,71 @@ class FamilyRegistrationSerializerTests(TestCase):
         mock_sync_parent.assert_called_once_with(parent)
         self.assertEqual(mock_sync_student.call_count, 2)
 
+    @patch("apps.students.serializers.sync_student")
+    @patch("apps.students.serializers.sync_parent")
+    def test_recreates_a_deleted_family_with_the_same_emails(self, mock_sync_parent, mock_sync_student):
+        initial_payload = {
+            "parent": {
+                "first_name": "Mireille",
+                "last_name": "Levana",
+                "email": "parent.levana@example.com",
+                "phone": "+243000000333",
+            },
+            "students": [{
+                "user": {
+                    "first_name": "Ancien Prenom",
+                    "last_name": "Levana",
+                    "email": "levana@gmail.com",
+                },
+                "date_of_birth": "2015-02-10",
+                "gender": "F",
+            }],
+        }
+        first_serializer = FamilyRegistrationSerializer(data=initial_payload)
+        self.assertTrue(first_serializer.is_valid(), first_serializer.errors)
+        with self.captureOnCommitCallbacks(execute=True):
+            first_family = first_serializer.save()
+
+        original_parent = first_family["parent"]
+        original_student = first_family["students"][0]
+        original_user = original_student.user
+        original_parent.is_active = False
+        original_parent.save(update_fields=["is_active"])
+        original_user.is_active = False
+        original_user.save(update_fields=["is_active"])
+        original_student.is_active = False
+        original_student.save(update_fields=["is_active"])
+
+        recreated_payload = {
+            **initial_payload,
+            "students": [{
+                **initial_payload["students"][0],
+                "user": {
+                    **initial_payload["students"][0]["user"],
+                    "first_name": "Nouveau Prenom",
+                },
+            }],
+        }
+        second_serializer = FamilyRegistrationSerializer(data=recreated_payload)
+        self.assertTrue(second_serializer.is_valid(), second_serializer.errors)
+        with self.captureOnCommitCallbacks(execute=True):
+            recreated_family = second_serializer.save()
+
+        recreated_parent = recreated_family["parent"]
+        recreated_student = recreated_family["students"][0]
+        recreated_parent.refresh_from_db()
+        recreated_student.refresh_from_db()
+        recreated_student.user.refresh_from_db()
+
+        self.assertEqual(recreated_parent.pk, original_parent.pk)
+        self.assertEqual(recreated_student.pk, original_student.pk)
+        self.assertEqual(recreated_student.user_id, original_user.pk)
+        self.assertTrue(recreated_parent.is_active)
+        self.assertTrue(recreated_student.is_active)
+        self.assertTrue(recreated_student.user.is_active)
+        self.assertEqual(recreated_student.user.first_name, "Nouveau Prenom")
+        self.assertEqual(User.objects.filter(email__iexact="levana@gmail.com").count(), 1)
+        self.assertEqual(Student.objects.filter(user__email__iexact="levana@gmail.com").count(), 1)
 
 class OrbitSyncPayloadTests(TestCase):
     @patch("apps.integration.orbit._post_json")

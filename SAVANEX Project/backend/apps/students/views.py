@@ -1,6 +1,7 @@
 from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from apps.integration.orbit import delete_student, sync_parent, sync_student
 from .models import Student
 from .serializers import FamilyRegistrationSerializer, StudentSerializer, StudentCreateSerializer, StudentDetailSerializer
@@ -34,6 +35,8 @@ class StudentListCreateView(generics.ListCreateAPIView):
 class FamilyRegistrationView(generics.CreateAPIView):
     serializer_class = FamilyRegistrationSerializer
     permission_classes = [IsAdminUser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'family_registration'
 
 
 class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):

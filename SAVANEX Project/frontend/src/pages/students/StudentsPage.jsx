@@ -821,7 +821,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                 {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
                 <div className="mt-6 flex flex-wrap justify-end gap-3 rounded-2xl border border-slate-500/60 bg-slate-800 px-5 py-4 shadow-lg">
                   <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border-2 border-slate-400 bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800">Annuler</button>
-                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="min-w-72 rounded-xl border-2 border-white bg-emerald-300 px-8 py-4 text-base font-black text-slate-950 shadow-[0_0_34px_rgba(52,211,153,0.75)] transition hover:scale-[1.02] hover:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-200/60 disabled:opacity-60">
+                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="savanex-student-save-button min-w-72 rounded-xl border-2 px-8 py-4 text-base font-black transition hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-cyan-200/60 disabled:opacity-60">
                     {savingEdit ? 'Modification...' : 'Enregistrer les modifications'}
                   </button>
                 </div>

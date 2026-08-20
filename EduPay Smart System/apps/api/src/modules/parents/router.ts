@@ -1082,10 +1082,21 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const normalizedPhone = payload.phone.replace(/\s+/g, "");
   let orbitUpdateSucceeded = false;
   try {
+    const sharedDirectory = orbitRegistryIsEnabled()
+      ? await syncOrbitRegistryMirror(req.user!.schoolId)
+      : null;
+    let mirroredParent = sharedDirectory?.parents.find((entry) =>
+      matchesSharedParentIdentifier(entry, id)
+    );
     const parentExists = await prisma.parent.findFirst({
       where: {
         schoolId: req.user!.schoolId,
-        OR: [{ id }, { orbitId: id }],
+        OR: [
+          { id },
+          { orbitId: id },
+          ...(mirroredParent?.localId ? [{ id: mirroredParent.localId }] : []),
+          ...(mirroredParent?.orbitId ? [{ orbitId: mirroredParent.orbitId }] : []),
+        ],
       },
       select: { id: true, orbitId: true, userId: true }
     });
@@ -1096,10 +1107,8 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 
     if (orbitRegistryIsEnabled()) {
       try {
-        const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-        const mirroredParent = mirrored.parents.find((entry) =>
+        mirroredParent = mirroredParent || sharedDirectory?.parents.find((entry) =>
           matchesSharedParentIdentifier(entry, parentExists.orbitId || id)
-          || matchesSharedParentIdentifier(entry, id)
         );
         const orbitParentId = parentExists.orbitId || mirroredParent?.orbitId;
 

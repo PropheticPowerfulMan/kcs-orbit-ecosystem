@@ -110,6 +110,7 @@ const demoState = {
 };
 
 function demoResponse(path, method, body) {
+  const cleanPath = path.split("?")[0];
   if (path === "/auth/login" && method === "POST") {
     const user = demoState.users.find(
       (item) => item.email === body?.email && item.password === body?.password
@@ -171,6 +172,29 @@ function demoResponse(path, method, body) {
       visibility: "shared-directory",
       ...demoState.directory,
     };
+  }
+
+  if (path.startsWith("/registry/entities/")) {
+    const parts = cleanPath.split("/").filter(Boolean);
+    const entityType = parts[2];
+    const identifier = parts[3];
+    const collection = entityType === "parent" ? "parents" : entityType === "student" ? "students" : "teachers";
+    const payload = body?.payload || {};
+    if (method === "POST") {
+      const entity = { id: `demo-${entityType}-${Date.now()}`, ...payload };
+      demoState.directory[collection] = [entity, ...demoState.directory[collection]];
+      return entity;
+    }
+    const index = demoState.directory[collection].findIndex((item) => String(item.id) === String(identifier));
+    if (index < 0) throw new Error("Entity not found");
+    if (method === "PUT" || method === "PATCH") {
+      demoState.directory[collection][index] = { ...demoState.directory[collection][index], ...payload };
+      return demoState.directory[collection][index];
+    }
+    if (method === "DELETE") {
+      demoState.directory[collection].splice(index, 1);
+      return { deleted: true };
+    }
   }
 
   if (path.startsWith("/notifications/") && path.endsWith("/read") && method === "PATCH") {

@@ -159,6 +159,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': config('DRF_ANON_THROTTLE_RATE', default='120/hour'),
         'user': config('DRF_USER_THROTTLE_RATE', default='1200/hour'),
+        'family_registration': config('DRF_FAMILY_REGISTRATION_THROTTLE_RATE', default='120/hour'),
     },
 }
 

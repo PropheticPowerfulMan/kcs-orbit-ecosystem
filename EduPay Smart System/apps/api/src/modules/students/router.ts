@@ -1,6 +1,6 @@
-import { NextFunction, Request, Response, Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
-import { deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { createOrbitStudent, deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { notifyParentEntityChange } from "../notifications/entityChange";
@@ -11,14 +11,6 @@ const createStudentSchema = z.object({
   externalStudentId: z.string().min(1).optional(),
   fullName: z.string().min(3),
   annualFee: z.number().positive()
-}).superRefine((payload, context) => {
-  if (orbitRegistryIsEnabled() && !payload.externalStudentId) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["externalStudentId"],
-      message: "externalStudentId est obligatoire quand la synchronisation Orbit est active."
-    });
-  }
 });
 
 const updateStudentSchema = z.object({
@@ -38,20 +30,46 @@ const updateStudentSchema = z.object({
 });
 
 export const studentRouter = Router();
-const denyEntityMutation = (_req: Request, res: Response, _next: NextFunction) => res.status(403).json({
-  message: 'EduPay dispose d’un accès en lecture seule aux entités. Utilisez Savanex ou le superadministrateur KCS Nexus pour toute modification.',
-});
-
 studentRouter.use(authGuard);
 
-studentRouter.post("/", denyEntityMutation, async (req: AuthenticatedRequest, res) => {
+studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+  const payload = createStudentSchema.parse(req.body);
   if (orbitRegistryIsEnabled()) {
-    return res.status(409).json({
-      message: "La création locale d'élèves est désactivée dans EduPay quand le registre Orbit est actif. Créez d'abord l'élève dans SAVANEX."
+    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+    const parent = mirrored.parents.find((entry) =>
+      entry.id === payload.parentId
+      || entry.localId === payload.parentId
+      || entry.orbitId === payload.parentId
+      || entry.displayId === payload.parentId
+    );
+    if (!parent?.orbitId) {
+      return res.status(404).json({ message: "Parent introuvable dans le registre partagé." });
+    }
+    const classRow = await prisma.class.findFirst({
+      where: { id: payload.classId, schoolId: req.user!.schoolId },
+      select: { name: true },
     });
+    const created = await createOrbitStudent({
+      fullName: payload.fullName,
+      parentOrbitId: parent.orbitId,
+      className: classRow?.name || payload.classId,
+      studentNumber: payload.externalStudentId,
+    });
+    await syncOrbitRegistryMirror(req.user!.schoolId);
+    const local = await prisma.student.findFirst({
+      where: { schoolId: req.user!.schoolId, orbitId: created.orbitId },
+      include: { class: true, parent: true, payments: true },
+    });
+    if (local && local.annualFee !== payload.annualFee) {
+      return res.status(201).json(await prisma.student.update({
+        where: { id: local.id },
+        data: { annualFee: payload.annualFee },
+        include: { class: true, parent: true, payments: true },
+      }));
+    }
+    return res.status(201).json(local || created);
   }
 
-  const payload = createStudentSchema.parse(req.body);
   const student = await prisma.student.create({
     data: {
       ...payload,
@@ -197,7 +215,18 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
 
 studentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
-    await deleteOrbitStudent(req.params.id);
+    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+    const student = mirrored.students.find((entry) =>
+      entry.id === req.params.id
+      || entry.localId === req.params.id
+      || entry.orbitId === req.params.id
+      || entry.displayId === req.params.id
+      || entry.externalStudentId === req.params.id
+    );
+    if (!student?.orbitId) {
+      return res.status(404).json({ message: "Élève introuvable dans le registre partagé." });
+    }
+    await deleteOrbitStudent(student.orbitId);
     await syncOrbitRegistryMirror(req.user!.schoolId);
     return res.status(204).end();
   }

@@ -25,6 +25,17 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Django Debug Toolbar (optional)
 INSTALLED_APPS += ['django_extensions']
 
+# Local dashboards poll several endpoints frequently. Keep throttling enabled, but
+# use development-sized limits so normal navigation and post-save refreshes do not
+# exhaust the production-oriented hourly quota.
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    'DEFAULT_THROTTLE_RATES': {
+        **REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'],
+        'anon': os.environ.get('DRF_DEV_ANON_THROTTLE_RATE', '10000/hour'),
+        'user': os.environ.get('DRF_DEV_USER_THROTTLE_RATE', '100000/hour'),
+    },
+}
 # Logging
 LOGGING = {
     'version': 1,

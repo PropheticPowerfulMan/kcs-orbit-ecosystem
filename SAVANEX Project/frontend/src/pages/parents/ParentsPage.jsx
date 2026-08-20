@@ -127,6 +127,13 @@ const ParentsPage = () => {
         studentsByParent.set(parentId, current);
       }
 
+      const localStudentsByExternalId = new Map(
+        students
+          .filter((student) => !String(student?.id || '').startsWith('orbit:'))
+          .map((student) => [String(student?.student_id || '').trim().toLowerCase(), student])
+          .filter(([studentId]) => studentId)
+      );
+
       return directory.parents
         .map((parent) => {
           const orbitStudents = studentsByParent.get(parent.id) || [];
@@ -163,16 +170,35 @@ const ParentsPage = () => {
             class_parts: classParts,
             student_count: linkedStudents.length,
             activeStudents: linkedStudents.filter((student) => (student.status || 'ACTIVE') !== 'INACTIVE').length,
-            linked_students: linkedStudents.map((student) => ({
-              id: orbitStudents.length ? `orbit:${student.id}` : student.id,
-              student_id: student.studentNumber || student.displayId || student.id,
-              full_name: student.fullName || student.displayId || '',
-              email: student.email || '',
-              class_name: student.className || '',
-              date_of_birth: student.dateOfBirth || '',
-              gender: student.gender || '',
-              notes: student.notes || '',
-            })),
+            linked_students: linkedStudents.map((student) => {
+              if (!orbitStudents.length) {
+                return student;
+              }
+
+              const savanexExternalId = (Array.isArray(student.externalIds) ? student.externalIds : [])
+                .map((entry) => typeof entry === 'string' ? { appSlug: '', externalId: entry } : entry)
+                .find((entry) => String(entry?.appSlug || '').toUpperCase() === 'SAVANEX')?.externalId;
+              const localStudent = localStudentsByExternalId.get(
+                String(savanexExternalId || student.studentNumber || '').trim().toLowerCase()
+              );
+
+              // Route SAVANEX-owned children through the local endpoint so SAVANEX is
+              // updated first and its normal Orbit propagation remains authoritative.
+              if (localStudent) {
+                return localStudent;
+              }
+
+              return {
+                id: `orbit:${student.id}`,
+                student_id: student.studentNumber || student.displayId || student.id,
+                full_name: student.fullName || student.displayId || '',
+                email: student.email || '',
+                class_name: student.className || '',
+                date_of_birth: student.dateOfBirth || '',
+                gender: student.gender || '',
+                notes: student.notes || '',
+              };
+            }),
             kcs_card_id: parent.displayId,
             parent_external_id: parent.displayId,
             email: parent.email || '',
@@ -517,7 +543,15 @@ const ParentsPage = () => {
       {error ? <p className="mb-4 text-sm text-rose-300">{error}</p> : null}
       <DataTable columns={columns} data={filtered} />
 
-      <EntityDetailPanel entity={selectedParent} type="parent" onClose={() => setSelectedParent(null)} />
+      <EntityDetailPanel
+        entity={selectedParent}
+        type="parent"
+        onClose={() => setSelectedParent(null)}
+        onEdit={(parent) => {
+          setSelectedParent(null);
+          openEdit(parent);
+        }}
+      />
 
       {editingParent ? (
         <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8">

@@ -1000,6 +1000,18 @@ body {
   box-shadow: 0 0 0 3px rgba(34,211,238,.13), 0 10px 24px rgba(14,165,216,.1);
 }
 
+.savanex-entity-edit-panel .savanex-student-save-button {
+  border-color: #e0f2fe !important;
+  background: linear-gradient(135deg, #38bdf8, #22d3ee) !important;
+  color: #082f49 !important;
+  box-shadow: 0 0 0 1px rgba(125, 211, 252, .42), 0 0 34px rgba(34, 211, 238, .58), 0 14px 30px rgba(2, 132, 199, .35) !important;
+}
+
+.savanex-entity-edit-panel .savanex-student-save-button:hover:not(:disabled) {
+  border-color: #ffffff !important;
+  background: linear-gradient(135deg, #bae6fd, #67e8f9) !important;
+  color: #0c4a6e !important;
+}
 @media (min-width: 1024px) {
   .savanex-shell { gap: 1rem !important; padding: 1rem !important; }
   .savanex-workspace { height: calc(100vh - 2rem) !important; }

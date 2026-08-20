@@ -175,7 +175,6 @@ api.interceptors.response.use(
         const res = await axios.post(`${API_BASE_URL}/auth/refresh/`, { refresh });
         const newAccess = res.data.access;
         useAuthStore.setState({ accessToken: newAccess });
-        localStorage.setItem('savanex_access', newAccess);
         original.headers.Authorization = `Bearer ${newAccess}`;
         return api(original);
       } catch (refreshError) {
@@ -256,7 +255,7 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     parent_address: parent?.physicalAddress || '',
     parent_external_id: parentExternalIds[0]?.externalId || '',
     parent_kcs_card_id: null,
-    parent_photo_data: '',
+    parent_photo_data: parent?.photoData || '',
     parent_left_fingerprint_data: '',
     parent_right_fingerprint_data: '',
     enrollment_date: null,
@@ -347,6 +346,8 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
           savanex_external_id: sharedStudent.savanex_external_id || student.student_id,
           orbit_id: sharedStudent.orbit_id || student.orbit_id,
           external_ids: sharedStudent.external_ids || student.external_ids,
+          photo_data: sharedStudent.photo_data || student.photo_data || '',
+          photo_source: sharedStudent.photo_source || student.photo_source || '',
         } : {}),
         source: student?.source || 'local',
         source_label: student?.source_label || 'SAVANEX',
@@ -699,6 +700,8 @@ export const teachersService = {
       source: 'orbit',
       source_label: 'Orbit',
       is_read_only: false,
+      photo_data: teacher.photoData || '',
+      photo_source: teacher.photoSource || '',
     }));
   },
 
@@ -718,6 +721,25 @@ export const teachersService = {
       throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour modifier des employés.");
     }
 
+    if (String(id).startsWith('orbit:')) {
+      const orbitId = String(id).slice('orbit:'.length);
+      const res = await api.patch(`/integration/entities/teacher/${orbitId}/`, {
+        ...(data?.first_name !== undefined ? { firstName: data.first_name || null } : {}),
+        ...(data?.middle_name !== undefined ? { middleName: data.middle_name || null } : {}),
+        ...(data?.last_name !== undefined ? { lastName: data.last_name || null } : {}),
+        ...(data?.user_email !== undefined ? { email: data.user_email || null } : {}),
+        ...(data?.phone !== undefined ? { phone: data.phone || null } : {}),
+        ...(data?.address !== undefined ? { physicalAddress: data.address || null } : {}),
+        ...(data?.specialization !== undefined ? { subject: data.specialization || null } : {}),
+        ...(data?.employee_type !== undefined ? { employeeType: data.employee_type || null } : {}),
+        ...(data?.department !== undefined ? { department: data.department || null } : {}),
+        ...(data?.job_title !== undefined ? { jobTitle: data.job_title || null } : {}),
+        ...(data?.photo_data !== undefined ? { photoData: data.photo_data || null } : {}),
+        ...(data?.photo_source !== undefined ? { photoSource: data.photo_source || null } : {}),
+      }, { params: { identifierType: 'orbitId' } });
+      return res.data;
+    }
+
     const res = await api.patch(`/teachers/${id}/`, data);
     return res.data;
   },
@@ -726,6 +748,14 @@ export const teachersService = {
     if (isDemoSession()) {
       useAuthStore.getState().clearAuth();
       throw new Error("Vous étiez en mode démo. La session démo a été fermée; reconnectez-vous au vrai SAVANEX pour supprimer des employés.");
+    }
+
+    if (String(id).startsWith('orbit:')) {
+      const orbitId = String(id).slice('orbit:'.length);
+      const res = await api.delete(`/integration/entities/teacher/${orbitId}/`, {
+        params: { identifierType: 'orbitId' },
+      });
+      return res.data;
     }
 
     const res = await api.delete(`/teachers/${id}/`);

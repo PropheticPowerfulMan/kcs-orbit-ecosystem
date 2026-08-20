@@ -513,7 +513,16 @@ const TeachersPage = () => {
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des employés...</p> : null}
       <DataTable columns={columns} data={filteredTeachers} />
 
-      <EntityDetailPanel entity={selectedEmployee} type="employee" onClose={() => setSelectedEmployee(null)} />
+      <EntityDetailPanel
+        entity={selectedEmployee}
+        type="employee"
+        onClose={() => setSelectedEmployee(null)}
+        onEdit={(employee) => {
+          setSelectedEmployee(null);
+          openEmployeeEdit(employee);
+          window.requestAnimationFrame(() => employeeFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        }}
+      />
     </DashboardLayout>
   );
 };

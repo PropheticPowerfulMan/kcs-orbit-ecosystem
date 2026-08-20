@@ -21,6 +21,7 @@ const quickPrompts = [
 
 const tabItems = [
   ["chat", "Chat", "AI"],
+  ["directory", "Entités", "CRUD"],
   ["actions", "Actions", "+"],
   ["activity", "Activity", "Log"],
   ["inbox", "Inbox", "New"],
@@ -87,6 +88,8 @@ export default function DashboardPanel() {
   const [notifications, setNotifications] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [sharedDirectory, setSharedDirectory] = useState({ parents: [], students: [], teachers: [] });
+  const [editingEntity, setEditingEntity] = useState(null);
+  const [entityForm, setEntityForm] = useState({ entityType: "parent", fullName: "", email: "", phone: "", className: "", parentOrbitId: "", subject: "" });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busyChat, setBusyChat] = useState(false);
@@ -145,6 +148,50 @@ export default function DashboardPanel() {
         logout();
         return;
       }
+      setError(err.message);
+    }
+  };
+
+  const saveEntity = async (event) => {
+    event.preventDefault();
+    setError("");
+    const { entityType, ...values } = entityForm;
+    const payload = Object.fromEntries(Object.entries(values).filter(([, value]) => String(value ?? "").trim()));
+    try {
+      const path = editingEntity
+        ? `/registry/entities/${entityType}/${encodeURIComponent(editingEntity.id)}?identifier_type=orbitId`
+        : `/registry/entities/${entityType}`;
+      await apiRequest(path, editingEntity ? "PATCH" : "POST", { payload }, token);
+      setNotice(editingEntity ? "Entité modifiée et propagée." : "Entité créée et propagée.");
+      setEditingEntity(null);
+      setEntityForm({ entityType, fullName: "", email: "", phone: "", className: "", parentOrbitId: "", subject: "" });
+      await loadData();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const editEntity = (entityType, entity) => {
+    setEditingEntity(entity);
+    setEntityForm({
+      entityType,
+      fullName: entity.fullName || "",
+      email: entity.email || "",
+      phone: entity.phone || "",
+      className: entity.className || "",
+      parentOrbitId: entity.parentId || "",
+      subject: entity.subject || "",
+    });
+    navigateTo("directory");
+  };
+
+  const deleteEntity = async (entityType, entity) => {
+    if (!window.confirm(`Supprimer ${entity.fullName || entity.id} dans tout l'écosystème ?`)) return;
+    try {
+      await apiRequest(`/registry/entities/${entityType}/${encodeURIComponent(entity.id)}?identifier_type=orbitId`, "DELETE", null, token);
+      setNotice("Entité supprimée et propagation demandée.");
+      await loadData();
+    } catch (err) {
       setError(err.message);
     }
   };
@@ -544,6 +591,56 @@ export default function DashboardPanel() {
                 />
                 <button type="submit">Submit</button>
               </form>
+            </section>
+          )}
+
+          {activeTab === "directory" && (
+            <section className="activity-view">
+              <div className="section-title">
+                <div>
+                  <p className="eyebrow">Registre partagé</p>
+                  <h2>Gestion des entités</h2>
+                </div>
+                <button type="button" className="ghost-button" onClick={loadData}>Synchroniser</button>
+              </div>
+              <form className="mobile-form" onSubmit={saveEntity}>
+                <h3>{editingEntity ? "Modifier l'entité" : "Ajouter une entité"}</h3>
+                <select value={entityForm.entityType} disabled={Boolean(editingEntity)} onChange={(event) => setEntityForm((current) => ({ ...current, entityType: event.target.value }))}>
+                  <option value="parent">Parent</option>
+                  <option value="student">Élève</option>
+                  <option value="teacher">Employé / enseignant</option>
+                </select>
+                <input value={entityForm.fullName} onChange={(event) => setEntityForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Nom complet *" required />
+                <input type="email" value={entityForm.email} onChange={(event) => setEntityForm((current) => ({ ...current, email: event.target.value }))} placeholder="Adresse e-mail" />
+                <input value={entityForm.phone} onChange={(event) => setEntityForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Téléphone" />
+                {entityForm.entityType === "student" && <>
+                  <input value={entityForm.className} onChange={(event) => setEntityForm((current) => ({ ...current, className: event.target.value }))} placeholder="Classe *" required />
+                  <input value={entityForm.parentOrbitId} onChange={(event) => setEntityForm((current) => ({ ...current, parentOrbitId: event.target.value }))} placeholder="Orbit ID du parent *" required />
+                </>}
+                {entityForm.entityType === "teacher" && <input value={entityForm.subject} onChange={(event) => setEntityForm((current) => ({ ...current, subject: event.target.value }))} placeholder="Fonction / matière" />}
+                <div className="field-row">
+                  {editingEntity && <button type="button" className="ghost-button" onClick={() => { setEditingEntity(null); setEntityForm({ entityType: entityForm.entityType, fullName: "", email: "", phone: "", className: "", parentOrbitId: "", subject: "" }); }}>Annuler</button>}
+                  <button type="submit">{editingEntity ? "Enregistrer les modifications" : "Créer et propager"}</button>
+                </div>
+              </form>
+              {[
+                ["parent", sharedDirectory.parents || []],
+                ["student", sharedDirectory.students || []],
+                ["teacher", sharedDirectory.teachers || []],
+              ].map(([entityType, rows]) => (
+                <div className="activity-section" key={entityType}>
+                  <h3>{entityType === "parent" ? "Parents" : entityType === "student" ? "Élèves" : "Employés"}</h3>
+                  {rows.length ? rows.map((entity) => (
+                    <article className="activity-row" key={entity.id}>
+                      <div><p>{entity.fullName}</p><span>{entity.displayId || entity.studentNumber || entity.employeeId || entity.id}</span></div>
+                      <div className="action-tags">
+                        <button type="button" onClick={() => editEntity(entityType, entity)}>Modifier</button>
+                        <button type="button" onClick={() => deleteEntity(entityType, entity)}>Supprimer</button>
+                      </div>
+                    </article>
+                  )) : <EmptyState>Aucune entité.</EmptyState>}
+                </div>
+              ))}
             </section>
           )}
 

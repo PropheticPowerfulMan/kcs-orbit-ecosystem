@@ -167,6 +167,19 @@ type SharedDirectoryParent = {
   externalIds?: Array<{ appSlug?: string; externalId?: string }>
 }
 
+type SharedDirectoryTeacher = {
+  id: string
+  fullName: string
+  firstName?: string
+  middleName?: string | null
+  lastName?: string
+  email?: string | null
+  phone?: string | null
+  employeeId?: string | null
+  department?: string | null
+  jobTitle?: string | null
+}
+
 type SharedDirectoryPayload = {
   source?: 'local' | 'orbit'
   counts?: {
@@ -176,6 +189,7 @@ type SharedDirectoryPayload = {
     teachers?: number
   }
   parents?: SharedDirectoryParent[]
+  teachers?: SharedDirectoryTeacher[]
 }
 
 type AdminStudentEditForm = {
@@ -329,7 +343,7 @@ const extractStudentApiMessage = (error: unknown, fallback: string) => {
   return responseData?.message || responseData?.error || responseData?.details || (error as { message?: string })?.message || fallback
 }
 
-const adminRosterSegments = new Set(['students', 'parents', 'transcripts', 'reports'])
+const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'transcripts', 'reports'])
 
 const getAdminRoster = () => studentsAPI.getAll(undefined, {
   headers: {
@@ -1121,6 +1135,9 @@ const AdminSectionView = ({
   const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
   const [parentEditForm, setParentEditForm] = useState<AdminParentEditForm>(() => createAdminParentEditForm(null))
   const [savingParentEdit, setSavingParentEdit] = useState(false)
+  const [editingTeacherId, setEditingTeacherId] = useState('')
+  const [teacherNotice, setTeacherNotice] = useState('')
+  const [teacherForm, setTeacherForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', phone: '', employeeId: '', department: '', jobTitle: '' })
   const [sentNotice, setSentNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
   const [parentQuery, setParentQuery] = useState('')
@@ -1545,6 +1562,65 @@ const AdminSectionView = ({
       setParentNotice(response.data?.message || `${parent.name} a ete supprime du registre parent.`)
     } catch (error) {
       setParentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${parent.name} pour le moment.`))
+    }
+  }
+
+  const clearTeacherForm = () => {
+    setEditingTeacherId('')
+    setTeacherForm({ firstName: '', middleName: '', lastName: '', email: '', phone: '', employeeId: '', department: '', jobTitle: '' })
+  }
+
+  const editTeacherRecord = (teacher: SharedDirectoryTeacher) => {
+    setEditingTeacherId(teacher.id)
+    setTeacherForm({
+      firstName: teacher.firstName || '',
+      middleName: teacher.middleName || '',
+      lastName: teacher.lastName || '',
+      email: teacher.email || '',
+      phone: teacher.phone || '',
+      employeeId: teacher.employeeId || '',
+      department: teacher.department || '',
+      jobTitle: teacher.jobTitle || '',
+    })
+    setTeacherNotice('')
+  }
+
+  const saveTeacherRecord = async () => {
+    if (!teacherForm.firstName.trim() || !teacherForm.lastName.trim()) {
+      setTeacherNotice('Le prénom et le nom de l’enseignant sont obligatoires.')
+      return
+    }
+    const payload = {
+      firstName: teacherForm.firstName.trim(),
+      middleName: teacherForm.middleName.trim() || null,
+      lastName: teacherForm.lastName.trim(),
+      email: teacherForm.email.trim() || undefined,
+      phone: teacherForm.phone.trim() || null,
+      employeeId: teacherForm.employeeId.trim() || undefined,
+      department: teacherForm.department.trim() || null,
+      jobTitle: teacherForm.jobTitle.trim() || null,
+    }
+    try {
+      const response = editingTeacherId
+        ? await registryAPI.updateEntity('teacher', editingTeacherId, payload)
+        : await registryAPI.createEntity('teacher', payload)
+      clearTeacherForm()
+      await refreshOfficialRoster()
+      setTeacherNotice(response.data?.message || (editingTeacherId ? 'Enseignant modifié et propagé.' : 'Enseignant ajouté et propagé.'))
+    } catch (error) {
+      setTeacherNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cet enseignant.'))
+    }
+  }
+
+  const deleteTeacherRecord = async (teacher: SharedDirectoryTeacher) => {
+    if (!window.confirm(`Supprimer ${teacher.fullName} du registre partagé ?`)) return
+    try {
+      const response = await registryAPI.deleteEntity('teacher', teacher.id)
+      if (editingTeacherId === teacher.id) clearTeacherForm()
+      await refreshOfficialRoster()
+      setTeacherNotice(response.data?.message || `${teacher.fullName} a été supprimé et la suppression a été propagée.`)
+    } catch (error) {
+      setTeacherNotice(extractStudentApiMessage(error, `Impossible de supprimer ${teacher.fullName}.`))
     }
   }
 
@@ -2620,6 +2696,51 @@ const AdminSectionView = ({
   if (segment === 'teachers') {
     return (
       <>
+      <div className="mb-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <h2 className="font-bold text-kcs-blue-900 dark:text-white">{editingTeacherId ? 'Modifier un enseignant' : 'Ajouter un enseignant'}</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Toute opération est enregistrée dans Orbit puis propagée aux applications de l’écosystème.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {[
+              ['firstName', 'Prénom'],
+              ['middleName', 'Deuxième prénom'],
+              ['lastName', 'Nom'],
+              ['email', 'Email'],
+              ['phone', 'Téléphone'],
+              ['employeeId', 'ID employé'],
+              ['department', 'Département'],
+              ['jobTitle', 'Fonction'],
+            ].map(([field, label]) => (
+              <label key={field} className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                {label}
+                <input value={teacherForm[field as keyof typeof teacherForm]} onChange={(event) => setTeacherForm((current) => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" className={adminButton} onClick={() => void saveTeacherRecord()}>{editingTeacherId ? 'Enregistrer les modifications' : 'Ajouter et propager'}</button>
+            {editingTeacherId ? <button type="button" className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200" onClick={clearTeacherForm}>Annuler</button> : null}
+          </div>
+          {teacherNotice ? <p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">{teacherNotice}</p> : null}
+        </section>
+        <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+          <div className="flex items-center justify-between gap-3">
+            <div><h2 className="font-bold text-kcs-blue-900 dark:text-white">Registre partagé des enseignants</h2><p className="text-sm text-gray-500 dark:text-gray-400">{sharedDirectory?.teachers?.length || 0} entité(s) synchronisée(s)</p></div>
+            <button type="button" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200" onClick={() => void refreshOfficialRoster()}>Actualiser</button>
+          </div>
+          <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
+            {(sharedDirectory?.teachers || []).map((teacher) => (
+              <article key={teacher.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div><p className="font-semibold text-kcs-blue-900 dark:text-white">{teacher.fullName}</p><p className="text-sm text-gray-500 dark:text-gray-400">{teacher.employeeId || 'ID non renseigné'} · {teacher.email || teacher.phone || 'Contact non renseigné'}</p></div>
+                  <div className="flex gap-2"><button type="button" onClick={() => editTeacherRecord(teacher)} className="rounded-lg bg-kcs-blue-100 px-3 py-2 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-kcs-blue-200">Modifier</button><button type="button" onClick={() => void deleteTeacherRecord(teacher)} className="rounded-lg bg-red-100 px-3 py-2 text-xs font-bold text-red-700 dark:bg-red-900/30 dark:text-red-300">Supprimer</button></div>
+                </div>
+              </article>
+            ))}
+            {!sharedDirectory?.teachers?.length ? <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-400">Aucun enseignant partagé. Utilisez le formulaire pour créer le premier.</p> : null}
+          </div>
+        </section>
+      </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Teachers & Load</h2>

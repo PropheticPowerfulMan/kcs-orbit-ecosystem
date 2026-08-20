@@ -71,7 +71,7 @@ const subtitles = {
 };
 
 const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
-  const entityPhoto = entity?.photo_data || entity?.parent_photo_data || entity?.avatar || '';
+  const entityPhoto = entity?.photo_data || entity?.photoData || entity?.parent_photo_data || entity?.parentPhotoData || entity?.avatar || '';
   const fields = useMemo(() => baseFieldsByType[type] || [], [type]);
 
   useEffect(() => {
@@ -108,11 +108,20 @@ const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
       onClick={onClose}
     >
       <section className="savanex-modal-panel savanex-entity-detail-panel w-full overflow-y-auto p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-2 border-cyan-300/40 bg-slate-950/70 shadow-lg shadow-cyan-950/40">
+              {entityPhoto ? (
+                <img src={entityPhoto} alt={entity.full_name || entity.family_name || 'Photo de l’entité'} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs font-semibold text-slate-400">Ajouter une photo</div>
+              )}
+            </div>
+            <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Consultation</p>
             <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">{titles[type] || 'Fiche individuelle'}</h3>
             <p className="mt-1 text-sm text-slate-400">{subtitles[type] || "Informations détaillées de l'entité sélectionnée."}</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {onEdit ? (
@@ -140,14 +149,6 @@ const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
 
           <div className="xl:w-[360px]">
             <div className="sticky top-0">
-              {entityPhoto ? (
-                <div className="mb-4 overflow-hidden rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-3">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-cyan-200">Photo</p>
-                  <img src={entityPhoto} alt={entity.full_name || entity.family_name || 'Photo de l’entité'} className="mx-auto aspect-[4/3] max-h-64 w-full rounded-xl object-cover" />
-                </div>
-              ) : (
-                <div className="mb-4 flex min-h-32 items-center justify-center rounded-2xl border border-dashed border-slate-600 bg-slate-950/40 px-4 text-center text-sm text-slate-400">Aucune photo enregistrée</div>
-              )}
               <PrintableKcsCard entity={entity} />
             </div>
           </div>

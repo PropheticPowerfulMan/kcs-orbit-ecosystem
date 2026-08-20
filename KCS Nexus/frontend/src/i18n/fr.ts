@@ -185,7 +185,7 @@ const fr = {
     parent: 'Parent',
   },
 
-  portalNav: {
+  portalNavBase: {
     dashboard: 'Tableau de bord',
     myGrades: 'Mes notes',
     assignments: 'Devoirs',

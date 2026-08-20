@@ -1040,7 +1040,8 @@ function StudentEditModal({
   classes,
   saving,
   onSave,
-  onClose
+  onClose,
+  creating = false
 }: {
   student: SharedDirectoryStudent;
   parent?: SharedDirectoryParent;
@@ -1049,6 +1050,7 @@ function StudentEditModal({
   saving: boolean;
   onSave: (state: StudentFormState) => Promise<void>;
   onClose: () => void;
+  creating?: boolean;
 }) {
   const classOptions = useMemo(() => getSchoolClassOptions(classes), [classes]);
   const identity = resolveStudentIdentity(student);
@@ -1070,7 +1072,7 @@ function StudentEditModal({
         <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-ink-dim hover:bg-white/10 hover:text-white">
           <X className="h-4 w-4" />
         </button>
-        <h2 className="pr-10 font-display text-2xl font-bold text-white">Modifier l'élève</h2>
+        <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? "Ajouter un élève" : "Modifier l'élève"}</h2>
         <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="grid gap-1 text-xs font-semibold text-ink-dim">Nom de famille *<input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
@@ -1138,6 +1140,7 @@ export function StudentsDirectoryPage() {
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
   const [viewTarget, setViewTarget] = useState<SharedDirectoryStudent | null>(null);
   const [editTarget, setEditTarget] = useState<SharedDirectoryStudent | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SharedDirectoryStudent | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1250,6 +1253,30 @@ export function StudentsDirectoryPage() {
     }
   };
 
+  const handleCreateStudent = async (state: StudentFormState) => {
+    try {
+      setSaving(true);
+      setApiError(null);
+      const fullName = composeAdministrativeFullName(state);
+      await api("/api/students", {
+        method: "POST",
+        body: JSON.stringify({
+          fullName,
+          parentId: state.parentId,
+          classId: state.classId,
+          annualFee: Number(state.annualFee),
+        }),
+      });
+      setCreateOpen(false);
+      setMutationNotice(`L'élève ${fullName} a été créé et propagé dans le registre partagé.`);
+      await load();
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Impossible de créer l'élève.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDeleteStudent = async () => {
     if (!deleteTarget) return;
     try {
@@ -1290,6 +1317,17 @@ export function StudentsDirectoryPage() {
           onClose={() => setEditTarget(null)}
         />
       )}
+      {createOpen && (
+        <StudentEditModal
+          student={{ id: "", fullName: "", classId: "", annualFee: 0 } as SharedDirectoryStudent}
+          parents={directory?.parents ?? []}
+          classes={classes}
+          saving={saving}
+          onSave={handleCreateStudent}
+          onClose={() => setCreateOpen(false)}
+          creating
+        />
+      )}
       {deleteTarget && <StudentDeleteModal student={deleteTarget} deleting={deleting} onConfirm={handleDeleteStudent} onClose={() => setDeleteTarget(null)} />}
 
       <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
@@ -1299,9 +1337,14 @@ export function StudentsDirectoryPage() {
             Liste centralisée des élèves venant du registre partage Orbit via Savanex, comme pour les parents.
           </p>
         </div>
-        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 hover:bg-cyan-300">
+            Ajouter un élève
+          </button>
+          <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Source</p>
           <p className="mt-1 text-sm font-semibold text-white">{directory?.source ?? "Chargement..."}</p>
+          </div>
         </div>
       </div>
 

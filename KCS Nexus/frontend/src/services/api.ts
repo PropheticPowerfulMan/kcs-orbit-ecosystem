@@ -145,6 +145,19 @@ export const registryAPI = {
   registerFamily: (data: object) => api.post('/registry/families', data),
 }
 
+export const diagnosticAPI = {
+  getTests: () => api.get('/diagnostic-tests'),
+  createTest: (data: object) => api.post('/diagnostic-tests', data),
+  publishTest: (id: string) => api.post(`/diagnostic-tests/${id}/publish`),
+  assignTest: (id: string, data: object) => api.post(`/diagnostic-tests/${id}/assign`, data),
+  getSubmissions: () => api.get('/diagnostic-submissions'),
+  startSubmission: (data: object) => api.post('/diagnostic-submissions/start', data),
+  submit: (id: string, answers: object[]) => api.post(`/diagnostic-submissions/${id}/submit`, { answers }),
+  approve: (id: string, data: object) => api.post(`/diagnostic-submissions/${id}/approve`, data),
+  requestRetake: (id: string, data: object) => api.post(`/diagnostic-submissions/${id}/request-retake`, data),
+  getAnalytics: () => api.get('/diagnostic-analytics'),
+}
+
 // --- Parent Forum API ---
 export const forumAPI = {
   getPosts: () => api.get('/forum/posts'),

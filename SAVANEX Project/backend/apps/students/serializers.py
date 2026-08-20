@@ -8,7 +8,7 @@ from apps.communication.services import deliver_parent_communication, deliver_us
 from apps.classes.utils import get_or_create_standard_class, normalize_class_level, normalize_class_suffix
 from apps.users.models import User
 from .models import Student
-from apps.users.serializers import UserCreateSerializer, UserListSerializer, UserMeSerializer
+from apps.users.serializers import generate_temporary_password, UserCreateSerializer, UserListSerializer, UserMeSerializer
 
 
 def _generate_ecosystem_id(entity_prefix: str) -> str:
@@ -304,7 +304,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
 
         existing_student_emails = []
         for student_email in sorted(seen_student_emails):
-            if User.objects.filter(role=User.ROLE_STUDENT, email__iexact=student_email).exists():
+            if User.objects.filter(role=User.ROLE_STUDENT, email__iexact=student_email, is_active=True).exists():
                 existing_student_emails.append(student_email)
 
         if existing_student_emails:
@@ -323,7 +323,7 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             if existing_parent is not None:
                 parent = existing_parent
                 parent_update_fields = []
-                for field in ('first_name', 'middle_name', 'last_name', 'email', 'phone', 'address'):
+                for field in ('first_name', 'middle_name', 'last_name', 'email', 'phone', 'address', 'language', 'photo_data', 'photo_source'):
                     if field not in parent_data:
                         continue
 
@@ -338,9 +338,20 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                 if parent.role != User.ROLE_PARENT:
                     parent.role = User.ROLE_PARENT
                     parent_update_fields.append('role')
+                if not parent.is_active:
+                    parent.is_active = True
+                    parent_update_fields.append('is_active')
 
-                if parent_update_fields:
-                    parent.save(update_fields=parent_update_fields)
+                parent_password = (parent_data.get('password') or '').strip()
+                if not parent_password:
+                    parent_password = generate_temporary_password(User.ROLE_PARENT)
+                    parent.must_change_password = True
+                    parent.password_generated_by_system = True
+                    parent_update_fields.extend(['must_change_password', 'password_generated_by_system'])
+                parent.set_password(parent_password)
+                parent._generated_password = parent_password
+                parent_update_fields.append('password')
+                parent.save(update_fields=list(dict.fromkeys(parent_update_fields)))
             else:
                 parent_serializer = FamilyParentSerializer(data={
                     **parent_data,
@@ -353,22 +364,69 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             created_students = []
             for student_data in students_data:
                 user_data = student_data.pop('user')
-                user_serializer = UserCreateSerializer(data={**user_data, 'role': User.ROLE_STUDENT})
-                user_serializer.is_valid(raise_exception=True)
-                student_user = user_serializer.save()
+                student_email = (user_data.get('email') or '').strip()
+                inactive_user = None
+                if student_email:
+                    inactive_user = User.objects.filter(
+                        role=User.ROLE_STUDENT,
+                        email__iexact=student_email,
+                        is_active=False,
+                    ).select_related('student_profile').first()
 
-                student_id = (student_data.pop('student_id', '') or '').strip() or _generate_student_id()
+                student_id = (student_data.pop('student_id', '') or '').strip()
                 class_level = student_data.pop('class_level', '').strip()
                 class_suffix = student_data.pop('class_suffix', '').strip()
                 if class_level:
                     student_data['current_class'] = get_or_create_standard_class(class_level, class_suffix)
+                elif 'current_class' not in student_data:
+                    student_data['current_class'] = None
 
-                student = Student.objects.create(
-                    user=student_user,
-                    parent=parent,
-                    student_id=student_id,
-                    **student_data,
-                )
+                if inactive_user is not None and hasattr(inactive_user, 'student_profile'):
+                    student_user = inactive_user
+                    user_update_fields = []
+                    for field in ('first_name', 'middle_name', 'last_name', 'email', 'phone', 'language', 'photo_data', 'photo_source'):
+                        if field not in user_data:
+                            continue
+                        next_value = user_data.get(field)
+                        if isinstance(next_value, str):
+                            next_value = next_value.strip()
+                        if getattr(student_user, field) != next_value:
+                            setattr(student_user, field, next_value)
+                            user_update_fields.append(field)
+
+                    student_user.is_active = True
+                    student_user.role = User.ROLE_STUDENT
+                    user_update_fields.extend(['is_active', 'role'])
+                    student_password = (user_data.get('password') or '').strip()
+                    if not student_password:
+                        student_password = generate_temporary_password(User.ROLE_STUDENT)
+                        student_user.must_change_password = True
+                        student_user.password_generated_by_system = True
+                        user_update_fields.extend(['must_change_password', 'password_generated_by_system'])
+                    student_user.set_password(student_password)
+                    student_user._generated_password = student_password
+                    user_update_fields.append('password')
+                    student_user.save(update_fields=list(dict.fromkeys(user_update_fields)))
+
+                    student = student_user.student_profile
+                    for field, value in student_data.items():
+                        setattr(student, field, value)
+                    if student_id:
+                        student.student_id = student_id
+                    student.parent = parent
+                    student.is_active = True
+                    student.save()
+                else:
+                    user_serializer = UserCreateSerializer(data={**user_data, 'role': User.ROLE_STUDENT})
+                    user_serializer.is_valid(raise_exception=True)
+                    student_user = user_serializer.save()
+                    student = Student.objects.create(
+                        user=student_user,
+                        parent=parent,
+                        student_id=student_id or _generate_student_id(),
+                        **student_data,
+                    )
+
                 created_students.append(student)
 
             def _sync_family() -> None:
