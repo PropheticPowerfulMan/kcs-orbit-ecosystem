@@ -462,6 +462,33 @@ export async function updateOrbitStudent(identifier: string, payload: {
   });
 }
 
+export async function createOrbitStudent(payload: {
+  fullName: string;
+  parentOrbitId: string;
+  className?: string;
+  gender?: string | null;
+  studentNumber?: string;
+  email?: string | null;
+}) {
+  const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
+  const nameParts = payload.fullName.trim().split(/\s+/);
+  return orbitRegistryRequest<{ orbitId: string; externalId: string }>("/api/integration/registry/student", {
+    method: "POST",
+    body: JSON.stringify({
+      organizationId,
+      firstName: nameParts[nameParts.length - 1] || "Student",
+      middleName: nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : undefined,
+      lastName: nameParts[0] || "Student",
+      gender: payload.gender || "O",
+      className: payload.className || "Non renseignee",
+      studentNumber: payload.studentNumber,
+      email: payload.email || undefined,
+      parentOrbitId: payload.parentOrbitId,
+      mustChangePassword: true,
+    }),
+  });
+}
+
 export async function deleteOrbitStudent(identifier: string) {
   return orbitRegistryRequest<{ orbitId: string; deleted: boolean }>(`/api/integration/registry/student/${encodeURIComponent(identifier)}?identifierType=orbitId`, {
     method: "DELETE",

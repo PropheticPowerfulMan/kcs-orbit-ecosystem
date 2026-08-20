@@ -121,7 +121,9 @@ export const StudentPayloadSchema = z.object({
   phone: TrimmedStringSchema.optional(),
   dateOfBirth: TrimmedStringSchema.optional(),
   status: TrimmedStringSchema.optional(),
-  mustChangePassword: z.boolean().optional()
+  mustChangePassword: z.boolean().optional(),
+  photoData: z.string().optional(),
+  photoSource: TrimmedStringSchema.optional()
 });
 
 export const ClassPayloadSchema = z.object({
@@ -140,7 +142,9 @@ export const ParentPayloadSchema = z.object({
   email: z.string().email().optional(),
   phone: TrimmedStringSchema.optional(),
   physicalAddress: TrimmedStringSchema.optional(),
-  mustChangePassword: z.boolean().optional()
+  mustChangePassword: z.boolean().optional(),
+  photoData: z.string().optional(),
+  photoSource: TrimmedStringSchema.optional()
 }).superRefine((value, ctx) => {
   if (value.fullName || (value.firstName && value.lastName)) {
     return;
@@ -167,7 +171,9 @@ export const TeacherPayloadSchema = z.object({
   employeeType: TrimmedStringSchema.optional(),
   department: TrimmedStringSchema.optional(),
   jobTitle: TrimmedStringSchema.optional(),
-  mustChangePassword: z.boolean().optional()
+  mustChangePassword: z.boolean().optional(),
+  photoData: z.string().optional(),
+  photoSource: TrimmedStringSchema.optional()
 }).superRefine((value, ctx) => {
   if (value.fullName || (value.firstName && value.lastName)) {
     return;

@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useMemo, useState, useEffect, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
@@ -2816,8 +2817,7 @@ export function PaymentsPage() {
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Du</label>
-              <input
-                type="date"
+              <DateSelect
                 value={historyDateFrom}
                 onChange={(e) => setHistoryDateFrom(e.target.value)}
                 className="w-full"
@@ -2825,8 +2825,7 @@ export function PaymentsPage() {
             </div>
             <div>
               <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Au</label>
-              <input
-                type="date"
+              <DateSelect
                 value={historyDateTo}
                 onChange={(e) => setHistoryDateTo(e.target.value)}
                 className="w-full"
@@ -3815,7 +3814,7 @@ export function PaymentsPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Date du virement</label>
-                <input type="date" value={form.transferDate} onChange={(e) => setField("transferDate", e.target.value)} className="w-full" />
+                <DateSelect value={form.transferDate} onChange={(e) => setField("transferDate", e.target.value)} className="w-full" />
                 {fieldErrors.transferDate && <p className="text-xs text-danger">{fieldErrors.transferDate}</p>}
               </div>
               <div className="space-y-1.5">

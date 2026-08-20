@@ -57,8 +57,8 @@ class StudentSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
     kcs_card_id = serializers.CharField(source='user.kcs_card_id', read_only=True)
     access_code = serializers.CharField(source='user.access_code', read_only=True)
-    photo_data = serializers.CharField(source='user.photo_data', read_only=True)
-    photo_source = serializers.CharField(source='user.photo_source', read_only=True)
+    photo_data = serializers.CharField(source='user.photo_data', required=False, allow_blank=True)
+    photo_source = serializers.CharField(source='user.photo_source', required=False, allow_blank=True)
     left_fingerprint_data = serializers.CharField(source='user.left_fingerprint_data', read_only=True)
     right_fingerprint_data = serializers.CharField(source='user.right_fingerprint_data', read_only=True)
     has_photo = serializers.SerializerMethodField()
@@ -96,10 +96,13 @@ class StudentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'student_id', 'enrollment_date']
 
     def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
         first_name = validated_data.pop('first_name', None)
         middle_name = validated_data.pop('middle_name', None)
         last_name = validated_data.pop('last_name', None)
         user_email = validated_data.pop('user_email', None)
+        photo_data = user_data.get('photo_data')
+        photo_source = user_data.get('photo_source')
         class_level = validated_data.pop('class_level', None)
         class_suffix = validated_data.pop('class_suffix', None)
 
@@ -127,6 +130,12 @@ class StudentSerializer(serializers.ModelSerializer):
         if user_email is not None:
             instance.user.email = user_email
             user_update_fields.append('email')
+        if photo_data is not None:
+            instance.user.photo_data = photo_data
+            user_update_fields.append('photo_data')
+        if photo_source is not None:
+            instance.user.photo_source = photo_source
+            user_update_fields.append('photo_source')
 
         if user_update_fields:
             instance.user.save(update_fields=user_update_fields)

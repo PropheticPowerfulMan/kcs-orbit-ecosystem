@@ -1272,8 +1272,19 @@ const AdminSectionView = ({
         setApiSynced(false)
         setStudentNotice('La synchronisation du registre est indisponible. Verifiez que KCS Orbit API est bien lance pour voir les eleves provenant des autres applications.')
       })
-    const refresh = () => void refreshOfficialRoster().catch(() => undefined)
-    const timer = window.setInterval(refresh, 3000)
+    let refreshInFlight = false
+    const refresh = async () => {
+      if (refreshInFlight) return
+      refreshInFlight = true
+      try {
+        await refreshOfficialRoster()
+      } catch {
+        // Le prochain cycle retentera sans vider le registre affiché.
+      } finally {
+        refreshInFlight = false
+      }
+    }
+    const timer = window.setInterval(() => void refresh(), 1500)
     window.addEventListener('focus', refresh)
     return () => {
       mounted = false
@@ -1396,7 +1407,7 @@ const AdminSectionView = ({
     try {
       const response = await registryAPI.resetAccess(entityType, identifier)
       const credential = response.data?.data
-      setFamilyCredentials(entityType === 'parent' ? { parent: credential, students: [] } : { parent: null, students: [{ ...credential, studentId: identifier }] })
+      setFamilyCredentials(entityType === 'parent' ? { parent: credential, students: [], reset: { entityType, identifier } } : { parent: null, students: [{ ...credential, studentId: identifier }], reset: { entityType, identifier } })
       const message = `Accès temporaire régénéré pour ${identifier}.`
       if (entityType === 'parent') setParentNotice(message)
       else setStudentNotice(message)
@@ -1680,6 +1691,21 @@ const AdminSectionView = ({
 
     return (
       <div className="space-y-6">
+        {familyCredentials?.reset && createPortal((
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Reinitialisation des identifiants">
+            <section className="w-full max-w-xl rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl dark:border-emerald-900 dark:bg-kcs-blue-950">
+              <button type="button" onClick={() => setFamilyCredentials(null)} className="float-right rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button>
+              <p className="text-xs font-bold uppercase text-emerald-600">Reinitialisation terminee</p>
+              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">Nouvel acces de {familyCredentials.reset.identifier}</h3>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Le mot de passe devra etre change a la prochaine connexion.</p>
+              <div className="mt-6 space-y-3 rounded-2xl bg-emerald-50 p-5 text-kcs-blue-950 dark:bg-emerald-950/30 dark:text-white">
+                <p>Identifiant : <strong>{familyCredentials.parent?.username}</strong></p>
+                <p>Code acces : <strong>{familyCredentials.parent?.accessCode || 'Non defini'}</strong></p>
+                <p>Mot de passe temporaire : <strong>{familyCredentials.parent?.temporaryPassword}</strong></p>
+              </div>
+            </section>
+          </div>
+        ), document.body)}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -1695,7 +1721,6 @@ const AdminSectionView = ({
           {[
             { label: 'Parents visibles', value: filteredParents.length, detail: `${sharedDirectory?.counts?.parents ?? parentRecords.length} au total partage`, icon: Users },
             { label: 'Enfants lies', value: totalLinkedStudents, detail: 'dans le registre officiel', icon: GraduationCap },
-            { label: 'Classes couvertes', value: Array.from(new Set(parentRecords.flatMap((parent) => parent.classes))).length, detail: 'via les familles', icon: BookOpen },
             { label: 'Suivi requis', value: parentsWithAlerts, detail: 'au moins un enfant a surveiller', icon: AlertTriangle },
           ].map(({ label, value, detail, icon: Icon }) => (
             <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -1718,7 +1743,7 @@ const AdminSectionView = ({
         <div className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="border-b border-gray-100 px-5 py-4 dark:border-kcs-blue-800">
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Liste officielle des parents</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Vue semblable a SAVANEX : responsable, contacts, enfants rattaches, classes et statut de suivi.</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Vue semblable a SAVANEX : responsable, contacts, enfants rattaches et statut de suivi.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[900px] w-full text-sm">
@@ -1728,7 +1753,6 @@ const AdminSectionView = ({
                   <th className="px-5 py-3 font-semibold">ID parent</th>
                   <th className="px-5 py-3 font-semibold">Contact</th>
                   <th className="px-5 py-3 font-semibold">Enfants</th>
-                  <th className="px-5 py-3 font-semibold">Classes</th>
                   <th className="px-5 py-3 font-semibold">Source</th>
                   <th className="px-5 py-3 text-right font-semibold">Action</th>
                 </tr>
@@ -1746,7 +1770,6 @@ const AdminSectionView = ({
                       <p className="mt-1">{parent.phone}</p>
                     </td>
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.studentCount} enfant(s)</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{parent.classes.join(', ') || 'Non assignee'}</td>
                     <td className="px-5 py-4"><span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{parent.syncSource}</span></td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex justify-end gap-2">
@@ -1773,7 +1796,7 @@ const AdminSectionView = ({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche parent</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Contact familial, enfants rattaches et classes synchronisees.</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Contact familial et enfants rattaches.</p>
                 </div>
                 <button type="button" onClick={() => setSelectedParent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
                   <X size={16} />
@@ -1797,7 +1820,6 @@ const AdminSectionView = ({
                       ['Telephone', selectedParent.phone],
                       ['Adresse physique', selectedParent.physicalAddress],
                       ['Enfants', String(selectedParent.studentCount)],
-                      ['Classes', selectedParent.classes.join(', ') || 'Non assignee'],
                       ['Statut', selectedParent.status],
                     ].map(([label, value]) => (
                       <div key={label} className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
@@ -1957,7 +1979,7 @@ const AdminSectionView = ({
           {familyCredentials && createPortal((
             <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
               <section className="relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-[0_30px_100px_rgba(0,0,0,0.45)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Identifiants générés</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Accès de la nouvelle famille</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n'accèdent ni à SAVANEX ni à EduPay.</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
+                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-base font-bold text-kcs-blue-950 dark:text-white">{credential.displayName || credential.studentId || (index === 0 ? 'Parent' : 'Élève')}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
                 </div>

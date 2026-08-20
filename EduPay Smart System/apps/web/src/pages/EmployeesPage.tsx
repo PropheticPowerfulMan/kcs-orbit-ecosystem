@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, FileText, Printer } from "lucide-react";
 import { SearchField } from "../components/SearchField";
@@ -1198,8 +1199,8 @@ export function EmployeesPage() {
                       </div>
                       <div className="grid gap-2 sm:grid-cols-3">
                         <input className="h-10" value={employeeFinanceQuery} onChange={(event) => setEmployeeFinanceQuery(event.target.value)} placeholder="Recherche: avance, dette, retard..." />
-                        <input className="h-10" type="date" value={employeeFinanceDateFrom} onChange={(event) => setEmployeeFinanceDateFrom(event.target.value)} />
-                        <input className="h-10" type="date" value={employeeFinanceDateTo} onChange={(event) => setEmployeeFinanceDateTo(event.target.value)} />
+                        <DateSelect className="h-10"  value={employeeFinanceDateFrom} onChange={(event) => setEmployeeFinanceDateFrom(event.target.value)} />
+                        <DateSelect className="h-10"  value={employeeFinanceDateTo} onChange={(event) => setEmployeeFinanceDateTo(event.target.value)} />
                       </div>
                     </div>
 

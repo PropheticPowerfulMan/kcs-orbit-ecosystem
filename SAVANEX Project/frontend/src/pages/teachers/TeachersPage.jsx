@@ -37,6 +37,8 @@ const buildTeacherPayload = (form) => ({
   base_salary: form.baseSalary || null,
   pay_frequency: form.payFrequency,
   supervisor_name: form.supervisorName,
+  photo_data: form.identity.photo_data,
+  photo_source: form.identity.photo_source,
 });
 
 const buildTeacherCreatePayload = (form) => ({
@@ -424,9 +426,7 @@ const TeachersPage = () => {
               <option value="part_time">Part Time</option>
               <option value="consultant">Consultant</option>
             </select>
-            <input value={form.workLocation} onChange={(event) => updateForm('workLocation', event.target.value)} placeholder="Lieu de travail" className={inputClass} />
             <input type="email" value={form.workEmail} onChange={(event) => updateForm('workEmail', event.target.value)} placeholder="Email professionnel" className={inputClass} />
-            <input value={form.supervisorName} onChange={(event) => updateForm('supervisorName', event.target.value)} placeholder="Superviseur" className={inputClass} />
           </div>
 
           <details className="rounded-2xl border border-github-border bg-slate-950/35 p-4">

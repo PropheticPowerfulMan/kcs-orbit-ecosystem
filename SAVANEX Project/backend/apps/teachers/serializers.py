@@ -24,8 +24,8 @@ class TeacherSerializer(serializers.ModelSerializer):
     contact_phone = serializers.CharField(source='user.phone', read_only=True)
     kcs_card_id = serializers.CharField(source='user.kcs_card_id', read_only=True)
     access_code = serializers.CharField(source='user.access_code', read_only=True)
-    photo_data = serializers.CharField(source='user.photo_data', read_only=True)
-    photo_source = serializers.CharField(source='user.photo_source', read_only=True)
+    photo_data = serializers.CharField(source='user.photo_data', required=False, allow_blank=True)
+    photo_source = serializers.CharField(source='user.photo_source', required=False, allow_blank=True)
     left_fingerprint_data = serializers.CharField(source='user.left_fingerprint_data', read_only=True)
     right_fingerprint_data = serializers.CharField(source='user.right_fingerprint_data', read_only=True)
     has_photo = serializers.SerializerMethodField()
@@ -55,11 +55,14 @@ class TeacherSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def update(self, instance, validated_data):
+        user_data = validated_data.pop('user', {})
         first_name = validated_data.pop('first_name', None)
         middle_name = validated_data.pop('middle_name', None)
         last_name = validated_data.pop('last_name', None)
         user_email = validated_data.pop('user_email', None)
         phone = validated_data.pop('phone', None)
+        photo_data = user_data.get('photo_data')
+        photo_source = user_data.get('photo_source')
 
         has_is_active = 'is_active' in validated_data
         has_employment_status = 'employment_status' in validated_data
@@ -90,6 +93,12 @@ class TeacherSerializer(serializers.ModelSerializer):
         if phone is not None:
             instance.user.phone = phone
             user_update_fields.append('phone')
+        if photo_data is not None:
+            instance.user.photo_data = photo_data
+            user_update_fields.append('photo_data')
+        if photo_source is not None:
+            instance.user.photo_source = photo_source
+            user_update_fields.append('photo_source')
 
         if has_is_active or has_employment_status:
             user_update_fields.append('is_active')

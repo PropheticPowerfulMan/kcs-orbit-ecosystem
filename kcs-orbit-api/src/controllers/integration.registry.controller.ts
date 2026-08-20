@@ -92,6 +92,8 @@ const updateParentSchema = z.object({
   phone: z.string().min(6).nullable().optional(),
   physicalAddress: z.string().min(1).nullable().optional(),
   mustChangePassword: z.boolean().optional(),
+  photoData: z.string().nullable().optional(),
+  photoSource: z.string().nullable().optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
 });
@@ -110,6 +112,8 @@ const updateTeacherSchema = z.object({
   department: z.string().min(1).nullable().optional(),
   jobTitle: z.string().min(1).nullable().optional(),
   mustChangePassword: z.boolean().optional(),
+  photoData: z.string().nullable().optional(),
+  photoSource: z.string().nullable().optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
 });
@@ -129,6 +133,8 @@ const updateStudentSchema = z.object({
   className: z.string().min(1).nullable().optional(),
   parentOrbitId: z.string().nullable().optional(),
   classOrbitId: z.string().nullable().optional(),
+  photoData: z.string().nullable().optional(),
+  photoSource: z.string().nullable().optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
 });
@@ -492,6 +498,8 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(parentPayload.phone !== undefined ? { phone: parentPayload.phone } : {}),
           ...(parentPayload.physicalAddress !== undefined ? { physicalAddress: parentPayload.physicalAddress ? normalizeText(parentPayload.physicalAddress) : null } : {}),
           ...(parentPayload.mustChangePassword !== undefined ? { mustChangePassword: parentPayload.mustChangePassword } : {}),
+          ...(parentPayload.photoData !== undefined ? { photoData: parentPayload.photoData } : {}),
+          ...(parentPayload.photoSource !== undefined ? { photoSource: parentPayload.photoSource } : {}),
         },
       });
 
@@ -564,6 +572,8 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(teacherPayload.department !== undefined ? { department: teacherPayload.department ? normalizeText(teacherPayload.department) : null } : {}),
           ...(teacherPayload.jobTitle !== undefined ? { jobTitle: teacherPayload.jobTitle ? normalizeText(teacherPayload.jobTitle) : null } : {}),
           ...(teacherPayload.mustChangePassword !== undefined ? { mustChangePassword: teacherPayload.mustChangePassword } : {}),
+          ...(teacherPayload.photoData !== undefined ? { photoData: teacherPayload.photoData } : {}),
+          ...(teacherPayload.photoSource !== undefined ? { photoSource: teacherPayload.photoSource } : {}),
         },
       });
 
@@ -641,6 +651,8 @@ export async function updateRegistryEntity(req: Request, res: Response) {
         ...(studentPayload.className !== undefined ? { className: studentPayload.className } : {}),
         ...(studentPayload.parentOrbitId !== undefined ? { parentId: studentPayload.parentOrbitId } : {}),
         ...(studentPayload.classOrbitId !== undefined ? { classId: studentPayload.classOrbitId } : {}),
+        ...(studentPayload.photoData !== undefined ? { photoData: studentPayload.photoData } : {}),
+        ...(studentPayload.photoSource !== undefined ? { photoSource: studentPayload.photoSource } : {}),
       },
     });
 

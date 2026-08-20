@@ -195,6 +195,8 @@ model Parent {
   phone          String?
   email          String?
   physicalAddress String?
+  photoData      String?
+  photoSource    String?
   mustChangePassword Boolean   @default(false)
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
@@ -215,6 +217,8 @@ model Teacher {
   phone          String?
   email          String?
   physicalAddress String?
+  photoData      String?
+  photoSource    String?
   subject        String?
   employeeId     String?
   employeeType   String?
@@ -256,6 +260,8 @@ model Student {
   studentNumber  String?
   email          String?
   phone          String?
+  photoData      String?
+  photoSource    String?
   dateOfBirth    DateTime?
   status         String?
   mustChangePassword Boolean   @default(false)

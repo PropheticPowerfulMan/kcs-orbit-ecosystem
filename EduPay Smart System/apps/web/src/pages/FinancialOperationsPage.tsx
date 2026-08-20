@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -2562,8 +2563,8 @@ export function FinancialOperationsPage() {
               </div>
               {expensePeriodFilter === "CUSTOM" && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <input className="input" type="date" value={expenseDateFrom} onChange={(event) => setExpenseDateFrom(event.target.value)} aria-label="Date debut depenses" />
-                  <input className="input" type="date" value={expenseDateTo} onChange={(event) => setExpenseDateTo(event.target.value)} aria-label="Date fin depenses" />
+                  <DateSelect className="input"  value={expenseDateFrom} onChange={(event) => setExpenseDateFrom(event.target.value)} aria-label="Date debut depenses" />
+                  <DateSelect className="input"  value={expenseDateTo} onChange={(event) => setExpenseDateTo(event.target.value)} aria-label="Date fin depenses" />
                 </div>
               )}
 
@@ -2795,7 +2796,7 @@ export function FinancialOperationsPage() {
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
                         Date de la depense
-                        <input className="input" type="date" value={expenseForm.expenseDate} onChange={(event) => setExpenseForm((current) => ({ ...current, expenseDate: event.target.value }))} required />
+                        <DateSelect className="input"  value={expenseForm.expenseDate} onChange={(event) => setExpenseForm((current) => ({ ...current, expenseDate: event.target.value }))} required />
                       </label>
                     </div>
                     <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm">
@@ -3385,8 +3386,8 @@ export function FinancialOperationsPage() {
                     <option value="EXTERNAL_PAYMENT">Paiement hors salaire</option>
                     <option value="MIXED">Mixte</option>
                   </select>
-                  <input className="input" type="date" value={employeeObligationForm.startDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, startDate: event.target.value }))} required />
-                  <input className="input" type="date" value={employeeObligationForm.dueDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, dueDate: event.target.value }))} required />
+                  <DateSelect className="input"  value={employeeObligationForm.startDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, startDate: event.target.value }))} required />
+                  <DateSelect className="input"  value={employeeObligationForm.dueDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, dueDate: event.target.value }))} required />
                 </div>
 
                 <textarea className="input min-h-24" value={employeeObligationForm.notes} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes de validation, motif ou référence interne" />
@@ -3621,8 +3622,8 @@ export function FinancialOperationsPage() {
             </div>
             {cashflowPeriodFilter === "CUSTOM" && (
               <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                <input className="input h-9 text-xs" type="date" value={cashflowDateFrom} onChange={(event) => setCashflowDateFrom(event.target.value)} aria-label="Date début trésorerie" />
-                <input className="input h-9 text-xs" type="date" value={cashflowDateTo} onChange={(event) => setCashflowDateTo(event.target.value)} aria-label="Date fin trésorerie" />
+                <DateSelect className="input h-9 text-xs"  value={cashflowDateFrom} onChange={(event) => setCashflowDateFrom(event.target.value)} aria-label="Date début trésorerie" />
+                <DateSelect className="input h-9 text-xs"  value={cashflowDateTo} onChange={(event) => setCashflowDateTo(event.target.value)} aria-label="Date fin trésorerie" />
               </div>
             )}
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">

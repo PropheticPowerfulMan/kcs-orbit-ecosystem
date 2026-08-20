@@ -3,7 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
-import { createOrbitParent, deleteOrbitParent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent } from "../../integrations/orbitRegistry";
+import { createOrbitParent, createOrbitStudent, deleteOrbitParent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
@@ -1127,6 +1127,8 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
       where: { parentId: localParentId, schoolId: req.user!.schoolId },
       select: {
         id: true,
+        orbitId: true,
+        externalStudentId: true,
         fullName: true,
         gender: true,
         classId: true,
@@ -1291,6 +1293,36 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     });
     if (!parent) {
       return res.status(404).json({ message: "Parent non trouvé après mise à jour." });
+    }
+
+    if (orbitRegistryIsEnabled() && parent.orbitId) {
+      try {
+        for (const student of parent.students) {
+          const nameParts = student.fullName.trim().split(/\s+/);
+          const orbitPayload = {
+            fullName: student.fullName,
+            firstName: nameParts[nameParts.length - 1] || "Student",
+            middleName: nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null,
+            lastName: nameParts[0] || "Student",
+            gender: student.gender || undefined,
+            className: student.class?.name || "Non renseignee",
+            studentNumber: student.id,
+          };
+          if (student.orbitId) {
+            await updateOrbitStudent(student.orbitId, orbitPayload);
+          } else {
+            const created = await createOrbitStudent({ ...orbitPayload, parentOrbitId: parent.orbitId });
+            await prisma.student.update({
+              where: { id: student.id },
+              data: { orbitId: created.orbitId, externalStudentId: created.externalId },
+            });
+          }
+        }
+        await syncOrbitRegistryMirror(req.user!.schoolId);
+      } catch (orbitStudentError) {
+        console.error("[PARENT_CHILDREN_ORBIT_SYNC] Parent saved but child propagation failed", orbitStudentError);
+        return res.status(502).json({ message: "Le parent a ete enregistre, mais la propagation de ses enfants a echoue. Reessayez la modification." });
+      }
     }
 
     const persistedPhone = parent.phone.replace(/\s+/g, "");

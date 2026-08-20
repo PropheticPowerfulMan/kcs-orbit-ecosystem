@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -2072,11 +2073,11 @@ export function FinanceDashboardPage() {
                     </label>
                     <label className="space-y-1.5">
                       <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Date min</span>
-                      <input type="date" value={scholarshipDateFrom} onChange={(event) => setScholarshipDateFrom(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40" />
+                      <DateSelect value={scholarshipDateFrom} onChange={(event) => setScholarshipDateFrom(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40" />
                     </label>
                     <label className="space-y-1.5">
                       <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Date max</span>
-                      <input type="date" value={scholarshipDateTo} onChange={(event) => setScholarshipDateTo(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40" />
+                      <DateSelect value={scholarshipDateTo} onChange={(event) => setScholarshipDateTo(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40" />
                     </label>
                   </div>
                   <div className="flex flex-wrap gap-2">

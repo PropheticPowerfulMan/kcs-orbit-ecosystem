@@ -39,6 +39,8 @@ export type SharedDirectoryStudent = {
   dateOfBirth: string | null;
   status: string | null;
   mustChangePassword: boolean;
+  photoData: string | null;
+  photoSource: string | null;
   classId: string | null;
   className: string | null;
   parentId: string | null;
@@ -58,6 +60,8 @@ export type SharedDirectoryParent = {
   email: string | null;
   physicalAddress: string | null;
   mustChangePassword: boolean;
+  photoData: string | null;
+  photoSource: string | null;
   organizationId: string | null;
   studentIds: string[];
   externalIds: ExternalIdEntry[];
@@ -80,6 +84,8 @@ export type SharedDirectoryTeacher = {
   department: string | null;
   jobTitle: string | null;
   mustChangePassword: boolean;
+  photoData: string | null;
+  photoSource: string | null;
   organizationId: string | null;
   externalIds: ExternalIdEntry[];
 };
@@ -189,6 +195,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         dateOfBirth: true,
         status: true,
         mustChangePassword: true,
+        photoData: true,
+        photoSource: true,
         classId: true,
         className: true,
         class: {
@@ -214,6 +222,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         email: true,
         physicalAddress: true,
         mustChangePassword: true,
+        photoData: true,
+        photoSource: true,
         organizationId: true,
         students: {
           select: { id: true },
@@ -240,6 +250,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         department: true,
         jobTitle: true,
         mustChangePassword: true,
+        photoData: true,
+        photoSource: true,
         organizationId: true,
       },
       orderBy: { fullName: "asc" },
@@ -308,6 +320,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         dateOfBirth: student.dateOfBirth?.toISOString() ?? null,
         status: student.status,
         mustChangePassword: student.mustChangePassword,
+        photoData: student.photoData,
+        photoSource: student.photoSource,
         classId: student.classId,
         className: student.class?.name || student.className || student.classId || null,
         parentId: student.parentId,
@@ -333,6 +347,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         email: parent.email,
         physicalAddress: parent.physicalAddress,
         mustChangePassword: parent.mustChangePassword,
+        photoData: parent.photoData,
+        photoSource: parent.photoSource,
         organizationId: parent.organizationId,
         studentIds: parent.students.map((student) => student.id),
         externalIds,
@@ -361,6 +377,8 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         department: teacher.department,
         jobTitle: teacher.jobTitle,
         mustChangePassword: teacher.mustChangePassword,
+        photoData: teacher.photoData,
+        photoSource: teacher.photoSource,
         organizationId: teacher.organizationId,
         externalIds,
       };

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { IdentityCapturePanel } from '../../components/ui/KcsIdentityTools';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
@@ -95,12 +97,23 @@ const ParentsPage = () => {
 
   useEffect(() => {
     void loadStudents();
-    const refresh = () => void loadStudents(true);
-    const timer = window.setInterval(refresh, 3000);
+    let refreshInFlight = false;
+    const refresh = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await loadStudents(true);
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 1500);
     window.addEventListener('focus', refresh);
+    window.addEventListener('savanex:directory-changed', refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('savanex:directory-changed', refresh);
     };
   }, []);
 
@@ -150,12 +163,23 @@ const ParentsPage = () => {
             class_parts: classParts,
             student_count: linkedStudents.length,
             activeStudents: linkedStudents.filter((student) => (student.status || 'ACTIVE') !== 'INACTIVE').length,
+            linked_students: linkedStudents.map((student) => ({
+              id: orbitStudents.length ? `orbit:${student.id}` : student.id,
+              student_id: student.studentNumber || student.displayId || student.id,
+              full_name: student.fullName || student.displayId || '',
+              email: student.email || '',
+              class_name: student.className || '',
+              date_of_birth: student.dateOfBirth || '',
+              gender: student.gender || '',
+              notes: student.notes || '',
+            })),
             kcs_card_id: parent.displayId,
             parent_external_id: parent.displayId,
             email: parent.email || '',
             phone: parent.phone || '',
             address: parent.physicalAddress || '',
-            photo_data: '',
+            photo_data: parent.photoData || '',
+            photo_source: parent.photoSource || '',
             left_fingerprint_data: '',
             right_fingerprint_data: '',
             management_id: localParentId || parent.id,
@@ -194,10 +218,12 @@ const ParentsPage = () => {
         management_source: 'local',
         identifier_type: 'local',
         student_ids: [],
+        linked_students: [],
       };
 
       current.students.push(student.full_name);
       current.student_ids.push(student.student_id);
+      current.linked_students.push(student);
       const className = normalizeLabel(student.class_name, 'Non assignée');
       current.classes.add(className);
       current.classParts.push(splitClassName(className));
@@ -223,6 +249,7 @@ const ParentsPage = () => {
         class_parts: group.classParts,
         student_count: group.students.length,
         activeStudents: group.activeStudents,
+        linked_students: group.linked_students,
         kcs_card_id: group.kcs_card_id,
         parent_external_id: group.parent_external_id,
         email: group.email,
@@ -308,6 +335,12 @@ const ParentsPage = () => {
       email: row.email || '',
       phone: row.phone || '',
       address: row.address || '',
+      identity: {
+        photo_data: row.photo_data || '',
+        photo_source: row.photo_source || '',
+        left_fingerprint_data: row.left_fingerprint_data || '',
+        right_fingerprint_data: row.right_fingerprint_data || '',
+      },
     });
   };
 
@@ -320,7 +353,11 @@ const ParentsPage = () => {
     setSubmitting(true);
     setError('');
     try {
-      await parentsService.update(editingParent.management_id, editForm, {
+      await parentsService.update(editingParent.management_id, {
+        ...editForm,
+        photo_data: editForm.identity.photo_data,
+        photo_source: editForm.identity.photo_source,
+      }, {
         source: editingParent.management_source,
         identifierType: editingParent.identifier_type,
       });
@@ -404,7 +441,7 @@ const ParentsPage = () => {
 
   return (
     <DashboardLayout>
-      {temporaryCredentials ? <section className="mb-5 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-50"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">Nouvel accès temporaire</p><p className="mt-2">Identifiant : <strong>{temporaryCredentials.username}</strong> · Code : <strong>{temporaryCredentials.accessCode || 'Non défini'}</strong> · Mot de passe : <strong>{temporaryCredentials.temporaryPassword}</strong></p><p className="mt-1 text-xs">À changer dès la prochaine connexion.</p></div><button type="button" onClick={() => setTemporaryCredentials(null)} className="rounded-lg border border-amber-200 px-3 py-2">Fermer</button></div></section> : null}
+      {temporaryCredentials ? createPortal(<ResetAccessDialog credentials={temporaryCredentials} onClose={() => setTemporaryCredentials(null)} />, document.body) : null}
       <section className="mb-6 flex flex-col gap-4 page-enter lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Parent relationship management</p>
@@ -511,6 +548,12 @@ const ParentsPage = () => {
                   </label>
                 </div>
               </section>
+              <IdentityCapturePanel
+                value={editForm.identity}
+                subjectName={`${editForm.last_name} ${editForm.middle_name} ${editForm.first_name}`.replace(/\s+/g, ' ').trim()}
+                onChange={(identity) => setEditForm({ ...editForm, identity })}
+                compact
+              />
               <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Coordonnées</p>
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -587,4 +630,5 @@ const ParentsPage = () => {
   );
 };
 
+const ResetAccessDialog=({credentials,onClose})=><div className="savanex-modal-backdrop fixed inset-0 z-[9999] grid place-items-center overflow-y-auto p-4" role="dialog" aria-modal="true"><section className="savanex-modal-panel savanex-reset-access-panel w-full max-w-xl p-6"><button type="button" onClick={onClose} className="float-right text-white">Fermer</button><p className="text-xs text-amber-300">REINITIALISATION TERMINEE</p><h3 className="mt-2 text-2xl font-bold text-white">Nouveaux identifiants</h3><div className="mt-6 space-y-3 text-slate-200"><p>Identifiant : <b>{credentials.username}</b></p><p>Code acces : <b>{credentials.accessCode}</b></p><p>Mot de passe : <b className="text-emerald-200">{credentials.temporaryPassword}</b></p></div><p className="mt-4 text-xs text-slate-400">Mot de passe a changer a la prochaine connexion.</p></section></div>;
 export default ParentsPage;

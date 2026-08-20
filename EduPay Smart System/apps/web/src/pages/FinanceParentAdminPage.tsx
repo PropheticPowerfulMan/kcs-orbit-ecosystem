@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -1643,8 +1644,7 @@ export function FinanceParentAdminPage() {
                               className="w-full"
                               placeholder={copy.label}
                             />
-                            <input
-                              type="date"
+                            <DateSelect
                               value={installment.dueDate}
                               onChange={(event) => setAgreementForm((current) => ({
                                 ...current,

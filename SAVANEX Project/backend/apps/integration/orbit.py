@@ -274,6 +274,8 @@ def sync_student(student) -> None:
             "dateOfBirth": _contract_datetime(student.date_of_birth) if student.date_of_birth else None,
             "status": "ACTIVE" if student.is_active else "INACTIVE",
             "mustChangePassword": student.user.must_change_password,
+            "photoData": student.user.photo_data or None,
+            "photoSource": student.user.photo_source or None,
         }),
     }
     _post_json("/api/integration/ingest/savanex/students", payload)
@@ -302,6 +304,8 @@ def sync_parent(parent) -> None:
             "phone": parent.phone or None,
             "physicalAddress": parent.address or None,
             "mustChangePassword": parent.must_change_password,
+            "photoData": parent.photo_data or None,
+            "photoSource": parent.photo_source or None,
         }),
     }
     _post_json("/api/integration/ingest/savanex/parents", payload)
@@ -339,6 +343,8 @@ def sync_teacher(teacher) -> None:
             "payFrequency": teacher.pay_frequency or None,
             "subject": teacher.specialization or None,
             "mustChangePassword": teacher.user.must_change_password,
+            "photoData": teacher.user.photo_data or None,
+            "photoSource": teacher.user.photo_source or None,
         }),
     }
     _post_json("/api/integration/ingest/savanex/teachers", payload)

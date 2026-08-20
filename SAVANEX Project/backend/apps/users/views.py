@@ -181,12 +181,49 @@ def reset_entity_access(request, entity_type, identifier):
             | Q(user__email__iexact=identifier)
         ).first()
         user = student.user if student else None
+        if not user:
+            user = provision_student_access_identity(identifier, request.data)
     else:
         return Response({'detail': 'Type d\'entite non pris en charge.'}, status=status.HTTP_400_BAD_REQUEST)
 
     if not user:
         return Response({'detail': 'Compte utilisateur introuvable pour cette entite.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(reset_user_access_credentials(user))
+
+
+def provision_student_access_identity(identifier, data=None):
+    data = data or {}
+    existing = User.objects.filter(role=User.ROLE_STUDENT, is_active=True).filter(
+        Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier)
+        | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
+    ).first()
+    if existing:
+        return existing
+
+    full_name = str(data.get('fullName') or '').strip()
+    parts = full_name.split()
+    last_name = str(data.get('lastName') or (parts[0] if parts else '')).strip()
+    first_name = str(data.get('firstName') or (parts[-1] if len(parts) > 1 else '')).strip()
+    middle_name = str(data.get('middleName') or (' '.join(parts[1:-1]) if len(parts) > 2 else '')).strip()
+    username = str(data.get('studentNumber') or identifier).strip()[:150]
+    if not username:
+        return None
+    collision = User.objects.filter(username__iexact=username).first()
+    if collision:
+        return collision if collision.role == User.ROLE_STUDENT else None
+
+    user = User(
+        username=username,
+        role=User.ROLE_STUDENT,
+        first_name=first_name,
+        middle_name=middle_name,
+        last_name=last_name,
+        email=str(data.get('email') or '').strip(),
+        phone=str(data.get('phone') or '').strip(),
+    )
+    user.set_unusable_password()
+    user.save()
+    return user
 
 
 def reset_user_access_credentials(user):

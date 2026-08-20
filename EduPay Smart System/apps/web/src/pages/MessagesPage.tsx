@@ -1,3 +1,4 @@
+import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { Eye, Mail, MessageSquare, Send, Trash2, Users, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
@@ -420,11 +421,11 @@ export function MessagesPage() {
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
               Du
-              <input type="date" value={historyDateFrom} onChange={(event) => setHistoryDateFrom(event.target.value)} className="w-full" />
+              <DateSelect value={historyDateFrom} onChange={(event) => setHistoryDateFrom(event.target.value)} className="w-full" />
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
               Au
-              <input type="date" value={historyDateTo} onChange={(event) => setHistoryDateTo(event.target.value)} className="w-full" />
+              <DateSelect value={historyDateTo} onChange={(event) => setHistoryDateTo(event.target.value)} className="w-full" />
             </label>
             <div className="flex items-end">
               <button

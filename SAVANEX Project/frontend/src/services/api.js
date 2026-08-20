@@ -222,6 +222,7 @@ const buildSharedParentMap = (parents) => {
 
 const mapSharedStudentToSavanexStudent = (student, parentMap) => {
   const externalIds = normalizeDirectoryExternalIds(student?.externalIds);
+  const savanexExternalId = externalIds.find((entry) => entry.appSlug.toUpperCase() === 'SAVANEX')?.externalId || '';
   const parent = parentMap.get(student?.parentId) || null;
   const parentExternalIds = normalizeDirectoryExternalIds(parent?.externalIds);
   const preferredStudentId =
@@ -236,8 +237,8 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     email: student?.email || '',
     avatar: null,
     kcs_card_id: null,
-    photo_data: '',
-    photo_source: 'orbit',
+    photo_data: student?.photoData || '',
+    photo_source: student?.photoSource || 'orbit',
     left_fingerprint_data: '',
     right_fingerprint_data: '',
     has_photo: false,
@@ -265,6 +266,7 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     source_label: 'Orbit',
     is_read_only: false,
     orbit_id: student?.id || null,
+    savanex_external_id: savanexExternalId,
     external_ids: externalIds,
   };
 };
@@ -284,6 +286,8 @@ const mapSavanexStudentPatchToOrbit = (data) => {
     ...(data?.date_of_birth !== undefined ? { dateOfBirth: data.date_of_birth || null } : {}),
     ...(className ? { className } : {}),
     ...(data?.notes !== undefined ? { notes: data.notes } : {}),
+    ...(data?.photo_data !== undefined ? { photoData: data.photo_data || null } : {}),
+    ...(data?.photo_source !== undefined ? { photoSource: data.photo_source || null } : {}),
   };
 };
 
@@ -340,6 +344,9 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
           parent_phone: sharedStudent.parent_phone || student.parent_phone,
           parent_address: sharedStudent.parent_address || student.parent_address,
           parent_external_id: sharedStudent.parent_external_id || student.parent_external_id,
+          savanex_external_id: sharedStudent.savanex_external_id || student.student_id,
+          orbit_id: sharedStudent.orbit_id || student.orbit_id,
+          external_ids: sharedStudent.external_ids || student.external_ids,
         } : {}),
         source: student?.source || 'local',
         source_label: student?.source_label || 'SAVANEX',
@@ -511,7 +518,7 @@ export const studentsService = {
     const path = options.entityType
       ? `/users/reset-access/${options.entityType}/${encodeURIComponent(identifier)}/`
       : `/users/${identifier}/reset-access/`;
-    const res = await api.post(path);
+    const res = await api.post(path, options.entityData || {});
     return res.data;
   },
 };
@@ -544,6 +551,8 @@ export const parentsService = {
         ...(data?.email !== undefined ? { email: data.email || null } : {}),
         ...(data?.phone !== undefined ? { phone: data.phone || null } : {}),
         ...(data?.address !== undefined ? { physicalAddress: data.address || null } : {}),
+        ...(data?.photo_data !== undefined ? { photoData: data.photo_data || null } : {}),
+        ...(data?.photo_source !== undefined ? { photoSource: data.photo_source || null } : {}),
       }, {
         params: { identifierType: options.identifierType || 'orbitId' },
       });

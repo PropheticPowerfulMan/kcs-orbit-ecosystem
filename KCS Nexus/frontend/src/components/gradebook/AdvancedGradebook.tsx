@@ -1,3 +1,4 @@
+import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -509,7 +510,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </select>
               <input className="input-kcs py-2 text-sm" type="number" min={1} value={draft.maxPoints} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: Number(event.target.value) }))} />
             </div>
-            <input className="input-kcs py-2 text-sm" type="date" value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
+            <DateSelect className="input-kcs py-2 text-sm"  value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
             <textarea className="input-kcs min-h-20 py-2 text-sm" value={draft.description} onChange={(event) => setDraft((item) => ({ ...item, description: event.target.value }))} />
             <button onClick={addAssignment} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800"><Plus size={16} className="mr-1 inline" /> Add task</button>
           </div>

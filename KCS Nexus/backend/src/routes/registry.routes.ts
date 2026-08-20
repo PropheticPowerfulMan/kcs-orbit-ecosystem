@@ -507,12 +507,29 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
   const entityType = z.enum(['parent', 'student']).parse(req.params.entityType)
   const identifier = String(req.params.identifier)
   const directory = await getSharedDirectoryFromOrbit()
-  const entity = (entityType === 'parent' ? directory.parents : directory.students).find((item: any) =>
+  let entity = (entityType === 'parent' ? directory.parents : directory.students).find((item: any) =>
     item.id === identifier || item.displayId === identifier || item.studentNumber === identifier
       || item.externalIds?.some((link: any) => link.externalId === identifier)
   ) as any
 
-  if (!entity) throw new ApiError(404, 'Entite introuvable dans le registre partage.')
+  if (!entity && entityType === 'student') {
+    const localProfile = await prisma.studentProfile.findFirst({
+      where: { OR: [{ id: identifier }, { studentNumber: identifier }] },
+      include: { user: true },
+    })
+    if (localProfile) {
+      entity = {
+        id: localProfile.id,
+        studentNumber: localProfile.studentNumber,
+        fullName: composeAdministrativeName(localProfile.user),
+        email: localProfile.user.email,
+        phone: localProfile.user.phone,
+        externalIds: [],
+      }
+    }
+  }
+
+  if (!entity) throw new ApiError(404, 'Entite introuvable dans le registre partage ou dans KCS Nexus.')
 
   const savanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
   if (savanexExternalId && env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
@@ -520,6 +537,15 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     const resetResponse = await fetch(resetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY },
+      body: JSON.stringify({
+        fullName: entity.fullName,
+        firstName: entity.firstName,
+        middleName: entity.middleName,
+        lastName: entity.lastName,
+        email: entity.email,
+        phone: entity.phone,
+        studentNumber: entity.studentNumber || identifier,
+      }),
       signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
     })
     const resetData = await resetResponse.json().catch(() => ({})) as Record<string, unknown>

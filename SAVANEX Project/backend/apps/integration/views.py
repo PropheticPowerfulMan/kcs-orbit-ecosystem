@@ -8,7 +8,7 @@ from apps.students.models import Student
 from apps.teachers.models import Teacher
 from apps.users.models import User
 from apps.users.serializers import UserMeSerializer
-from apps.users.views import reset_user_access_credentials
+from apps.users.views import provision_student_access_identity, reset_user_access_credentials
 from apps.users.permissions import IsAdminUser
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
 
@@ -151,6 +151,8 @@ def reset_ecosystem_identity_access_view(request, entity_type, identifier):
             | Q(user__email__iexact=identifier)
         ).first()
         user = student.user if student else None
+        if not user:
+            user = provision_student_access_identity(identifier, request.data)
     else:
         return Response({'detail': 'Unsupported entity type.'}, status=400)
 

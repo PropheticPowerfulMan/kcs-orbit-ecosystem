@@ -28,6 +28,8 @@ const attendanceSummary = [
   { label: 'Staff', attendance: 98 },
 ]
 
+attendanceSummary.splice(0, attendanceSummary.length)
+
 const getStaffSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
   return !segment || segment === 'staff' || segment === 'dashboard' ? 'dashboard' : segment
@@ -51,6 +53,9 @@ const StaffSectionView = ({ segment }: { segment: string }) => {
   }
 
   if (segment === 'records') {
+    if (!selectedRecord) {
+      return <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 dark:text-gray-400">Aucun dossier. Les dossiers apparaîtront après leur création par le Super Admin.</div>
+    }
     return (
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -111,7 +116,7 @@ const StaffSectionView = ({ segment }: { segment: string }) => {
       { family: 'Mbuyi Family', student: 'Amani Mbuyi', grade: 'Grade 9', stage: 'Interview scheduled', owner: 'Registrar Office' },
       { family: 'Nsimba Family', student: 'Joelle Nsimba', grade: 'Grade 6', stage: 'Documents pending', owner: 'Admissions Office' },
       { family: 'Kanku Family', student: 'Samuel Kanku', grade: 'Grade 10', stage: 'Placement review', owner: 'Academic Coordinator' },
-    ]
+    ].filter(() => false)
     return (
       <div className="grid gap-4 lg:grid-cols-3">
         {admissionQueue.map((item) => (

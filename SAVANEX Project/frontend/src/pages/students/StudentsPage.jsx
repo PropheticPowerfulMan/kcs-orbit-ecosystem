@@ -93,6 +93,12 @@ const createEditForm = (student) => {
     dateOfBirth: student?.date_of_birth || '',
     gender: student?.gender || 'F',
     notes: student?.notes || '',
+    identity: {
+      photo_data: student?.photo_data || '',
+      photo_source: student?.photo_source || '',
+      left_fingerprint_data: student?.left_fingerprint_data || '',
+      right_fingerprint_data: student?.right_fingerprint_data || '',
+    },
   };
 };
 
@@ -156,12 +162,25 @@ const StudentsPage = ({ familyWorkspace = false }) => {
     };
 
     void loadStudents();
-    const refresh = () => void studentsService.getAll().then(setStudents).catch(() => undefined);
-    const timer = window.setInterval(refresh, 3000);
+    let refreshInFlight = false;
+    const refresh = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        setStudents(await studentsService.getAll());
+      } catch {
+        // Le prochain cycle retentera sans masquer les données déjà affichées.
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 1500);
     window.addEventListener('focus', refresh);
+    window.addEventListener('savanex:directory-changed', refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('savanex:directory-changed', refresh);
     };
   }, []);
 
@@ -300,6 +319,8 @@ const StudentsPage = ({ familyWorkspace = false }) => {
         class_level: editForm.classLevel,
         class_suffix: editForm.classSuffix,
         notes: editForm.notes,
+        photo_data: editForm.identity.photo_data,
+        photo_source: editForm.identity.photo_source,
       };
       if (editForm.dateOfBirth) {
         payload.date_of_birth = editForm.dateOfBirth;
@@ -337,12 +358,20 @@ const StudentsPage = ({ familyWorkspace = false }) => {
   };
 
   const resetStudentAccess = async (student) => {
-    const identifier = student.user_id || student.student_id || student.externalStudentId;
+    const isLocalStudent = student.source !== 'orbit' && Boolean(student.user_id);
+    const identifier = isLocalStudent
+      ? student.user_id
+      : (student.savanex_external_id || student.student_id || student.orbit_id);
     if (!identifier) return setError('Compte utilisateur introuvable pour cet élève.');
     setResettingId(student.id);
     setError('');
     try {
-      const credentials = await studentsService.resetAccess(identifier, student.user_id ? {} : { entityType: 'student' });
+      const credentials = await studentsService.resetAccess(identifier, isLocalStudent ? {} : { entityType: 'student', entityData: {
+        fullName: student.full_name,
+        email: student.email,
+        phone: student.phone,
+        studentNumber: student.student_id,
+      } });
       setLastTemporaryCredentials({ parent: null, students: [{ studentId: student.student_id, ...credentials }] });
       setCredentialsDialogOpen(true);
       setFeedback('Un nouveau mot de passe temporaire a été généré.');
@@ -376,7 +405,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       label: 'Action',
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => navigate(`/students/${encodeURIComponent(row.id)}`, { state: { entity: { ...row, role: 'Élève' } } })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
+          <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
           {row.is_read_only ? (
             <span className="savanex-entity-action savanex-entity-action-muted">Lecture seule</span>
           ) : (
@@ -508,7 +537,19 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                   <h4 className="mt-1 font-display text-lg font-semibold text-slate-100">Mots de passe à remettre à la famille</h4>
                   <p className="mt-1 text-xs text-slate-300">Format commun de l'écosystème: KCS-123456. Ce mot de passe sert seulement à la première connexion.</p>
                 </div>
-                <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCredentialsDialogOpen(false);
+                      setLastTemporaryCredentials(null);
+                    }}
+                    className="rounded-lg border border-slate-400/50 bg-slate-950/70 px-3 py-1.5 text-xs font-bold text-white hover:bg-slate-800"
+                  >
+                    Fermer ces informations
+                  </button>
+                </div>
               </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {lastTemporaryCredentials.parent ? (
@@ -540,7 +581,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
 
           {credentialsDialogOpen && lastTemporaryCredentials ? createPortal((
             <div className={modalBackdropClass}>
-              <section role="dialog" aria-modal="true" aria-label="Identifiants générés" className={`${modalPanelClass} max-w-3xl`}>
+              <section role="dialog" aria-modal="true" aria-label="Identifiants générés" className={`${modalPanelClass} savanex-reset-access-panel max-w-3xl`}>
                 <div className="flex items-start justify-between gap-4">
                   <div><p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Identifiants générés</p><h3 className="mt-1 text-xl font-bold text-white">Accès à remettre à la famille</h3><p className="mt-2 text-sm text-slate-300">Ces accès fonctionnent dans les portails autorisés de l'écosystème. SAVANEX reste réservé aux administrateurs.</p></div>
                   <button type="button" onClick={() => setCredentialsDialogOpen(false)} className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-white">Fermer</button>
@@ -722,6 +763,12 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                       </label>
                     </div>
                   </section>
+                  <IdentityCapturePanel
+                    value={editForm.identity}
+                    subjectName={`${editForm.lastName} ${editForm.middleName} ${editForm.firstName}`.replace(/\s+/g, ' ').trim()}
+                    onChange={(identity) => setEditField('identity', identity)}
+                    compact
+                  />
                   <section className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Classe et profil</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -772,9 +819,9 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                 </div>
 
                 {error ? <p className="mt-4 text-sm text-rose-300">{error}</p> : null}
-                <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-github-border pt-4">
-                  <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-github-border bg-slate-950/50 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800/60">Annuler</button>
-                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="min-w-64 rounded-xl border-2 border-white bg-emerald-300 px-7 py-3.5 text-base font-black text-slate-950 shadow-[0_0_28px_rgba(52,211,153,0.55)] transition hover:scale-[1.02] hover:bg-emerald-200 disabled:opacity-60">
+                <div className="mt-6 flex flex-wrap justify-end gap-3 rounded-2xl border border-slate-500/60 bg-slate-800 px-5 py-4 shadow-lg">
+                  <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border-2 border-slate-400 bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-slate-800">Annuler</button>
+                  <button type="button" onClick={() => void saveEditedStudent()} disabled={savingEdit} className="min-w-72 rounded-xl border-2 border-white bg-emerald-300 px-8 py-4 text-base font-black text-slate-950 shadow-[0_0_34px_rgba(52,211,153,0.75)] transition hover:scale-[1.02] hover:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-200/60 disabled:opacity-60">
                     {savingEdit ? 'Modification...' : 'Enregistrer les modifications'}
                   </button>
                 </div>
@@ -826,7 +873,15 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des élèves...</p> : null}
       <DataTable columns={columns} data={filtered} />
 
-      <EntityDetailPanel entity={selectedStudent} type="student" onClose={() => setSelectedStudent(null)} />
+      <EntityDetailPanel
+        entity={selectedStudent}
+        type="student"
+        onClose={() => setSelectedStudent(null)}
+        onEdit={(student) => {
+          setSelectedStudent(null);
+          openEditDialog(student);
+        }}
+      />
 
       <section className="mt-6 grid gap-4 xl:grid-cols-2">
         <article className="card p-5">

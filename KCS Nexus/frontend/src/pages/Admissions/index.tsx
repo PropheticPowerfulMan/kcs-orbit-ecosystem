@@ -1,3 +1,4 @@
+import DateSelect from '@/components/shared/DateSelect'
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import {
@@ -542,7 +543,7 @@ const AdmissionsPage = () => {
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Date of Birth *</label>
-                            <input type="date" {...studentForm.register('dateOfBirth')} className="input-kcs" />
+                            <DateSelect {...studentForm.register('dateOfBirth')} className="input-kcs" />
                             {studentForm.formState.errors.dateOfBirth && <p className="text-xs text-red-500 mt-1">{studentForm.formState.errors.dateOfBirth.message}</p>}
                           </div>
                           <div>
