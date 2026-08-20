@@ -531,8 +531,11 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
 
   if (!entity) throw new ApiError(404, 'Entite introuvable dans le registre partage ou dans KCS Nexus.')
 
-  const savanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
-  if (savanexExternalId && env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
+  const linkedSavanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
+  const savanexExternalId = entityType === 'student'
+    ? (entity.studentNumber || identifier)
+    : (linkedSavanexExternalId || identifier)
+  if (env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
     const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
     const resetResponse = await fetch(resetUrl, {
       method: 'POST',

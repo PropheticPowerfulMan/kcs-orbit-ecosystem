@@ -1073,18 +1073,18 @@ function StudentEditModal({
         <h2 className="pr-10 font-display text-2xl font-bold text-white">Modifier l'élève</h2>
         <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
-            <input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Nom *" aria-label="Nom" required />
-            <input className="input" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Postnom" aria-label="Postnom" />
-            <input className="input" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Prénom *" aria-label="Prénom" required />
-          </div>
-<div className="grid gap-3 sm:grid-cols-2">
-            <input className="input" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email de l’élève" aria-label="Email de l’élève" />
-            <input className="input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Téléphone de l’élève" aria-label="Téléphone de l’élève" />
-            <DateSelect className="input"  value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} aria-label="Date de naissance" />
-            <select className="input" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))} aria-label="Genre"><option value="">Genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Nom de famille *<input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Postnom<input className="input" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Ex. Kabongo" /></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Prénom *<input className="input" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Ex. Marie" required /></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <select className="input" value={form.classId} onChange={(event) => setForm((current) => ({ ...current, classId: event.target.value }))} required>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Adresse e-mail de l’élève<input className="input" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="eleve@exemple.com" /></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Téléphone de l’élève<input className="input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243..." /></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Date de naissance<DateSelect className="input" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Genre<select className="input" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Classe actuelle *<select className="input" value={form.classId} onChange={(event) => setForm((current) => ({ ...current, classId: event.target.value }))} required>
               <option value="">Classe</option>
               <optgroup label="Maternelle">
                 {classOptions.filter((item) => item.name.startsWith("K")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -1092,13 +1092,13 @@ function StudentEditModal({
               <optgroup label="G1 - G12">
                 {classOptions.filter((item) => item.name.startsWith("G")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
-            </select>
-            <input className="input" type="number" min="0" step="0.01" value={form.annualFee} onChange={(event) => setForm((current) => ({ ...current, annualFee: event.target.value }))} placeholder="Frais annuels" required />
+            </select></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Frais scolaires annuels (USD) *<input className="input" type="number" min="0" step="0.01" value={form.annualFee} onChange={(event) => setForm((current) => ({ ...current, annualFee: event.target.value }))} placeholder="Ex. 650" required /></label>
           </div>
-          <select className="input" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
+          <label className="grid gap-1 text-xs font-semibold text-ink-dim">Parent responsable *<select className="input" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
             <option value="">Parent</option>
             {parents.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
-          </select>
+          </select></label>
           <div className="flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">Annuler</button>
             <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-400 disabled:opacity-60">

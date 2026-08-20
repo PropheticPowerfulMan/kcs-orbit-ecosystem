@@ -1097,12 +1097,16 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     if (orbitRegistryIsEnabled()) {
       try {
         const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-        const mirroredParent = mirrored.parents.find((entry) => matchesSharedParentIdentifier(entry, id));
+        const mirroredParent = mirrored.parents.find((entry) =>
+          matchesSharedParentIdentifier(entry, parentExists.orbitId || id)
+          || matchesSharedParentIdentifier(entry, id)
+        );
+        const orbitParentId = parentExists.orbitId || mirroredParent?.orbitId;
 
-        if (mirroredParent?.orbitId) {
+        if (orbitParentId) {
           const { firstName, lastName } = splitPersonName(payload.fullName);
 
-          await updateOrbitParent(mirroredParent.orbitId, {
+          await updateOrbitParent(orbitParentId, {
             fullName: payload.fullName,
             firstName: payload.prenom || firstName,
             lastName: [payload.nom, payload.postnom].filter(Boolean).join(" ") || lastName,
@@ -1121,6 +1125,12 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
       }
     }
 
+
+    if (orbitRegistryIsEnabled() && parentExists.orbitId && !orbitUpdateSucceeded) {
+      return res.status(502).json({
+        message: "La modification n'a pas pu etre propagee au registre partage. Reessayez dans quelques instants."
+      });
+    }
 
     const classIdResolution = await resolveStudentClassIds(req.user!.schoolId, payload.students);
     const currentStudents = await prisma.student.findMany({

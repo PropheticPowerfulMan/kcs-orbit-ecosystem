@@ -71,7 +71,7 @@ const subtitles = {
 };
 
 const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
-  const entityPhoto = entity.photo_data || entity.parent_photo_data || entity.avatar || '';
+  const entityPhoto = entity?.photo_data || entity?.parent_photo_data || entity?.avatar || '';
   const fields = useMemo(() => baseFieldsByType[type] || [], [type]);
 
   useEffect(() => {
