@@ -53,14 +53,14 @@ body {
 
 @media print {
   @page {
-    size: 85.6mm 54mm;
+    size: 85.6mm 53.98mm;
     margin: 0;
   }
 
   html,
   body {
     width: 85.6mm;
-    min-height: 54mm;
+    min-height: 53.98mm;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
@@ -73,7 +73,7 @@ body {
   body.kcs-card-print-mode .kcs-print-portal {
     display: block !important;
     width: 85.6mm !important;
-    min-height: 54mm !important;
+    min-height: 53.98mm !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
@@ -82,7 +82,7 @@ body {
   body.kcs-card-print-mode .kcs-print-sheet {
     position: static !important;
     width: 85.6mm !important;
-    min-height: 54mm !important;
+    min-height: 53.98mm !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
@@ -96,7 +96,7 @@ body {
     box-shadow: none !important;
     transform: none !important;
     width: 85.6mm !important;
-    height: 54mm !important;
+    height: 53.98mm !important;
     border-radius: 0 !important;
     print-color-adjust: exact !important;
     -webkit-print-color-adjust: exact !important;
@@ -112,6 +112,16 @@ body {
   .kcs-card-back {
     break-before: page;
     page-break-before: always;
+  }
+
+  .kcs-print-side-front .kcs-card-back,
+  .kcs-print-side-back .kcs-card-front {
+    display: none !important;
+  }
+
+  .kcs-print-side-back .kcs-card-back {
+    break-before: auto;
+    page-break-before: auto;
   }
 }
 
@@ -458,6 +468,19 @@ body {
 
 .kcs-print-portal {
   display: none;
+}
+
+.kcs-card-print-select {
+  color: #f8fafc !important;
+  background-color: rgba(2, 6, 23, 0.92) !important;
+  color-scheme: dark;
+  -webkit-text-fill-color: #f8fafc;
+  opacity: 1 !important;
+}
+
+.kcs-card-print-select option {
+  color: #f8fafc;
+  background: #020617;
 }
 
 .kcs-card-set {

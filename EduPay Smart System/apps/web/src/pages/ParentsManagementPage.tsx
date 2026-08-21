@@ -2,6 +2,7 @@ import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
 import { SearchField } from "../components/SearchField";
+import DateSelect from "../components/DateSelect";
 import { schoolBranding } from "../config/branding";
 import { api } from "../services/api";
 import { exportWorkbook } from "../utils/financeExcel";
@@ -14,6 +15,7 @@ type Student = {
   displayId?: string;
   fullName: string;
   gender?: "F" | "M" | "O" | "";
+  dateOfBirth?: string | null;
   classId: string;
   className: string;
   annualFee: number;
@@ -61,6 +63,7 @@ type SharedDirectoryResponse = {
       className?: string;
       annualFee?: number;
       annualFeeDisplay?: number;
+      dateOfBirth?: string | null;
       createdAt?: string;
       paymentOptionType?: string | null;
       tuitionPlanName?: string;
@@ -74,6 +77,7 @@ type SharedDirectoryResponse = {
     className?: string;
     annualFee?: number;
     annualFeeDisplay?: number;
+    dateOfBirth?: string | null;
   }>;
 };
 
@@ -158,6 +162,7 @@ function normalizeParentForUi(parent: Parent): Parent {
           id: String(student.id ?? ""),
           displayId: student.displayId ? String(student.displayId) : undefined,
           fullName: String(student.fullName ?? ""),
+          dateOfBirth: student.dateOfBirth ? String(student.dateOfBirth) : null,
           classId: String(student.classId ?? ""),
           className: String(student.className ?? ""),
           annualFee: toSafeNumber(student.annualFee),
@@ -198,6 +203,7 @@ function normalizeSharedDirectoryForParents(directory: SharedDirectoryResponse):
       id: String(student.id),
       displayId: student.displayId ? String(student.displayId) : undefined,
       fullName: String(student.fullName ?? ""),
+      dateOfBirth: student.dateOfBirth ? String(student.dateOfBirth) : null,
       gender: (student.gender as Student["gender"]) ?? "",
       classId: String(student.classId ?? ""),
       className: String(student.className ?? student.classId ?? ""),
@@ -217,6 +223,7 @@ function normalizeSharedDirectoryForParents(directory: SharedDirectoryResponse):
           id: String(student.id),
           displayId: student.displayId ? String(student.displayId) : undefined,
           fullName: String(student.fullName ?? ""),
+          dateOfBirth: student.dateOfBirth ? String(student.dateOfBirth) : null,
           gender: (student.gender as Student["gender"]) ?? "",
           classId: String(student.classId ?? ""),
           className: String(student.className ?? student.classId ?? ""),
@@ -230,9 +237,9 @@ function normalizeSharedDirectoryForParents(directory: SharedDirectoryResponse):
     return normalizeParentForUi({
       id: String(parent.id),
       displayId: parent.displayId ? String(parent.displayId) : undefined,
-      nom: parent.lastName ? String(parent.lastName) : parts.nom,
+      nom: parts.nom,
       postnom: parts.postnom,
-      prenom: parent.firstName ? String(parent.firstName) : parts.prenom,
+      prenom: parts.prenom,
       fullName,
       phone: String(parent.phone ?? ""),
       email: String(parent.email ?? ""),
@@ -431,6 +438,7 @@ type StudentFormState = {
   middleName: string;
   firstName: string;
   fullName: string;
+  dateOfBirth: string | null;
   gender: "F" | "M" | "O" | "";
   classId: string;
   annualFee: string;
@@ -492,7 +500,7 @@ const EMPTY_FORM: FormState = {
   students: []
 };
 
-const EMPTY_STUDENT: StudentFormState = { lastName: "", middleName: "", firstName: "", fullName: "", gender: "", classId: "", annualFee: "", paymentOptionType: "STANDARD_MONTHLY" };
+const EMPTY_STUDENT: StudentFormState = { lastName: "", middleName: "", firstName: "", fullName: "", dateOfBirth: "", gender: "", classId: "", annualFee: "", paymentOptionType: "STANDARD_MONTHLY" };
 
 const EMPTY_SPECIAL_AGREEMENT: SpecialAgreementDraft = {
   title: "",
@@ -1950,6 +1958,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
       students: initial.students.map((s) => ({
         id: s.id,
         ...(() => { const parts = splitNameParts(s.fullName); return { lastName: parts.nom, middleName: parts.postnom, firstName: parts.prenom, fullName: s.fullName }; })(),
+        dateOfBirth: s.dateOfBirth ? String(s.dateOfBirth).slice(0, 10) : "",
         gender: s.gender || "",
         classId: s.classId,
         annualFee: String(s.annualFee),
@@ -2196,7 +2205,11 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
     const normalizedForm: FormState = {
       ...form,
       students: form.students.map((student) => {
-        student = { ...student, fullName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(" ").trim() };
+        student = {
+          ...student,
+          fullName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(" ").trim(),
+          dateOfBirth: student.dateOfBirth || null
+        } as StudentFormState;
         if (student.paymentOptionType !== "SPECIAL_OWNER_AGREEMENT") {
           return { ...student, specialAgreement: undefined };
         }
@@ -2404,11 +2417,15 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="space-y-1"><label className="text-xs text-ink-dim">Nom *</label><input value={st.lastName} onChange={(e) => setStudent(idx, "lastName", e.target.value)} className="w-full" placeholder="Nom de l??l?ve" required /></div>
-                <div className="space-y-1"><label className="text-xs text-ink-dim">Postnom</label><input value={st.middleName} onChange={(e) => setStudent(idx, "middleName", e.target.value)} className="w-full" placeholder="Postnom de l??l?ve" /></div>
-                <div className="space-y-1"><label className="text-xs text-ink-dim">Pr?nom *</label><input value={st.firstName} onChange={(e) => setStudent(idx, "firstName", e.target.value)} className="w-full" placeholder="Pr?nom de l??l?ve" required /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">Nom *</label><input value={st.lastName} onChange={(e) => setStudent(idx, "lastName", e.target.value)} className="w-full" placeholder="Nom de l’élève" required /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">Postnom</label><input value={st.middleName} onChange={(e) => setStudent(idx, "middleName", e.target.value)} className="w-full" placeholder="Postnom de l’élève" /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">Prénom *</label><input value={st.firstName} onChange={(e) => setStudent(idx, "firstName", e.target.value)} className="w-full" placeholder="Prénom de l’élève" required /></div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.55fr_0.9fr]">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-ink-dim">Date de naissance</label>
+                  <DateSelect className="w-full" value={st.dateOfBirth || ""} onChange={(event) => setStudent(idx, "dateOfBirth", event.target.value)} />
+                </div>
                 <div className="space-y-1">
                   <label className="text-xs text-ink-dim">Sexe</label>
                   <select value={st.gender} onChange={(e) => setStudent(idx, "gender", e.target.value)} className="w-full">
@@ -2998,18 +3015,21 @@ export function ParentsManagementPage() {
     try {
       setSendingAccess(true);
       setApiError(null);
-      const result = await api<{ parentId: string; email: string; accessCode?: string; temporaryPassword: string; notificationStatus?: ParentCredentials["notificationStatus"] }>(`/api/parents/${parent.id}/reset-password`, {
+      const result = await api<{ username?: string; email?: string; accessCode?: string; temporaryPassword: string; delivery?: Array<{ channel?: string; status?: string }> }>(`/api/shared-directory/reset-access/parent/${encodeURIComponent(parent.id)}`, {
         method: "POST",
         body: JSON.stringify(channels)
       });
       setNotificationTarget(null);
       setCredentials({
-        parentId: result.parentId,
+        parentId: parent.id,
         parentName: parent.fullName,
-        email: result.email,
+        email: result.email || result.username || parent.email,
         accessCode: result.accessCode,
         temporaryPassword: result.temporaryPassword,
-        notificationStatus: result.notificationStatus
+        notificationStatus: {
+          email: result.delivery?.find((item) => item.channel === "email")?.status,
+          sms: result.delivery?.find((item) => item.channel === "sms")?.status,
+        }
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erreur API";

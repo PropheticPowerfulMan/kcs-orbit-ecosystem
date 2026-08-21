@@ -3,7 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
-import { createOrbitParent, createOrbitStudent, deleteOrbitParent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { createOrbitParent, createOrbitStudent, deleteOrbitParent, deleteOrbitStudent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
@@ -31,6 +31,10 @@ async function generateUniqueParentAccessCode(tx: typeof prisma) {
 const studentInputSchema = z.object({
   id: z.string().optional(),
   fullName: z.string().min(1),
+  firstName: z.string().trim().optional().default(""),
+  middleName: z.string().trim().optional().default(""),
+  lastName: z.string().trim().optional().default(""),
+  dateOfBirth: z.coerce.date().nullable().optional(),
   gender: z.enum(["F", "M", "O", ""]).optional().default(""),
   classId: z.string().min(1),
   annualFee: z.union([z.string(), z.number()]).transform((v) => parseFloat(String(v))),
@@ -749,7 +753,8 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
       const orbitResult = await createOrbitParent({
         fullName: payload.fullName,
         firstName: payload.prenom || firstName,
-        lastName: [payload.nom, payload.postnom].filter(Boolean).join(" ") || lastName,
+        middleName: payload.postnom || undefined,
+        lastName: payload.nom || lastName,
         email: payload.email,
         phone: payload.phone,
         physicalAddress: payload.physicalAddress,
@@ -757,6 +762,11 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
         mustChangePassword: true,
         students: payload.students.map((student) => ({
           fullName: student.fullName,
+          firstName: student.firstName,
+          middleName: student.middleName || null,
+          lastName: student.lastName,
+          dateOfBirth: student.dateOfBirth,
+          gender: student.gender || null,
           className: classNameById.get(classIdResolution.get(student.classId) ?? student.classId) || fallbackClassNameFromId(student.classId),
           mustChangePassword: true,
         })),
@@ -815,7 +825,14 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
         const [student] = unmatchedLocalStudents.splice(fallbackIndex, 1);
         await prisma.student.update({
           where: { id: student.id },
-          data: { annualFee: requestedStudent.annualFee, gender: requestedStudent.gender || null },
+          data: {
+            annualFee: requestedStudent.annualFee,
+            firstName: requestedStudent.firstName || null,
+            middleName: requestedStudent.middleName || null,
+            lastName: requestedStudent.lastName || null,
+            dateOfBirth: requestedStudent.dateOfBirth || null,
+            gender: requestedStudent.gender || null
+          },
         });
         createdStudents.push({
           id: student.id,
@@ -918,6 +935,10 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
           data: {
             id: studentId,
             fullName: st.fullName,
+            firstName: st.firstName || null,
+            middleName: st.middleName || null,
+            lastName: st.lastName || null,
+            dateOfBirth: st.dateOfBirth || null,
             gender: st.gender || null,
             classId: classIdResolution.get(st.classId) ?? st.classId,
             annualFee: st.annualFee,
@@ -1118,7 +1139,8 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
           await updateOrbitParent(orbitParentId, {
             fullName: payload.fullName,
             firstName: payload.prenom || firstName,
-            lastName: [payload.nom, payload.postnom].filter(Boolean).join(" ") || lastName,
+            middleName: payload.postnom || null,
+            lastName: payload.nom || lastName,
             email: normalizedEmail,
             phone: normalizedPhone,
             physicalAddress: payload.physicalAddress || null
@@ -1149,6 +1171,10 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
         orbitId: true,
         externalStudentId: true,
         fullName: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        dateOfBirth: true,
         gender: true,
         classId: true,
         annualFee: true,
@@ -1193,6 +1219,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
         installmentMode?: OwnerAgreementInstallmentMode;
       };
     }> = [];
+    const removedOrbitStudentIds: string[] = [];
     await prisma.$transaction(async (tx) => {
       await tx.parent.update({
         where: { id: localParentId },
@@ -1229,6 +1256,9 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
         .map((student) => student.id ? localStudentIdByIdentifier.get(student.id) : undefined)
         .filter((studentId): studentId is string => Boolean(studentId)));
       const studentsToDelete = [...existingStudentIds].filter((studentId) => !requestedExistingIds.has(studentId));
+      removedOrbitStudentIds.push(...studentsToDelete
+        .map((studentId) => currentStudentById.get(studentId)?.orbitId)
+        .filter((orbitId): orbitId is string => Boolean(orbitId)));
 
       if (studentsToDelete.length) {
         await tx.student.deleteMany({
@@ -1249,6 +1279,10 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
             where: { id: localStudentId },
             data: {
               fullName: student.fullName,
+              firstName: student.firstName || null,
+              middleName: student.middleName || null,
+              lastName: student.lastName || null,
+              dateOfBirth: student.dateOfBirth || null,
               gender: student.gender || null,
               classId: resolvedClassId,
               annualFee: student.annualFee
@@ -1278,6 +1312,10 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
           data: {
             id: studentId,
             fullName: student.fullName,
+            firstName: student.firstName || null,
+            middleName: student.middleName || null,
+            lastName: student.lastName || null,
+            dateOfBirth: student.dateOfBirth || null,
             gender: student.gender || null,
             classId: classIdResolution.get(student.classId) ?? student.classId,
             annualFee: student.annualFee,
@@ -1316,13 +1354,17 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 
     if (orbitRegistryIsEnabled() && parent.orbitId) {
       try {
+        for (const orbitStudentId of removedOrbitStudentIds) {
+          await deleteOrbitStudent(orbitStudentId);
+        }
         for (const student of parent.students) {
           const nameParts = student.fullName.trim().split(/\s+/);
           const orbitPayload = {
             fullName: student.fullName,
-            firstName: nameParts[nameParts.length - 1] || "Student",
-            middleName: nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null,
-            lastName: nameParts[0] || "Student",
+            firstName: student.firstName || nameParts[nameParts.length - 1] || "Student",
+            middleName: student.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null),
+            lastName: student.lastName || nameParts[0] || "Student",
+            dateOfBirth: student.dateOfBirth,
             gender: student.gender || undefined,
             className: student.class?.name || "Non renseignee",
             studentNumber: student.id,
@@ -1330,7 +1372,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
           if (student.orbitId) {
             await updateOrbitStudent(student.orbitId, orbitPayload);
           } else {
-            const created = await createOrbitStudent({ ...orbitPayload, parentOrbitId: parent.orbitId });
+            const created = await createOrbitStudent({ ...orbitPayload, parentOrbitId: parent.orbitId, dateOfBirth: student.dateOfBirth });
             await prisma.student.update({
               where: { id: student.id },
               data: { orbitId: created.orbitId, externalStudentId: created.externalId },

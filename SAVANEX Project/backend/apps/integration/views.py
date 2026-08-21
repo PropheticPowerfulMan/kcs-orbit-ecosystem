@@ -153,6 +153,13 @@ def reset_ecosystem_identity_access_view(request, entity_type, identifier):
         user = student.user if student else None
         if not user:
             user = provision_student_access_identity(identifier, request.data)
+    elif entity_type in ('employee', 'teacher'):
+        teacher = Teacher.objects.select_related('user').filter(is_active=True).filter(
+            Q(teacher_id__iexact=identifier) | Q(user__username__iexact=identifier)
+            | Q(user__kcs_card_id__iexact=identifier) | Q(user__access_code__iexact=identifier)
+            | Q(user__email__iexact=identifier)
+        ).first()
+        user = teacher.user if teacher else None
     else:
         return Response({'detail': 'Unsupported entity type.'}, status=400)
 

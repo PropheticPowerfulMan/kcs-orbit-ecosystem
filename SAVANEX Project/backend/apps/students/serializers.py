@@ -1,9 +1,10 @@
 from uuid import uuid4
 
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers
 
-from apps.integration.orbit import sync_class, sync_parent, sync_student
+from apps.integration.orbit import fetch_shared_directory, orbit_sync_is_enabled, sync_class, sync_parent, sync_student
 from apps.communication.services import deliver_parent_communication, deliver_user_communication
 from apps.classes.utils import get_or_create_standard_class, normalize_class_level, normalize_class_suffix
 from apps.users.models import User
@@ -302,9 +303,48 @@ class FamilyRegistrationSerializer(serializers.Serializer):
         if parent_conflict:
             attrs['existing_parent'] = parent_conflict
 
+        reusable_student_user_ids = set()
+        central_student_emails = set()
+        central_savanex_student_ids = set()
+        central_directory_available = False
+        if orbit_sync_is_enabled():
+            try:
+                shared_directory = fetch_shared_directory()
+                central_directory_available = shared_directory.get('source') == 'orbit'
+                for shared_student in shared_directory.get('students', []):
+                    email = (shared_student.get('email') or '').strip().lower()
+                    if email:
+                        central_student_emails.add(email)
+                    for external_id in shared_student.get('externalIds', []):
+                        if (external_id.get('appSlug') or '').upper() == 'SAVANEX':
+                            value = (external_id.get('externalId') or '').strip().lower()
+                            if value:
+                                central_savanex_student_ids.add(value)
+            except Exception:
+                central_directory_available = False
+
         existing_student_emails = []
         for student_email in sorted(seen_student_emails):
-            if User.objects.filter(role=User.ROLE_STUDENT, email__iexact=student_email, is_active=True).exists():
+            existing_user = User.objects.filter(
+                role=User.ROLE_STUDENT,
+                email__iexact=student_email,
+                is_active=True,
+            ).select_related('student_profile').first()
+            if existing_user is None:
+                continue
+
+            local_student_id = (
+                existing_user.student_profile.student_id.strip().lower()
+                if hasattr(existing_user, 'student_profile')
+                else ''
+            )
+            is_central_student = (
+                student_email in central_student_emails
+                or (local_student_id and local_student_id in central_savanex_student_ids)
+            )
+            if central_directory_available and not is_central_student and hasattr(existing_user, 'student_profile'):
+                reusable_student_user_ids.add(existing_user.pk)
+            else:
                 existing_student_emails.append(student_email)
 
         if existing_student_emails:
@@ -312,12 +352,14 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                 'students': f"Student accounts already exist for: {', '.join(existing_student_emails)}."
             })
 
+        attrs['reusable_student_user_ids'] = reusable_student_user_ids
         return attrs
 
     def create(self, validated_data):
         parent_data = validated_data['parent']
         students_data = validated_data['students']
         existing_parent = validated_data.get('existing_parent')
+        reusable_student_user_ids = validated_data.get('reusable_student_user_ids', set())
 
         with transaction.atomic():
             if existing_parent is not None:
@@ -370,7 +412,8 @@ class FamilyRegistrationSerializer(serializers.Serializer):
                     inactive_user = User.objects.filter(
                         role=User.ROLE_STUDENT,
                         email__iexact=student_email,
-                        is_active=False,
+                    ).filter(
+                        Q(is_active=False) | Q(pk__in=reusable_student_user_ids)
                     ).select_related('student_profile').first()
 
                 student_id = (student_data.pop('student_id', '') or '').strip()

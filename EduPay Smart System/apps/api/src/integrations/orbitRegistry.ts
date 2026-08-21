@@ -41,6 +41,7 @@ type OrbitSharedDirectory = {
     firstName?: string;
     middleName?: string | null;
     lastName?: string;
+    gender?: string | null;
     studentNumber?: string;
     email?: string | null;
     phone?: string | null;
@@ -89,6 +90,10 @@ export type SharedStudentOption = {
   status?: string | null;
   mustChangePassword?: boolean;
   fullName: string;
+  firstName?: string;
+  middleName?: string | null;
+  lastName?: string;
+  gender?: string | null;
   classId: string;
   className: string;
   annualFee: number;
@@ -202,6 +207,10 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
           status: student.status,
           mustChangePassword: student.mustChangePassword,
           fullName: student.fullName,
+          firstName: student.firstName,
+          middleName: student.middleName,
+          lastName: student.lastName,
+          gender: student.gender,
           classId: className,
           className,
           annualFee: 0,
@@ -246,6 +255,10 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
       status: student.status,
       mustChangePassword: student.mustChangePassword,
       fullName: student.fullName,
+      firstName: student.firstName,
+      middleName: student.middleName,
+      lastName: student.lastName,
+      gender: student.gender,
       classId: className,
       className,
       annualFee: 0,
@@ -361,7 +374,18 @@ export async function createOrbitParent(payload: {
   physicalAddress?: string;
   accessCode?: string;
   mustChangePassword?: boolean;
-  students?: Array<{ fullName: string; className?: string; accessCode?: string; studentNumber?: string; mustChangePassword?: boolean }>;
+  students?: Array<{
+    fullName: string;
+    firstName?: string;
+    middleName?: string | null;
+    lastName?: string;
+    gender?: string | null;
+    dateOfBirth?: Date | string | null;
+    className?: string;
+    accessCode?: string;
+    studentNumber?: string;
+    mustChangePassword?: boolean;
+  }>;
 }) {
   const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
   const students = payload.students || [];
@@ -385,10 +409,11 @@ export async function createOrbitParent(payload: {
         students: students.map((student) => {
           const nameParts = student.fullName.trim().split(/\s+/);
           return {
-            firstName: nameParts[nameParts.length - 1] || "Student",
-            middleName: nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : undefined,
-            lastName: nameParts[0] || "Student",
-            gender: "O",
+            firstName: student.firstName || nameParts[nameParts.length - 1] || "Student",
+            middleName: student.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : undefined),
+            lastName: student.lastName || nameParts[0] || "Student",
+            dateOfBirth: student.dateOfBirth || undefined,
+            gender: student.gender || "O",
             className: student.className || "Non renseignee",
             accessCode: student.accessCode,
             studentNumber: student.studentNumber,
@@ -415,7 +440,7 @@ export async function createOrbitParent(payload: {
   });
 }
 
-export async function updateOrbitParent(identifier: string, payload: { fullName?: string; firstName?: string; lastName?: string; email?: string; phone?: string; physicalAddress?: string | null }) {
+export async function updateOrbitParent(identifier: string, payload: { fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string; phone?: string; physicalAddress?: string | null }) {
   return orbitRegistryRequest<{ orbitId: string; updated: boolean }>(`/api/integration/registry/parent/${encodeURIComponent(identifier)}?identifierType=orbitId`, {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -469,6 +494,7 @@ export async function createOrbitStudent(payload: {
   gender?: string | null;
   studentNumber?: string;
   email?: string | null;
+  dateOfBirth?: Date | string | null;
 }) {
   const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
   const nameParts = payload.fullName.trim().split(/\s+/);
@@ -483,6 +509,7 @@ export async function createOrbitStudent(payload: {
       className: payload.className || "Non renseignee",
       studentNumber: payload.studentNumber,
       email: payload.email || undefined,
+      dateOfBirth: payload.dateOfBirth || undefined,
       parentOrbitId: payload.parentOrbitId,
       mustChangePassword: true,
     }),
@@ -622,6 +649,11 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
               orbitId: student.orbitId,
               externalStudentId: student.externalStudentId,
               fullName: student.fullName,
+              firstName: student.firstName || null,
+              middleName: student.middleName || null,
+              lastName: student.lastName || null,
+              dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : null,
+              gender: student.gender || null,
               parentId: savedParent.id,
               classId,
               ...annualFeeUpdate,
@@ -633,6 +665,11 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
             update: {
               externalStudentId: student.externalStudentId,
               fullName: student.fullName,
+              firstName: student.firstName || null,
+              middleName: student.middleName || null,
+              lastName: student.lastName || null,
+              dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : null,
+              gender: student.gender || null,
               parentId: savedParent.id,
               classId,
               ...annualFeeUpdate,
@@ -644,6 +681,11 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
               classId,
               externalStudentId: student.externalStudentId,
               fullName: student.fullName,
+              firstName: student.firstName || null,
+              middleName: student.middleName || null,
+              lastName: student.lastName || null,
+              dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : null,
+              gender: student.gender || null,
               annualFee: studentAnnualFee,
             },
           });
@@ -664,6 +706,11 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
           where: { id: existingStudent.id },
           data: {
             fullName: student.fullName,
+            firstName: student.firstName || null,
+            middleName: student.middleName || null,
+            lastName: student.lastName || null,
+            dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : null,
+            gender: student.gender || null,
             classId,
             ...annualFeeUpdate,
           },
@@ -675,6 +722,11 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
             parentId: savedParent.id,
             classId,
             fullName: student.fullName,
+            firstName: student.firstName || null,
+            middleName: student.middleName || null,
+            lastName: student.lastName || null,
+            dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : null,
+            gender: student.gender || null,
             annualFee: studentAnnualFee,
           },
         });

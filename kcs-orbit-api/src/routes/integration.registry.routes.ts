@@ -8,8 +8,8 @@ const router = Router();
 
 function restrictEduPayEntityScope(req: Request, res: Response, next: NextFunction) {
   const entityType = String(req.params.entityType || '').toLowerCase();
-  if (req.integration?.appSlug === AppSlug.EDUPAY && !['parent', 'student', 'teacher'].includes(entityType)) {
-    return res.status(403).json({ message: 'EduPay registry mutations are limited to parents and employees.' });
+  if (req.integration?.appSlug === AppSlug.EDUPAY && !['family', 'parent', 'student', 'teacher'].includes(entityType)) {
+    return res.status(403).json({ message: 'EduPay registry mutations are limited to families, parents, students and employees.' });
   }
   return next();
 }

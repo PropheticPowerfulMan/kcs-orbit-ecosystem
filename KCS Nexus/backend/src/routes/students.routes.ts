@@ -476,8 +476,8 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       })
       const localStudentProfile = await prisma.studentProfile.upsert({
         where: { studentNumber: student.studentNumber },
-        update: { userId: localStudentUser.id, grade: student.grade, section: student.section || '', status: 'active' },
-        create: { userId: localStudentUser.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section || '', status: 'active' },
+        update: { userId: localStudentUser.id, grade: student.grade, section: student.section || '', dateOfBirth: student.dateOfBirth, status: 'active' },
+        create: { userId: localStudentUser.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section || '', dateOfBirth: student.dateOfBirth, status: 'active' },
       })
       await prisma.parentStudentLink.upsert({
         where: { parentId_studentId: { parentId: localParentUser.id, studentId: localStudentProfile.id } },
@@ -583,10 +583,11 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
           role: 'STUDENT',
           studentProfile: {
             create: {
-              studentNumber: student.studentNumber,
-              grade: student.grade,
-              section: student.section || '',
-              status: 'active',
+            studentNumber: student.studentNumber,
+            grade: student.grade,
+            section: student.section || '',
+            dateOfBirth: student.dateOfBirth,
+            status: 'active',
               gpa: 0,
               attendanceRate: 100,
               parentLinks: {

@@ -285,6 +285,7 @@ const registerFamilySchema = z.object({
     grade: z.enum(schoolLevels),
     section: z.string().default('A'),
     gender: z.enum(['M', 'F', 'O']).default('O'),
+    dateOfBirth: z.coerce.date().nullable().optional(),
   }),
 })
 
@@ -656,6 +657,7 @@ registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler
       className: `${student.grade} ${student.section}`.trim(),
       parentOrbitId,
       status: 'ACTIVE',
+      dateOfBirth: student.dateOfBirth,
     })
 
     return success(res, {
@@ -712,6 +714,7 @@ registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler
             studentNumber: student.studentNumber,
             grade: student.grade,
             section: student.section,
+            dateOfBirth: student.dateOfBirth,
             parentLinks: {
               create: {
                 parent: { connect: { id: parentUser.id } },

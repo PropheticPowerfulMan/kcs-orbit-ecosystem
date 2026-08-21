@@ -2247,6 +2247,9 @@ const AdminSectionView = ({
                   {[
                     ['ID élève', viewingStudent.studentNumber ?? 'Non renseigné'],
                     ['Nom complet', viewingStudent.name],
+                    ['Date de naissance', viewingStudent.dateOfBirth
+                      ? new Date(viewingStudent.dateOfBirth).toLocaleDateString('fr-FR', { timeZone: 'UTC' })
+                      : 'Non renseignée'],
                     ['Classe', formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'],
                     ['Statut', viewingStudent.status],
                     ['Parent responsable', viewingStudent.parent || 'Aucun parent lié'],

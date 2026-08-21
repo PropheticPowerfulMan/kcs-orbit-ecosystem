@@ -4,6 +4,7 @@ import { authGuard, AuthenticatedRequest } from "../../middlewares/auth";
 import { deleteOrbitTeacher, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitTeacher } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { notifyStandaloneEntityChange } from "../notifications/entityChange";
+import { env } from "../../config/env";
 
 export const sharedDirectoryRouter = Router();
 const denyEntityMutation = (_req: Request, res: Response, _next: NextFunction) => res.status(403).json({
@@ -94,6 +95,13 @@ function serializeSharedStudent(student: {
   accessCode?: string | null;
   mustChangePassword?: boolean | null;
   fullName: string;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  dateOfBirth?: Date | string | null;
+  gender?: string | null;
   classId: string;
   createdAt?: Date | string | null;
   class?: { name?: string | null } | null;
@@ -124,6 +132,13 @@ function serializeSharedStudent(student: {
     accessCode: student.accessCode || undefined,
     mustChangePassword: student.mustChangePassword ?? undefined,
     fullName: student.fullName,
+    firstName: student.firstName || splitFullName(student.fullName).firstName,
+    middleName: student.middleName || splitFullName(student.fullName).middleName,
+    lastName: student.lastName || splitFullName(student.fullName).lastName,
+    email: student.email || null,
+    phone: student.phone || null,
+    dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString() : null,
+    gender: student.gender || null,
     classId: student.classId,
     className: student.class?.name || student.classId,
     createdAt: student.createdAt ? new Date(student.createdAt).toISOString() : undefined,
@@ -140,6 +155,64 @@ function serializeSharedStudent(student: {
 }
 
 sharedDirectoryRouter.use(authGuard);
+
+sharedDirectoryRouter.post("/reset-access/:entityType/:id", async (req: AuthenticatedRequest, res) => {
+  const entityType = z.enum(["parent", "student", "employee"]).parse(req.params.entityType);
+  if (!env.SAVANEX_API_URL || !env.KCS_ORBIT_API_KEY) {
+    return res.status(503).json({ message: "Le service central de réinitialisation des accès est indisponible." });
+  }
+
+  const directory = await readOrbitSharedOptions();
+  const collection = entityType === "parent"
+    ? directory.parents
+    : entityType === "student"
+      ? directory.students
+      : directory.teachers;
+  const entity = collection.find((item) =>
+    item.id === req.params.id
+    || item.orbitId === req.params.id
+    || item.displayId === req.params.id
+    || (item as { externalIds?: Array<{ externalId: string }> }).externalIds?.some((link) => link.externalId === req.params.id)
+  );
+  if (!entity) {
+    return res.status(404).json({ message: "Entité introuvable dans le registre partagé." });
+  }
+
+  const sharedEntity = entity as typeof entity & {
+    externalIds?: Array<{ appSlug: string; externalId: string }>;
+    studentNumber?: string;
+    employeeId?: string;
+    email?: string | null;
+  };
+  const savanexId = sharedEntity.externalIds?.find((link) => link.appSlug.toUpperCase() === "SAVANEX")?.externalId;
+  const identifier = savanexId
+    || (entityType === "student" ? sharedEntity.studentNumber : undefined)
+    || (entityType === "employee" ? sharedEntity.employeeId : undefined)
+    || sharedEntity.email
+    || sharedEntity.displayId
+    || sharedEntity.id;
+  const upstreamType = entityType === "employee" ? "employee" : entityType;
+  const response = await fetch(
+    `${env.SAVANEX_API_URL.replace(/\/$/, "")}/api/integration/entities/${upstreamType}/${encodeURIComponent(String(identifier))}/reset-access/`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": env.KCS_ORBIT_API_KEY,
+      },
+      body: JSON.stringify(sharedEntity),
+    }
+  );
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return res.status(response.status).json({
+      message: typeof result.detail === "string" ? result.detail : "Impossible de réinitialiser cet accès.",
+    });
+  }
+
+  await syncOrbitRegistryMirror(req.user!.schoolId);
+  return res.json({ ...result, entityType, orbitId: sharedEntity.orbitId || sharedEntity.id });
+});
 
 sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {

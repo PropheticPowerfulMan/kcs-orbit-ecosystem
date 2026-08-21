@@ -1,16 +1,26 @@
 import { Router } from "express";
 import { z } from "zod";
+import { PaymentOptionType } from "@prisma/client";
 import { createOrbitStudent, deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { notifyParentEntityChange } from "../notifications/entityChange";
+import { upsertParentPlanAssignment } from "../finance/service";
 
 const createStudentSchema = z.object({
   parentId: z.string().min(1),
   classId: z.string().min(1),
   externalStudentId: z.string().min(1).optional(),
   fullName: z.string().min(3),
-  annualFee: z.number().positive()
+  firstName: z.string().trim().min(1).optional(),
+  middleName: z.string().trim().min(1).nullable().optional(),
+  lastName: z.string().trim().min(1).optional(),
+  email: z.string().trim().email().nullable().optional(),
+  phone: z.string().trim().min(6).nullable().optional(),
+  dateOfBirth: z.coerce.date().nullable().optional(),
+  gender: z.string().trim().min(1).nullable().optional(),
+  annualFee: z.number().positive(),
+  paymentOptionType: z.nativeEnum(PaymentOptionType).default(PaymentOptionType.STANDARD_MONTHLY)
 });
 
 const updateStudentSchema = z.object({
@@ -53,31 +63,107 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       fullName: payload.fullName,
       parentOrbitId: parent.orbitId,
       className: classRow?.name || payload.classId,
+      gender: payload.gender,
       studentNumber: payload.externalStudentId,
+      email: payload.email,
+      dateOfBirth: payload.dateOfBirth,
     });
     await syncOrbitRegistryMirror(req.user!.schoolId);
     const local = await prisma.student.findFirst({
       where: { schoolId: req.user!.schoolId, orbitId: created.orbitId },
       include: { class: true, parent: true, payments: true },
     });
-    if (local && local.annualFee !== payload.annualFee) {
-      return res.status(201).json(await prisma.student.update({
-        where: { id: local.id },
-        data: { annualFee: payload.annualFee },
-        include: { class: true, parent: true, payments: true },
-      }));
+    if (!local) {
+      return res.status(201).json({
+        id: created.orbitId,
+        orbitId: created.orbitId,
+        fullName: payload.fullName,
+        parentId: parent.orbitId,
+        classId: payload.classId,
+        annualFee: payload.annualFee,
+        propagatedToOrbit: true,
+        localSetupStatus: "PENDING",
+        financeStatus: "PENDING",
+        paymentOptionType: payload.paymentOptionType,
+        notificationStatus: { dashboard: "PENDING" },
+      });
     }
-    return res.status(201).json(local || created);
+    const savedStudent = await prisma.student.update({
+        where: { id: local.id },
+        data: {
+          fullName: payload.fullName,
+          firstName: payload.firstName || null,
+          middleName: payload.middleName || null,
+          lastName: payload.lastName || null,
+          email: payload.email || null,
+          phone: payload.phone || null,
+          dateOfBirth: payload.dateOfBirth || null,
+          gender: payload.gender || null,
+          annualFee: payload.annualFee
+        },
+        include: { class: true, parent: true, payments: true },
+      });
+    let financeStatus = "SYNCED";
+    try {
+      await upsertParentPlanAssignment({
+        schoolId: req.user!.schoolId,
+        parentId: savedStudent.parentId,
+        studentId: savedStudent.id,
+        paymentOptionType: payload.paymentOptionType,
+      });
+    } catch (error) {
+      financeStatus = "PENDING";
+      console.error("Student created and propagated; tuition plan assignment is pending", error);
+    }
+
+    let notificationStatus: { dashboard?: string; email?: string; sms?: string; adminEmail?: string } = { dashboard: "PENDING" };
+    try {
+      notificationStatus = await notifyParentEntityChange({
+        schoolId: req.user!.schoolId,
+        parentId: savedStudent.parentId,
+        subject: "Nouvel élève ajouté dans EduPay",
+        body: `${savedStudent.fullName} a été ajouté et synchronisé dans le registre partagé de l'écosystème.`,
+      });
+    } catch (error) {
+      console.error("Student created and propagated; parent notification is pending", error);
+    }
+
+    return res.status(201).json({
+      ...savedStudent,
+      propagatedToOrbit: true,
+      localSetupStatus: "SYNCED",
+      financeStatus,
+      paymentOptionType: payload.paymentOptionType,
+      notificationStatus,
+    });
   }
 
   const student = await prisma.student.create({
     data: {
-      ...payload,
+      parentId: payload.parentId,
+      classId: payload.classId,
+      externalStudentId: payload.externalStudentId,
+      fullName: payload.fullName,
+      firstName: payload.firstName || null,
+      middleName: payload.middleName || null,
+      lastName: payload.lastName || null,
+      email: payload.email || null,
+      phone: payload.phone || null,
+      dateOfBirth: payload.dateOfBirth || null,
+      gender: payload.gender || null,
+      annualFee: payload.annualFee,
       schoolId: req.user!.schoolId
     }
   });
 
-  res.status(201).json(student);
+  await upsertParentPlanAssignment({
+    schoolId: req.user!.schoolId,
+    parentId: student.parentId,
+    studentId: student.id,
+    paymentOptionType: payload.paymentOptionType,
+  });
+
+  res.status(201).json({ ...student, paymentOptionType: payload.paymentOptionType, propagatedToOrbit: false });
 });
 
 studentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {

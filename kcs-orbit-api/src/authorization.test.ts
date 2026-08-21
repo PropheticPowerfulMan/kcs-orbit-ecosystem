@@ -400,3 +400,21 @@ test("registry route rejects unknown integration clients", async () => {
     assert.equal(response.status, 401);
   });
 });
+
+test("registry route allows EduPay to create a family", async () => {
+  process.env.EDUPAY_INTEGRATION_KEY = "test-edupay-key";
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/integration/registry/family`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "test-edupay-key",
+        "x-app-slug": "EDUPAY",
+      },
+      body: JSON.stringify({}),
+    });
+
+    assert.notEqual(response.status, 403);
+  });
+});

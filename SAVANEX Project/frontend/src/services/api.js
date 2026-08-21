@@ -305,7 +305,14 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
         .filter(Boolean)
       : []
   );
-  const visibleLocalStudents = safeLocalStudents;
+  const visibleLocalStudents = sharedDirectory?.source === 'orbit'
+    ? safeLocalStudents.filter((student) => {
+      const localStudentId = typeof student?.student_id === 'string'
+        ? student.student_id.trim().toLowerCase()
+        : '';
+      return localStudentId ? centralSavanexStudentIds.has(localStudentId) : false;
+    })
+    : safeLocalStudents;
 
   const sharedStudentBySavanexId = new Map(
     sharedStudents.flatMap((student) => {

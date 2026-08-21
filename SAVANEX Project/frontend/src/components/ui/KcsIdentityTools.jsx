@@ -386,6 +386,7 @@ export const KcsIdCard = ({ entity }) => {
 
 export const PrintableKcsCard = ({ entity }) => {
   const sheetRef = useRef(null);
+  const [printSide, setPrintSide] = useState('duplex');
 
   const printCard = () => {
     const source = sheetRef.current;
@@ -395,7 +396,7 @@ export const PrintableKcsCard = ({ entity }) => {
     }
 
     const portal = document.createElement('div');
-    portal.className = 'kcs-print-portal';
+    portal.className = `kcs-print-portal kcs-print-side-${printSide}`;
     portal.appendChild(source.cloneNode(true));
     document.body.appendChild(portal);
     document.body.classList.add('kcs-card-print-mode');
@@ -416,9 +417,29 @@ export const PrintableKcsCard = ({ entity }) => {
       <div ref={sheetRef} className="kcs-print-sheet">
         <KcsIdCard entity={entity} />
       </div>
-      <button type="button" onClick={printCard} className="inline-flex items-center gap-2 rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200 hover:bg-slate-800/60">
+      <div className="grid gap-3 rounded-xl border border-github-border bg-slate-950/50 p-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs font-semibold text-slate-300">
+          Imprimante recommandée
+          <select className={`${inputClass} kcs-card-print-select`} value="evolis-primacy-2-duplex" onChange={() => undefined}>
+            <option value="evolis-primacy-2-duplex">Evolis Primacy 2 Duplex · PVC CR80</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-slate-300">
+          Faces à imprimer
+          <select className={`${inputClass} kcs-card-print-select`} value={printSide} onChange={(event) => setPrintSide(event.target.value)}>
+            <option value="duplex">Recto + verso (duplex)</option>
+            <option value="front">Recto uniquement</option>
+            <option value="back">Verso uniquement</option>
+          </select>
+        </label>
+      </div>
+      <p className="text-xs leading-5 text-slate-400">
+        Format international ID-1 / CR80 : 85,60 × 53,98 mm. Dans le pilote Evolis, choisissez PVC CR80,
+        échelle 100 %, impression sans marge et duplex bord court.
+      </p>
+      <button type="button" onClick={printCard} className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-400/20">
         <Printer className="h-4 w-4" />
-        Imprimer la carte
+        Imprimer sur carte PVC
       </button>
     </div>
   );

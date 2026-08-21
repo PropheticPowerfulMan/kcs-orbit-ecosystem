@@ -749,6 +749,9 @@ export async function createRegistryEntity(req: Request, res: Response) {
       await createAuditLog(tx, { organizationId: payload.organizationId, action: `${appSlug.toLowerCase()}.family.created`, entityType, entityId: parent.id, metadata: { familyExternalId, parentExternalId, studentExternalIds } });
 
       return { parent, students };
+    }, {
+      maxWait: 10_000,
+      timeout: 30_000,
     });
 
     return res.status(201).json({

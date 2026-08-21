@@ -1,6 +1,6 @@
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
-import { FileSpreadsheet, FileText, Printer } from "lucide-react";
+import { FileSpreadsheet, FileText, KeyRound, Printer } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
 import { api } from "../services/api";
@@ -929,6 +929,26 @@ export function EmployeesPage() {
     }
   }
 
+  async function handleResetEmployeeAccess(employee: Employee) {
+    const identifier = employee.orbitId || employee.id;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await api<{ username?: string; accessCode?: string; temporaryPassword: string }>(`/api/shared-directory/reset-access/employee/${encodeURIComponent(identifier)}`, { method: "POST" });
+      setMutationNotice([
+        `Accès de ${employee.fullName} réinitialisé avec succès.`,
+        `Identifiant : ${result.username || employee.email || employee.displayId || identifier}`,
+        `Code d'accès : ${result.accessCode || "Non renseigné"}`,
+        `Mot de passe temporaire : ${result.temporaryPassword}`,
+        "Ce mot de passe devra être changé à la prochaine connexion.",
+      ].join("\n"));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Impossible de réinitialiser l'accès de cet employé.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="space-y-6 pb-8">
       {mutationNotice ? (
@@ -1093,6 +1113,14 @@ export function EmployeesPage() {
           onClose={() => setSelectedEmployee(null)}
           actions={(
             <>
+              <button
+                type="button"
+                onClick={() => void handleResetEmployeeAccess(selectedEmployee)}
+                disabled={submitting}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:opacity-50"
+              >
+                <KeyRound className="h-4 w-4" /> {submitting ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
+              </button>
               <button
                 type="button"
                 onClick={() => {

@@ -142,6 +142,60 @@ class FamilyRegistrationSerializerTests(TestCase):
         self.assertEqual(User.objects.filter(email__iexact="levana@gmail.com").count(), 1)
         self.assertEqual(Student.objects.filter(user__email__iexact="levana@gmail.com").count(), 1)
 
+    @patch("apps.students.serializers.sync_student")
+    @patch("apps.students.serializers.sync_parent")
+    def test_reuses_an_active_local_student_removed_from_orbit(self, mock_sync_parent, mock_sync_student):
+        parent = User.objects.create_user(
+            username="SAV-PAR-ORPHAN",
+            email="parent.orphan@example.com",
+            first_name="Mireille",
+            last_name="Levana",
+            role=User.ROLE_PARENT,
+        )
+        student_user = User.objects.create_user(
+            username="student-orphan",
+            email="levana@gmail.com",
+            first_name="Ancien",
+            last_name="Levana",
+            role=User.ROLE_STUDENT,
+        )
+        student = Student.objects.create(
+            user=student_user,
+            parent=parent,
+            student_id="SAV-STU-ORPHAN",
+            date_of_birth=date(2015, 2, 10),
+            gender="F",
+        )
+        payload = {
+            "parent": {
+                "first_name": "Mireille",
+                "last_name": "Levana",
+                "email": "parent.orphan@example.com",
+            },
+            "students": [{
+                "user": {
+                    "first_name": "Nouveau",
+                    "last_name": "Levana",
+                    "email": "levana@gmail.com",
+                },
+                "date_of_birth": "2015-02-10",
+                "gender": "F",
+            }],
+        }
+
+        with patch("apps.students.serializers.orbit_sync_is_enabled", return_value=True), patch(
+            "apps.students.serializers.fetch_shared_directory",
+            return_value={"source": "orbit", "students": []},
+        ):
+            serializer = FamilyRegistrationSerializer(data=payload)
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            with self.captureOnCommitCallbacks(execute=True):
+                recreated = serializer.save()
+
+        self.assertEqual(recreated["students"][0].pk, student.pk)
+        self.assertEqual(recreated["students"][0].user_id, student_user.pk)
+        self.assertEqual(User.objects.filter(email__iexact="levana@gmail.com").count(), 1)
+
 class OrbitSyncPayloadTests(TestCase):
     @patch("apps.integration.orbit._post_json")
     def test_sync_parent_and_student_emit_contract_safe_payloads(self, mock_post_json):

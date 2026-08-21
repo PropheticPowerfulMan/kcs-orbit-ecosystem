@@ -195,6 +195,7 @@ model StudentProfile {
   studentNumber      String               @unique
   grade              String
   section            String
+  dateOfBirth        DateTime?
   enrollmentDate     DateTime             @default(now())
   status             String               @default("active")
   gpa                Float?

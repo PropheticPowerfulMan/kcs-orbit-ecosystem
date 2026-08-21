@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Edit3, X } from 'lucide-react';
 import { PrintableKcsCard } from './KcsIdentityTools';
 
@@ -100,14 +101,14 @@ const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
     return null;
   }
 
-  return (
+  return createPortal(
     <div
-      className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8"
+      className="savanex-modal-backdrop fixed inset-0 z-[1000] flex items-center justify-center overflow-hidden p-3 sm:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
-      <section className="savanex-modal-panel savanex-entity-detail-panel w-full overflow-y-auto p-5 shadow-2xl sm:p-6" onClick={(event) => event.stopPropagation()}>
+      <section className="savanex-modal-panel savanex-entity-detail-panel h-[calc(100dvh-1.5rem)] w-full max-h-none overflow-y-auto p-5 shadow-2xl sm:h-[calc(100dvh-2rem)] sm:p-6" onClick={(event) => event.stopPropagation()}>
         <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-2 border-cyan-300/40 bg-slate-950/70 shadow-lg shadow-cyan-950/40">
@@ -154,7 +155,8 @@ const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
           </div>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 };
 

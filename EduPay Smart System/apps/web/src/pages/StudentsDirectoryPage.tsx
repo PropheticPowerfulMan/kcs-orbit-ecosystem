@@ -1,6 +1,6 @@
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, Printer, Trash2, X } from "lucide-react";
+import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, KeyRound, Printer, Trash2, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
 import { api } from "../services/api";
@@ -197,6 +197,21 @@ type SharedDirectoryResponse = {
 
 type SchoolClass = { id: string; name: string };
 
+type TuitionPlan = {
+  id: string;
+  name: string;
+  paymentOptionType: string;
+  gradeGroup: string;
+  finalAmount: number;
+  originalAmount?: number;
+  reductionAmount?: number;
+};
+
+type FinanceCatalog = {
+  academicYear?: { name?: string };
+  plans: TuitionPlan[];
+};
+
 type StudentFormState = {
   lastName: string;
   middleName: string;
@@ -208,7 +223,26 @@ type StudentFormState = {
   classId: string;
   parentId: string;
   annualFee: string;
+  paymentOptionType: string;
 };
+
+const PAYMENT_OPTION_LABELS: Record<string, string> = {
+  FULL_PRESEPTEMBER: "Paiement complet avant septembre",
+  TWO_INSTALLMENTS: "Paiement en 2 tranches",
+  THREE_INSTALLMENTS: "Paiement en 3 tranches",
+  STANDARD_MONTHLY: "Paiement mensuel standard",
+};
+
+function resolveStudentGradeGroup(className?: string) {
+  const normalized = String(className || "").trim().toLowerCase();
+  if (/^k\d?/.test(normalized) || normalized.includes("maternelle")) return "K";
+  const match = normalized.match(/(?:grade|g)\s*(\d{1,2})/i);
+  const grade = match ? Number(match[1]) : Number.NaN;
+  if (grade <= 5) return "GRADE_1_5";
+  if (grade <= 8) return "GRADE_6_8";
+  if (grade <= 12) return "GRADE_9_12";
+  return "CUSTOM";
+}
 
 function resolveStudentIdentity(student: SharedDirectoryStudent) {
   if (student.firstName || student.middleName || student.lastName) {
@@ -734,7 +768,7 @@ function exportStudentReportExcel(student: SharedDirectoryStudent, parent: Share
   ]);
 }
 
-function StudentDetailModal({ student, parent, onClose }: { student: SharedDirectoryStudent; parent?: SharedDirectoryParent; onClose: () => void }) {
+function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, onClose }: { student: SharedDirectoryStudent; parent?: SharedDirectoryParent; resettingAccess: boolean; onResetAccess: () => void; onClose: () => void }) {
   const displayedAnnualFee = typeof student.annualFeeDisplay === "number" ? student.annualFeeDisplay : student.annualFee;
   const originalAnnualFee = typeof student.originalAnnualFee === "number" ? student.originalAnnualFee : student.annualFee;
   const reductionTotal = typeof student.reductionTotal === "number" ? student.reductionTotal : 0;
@@ -809,6 +843,14 @@ function StudentDetailModal({ student, parent, onClose }: { student: SharedDirec
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              onClick={onResetAccess}
+              disabled={resettingAccess}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:opacity-50"
+            >
+              <KeyRound className="h-4 w-4" /> {resettingAccess ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setPdfExporting(true);
                 void exportStudentReportPdf(student, parent, financeSnapshot).finally(() => setPdfExporting(false));
@@ -845,6 +887,10 @@ function StudentDetailModal({ student, parent, onClose }: { student: SharedDirec
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs text-ink-dim">Classe</p>
             <p className="mt-1 font-semibold text-white">{student.className || student.classId || "Classe non renseignee"}</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+            <p className="text-xs text-ink-dim">Date de naissance</p>
+            <p className="mt-1 font-semibold text-white">{formatDateLabel(student.dateOfBirth)}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-xs text-ink-dim">Parent</p>
@@ -1038,6 +1084,7 @@ function StudentEditModal({
   parent,
   parents,
   classes,
+  catalog,
   saving,
   onSave,
   onClose,
@@ -1047,6 +1094,7 @@ function StudentEditModal({
   parent?: SharedDirectoryParent;
   parents: SharedDirectoryParent[];
   classes: SchoolClass[];
+  catalog: FinanceCatalog | null;
   saving: boolean;
   onSave: (state: StudentFormState) => Promise<void>;
   onClose: () => void;
@@ -1062,18 +1110,48 @@ function StudentEditModal({
     gender: student.gender || '',
     classId: student.classId || "",
     parentId: parent?.id || student.parentId || "",
-    annualFee: typeof student.annualFee === "number" ? String(student.annualFee) : ""
+    annualFee: typeof student.annualFee === "number" ? String(student.annualFee) : "",
+    paymentOptionType: student.paymentOptionType || "STANDARD_MONTHLY"
   });
+  const selectedClassName = classOptions.find((item) => item.id === form.classId)?.name || "";
+  const matchingPlans = useMemo(() => {
+    const gradeGroup = resolveStudentGradeGroup(selectedClassName);
+    return (catalog?.plans ?? []).filter((plan) => plan.gradeGroup === gradeGroup && PAYMENT_OPTION_LABELS[plan.paymentOptionType]);
+  }, [catalog, selectedClassName]);
+
+  const applyClass = (classId: string) => {
+    const className = classOptions.find((item) => item.id === classId)?.name || "";
+    const gradeGroup = resolveStudentGradeGroup(className);
+    const plans = (catalog?.plans ?? []).filter((plan) => plan.gradeGroup === gradeGroup && PAYMENT_OPTION_LABELS[plan.paymentOptionType]);
+    const selected = plans.find((plan) => plan.paymentOptionType === form.paymentOptionType)
+      || plans.find((plan) => plan.paymentOptionType === "STANDARD_MONTHLY")
+      || plans[0];
+    setForm((current) => ({
+      ...current,
+      classId,
+      paymentOptionType: selected?.paymentOptionType || current.paymentOptionType,
+      annualFee: selected ? String(selected.finalAmount) : current.annualFee,
+    }));
+  };
+
+  const applyTuitionPlan = (paymentOptionType: string) => {
+    const selected = matchingPlans.find((plan) => plan.paymentOptionType === paymentOptionType);
+    setForm((current) => ({
+      ...current,
+      paymentOptionType,
+      annualFee: selected ? String(selected.finalAmount) : current.annualFee,
+    }));
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-5">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="edupay-dialog-panel-md relative w-full rounded-2xl border border-white/10 glass p-6 shadow-2xl sm:p-7">
+      <div className="edupay-scrollbar relative h-[80dvh] w-[80vw] max-w-none overflow-y-auto rounded-2xl border border-white/10 glass p-6 shadow-2xl sm:p-8">
         <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-ink-dim hover:bg-white/10 hover:text-white">
           <X className="h-4 w-4" />
         </button>
         <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? "Ajouter un élève" : "Modifier l'élève"}</h2>
-        <form className="mt-5 grid gap-4" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
+        <form className="mt-6 grid gap-5" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="grid gap-1 text-xs font-semibold text-ink-dim">Nom de famille *<input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
             <label className="grid gap-1 text-xs font-semibold text-ink-dim">Postnom<input className="input" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Ex. Kabongo" /></label>
@@ -1086,7 +1164,7 @@ function StudentEditModal({
             <label className="grid gap-1 text-xs font-semibold text-ink-dim">Genre<select className="input" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Classe actuelle *<select className="input" value={form.classId} onChange={(event) => setForm((current) => ({ ...current, classId: event.target.value }))} required>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Classe actuelle *<select className="input" value={form.classId} onChange={(event) => applyClass(event.target.value)} required>
               <option value="">Classe</option>
               <optgroup label="Maternelle">
                 {classOptions.filter((item) => item.name.startsWith("K")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -1095,7 +1173,16 @@ function StudentEditModal({
                 {classOptions.filter((item) => item.name.startsWith("G")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
             </select></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Frais scolaires annuels (USD) *<input className="input" type="number" min="0" step="0.01" value={form.annualFee} onChange={(event) => setForm((current) => ({ ...current, annualFee: event.target.value }))} placeholder="Ex. 650" required /></label>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Tuition plan *<select className="input" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
+              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{PAYMENT_OPTION_LABELS[plan.paymentOptionType] || plan.name} · $ {Number(plan.finalAmount).toFixed(2)}</option>)}
+            </select></label>
+          </div>
+          <div className="grid gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:grid-cols-[1fr_0.7fr] sm:items-end">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Frais calculés depuis le tuition plan</p>
+              <p className="mt-2 text-sm text-ink-dim">Le montant est automatiquement adapté à la classe et au plan sélectionnés.</p>
+            </div>
+            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Frais scolaires annuels (USD)<input className="input bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" value={form.annualFee} readOnly required /></label>
           </div>
           <label className="grid gap-1 text-xs font-semibold text-ink-dim">Parent responsable *<select className="input" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
             <option value="">Parent</option>
@@ -1134,10 +1221,14 @@ function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student
 export function StudentsDirectoryPage() {
   const [directory, setDirectory] = useState<SharedDirectoryResponse | null>(null);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
+  const [creationNotice, setCreationNotice] = useState<string | null>(null);
+  const [accessNotice, setAccessNotice] = useState<string | null>(null);
+  const [resettingAccess, setResettingAccess] = useState(false);
   const [viewTarget, setViewTarget] = useState<SharedDirectoryStudent | null>(null);
   const [editTarget, setEditTarget] = useState<SharedDirectoryStudent | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -1151,25 +1242,30 @@ export function StudentsDirectoryPage() {
       setApiError(null);
     }
 
-    const [directoryResult, classesResult] = await Promise.allSettled([
-      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 4500, "shared-directory"),
-      api<SchoolClass[]>("/api/classes")
+    const [directoryResult, classesResult, catalogResult] = await Promise.allSettled([
+      withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 20000, "shared-directory"),
+      api<SchoolClass[]>("/api/classes"),
+      api<FinanceCatalog>("/api/finance/catalog")
     ]);
 
     if (directoryResult.status === "fulfilled") {
       setDirectory(normalizeDirectoryForUi(directoryResult.value));
     } else {
-      setApiError(directoryResult.reason instanceof Error ? directoryResult.reason.message : "Impossible de charger l'annuaire des élèves.");
+      const message = directoryResult.reason instanceof Error ? directoryResult.reason.message : "Impossible de charger l'annuaire des élèves.";
+      if (!message.toLowerCase().includes("timeout")) {
+        setApiError(message);
+      }
     }
 
     setClasses(classesResult.status === "fulfilled" && classesResult.value.length ? classesResult.value : SCHOOL_SECTIONS);
+    if (catalogResult.status === "fulfilled") setCatalog(catalogResult.value);
     if (!silent) setLoading(false);
   };
 
   useEffect(() => {
     void load();
     const refresh = () => void load(true);
-    const timer = window.setInterval(refresh, 3000);
+    const timer = window.setInterval(refresh, 15000);
     window.addEventListener('focus', refresh);
     return () => {
       window.clearInterval(timer);
@@ -1258,18 +1354,40 @@ export function StudentsDirectoryPage() {
       setSaving(true);
       setApiError(null);
       const fullName = composeAdministrativeFullName(state);
-      await api("/api/students", {
+      const created = await api<{ propagatedToOrbit?: boolean; localSetupStatus?: string; financeStatus?: string; notificationStatus?: { dashboard?: string } }>("/api/students", {
         method: "POST",
         body: JSON.stringify({
           fullName,
+          lastName: state.lastName.trim(),
+          middleName: state.middleName.trim() || null,
+          firstName: state.firstName.trim(),
+          email: state.email.trim() || null,
+          phone: state.phone.trim() || null,
+          dateOfBirth: state.dateOfBirth || null,
+          gender: state.gender || null,
           parentId: state.parentId,
           classId: state.classId,
           annualFee: Number(state.annualFee),
+          paymentOptionType: state.paymentOptionType,
         }),
       });
       setCreateOpen(false);
-      setMutationNotice(`L'élève ${fullName} a été créé et propagé dans le registre partagé.`);
-      await load();
+      setCreationNotice([
+        `L'élève ${fullName} a été ajouté avec succès.`,
+        created.propagatedToOrbit
+          ? "Son identité, sa date de naissance et son rattachement ont été propagés immédiatement dans l'écosystème."
+          : "L'élève a été enregistré dans EduPay ; le registre partagé était indisponible au moment de l'ajout.",
+        `Tuition plan : ${PAYMENT_OPTION_LABELS[state.paymentOptionType] || state.paymentOptionType}`,
+        `Frais annuels : $ ${Number(state.annualFee).toFixed(2)}`,
+        `Dossier EduPay : ${created.localSetupStatus ?? "SYNCED"}`,
+        `Plan financier : ${created.financeStatus ?? "SYNCED"}`,
+        `Notification parent : ${created.notificationStatus?.dashboard ?? "OPEN"}`,
+      ].join("\n"));
+      try {
+        await load();
+      } catch (refreshError) {
+        console.error("Student created successfully; directory refresh will retry on the next load", refreshError);
+      }
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Impossible de créer l'élève.");
     } finally {
@@ -1292,8 +1410,49 @@ export function StudentsDirectoryPage() {
     }
   };
 
+  const handleResetStudentAccess = async (student: SharedDirectoryStudent) => {
+    try {
+      setResettingAccess(true);
+      setApiError(null);
+      const result = await api<{ username?: string; accessCode?: string; temporaryPassword: string }>(`/api/shared-directory/reset-access/student/${encodeURIComponent(student.orbitId || student.id)}`, { method: "POST" });
+      setAccessNotice([
+        `Accès de ${student.fullName} réinitialisé avec succès.`,
+        `Identifiant : ${result.username || student.studentNumber || student.displayId || student.id}`,
+        `Code d'accès : ${result.accessCode || "Non renseigné"}`,
+        `Mot de passe temporaire : ${result.temporaryPassword}`,
+        "Ce mot de passe devra être changé à la prochaine connexion.",
+      ].join("\n"));
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Impossible de réinitialiser l'accès de l'élève.");
+    } finally {
+      setResettingAccess(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-8">
+      {accessNotice && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+          <section className="w-full max-w-xl rounded-3xl border border-amber-300/30 bg-slate-950 p-7 shadow-2xl">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-200">Accès réinitialisé</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">Nouveaux identifiants temporaires</h2>
+            <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-sm leading-6 text-amber-50">{accessNotice}</pre>
+            <button type="button" onClick={() => setAccessNotice(null)} className="mt-6 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-slate-950">Compris</button>
+          </section>
+        </div>
+      )}
+      {creationNotice && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Confirmation de l'ajout" onClick={() => setCreationNotice(null)}>
+          <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md" />
+          <section className="relative w-full max-w-xl rounded-3xl border border-cyan-300/30 bg-slate-950 p-7 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-3xl text-emerald-300">✓</div>
+            <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Ajout synchronisé</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">Élève enregistré</h2>
+            <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-left text-sm leading-6 text-cyan-50">{creationNotice}</pre>
+            <button type="button" onClick={() => setCreationNotice(null)} className="mt-6 w-full rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200">Continuer</button>
+          </section>
+        </div>
+      )}
       {mutationNotice && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setMutationNotice(null)}>
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
@@ -1305,13 +1464,14 @@ export function StudentsDirectoryPage() {
           </section>
         </div>
       )}
-      {viewTarget && <StudentDetailModal student={viewTarget} parent={parentByStudentId.get(viewTarget.id)} onClose={() => setViewTarget(null)} />}
+      {viewTarget && <StudentDetailModal student={viewTarget} parent={parentByStudentId.get(viewTarget.id)} resettingAccess={resettingAccess} onResetAccess={() => void handleResetStudentAccess(viewTarget)} onClose={() => setViewTarget(null)} />}
       {editTarget && (
         <StudentEditModal
           student={editTarget}
           parent={parentByStudentId.get(editTarget.id)}
           parents={directory?.parents ?? []}
           classes={classes}
+          catalog={catalog}
           saving={saving}
           onSave={handleUpdateStudent}
           onClose={() => setEditTarget(null)}
@@ -1322,6 +1482,7 @@ export function StudentsDirectoryPage() {
           student={{ id: "", fullName: "", classId: "", annualFee: 0 } as SharedDirectoryStudent}
           parents={directory?.parents ?? []}
           classes={classes}
+          catalog={catalog}
           saving={saving}
           onSave={handleCreateStudent}
           onClose={() => setCreateOpen(false)}

@@ -377,6 +377,12 @@ model Student {
   classId    String
   externalStudentId String?
   fullName   String
+  firstName  String?
+  middleName String?
+  lastName   String?
+  email      String?
+  phone      String?
+  dateOfBirth DateTime?
   gender     String?
   annualFee  Float
   createdAt  DateTime  @default(now())
