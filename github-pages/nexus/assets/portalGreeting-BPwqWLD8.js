@@ -1,0 +1,1 @@
+function n(n,o=new Date){const e=o.getHours();return"fr"===n?e<12?"Bonjour":e<18?"Bon apres-midi":"Bonsoir":e<12?"Good morning":e<18?"Good afternoon":"Good evening"}function o(n,o=new Date){return o.toLocaleDateString("fr"===n?"fr-FR":"en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}export{o as a,n as g};
