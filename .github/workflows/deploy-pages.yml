@@ -26,12 +26,15 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
+      - name: Install EduPay dependencies
+        working-directory: EduPay Smart System
+        run: pnpm install --frozen-lockfile
       - name: Build EduPay
         working-directory: EduPay Smart System
         env:
           NODE_OPTIONS: --max-old-space-size=6144
           VITE_DISABLE_PWA: "true"
-        run: pnpm install --frozen-lockfile && pnpm --filter @edupay/web exec vite build
+        run: pnpm --filter @edupay/web exec vite build
       - name: Build SAVANEX
         working-directory: SAVANEX Project/frontend
         env:
