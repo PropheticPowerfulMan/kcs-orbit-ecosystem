@@ -5,16 +5,17 @@ import { VitePWA } from "vite-plugin-pwa";
 const disablePwa =
   (process.env.VITE_DISABLE_PWA ?? "").trim().toLowerCase() === "true" ||
   process.versions.node.startsWith("24.");
+const appBasePath = process.env.VITE_BASE_PATH || "/EduPay-Smart-System/";
 
 export default defineConfig({
-  base: "/EduPay-Smart-System/",
+  base: appBasePath,
   plugins: [
     react(),
     !disablePwa && VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "logo-school.png", "kcs.jpg", "apple-touch-icon.png", "pwa-192x192.png", "pwa-512x512.png", "pwa-maskable-512x512.png"],
       manifest: {
-        id: "/EduPay-Smart-System/",
+        id: appBasePath,
         name: "EduPay KCS",
         short_name: "EduPay KCS",
         lang: "fr",
@@ -24,8 +25,8 @@ export default defineConfig({
         display: "standalone",
         display_override: ["window-controls-overlay", "standalone", "minimal-ui"],
         orientation: "any",
-        scope: "/EduPay-Smart-System/",
-        start_url: "/EduPay-Smart-System/#/dashboard",
+        scope: appBasePath,
+        start_url: appBasePath + "#/dashboard",
         categories: ["education", "finance", "productivity"],
         icons: [
           { src: "pwa-192x192.png", sizes: "192x192", type: "image/png", purpose: "any" },
@@ -36,25 +37,25 @@ export default defineConfig({
           {
             name: "Dashboard",
             short_name: "Dashboard",
-            url: "/EduPay-Smart-System/#/dashboard",
+            url: appBasePath + "#/dashboard",
             icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }]
           },
           {
             name: "Paiements",
             short_name: "Paiements",
-            url: "/EduPay-Smart-System/#/payments",
+            url: appBasePath + "#/payments",
             icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }]
           },
           {
             name: "Parents",
             short_name: "Parents",
-            url: "/EduPay-Smart-System/#/parents",
+            url: appBasePath + "#/parents",
             icons: [{ src: "pwa-192x192.png", sizes: "192x192", type: "image/png" }]
           }
         ]
       },
       workbox: {
-        navigateFallback: "/EduPay-Smart-System/index.html",
+        navigateFallback: appBasePath + "index.html",
         globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff2}"],
         runtimeCaching: [
           {
