@@ -26,6 +26,12 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.9
+      - name: Build EduPay
+        working-directory: EduPay Smart System
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          VITE_DISABLE_PWA: "true"
+        run: pnpm install --frozen-lockfile && pnpm --filter @edupay/web exec vite build
       - name: Build SAVANEX
         working-directory: SAVANEX Project/frontend
         env:
@@ -43,11 +49,11 @@ jobs:
         env:
           VITE_API_URL: ${{ vars.EDUSYNC_API_URL }}
         run: npm ci && npm run build
-      - name: Build EduPay
+      - name: Confirm EduPay build
         working-directory: EduPay Smart System
         env:
           VITE_API_BASE_URL: ${{ vars.EDUPAY_API_URL }}
-        run: pnpm install --frozen-lockfile && VITE_DISABLE_PWA=true pnpm --filter @edupay/web exec vite build
+        run: test -f apps/web/dist/index.html
       - name: Assemble portal
         shell: bash
         run: |
