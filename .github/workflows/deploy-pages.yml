@@ -47,7 +47,7 @@ jobs:
         working-directory: EduPay Smart System
         env:
           VITE_API_BASE_URL: ${{ vars.EDUPAY_API_URL }}
-        run: pnpm install --frozen-lockfile && pnpm --filter @edupay/web build
+        run: pnpm install --frozen-lockfile && VITE_DISABLE_PWA=true pnpm --filter @edupay/web exec vite build
       - name: Assemble portal
         shell: bash
         run: |
