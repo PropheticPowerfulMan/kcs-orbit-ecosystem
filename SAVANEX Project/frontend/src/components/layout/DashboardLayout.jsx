@@ -29,13 +29,13 @@ const DashboardLayout = ({ children }) => {
         onClose={() => setIsSidebarOpen(false)}
         onToggleCollapse={() => setIsSidebarCollapsed((current) => !current)}
       />
-      <div className="savanex-workspace flex min-h-screen flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-github-border bg-github-panel/45 shadow-glass backdrop-blur-xl lg:h-[calc(100vh-2.5rem)] lg:min-h-0">
+      <div className="savanex-workspace flex min-h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden border border-github-border bg-github-panel/45 shadow-glass backdrop-blur-xl lg:h-[calc(100vh-2.5rem)] lg:min-h-0 lg:rounded-[1.75rem]">
         <Topbar
           onMenuClick={() => setIsSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
           onSidebarToggle={() => setIsSidebarCollapsed((current) => !current)}
         />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-5 lg:p-8">{children}</main>
       </div>
     </div>
   );

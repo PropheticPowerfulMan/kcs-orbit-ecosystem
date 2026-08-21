@@ -20,8 +20,8 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
   const greeting = getGreeting(new Date().getHours());
 
   return (
-    <header className="savanex-topbar sticky top-0 z-20 flex items-center justify-between border-b border-github-border bg-github-canvas/72 px-4 py-3 backdrop-blur-xl lg:px-8">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="savanex-topbar sticky top-0 z-20 flex min-w-0 items-center justify-between gap-2 border-b border-github-border bg-github-canvas/72 px-3 py-3 backdrop-blur-xl sm:px-4 lg:px-8">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <button
           type="button"
           onClick={onMenuClick}
@@ -30,14 +30,14 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
         >
           <Menu size={18} />
         </button>
-        <SchoolLogo size="sm" className="lg:hidden" />
+        <SchoolLogo size="sm" className="hidden sm:flex lg:hidden" />
         <div className="min-w-0">
           <h1 className="truncate font-display text-base font-semibold text-slate-100 sm:text-lg">{t('app.title')}</h1>
           <p className="truncate text-xs text-slate-400">{greeting}, {displayName}</p>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <button
           type="button"
           onClick={onSidebarToggle}

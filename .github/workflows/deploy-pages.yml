@@ -1,0 +1,80 @@
+name: Deploy ecosystem to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            SAVANEX Project/frontend/package-lock.json
+            KCS Nexus/frontend/package-lock.json
+            EduSync AI/frontend/package-lock.json
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - name: Build SAVANEX
+        working-directory: SAVANEX Project/frontend
+        env:
+          VITE_BASE_PATH: /kcs-orbit-ecosystem/savanex/
+          VITE_API_URL: ${{ vars.SAVANEX_API_URL }}
+        run: npm ci && npm run build
+      - name: Build KCS Nexus
+        working-directory: KCS Nexus/frontend
+        env:
+          VITE_BASE_PATH: /kcs-orbit-ecosystem/nexus/
+          VITE_API_URL: ${{ vars.NEXUS_API_URL }}
+        run: npm ci && npm run build
+      - name: Build EduSync AI
+        working-directory: EduSync AI/frontend
+        env:
+          VITE_API_URL: ${{ vars.EDUSYNC_API_URL }}
+        run: npm ci && npm run build
+      - name: Build EduPay
+        working-directory: EduPay Smart System
+        env:
+          VITE_API_BASE_URL: ${{ vars.EDUPAY_API_URL }}
+        run: pnpm install --frozen-lockfile && pnpm --filter @edupay/web build
+      - name: Assemble portal
+        shell: bash
+        run: |
+          mkdir -p site/savanex site/nexus site/edusync site/EduPay-Smart-System
+          cp -R github-pages/. site/
+          cp -R "SAVANEX Project/frontend/dist/." site/savanex/
+          cp -R "KCS Nexus/frontend/dist/." site/nexus/
+          cp -R "EduSync AI/frontend/dist/." site/edusync/
+          cp -R "EduPay Smart System/apps/web/dist/." site/EduPay-Smart-System/
+          cp site/savanex/index.html site/savanex/404.html
+          cp site/nexus/index.html site/nexus/404.html
+          cp site/edusync/index.html site/edusync/404.html
+          cp site/EduPay-Smart-System/index.html site/EduPay-Smart-System/404.html
+          touch site/.nojekyll
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
