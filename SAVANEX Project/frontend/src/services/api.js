@@ -8,16 +8,18 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api';
 const DEMO_ACCESS_TOKEN = 'demo-access-token';
-const DEMO_MODE_ENABLED = String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
+const IS_GITHUB_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
+const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
+  || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
 const DIRECTORY_REQUEST_TIMEOUT_MS = 10000;
 
 const demoUser = {
   id: 1,
-  username: 'admin',
-  email: 'admin@savanex.local',
-  first_name: 'Demo',
-  last_name: 'Admin',
-  full_name: 'Demo Admin',
+  username: 'admin.savanex',
+  email: 'administration@savanex.school',
+  first_name: 'Administration',
+  last_name: 'SAVANEX',
+  full_name: 'Administration SAVANEX',
   role: 'admin',
   language: 'fr',
 };
@@ -137,6 +139,8 @@ const buildDemoLivingProfile = (studentId) => {
 };
 
 const isDemoSession = () => DEMO_MODE_ENABLED && useAuthStore.getState().accessToken === DEMO_ACCESS_TOKEN;
+
+export const isDemoModeEnabled = () => DEMO_MODE_ENABLED;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -345,6 +349,14 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
       return {
         ...student,
         ...(sharedStudent ? {
+          full_name: sharedStudent.full_name || student.full_name,
+          email: sharedStudent.email || '',
+          date_of_birth: sharedStudent.date_of_birth || null,
+          gender: sharedStudent.gender || student.gender,
+          current_class: sharedStudent.current_class || student.current_class,
+          class_name: sharedStudent.class_name || student.class_name,
+          is_active: sharedStudent.is_active,
+          must_change_password: sharedStudent.must_change_password,
           parent_name: sharedStudent.parent_name || student.parent_name,
           parent_email: sharedStudent.parent_email || student.parent_email,
           parent_phone: sharedStudent.parent_phone || student.parent_phone,
@@ -367,6 +379,21 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
 
 export const authService = {
   async login(username, password) {
+    if (DEMO_MODE_ENABLED) {
+      const normalizedIdentifier = String(username || '').trim().toLowerCase();
+      const acceptedIdentifiers = new Set([demoUser.username, demoUser.email]);
+      if (!acceptedIdentifiers.has(normalizedIdentifier) || String(password || '').length < 8) {
+        const error = new Error('Identifiants de demonstration invalides.');
+        error.response = { data: { detail: error.message }, status: 401 };
+        throw error;
+      }
+      return {
+        access: DEMO_ACCESS_TOKEN,
+        refresh: 'demo-refresh-token',
+        user: demoUser,
+      };
+    }
+
     const res = await api.post('/auth/login/', { username, password });
     return res.data;
   },

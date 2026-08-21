@@ -37,6 +37,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/portal/student/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/student/profile', label: t('portalNav.myProfile'), icon: UserCheck },
+        { to: '/portal/student/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'parent':
       return [
@@ -47,6 +48,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/parent/calendar', label: t('portalNav.calendar'), icon: Calendar },
         { to: '/portal/parent/finance', label: t('portalNav.fees'), icon: WalletCards },
         { to: '/portal/parent/profile', label: t('portalNav.profile'), icon: UserCheck },
+        { to: '/portal/parent/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'teacher':
       return [

@@ -1,4 +1,5 @@
 import { prisma } from "../prisma";
+import { syncAutomaticFamilyTuitionPlan } from "../modules/finance/service";
 
 type OrbitSharedDirectory = {
   source: "orbit";
@@ -768,6 +769,9 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
         students: { none: {} },
       },
     });
+  }
+  for (const parentId of activeParentIds) {
+    await syncAutomaticFamilyTuitionPlan({ schoolId, parentId });
   }
   const parents = activeParentIds.length > 0
     ? await prisma.parent.findMany({

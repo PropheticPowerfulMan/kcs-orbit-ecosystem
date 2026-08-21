@@ -9,6 +9,7 @@ import {
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import { aiAPI, authAPI, messagesAPI, studentsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
@@ -1608,41 +1609,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         <div className="space-y-5"><div className={panelClass}><label className="text-sm font-semibold text-kcs-blue-900 dark:text-white" htmlFor="resource-search">Search learning resources</label><input id="resource-search" value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} className={`${inputClass} mt-3 w-full`} placeholder="Title, subject, type or status..." /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lmsResources.filter((resource) => `${resource.title} ${resource.subject} ${resource.type} ${resource.status}`.toLowerCase().includes(resourceQuery.toLowerCase())).map((resource) => <button type="button" key={resource.title} onClick={() => setSelectedResource(resource)} className={`${panelClass} text-left transition hover:border-kcs-blue-300 hover:shadow-lg`}><div className="flex justify-between gap-3"><LibraryBig className="text-kcs-blue-600 dark:text-kcs-blue-300"/><span className="badge-blue capitalize">{resource.type}</span></div><h3 className="mt-4 font-bold text-kcs-blue-900 dark:text-white">{resource.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{resource.subject} · {resource.status}</p><p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">View resource →</p></button>)}</div>{selectedResource && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedResource.type}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedResource.title}</h3></div><button type="button" onClick={() => setSelectedResource(null)} aria-label="Close"><X/></button></div><p className="mt-5 text-sm text-gray-600 dark:text-gray-300">Subject: {selectedResource.subject}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Visibility: {selectedResource.audience.join(', ')}</p><button type="button" onClick={() => { setActionMessage(`${selectedResource.title} opened successfully.`); setSelectedResource(null) }} className={`${compactButton} mt-5 w-full`}><BookOpen size={16}/> Open resource</button></div></div>}</div>
       )}
 
-      {segment === 'settings' && (
-        <div className="space-y-6">
-          <div className={panelClass}>
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-              <div className="text-center">
-                <img src={profileDraft.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(`${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`)}`} alt="Teacher profile" className="mx-auto h-40 w-40 rounded-3xl border-4 border-white object-cover shadow-lg dark:border-kcs-blue-800"/>
-                <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800 focus-within:ring-2 focus-within:ring-kcs-gold-400">
-                  <Upload size={16}/> Upload photo
-                  <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => readProfilePhoto(event.target.files?.[0])}/>
-                </label>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">PNG, JPEG or WebP, maximum 1 MB.</p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <input className={inputClass} value={profileDraft.lastName} onChange={(event) => setProfileDraft((draft) => ({ ...draft, lastName: event.target.value }))} placeholder="Last name"/>
-                <input className={inputClass} value={profileDraft.middleName} onChange={(event) => setProfileDraft((draft) => ({ ...draft, middleName: event.target.value }))} placeholder="Middle name / Postnom"/>
-                <input className={inputClass} value={profileDraft.firstName} onChange={(event) => setProfileDraft((draft) => ({ ...draft, firstName: event.target.value }))} placeholder="First name"/>
-                <input className={inputClass} type="email" value={profileDraft.email} onChange={(event) => setProfileDraft((draft) => ({ ...draft, email: event.target.value }))} placeholder="Email"/>
-                <input className={inputClass} value={profileDraft.phone} onChange={(event) => setProfileDraft((draft) => ({ ...draft, phone: event.target.value }))} placeholder="Phone"/>
-                {profileDraft.email.trim().toLowerCase() !== user?.email?.toLowerCase() && <input className={`${inputClass} sm:col-span-2`} type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password required to change email" autoComplete="current-password"/>}
-                <button type="button" disabled={profileSaving} onClick={() => void saveTeacherProfile()} className={`${compactButton} sm:col-span-2 disabled:cursor-not-allowed disabled:opacity-60`}>{profileSaving ? 'Saving to KCS Nexus…' : 'Save changes'}</button>
-              </div>
-            </div>
-          </div>
-          <div className={panelClass}>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><h3 className="font-bold text-kcs-blue-900 dark:text-white">Two-factor authentication</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Protect this account with a standards-based authenticator code.</p></div>
-              <span className={`rounded-full px-3 py-1 text-xs font-bold ${user?.twoFactorEnabled ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-kcs-blue-800 dark:text-gray-300'}`}>{user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}</span>
-            </div>
-            {!user?.twoFactorEnabled && !twoFactorSecret && <button type="button" onClick={() => void startTwoFactorSetup()} className={`${compactButton} mt-4`}>Set up authenticator</button>}
-            {twoFactorSecret && <div className="mt-4 space-y-3 rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-800/30"><p className="text-sm text-kcs-blue-900 dark:text-white">Add this secret to your authenticator app:</p><code className="block break-all rounded-lg bg-white p-3 text-sm font-bold tracking-wider text-kcs-blue-900 dark:bg-kcs-blue-950 dark:text-kcs-gold-300">{twoFactorSecret}</code><a href={twoFactorSetupUrl} className="text-xs font-semibold text-kcs-blue-600 underline dark:text-kcs-blue-300">Open authenticator setup link</a><div className="flex flex-col gap-2 sm:flex-row"><input className={inputClass} inputMode="numeric" maxLength={6} value={twoFactorCode} onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, ''))} placeholder="6-digit code"/><button type="button" disabled={twoFactorCode.length !== 6} onClick={() => void verifyTwoFactorSetup()} className={`${compactButton} disabled:opacity-60`}>Verify and enable</button></div></div>}
-            {user?.twoFactorEnabled && <button type="button" onClick={() => void disableTwoFactor()} className="mt-4 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/20">Disable 2FA</button>}
-          </div>
-          {profileDialog && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Teacher settings</h3><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{profileDialog}</p><button type="button" onClick={() => setProfileDialog('')} className={`${compactButton} mt-5 w-full`}>OK</button></div></div>}
-        </div>
-      )}
+      {segment === 'settings' && <AccountSettingsPanel roleLabel="Teacher account" />}
 
       {segment === 'discipline' && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">

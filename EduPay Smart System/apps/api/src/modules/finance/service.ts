@@ -2742,6 +2742,10 @@ export function buildTuitionParentNotificationMessages(input: {
   return { subject, emailBody, smsBody, dashboardBody: emailBody };
 }
 
+export const AUTOMATIC_ECOSYSTEM_TUITION_NOTE = "AUTO_ECOSYSTEM_SYNC: affectation selon la classe et la taille de la famille";
+export function isAutomaticEcosystemTuitionAssignment(assignment?: { notes?: string | null } | null) {
+  return !assignment || Boolean(assignment.notes?.startsWith(AUTOMATIC_ECOSYSTEM_TUITION_NOTE));
+}
 export async function ensureParentTuitionEnginePlan(input: {
   schoolId: string;
   parentId: string;
@@ -2956,7 +2960,7 @@ export async function ensureParentTuitionEnginePlan(input: {
         }
         continue;
       }
-      if (existingAssignment && existingInstallments.length > 0) {
+      if (existingAssignment && existingInstallments.length > 0 && !isAutomaticEcosystemTuitionAssignment(existingAssignment)) {
         continue;
       }
 
@@ -3100,6 +3104,32 @@ export async function ensureParentTuitionEnginePlan(input: {
   });
 }
 
+export async function syncAutomaticFamilyTuitionPlan(input: { schoolId: string; parentId: string }) {
+  const { academicYear } = await getTargetAcademicYear(input.schoolId)
+  const students = await prisma.student.findMany({
+    where: { schoolId: input.schoolId, parentId: input.parentId },
+    select: { id: true }
+  })
+  const assignments = await prisma.parentPlanAssignment.findMany({
+    where: { schoolId: input.schoolId, parentId: input.parentId, academicYearId: academicYear.id, isActive: true },
+    select: { studentId: true, notes: true }
+  })
+  const assignmentByStudent = new Map(assignments.filter((row) => row.studentId).map((row) => [row.studentId!, row]))
+  const automaticStudentIds = students
+    .filter((student) => {
+      const assignment = assignmentByStudent.get(student.id)
+      return isAutomaticEcosystemTuitionAssignment(assignment)
+    })
+    .map((student) => student.id)
+  if (automaticStudentIds.length === 0) return null
+  return ensureParentTuitionEnginePlan({
+    schoolId: input.schoolId,
+    parentId: input.parentId,
+    studentIds: automaticStudentIds,
+    paymentOptionType: PaymentOptionType.STANDARD_MONTHLY,
+    notes: AUTOMATIC_ECOSYSTEM_TUITION_NOTE
+  })
+}
 function buildAllocationPreviewFromInstallments(input: {
   amount: number;
   installments: Array<{

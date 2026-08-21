@@ -10,16 +10,17 @@ from app.models.user import Role
 
 
 class EduSyncSharedAuthTests(unittest.TestCase):
-    def test_map_edupay_role_supports_admin_staff_and_parent(self):
+    def test_map_edupay_role_supports_admin_and_staff_only(self):
         self.assertEqual(auth.map_edupay_role("ADMIN"), Role.ADMIN)
         self.assertEqual(auth.map_edupay_role("ACCOUNTANT"), Role.STAFF)
-        self.assertEqual(auth.map_edupay_role("PARENT"), Role.PARENT)
+        self.assertIsNone(auth.map_edupay_role("PARENT"))
 
-    def test_map_savanex_role_supports_teacher_employee_parent_and_student(self):
+    def test_map_savanex_role_supports_admin_teacher_and_employee_only(self):
         self.assertEqual(auth.map_savanex_role("teacher"), Role.TEACHER)
         self.assertEqual(auth.map_savanex_role("employee"), Role.STAFF)
-        self.assertEqual(auth.map_savanex_role("parent"), Role.PARENT)
-        self.assertEqual(auth.map_savanex_role("student"), Role.STUDENT)
+        self.assertEqual(auth.map_savanex_role("admin"), Role.ADMIN)
+        self.assertIsNone(auth.map_savanex_role("parent"))
+        self.assertIsNone(auth.map_savanex_role("student"))
 
     @patch.object(auth.settings, "edupay_api_url", "http://localhost:4000")
     @patch.object(auth.settings, "edupay_login_path", "/api/auth/login")
@@ -45,7 +46,7 @@ class EduSyncSharedAuthTests(unittest.TestCase):
     @patch.object(auth.settings, "edupay_login_path", "/api/auth/login")
     @patch.object(auth.settings, "edupay_timeout_seconds", 5)
     @patch("app.api.routes.auth.request.urlopen")
-    def test_authenticate_with_edupay_maps_parent_payload(self, mock_urlopen):
+    def test_authenticate_with_edupay_rejects_parent_payload(self, mock_urlopen):
         payload = {
             "role": "PARENT",
             "fullName": "Parent User",
@@ -56,10 +57,7 @@ class EduSyncSharedAuthTests(unittest.TestCase):
 
         external_user = auth.authenticate_with_edupay("parent@example.com", "password123")
 
-        self.assertEqual(external_user["role"], Role.PARENT)
-        self.assertEqual(external_user["email"], "parent@example.com")
-        self.assertEqual(external_user["access_code"], "ACC-PAR-TEST01")
-        self.assertEqual(external_user["department"], "Family Relations")
+        self.assertIsNone(external_user)
 
     @patch.object(auth.settings, "edupay_api_url", "http://localhost:4000")
     @patch.object(auth.settings, "edupay_login_path", "/api/auth/login")

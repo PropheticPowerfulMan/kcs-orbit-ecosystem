@@ -829,23 +829,23 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
       <button
         type="button"
         onClick={onClose}
-        className="absolute right-3 top-5 z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/80 text-ink-dim shadow-lg backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white"
+        className="absolute right-3 top-5 z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/80 text-slate-300 shadow-lg backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white"
         aria-label="Fermer"
       >
         <X className="h-5 w-5" />
       </button>
         <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/10 bg-slate-950/90 px-6 py-5 pr-14 backdrop-blur-xl sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Fiche élève</p>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">Fiche élève</p>
             <h2 className="mt-2 font-display text-2xl font-bold text-white">{student.fullName}</h2>
-            <p className="mt-1 text-sm text-ink-dim">Traçabilité complète du dossier financier, des échéances, des paiements et des alertes.</p>
+            <p className="mt-1 text-sm text-slate-300">Traçabilité complète du dossier financier, des échéances, des paiements et des alertes.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={onResetAccess}
               disabled={resettingAccess}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 text-xs font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:opacity-50"
             >
               <KeyRound className="h-4 w-4" /> {resettingAccess ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
             </button>
@@ -856,7 +856,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                 void exportStudentReportPdf(student, parent, financeSnapshot).finally(() => setPdfExporting(false));
               }}
               disabled={exportDisabled}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-100 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FileText className="h-4 w-4" /> {pdfExporting ? "PDF..." : "PDF"}
             </button>
@@ -864,7 +864,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
               type="button"
               onClick={() => printStudentReport(student, parent, financeSnapshot)}
               disabled={exportDisabled}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-sm font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Printer className="h-4 w-4" /> Impression
             </button>
@@ -872,7 +872,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
               type="button"
               onClick={() => exportStudentReportExcel(student, parent, financeSnapshot)}
               disabled={exportDisabled}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <FileSpreadsheet className="h-4 w-4" /> Excel
             </button>
@@ -881,40 +881,40 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
         <div className="edupay-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="grid gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">ID élève</p>
+            <p className="text-sm text-slate-300">ID élève</p>
             <p className="mt-1 break-words font-mono text-sm font-bold text-cyan-200">{student.displayId || student.studentNumber || student.id}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">Classe</p>
+            <p className="text-sm text-slate-300">Classe</p>
             <p className="mt-1 font-semibold text-white">{student.className || student.classId || "Classe non renseignee"}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">Date de naissance</p>
+            <p className="text-sm text-slate-300">Date de naissance</p>
             <p className="mt-1 font-semibold text-white">{formatDateLabel(student.dateOfBirth)}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">Parent</p>
+            <p className="text-sm text-slate-300">Parent</p>
             <p className="mt-1 font-semibold text-white">{parent?.fullName || "Parent non retrouvé"}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">Inscription</p>
+            <p className="text-sm text-slate-300">Inscription</p>
             <p className="mt-1 font-semibold text-white">{registrationDate}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">Frais annuels</p>
+            <p className="text-sm text-slate-300">Frais annuels</p>
             <p className="mt-1 font-mono font-bold text-emerald-300">{typeof displayedAnnualFee === "number" ? `$ ${displayedAnnualFee.toFixed(2)}` : "-"}</p>
-            {student.tuitionPlanName ? <p className="mt-1 text-xs text-cyan-200">{student.tuitionPlanName}</p> : null}
-            {typeof originalAnnualFee === "number" && reductionTotal > 0 ? <p className="mt-1 text-xs text-amber-200">Base $ {originalAnnualFee.toFixed(2)} · Reduction $ {reductionTotal.toFixed(2)}</p> : null}
+            {student.tuitionPlanName ? <p className="mt-1 text-sm text-cyan-200">{student.tuitionPlanName}</p> : null}
+            {typeof originalAnnualFee === "number" && reductionTotal > 0 ? <p className="mt-1 text-sm text-amber-200">Base $ {originalAnnualFee.toFixed(2)} · Reduction $ {reductionTotal.toFixed(2)}</p> : null}
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">Total attendu</p>
+            <p className="text-sm text-slate-300">Total attendu</p>
             <p className="mt-1 font-mono font-bold text-white">{formatCurrency(financeStudent?.expectedTotal ?? displayedAnnualFee ?? null)}</p>
-            <p className="mt-1 text-xs text-ink-dim">Payé {formatCurrency(financeStudent?.paid ?? 0)} · Solde {formatCurrency(financeStudent?.balance ?? 0)}</p>
+            <p className="mt-1 text-sm text-slate-300">Payé {formatCurrency(financeStudent?.paid ?? 0)} · Solde {formatCurrency(financeStudent?.balance ?? 0)}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-xs text-ink-dim">État du dossier</p>
+            <p className="text-sm text-slate-300">État du dossier</p>
             <p className="mt-1 font-semibold text-white">{(financeStudent?.completionRate ?? 0).toFixed(1)}% de completion</p>
-            <p className="mt-1 text-xs text-ink-dim">{financeStudent?.overdueInstallments ?? 0} échéance(s) en retard</p>
+            <p className="mt-1 text-sm text-slate-300">{financeStudent?.overdueInstallments ?? 0} échéance(s) en retard</p>
           </div>
         </div>
 
@@ -931,14 +931,14 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-200">Échéancier détaillé</p>
-                      <p className="mt-1 text-sm text-ink-dim">Chaque échéance, son statut, son reste à payer et sa date limite.</p>
+                      <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Échéancier détaillé</p>
+                      <p className="mt-1 text-sm text-slate-300">Chaque échéance, son statut, son reste à payer et sa date limite.</p>
                     </div>
                   </div>
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-white/10 text-left text-xs uppercase tracking-[0.12em] text-ink-dim">
+                        <tr className="border-b border-white/10 text-left text-sm uppercase tracking-[0.12em] text-slate-300">
                           <th className="px-3 py-3">Libellé</th>
                           <th className="px-3 py-3">Date</th>
                           <th className="px-3 py-3">Montant dû</th>
@@ -949,15 +949,15 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                       </thead>
                       <tbody>
                         {installments.length === 0 ? (
-                          <tr><td colSpan={6} className="px-3 py-4 text-sm text-ink-dim">Aucune échéance enregistrée.</td></tr>
+                          <tr><td colSpan={6} className="px-3 py-4 text-sm text-slate-300">Aucune échéance enregistrée.</td></tr>
                         ) : installments.map((installment) => (
                           <tr key={installment.id} className="border-b border-white/5">
-                            <td className="px-3 py-3 text-white">{installment.label}<p className="mt-1 text-xs text-ink-dim">{installment.periodKey || "Période non renseignée"}</p></td>
-                            <td className="px-3 py-3 text-ink-dim">{formatDateLabel(installment.dueDate)}</td>
+                            <td className="px-3 py-3 text-white">{installment.label}<p className="mt-1 text-sm text-slate-300">{installment.periodKey || "Période non renseignée"}</p></td>
+                            <td className="px-3 py-3 text-slate-300">{formatDateLabel(installment.dueDate)}</td>
                             <td className="px-3 py-3 font-mono text-white">{formatCurrency(installment.amountDue)}</td>
                             <td className="px-3 py-3 font-mono text-emerald-300">{formatCurrency(installment.amountPaid)}</td>
                             <td className="px-3 py-3 font-mono text-amber-200">{formatCurrency(installment.balance)}</td>
-                            <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getInstallmentStatusTone(installment.status, installment.isOverdue)}`}>{installment.status}</span></td>
+                            <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getInstallmentStatusTone(installment.status, installment.isOverdue)}`}>{installment.status}</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -967,26 +967,26 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
 
                 <section className="space-y-5">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-200">Traçabilité des paiements</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Traçabilité des paiements</p>
                     <div className="mt-4 space-y-3">
                       {paymentHistory.length === 0 ? (
-                        <p className="text-sm text-ink-dim">Aucun paiement rattaché à cet élève.</p>
+                        <p className="text-sm text-slate-300">Aucun paiement rattaché à cet élève.</p>
                       ) : paymentHistory.map((payment) => (
                         <div key={payment.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="font-semibold text-white">{payment.reason}</p>
-                              <p className="mt-1 text-xs text-ink-dim">{payment.transactionNumber} · {formatDateTimeLabel(payment.createdAt)}</p>
+                              <p className="mt-1 text-sm text-slate-300">{payment.transactionNumber} · {formatDateTimeLabel(payment.createdAt)}</p>
                             </div>
                             <div className="text-right">
                               <p className="font-mono text-lg font-bold text-emerald-300">{formatCurrency(payment.amount)}</p>
-                              <p className="mt-1 text-xs text-ink-dim">{payment.method} · {payment.status}</p>
+                              <p className="mt-1 text-sm text-slate-300">{payment.method} · {payment.status}</p>
                             </div>
                           </div>
                           {payment.allocationTrace?.lines?.filter((line) => line.studentId === student.id).length ? (
                             <div className="mt-3 space-y-2 rounded-xl border border-white/5 bg-white/[0.03] p-3">
                               {payment.allocationTrace.lines.filter((line) => line.studentId === student.id).map((line, index) => (
-                                <div key={`${payment.id}-${line.installmentId || index}`} className="flex items-center justify-between gap-3 text-xs text-ink-dim">
+                                <div key={`${payment.id}-${line.installmentId || index}`} className="flex items-center justify-between gap-3 text-sm text-slate-300">
                                   <span>{line.label} · {formatDateLabel(line.dueDate)}</span>
                                   <span className="font-mono text-cyan-200">Alloué {formatCurrency(line.allocated)} · Reste {formatCurrency(line.outstandingAfter)}</span>
                                 </div>
@@ -999,14 +999,14 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-200">Réductions et accords</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Réductions et accords</p>
                     <div className="mt-4 space-y-3">
                       {reductions.map((reduction) => (
                         <div key={reduction.id} className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <p className="font-semibold text-white">{reduction.title}</p>
-                              <p className="mt-1 text-xs text-ink-dim">{reduction.source || reduction.scope || "Remise"} · {formatDateLabel(reduction.effectiveDate)}</p>
+                              <p className="mt-1 text-sm text-slate-300">{reduction.source || reduction.scope || "Remise"} · {formatDateLabel(reduction.effectiveDate)}</p>
                             </div>
                             <p className="font-mono text-sm font-bold text-amber-200">{formatCurrency(reduction.amount)}</p>
                           </div>
@@ -1015,11 +1015,11 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                       {agreements.map((agreement) => (
                         <div key={agreement.id} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3">
                           <p className="font-semibold text-white">{agreement.title}</p>
-                          <p className="mt-1 text-xs text-ink-dim">{agreement.paymentOptionType || "Accord spécial"} · {agreement.status}</p>
+                          <p className="mt-1 text-sm text-slate-300">{agreement.paymentOptionType || "Accord spécial"} · {agreement.status}</p>
                           <p className="mt-2 text-sm text-cyan-100">Total {formatCurrency(agreement.customTotal)} · Réduction {formatCurrency(agreement.reductionAmount)} · Solde {formatCurrency(agreement.balanceDue)}</p>
                         </div>
                       ))}
-                      {reductions.length === 0 && agreements.length === 0 ? <p className="text-sm text-ink-dim">Aucune réduction ni accord spécial enregistré.</p> : null}
+                      {reductions.length === 0 && agreements.length === 0 ? <p className="text-sm text-slate-300">Aucune réduction ni accord spécial enregistré.</p> : null}
                     </div>
                   </div>
                 </section>
@@ -1027,23 +1027,23 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
 
               <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-200">Dettes et reports</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Dettes et reports</p>
                   <div className="mt-4 space-y-3">
                     {debts.length === 0 ? (
-                      <p className="text-sm text-ink-dim">Aucune dette spécifique trouvée pour cet élève.</p>
+                      <p className="text-sm text-slate-300">Aucune dette spécifique trouvée pour cet élève.</p>
                     ) : debts.map((debt) => (
                       <div key={debt.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-white">{debt.title}</p>
-                            <p className="mt-1 text-xs text-ink-dim">{debt.reason || debt.academicYearName || debt.academicYearId}</p>
+                            <p className="mt-1 text-sm text-slate-300">{debt.reason || debt.academicYearName || debt.academicYearId}</p>
                           </div>
-                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getDebtStatusTone(debt.status)}`}>{debt.status}</span>
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getDebtStatusTone(debt.status)}`}>{debt.status}</span>
                         </div>
                         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          <div><p className="text-xs text-ink-dim">Montant initial</p><p className="mt-1 font-mono font-bold text-white">{formatCurrency(debt.originalAmount)}</p></div>
-                          <div><p className="text-xs text-ink-dim">Reste à payer</p><p className="mt-1 font-mono font-bold text-amber-200">{formatCurrency(debt.amountRemaining)}</p></div>
-                          <div><p className="text-xs text-ink-dim">Échéance</p><p className="mt-1 font-semibold text-white">{formatDateLabel(debt.dueDate)}</p></div>
+                          <div><p className="text-sm text-slate-300">Montant initial</p><p className="mt-1 font-mono font-bold text-white">{formatCurrency(debt.originalAmount)}</p></div>
+                          <div><p className="text-sm text-slate-300">Reste à payer</p><p className="mt-1 font-mono font-bold text-amber-200">{formatCurrency(debt.amountRemaining)}</p></div>
+                          <div><p className="text-sm text-slate-300">Échéance</p><p className="mt-1 font-semibold text-white">{formatDateLabel(debt.dueDate)}</p></div>
                         </div>
                       </div>
                     ))}
@@ -1051,18 +1051,18 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                 </section>
 
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-200">Alertes et suivi</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Alertes et suivi</p>
                   <div className="mt-4 space-y-3">
                     {alerts.length === 0 ? (
-                      <p className="text-sm text-ink-dim">Aucune alerte spécifique pour cet élève.</p>
+                      <p className="text-sm text-slate-300">Aucune alerte spécifique pour cet élève.</p>
                     ) : alerts.map((alert) => (
                       <div key={alert.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 rounded-full bg-amber-500/10 p-2 text-amber-200"><AlertCircle className="h-4 w-4" /></div>
                           <div>
                             <p className="font-semibold text-white">{alert.title}</p>
-                            <p className="mt-1 text-sm text-ink-dim">{alert.message}</p>
-                            <p className="mt-2 text-xs text-ink-dim">{alert.severity} · {formatDateTimeLabel(alert.createdAt)}</p>
+                            <p className="mt-1 text-sm text-slate-300">{alert.message}</p>
+                            <p className="mt-2 text-sm text-slate-300">{alert.severity} · {formatDateTimeLabel(alert.createdAt)}</p>
                           </div>
                         </div>
                       </div>
@@ -1147,24 +1147,24 @@ function StudentEditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-3 sm:p-5">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="edupay-scrollbar relative h-[80dvh] w-[80vw] max-w-none overflow-y-auto rounded-2xl border border-white/10 glass p-6 shadow-2xl sm:p-8">
-        <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-ink-dim hover:bg-white/10 hover:text-white">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg p-2 text-slate-200 hover:bg-white/10 hover:text-white">
           <X className="h-4 w-4" />
         </button>
         <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? "Ajouter un élève" : "Modifier l'élève"}</h2>
         <form className="mt-6 grid gap-5" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Nom de famille *<input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Postnom<input className="input" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Ex. Kabongo" /></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Prénom *<input className="input" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Ex. Marie" required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Nom de famille *<input className="input text-base" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Postnom<input className="input text-base" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Ex. Kabongo" /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Prénom *<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Ex. Marie" required /></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Adresse e-mail de l’élève<input className="input" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="eleve@exemple.com" /></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Téléphone de l’élève<input className="input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243..." /></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Date de naissance<DateSelect className="input" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Genre<select className="input" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Adresse e-mail de l’élève<input className="input text-base" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="eleve@exemple.com" /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Téléphone de l’élève<input className="input text-base" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243..." /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Date de naissance<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Genre<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Classe actuelle *<select className="input" value={form.classId} onChange={(event) => applyClass(event.target.value)} required>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Classe actuelle *<select className="input text-base" value={form.classId} onChange={(event) => applyClass(event.target.value)} required>
               <option value="">Classe</option>
               <optgroup label="Maternelle">
                 {classOptions.filter((item) => item.name.startsWith("K")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -1173,23 +1173,23 @@ function StudentEditModal({
                 {classOptions.filter((item) => item.name.startsWith("G")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
             </select></label>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Tuition plan *<select className="input" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Tuition plan *<select className="input text-base" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
               {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{PAYMENT_OPTION_LABELS[plan.paymentOptionType] || plan.name} · $ {Number(plan.finalAmount).toFixed(2)}</option>)}
             </select></label>
           </div>
           <div className="grid gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:grid-cols-[1fr_0.7fr] sm:items-end">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-200">Frais calculés depuis le tuition plan</p>
-              <p className="mt-2 text-sm text-ink-dim">Le montant est automatiquement adapté à la classe et au plan sélectionnés.</p>
+              <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-200">Frais calculés depuis le tuition plan</p>
+              <p className="mt-2 text-sm text-slate-200">Le montant est automatiquement adapté à la classe et au plan sélectionnés.</p>
             </div>
-            <label className="grid gap-1 text-xs font-semibold text-ink-dim">Frais scolaires annuels (USD)<input className="input bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" value={form.annualFee} readOnly required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Frais scolaires annuels (USD)<input className="input text-base bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" value={form.annualFee} readOnly required /></label>
           </div>
-          <label className="grid gap-1 text-xs font-semibold text-ink-dim">Parent responsable *<select className="input" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
+          <label className="grid gap-1 text-sm font-semibold text-slate-200">Parent responsable *<select className="input text-base" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
             <option value="">Parent</option>
             {parents.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
           </select></label>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">Annuler</button>
+            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">Annuler</button>
             <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-400 disabled:opacity-60">
               {saving ? "Enregistrement..." : "Enregistrer"}
             </button>

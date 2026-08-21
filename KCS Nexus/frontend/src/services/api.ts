@@ -40,6 +40,11 @@ api.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
     const skipAuthLogout = originalRequest?.headers?.['x-skip-auth-logout'] === 'true'
 
+    if (error.response?.status === 410) {
+      useAuthStore.getState().logout()
+      window.location.replace(`${getRouteUrl('login')}?reason=identity-removed`)
+      return Promise.reject(error)
+    }
     if (error.response?.status === 401 && skipAuthLogout) {
       return Promise.reject(error)
     }
@@ -85,6 +90,8 @@ export const authAPI = {
     api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.put('/auth/change-password', { currentPassword, newPassword }),
   me: () =>
     api.get('/auth/me'),
   updateProfile: (data: { firstName?: string; middleName?: string | null; lastName?: string; phone?: string; avatar?: string; bio?: string }) =>

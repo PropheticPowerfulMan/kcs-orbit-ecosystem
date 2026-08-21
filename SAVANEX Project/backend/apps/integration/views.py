@@ -133,6 +133,41 @@ def authenticate_ecosystem_identity_view(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def change_ecosystem_identity_password_view(request, entity_type, identifier):
+    provided_key = request.headers.get('x-api-key', '')
+    trusted_keys = {settings.KCS_NEXUS_AUTH_KEY, settings.EDUPAY_AUTH_KEY, settings.EDUSYNC_AUTH_KEY} - {''}
+    if not provided_key or provided_key not in trusted_keys:
+        return Response({'detail': 'Unauthorized ecosystem password change request.'}, status=401)
+
+    current_password = str(request.data.get('currentPassword') or '')
+    new_password = str(request.data.get('newPassword') or '')
+    if len(new_password) < 8:
+        return Response({'detail': 'Le nouveau mot de passe doit contenir au moins 8 caracteres.'}, status=400)
+
+    query = Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier) | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
+    allowed_roles = {
+        'parent': {User.ROLE_PARENT},
+        'student': {User.ROLE_STUDENT},
+        'teacher': {User.ROLE_TEACHER, User.ROLE_EMPLOYEE},
+        'employee': {User.ROLE_TEACHER, User.ROLE_EMPLOYEE},
+    }.get(entity_type)
+    if not allowed_roles:
+        return Response({'detail': 'Unsupported entity type.'}, status=400)
+
+    user = User.objects.filter(role__in=allowed_roles, is_active=True).filter(query).first()
+    if not user:
+        return Response({'detail': 'Compte SAVANEX introuvable pour cette entite.'}, status=404)
+    if not user.check_password(current_password):
+        return Response({'detail': 'Mot de passe actuel incorrect.'}, status=400)
+
+    user.set_password(new_password)
+    user.must_change_password = False
+    user.password_generated_by_system = False
+    user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system', 'updated_at'])
+    return Response({'detail': 'Mot de passe modifie dans l ecosystem.', 'accessCode': user.access_code})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def reset_ecosystem_identity_access_view(request, entity_type, identifier):
     provided_key = request.headers.get('x-api-key', '')
     trusted_keys = {settings.KCS_NEXUS_AUTH_KEY, settings.EDUPAY_AUTH_KEY, settings.EDUSYNC_AUTH_KEY} - {''}

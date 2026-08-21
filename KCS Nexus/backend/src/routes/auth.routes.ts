@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import type { User as PrismaUser } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import jwt, { type SignOptions } from 'jsonwebtoken'
@@ -129,7 +130,7 @@ const registerSchema = z.object({
   lastName: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(8),
-  role: z.enum(['admin', 'staff', 'teacher', 'student', 'parent']),
+  role: z.enum(['student', 'parent'], { message: 'KCS Nexus can only register parents and their children. School employees are provisioned by SAVANEX or EduPay.' }),
 })
 
 const loginSchema = z.object({
@@ -151,54 +152,52 @@ const configuredSuperAdmin = {
   role: 'admin' as const,
 }
 
-function loginConfiguredSuperAdmin(payload: z.infer<typeof loginSchema>) {
+async function getConfiguredSuperAdminAccount() {
+  const existing = await prisma.user.findUnique({ where: { email: configuredSuperAdmin.email } })
+  if (existing) return existing
+  return prisma.user.create({
+    data: {
+      email: configuredSuperAdmin.email,
+      accessCode: 'ACC-ADM-SUPER1',
+      passwordHash: await bcrypt.hash(configuredSuperAdmin.password, 10),
+      firstName: configuredSuperAdmin.firstName,
+      lastName: configuredSuperAdmin.lastName,
+      role: 'ADMIN',
+    },
+  })
+}
+
+async function loginConfiguredSuperAdmin(payload: z.infer<typeof loginSchema>) {
   const identifier = (payload.identifier ?? payload.email ?? '').trim().toLowerCase()
-  if (
-    identifier !== configuredSuperAdmin.email.toLowerCase() ||
-    payload.password !== configuredSuperAdmin.password
-  ) {
-    return null
-  }
-
-  const user = {
-    id: configuredSuperAdmin.id,
-    email: configuredSuperAdmin.email,
-    accessCode: 'ACC-ADM-SUPER1',
-    firstName: configuredSuperAdmin.firstName,
-    lastName: configuredSuperAdmin.lastName,
-    role: configuredSuperAdmin.role,
-    avatar: null,
-    phone: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
-
+  if (identifier !== configuredSuperAdmin.email.toLowerCase()) return null
+  const account = await getConfiguredSuperAdminAccount()
+  if (!account.passwordHash || !(await bcrypt.compare(payload.password, account.passwordHash))) return null
+  const user = buildConfiguredSuperAdminUser(account)
   return {
     user,
     token: jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] }),
     refreshToken: jwt.sign({ sub: user.id, role: user.role }, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'] }),
   }
 }
-
 function isConfiguredSuperAdminUser(userId?: string) {
   return userId === configuredSuperAdmin.id
 }
 
-function buildConfiguredSuperAdminUser() {
+function buildConfiguredSuperAdminUser(account: PrismaUser) {
   return {
     id: configuredSuperAdmin.id,
-    email: configuredSuperAdmin.email,
-    accessCode: 'ACC-ADM-SUPER1',
-    firstName: configuredSuperAdmin.firstName,
-    lastName: configuredSuperAdmin.lastName,
+    email: account.email,
+    accessCode: account.accessCode || 'ACC-ADM-SUPER1',
+    firstName: account.firstName,
+    middleName: account.middleName,
+    lastName: account.lastName,
     role: configuredSuperAdmin.role,
-    avatar: null,
-    phone: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    avatar: account.avatar,
+    phone: account.phone,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
   }
 }
-
 async function authenticateWithSavanex(identifier: string, password: string) {
   if (!savanexAuthIsEnabled()) {
     return null
@@ -325,6 +324,77 @@ async function authenticateWithSharedProviders(identifier: string, password: str
   }
 }
 
+async function refreshCanonicalIdentity(user: PrismaUser): Promise<PrismaUser> {
+  if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return user
+  const collection = user.role === 'PARENT' ? 'parents' : user.role === 'STUDENT' ? 'students' : ['TEACHER', 'STAFF'].includes(user.role) ? 'teachers' : null
+  if (!collection) return user
+  const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
+  try {
+    const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, {
+      headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' },
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!response.ok) return user
+    const directory = await response.json() as Record<string, Array<Record<string, unknown>>>
+    const accessCode = (user.accessCode || '').trim().toUpperCase()
+    const email = user.email.trim().toLowerCase()
+    const entity = (directory[collection] || []).find((item) =>
+      (accessCode && String(item.accessCode || '').trim().toUpperCase() === accessCode)
+      || (email && String(item.email || '').trim().toLowerCase() === email),
+    )
+    if (!entity) {
+      if (isFederated) throw new ApiError(410, 'This ecosystem identity was deleted or deactivated.')
+      return user
+    }
+
+    return prisma.user.update({
+      where: { id: user.id },
+      data: {
+        ...(typeof entity.firstName === 'string' && entity.firstName.trim() ? { firstName: entity.firstName.trim() } : {}),
+        ...(entity.middleName === null || typeof entity.middleName === 'string' ? { middleName: entity.middleName ? String(entity.middleName).trim() : null } : {}),
+        ...(typeof entity.lastName === 'string' && entity.lastName.trim() ? { lastName: entity.lastName.trim() } : {}),
+        ...(typeof entity.email === 'string' && entity.email.trim() ? { email: entity.email.trim().toLowerCase() } : {}),
+        ...(typeof entity.phone === 'string' ? { phone: entity.phone.trim() || null } : {}),
+        avatar: typeof entity.photoData === 'string' ? entity.photoData : null,
+      },
+    })
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    return user
+  }
+}
+async function updateFederatedPhoto(user: { role: string; accessCode: string | null; email: string; permissions: string[] }, avatar: string) {
+  const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
+  if (!isFederated || !env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return
+
+  const entityType = user.role === 'PARENT' ? 'parent' : user.role === 'STUDENT' ? 'student' : 'teacher'
+  const identifier = user.accessCode || user.email
+  const url = `${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/registry/${entityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}&identifierType=${user.accessCode ? 'accessCode' : 'email'}`
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' },
+    body: JSON.stringify({ photoData: avatar || null, photoSource: 'self-service:kcs-nexus' }),
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({} as { message?: string })) as { message?: string }
+    throw new ApiError(response.status, payload.message || 'The ecosystem profile photo could not be synchronized.')
+  }
+}
+
+async function changeFederatedPassword(user: { role: string; accessCode: string | null; email: string }, currentPassword: string, newPassword: string) {
+  if (!env.SAVANEX_API_URL || !env.KCS_ORBIT_API_KEY) throw new ApiError(503, 'SAVANEX password authority is unavailable.')
+  const entityType = user.role === 'PARENT' ? 'parent' : user.role === 'STUDENT' ? 'student' : 'teacher'
+  const identifier = user.accessCode || user.email
+  const response = await fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(identifier)}/change-password/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY },
+    body: JSON.stringify({ currentPassword, newPassword }),
+    signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
+  })
+  const payload = await response.json().catch(() => ({} as { detail?: string })) as { detail?: string }
+  if (!response.ok) throw new ApiError(response.status, payload.detail || 'The ecosystem password could not be changed.')
+}
 async function upsertExternalUser(externalUser: ExternalUserProfile | null, password: string) {
   if (!externalUser) {
     return null
@@ -440,14 +510,15 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
   const payload = loginSchema.parse(req.body)
-  const configuredLogin = loginConfiguredSuperAdmin(payload)
+  const configuredLogin = await loginConfiguredSuperAdmin(payload)
   if (configuredLogin) {
     return success(res, configuredLogin, 'Login successful')
   }
 
   const identifier = (payload.identifier ?? payload.email ?? '').trim()
   const user = await findLocalUserByIdentifier(identifier)
-  if (user?.passwordHash) {
+  const isFederatedUser = Boolean(user?.permissions?.some((permission) => permission.startsWith('ecosystem:')))
+  if (user?.passwordHash && !isFederatedUser) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
       if (user.twoFactorEnabled) {
@@ -492,7 +563,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(resolvedUser), token, refreshToken }, 'Login successful')
+  const synchronizedUser = await refreshCanonicalIdentity(resolvedUser)
+  return success(res, { user: buildSafeUser(synchronizedUser), token, refreshToken }, 'Login successful')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -509,7 +581,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   try {
     const payload = jwt.verify(refreshToken, env.JWT_REFRESH_SECRET) as { sub?: string; role?: string }
     if (isConfiguredSuperAdminUser(payload.sub)) {
-      const user = buildConfiguredSuperAdminUser()
+      const user = buildConfiguredSuperAdminUser(await getConfiguredSuperAdminAccount())
       const token = jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] })
       return success(res, { token, user }, 'Token refreshed')
     }
@@ -617,7 +689,7 @@ authRouter.post('/reset-password', asyncHandler(async (req, res) => {
 
 authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
-    return success(res, buildConfiguredSuperAdminUser())
+    return success(res, buildConfiguredSuperAdminUser(await getConfiguredSuperAdminAccount()))
   }
 
   const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
@@ -625,9 +697,40 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
     throw new ApiError(404, 'User not found')
   }
 
-  return success(res, buildSafeUser(user))
+  const synchronizedUser = await refreshCanonicalIdentity(user)
+  return success(res, buildSafeUser(synchronizedUser))
 }))
 
+authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) })
+  const { currentPassword, newPassword } = schema.parse(req.body)
+  if (isConfiguredSuperAdminUser(req.user!.sub)) {
+    const account = await getConfiguredSuperAdminAccount()
+    if (!account.passwordHash || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
+      throw new ApiError(400, 'Current password is incorrect')
+    }
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: account.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } }),
+      prisma.refreshToken.deleteMany({ where: { userId: account.id } }),
+    ])
+    return success(res, null, 'Password changed successfully')
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!user?.passwordHash) throw new ApiError(404, 'User account not found')
+  const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
+  if (isFederated) {
+    await changeFederatedPassword(user, currentPassword, newPassword)
+  } else {
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!valid) throw new ApiError(400, 'Current password is incorrect')
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10)
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+  await prisma.refreshToken.deleteMany({ where: { userId: user.id } })
+  return success(res, null, 'Password changed across the ecosystem')
+}))
 authRouter.put('/access-code', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
     throw new ApiError(403, 'Configured super admin access code cannot be modified from the API')
@@ -658,39 +761,25 @@ authRouter.put('/access-code', authenticate, asyncHandler(async (req: Authentica
 }))
 
 authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const profileSchema = z.object({
-    firstName: z.string().min(1).optional(),
-    middleName: z.string().nullable().optional(),
-    lastName: z.string().min(1).optional(),
-    phone: z.string().optional(),
-    avatar: z.string().optional(),
-    bio: z.string().optional(),
-  })
+  const profileSchema = z.object({ avatar: z.string().max(1_500_000) }).strict()
+
   const data = profileSchema.parse(req.body)
 
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
-    const adminUser = buildConfiguredSuperAdminUser()
-    const updated = { ...adminUser, ...data }
-    return success(res, updated, 'Profile updated successfully')
+    const account = await getConfiguredSuperAdminAccount()
+    const updatedAccount = await prisma.user.update({ where: { id: account.id }, data: { avatar: data.avatar } })
+    return success(res, buildConfiguredSuperAdminUser(updatedAccount), 'Profile updated successfully')
   }
+
+  const currentUser = await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!currentUser) throw new ApiError(404, 'User not found')
+  if (data.avatar !== undefined) await updateFederatedPhoto(currentUser, data.avatar)
 
   const updated = await prisma.user.update({
     where: { id: req.user!.sub },
-    data: {
-      ...(data.firstName ? { firstName: data.firstName.trim() } : {}),
-      ...(data.middleName !== undefined ? { middleName: data.middleName?.trim() || null } : {}),
-      ...(data.lastName ? { lastName: data.lastName.trim() } : {}),
-      ...(data.phone !== undefined ? { phone: data.phone.trim() } : {}),
-      ...(data.avatar !== undefined ? { avatar: data.avatar } : {}),
-    },
-  })
+    data: { avatar: data.avatar },
 
-  if (data.bio && updated.role === 'TEACHER') {
-    await prisma.teacherProfile.updateMany({
-      where: { userId: updated.id },
-      data: { bio: data.bio.trim() },
-    })
-  }
+  })
 
   return success(res, buildSafeUser(updated), 'Profile updated successfully')
 }))

@@ -418,3 +418,41 @@ test("registry route allows EduPay to create a family", async () => {
     assert.notEqual(response.status, 403);
   });
 });
+
+test("registry route blocks KCS Nexus from creating school employees", async () => {
+  process.env.KCS_NEXUS_INTEGRATION_KEY = "test-kcs-key";
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/integration/registry/teacher`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "test-kcs-key",
+        "x-app-slug": "KCS_NEXUS",
+      },
+      body: JSON.stringify({ organizationId: "org-1", fullName: "Blocked Employee" }),
+    });
+
+    assert.equal(response.status, 403);
+    const data = await response.json() as { allowedEntityTypes: string[] };
+    assert.deepEqual(data.allowedEntityTypes, ["family", "parent", "student"]);
+  });
+});
+
+test("registry route allows EduPay to provision students", async () => {
+  process.env.EDUPAY_INTEGRATION_KEY = "test-edupay-key";
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/integration/registry/student`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "test-edupay-key",
+        "x-app-slug": "EDUPAY",
+      },
+      body: JSON.stringify({}),
+    });
+
+    assert.notEqual(response.status, 403);
+  });
+});

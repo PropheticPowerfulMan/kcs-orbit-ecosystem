@@ -155,7 +155,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['grades', 'assignments', 'diagnostics', 'timetable', 'messages', 'profile'].map((segment) => (
+            {['grades', 'assignments', 'diagnostics', 'timetable', 'messages', 'profile', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/student/${segment}`}
@@ -199,7 +199,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['performance', 'messages', 'calendar', 'profile', 'grades', 'finance'].map((segment) => (
+            {['performance', 'messages', 'calendar', 'profile', 'grades', 'finance', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/parent/${segment}`}

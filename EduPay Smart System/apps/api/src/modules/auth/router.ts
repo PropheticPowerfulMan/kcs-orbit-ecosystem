@@ -508,7 +508,15 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       }
     });
 
-    if (user) {
+    let isFederatedUser = false;
+    if (user && ["PARENT", "EMPLOYEE"].includes(user.role)) {
+      const mirror = await syncOrbitRegistryMirror(user.schoolId);
+      isFederatedUser = user.role === "PARENT"
+        ? mirror.parents.some((entry) => matchesSharedParent(entry, identifier, user.email, user.accessCode || ""))
+        : mirror.teachers.some((entry) => matchesSharedEmployee(entry, identifier, user.email, user.accessCode || ""));
+    }
+
+    if (user && !isFederatedUser) {
       const ok = await bcrypt.compare(payload.password, user.passwordHash);
       if (ok) {
         const token = buildToken({ id: user.id, role: user.role, schoolId: user.schoolId });

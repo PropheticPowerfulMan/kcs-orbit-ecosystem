@@ -13,6 +13,7 @@ import {
 } from 'recharts'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { financeAPI, registryAPI, studentsAPI } from '@/services/api'
@@ -3033,8 +3034,10 @@ const AdminSectionView = ({
 
   if (segment === 'settings') {
     return (
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <div className="space-y-6">
+        <AccountSettingsPanel roleLabel="Compte super administrateur" />
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Role Permissions</h2>
           <div className="space-y-3">
             {Object.entries(rolePermissions).map(([role, permissions]) => (
@@ -3055,6 +3058,7 @@ const AdminSectionView = ({
               </div>
             ))}
           </div>
+        </div>
         </div>
       </div>
     )

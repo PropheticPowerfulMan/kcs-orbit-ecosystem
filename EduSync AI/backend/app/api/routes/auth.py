@@ -12,6 +12,7 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.db.session import get_db
 from app.models.analytics import ActivityLog
 from app.models.user import Role, User
+from app.integrations.orbit import fetch_shared_directory
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 
@@ -59,10 +60,6 @@ def map_savanex_role(role: str | None) -> Role | None:
         return Role.TEACHER
     if normalized == "employee":
         return Role.STAFF
-    if normalized == "parent":
-        return Role.PARENT
-    if normalized == "student":
-        return Role.STUDENT
     return None
 
 
@@ -72,8 +69,6 @@ def map_edupay_role(role: str | None) -> Role | None:
         return Role.ADMIN
     if normalized in {"FINANCIAL_MANAGER", "ACCOUNTANT", "CASHIER", "HR_MANAGER", "AUDITOR"}:
         return Role.STAFF
-    if normalized == "PARENT":
-        return Role.PARENT
     return None
 
 
@@ -88,6 +83,22 @@ def default_department_for_role(role: Role) -> str:
         return "Student Life"
     return "Operations"
 
+
+def is_shared_orbit_identity(identifier: str) -> bool:
+    normalized_email = identifier.strip().lower()
+    normalized_code = normalize_access_code(identifier)
+    try:
+        directory = fetch_shared_directory()
+    except Exception:
+        return False
+
+    for collection in ("parents", "students", "teachers"):
+        for entity in directory.get(collection) or []:
+            email = str(entity.get("email") or "").strip().lower()
+            access_code = normalize_access_code(entity.get("accessCode"))
+            if (normalized_email and email == normalized_email) or (normalized_code and access_code == normalized_code):
+                return True
+    return False
 
 def authenticate_with_edupay(identifier: str, password: str) -> dict | None:
     if not edupay_auth_is_enabled():
@@ -226,29 +237,11 @@ def upsert_external_user(db: Session, external_user: dict, password: str) -> Use
 
 @router.post("/register", response_model=UserResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    exists = db.query(User).filter(User.email == payload.email).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    requested_access_code = normalize_access_code(payload.access_code)
-    if requested_access_code:
-        duplicate_access_code = db.query(User).filter(User.access_code == requested_access_code).first()
-        if duplicate_access_code:
-            raise HTTPException(status_code=400, detail="Access code already registered")
-
-    user = User(
-        full_name=payload.full_name,
-        email=payload.email,
-        access_code=requested_access_code or generate_unique_access_code(db, payload.role),
-        hashed_password=get_password_hash(payload.password),
-        role=payload.role,
-        department=payload.department,
+    del payload, db
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="EduSync consumes identities provisioned by SAVANEX or EduPay and cannot create user accounts.",
     )
-    db.add(user)
-    db.add(ActivityLog(actor_id=None, event_type="user_registered", department=payload.department))
-    db.commit()
-    db.refresh(user)
-    return user
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -261,7 +254,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         or_(func.lower(User.email) == normalized_email, User.access_code == normalized_access_code)
     ).first()
 
-    if user and verify_password(payload.password, user.hashed_password):
+    is_federated_user = bool(user) and is_shared_orbit_identity(identifier)
+
+    if user and not is_federated_user and verify_password(payload.password, user.hashed_password):
         token = create_access_token(subject=str(user.id))
         db.add(ActivityLog(actor_id=user.id, event_type="user_login", department=user.department))
         db.commit()

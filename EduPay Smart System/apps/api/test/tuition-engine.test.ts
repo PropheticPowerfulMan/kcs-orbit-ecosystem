@@ -1,7 +1,15 @@
 import { NotificationChannel, NotificationType, PaymentOptionType, PaymentStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { buildParentNotificationHistory, buildTuitionParentNotificationMessages, simulateTuitionEngineScenario } from "../src/modules/finance/service";
+import { buildParentNotificationHistory, buildTuitionParentNotificationMessages, isAutomaticEcosystemTuitionAssignment, simulateTuitionEngineScenario } from "../src/modules/finance/service";
 
+describe("automatic ecosystem tuition ownership", () => {
+  it("selects new and automatic assignments but protects financier changes", () => {
+    expect(isAutomaticEcosystemTuitionAssignment(null)).toBe(true);
+    expect(isAutomaticEcosystemTuitionAssignment({ notes: "AUTO_ECOSYSTEM_SYNC: affectation selon la classe et la taille de la famille" })).toBe(true);
+    expect(isAutomaticEcosystemTuitionAssignment({ notes: "Plan modifié par le financier" })).toBe(false);
+    expect(isAutomaticEcosystemTuitionAssignment({ notes: null })).toBe(false);
+  });
+});
 const tenChildFamily = [
   { id: "stu-k5", fullName: "Child K5", className: "K5" },
   { id: "stu-g1", fullName: "Child G1", className: "Grade 1" },

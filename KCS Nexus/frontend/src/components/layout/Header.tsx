@@ -186,9 +186,7 @@ const Header = () => {
                 to={dashboardPath}
                 className="hidden sm:flex items-center gap-2 btn-primary text-sm py-2"
               >
-                <div className="w-6 h-6 rounded-full bg-kcs-gold-500 flex items-center justify-center text-kcs-blue-950 text-xs font-bold">
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
-                </div>
+                {user?.avatar ? <img src={user.avatar} alt={`${user.firstName} ${user.lastName}`} className="h-6 w-6 rounded-full object-cover"/> : <div className="flex h-6 w-6 items-center justify-center rounded-full bg-kcs-gold-500 text-xs font-bold text-kcs-blue-950">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>}
                 <span>{t('nav.dashboard')}</span>
               </Link>
             ) : (

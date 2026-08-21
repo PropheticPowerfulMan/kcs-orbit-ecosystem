@@ -1,9 +1,11 @@
+from unittest.mock import patch
+
 from django.test import TestCase
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from apps.users.models import User
 from apps.users.serializers import UserCreateSerializer
-from apps.users.views import UserMeView
+from apps.users.views import UserMeView, reset_user_access_credentials
 
 
 class UserAccessCodeTests(TestCase):
@@ -45,6 +47,27 @@ class UserAccessCodeTests(TestCase):
         self.assertEqual(response.data['user']['id'], user.id)
         self.assertEqual(response.data['user']['access_code'], user.access_code)
 
+    @patch('apps.users.views.deliver_direct_parent_contact', return_value=[])
+    @patch('apps.users.views.sync_parent')
+    def test_reset_access_invalidates_old_password_and_preserves_access_code(self, _sync_parent, _deliver):
+        old_password = 'ParentPass123!'
+        user = User.objects.create_user(
+            username='parent-reset-access',
+            email='parent.reset.access@example.com',
+            password=old_password,
+            first_name='Rachel',
+            last_name='Kabongo',
+            role=User.ROLE_PARENT,
+            access_code='ACC-PAR-RESET1',
+        )
+
+        credentials = reset_user_access_credentials(user)
+        user.refresh_from_db()
+
+        self.assertFalse(user.check_password(old_password))
+        self.assertTrue(user.check_password(credentials['temporaryPassword']))
+        self.assertEqual(credentials['accessCode'], 'ACC-PAR-RESET1')
+        self.assertTrue(user.must_change_password)
     def test_current_user_can_update_access_code(self):
         factory = APIRequestFactory()
         user = User.objects.create_user(

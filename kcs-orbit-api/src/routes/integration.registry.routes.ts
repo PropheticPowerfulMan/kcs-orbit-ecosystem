@@ -6,16 +6,30 @@ import { requireAnyIntegrationAccess } from "../middleware/auth";
 
 const router = Router();
 
-function restrictEduPayEntityScope(req: Request, res: Response, next: NextFunction) {
+const registryMutationScopes: Partial<Record<AppSlug, readonly string[]>> = {
+  [AppSlug.SAVANEX]: ['family', 'parent', 'student', 'teacher'],
+  [AppSlug.EDUPAY]: ['family', 'parent', 'student', 'teacher'],
+  [AppSlug.KCS_NEXUS]: ['family', 'parent', 'student'],
+};
+
+function restrictRegistryEntityScope(req: Request, res: Response, next: NextFunction) {
   const entityType = String(req.params.entityType || '').toLowerCase();
-  if (req.integration?.appSlug === AppSlug.EDUPAY && !['family', 'parent', 'student', 'teacher'].includes(entityType)) {
-    return res.status(403).json({ message: 'EduPay registry mutations are limited to families, parents, students and employees.' });
+  const appSlug = req.integration?.appSlug;
+  const baseAllowedTypes = appSlug ? registryMutationScopes[appSlug] : undefined;
+  const allowedTypes = appSlug === AppSlug.KCS_NEXUS && req.method === 'PUT'
+    ? ['family', 'parent', 'student', 'teacher']
+    : baseAllowedTypes;
+  if (!allowedTypes?.includes(entityType)) {
+    return res.status(403).json({
+      message: `${appSlug || 'This application'} cannot mutate ${entityType || 'unknown'} registry entities.`,
+      allowedEntityTypes: allowedTypes || [],
+    });
   }
   return next();
 }
 
-router.post("/:entityType", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.SAVANEX, AppSlug.EDUPAY), restrictEduPayEntityScope, asyncHandler(createRegistryEntity));
-router.put("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.SAVANEX, AppSlug.EDUPAY), restrictEduPayEntityScope, asyncHandler(updateRegistryEntity));
-router.delete("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.SAVANEX, AppSlug.EDUPAY), restrictEduPayEntityScope, asyncHandler(deleteRegistryEntity));
+router.post("/:entityType", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.SAVANEX, AppSlug.EDUPAY), restrictRegistryEntityScope, asyncHandler(createRegistryEntity));
+router.put("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.SAVANEX, AppSlug.EDUPAY), restrictRegistryEntityScope, asyncHandler(updateRegistryEntity));
+router.delete("/:entityType/:identifier", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.SAVANEX, AppSlug.EDUPAY), restrictRegistryEntityScope, asyncHandler(deleteRegistryEntity));
 
 export default router;

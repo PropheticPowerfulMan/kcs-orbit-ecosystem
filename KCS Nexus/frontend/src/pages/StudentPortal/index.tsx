@@ -494,13 +494,13 @@ const StudentSectionView = ({ segment }: { segment: string }) => {
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-kcs-blue-100 text-xl font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">EK</div>
+            {user?.avatar ? <img src={user.avatar} alt="Photo élève" className="h-16 w-16 rounded-2xl object-cover"/> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-kcs-blue-100 text-xl font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{user?.firstName?.[0] ?? "E"}{user?.lastName?.[0] ?? "K"}</div>}
             <div>
-              <h2 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Elise Kabongo</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Grade 11 A - Student ID stu-elise</p>
+              <h2 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{`${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim() || "Élève KCS"}</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{user?.accessCode || user?.email || "Profil scolaire en synchronisation"}</p>
             </div>
           </div>
-          <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{ecosystemStudents[0].aiInsight}</p>
+          <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">Le dossier académique détaillé apparaîtra après sa synchronisation depuis SAVANEX.</p>
         </div>
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Profile Details</h2>
@@ -584,6 +584,8 @@ const StudentPortal = () => {
             <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
               <Link to="/portal/student/ai-tutor" className="btn-gold flex flex-1 items-center justify-center gap-2 py-2 text-sm sm:flex-none">
                 <Brain size={16} /> AI Tutor
+              </Link>              <Link to="/portal/student/settings" className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white sm:flex-none">
+                <User size={16} /> Photo et mot de passe
               </Link>
               <div className="relative" ref={notificationPanelRef}>
                 <button type="button" onClick={() => setNotificationOpen((open) => !open)} aria-label={`Notifications, ${unreadNotifications} unread`} aria-expanded={notificationOpen} className="rounded-xl bg-gray-100 p-2 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-kcs-blue-800 dark:text-gray-300 dark:hover:bg-kcs-blue-700">
@@ -625,9 +627,9 @@ const StudentPortal = () => {
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h2 className="mb-3 font-bold text-kcs-blue-900 dark:text-white">Academic Identity</h2>
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                {ecosystemStudents[0].name} • {ecosystemStudents[0].grade} {ecosystemStudents[0].section} • {academicContext.term}
+                {[((user?.firstName ?? '') + ' ' + (user?.lastName ?? '')).trim() || '�l�ve KCS', academicContext.term].filter(Boolean).join(' � ')}
               </p>
-              <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{ecosystemStudents[0].aiInsight}</p>
+              <p className="mt-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">Le profil scolaire détaillé apparaîtra ici dès que la classe, les notes et les présences auront été synchronisées.</p>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h2 className="mb-3 font-bold text-kcs-blue-900 dark:text-white">School Alerts</h2>

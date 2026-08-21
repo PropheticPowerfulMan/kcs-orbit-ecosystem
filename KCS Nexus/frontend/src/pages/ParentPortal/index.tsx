@@ -126,6 +126,7 @@ const parentButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibo
 type ParentChild = typeof children[number]
 
 const ParentSectionView = ({ segment, selectedChild }: { segment: string; selectedChild: ParentChild }) => {
+  const { user } = useAuthStore()
   const [bookedEvent, setBookedEvent] = useState<string | null>(null)
   const [messageSent, setMessageSent] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
@@ -335,7 +336,7 @@ const ParentSectionView = ({ segment, selectedChild }: { segment: string; select
     return (
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Kabongo Family</h2>
+          <div className="flex items-center gap-4">{user?.avatar ? <img src={user.avatar} alt="Photo parent" className="h-20 w-20 rounded-2xl object-cover"/> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-kcs-blue-100 text-xl font-bold text-kcs-blue-700">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>}<h2 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{`${user?.lastName ?? ""} ${user?.firstName ?? ""}`.trim() || "Famille KCS"}</h2></div>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Parent portal for Rachel Kabongo, guardian contacts, children, school documents, and communication preferences.</p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <a className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-center text-sm font-semibold text-white" href="mailto:rachel.kabongo@family.kcs.test">Email</a>
@@ -399,6 +400,7 @@ const ParentPortal = () => {
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:gap-3">
+              <Link to="/portal/parent/settings" className="flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white"><User size={16}/> Photo et mot de passe</Link>
               {/* Child selector */}
               <div className="flex w-full overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700 sm:w-auto">
                 {children.map((child) => (

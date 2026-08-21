@@ -47,8 +47,8 @@ const Topbar = ({ onMenuClick = () => {}, isSidebarCollapsed = false, onSidebarT
         >
           {isSidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
         </button>
-        <FontThemeSelector />
-        <LanguageToggle />
+        <div className="hidden md:block"><FontThemeSelector /></div>
+        <div className="hidden sm:block"><LanguageToggle /></div>
         <button
           className="hidden rounded-xl border border-github-border bg-slate-900/45 p-2 text-slate-300 backdrop-blur hover:border-kcs-blue/50 hover:text-sky-300 sm:block"
           aria-label="Notifications"

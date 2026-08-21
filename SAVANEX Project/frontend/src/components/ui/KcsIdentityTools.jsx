@@ -276,9 +276,7 @@ export const KcsIdCard = ({ entity }) => {
       fields = addField(fields, 'Parent', entity.parent_name);
       fields = addField(fields, 'Naiss.', entity.date_of_birth);
       fields = addField(fields, 'Sexe', entity.gender);
-      fields = addField(fields, 'Email', entity.email);
-      fields = addField(fields, 'Carte', entity.kcs_card_id || primaryId);
-      return fields.slice(0, 7);
+      return fields.slice(0, 5);
     }
 
     if (isParent) {
@@ -311,7 +309,7 @@ export const KcsIdCard = ({ entity }) => {
   })();
 
   return (
-    <div className="kcs-card-set text-slate-950">
+    <div className={'kcs-card-set ' + (isStudent ? 'kcs-card-set-student' : isParent ? 'kcs-card-set-parent' : 'kcs-card-set-employee') + ' text-slate-950'}>
       <div className="kcs-card kcs-biometric-card kcs-card-front">
       <img src={schoolLogo} alt="" className="kcs-card-watermark" aria-hidden="true" />
       <div className="kcs-card-header">
@@ -414,8 +412,10 @@ export const PrintableKcsCard = ({ entity }) => {
 
   return (
     <div className="space-y-3">
-      <div ref={sheetRef} className="kcs-print-sheet">
-        <KcsIdCard entity={entity} />
+      <div className="kcs-card-preview-viewport">
+        <div ref={sheetRef} className="kcs-print-sheet">
+          <KcsIdCard entity={entity} />
+        </div>
       </div>
       <div className="grid gap-3 rounded-xl border border-github-border bg-slate-950/50 p-3 sm:grid-cols-2">
         <label className="grid gap-1 text-xs font-semibold text-slate-300">

@@ -1150,3 +1150,64 @@ body {
   background: #bae6fd !important;
   color: #020617 !important;
 }
+
+/* SAVANEX mobile usability and CR80 preview fixes */
+.kcs-card-preview-viewport {
+  width: 100%;
+  max-width: 342px;
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .savanex-topbar { min-height: 64px; }
+  .savanex-workspace > main { padding: .75rem !important; }
+  .savanex-entity-detail-panel > div:first-child > div:first-child { align-items: flex-start; }
+  .savanex-entity-detail-panel > div:first-child > div:last-child,
+  .savanex-entity-edit-panel .mt-6.flex.justify-end,
+  .savanex-entity-edit-panel .mt-6.flex.flex-wrap.justify-end { width: 100%; }
+  .savanex-entity-detail-panel > div:first-child button,
+  .savanex-entity-edit-panel .mt-6.flex.justify-end button {
+    flex: 1 1 8rem;
+    justify-content: center;
+  }
+  .kcs-card-preview-viewport,
+  .kcs-print-sheet,
+  .kcs-card-set,
+  .kcs-biometric-card {
+    width: 100%;
+    max-width: 342px;
+  }
+  .kcs-card-header {
+    grid-template-columns: 34px minmax(0, 1fr) 48px;
+    gap: 6px;
+    padding: 8px 9px 5px;
+  }
+  .kcs-card-logo { width: 32px; height: 32px; }
+  .kcs-card-body {
+    grid-template-columns: minmax(54px, 21%) minmax(0, 1fr);
+    gap: 7px;
+    padding: 5px 9px 4px;
+  }
+  .kcs-card-photo {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 68 / 86;
+  }
+  .kcs-card-name { font-size: clamp(10px, 3.5vw, 13px); }
+  .kcs-card-fields { font-size: clamp(5.8px, 2vw, 6.7px); }
+  .kcs-card-footer { right: 9px; bottom: 7px; left: 9px; }
+  .kcs-card-signature { right: 50px; bottom: 28px; width: 82px; }
+  .kcs-card-print-select { min-width: 0; width: 100%; }
+  .kcs-card-preview-viewport + .grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 390px) {
+  .savanex-entity-detail-panel > div:first-child > div:first-child { flex-direction: column; }
+  .savanex-entity-detail-panel > div:first-child > div:first-child > div:first-child {
+    width: 72px;
+    height: 72px;
+  }
+  .kcs-card-school { font-size: 7.4px; }
+  .kcs-card-subtitle { font-size: 6px; }
+  .kcs-flag { width: 17px; height: 10px; }
+}

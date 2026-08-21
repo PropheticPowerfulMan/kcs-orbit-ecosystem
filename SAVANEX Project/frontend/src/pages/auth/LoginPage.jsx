@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { authService } from '../../services/api';
+import { authService, isDemoModeEnabled } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import SchoolLogo from '../../components/ui/SchoolLogo';
 
@@ -19,6 +19,7 @@ const LoginPage = () => {
   const [resetOpen, setResetOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const demoMode = isDemoModeEnabled();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -78,6 +79,14 @@ const LoginPage = () => {
         </div>
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+          {demoMode && (
+            <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-left text-sm text-sky-100">
+              <p className="font-semibold">Demonstration autonome</p>
+              <p className="mt-1 text-xs text-slate-300">
+                Cette session utilise uniquement les donnees de demonstration de cet appareil. Le mot de passe n'est pas envoye a un serveur.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-slate-400">Identifiant ou code d'accès</label>

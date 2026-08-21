@@ -359,7 +359,10 @@ Endpoints d'ecriture partages ajoutes pour les applications autorisees de l'ecos
 
 Regles appliquees:
 
-- `KCS_NEXUS`, `EDUSYNCAI`, `SAVANEX` et `EDUPAY` peuvent creer ou supprimer ces entites via Orbit
+- `SAVANEX` et `EDUPAY` sont les proprietaires de creation des identites scolaires: employes, eleves et parents
+- les employes utilisent l'entite canonique `teacher` avec une categorie obligatoire: `teacher`, `administrative`, `support`, `leadership` ou `specialist`, completee par `department` et `jobTitle`
+- `KCS_NEXUS` peut creer uniquement les familles, les parents et leurs enfants (`family`, `parent`, `student`); toute mutation d'un employe est rejetee avec `403`
+- `EDUSYNCAI` consomme les identites synchronisees et ne peut creer, modifier ou supprimer aucune identite canonique
 - quand `EDUPAY` cree une famille, le parent et les eleves sont d'abord inscrits dans Orbit puis synchronises dans le miroir local EduPay avec le code d'acces et l'etat `mustChangePassword`
 - l'`externalId` est genere automatiquement par Orbit pour l'application appelante
 - si une entite equivalente existe deja dans l'organisation, Orbit rejette la creation avec une reponse de conflit

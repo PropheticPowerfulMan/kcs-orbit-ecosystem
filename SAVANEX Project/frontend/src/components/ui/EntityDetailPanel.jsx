@@ -148,7 +148,7 @@ const EntityDetailPanel = ({ entity, type, onClose, onEdit }) => {
             ))}
           </div>
 
-          <div className="xl:w-[360px]">
+          <div className="min-w-0 xl:w-[360px]">
             <div className="sticky top-0">
               <PrintableKcsCard entity={entity} />
             </div>
