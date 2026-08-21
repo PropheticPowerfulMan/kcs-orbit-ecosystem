@@ -28,7 +28,7 @@ jobs:
           version: 9.15.9
       - name: Install EduPay dependencies
         working-directory: EduPay Smart System
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       - name: Build EduPay
         working-directory: EduPay Smart System
         env:
