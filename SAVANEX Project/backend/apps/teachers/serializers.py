@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Teacher
 from .services import apply_teacher_status
+from apps.users.models import User
 from apps.users.serializers import UserCreateSerializer, UserMeSerializer
 
 
@@ -54,6 +55,17 @@ class TeacherSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def validate_user_email(self, value):
+        normalized = (value or '').strip().lower()
+        if not normalized and self.instance is not None:
+            return self.instance.user.email
+        if normalized:
+            duplicate = User.objects.filter(email__iexact=normalized)
+            if self.instance is not None:
+                duplicate = duplicate.exclude(pk=self.instance.user_id)
+            if duplicate.exists():
+                raise serializers.ValidationError('Cette adresse e-mail est déjà attribuée à une autre entité.')
+        return normalized
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
         first_name = validated_data.pop('first_name', None)

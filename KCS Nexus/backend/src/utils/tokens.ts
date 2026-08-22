@@ -10,6 +10,7 @@ export const buildSafeUser = (user: User) => ({
   email: user.email,
   accessCode: user.accessCode,
   firstName: user.firstName,
+  middleName: user.middleName,
   lastName: user.lastName,
   role: user.role.toLowerCase(),
   avatar: user.avatar,

@@ -52,7 +52,7 @@ class StudentSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     middle_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
     last_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    user_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    user_email = serializers.EmailField(write_only=True, required=False, allow_blank=True, allow_null=True)
     class_level = serializers.CharField(write_only=True, required=False, allow_blank=True)
     class_suffix = serializers.CharField(write_only=True, required=False, allow_blank=True)
     avatar = serializers.ImageField(source='user.avatar', read_only=True)
@@ -96,6 +96,17 @@ class StudentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'student_id', 'enrollment_date']
 
+    def validate_user_email(self, value):
+        normalized = (value or '').strip().lower()
+        if not normalized and self.instance is not None:
+            return self.instance.user.email
+        if normalized:
+            duplicate = User.objects.filter(email__iexact=normalized)
+            if self.instance is not None:
+                duplicate = duplicate.exclude(pk=self.instance.user_id)
+            if duplicate.exists():
+                raise serializers.ValidationError('Cette adresse e-mail est déjà attribuée à une autre entité.')
+        return normalized
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
         first_name = validated_data.pop('first_name', None)
@@ -129,7 +140,7 @@ class StudentSerializer(serializers.ModelSerializer):
             instance.user.last_name = last_name
             user_update_fields.append('last_name')
         if user_email is not None:
-            instance.user.email = user_email
+            instance.user.email = user_email or ''
             user_update_fields.append('email')
         if photo_data is not None:
             instance.user.photo_data = photo_data
@@ -143,6 +154,15 @@ class StudentSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation.update({
+            'first_name': instance.user.first_name,
+            'middle_name': instance.user.middle_name,
+            'last_name': instance.user.last_name,
+        })
+        return representation
 
     def get_parent_name(self, obj):
         if obj.parent:

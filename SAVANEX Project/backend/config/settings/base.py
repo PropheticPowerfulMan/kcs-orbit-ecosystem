@@ -100,6 +100,7 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
 
 # ─── Custom User Model ──────────────────────────────────────────────────────────
 AUTH_USER_MODEL = 'users.User'
+SCHOOL_EMAIL_DOMAIN = config('SCHOOL_EMAIL_DOMAIN', default='ourkcs.org')
 
 # ─── Password Validation ────────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [

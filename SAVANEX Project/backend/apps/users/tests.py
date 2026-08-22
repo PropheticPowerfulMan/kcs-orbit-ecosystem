@@ -86,3 +86,35 @@ class UserAccessCodeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         user.refresh_from_db()
         self.assertEqual(user.access_code, 'ACC-PAR-CUSTOM')
+class SchoolEmailGenerationTests(TestCase):
+    def create_entity(self, *, first_name='Élodie', middle_name='', last_name='Mbuyi-Kabongo', role=User.ROLE_STUDENT):
+        serializer = UserCreateSerializer(data={
+            'first_name': first_name,
+            'middle_name': middle_name,
+            'last_name': last_name,
+            'email': 'adresse.personnelle@example.com',
+            'role': role,
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        return serializer.save()
+
+    def test_generates_short_school_email_and_ignores_submitted_personal_email(self):
+        user = self.create_entity()
+        self.assertEqual(user.email, 'elodie.mbuyikabongo@ourkcs.org')
+
+    def test_uses_middle_initial_then_numeric_suffix_to_guarantee_uniqueness(self):
+        first = self.create_entity()
+        second = self.create_entity(middle_name='Grâce')
+        third = self.create_entity()
+
+        self.assertEqual(first.email, 'elodie.mbuyikabongo@ourkcs.org')
+        self.assertEqual(second.email, 'elodie.g.mbuyikabongo@ourkcs.org')
+        self.assertEqual(third.email, 'elodie.mbuyikabongo2@ourkcs.org')
+        self.assertEqual(User.objects.filter(email__iendswith='@ourkcs.org').count(), 3)
+
+    def test_generates_email_for_employee_roles(self):
+        employee = self.create_entity(first_name='Paul', last_name='Ilunga', role=User.ROLE_EMPLOYEE)
+        teacher = self.create_entity(first_name='Paul', middle_name='Alain', last_name='Ilunga', role=User.ROLE_TEACHER)
+
+        self.assertEqual(employee.email, 'paul.ilunga@ourkcs.org')
+        self.assertEqual(teacher.email, 'paul.a.ilunga@ourkcs.org')

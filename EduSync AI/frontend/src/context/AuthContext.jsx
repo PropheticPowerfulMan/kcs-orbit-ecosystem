@@ -17,12 +17,17 @@ export function AuthProvider({ children }) {
     []
   );
 
+  const forgotPassword = useCallback(
+    (email) => apiRequest("/auth/forgot-password", "POST", { email }),
+    []
+  );
+
   const logout = useCallback(() => {
     setToken("");
     localStorage.removeItem("edusync_token");
   }, []);
 
-  const value = { token, login, register, logout, isAuthenticated: Boolean(token) };
+  const value = { token, login, register, forgotPassword, logout, isAuthenticated: Boolean(token) };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

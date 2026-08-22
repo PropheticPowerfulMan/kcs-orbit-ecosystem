@@ -46,7 +46,6 @@ const buildTeacherCreatePayload = (form) => ({
     first_name: form.firstName,
     middle_name: form.middleName,
     last_name: form.lastName,
-    ...(form.email ? { email: form.email } : {}),
     phone: form.phone,
     ...form.identity,
   },
@@ -398,7 +397,7 @@ const TeachersPage = () => {
             <input value={form.lastName} onChange={(event) => updateForm('lastName', event.target.value)} placeholder="Nom" className={inputClass} required />
             <input value={form.middleName} onChange={(event) => updateForm('middleName', event.target.value)} placeholder="Postnom" className={inputClass} />
             <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prénom" className={inputClass} required />
-            <input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} placeholder="Email personnel optionnel" className={inputClass} />
+            <input type={editingEmployee ? "email" : "text"} value={editingEmployee ? form.email : "Adresse @ourkcs.org générée à la création"} onChange={(event) => updateForm('email', event.target.value)} className={editingEmployee ? inputClass : `${inputClass} opacity-70`} disabled={!editingEmployee} />
             <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="Téléphone" className={inputClass} />
             <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Département" className={inputClass} />
             <input value={form.jobTitle} onChange={(event) => updateForm('jobTitle', event.target.value)} placeholder="Titre du poste" className={inputClass} />

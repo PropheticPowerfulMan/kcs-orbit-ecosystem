@@ -74,9 +74,9 @@ const AdminDashboardRoute = () => {
 }
 
 const PortalRedirect = () => {
-  const { user, isAuthenticated } = useAuthStore()
+  const { user, token, refreshToken } = useAuthStore()
 
-  if (!isAuthenticated || !user) {
+  if (!user || !token || !refreshToken) {
     return <Navigate to="/login" replace />
   }
 

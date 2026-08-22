@@ -237,6 +237,9 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     id: `orbit:${student.id}`,
     student_id: preferredStudentId,
     full_name: student?.fullName || 'Élève Orbit',
+    first_name: student?.firstName || '',
+    middle_name: student?.middleName || '',
+    last_name: student?.lastName || '',
     email: student?.email || '',
     avatar: null,
     kcs_card_id: null,
@@ -283,6 +286,7 @@ const mapSavanexStudentPatchToOrbit = (data) => {
 
   return {
     ...(data?.first_name !== undefined ? { firstName: data.first_name } : {}),
+    ...(data?.middle_name !== undefined ? { middleName: data.middle_name || null } : {}),
     ...(data?.last_name !== undefined ? { lastName: data.last_name } : {}),
     ...(data?.user_email !== undefined ? { email: data.user_email || null } : {}),
     ...(data?.gender !== undefined ? { gender: data.gender } : {}),
@@ -349,12 +353,12 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
       return {
         ...student,
         ...(sharedStudent ? {
-          full_name: sharedStudent.full_name || student.full_name,
-          email: sharedStudent.email || '',
-          date_of_birth: sharedStudent.date_of_birth || null,
-          gender: sharedStudent.gender || student.gender,
-          current_class: sharedStudent.current_class || student.current_class,
-          class_name: sharedStudent.class_name || student.class_name,
+          full_name: student.full_name || sharedStudent.full_name,
+          email: student.email || sharedStudent.email || '',
+          date_of_birth: student.date_of_birth || sharedStudent.date_of_birth || null,
+          gender: student.gender || sharedStudent.gender,
+          current_class: student.current_class || sharedStudent.current_class,
+          class_name: student.class_name || sharedStudent.class_name,
           is_active: sharedStudent.is_active,
           must_change_password: sharedStudent.must_change_password,
           parent_name: sharedStudent.parent_name || student.parent_name,

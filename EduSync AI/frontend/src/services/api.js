@@ -113,7 +113,7 @@ function demoResponse(path, method, body) {
   const cleanPath = path.split("?")[0];
   if (path === "/auth/login" && method === "POST") {
     const user = demoState.users.find(
-      (item) => item.email === body?.email && item.password === body?.password
+      (item) => item.email === (body?.identifier ?? body?.email) && item.password === body?.password
     );
     if (user) {
       return { access_token: `demo-${user.role}-token-${user.id}` };
@@ -121,6 +121,9 @@ function demoResponse(path, method, body) {
     throw new Error("Invalid credentials");
   }
 
+  if (path === "/auth/forgot-password" && method === "POST") {
+    return { message: "If this account exists, a secure reset link has been sent by email." };
+  }
   if (path === "/auth/register" && method === "POST") {
     const exists = demoState.users.some((item) => item.email === body?.email);
     if (exists) {

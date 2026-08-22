@@ -90,6 +90,13 @@ class User(AbstractUser):
         db_table = 'users'
         verbose_name = _('User')
         verbose_name_plural = _('Users')
+        constraints = [
+            models.UniqueConstraint(
+                models.functions.Lower('email'),
+                condition=~models.Q(email=''),
+                name='users_email_ci_unique_nonblank',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.get_full_name() or self.username} ({self.get_role_display()})"

@@ -40,16 +40,17 @@ api.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
     const skipAuthLogout = originalRequest?.headers?.['x-skip-auth-logout'] === 'true'
 
-    if (error.response?.status === 410) {
-      useAuthStore.getState().logout()
-      window.location.replace(`${getRouteUrl('login')}?reason=identity-removed`)
-      return Promise.reject(error)
-    }
+    // A 410 returned by a dashboard resource means that resource is gone; it
+    // must not be interpreted as deletion of the signed-in identity. Only the
+    // authentication endpoints are allowed to invalidate the whole session.
+    const requestPath = originalRequest?.url ?? ''
+    const identityNeedsRevalidation = error.response?.status === 410
+      && requestPath.includes('/auth/me')
     if (error.response?.status === 401 && skipAuthLogout) {
       return Promise.reject(error)
     }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if ((error.response?.status === 401 || identityNeedsRevalidation) && !originalRequest._retry) {
       originalRequest._retry = true
 
       try {

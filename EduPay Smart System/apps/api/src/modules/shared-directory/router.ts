@@ -6,6 +6,8 @@ import { prisma } from "../../prisma";
 import { notifyStandaloneEntityChange } from "../notifications/entityChange";
 import { env } from "../../config/env";
 
+import bcrypt from 'bcryptjs';
+
 export const sharedDirectoryRouter = Router();
 const denyEntityMutation = (_req: Request, res: Response, _next: NextFunction) => res.status(403).json({
   message: 'EduPay dispose d’un accès en lecture seule aux entités. Utilisez Savanex ou le superadministrateur KCS Nexus pour toute modification.',
@@ -179,6 +181,7 @@ sharedDirectoryRouter.post("/reset-access/:entityType/:id", async (req: Authenti
   }
 
   const sharedEntity = entity as typeof entity & {
+    localId?: string;
     externalIds?: Array<{ appSlug: string; externalId: string }>;
     studentNumber?: string;
     employeeId?: string;
@@ -205,6 +208,41 @@ sharedDirectoryRouter.post("/reset-access/:entityType/:id", async (req: Authenti
   );
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 404 && entityType === 'parent') {
+      const localParent = await prisma.parent.findFirst({
+        where: {
+          schoolId: req.user!.schoolId,
+          OR: [
+            { id: sharedEntity.localId || sharedEntity.id },
+            { orbitId: sharedEntity.orbitId || sharedEntity.id },
+            ...(sharedEntity.email ? [{ email: sharedEntity.email }] : []),
+          ],
+        },
+        include: { user: true },
+      });
+      if (!localParent?.user) {
+        return res.status(404).json({ message: 'Compte parent EduPay introuvable pour cette entité.' });
+      }
+      const temporaryPassword = 'KCS-' + Math.floor(100000 + Math.random() * 900000);
+      await prisma.user.update({
+        where: { id: localParent.user.id },
+        data: {
+          passwordHash: await bcrypt.hash(temporaryPassword, 10),
+          mustChangePassword: true,
+        },
+      });
+      return res.json({
+        entityType,
+        orbitId: sharedEntity.orbitId || sharedEntity.id,
+        parentId: localParent.id,
+        username: localParent.user.email,
+        email: localParent.user.email,
+        accessCode: localParent.user.accessCode,
+        temporaryPassword,
+        mustChangePassword: true,
+        source: 'EDUPAY',
+      });
+    }
     return res.status(response.status).json({
       message: typeof result.detail === "string" ? result.detail : "Impossible de réinitialiser cet accès.",
     });

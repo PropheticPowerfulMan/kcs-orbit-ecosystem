@@ -10,10 +10,11 @@ const demoCredentials = {
 };
 
 export default function AuthPanel() {
-  const { login, register } = useAuth();
+  const { login, register, forgotPassword } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [mode, setMode] = useState("login");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     full_name: "",
@@ -37,8 +38,14 @@ export default function AuthPanel() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    setMessage("");
     setBusy(true);
     try {
+      if (mode === "recovery") {
+        const result = await forgotPassword(form.email);
+        setMessage(result.message);
+        return;
+      }
       if (mode === "register") {
         await register(form);
       }
@@ -68,11 +75,11 @@ export default function AuthPanel() {
         <div className="auth-card-head">
           <img src={schoolLogo} alt="" className="school-logo" />
           <div>
-            <p className="eyebrow">{mode === "login" ? "Sign in" : "Create account"}</p>
-            <h2>{mode === "login" ? "Open the portal" : "Create access"}</h2>
+            <p className="eyebrow">{mode === "recovery" ? "Password recovery" : mode === "login" ? "Sign in" : "Create account"}</p>
+            <h2>{mode === "recovery" ? "Recover access" : mode === "login" ? "Open the portal" : "Create access"}</h2>
           </div>
         </div>
-        <p className="subtle">Use your school email or shared access code to open the dashboard.</p>
+        <p className="subtle">{mode === "recovery" ? "Enter the email attached to your school account." : "Use your school email or shared access code to open the dashboard."}</p>
 
         {mode === "login" && (
           <button type="button" className="credential-chip" onClick={fillDemoCredentials}>
@@ -91,18 +98,20 @@ export default function AuthPanel() {
 
         <input
           type="text"
-          placeholder="School email or access code"
+          placeholder={mode === "recovery" ? "School email" : "School email or access code"}
           value={form.email}
           onChange={(e) => updateField("email", e.target.value)}
           required
         />
-        <input
-          type="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={(e) => updateField("password", e.target.value)}
-          required
-        />
+        {mode !== "recovery" && (
+          <input
+            type="password"
+            placeholder="Password"
+            value={form.password}
+            onChange={(e) => updateField("password", e.target.value)}
+            required
+          />
+        )}
 
         {mode === "register" && (
           <>
@@ -123,16 +132,22 @@ export default function AuthPanel() {
         )}
 
         {error && <p className="error-text">{error}</p>}
+        {message && <p className="success-text">{message}</p>}
 
         <button disabled={busy} type="submit">
-          {busy ? "Processing..." : mode === "login" ? "Sign in" : "Create account"}
+          {busy ? "Processing..." : mode === "recovery" ? "Send reset link" : mode === "login" ? "Sign in" : "Create account"}
         </button>
+        {mode === "login" && (
+          <button type="button" className="secondary" onClick={() => { setMode("recovery"); setError(""); setMessage(""); }}>
+            Forgot password?
+          </button>
+        )}
         <button
           type="button"
           className="secondary"
-          onClick={() => setMode((prev) => (prev === "login" ? "register" : "login"))}
+          onClick={() => { setMode((prev) => (prev === "login" ? "register" : "login")); setError(""); setMessage(""); }}
         >
-          {mode === "login" ? "Need an account? Register" : "Already have an account? Sign in"}
+          {mode === "login" ? "Need an account? Register" : "Back to sign in"}
         </button>
       </form>
     </section>

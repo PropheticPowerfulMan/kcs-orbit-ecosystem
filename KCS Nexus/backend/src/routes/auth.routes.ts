@@ -120,6 +120,7 @@ type ExternalUserProfile = {
   accessCode: string
   role: 'ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT'
   firstName: string
+  middleName: string | null
   lastName: string
   permissions?: string[]
   staffFunction?: string | null
@@ -234,7 +235,16 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   const fullName = typeof externalUser.full_name === 'string' && externalUser.full_name.trim()
     ? externalUser.full_name.trim()
     : 'Shared User'
-  const name = splitFullName(fullName)
+  const fallbackName = splitFullName(fullName)
+  const firstName = typeof externalUser.first_name === 'string' && externalUser.first_name.trim()
+    ? externalUser.first_name.trim()
+    : fallbackName.firstName
+  const middleName = typeof externalUser.middle_name === 'string' && externalUser.middle_name.trim()
+    ? externalUser.middle_name.trim()
+    : null
+  const lastName = typeof externalUser.last_name === 'string' && externalUser.last_name.trim()
+    ? externalUser.last_name.trim()
+    : fallbackName.lastName
   const accessCode = normalizeAccessCode(
     typeof externalUser.access_code === 'string' ? externalUser.access_code : identifier,
   )
@@ -246,8 +256,9 @@ async function authenticateWithSavanex(identifier: string, password: string) {
     email,
     accessCode,
     role: mappedRole,
-    firstName: name.firstName,
-    lastName: name.lastName,
+    firstName,
+    middleName,
+    lastName,
     permissions: ['ecosystem:savanex', `savanex:${mappedRole.toLowerCase()}`],
     staffFunction: mappedRole === 'STAFF' ? 'office' : null,
   }
@@ -300,6 +311,7 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
     accessCode,
     role: mappedRole,
     firstName: name.firstName,
+    middleName: null,
     lastName: name.lastName,
     permissions: ['ecosystem:edupay', `edupay:${sourceRole.toLowerCase()}`],
     staffFunction: mappedRole === 'STAFF' ? mapEduPayStaffFunction(sourceRole) : null,
@@ -307,20 +319,27 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
 }
 
 async function authenticateWithSharedProviders(identifier: string, password: string) {
+  let savanexUnavailable = false
   try {
-    const edupayUser = await authenticateWithEduPay(identifier, password)
-    if (edupayUser) {
-      return edupayUser
-    }
+    const savanexUser = await authenticateWithSavanex(identifier, password)
+    if (savanexUser) return savanexUser
   } catch (error) {
-    console.warn('[auth] EduPay shared authentication unavailable; trying other ecosystem providers.', error)
+    savanexUnavailable = true
+    console.warn('[auth] SAVANEX shared authentication unavailable.', error)
   }
 
   try {
-    return await authenticateWithSavanex(identifier, password)
+    const edupayUser = await authenticateWithEduPay(identifier, password)
+    if (!edupayUser && savanexUnavailable) {
+      throw new ApiError(503, "Le service d'authentification SAVANEX est temporairement indisponible.")
+    }
+    return edupayUser
   } catch (error) {
-    console.warn('[auth] SAVANEX shared authentication unavailable.', error)
-    throw new ApiError(503, 'Shared ecosystem authentication is temporarily unavailable. Verify KCS Nexus, EduPay, SAVANEX, and KCS Orbit services.')
+    console.warn('[auth] EduPay shared authentication unavailable.', error)
+    if (savanexUnavailable) {
+      throw new ApiError(503, "Le service d'authentification de l'écosystème est temporairement indisponible.")
+    }
+    return null
   }
 }
 
@@ -329,6 +348,9 @@ async function refreshCanonicalIdentity(user: PrismaUser): Promise<PrismaUser> {
   const collection = user.role === 'PARENT' ? 'parents' : user.role === 'STUDENT' ? 'students' : ['TEACHER', 'STAFF'].includes(user.role) ? 'teachers' : null
   if (!collection) return user
   const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
+  // Orbit's shared directory contains academic identities. EduPay financial
+  // staff legitimately map to Nexus staff without necessarily being teachers.
+  const requiresDirectoryIdentity = ['PARENT', 'STUDENT', 'TEACHER'].includes(user.role)
   try {
     const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, {
       headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' },
@@ -338,12 +360,30 @@ async function refreshCanonicalIdentity(user: PrismaUser): Promise<PrismaUser> {
     const directory = await response.json() as Record<string, Array<Record<string, unknown>>>
     const accessCode = (user.accessCode || '').trim().toUpperCase()
     const email = user.email.trim().toLowerCase()
-    const entity = (directory[collection] || []).find((item) =>
-      (accessCode && String(item.accessCode || '').trim().toUpperCase() === accessCode)
-      || (email && String(item.email || '').trim().toLowerCase() === email),
-    )
+    const entity = (directory[collection] || []).find((item) => {
+      const identifiers = [
+        item.accessCode,
+        item.email,
+        item.displayId,
+        item.studentNumber,
+        item.employeeId,
+        ...((Array.isArray(item.externalIds) ? item.externalIds : []) as Array<Record<string, unknown>>)
+          .map((externalId) => externalId.externalId),
+      ]
+        .map((value) => String(value || '').trim().toUpperCase())
+        .filter(Boolean)
+
+      return (accessCode && identifiers.includes(accessCode))
+        || (email && identifiers.includes(email.toUpperCase()))
+    })
     if (!entity) {
-      if (isFederated) throw new ApiError(410, 'This ecosystem identity was deleted or deactivated.')
+      // Orbit synchronization can lag behind a successful source login. Keep
+      // the verified session for the access-token window, then require the
+      // identity to be visible again before a later refresh.
+      const federationGracePeriodMs = 30 * 60 * 1000
+      const identityWasJustVerified = isFederated && Date.now() - user.updatedAt.getTime() < federationGracePeriodMs
+      if (identityWasJustVerified) return user
+      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identité a été supprimée ou désactivée dans l’écosystème.')
       return user
     }
 
@@ -418,6 +458,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
         accessCode: externalUser.accessCode,
         role: externalUser.role,
         firstName: externalUser.firstName,
+        middleName: externalUser.middleName,
         lastName: externalUser.lastName,
         permissions: externalUser.permissions ?? [],
         staffFunction: externalUser.staffFunction ?? null,
@@ -432,6 +473,7 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
       accessCode: externalUser.accessCode,
       role: externalUser.role,
       firstName: externalUser.firstName,
+      middleName: externalUser.middleName,
       lastName: externalUser.lastName,
       permissions: externalUser.permissions ?? [],
       staffFunction: externalUser.staffFunction ?? null,
@@ -544,12 +586,12 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true'
   const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password)
   if (!externalUser) {
-    throw new ApiError(401, 'Invalid email or password')
+    throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
   const resolvedUser = await upsertExternalUser(externalUser, payload.password)
   if (!resolvedUser) {
-    throw new ApiError(401, 'Invalid email or password')
+    throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
   const token = signAccessToken(resolvedUser)
@@ -563,8 +605,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  const synchronizedUser = await refreshCanonicalIdentity(resolvedUser)
-  return success(res, { user: buildSafeUser(synchronizedUser), token, refreshToken }, 'Login successful')
+  return success(res, { user: buildSafeUser(resolvedUser), token, refreshToken }, 'Connexion réussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -598,17 +639,47 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Refresh token invalid or expired')
   }
 
-  const token = signAccessToken(storedToken.user)
-  return success(res, { token, user: buildSafeUser(storedToken.user) }, 'Token refreshed')
+  const synchronizedUser = await refreshCanonicalIdentity(storedToken.user)
+  const token = signAccessToken(synchronizedUser)
+  return success(res, { token, user: buildSafeUser(synchronizedUser) }, 'Token refreshed')
 }))
 
+async function forwardPasswordRecovery(email: string, sources: string[] = []) {
+  const requests: Promise<unknown>[] = []
+  const useSavanex = sources.length === 0 || sources.includes('savanex')
+  const useEduPay = sources.length === 0 || sources.includes('edupay')
+
+  if (useSavanex && env.SAVANEX_API_URL) {
+    requests.push(fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/auth/forgot-password/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+      signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
+    }).catch(() => null))
+  }
+  if (useEduPay && env.EDUPAY_API_URL) {
+    requests.push(fetch(`${env.EDUPAY_API_URL.replace(/\/$/, '')}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: email }),
+      signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
+    }).catch(() => null))
+  }
+
+  await Promise.allSettled(requests)
+}
 authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
   const schema = z.object({ email: z.string().email() })
   const { email } = schema.parse(req.body)
   const normalizedEmail = email.trim().toLowerCase()
   const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
+  const recoverySources = user?.permissions
+    .filter((permission) => permission.startsWith('ecosystem:'))
+    .map((permission) => permission.slice('ecosystem:'.length)) ?? []
 
-  if (user?.passwordHash && !isConfiguredSuperAdminUser(user.id)) {
+  await forwardPasswordRecovery(normalizedEmail, recoverySources)
+
+  if (user?.passwordHash && recoverySources.length === 0 && !isConfiguredSuperAdminUser(user.id)) {
     const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('base64url')
     const tokenHash = hashResetToken(rawToken)
     const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000)
@@ -697,8 +768,10 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
     throw new ApiError(404, 'User not found')
   }
 
-  const synchronizedUser = await refreshCanonicalIdentity(user)
-  return success(res, buildSafeUser(synchronizedUser))
+  // This endpoint runs whenever a protected dashboard mounts. It validates
+  // the signed session without turning a transient Orbit mirror miss into a
+  // logout. Canonical enforcement remains on the refresh-token path.
+  return success(res, buildSafeUser(user))
 }))
 
 authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {

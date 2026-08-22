@@ -7,6 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([usedAt])
+  @@index([userId, expiresAt])
+}
 enum UserRole {
   ADMIN
   STAFF
@@ -110,6 +122,7 @@ model User {
   authoredNews       NewsPost[]           @relation("NewsAuthor")
   contactMessages    ContactMessage[]
   refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   forumPosts         ParentForumPost[]    @relation("ForumPostAuthor")
   forumComments      ParentForumComment[] @relation("ForumCommentAuthor")
   aiForumReports     AIForumReport[]      @relation("AIForumReportReviewer")

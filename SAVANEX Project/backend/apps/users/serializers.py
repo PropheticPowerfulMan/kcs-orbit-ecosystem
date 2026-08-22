@@ -5,6 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from secrets import randbelow
 from uuid import uuid4
 
+from .emailing import generate_school_email
 from .models import User
 
 
@@ -99,7 +100,7 @@ class UserMeSerializer(serializers.ModelSerializer):
                   'left_fingerprint_data', 'right_fingerprint_data', 'has_biometrics',
                   'language', 'dark_mode', 'must_change_password',
                   'password_generated_by_system']
-        read_only_fields = ['id', 'username', 'role']
+        read_only_fields = ['id', 'username', 'role', 'email']
 
     def get_full_name(self, obj):
         return obj.get_full_name()
@@ -143,6 +144,14 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         role = validated_data.get('role', User.ROLE_STUDENT)
+        if role in {User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE}:
+            validated_data['email'] = generate_school_email(
+                first_name=validated_data.get('first_name', ''),
+                middle_name=validated_data.get('middle_name', ''),
+                last_name=validated_data.get('last_name', ''),
+            )
+        elif validated_data.get('email'):
+            validated_data['email'] = validated_data['email'].strip().lower()
         password = (validated_data.pop('password', '') or '').strip()
         generated_by_system = not password
         if generated_by_system:

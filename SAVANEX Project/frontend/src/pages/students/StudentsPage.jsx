@@ -84,9 +84,9 @@ const createEditForm = (student) => {
   const classParts = splitClassName(student?.class_name || '');
 
   return {
-    lastName: nameParts[0] || '',
-    middleName: nameParts.slice(1, -1).join(' '),
-    firstName: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '',
+    lastName: student?.last_name ?? nameParts[0] ?? '',
+    middleName: student?.middle_name ?? nameParts.slice(1, -1).join(' '),
+    firstName: student?.first_name ?? (nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''),
     email: student?.email || '',
     classLevel: standardClassLevels.includes(classParts.level) ? classParts.level : '',
     classSuffix: classParts.suffix || '',
@@ -431,7 +431,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
     try {
       const parentReady = form.parentFirstName.trim() && form.parentLastName.trim() && form.parentEmail.trim();
       const studentsReady = form.students.every((student) => (
-        student.firstName.trim() && student.lastName.trim() && student.email.trim() && student.dateOfBirth
+        student.firstName.trim() && student.lastName.trim() && student.dateOfBirth
       ));
 
       if (!parentReady) {
@@ -459,7 +459,6 @@ const StudentsPage = ({ familyWorkspace = false }) => {
             first_name: student.firstName,
             middle_name: student.middleName,
             last_name: student.lastName,
-            email: student.email,
             ...student.identity,
           },
           date_of_birth: student.dateOfBirth,
@@ -662,7 +661,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                   <input value={student.lastName} onChange={(event) => updateStudentDraft(index, 'lastName', event.target.value)} placeholder="Nom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <input value={student.middleName} onChange={(event) => updateStudentDraft(index, 'middleName', event.target.value)} placeholder="Postnom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
                   <input value={student.firstName} onChange={(event) => updateStudentDraft(index, 'firstName', event.target.value)} placeholder="Prénom" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-                  <input type="email" value={student.email} onChange={(event) => updateStudentDraft(index, 'email', event.target.value)} placeholder="Email élève" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
+                  <input type="text" value="Adresse @ourkcs.org générée à la création" className="w-full rounded-xl border border-github-border bg-slate-950/45 px-4 py-3 text-sm text-slate-400" disabled />
                   <select value={student.classLevel} onChange={(event) => updateStudentDraft(index, 'classLevel', event.target.value)} className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue">
                     <option value="">Classe non assignée</option>
                     {standardClassLevels.map((level) => <option key={level} value={level}>{level}</option>)}

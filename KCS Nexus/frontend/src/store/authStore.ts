@@ -1,9 +1,26 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
 import type { User, UserRole } from '@/types'
 
 if (typeof window !== 'undefined' && localStorage.getItem('kcs-auth')?.includes('demo-access-token')) {
   localStorage.removeItem('kcs-auth')
+}
+
+const resilientAuthStorage: StateStorage = {
+  getItem: (name) => sessionStorage.getItem(name) ?? localStorage.getItem(name),
+  setItem: (name, value) => {
+    try {
+      localStorage.setItem(name, value)
+      sessionStorage.removeItem(name)
+    } catch {
+      localStorage.removeItem(name)
+      sessionStorage.setItem(name, value)
+    }
+  },
+  removeItem: (name) => {
+    localStorage.removeItem(name)
+    sessionStorage.removeItem(name)
+  },
 }
 
 interface AuthState {
@@ -31,7 +48,13 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
 
       login: (user, token, refreshToken) => {
-        set({ user, token, refreshToken, isAuthenticated: true, isLoading: false })
+        set({
+          user: { ...user, role: user.role.toLowerCase() as UserRole },
+          token,
+          refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        })
       },
 
       logout: () => {
@@ -62,13 +85,28 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'kcs-auth',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => resilientAuthStorage),
       partialize: (state) => ({
-        user: state.user,
+        user: state.user ? { ...state.user, avatar: undefined } : null,
         token: state.token,
         refreshToken: state.refreshToken,
-        isAuthenticated: state.isAuthenticated,
       }),
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<AuthState>
+        const user = persisted.user
+          ? { ...persisted.user, role: persisted.user.role.toLowerCase() as UserRole }
+          : null
+        const token = persisted.token ?? null
+        const refreshToken = persisted.refreshToken ?? null
+        return {
+          ...currentState,
+          ...persisted,
+          user,
+          token,
+          refreshToken,
+          isAuthenticated: Boolean(user && token && refreshToken),
+        }
+      },
     }
   )
 )

@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.models.analytics import ActivityLog
 from app.models.user import Role, User
 from app.integrations.orbit import fetch_shared_directory
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import ForgotPasswordRequest, LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -243,6 +243,37 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         detail="EduSync consumes identities provisioned by SAVANEX or EduPay and cannot create user accounts.",
     )
 
+
+def forward_password_recovery(email: str) -> None:
+    targets: list[tuple[str, dict, dict]] = []
+    if settings.savanex_api_url.strip():
+        targets.append((
+            f"{settings.savanex_api_url.rstrip('/')}/api/auth/forgot-password/",
+            {"email": email},
+            {},
+        ))
+    if settings.edupay_api_url.strip():
+        targets.append((
+            f"{settings.edupay_api_url.rstrip('/')}/api/auth/forgot-password",
+            {"identifier": email},
+            {},
+        ))
+
+    for url, payload, headers in targets:
+        body = json.dumps(payload).encode("utf-8")
+        req = request.Request(url, data=body, headers={"Content-Type": "application/json", **headers}, method="POST")
+        try:
+            with request.urlopen(req, timeout=max(settings.savanex_timeout_seconds, settings.edupay_timeout_seconds)):
+                pass
+        except Exception:
+            # The public response stays generic and never reveals whether an account exists upstream.
+            continue
+
+
+@router.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest):
+    forward_password_recovery(str(payload.email).strip().lower())
+    return {"message": "If this account exists, a secure reset link has been sent by email."}
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):

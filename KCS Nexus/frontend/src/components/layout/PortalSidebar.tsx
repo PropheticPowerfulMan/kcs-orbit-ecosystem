@@ -348,10 +348,10 @@ const PortalSidebar = () => {
                 <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-kcs-blue-200 dark:bg-kcs-blue-700" aria-hidden="true" />
                 <div className="rounded-[24px] border border-white/70 bg-white/60 p-3 shadow-inner shadow-white/40 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/40 dark:shadow-none">
                 <div className="flex items-center gap-3">
-                  {user.avatar ? <img src={user.avatar} alt={`${user.firstName} ${user.lastName}`} className="h-12 w-12 flex-shrink-0 rounded-full object-cover ring-4 ring-white dark:ring-kcs-blue-950"/> : <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${roleColor} text-sm font-bold text-white ring-4 ring-white dark:ring-kcs-blue-950`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
+                  {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-12 w-12 flex-shrink-0 rounded-full object-cover ring-4 ring-white dark:ring-kcs-blue-950"/> : <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${roleColor} text-sm font-bold text-white ring-4 ring-white dark:ring-kcs-blue-950`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-                      {user.firstName} {user.lastName}
+                      {[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')}
                     </p>
                     <p className="truncate text-xs capitalize text-gray-500 dark:text-gray-400">
                       {user.role}
@@ -428,7 +428,7 @@ const PortalSidebar = () => {
       {/* User Profile */}
       <div className={`border-b border-white/60 p-4 dark:border-white/10 ${sidebarCollapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 rounded-[22px] border border-white/60 bg-white/50 p-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/30 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-          {user.avatar ? <img src={user.avatar} alt={`${user.firstName} ${user.lastName}`} className="h-10 w-10 flex-shrink-0 rounded-xl object-cover"/> : <div className={`w-10 h-10 rounded-xl ${roleColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
+          {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-10 w-10 flex-shrink-0 rounded-xl object-cover"/> : <div className={`w-10 h-10 rounded-xl ${roleColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
           <AnimatePresence>
             {!sidebarCollapsed && (
               <motion.div
@@ -438,7 +438,7 @@ const PortalSidebar = () => {
                 className="min-w-0 flex-1"
               >
                 <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                  {user.firstName} {user.lastName}
+                  {[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate">
                   {user.role}

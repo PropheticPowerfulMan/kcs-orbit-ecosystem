@@ -861,7 +861,7 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
       }
 
         const notificationStatus = await safeSendParentWelcomeNotifications(
-          createdParent,
+          { ...createdParent, accessCode: user.accessCode },
           temporaryPassword,
           req.user!.schoolId,
           {
@@ -973,7 +973,7 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
 }
 
     const notificationStatus = await safeSendParentWelcomeNotifications(
-      createdParent,
+      { ...createdParent, accessCode: parent.accessCode },
       temporaryPassword,
       req.user!.schoolId,
       {

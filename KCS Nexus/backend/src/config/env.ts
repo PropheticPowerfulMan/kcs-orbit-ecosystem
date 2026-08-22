@@ -44,7 +44,7 @@ const envSchema = z.object({
   EDUPAY_TIMEOUT_SECONDS: z.coerce.number().default(15),
   SAVANEX_API_URL: z.string().optional(),
   SAVANEX_LOGIN_PATH: z.string().default('/api/integration/authenticate/'),
-  SAVANEX_TIMEOUT_SECONDS: z.coerce.number().default(5),
+  SAVANEX_TIMEOUT_SECONDS: z.coerce.number().default(10),
   SAVANEX_INTELLIGENCE_API_KEY: z.string().optional(),
 })
 

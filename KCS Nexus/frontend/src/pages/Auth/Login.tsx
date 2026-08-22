@@ -31,7 +31,7 @@ const getLoginErrorMessage = (error: any) => {
 
 const LoginPage = () => {
   const navigate = useNavigate()
-  const { login, logout, user, isAuthenticated, setLoading, isLoading } = useAuthStore()
+  const { login, user, isAuthenticated, setLoading, isLoading } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false)
@@ -56,8 +56,8 @@ const LoginPage = () => {
       const response = await authAPI.login(values.email.trim(), values.password, values.twoFactorCode)
       const data = response.data?.data
       if (!data?.user || !data?.token || !data?.refreshToken) throw new Error('Réponse d’authentification invalide.')
-      logout(); login(data.user, data.token, data.refreshToken)
-      navigate(resolveDestination(data.user.role), { replace: true })
+      login(data.user, data.token, data.refreshToken)
+      navigate(resolveDestination(data.user.role.toLowerCase() as UserRole), { replace: true })
     } catch (error: any) {
       if (error?.response?.status === 428) {
         setRequiresTwoFactor(true)

@@ -26,6 +26,10 @@ class LoginRequest(BaseModel):
         return self
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

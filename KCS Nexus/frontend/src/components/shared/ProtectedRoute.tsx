@@ -11,23 +11,24 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: ProtectedRouteProps) => {
-  const { isAuthenticated, user, updateUser } = useAuthStore()
+  const { user, token, refreshToken, updateUser } = useAuthStore()
   const location = useLocation()
+  const hasSession = Boolean(user && token && refreshToken)
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return
+    if (!hasSession || !user) return
     let active = true
     void authAPI.me().then((response) => {
       if (active && response.data?.data) updateUser(response.data.data)
     }).catch(() => undefined)
     return () => { active = false }
-  }, [isAuthenticated, user?.id, updateUser])
-  if (!isAuthenticated) {
+  }, [hasSession, user?.id, updateUser])
+  if (!hasSession) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    const fallbackRoute = user.role === 'admin' ? '/admin' : redirectTo
+    const fallbackRoute = user.role === 'admin' ? '/admin' : `/portal/${user.role}`
     return <Navigate to={fallbackRoute} state={{ from: location, unauthorizedRole: user.role }} replace />
   }
 
