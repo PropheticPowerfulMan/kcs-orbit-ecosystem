@@ -309,6 +309,38 @@ function generateTemporaryPassword(role: 'PAR' | 'STU' = 'STU') {
   return `KCS-${randomInt(0, 1_000_000).toString().padStart(6, '0')}`
 }
 
+function schoolEmailToken(value?: string | null) {
+  return (value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '')
+}
+
+function generateSchoolEmail(student: { firstName: string; middleName?: string | null; lastName: string }, unavailableEmails: Set<string>) {
+  const first = schoolEmailToken(student.firstName) || 'user'
+  const middle = schoolEmailToken(student.middleName)
+  const last = schoolEmailToken(student.lastName) || 'kcs'
+  const bases = [`${first}.${last}`]
+  if (middle) bases.push(`${first}.${middle[0]}.${last}`, `${first}.${middle}.${last}`)
+
+  for (const base of bases) {
+    const candidate = `${base}@ourkcs.org`
+    if (!unavailableEmails.has(candidate)) {
+      unavailableEmails.add(candidate)
+      return candidate
+    }
+  }
+
+  for (let sequence = 2; ; sequence += 1) {
+    const candidate = `${bases[0]}${sequence}@ourkcs.org`
+    if (!unavailableEmails.has(candidate)) {
+      unavailableEmails.add(candidate)
+      return candidate
+    }
+  }
+}
+
 type FamilyCredential = { displayName?: string; studentId?: string; username: string; accessCode?: string; temporaryPassword: string }
 
 async function deliverFamilyCredentials(input: {
@@ -440,7 +472,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
 studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const { parent, students: submittedStudents } = normalizeCreateStudentPayload(req.body)
   const generatedAt = Date.now().toString(36).toUpperCase()
-  const students = submittedStudents.map((student, index) => ({
+  let students = submittedStudents.map((student, index) => ({
     ...student,
     studentNumber: student.studentNumber?.trim() || `KCS-STU-${generatedAt}-${String(index + 1).padStart(2, '0')}`,
   }))
@@ -452,6 +484,15 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
 
   if (orbitRegistryIsEnabled()) {
     const directoryBeforeCreate = await getSharedDirectoryFromOrbit()
+    const localSchoolEmails = await prisma.user.findMany({
+      where: { email: { endsWith: '@ourkcs.org', mode: 'insensitive' } },
+      select: { email: true },
+    })
+    const unavailableSchoolEmails = new Set([
+      ...directoryBeforeCreate.students.map((student) => student.email?.trim().toLowerCase()).filter((email): email is string => Boolean(email)),
+      ...localSchoolEmails.map((user) => user.email.trim().toLowerCase()),
+    ])
+    students = students.map((student) => ({ ...student, email: generateSchoolEmail(student, unavailableSchoolEmails) }))
     const duplicateOrbitStudents = directoryBeforeCreate.students.filter((student) => {
       const keys = orbitStudentKeys(student).map((key) => key.toLowerCase())
       return studentNumbers.some((studentNumber) => keys.includes(studentNumber.toLowerCase()))

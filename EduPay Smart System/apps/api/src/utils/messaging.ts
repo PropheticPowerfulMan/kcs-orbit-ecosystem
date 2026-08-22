@@ -213,7 +213,10 @@ function getSmsApiKey() {
 }
 
 function getSmsSender() {
-  return env.AFRICASTALKING_SENDER || env.AFRIKTALK_SENDER;
+  // When the shared production credentials are active, an omitted sender is
+  // intentional: Africa's Talking must choose the default route. Do not fall
+  // back to an obsolete local Sender ID in that case.
+  return env.AFRICASTALKING_API_KEY ? env.AFRICASTALKING_SENDER : env.AFRIKTALK_SENDER;
 }
 
 export function getMessagingConfigStatus(): MessagingConfigStatus {

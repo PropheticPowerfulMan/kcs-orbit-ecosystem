@@ -50,6 +50,24 @@ function Get-ConfigValue {
   return $value
 }
 
+# Secrets saved in the Windows user environment are not automatically added
+# to the environment of an already-running parent process. Import only the
+# shared SMS settings so every backend launched below inherits them without
+# placing their values in source files or command-line arguments.
+foreach ($smsSettingName in @(
+  'AFRICASTALKING_USERNAME',
+  'AFRICASTALKING_API_KEY',
+  'AFRICASTALKING_API_URL',
+  'AFRICASTALKING_SENDER'
+)) {
+  if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($smsSettingName, 'Process'))) {
+    $smsUserValue = [Environment]::GetEnvironmentVariable($smsSettingName, 'User')
+    if (-not [string]::IsNullOrWhiteSpace($smsUserValue)) {
+      [Environment]::SetEnvironmentVariable($smsSettingName, $smsUserValue, 'Process')
+    }
+  }
+}
+
 $orbitDatabaseUrl = Get-ConfigValue -Name 'ORBIT_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_orbit'
 $kcsNexusDatabaseUrl = Get-ConfigValue -Name 'KCS_NEXUS_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/kcs_nexus'
 $eduPayDatabaseUrl = Get-ConfigValue -Name 'EDUPAY_DATABASE_URL' -DefaultValue 'postgresql://postgres:postgres@localhost:5432/edupay?schema=public'

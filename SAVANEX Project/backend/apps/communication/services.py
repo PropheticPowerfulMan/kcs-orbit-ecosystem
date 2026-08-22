@@ -109,6 +109,37 @@ def _send_sms_with_twilio(phone, body):
         return DeliveryResult('sms', 'failed', f'Twilio returned {response.status}: {response_body[:160]}')
 
 
+def _send_sms_with_africas_talking(phone, body):
+    api_url = getattr(settings, 'AFRICASTALKING_API_URL', '')
+    api_key = getattr(settings, 'AFRICASTALKING_API_KEY', '')
+    username = getattr(settings, 'AFRICASTALKING_USERNAME', '')
+    sender = getattr(settings, 'AFRICASTALKING_SENDER', '')
+    if not all([api_url, api_key, username]):
+        return None
+
+    payload = {'username': username, 'to': phone, 'message': body}
+    if sender:
+        payload['from'] = sender
+    request = urllib.request.Request(
+        api_url,
+        data=urllib.parse.urlencode(payload).encode('utf-8'),
+        headers={'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'apiKey': api_key},
+        method='POST',
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        response_body = response.read().decode('utf-8', errors='ignore')
+        parsed = json.loads(response_body or '{}')
+        recipients = parsed.get('SMSMessageData', {}).get('Recipients', [])
+        accepted = any(
+            str(recipient.get('statusCode', '')) == '101'
+            or any(label in str(recipient.get('status', '')).lower() for label in ('success', 'sent', 'submitted'))
+            for recipient in recipients
+        )
+        if not 200 <= response.status < 300 or (recipients and not accepted):
+            return DeliveryResult('sms', 'failed', response_body[:160])
+        return DeliveryResult('sms', 'sent', response_body[:160])
+
+
 def _send_user_sms(user, body, label='User'):
     phone = _normalize_phone(user.phone)
     if not phone:
@@ -118,7 +149,7 @@ def _send_user_sms(user, body, label='User'):
         return DeliveryResult('sms', 'skipped', 'SMS delivery is disabled.')
 
     try:
-        result = _send_sms_with_webhook(phone, body) or _send_sms_with_twilio(phone, body)
+        result = _send_sms_with_africas_talking(phone, body) or _send_sms_with_webhook(phone, body) or _send_sms_with_twilio(phone, body)
     except Exception as exc:
         logger.exception('Unable to send %s SMS to %s', label.lower(), phone)
         return DeliveryResult('sms', 'failed', str(exc))
