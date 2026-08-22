@@ -39,13 +39,16 @@ const schoolLevels = [
 
 type OrbitPerson = {
   id: string
+  displayId?: string | null
   fullName: string
   firstName?: string | null
   middleName?: string | null
   lastName?: string | null
   email?: string | null
   phone?: string | null
+  accessCode?: string | null
   studentIds?: string[]
+  externalIds?: Array<{ appSlug: string; externalId: string }>
 }
 
 type OrbitStudent = {
@@ -394,6 +397,44 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent')
     orderBy: { enrollmentDate: 'desc' },
   })
   return success(res, students)
+}))
+
+studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user!.sub },
+    select: { id: true, email: true, accessCode: true },
+  })
+  if (!currentUser) throw new ApiError(404, 'Parent account not found')
+
+  if (orbitRegistryIsEnabled()) {
+    const directory = await getSharedDirectoryFromOrbit()
+    const identityKeys = new Set(
+      [currentUser.id, currentUser.email, currentUser.accessCode]
+        .filter(Boolean)
+        .map((value) => value.trim().toLowerCase()),
+    )
+    const parent = directory.parents.find((candidate) =>
+      [candidate.id, candidate.displayId, candidate.email, candidate.accessCode, ...(candidate.externalIds?.map((item) => item.externalId) ?? [])]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => identityKeys.has(value.trim().toLowerCase())),
+    )
+    if (!parent) return success(res, [], 'No children linked to this parent')
+
+    const linkedStudentIds = new Set(parent.studentIds ?? [])
+    const familyDirectory: OrbitSharedDirectory = {
+      parents: [parent],
+      students: directory.students.filter((student) =>
+        student.parentId === parent.id || linkedStudentIds.has(student.id) || orbitStudentKeys(student).some((key) => linkedStudentIds.has(key)),
+      ),
+    }
+    return success(res, orbitStudentsToProfiles(familyDirectory), 'Parent children loaded from Orbit')
+  }
+
+  const links = await prisma.parentStudentLink.findMany({
+    where: { parentId: currentUser.id },
+    include: { student: { include: { user: true, parentLinks: { include: { parent: true } } } } },
+  })
+  return success(res, links.map((link) => link.student), 'Parent children loaded')
 }))
 
 studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {

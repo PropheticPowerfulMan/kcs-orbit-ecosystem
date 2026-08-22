@@ -519,7 +519,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     // EduPay owns the password of accounts it creates. A parent or employee
     // present in Orbit must therefore be allowed to use that local password.
     // The previous condition was inverted and skipped valid mirrored users.
-    if (user && (!['PARENT', 'EMPLOYEE'].includes(user.role) || isFederatedUser)) {
+    if (user) {
       const ok = await bcrypt.compare(payload.password, user.passwordHash);
       if (ok) {
         const token = buildToken({ id: user.id, role: user.role, schoolId: user.schoolId });

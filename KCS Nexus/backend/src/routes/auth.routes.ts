@@ -69,7 +69,7 @@ function splitFullName(fullName: string) {
 function mapSavanexRole(role: string | undefined) {
   const normalized = (role || '').trim().toLowerCase()
   if (normalized === 'admin') return 'ADMIN' as const
-  if (normalized === 'employee') return 'STAFF' as const
+  if (['employee', 'staff', 'administrative staff', 'administrative_staff', 'administrative-staff'].includes(normalized)) return 'STAFF' as const
   if (normalized === 'teacher') return 'TEACHER' as const
   if (normalized === 'student') return 'STUDENT' as const
   if (normalized === 'parent') return 'PARENT' as const
@@ -80,7 +80,7 @@ function mapEduPayRole(role: string | undefined) {
   const normalized = (role || '').trim().toUpperCase()
   if (!normalized) return null
   if (['SUPER_ADMIN', 'OWNER', 'ADMIN'].includes(normalized)) return 'ADMIN' as const
-  if (['FINANCIAL_MANAGER', 'ACCOUNTANT', 'CASHIER', 'HR_MANAGER', 'AUDITOR'].includes(normalized)) return 'STAFF' as const
+  if (['EMPLOYEE', 'STAFF', 'ADMINISTRATIVE STAFF', 'ADMINISTRATIVE_STAFF', 'ADMINISTRATIVE-STAFF', 'FINANCIAL_MANAGER', 'ACCOUNTANT', 'CASHIER', 'HR_MANAGER', 'AUDITOR'].includes(normalized)) return 'STAFF' as const
   if (normalized === 'PARENT') return 'PARENT' as const
   return null
 }
@@ -343,7 +343,7 @@ async function authenticateWithSharedProviders(identifier: string, password: str
   }
 }
 
-async function refreshCanonicalIdentity(user: PrismaUser): Promise<PrismaUser> {
+async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true): Promise<PrismaUser> {
   if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return user
   const collection = user.role === 'PARENT' ? 'parents' : user.role === 'STUDENT' ? 'students' : ['TEACHER', 'STAFF'].includes(user.role) ? 'teachers' : null
   if (!collection) return user
@@ -377,6 +377,7 @@ async function refreshCanonicalIdentity(user: PrismaUser): Promise<PrismaUser> {
         || (email && identifiers.includes(email.toUpperCase()))
     })
     if (!entity) {
+      if (!enforcePresence) return user
       // Orbit synchronization can lag behind a successful source login. Keep
       // the verified session for the access-token window, then require the
       // identity to be visible again before a later refresh.
@@ -387,13 +388,21 @@ async function refreshCanonicalIdentity(user: PrismaUser): Promise<PrismaUser> {
       return user
     }
 
+    const canonicalEmail = typeof entity.email === 'string' && entity.email.trim()
+      ? entity.email.trim().toLowerCase()
+      : null
+    const canonicalEmailOwner = canonicalEmail
+      ? await prisma.user.findUnique({ where: { email: canonicalEmail }, select: { id: true } })
+      : null
+    const canAdoptCanonicalEmail = Boolean(canonicalEmail && (!canonicalEmailOwner || canonicalEmailOwner.id === user.id))
+
     return prisma.user.update({
       where: { id: user.id },
       data: {
         ...(typeof entity.firstName === 'string' && entity.firstName.trim() ? { firstName: entity.firstName.trim() } : {}),
         ...(entity.middleName === null || typeof entity.middleName === 'string' ? { middleName: entity.middleName ? String(entity.middleName).trim() : null } : {}),
         ...(typeof entity.lastName === 'string' && entity.lastName.trim() ? { lastName: entity.lastName.trim() } : {}),
-        ...(typeof entity.email === 'string' && entity.email.trim() ? { email: entity.email.trim().toLowerCase() } : {}),
+        ...(canAdoptCanonicalEmail ? { email: canonicalEmail! } : {}),
         ...(typeof entity.phone === 'string' ? { phone: entity.phone.trim() || null } : {}),
         avatar: typeof entity.photoData === 'string' ? entity.photoData : null,
       },
@@ -441,20 +450,19 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
-  const user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email: externalUser.email },
-        { accessCode: externalUser.accessCode },
-      ],
-    },
-  })
+  const [accessCodeUser, emailUser] = await Promise.all([
+    prisma.user.findUnique({ where: { accessCode: externalUser.accessCode } }),
+    prisma.user.findUnique({ where: { email: externalUser.email } }),
+  ])
+  // The access code is the stable cross-application identity. Prefer it when
+  // an older local copy already owns the canonical email.
+  const user = accessCodeUser || emailUser
 
   if (user) {
     return prisma.user.update({
       where: { id: user.id },
       data: {
-        email: externalUser.email,
+        email: emailUser && emailUser.id !== user.id ? user.email : externalUser.email,
         accessCode: externalUser.accessCode,
         role: externalUser.role,
         firstName: externalUser.firstName,
@@ -771,7 +779,8 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
   // This endpoint runs whenever a protected dashboard mounts. It validates
   // the signed session without turning a transient Orbit mirror miss into a
   // logout. Canonical enforcement remains on the refresh-token path.
-  return success(res, buildSafeUser(user))
+  const synchronizedUser = await refreshCanonicalIdentity(user, false)
+  return success(res, buildSafeUser(synchronizedUser))
 }))
 
 authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {

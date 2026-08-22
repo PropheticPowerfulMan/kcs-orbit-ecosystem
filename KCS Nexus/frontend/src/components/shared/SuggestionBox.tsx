@@ -143,9 +143,7 @@ export default function SuggestionBox() {
                 : '• The author\'s identity is never revealed to the Teacher or other users.'}
             </p>
             <p className="text-kcs-blue-200/80">
-              {language === 'fr'
-                ? '• Seul l\'Administrateur autorisé peut identifier l\'auteur lorsque le cadre institutionnel et réglementaire le permet.'
-                : '• Only the authorized Administrator can identify the author when institutional and regulatory frameworks permit.'}
+              {null}
             </p>
           </div>
         </div>

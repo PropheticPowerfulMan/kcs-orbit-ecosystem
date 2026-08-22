@@ -12,6 +12,20 @@ export const api = axios.create({
   timeout: 15000,
 })
 
+type AuthenticatedUser = NonNullable<ReturnType<typeof useAuthStore.getState>['user']>
+let refreshSessionPromise: Promise<{ token: string; user: AuthenticatedUser }> | null = null
+
+const refreshSession = async () => {
+  if (!refreshSessionPromise) {
+    const { refreshToken } = useAuthStore.getState()
+    if (!refreshToken) throw new Error('No refresh token')
+    refreshSessionPromise = axios.post(`${API_BASE}/auth/refresh`, { refreshToken })
+      .then((response) => response.data.data)
+      .finally(() => { refreshSessionPromise = null })
+  }
+  return refreshSessionPromise
+}
+
 // Request interceptor — attach JWT token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -62,8 +76,7 @@ api.interceptors.response.use(
         }
         if (!refreshToken) throw new Error('No refresh token')
 
-        const response = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken })
-        const { token, user } = response.data.data
+        const { token, user } = await refreshSession()
 
         useAuthStore.getState().login(user, token, refreshToken)
         originalRequest.headers.Authorization = `Bearer ${token}`
@@ -129,6 +142,7 @@ export const eventsAPI = {
 // --- Students API ---
 export const studentsAPI = {
   getAll: (params?: object, config?: object) => api.get('/students', { params, ...config }),
+  getMyChildren: () => api.get('/students/me/children'),
   getById: (id: string) => api.get(`/students/${id}`),
   create: (data: object) => api.post('/students', data),
   getGrades: (id: string) => api.get(`/students/${id}/grades`),

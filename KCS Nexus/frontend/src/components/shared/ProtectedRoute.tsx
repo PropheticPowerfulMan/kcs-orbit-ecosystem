@@ -18,10 +18,20 @@ const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: Prote
   useEffect(() => {
     if (!hasSession || !user) return
     let active = true
-    void authAPI.me().then((response) => {
+    const synchronizeProfile = () => void authAPI.me().then((response) => {
       if (active && response.data?.data) updateUser(response.data.data)
     }).catch(() => undefined)
-    return () => { active = false }
+    synchronizeProfile()
+    const timer = window.setInterval(synchronizeProfile, 30_000)
+    const synchronizeWhenVisible = () => {
+      if (document.visibilityState === 'visible') synchronizeProfile()
+    }
+    document.addEventListener('visibilitychange', synchronizeWhenVisible)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', synchronizeWhenVisible)
+    }
   }, [hasSession, user?.id, updateUser])
   if (!hasSession) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />

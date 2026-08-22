@@ -120,8 +120,14 @@ def authenticate_ecosystem_identity_view(request):
     identifier = str(request.data.get('identifier') or request.data.get('username') or '').strip()
     password = str(request.data.get('password') or '')
     user = User.objects.filter(
-        Q(username__iexact=identifier) | Q(email__iexact=identifier) | Q(access_code__iexact=identifier)
-    ).first()
+        Q(username__iexact=identifier)
+        | Q(email__iexact=identifier)
+        | Q(access_code__iexact=identifier)
+        | Q(kcs_card_id__iexact=identifier)
+        | Q(teacher_profile__employee_id__iexact=identifier)
+        | Q(teacher_profile__teacher_id__iexact=identifier)
+        | Q(teacher_profile__work_email__iexact=identifier)
+    ).distinct().first()
     if user is None or not user.is_active or not user.check_password(password):
         return Response({'detail': 'Invalid credentials.'}, status=401)
 

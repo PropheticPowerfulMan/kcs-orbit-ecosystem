@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
+import { studentsAPI } from '@/services/api'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
@@ -123,7 +124,15 @@ const getParentSegment = (pathname: string) => {
 
 const parentButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
 
-type ParentChild = typeof children[number]
+type ParentChild = {
+  id: string
+  name: string
+  grade: string
+  avatar: string | null
+  gpa: number
+  attendance: number
+  rank: number
+}
 
 const ParentSectionView = ({ segment, selectedChild }: { segment: string; selectedChild: ParentChild }) => {
   const { user } = useAuthStore()
@@ -367,7 +376,39 @@ const ParentPortal = () => {
   const { language } = useUIStore()
   const location = useLocation()
   const activeSegment = getParentSegment(location.pathname)
-  const [selectedChild, setSelectedChild] = useState(children[0])
+  const [familyChildren, setFamilyChildren] = useState<ParentChild[]>([])
+  const [selectedChild, setSelectedChild] = useState<ParentChild | null>(null)
+  const [childrenLoading, setChildrenLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    studentsAPI.getMyChildren()
+      .then(({ data }) => {
+        if (!active) return
+        const profiles = Array.isArray(data?.data) ? data.data : []
+        const loadedChildren: ParentChild[] = profiles.map((profile: any) => ({
+          id: String(profile.id),
+          name: [profile.user?.firstName, profile.user?.middleName, profile.user?.lastName].filter(Boolean).join(' ') || profile.studentNumber,
+          grade: [profile.grade, profile.section].filter(Boolean).join(' '),
+          avatar: null,
+          gpa: Number(profile.gpa ?? 0),
+          attendance: Number(profile.attendanceRate ?? 0),
+          rank: Number(profile.rank ?? 0),
+        }))
+        setFamilyChildren(loadedChildren)
+        setSelectedChild((current) => loadedChildren.find((child) => child.id === current?.id) ?? loadedChildren[0] ?? null)
+      })
+      .catch(() => {
+        if (active) {
+          setFamilyChildren([])
+          setSelectedChild(null)
+        }
+      })
+      .finally(() => {
+        if (active) setChildrenLoading(false)
+      })
+    return () => { active = false }
+  }, [])
 
   if (!selectedChild) {
     return (
@@ -403,7 +444,7 @@ const ParentPortal = () => {
               <Link to="/portal/parent/settings" className="flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white"><User size={16}/> Photo et mot de passe</Link>
               {/* Child selector */}
               <div className="flex w-full overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700 sm:w-auto">
-                {children.map((child) => (
+                {familyChildren.map((child) => (
                   <button
                     key={child.id}
                     onClick={() => setSelectedChild(child)}
