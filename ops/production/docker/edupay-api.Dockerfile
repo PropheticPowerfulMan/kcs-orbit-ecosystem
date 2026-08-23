@@ -1,7 +1,8 @@
 FROM node:20-alpine
-RUN corepack enable
+RUN apk add --no-cache openssl && corepack enable
 WORKDIR /workspace
 COPY . .
+RUN npm --prefix /workspace/packages/shared-contracts ci && npm --prefix /workspace/packages/shared-contracts run build
 WORKDIR "/workspace/EduPay Smart System"
 RUN pnpm install --frozen-lockfile \
     && pnpm --filter @edupay/api prisma:generate \
