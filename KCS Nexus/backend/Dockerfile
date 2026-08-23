@@ -8,6 +8,7 @@ COPY src ./src
 RUN npx prisma generate && npm run build
 
 FROM node:20-alpine AS runtime
+RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/package*.json ./
