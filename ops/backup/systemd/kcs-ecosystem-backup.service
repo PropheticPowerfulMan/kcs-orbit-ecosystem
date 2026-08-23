@@ -1,0 +1,16 @@
+[Unit]
+Description=Verified backup of the KCS ecosystem
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=BACKUP_CONFIG_FILE=/etc/kcs-ecosystem/backup.env
+ExecStart=/opt/kcs-ecosystem/ops/backup/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true
