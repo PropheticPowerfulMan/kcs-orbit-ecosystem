@@ -142,6 +142,7 @@ def _send_sms_with_africas_talking(phone, body):
 
 def _send_user_sms(user, body, label='User'):
     phone = _normalize_phone(user.phone)
+    body = body if body.lstrip().upper().startswith('SAVANEX:') else f'SAVANEX: {body}'
     if not phone:
         return DeliveryResult('sms', 'skipped', f'{label} phone is missing.')
 

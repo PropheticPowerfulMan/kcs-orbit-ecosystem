@@ -1398,13 +1398,16 @@ export function StudentsDirectoryPage() {
 
   const handleDeleteStudent = async () => {
     if (!deleteTarget) return;
+    const removedStudent = deleteTarget;
+    setDeleting(true);
+    setApiError(null);
+    setDeleteTarget(null);
+    setDirectory((current) => current ? { ...current, students: current.students.filter((student) => student.id !== removedStudent.id) } : current);
     try {
-      setDeleting(true);
-      setApiError(null);
-      await api(`/api/students/${deleteTarget.id}`, { method: "DELETE" });
-      setDeleteTarget(null);
-      await load();
+      await api(`/api/students/${removedStudent.id}`, { method: "DELETE" });
+      void load(true);
     } catch (error) {
+      setDirectory((current) => current && !current.students.some((student) => student.id === removedStudent.id) ? { ...current, students: [...current.students, removedStudent] } : current);
       setApiError(error instanceof Error ? error.message : "Impossible de supprimer l'élève.");
     } finally {
       setDeleting(false);

@@ -13,6 +13,11 @@ const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
 const authRateLimit = (windowMs: number, max: number) => {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Session maintenance is not an authentication attempt. Counting refresh
+    // and profile requests eventually locks out an otherwise valid session.
+    const rateLimitedPaths = new Set(['/login', '/register', '/forgot-password', '/reset-password'])
+    if (!rateLimitedPaths.has(req.path)) return next()
+
     const now = Date.now()
     const key = `${req.ip}:${req.path}:${String(req.body?.email || req.body?.identifier || '').toLowerCase()}`
     const current = authAttempts.get(key)

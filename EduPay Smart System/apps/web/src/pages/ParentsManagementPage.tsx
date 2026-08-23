@@ -3001,12 +3001,15 @@ export function ParentsManagementPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    const removedParent = deleteTarget;
+    setApiError(null);
+    setDeleteTarget(null);
+    setParents((current) => current.filter((parent) => parent.id !== removedParent.id));
     try {
-      setApiError(null);
-      await api(`/api/parents/${deleteTarget.id}`, { method: "DELETE" });
-      setDeleteTarget(null);
-      await load();
+      await api(`/api/parents/${removedParent.id}`, { method: "DELETE" });
+      void load(true);
     } catch (error) {
+      setParents((current) => sortParentsForUi([...current, removedParent]));
       const message = error instanceof Error ? error.message : "Erreur API";
       setApiError(message);
     }

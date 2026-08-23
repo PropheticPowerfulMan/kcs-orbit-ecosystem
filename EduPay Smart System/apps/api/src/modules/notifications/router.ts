@@ -160,7 +160,7 @@ notificationRouter.post("/messages", authorize("ADMIN", "ACCOUNTANT"), async (re
         try {
           status.sms = await sendSms({
             to: parent.phone,
-            text: payload.body,
+            text: dashboardContent,
           });
         } catch (err) {
           console.error("Erreur d'envoi SMS manuel:", err);

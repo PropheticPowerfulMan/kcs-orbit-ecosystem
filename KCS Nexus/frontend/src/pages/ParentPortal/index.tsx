@@ -388,7 +388,7 @@ const ParentPortal = () => {
         const profiles = Array.isArray(data?.data) ? data.data : []
         const loadedChildren: ParentChild[] = profiles.map((profile: any) => ({
           id: String(profile.id),
-          name: [profile.user?.firstName, profile.user?.middleName, profile.user?.lastName].filter(Boolean).join(' ') || profile.studentNumber,
+          name: [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || profile.studentNumber,
           grade: [profile.grade, profile.section].filter(Boolean).join(' '),
           avatar: null,
           gpa: Number(profile.gpa ?? 0),

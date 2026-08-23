@@ -205,11 +205,11 @@ function getSmsApiUrl() {
 }
 
 function getSmsUsername() {
-  return env.AFRICASTALKING_USERNAME || env.AFRIKTALK_USERNAME;
+  return (env.AFRICASTALKING_USERNAME || env.AFRIKTALK_USERNAME).trim();
 }
 
 function getSmsApiKey() {
-  return env.AFRICASTALKING_API_KEY || env.AFRIKTALK_API_KEY;
+  return (env.AFRICASTALKING_API_KEY || env.AFRIKTALK_API_KEY).trim();
 }
 
 function getSmsSender() {
@@ -342,6 +342,7 @@ export async function sendEmail(input: EmailInput): Promise<DeliveryStatus> {
 export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
   if (!input.to) return "SKIPPED";
   const to = normalizePhoneNumber(input.to);
+  const message = /^\s*(?:\[?EduPay\]?\s*[:—-])/i.test(input.text) ? input.text : `EduPay: ${input.text}`;
   if (!to) return "SKIPPED";
 
   if (!hasSmsConfig()) {
@@ -358,7 +359,7 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
     const buildAfricaTalkingBody = (includeSender: boolean) => new URLSearchParams({
       username,
       to,
-      message: input.text,
+      message,
       ...(includeSender && sender ? { from: sender } : {})
     });
     const body = isAfricaTalking
@@ -376,8 +377,7 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
         ? {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
-          apiKey,
-          apikey: apiKey
+          apiKey
         }
         : {
           Accept: "application/json",
@@ -399,8 +399,7 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
-          apiKey,
-          apikey: apiKey
+          apiKey
         },
         body: buildAfricaTalkingBody(false)
       });

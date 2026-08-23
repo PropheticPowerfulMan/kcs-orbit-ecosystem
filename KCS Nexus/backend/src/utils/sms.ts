@@ -6,6 +6,7 @@ export type SmsResult =
 
 export async function sendSchoolSms(to: string | null | undefined, message: string): Promise<SmsResult> {
   const phone = (to || '').replace(/[\s()-]/g, '')
+  const brandedMessage = /^\s*(?:\[?KCS Nexus\]?\s*[:—-])/i.test(message) ? message : `KCS Nexus: ${message}`
   const apiUrl = env.AFRICASTALKING_API_URL || env.SMS_API_URL
   const apiKey = env.AFRICASTALKING_API_KEY || env.SMS_API_KEY
   const username = env.AFRICASTALKING_USERNAME || env.SMS_USERNAME
@@ -18,8 +19,8 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
   try {
     const isAfricasTalking = /africastalking/i.test(apiUrl)
     const body = isAfricasTalking
-      ? new URLSearchParams({ username, to: phone, message, ...(sender ? { from: sender } : {}) })
-      : JSON.stringify({ to: phone, message, sender })
+      ? new URLSearchParams({ username, to: phone, message: brandedMessage, ...(sender ? { from: sender } : {}) })
+      : JSON.stringify({ to: phone, message: brandedMessage, sender })
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: isAfricasTalking
