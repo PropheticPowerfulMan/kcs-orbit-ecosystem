@@ -117,6 +117,7 @@ class FamilyRegistrationSerializerTests(TestCase):
                 **initial_payload["students"][0],
                 "user": {
                     **initial_payload["students"][0]["user"],
+                    "email": original_user.email,
                     "first_name": "Nouveau Prenom",
                 },
             }],
@@ -139,8 +140,8 @@ class FamilyRegistrationSerializerTests(TestCase):
         self.assertTrue(recreated_student.is_active)
         self.assertTrue(recreated_student.user.is_active)
         self.assertEqual(recreated_student.user.first_name, "Nouveau Prenom")
-        self.assertEqual(User.objects.filter(email__iexact="levana@gmail.com").count(), 1)
-        self.assertEqual(Student.objects.filter(user__email__iexact="levana@gmail.com").count(), 1)
+        self.assertEqual(User.objects.filter(email__iexact=original_user.email).count(), 1)
+        self.assertEqual(Student.objects.filter(user__email__iexact=original_user.email).count(), 1)
 
     @patch("apps.students.serializers.sync_student")
     @patch("apps.students.serializers.sync_parent")

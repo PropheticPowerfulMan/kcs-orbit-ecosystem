@@ -3,13 +3,26 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.db import connection
+from django.http import JsonResponse
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
     TokenBlacklistView,
 )
 from apps.users.views import CustomTokenObtainPairView, forgot_password, reset_password
 
+
+def health_check(_request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+        return JsonResponse({'status': 'ok', 'databaseReady': True})
+    except Exception:
+        return JsonResponse({'status': 'degraded', 'databaseReady': False}, status=503)
+
 urlpatterns = [
+    path('api/health/', health_check, name='health_check'),
     # Admin
     path('admin/', admin.site.urls),
 

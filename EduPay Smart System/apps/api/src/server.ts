@@ -17,6 +17,7 @@ import { financeRouter } from "./modules/finance/router";
 import { expenseRouter } from "./modules/expenses/router";
 import { sharedDirectoryRouter } from "./modules/shared-directory/router";
 import { startOrbitOutboxWorker } from "./integrations/orbit";
+import { prisma } from "./prisma";
 
 const app = express();
 
@@ -86,8 +87,13 @@ app.use(rateLimit({
   max: 250
 }));
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "api" });
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", service: "api", databaseReady: true });
+  } catch {
+    res.status(503).json({ status: "degraded", service: "api", databaseReady: false });
+  }
 });
 
 app.use("/api/auth", authRouter);

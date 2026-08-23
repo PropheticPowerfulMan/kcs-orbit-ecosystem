@@ -1917,7 +1917,7 @@ async function demoApi<T>(path: string, init?: RequestInit): Promise<T> {
     const token = String(body.token ?? "").trim();
     const newPassword = String(body.newPassword ?? "");
     const resetToken = getDemoPasswordResetTokens().find((item) => item.token === token);
-    const requestedEmail = resolveDemoResetEmail(identifier);
+    const requestedEmail = identifier ? resolveDemoResetEmail(identifier) : resetToken?.email ?? null;
     if (!resetToken || resetToken.usedAt || !requestedEmail || requestedEmail !== resetToken.email || newPassword.length < 8) {
       throw new Error("Code de reinitialisation invalide ou expire.");
     }

@@ -42,10 +42,11 @@ app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 
 app.get('/health', (_req, res) => {
-  res.json({
+  const databaseReady = isDatabaseReady()
+  res.status(databaseReady ? 200 : 503).json({
     success: true,
-    message: isDatabaseReady() ? 'KCS Nexus API healthy' : 'KCS Nexus API running in degraded mode',
-    databaseReady: isDatabaseReady(),
+    message: databaseReady ? 'KCS Nexus API healthy' : 'KCS Nexus API running in degraded mode',
+    databaseReady,
   })
 })
 

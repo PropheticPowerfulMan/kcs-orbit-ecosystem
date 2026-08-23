@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.api.routes import analytics, auth, chat, directory, messaging, notifications, registry, workflows
 from app.core.config import settings
@@ -88,5 +90,20 @@ app.include_router(analytics.router, prefix=settings.api_prefix)
 
 
 @app.get("/")
-def health():
+def root():
     return {"status": "ok", "service": settings.app_name}
+
+
+@app.get("/health")
+def health():
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ok", "service": settings.app_name, "databaseReady": True}
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "service": settings.app_name, "databaseReady": False},
+        )
+    finally:
+        db.close()

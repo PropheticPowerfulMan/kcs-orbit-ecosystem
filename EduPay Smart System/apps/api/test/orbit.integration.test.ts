@@ -47,5 +47,27 @@ describe("payment Orbit outbox contract", () => {
     expect(body.payload.reference).toBe("SIM-TX-TEST-001");
     expect(body.metadata.studentExternalIds).toEqual(["STU-EXT-001", "STU-EXT-002"]);
     expect(body.metadata.localStudentIds).toEqual(["student-1", "student-2"]);
+  }, 15_000);
+
+  it("uses a unique idempotency key when the same outbox event is enqueued twice", async () => {
+    const upsert = vi.fn().mockResolvedValue({ id: "outbox-1" });
+    const db = { integrationOutboxEvent: { upsert } };
+    const { enqueueOrbitEvent } = await import("../src/integrations/orbit");
+    const event = {
+      eventType: "parent.deleted",
+      aggregateType: "Parent",
+      aggregateId: "parent-1",
+      path: "/api/integration/registry/parent/orbit-parent-1",
+      httpMethod: "DELETE" as const,
+      idempotencyKey: "EDUPAY:PARENT_DELETED:parent-1",
+    };
+
+    await enqueueOrbitEvent(db as never, event);
+    await enqueueOrbitEvent(db as never, event);
+
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[0][0].where.idempotencyKey).toBe(event.idempotencyKey);
+    expect(upsert.mock.calls[1][0].where.idempotencyKey).toBe(event.idempotencyKey);
+    expect(upsert.mock.calls[0][0].update).toEqual({});
   });
 });

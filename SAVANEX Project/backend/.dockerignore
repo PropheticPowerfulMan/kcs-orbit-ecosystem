@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.git
+.venv
+venv
+__pycache__
+.pytest_cache
+*.py[cod]
+*.sqlite
+*.sqlite3
+*.db
+*.log
+media
+staticfiles
+reset_test_data.py

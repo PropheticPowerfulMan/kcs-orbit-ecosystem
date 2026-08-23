@@ -1,0 +1,9 @@
+{$ORBIT_API_DOMAIN} { reverse_proxy orbit_api:4500 }
+{$NEXUS_DOMAIN} { reverse_proxy nexus_web:80 }
+{$NEXUS_API_DOMAIN} { reverse_proxy nexus_api:5000 }
+{$EDUPAY_DOMAIN} { reverse_proxy edupay_web:80 }
+{$EDUPAY_API_DOMAIN} { reverse_proxy edupay_api:4000 }
+{$SAVANEX_DOMAIN} { reverse_proxy savanex_web:80 }
+{$SAVANEX_API_DOMAIN} { reverse_proxy savanex_api:8000 }
+{$EDUSYNC_DOMAIN} { reverse_proxy edusync_web:80 }
+{$EDUSYNC_API_DOMAIN} { reverse_proxy edusync_api:8000 }

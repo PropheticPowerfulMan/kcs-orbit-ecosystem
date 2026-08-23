@@ -1196,12 +1196,6 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
     }
 
 
-    if (orbitRegistryIsEnabled() && parentExists.orbitId && !orbitUpdateSucceeded) {
-      return res.status(502).json({
-        message: "La modification n'a pas pu etre propagee au registre partage. Reessayez dans quelques instants."
-      });
-    }
-
     const classIdResolution = await resolveStudentClassIds(req.user!.schoolId, payload.students);
     const currentStudents = await prisma.student.findMany({
       where: { parentId: localParentId, schoolId: req.user!.schoolId },
@@ -1286,6 +1280,27 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
         where: { parentId: localParentId, schoolId: req.user!.schoolId },
         select: { id: true, orbitId: true }
       });
+
+      if (parentExists.orbitId) {
+        const { firstName, lastName } = splitPersonName(payload.fullName);
+        await enqueueOrbitEvent(tx, {
+          eventType: "parent.updated",
+          aggregateType: "Parent",
+          aggregateId: localParentId,
+          path: `/api/integration/registry/parent/${encodeURIComponent(parentExists.orbitId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
+          httpMethod: "PUT",
+          payload: {
+            fullName: payload.fullName,
+            firstName: payload.prenom || firstName,
+            middleName: payload.postnom || null,
+            lastName: payload.nom || lastName,
+            email: normalizedEmail,
+            phone: normalizedPhone,
+            physicalAddress: payload.physicalAddress || null
+          },
+          idempotencyKey: `EDUPAY:PARENT_UPDATED:${localParentId}:${Date.now()}`
+        });
+      }
       const existingStudentIds = new Set(existingStudents.map((student) => student.id));
       const localStudentIdByIdentifier = new Map(existingStudents.flatMap((student) => [
         [student.id, student.id] as const,
@@ -1489,6 +1504,49 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
 // DELETE parent
 parentRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
+  {
+    const localParent = await prisma.parent.findFirst({
+      where: { schoolId: req.user!.schoolId, OR: [{ id }, { orbitId: id }] },
+      select: {
+        id: true,
+        orbitId: true,
+        userId: true,
+        students: { select: { id: true, orbitId: true } }
+      }
+    });
+    if (!localParent) return res.status(404).json({ message: "Parent non trouve" });
+    await prisma.$transaction(async (tx) => {
+      await tx.student.deleteMany({ where: { parentId: localParent.id, schoolId: req.user!.schoolId } });
+      await tx.parent.delete({ where: { id: localParent.id } });
+      if (localParent.userId) {
+        await tx.user.deleteMany({ where: { id: localParent.userId, role: "PARENT" } });
+      }
+      for (const student of localParent.students) {
+        if (!student.orbitId) continue;
+        await enqueueOrbitEvent(tx, {
+          eventType: "student.deleted",
+          aggregateType: "Student",
+          aggregateId: student.id,
+          path: `/api/integration/registry/student/${encodeURIComponent(student.orbitId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
+          httpMethod: "DELETE",
+          idempotencyKey: `EDUPAY:STUDENT_DELETED:${student.id}`
+        });
+      }
+      if (localParent.orbitId) {
+        await enqueueOrbitEvent(tx, {
+          eventType: "parent.deleted",
+          aggregateType: "Parent",
+          aggregateId: localParent.id,
+          path: `/api/integration/registry/parent/${encodeURIComponent(localParent.orbitId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
+          httpMethod: "DELETE",
+          idempotencyKey: `EDUPAY:PARENT_DELETED:${localParent.id}`
+        });
+      }
+    });
+    return res.status(204).end();
+  }
+
+  /* Legacy direct-Orbit deletion path retained only for historical context.
   if (orbitRegistryIsEnabled()) {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
     const parent = mirrored.parents.find((entry) => matchesSharedParentIdentifier(entry, id));
@@ -1579,4 +1637,5 @@ parentRouter.delete("/:id", async (req: AuthenticatedRequest, res) => {
     demoParents = demoParents.filter((p) => p.id !== id);
     return res.status(204).end();
   }
+  */
 });

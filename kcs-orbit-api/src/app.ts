@@ -10,6 +10,7 @@ import integrationRegistryRoutes from "./routes/integration.registry.routes";
 import integrationReadRoutes from "./routes/integration.read.routes";
 import integrationRoutes from "./routes/integration.routes";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
+import { prisma } from "./db";
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -42,13 +43,16 @@ export function createApp() {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  if (process.env.NODE_ENV === "production" && allowedOrigins.length === 0) {
+    throw new Error("KCS Orbit production configuration is unsafe. Set CORS_ORIGIN.");
+  }
 
   app.use(helmet());
   app.use(express.json({ limit: "2mb" }));
-  app.use(morgan("dev"));
+  app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
   app.use(cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      if (!origin || (process.env.NODE_ENV !== "production" && allowedOrigins.length === 0) || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(new Error("Not allowed by CORS"));
@@ -64,11 +68,13 @@ export function createApp() {
     });
   });
 
-  app.get("/health", (_req, res) => {
-    res.json({
-      ok: true,
-      service: "kcs-orbit-api"
-    });
+  app.get("/health", async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ok: true, service: "kcs-orbit-api", databaseReady: true });
+    } catch {
+      res.status(503).json({ ok: false, service: "kcs-orbit-api", databaseReady: false });
+    }
   });
 
   app.use("/api/auth", authRateLimit(15 * 60 * 1000, 20), authRoutes);

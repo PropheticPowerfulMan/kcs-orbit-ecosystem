@@ -217,45 +217,6 @@ studentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticat
 studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   const payload = updateStudentSchema.parse(req.body);
 
-  if (orbitRegistryIsEnabled()) {
-    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-    const mirroredStudent = mirrored.students.find((student) =>
-      student.localId === req.params.id
-      || student.id === req.params.id
-      || student.orbitId === req.params.id
-      || student.displayId === req.params.id
-      || student.externalStudentId === req.params.id
-    );
-    if (!mirroredStudent?.orbitId) {
-      return res.status(404).json({ message: "Eleve introuvable dans le registre partage." });
-    }
-    const localClass = await prisma.class.findFirst({
-      where: { id: payload.classId, schoolId: req.user!.schoolId },
-      select: { name: true },
-    });
-    const className = String(req.body?.className || localClass?.name || payload.classId);
-    const nameParts = payload.fullName.trim().split(String.fromCharCode(32)).filter(Boolean);
-    await updateOrbitStudent(mirroredStudent.orbitId, {
-      fullName: payload.fullName,
-      firstName: payload.firstName || nameParts[nameParts.length - 1],
-      middleName: payload.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(String.fromCharCode(32)) : null),
-      lastName: payload.lastName || nameParts[0],
-      email: payload.email,
-      phone: payload.phone,
-      dateOfBirth: payload.dateOfBirth,
-      // Orbit rejects `null` for this optional field. Omitting it preserves the
-      // current value and prevents the whole student update from failing.
-      gender: payload.gender ?? undefined,
-      className,
-      studentNumber: payload.studentNumber,
-      mustChangePassword: payload.mustChangePassword
-    });
-    await syncOrbitRegistryMirror(req.user!.schoolId);
-    const directory = await readOrbitSharedOptions();
-    const updated = directory.students.find((student) => student.orbitId === mirroredStudent.orbitId);
-    return res.json({ ...updated, notificationStatus: { dashboard: "SYNCED", email: "SKIPPED", sms: "SKIPPED", adminEmail: "SKIPPED" } });
-  }
-
   const [parent, classRow] = await Promise.all([
     prisma.parent.findFirst({ where: { id: payload.parentId, schoolId: req.user!.schoolId }, select: { id: true } }),
     prisma.class.findFirst({ where: { id: payload.classId, schoolId: req.user!.schoolId }, select: { id: true } })
@@ -266,53 +227,51 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
 
   const existing = await prisma.student.findFirst({
     where: { id: req.params.id, schoolId: req.user!.schoolId },
-    select: { id: true, externalStudentId: true }
+    select: { id: true, orbitId: true, externalStudentId: true }
   });
   if (!existing) return res.status(404).json({ message: "Eleve introuvable." });
 
-  if (orbitRegistryIsEnabled()) {
-    try {
-      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
-      const mirroredStudent = mirrored.parents
-        .flatMap((parent) => parent.students)
-        .find((student) => student.id === req.params.id
-          || student.orbitId === req.params.id
-          || student.externalStudentId === existing.externalStudentId
-          || student.displayId === existing.externalStudentId);
-      const className = await prisma.class.findUnique({ where: { id: payload.classId }, select: { name: true } });
-      const nameParts = payload.fullName.trim().split(/\s+/);
-      await updateOrbitStudent(mirroredStudent?.orbitId || req.params.id, {
+  const nameParts = payload.fullName.trim().split(/\s+/);
+  const student = await prisma.$transaction(async (tx) => {
+    const updated = await tx.student.update({
+      where: { id: existing.id },
+      data: {
         fullName: payload.fullName,
         firstName: payload.firstName || nameParts[nameParts.length - 1] || null,
         middleName: payload.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null),
         lastName: payload.lastName || nameParts[0] || null,
-        email: payload.email ?? undefined,
-        phone: payload.phone ?? undefined,
-        dateOfBirth: payload.dateOfBirth ?? undefined,
-        gender: payload.gender ?? undefined,
-        className: className?.name ?? payload.classId,
-        studentNumber: payload.studentNumber ?? undefined,
-        mustChangePassword: payload.mustChangePassword
+        dateOfBirth: payload.dateOfBirth ?? null,
+        gender: payload.gender ?? null,
+        classId: payload.classId,
+        parentId: payload.parentId,
+        annualFee: payload.annualFee
+      },
+      include: { class: true, parent: true, payments: true }
+    });
+    if (existing.orbitId) {
+      await enqueueOrbitEvent(tx, {
+        eventType: "student.updated",
+        aggregateType: "Student",
+        aggregateId: existing.id,
+        path: `/api/integration/registry/student/${encodeURIComponent(existing.orbitId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
+        httpMethod: "PUT",
+        payload: {
+          fullName: payload.fullName,
+          firstName: payload.firstName || nameParts[nameParts.length - 1] || null,
+          middleName: payload.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null),
+          lastName: payload.lastName || nameParts[0] || null,
+          email: payload.email ?? undefined,
+          phone: payload.phone ?? undefined,
+          dateOfBirth: payload.dateOfBirth ?? undefined,
+          gender: payload.gender ?? undefined,
+          className: updated.class?.name ?? payload.classId,
+          studentNumber: payload.studentNumber ?? existing.id,
+          mustChangePassword: payload.mustChangePassword
+        },
+        idempotencyKey: `EDUPAY:STUDENT_UPDATED:${existing.id}:${Date.now()}`
       });
-      await syncOrbitRegistryMirror(req.user!.schoolId);
-    } catch (error) {
-      console.error("[STUDENT_UPDATE_ORBIT] Orbit sync failed but local update will continue", error);
     }
-  }
-
-  const student = await prisma.student.update({
-    where: { id: req.params.id },
-    data: {
-      fullName: payload.fullName,
-      classId: payload.classId,
-      parentId: payload.parentId,
-      annualFee: payload.annualFee
-    },
-    include: {
-      class: true,
-      parent: true,
-      payments: true
-    }
+    return updated;
   });
 
   const notificationStatus = await notifyParentEntityChange({
@@ -331,6 +290,32 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
 });
 
 studentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+  {
+    const localStudent = await prisma.student.findFirst({
+      where: {
+        schoolId: req.user!.schoolId,
+        OR: [{ id: req.params.id }, { orbitId: req.params.id }, { externalStudentId: req.params.id }]
+      },
+      select: { id: true, orbitId: true }
+    });
+    if (!localStudent) return res.status(404).json({ message: "Eleve introuvable." });
+    await prisma.$transaction(async (tx) => {
+      await tx.student.delete({ where: { id: localStudent.id } });
+      if (localStudent.orbitId) {
+        await enqueueOrbitEvent(tx, {
+          eventType: "student.deleted",
+          aggregateType: "Student",
+          aggregateId: localStudent.id,
+          path: `/api/integration/registry/student/${encodeURIComponent(localStudent.orbitId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
+          httpMethod: "DELETE",
+          idempotencyKey: `EDUPAY:STUDENT_DELETED:${localStudent.id}`
+        });
+      }
+    });
+    return res.status(204).end();
+  }
+
+  /* Legacy direct-Orbit deletion path intentionally removed from execution.
   if (orbitRegistryIsEnabled()) {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
     const student = mirrored.students.find((entry) =>
@@ -362,4 +347,5 @@ studentRouter.delete("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authe
     await prisma.student.delete({ where: { id: req.params.id } });
   }
   return res.status(204).end();
+  */
 });

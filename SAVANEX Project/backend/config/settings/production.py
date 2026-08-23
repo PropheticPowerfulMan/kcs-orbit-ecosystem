@@ -1,5 +1,6 @@
 from .base import *
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 
 DEBUG = False
 
@@ -19,6 +20,19 @@ SECURE_HSTS_PRELOAD = True
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
+if SECRET_KEY == 'django-insecure-change-me-in-production' or len(SECRET_KEY) < 32:
+    raise ImproperlyConfigured('A strong SECRET_KEY is required in production.')
+if not any(host.strip() for host in ALLOWED_HOSTS):
+    raise ImproperlyConfigured('ALLOWED_HOSTS is required in production.')
+if not any(origin.strip() for origin in CORS_ALLOWED_ORIGINS):
+    raise ImproperlyConfigured('CORS_ALLOWED_ORIGINS is required in production.')
+if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise ImproperlyConfigured('PostgreSQL is required in production.')
+if DATABASES['default']['PASSWORD'] in {'', 'savanex_pass'}:
+    raise ImproperlyConfigured('A non-default PostgreSQL password is required in production.')
 
 # Logging
 LOGGING = {

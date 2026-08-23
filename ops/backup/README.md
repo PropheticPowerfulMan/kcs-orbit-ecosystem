@@ -40,4 +40,4 @@ pg_restore --no-owner --dbname=kcs_restore_test /var/tmp/kcs-restore-test/postgr
 
 Le pipeline doit appeler `pre-deploy-backup.sh`; son echec bloque le deploiement. Les schemas utilisent des migrations versionnees et aucune option acceptant une perte de donnees.
 
-Une sauvegarde serveur ne protege pas des donnees metier uniquement conservees dans `localStorage`. Les paiements EduPay encore concernes devront etre migres vers PostgreSQL avant l'ouverture publique.
+Une sauvegarde serveur ne protege jamais les preferences d'interface conservees dans `localStorage`. Les paiements, allocations, echeanciers, depenses, recus et autres donnees financieres officielles d'EduPay sont persistants dans PostgreSQL; seuls les jetons de session, caches de lecture et preferences d'interface restent dans le navigateur.

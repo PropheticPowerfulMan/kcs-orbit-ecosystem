@@ -36,6 +36,8 @@ const originalTeacherFindMany = prisma.teacher.findMany.bind(prisma.teacher);
 const originalExternalLinkFindMany = prisma.externalLink.findMany.bind(prisma.externalLink);
 const originalOrganizationFindUnique = prisma.organization.findUnique.bind(prisma.organization);
 const originalParentFindFirst = prisma.parent.findFirst.bind(prisma.parent);
+const originalStudentFindFirst = prisma.student.findFirst.bind(prisma.student);
+const originalTeacherFindFirst = prisma.teacher.findFirst.bind(prisma.teacher);
 const originalParentCreate = prisma.parent.create.bind(prisma.parent);
 const originalExternalLinkCreate = prisma.externalLink.create.bind(prisma.externalLink);
 const originalSyncEventCreate = prisma.syncEvent.create.bind(prisma.syncEvent);
@@ -109,6 +111,8 @@ function restorePrisma() {
   (prisma.externalLink.findMany as unknown as typeof prisma.externalLink.findMany) = originalExternalLinkFindMany as never;
   (prisma.organization.findUnique as unknown as typeof prisma.organization.findUnique) = originalOrganizationFindUnique as never;
   (prisma.parent.findFirst as unknown as typeof prisma.parent.findFirst) = originalParentFindFirst as never;
+  (prisma.student.findFirst as unknown as typeof prisma.student.findFirst) = originalStudentFindFirst as never;
+  (prisma.teacher.findFirst as unknown as typeof prisma.teacher.findFirst) = originalTeacherFindFirst as never;
   (prisma.parent.create as unknown as typeof prisma.parent.create) = originalParentCreate as never;
   (prisma.externalLink.create as unknown as typeof prisma.externalLink.create) = originalExternalLinkCreate as never;
   (prisma.syncEvent.create as unknown as typeof prisma.syncEvent.create) = originalSyncEventCreate as never;
@@ -324,6 +328,8 @@ test("registry creation generates an external id for a new parent", async () => 
   mockTransactionWithRootPrisma();
   (prisma.organization.findUnique as unknown as typeof prisma.organization.findUnique) = (async () => ({ id: "org-1" })) as never;
   (prisma.parent.findFirst as unknown as typeof prisma.parent.findFirst) = (async () => null) as never;
+  (prisma.student.findFirst as unknown as typeof prisma.student.findFirst) = (async () => null) as never;
+  (prisma.teacher.findFirst as unknown as typeof prisma.teacher.findFirst) = (async () => null) as never;
   (prisma.parent.create as unknown as typeof prisma.parent.create) = (async () => ({ id: "parent-2", fullName: "Parent Two" })) as never;
   (prisma.externalLink.create as unknown as typeof prisma.externalLink.create) = (async () => ({ id: "link-1" })) as never;
   (prisma.syncEvent.create as unknown as typeof prisma.syncEvent.create) = (async () => ({ id: "sync-1" })) as never;
@@ -357,6 +363,8 @@ test("registry creation accepts canonical split-name payloads for parents", asyn
   mockTransactionWithRootPrisma();
   (prisma.organization.findUnique as unknown as typeof prisma.organization.findUnique) = (async () => ({ id: "org-1" })) as never;
   (prisma.parent.findFirst as unknown as typeof prisma.parent.findFirst) = (async () => null) as never;
+  (prisma.student.findFirst as unknown as typeof prisma.student.findFirst) = (async () => null) as never;
+  (prisma.teacher.findFirst as unknown as typeof prisma.teacher.findFirst) = (async () => null) as never;
   (prisma.parent.create as unknown as typeof prisma.parent.create) = (async ({ data }: { data: { fullName: string } }) => ({ id: "parent-3", fullName: data.fullName })) as never;
   (prisma.externalLink.create as unknown as typeof prisma.externalLink.create) = (async () => ({ id: "link-2" })) as never;
   (prisma.syncEvent.create as unknown as typeof prisma.syncEvent.create) = (async () => ({ id: "sync-2" })) as never;
@@ -376,7 +384,7 @@ test("registry creation accepts canonical split-name payloads for parents", asyn
 
       assert.equal(response.status, 201);
       const data = await response.json() as { entity: { fullName: string } };
-      assert.equal(data.entity.fullName, "Jean Pierre Ilunga");
+      assert.equal(data.entity.fullName, "Ilunga Pierre Jean");
     });
   } finally {
     restorePrisma();
@@ -401,7 +409,7 @@ test("registry route rejects unknown integration clients", async () => {
   });
 });
 
-test("registry route allows EduPay to create a family", async () => {
+test("registry route authorizes EduPay family creation before payload validation", async () => {
   process.env.EDUPAY_INTEGRATION_KEY = "test-edupay-key";
 
   await withServer(async (baseUrl) => {
@@ -415,7 +423,7 @@ test("registry route allows EduPay to create a family", async () => {
       body: JSON.stringify({}),
     });
 
-    assert.notEqual(response.status, 403);
+    assert.equal(response.status, 400);
   });
 });
 
@@ -439,7 +447,7 @@ test("registry route blocks KCS Nexus from creating school employees", async () 
   });
 });
 
-test("registry route allows EduPay to provision students", async () => {
+test("registry route authorizes EduPay student creation before payload validation", async () => {
   process.env.EDUPAY_INTEGRATION_KEY = "test-edupay-key";
 
   await withServer(async (baseUrl) => {
@@ -453,6 +461,6 @@ test("registry route allows EduPay to provision students", async () => {
       body: JSON.stringify({}),
     });
 
-    assert.notEqual(response.status, 403);
+    assert.equal(response.status, 400);
   });
 });

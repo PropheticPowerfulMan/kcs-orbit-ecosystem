@@ -50,5 +50,14 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-if settings.app_env.lower() in {"prod", "production"} and settings.jwt_secret in {"change-me", "dev-secret", "dev_secret"}:
-    raise RuntimeError("EduSync production configuration is unsafe. Set a strong JWT_SECRET.")
+if settings.app_env.lower() in {"prod", "production"}:
+    if len(settings.jwt_secret) < 32 or settings.jwt_secret in {"change-me", "dev-secret", "dev_secret"}:
+        raise RuntimeError("EduSync production configuration is unsafe. Set a strong JWT_SECRET.")
+    if settings.app_debug:
+        raise RuntimeError("EduSync production configuration is unsafe. APP_DEBUG must be false.")
+    if settings.database_url.startswith("sqlite"):
+        raise RuntimeError("EduSync production configuration is unsafe. PostgreSQL DATABASE_URL is required.")
+    if settings.cors_origin_regex:
+        raise RuntimeError("EduSync production configuration is unsafe. Disable CORS_ORIGIN_REGEX.")
+    if not settings.cors_origins or any("localhost" in origin or "127.0.0.1" in origin for origin in settings.cors_origins):
+        raise RuntimeError("EduSync production configuration is unsafe. Set explicit public CORS_ORIGINS.")

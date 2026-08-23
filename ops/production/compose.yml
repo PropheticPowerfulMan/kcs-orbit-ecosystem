@@ -1,0 +1,158 @@
+name: kcs-orbit-production
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [kcs_private]
+  security_opt: [no-new-privileges:true]
+
+services:
+  proxy:
+    <<: *service-defaults
+    image: caddy:2.9-alpine
+    networks: [kcs_edge]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    env_file: /etc/kcs-orbit/domains.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api]
+
+  orbit_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-orbit-orbit-db
+    env_file: /etc/kcs-orbit/orbit-db.env
+    volumes: [orbit_db_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+
+  nexus_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-orbit-nexus-db
+    env_file: /etc/kcs-orbit/nexus-db.env
+    volumes: [nexus_db_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+
+  edupay_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-orbit-edupay-db
+    env_file: /etc/kcs-orbit/edupay-db.env
+    volumes: [edupay_db_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+
+  savanex_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-orbit-savanex-db
+    env_file: /etc/kcs-orbit/savanex-db.env
+    volumes: [savanex_db_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+
+  edusync_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-orbit-edusync-db
+    env_file: /etc/kcs-orbit/edusync-db.env
+    volumes: [edusync_db_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+
+  redis:
+    <<: *service-defaults
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes: [redis_data:/data]
+    healthcheck: { test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"], interval: 10s, timeout: 5s, retries: 10 }
+
+  orbit_api:
+    <<: *service-defaults
+    image: kcs/orbit-api:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/orbit-api.env
+    depends_on: { orbit_db: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4500/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
+  nexus_api:
+    <<: *service-defaults
+    image: kcs/nexus-api:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/nexus-api.env
+    volumes: [nexus_uploads:/app/uploads]
+    depends_on: { nexus_db: { condition: service_healthy }, orbit_api: { condition: service_started } }
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
+  nexus_web:
+    <<: *service-defaults
+    image: kcs/nexus-web:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
+
+  edupay_api:
+    <<: *service-defaults
+    image: kcs/edupay-api:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/edupay-api.env
+    volumes: [edupay_receipts:/app/storage]
+    depends_on: { edupay_db: { condition: service_healthy }, redis: { condition: service_healthy }, orbit_api: { condition: service_started } }
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
+  edupay_web:
+    <<: *service-defaults
+    image: kcs/edupay-web:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
+
+  savanex_api:
+    <<: *service-defaults
+    image: kcs/savanex-api:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/savanex-api.env
+    command: ["sh", "-c", "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"]
+    volumes: [savanex_media:/app/media, savanex_static:/app/staticfiles]
+    depends_on: { savanex_db: { condition: service_healthy }, orbit_api: { condition: service_started } }
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=4)"], interval: 15s, timeout: 5s, retries: 10, start_period: 45s }
+
+  savanex_web:
+    <<: *service-defaults
+    image: kcs/savanex-web:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
+
+  edusync_api:
+    <<: *service-defaults
+    image: kcs/edusync-api:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/edusync-api.env
+    depends_on: { edusync_db: { condition: service_healthy }, orbit_api: { condition: service_started } }
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
+  edusync_web:
+    <<: *service-defaults
+    image: kcs/edusync-web:${KCS_RELEASE:?set KCS_RELEASE}
+    networks: [kcs_edge]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
+
+networks:
+  kcs_edge:
+  kcs_private:
+    internal: true
+
+volumes:
+  orbit_db_data:
+  nexus_db_data:
+  edupay_db_data:
+  savanex_db_data:
+  edusync_db_data:
+  redis_data:
+  nexus_uploads:
+  edupay_receipts:
+  savanex_media:
+  savanex_static:
+  caddy_data:
+  caddy_config:

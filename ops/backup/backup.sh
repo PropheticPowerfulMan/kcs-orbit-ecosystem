@@ -13,7 +13,7 @@ set +a
 case "$BACKUP_ROOT" in
   /|/home|/root|/var|/var/backups) echo "Refusing unsafe BACKUP_ROOT: $BACKUP_ROOT" >&2; exit 1 ;;
 esac
-for tool in pg_dump pg_restore sha256sum tar flock; do
+for tool in pg_restore sha256sum tar flock; do
   command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
 done
 
@@ -35,10 +35,28 @@ dump_postgres() {
   pg_dump --format=custom --compress=6 --no-owner --no-privileges --file="$WORK_DIR/postgresql/${name}.dump" "$url"
   pg_restore --list "$WORK_DIR/postgresql/${name}.dump" >/dev/null
 }
+dump_postgres_container() {
+  local name="$1" container="$2"
+  [[ -n "$container" ]] || return 0
+  command -v docker >/dev/null || { echo "docker is required for container database backups" >&2; exit 1; }
+  docker inspect "$container" >/dev/null 2>&1 || { echo "Database container is missing: $container" >&2; exit 1; }
+  log "Backing up PostgreSQL container: $name"
+  docker exec "$container" sh -c 'exec pg_dump --format=custom --compress=6 --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' > "$WORK_DIR/postgresql/${name}.dump"
+  pg_restore --list "$WORK_DIR/postgresql/${name}.dump" >/dev/null
+}
+if [[ -n "${ORBIT_DATABASE_URL:-}${NEXUS_DATABASE_URL:-}${EDUPAY_DATABASE_URL:-}${SAVANEX_DATABASE_URL:-}${EDUSYNC_DATABASE_URL:-}" ]]; then
+  command -v pg_dump >/dev/null || { echo "pg_dump is required for URL database backups" >&2; exit 1; }
+fi
 dump_postgres orbit "${ORBIT_DATABASE_URL:-}"
 dump_postgres nexus "${NEXUS_DATABASE_URL:-}"
 dump_postgres edupay "${EDUPAY_DATABASE_URL:-}"
 dump_postgres savanex "${SAVANEX_DATABASE_URL:-}"
+dump_postgres edusync "${EDUSYNC_DATABASE_URL:-}"
+[[ -n "${ORBIT_DATABASE_URL:-}" ]] || dump_postgres_container orbit "${ORBIT_DATABASE_CONTAINER:-}"
+[[ -n "${NEXUS_DATABASE_URL:-}" ]] || dump_postgres_container nexus "${NEXUS_DATABASE_CONTAINER:-}"
+[[ -n "${EDUPAY_DATABASE_URL:-}" ]] || dump_postgres_container edupay "${EDUPAY_DATABASE_CONTAINER:-}"
+[[ -n "${SAVANEX_DATABASE_URL:-}" ]] || dump_postgres_container savanex "${SAVANEX_DATABASE_CONTAINER:-}"
+[[ -n "${EDUSYNC_DATABASE_URL:-}" ]] || dump_postgres_container edusync "${EDUSYNC_DATABASE_CONTAINER:-}"
 
 if [[ -n "${SQLITE_DATABASES:-}" ]]; then
   command -v sqlite3 >/dev/null || { echo "sqlite3 is required while SQLITE_DATABASES is set" >&2; exit 1; }

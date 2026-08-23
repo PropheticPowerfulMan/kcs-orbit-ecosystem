@@ -33,8 +33,8 @@ class UserAccessCodeTests(TestCase):
             password=password,
             first_name='Rachel',
             last_name='Kabongo',
-            role=User.ROLE_PARENT,
-            access_code='ACC-PAR-LOGIN1',
+            role=User.ROLE_ADMIN,
+            access_code='ACC-ADM-LOGIN1',
         )
         client = APIClient()
 

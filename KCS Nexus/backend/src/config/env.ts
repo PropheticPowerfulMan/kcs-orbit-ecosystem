@@ -50,6 +50,21 @@ const envSchema = z.object({
   SAVANEX_LOGIN_PATH: z.string().default('/api/integration/authenticate/'),
   SAVANEX_TIMEOUT_SECONDS: z.coerce.number().default(10),
   SAVANEX_INTELLIGENCE_API_KEY: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.NODE_ENV !== 'production') return
+  const weak = (secret: string) => secret.length < 32 || /change-me|dev-secret|CHANGE_ME/i.test(secret)
+  if (weak(value.JWT_SECRET)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['JWT_SECRET'], message: 'Strong production JWT_SECRET required' })
+  }
+  if (weak(value.JWT_REFRESH_SECRET)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['JWT_REFRESH_SECRET'], message: 'Strong production JWT_REFRESH_SECRET required' })
+  }
+  if (!value.DATABASE_URL.startsWith('postgresql://') && !value.DATABASE_URL.startsWith('postgres://')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['DATABASE_URL'], message: 'Production PostgreSQL DATABASE_URL required' })
+  }
+  if (/localhost|127\.0\.0\.1/.test(value.FRONTEND_URL)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['FRONTEND_URL'], message: 'Production FRONTEND_URL cannot use localhost' })
+  }
 })
 
 export const env = envSchema.parse(process.env)

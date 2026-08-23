@@ -37,6 +37,7 @@
     "typescript": "^5.7.2"
   },
   "overrides": {
-    "qs": "6.15.1"
+    "qs": "6.15.3",
+    "deepmerge-ts": "8.0.0"
   }
 }

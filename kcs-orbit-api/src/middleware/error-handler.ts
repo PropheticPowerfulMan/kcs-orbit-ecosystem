@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { ZodError } from "zod";
 
 type JsonBodySyntaxError = SyntaxError & {
   body?: unknown;
@@ -24,6 +25,13 @@ export function errorHandler(error: unknown, req: Request, res: Response, next: 
   if (isJsonBodySyntaxError(error)) {
     return res.status(400).json({
       message: "Invalid JSON payload.",
+    });
+  }
+
+  if (error instanceof ZodError) {
+    return res.status(400).json({
+      message: "Invalid request payload.",
+      issues: error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
     });
   }
 
