@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "../../components/InternationalPhoneInput";
 import { useEffect, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
 import { AlertCircle, BookOpen, Mail, Phone, Plus, ShieldAlert, UserRound, Users } from 'lucide-react'
@@ -156,13 +157,7 @@ const SchoolRegistryPage = () => {
                   ['parentEmail', 'Parent email'],
                   ['parentPhone', 'Parent phone'],
                 ].map(([key, label]) => (
-                  <input
-                    key={key}
-                    value={form[key as keyof typeof form]}
-                    onChange={(event) => setForm({ ...form, [key]: event.target.value })}
-                    placeholder={label}
-                    className="input-kcs"
-                  />
+                  key === "parentPhone" ? <InternationalPhoneInput key={key} value={form.parentPhone} onChange={(value) => setForm({ ...form, parentPhone: value })} /> : <input key={key} value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} placeholder={label} className="input-kcs" />
                 ))}
                 <select value={form.grade} onChange={(event) => setForm({ ...form, grade: event.target.value })} className="input-kcs">
                   <option value="">Select level</option>

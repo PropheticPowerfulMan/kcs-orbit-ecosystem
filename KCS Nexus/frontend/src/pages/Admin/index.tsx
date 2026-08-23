@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "../../components/InternationalPhoneInput";
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
@@ -1979,7 +1980,7 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Téléphone
-                      <input value={parentEditForm.phone} onChange={(event) => setParentEditForm((current) => ({ ...current, phone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Téléphone du parent" />
+                      <InternationalPhoneInput value={parentEditForm.phone} onChange={(value) => setParentEditForm((current) => ({ ...current, phone: value }))} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
                   </div>
@@ -2087,7 +2088,7 @@ const AdminSectionView = ({
                 <input value={newFamily.parentMiddleName} onChange={(event) => setNewFamily((item) => ({ ...item, parentMiddleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
                 <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom du parent *" required />
                 <input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parent email" />
-                <input value={newFamily.parentPhone} onChange={(event) => setNewFamily((item) => ({ ...item, parentPhone: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parent phone" />
+                <InternationalPhoneInput value={newFamily.parentPhone} onChange={(value) => setNewFamily((item) => ({ ...item, parentPhone: value }))} />
                 <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
                 <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Advisor, optional" />
               </div>
@@ -2724,7 +2725,7 @@ const AdminSectionView = ({
             ].map(([field, label]) => (
               <label key={field} className="text-xs font-semibold text-gray-600 dark:text-gray-300">
                 {label}
-                <input value={teacherForm[field as keyof typeof teacherForm]} onChange={(event) => setTeacherForm((current) => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
+                {field === "phone" ? <InternationalPhoneInput value={teacherForm.phone} onChange={(value) => setTeacherForm((current) => ({ ...current, phone: value }))} /> : <input value={teacherForm[field as keyof typeof teacherForm]} onChange={(event) => setTeacherForm((current) => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />}
               </label>
             ))}
           </div>

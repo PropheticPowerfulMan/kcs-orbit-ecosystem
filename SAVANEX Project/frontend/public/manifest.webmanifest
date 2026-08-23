@@ -1,10 +1,10 @@
 {
-  "id": "/Syst-me-de-gestion-scolaire/",
+  "id": "./",
   "name": "SAVANEX School Manager",
   "short_name": "SAVANEX",
   "description": "Kinshasa Christian School management application for mobile, tablet, and desktop use.",
-  "start_url": "/Syst-me-de-gestion-scolaire/",
-  "scope": "/Syst-me-de-gestion-scolaire/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
@@ -29,7 +29,7 @@
     {
       "name": "SAVANEX Dashboard",
       "short_name": "Dashboard",
-      "url": "/Syst-me-de-gestion-scolaire/",
+      "url": "./",
       "icons": [{ "src": "kcs.jpg", "sizes": "192x192", "type": "image/jpeg" }]
     }
   ]

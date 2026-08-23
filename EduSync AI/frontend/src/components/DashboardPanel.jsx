@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "./InternationalPhoneInput";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -612,7 +613,7 @@ export default function DashboardPanel() {
                 </select>
                 <input value={entityForm.fullName} onChange={(event) => setEntityForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Nom complet *" required />
                 <input type="email" value={entityForm.email} onChange={(event) => setEntityForm((current) => ({ ...current, email: event.target.value }))} placeholder="Adresse e-mail" />
-                <input value={entityForm.phone} onChange={(event) => setEntityForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Téléphone" />
+                <InternationalPhoneInput value={entityForm.phone} onChange={(value) => setEntityForm((current) => ({ ...current, phone: value }))} />
                 {entityForm.entityType === "student" && <>
                   <input value={entityForm.className} onChange={(event) => setEntityForm((current) => ({ ...current, className: event.target.value }))} placeholder="Classe *" required />
                   <input value={entityForm.parentOrbitId} onChange={(event) => setEntityForm((current) => ({ ...current, parentOrbitId: event.target.value }))} placeholder="Orbit ID du parent *" required />

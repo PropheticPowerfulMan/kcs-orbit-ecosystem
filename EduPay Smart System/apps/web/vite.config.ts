@@ -3,8 +3,7 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 const disablePwa =
-  (process.env.VITE_DISABLE_PWA ?? "").trim().toLowerCase() === "true" ||
-  process.versions.node.startsWith("24.");
+  (process.env.VITE_DISABLE_PWA ?? "").trim().toLowerCase() === "true";
 const appBasePath = process.env.VITE_BASE_PATH || "/EduPay-Smart-System/";
 
 export default defineConfig({

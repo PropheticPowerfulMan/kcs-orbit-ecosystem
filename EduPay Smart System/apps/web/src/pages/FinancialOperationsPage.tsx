@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -2854,7 +2855,7 @@ export function FinancialOperationsPage() {
               <form className="grid gap-3" onSubmit={handleCreateVendor}>
                     <input className="input" value={vendorForm.name} onChange={(event) => setVendorForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nom fournisseur" required />
                     <input className="input" value={vendorForm.contactName} onChange={(event) => setVendorForm((current) => ({ ...current, contactName: event.target.value }))} placeholder="Personne contact" />
-                    <input className="input" value={vendorForm.phone} onChange={(event) => setVendorForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Telephone" />
+                    <InternationalPhoneInput value={vendorForm.phone} onChange={(value) => setVendorForm((current) => ({ ...current, phone: value }))} />
                     <input className="input" value={vendorForm.email} onChange={(event) => setVendorForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" />
                     <input className="input" value={vendorForm.address} onChange={(event) => setVendorForm((current) => ({ ...current, address: event.target.value }))} placeholder="Adresse" />
                     <textarea className="input min-h-20" value={vendorForm.notes} onChange={(event) => setVendorForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes fournisseur" />
@@ -2913,7 +2914,7 @@ export function FinancialOperationsPage() {
                         <p className="text-sm font-semibold text-white">Modification fournisseur</p>
                         <input className="input" value={vendorEditForm.name} onChange={(event) => setVendorEditForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nom fournisseur" required />
                         <input className="input" value={vendorEditForm.contactName} onChange={(event) => setVendorEditForm((current) => ({ ...current, contactName: event.target.value }))} placeholder="Personne contact" />
-                        <input className="input" value={vendorEditForm.phone} onChange={(event) => setVendorEditForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Telephone" />
+                        <InternationalPhoneInput value={vendorEditForm.phone} onChange={(value) => setVendorEditForm((current) => ({ ...current, phone: value }))} />
                         <input className="input" value={vendorEditForm.email} onChange={(event) => setVendorEditForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" />
                         <input className="input" value={vendorEditForm.address} onChange={(event) => setVendorEditForm((current) => ({ ...current, address: event.target.value }))} placeholder="Adresse" />
                         <textarea className="input min-h-24" value={vendorEditForm.notes} onChange={(event) => setVendorEditForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes fournisseur" />

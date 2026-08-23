@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, KeyRound, Printer, Trash2, X } from "lucide-react";
@@ -1159,7 +1160,7 @@ function StudentEditModal({
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Adresse e-mail de l’élève<input className="input text-base" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="eleve@exemple.com" /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Téléphone de l’élève<input className="input text-base" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243..." /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Téléphone de l’élève<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Date de naissance<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Genre<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
           </div>

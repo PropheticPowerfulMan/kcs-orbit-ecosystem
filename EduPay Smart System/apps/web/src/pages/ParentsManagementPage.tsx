@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
@@ -2292,7 +2293,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-ink-dim uppercase tracking-[0.1em]">{t("pmPhone")} *</label>
-            <input value={form.phone} onChange={(e) => set("phone", e.target.value)} className="w-full" placeholder="+243 xxx xxx xxx" />
+            <InternationalPhoneInput value={form.phone} onChange={(value) => set("phone", value)} required />
             {errors.phone && <p className="text-xs text-danger">{errors.phone}</p>}
           </div>
           <div className="space-y-1">

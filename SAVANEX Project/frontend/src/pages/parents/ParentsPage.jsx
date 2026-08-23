@@ -1,3 +1,4 @@
+import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -597,7 +598,7 @@ const ParentsPage = () => {
                   </label>
                   <label className="grid gap-1 text-xs font-semibold text-slate-400">
                     Téléphone
-                    <input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                    <InternationalPhoneInput value={editForm.phone} onChange={(value) => setEditForm({ ...editForm, phone: value })} />
                   </label>
                 </div>
               </section>

@@ -1,3 +1,4 @@
+import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
@@ -398,7 +399,7 @@ const TeachersPage = () => {
             <input value={form.middleName} onChange={(event) => updateForm('middleName', event.target.value)} placeholder="Postnom" className={inputClass} />
             <input value={form.firstName} onChange={(event) => updateForm('firstName', event.target.value)} placeholder="Prénom" className={inputClass} required />
             <input type={editingEmployee ? "email" : "text"} value={editingEmployee ? form.email : "Adresse @ourkcs.org générée à la création"} onChange={(event) => updateForm('email', event.target.value)} className={editingEmployee ? inputClass : `${inputClass} opacity-70`} disabled={!editingEmployee} />
-            <input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} placeholder="Téléphone" className={inputClass} />
+            <InternationalPhoneInput value={form.phone} onChange={(value) => updateForm('phone', value)} />
             <input value={form.department} onChange={(event) => updateForm('department', event.target.value)} placeholder="Département" className={inputClass} />
             <input value={form.jobTitle} onChange={(event) => updateForm('jobTitle', event.target.value)} placeholder="Titre du poste" className={inputClass} />
             <input value={form.specialization} onChange={(event) => updateForm('specialization', event.target.value)} placeholder="Spécialité / matière si enseignant" className={inputClass} />

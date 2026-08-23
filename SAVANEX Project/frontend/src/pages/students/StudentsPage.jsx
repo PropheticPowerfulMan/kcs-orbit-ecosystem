@@ -1,3 +1,4 @@
+import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -614,7 +615,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
                   <input value={form.parentMiddleName} onChange={(event) => setForm({ ...form, parentMiddleName: event.target.value })} placeholder="Postnom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
                   <input value={form.parentFirstName} onChange={(event) => setForm({ ...form, parentFirstName: event.target.value })} placeholder="Prénom du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
                   <input type="email" value={form.parentEmail} onChange={(event) => setForm({ ...form, parentEmail: event.target.value })} placeholder="Email du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" required />
-                  <input value={form.parentPhone} onChange={(event) => setForm({ ...form, parentPhone: event.target.value })} placeholder="Téléphone du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue" />
+                  <InternationalPhoneInput value={form.parentPhone} onChange={(value) => setForm({ ...form, parentPhone: value })} />
                   <input value={form.parentAddress} onChange={(event) => setForm({ ...form, parentAddress: event.target.value })} placeholder="Adresse physique du parent" className="w-full rounded-xl border border-github-border bg-slate-950/70 px-4 py-3 text-sm text-slate-100 outline-none focus:border-kcs-blue md:col-span-2 xl:col-span-3" />
                 </div>
 

@@ -1,3 +1,4 @@
+import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, FileText, KeyRound, Printer } from "lucide-react";
@@ -1426,7 +1427,7 @@ export function EmployeesPage() {
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">Téléphone</span>
-              <input className="w-full" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+243 ..." />
+              <InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
             </label>
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm font-medium text-white">Adresse physique</span>
