@@ -18,6 +18,7 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /workspace/kcs-orbit-api/package*.json ./
 COPY --from=build /workspace/kcs-orbit-api/node_modules ./node_modules
+COPY --from=build /workspace/packages/shared-contracts /app/node_modules/@ecosystem/shared-contracts
 COPY --from=build /workspace/kcs-orbit-api/prisma ./prisma
 COPY --from=build /workspace/kcs-orbit-api/dist ./dist
 EXPOSE 4500
