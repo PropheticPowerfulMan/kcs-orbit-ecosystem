@@ -1037,3 +1037,40 @@ model CorrespondenceLog {
   @@index([reportCardId])
   @@index([disciplineCaseId])
 }
+
+
+enum IncidentReportStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  CLOSED
+}
+enum IncidentConfidentiality {
+  STANDARD
+  CONFIDENTIAL
+}
+model IncidentReport {
+  id String @id @default(cuid())
+  reference String @unique
+  title String
+  category String
+  occurredAt DateTime
+  location String
+  description String
+  peopleInvolved String?
+  immediateActions String?
+  confidentiality IncidentConfidentiality @default(STANDARD)
+  status IncidentReportStatus @default(SUBMITTED)
+  adminNotes String?
+  authorId String
+  authorRole UserRole
+  authorName String
+  attachmentName String?
+  attachmentMime String?
+  attachmentSize Int?
+  attachmentData Bytes?
+  verificationHash String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([authorId, createdAt])
+  @@index([status, createdAt])
+}

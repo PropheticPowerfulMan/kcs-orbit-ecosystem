@@ -26,6 +26,11 @@ class LoginRequest(BaseModel):
         return self
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

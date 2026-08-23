@@ -8,12 +8,12 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.security import create_access_token, get_password_hash, verify_password
+from app.core.security import create_access_token, get_current_user, get_password_hash, verify_password
 from app.db.session import get_db
 from app.models.analytics import ActivityLog
 from app.models.user import Role, User
 from app.integrations.orbit import fetch_shared_directory
-from app.schemas.auth import ForgotPasswordRequest, LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -311,3 +311,21 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     db.add(ActivityLog(actor_id=user.id, event_type="user_login", department=user.department))
     db.commit()
     return TokenResponse(access_token=token)
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=422, detail="The new password must contain at least 8 characters")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="The new password must be different")
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    db.add(ActivityLog(actor_id=current_user.id, event_type="password_changed", department=current_user.department))
+    db.commit()
+    return {"message": "Password changed successfully"}

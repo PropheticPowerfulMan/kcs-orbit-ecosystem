@@ -15,6 +15,37 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
 
+# Load repository-local secrets into this launcher process only. Values are
+# never printed or added to child command lines; child services inherit them.
+$localSecretsPath = Join-Path $repoRoot '.env.local'
+if (Test-Path -LiteralPath $localSecretsPath) {
+  foreach ($line in Get-Content -LiteralPath $localSecretsPath) {
+    $trimmed = $line.Trim()
+    if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
+    $name, $value = $trimmed.Split('=', 2)
+    $name = $name.Trim()
+    $value = $value.Trim()
+    $value = $value.Trim([char]34, [char]39)
+    if ($name -match '^[A-Za-z_][A-Za-z0-9_]*$') {
+      [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+    }
+  }
+}
+
+# Reuse one securely loaded OpenAI credential across compatible AI adapters.
+# Existing grounded/local fallbacks remain active if OpenAI is unavailable.
+$openAiApiKey = [Environment]::GetEnvironmentVariable('OPENAI_API_KEY', 'Process')
+if (-not [string]::IsNullOrWhiteSpace($openAiApiKey)) {
+  $openAiChatModel = [Environment]::GetEnvironmentVariable('OPENAI_CHAT_MODEL', 'Process')
+  if ([string]::IsNullOrWhiteSpace($openAiChatModel)) { $openAiChatModel = 'gpt-4.1' }
+
+  [Environment]::SetEnvironmentVariable('OPENAI_MODEL', $openAiChatModel, 'Process')
+  [Environment]::SetEnvironmentVariable('EXTERNAL_AI_ENABLED', 'true', 'Process')
+  [Environment]::SetEnvironmentVariable('EXTERNAL_AI_PROVIDER', 'openai_compatible', 'Process')
+  [Environment]::SetEnvironmentVariable('EXTERNAL_AI_BASE_URL', 'https://api.openai.com/v1', 'Process')
+  [Environment]::SetEnvironmentVariable('EXTERNAL_AI_API_KEY', $openAiApiKey, 'Process')
+  [Environment]::SetEnvironmentVariable('EXTERNAL_AI_MODEL', $openAiChatModel, 'Process')
+}
 $sharedContractsPath = Join-Path $repoRoot 'packages\shared-contracts'
 $orbitPath = Join-Path $repoRoot 'kcs-orbit-api'
 $kcsNexusBackendPath = Join-Path $repoRoot 'KCS Nexus\backend'

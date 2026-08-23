@@ -298,3 +298,12 @@ export const messagesAPI = {
   send: (data: { recipientId: string; subject: string; body: string }) => api.post('/messages', data),
   markRead: (id: string) => api.patch(`/messages/${id}/read`),
 }
+
+
+export const incidentReportsAPI = {
+  list: () => api.get('/incident-reports'),
+  create: (data: FormData) => api.post('/incident-reports', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  attachment: (id: string) => api.get(`/incident-reports/${id}/attachment`, { responseType: 'blob' }),
+  updateStatus: (id: string, data: { status: 'SUBMITTED' | 'UNDER_REVIEW' | 'CLOSED'; adminNotes?: string }) => api.patch(`/incident-reports/${id}/status`, data),
+  verify: (reference: string) => api.get(`/incident-reports/verify/${encodeURIComponent(reference)}`),
+}

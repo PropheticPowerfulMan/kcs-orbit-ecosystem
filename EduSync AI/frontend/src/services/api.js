@@ -121,6 +121,14 @@ function demoResponse(path, method, body) {
     throw new Error("Invalid credentials");
   }
 
+  if (cleanPath === "/auth/change-password" && method === "POST") {
+    const user = demoState.users[0];
+    if (!user || user.password !== body?.current_password) throw new Error("Current password is incorrect");
+    if (String(body?.new_password || "").length < 8) throw new Error("The new password must contain at least 8 characters");
+    user.password = body.new_password;
+    return { message: "Password changed successfully" };
+  }
+
   if (path === "/auth/forgot-password" && method === "POST") {
     return { message: "If this account exists, a secure reset link has been sent by email." };
   }

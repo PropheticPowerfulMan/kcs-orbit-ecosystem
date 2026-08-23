@@ -23,6 +23,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
     { to: dashboardPath, label: t('portalNav.dashboard'), icon: LayoutDashboard },
+    { to: '/incident-reports', label: 'Incident Report', icon: ClipboardList },
   ]
 
   switch (role) {

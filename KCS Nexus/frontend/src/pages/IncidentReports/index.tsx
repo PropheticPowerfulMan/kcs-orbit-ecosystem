@@ -1,0 +1,43 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { Download, FileCheck2, FileText, Printer, Send, ShieldCheck } from 'lucide-react'
+import PortalSidebar from '@/components/layout/PortalSidebar'
+import { incidentReportsAPI } from '@/services/api'
+import { useAuthStore } from '@/store/authStore'
+import { printOfficialPdf } from '@/utils/officialPdf'
+
+type Report={id:string;reference:string;title:string;category:string;occurredAt:string;location:string;description:string;peopleInvolved?:string;immediateActions?:string;confidentiality:'STANDARD'|'CONFIDENTIAL';status:'SUBMITTED'|'UNDER_REVIEW'|'CLOSED';adminNotes?:string;authorName:string;authorRole:string;attachmentName?:string;attachmentSize?:number;verificationHash:string;createdAt:string}
+const empty={title:'',category:'Operational',occurredAt:'',location:'',description:'',peopleInvolved:'',immediateActions:'',confidentiality:'STANDARD'}
+const labels={SUBMITTED:'Reçu',UNDER_REVIEW:'En analyse',CLOSED:'Clôturé'}
+
+export default function IncidentReportsPage(){
+ const {user}=useAuthStore();const superAdmin=user?.id==='configured-superadmin'
+ const [reports,setReports]=useState<Report[]>([]),[form,setForm]=useState(empty),[file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false),[message,setMessage]=useState('')
+ const load=async()=>{try{const response=await incidentReportsAPI.list();setReports(response.data.data||[])}catch{setMessage('Impossible de charger les rapports.')}}
+ useEffect(()=>{void load()},[])
+ const submit=async(event:FormEvent)=>{event.preventDefault();setBusy(true);setMessage('');try{const data=new FormData();Object.entries(form).forEach(([k,v])=>data.append(k,k==='occurredAt'?new Date(v).toISOString():v));if(file)data.append('attachment',file);await incidentReportsAPI.create(data);setForm(empty);setFile(null);setMessage('Rapport transmis et authentifié avec succès.');await load()}catch(error:any){setMessage(error?.response?.data?.message||'Envoi impossible. Vérifiez les informations et le document.')}finally{setBusy(false)}}
+ const download=async(report:Report)=>{const response=await incidentReportsAPI.attachment(report.id);const url=URL.createObjectURL(response.data);const link=document.createElement('a');link.href=url;link.download=report.attachmentName||'preuve';link.click();URL.revokeObjectURL(url)}
+ const print=(r:Report)=>printOfficialPdf({title:'INCIDENT REPORT',subtitle:'Rapport officiel hors discipline',metadata:[['Référence',r.reference],['Statut',labels[r.status]],['Auteur',r.authorName],['Rôle',r.authorRole],['Date du fait',new Date(r.occurredAt).toLocaleString('fr-CD')],['Lieu',r.location],['Catégorie',r.category],['Confidentialité',r.confidentiality],['Empreinte SHA-256',r.verificationHash],['Vérification',`${location.origin}/api/incident-reports/verify/${r.reference}`]],narrative:`${r.description}\n\nPersonnes concernées : ${r.peopleInvolved||'Non renseigné'}\nMesures immédiates : ${r.immediateActions||'Aucune'}\n\nPièce justificative : ${r.attachmentName||'Aucune'}`})
+ const update=async(r:Report,status:Report['status'])=>{await incidentReportsAPI.updateStatus(r.id,{status,adminNotes:r.adminNotes||''});await load()}
+ return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-screen bg-gray-50 p-4 pt-20 dark:bg-kcs-blue-950 lg:p-8 lg:pt-8">
+  <div className="mx-auto max-w-7xl space-y-6">
+   <header className="rounded-3xl bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-6 text-white shadow-xl"><div className="flex items-center gap-3"><ShieldCheck className="text-kcs-gold-400"/><div><p className="text-xs font-bold uppercase tracking-[.22em] text-kcs-gold-300">KCS Nexus</p><h1 className="font-display text-3xl font-bold">Incident Report</h1></div></div><p className="mt-3 max-w-3xl text-sm text-blue-100">{superAdmin?'Boîte centrale de tous les rapports opérationnels reçus.':'Signalez ici tout événement important qui ne relève pas d’un incident disciplinaire.'}</p></header>
+   {!superAdmin&&<form onSubmit={submit} className="grid gap-4 rounded-3xl bg-white p-6 shadow-lg dark:bg-kcs-blue-900 md:grid-cols-2">
+    <h2 className="md:col-span-2 font-display text-xl font-bold dark:text-white">Nouveau rapport</h2>
+    <input required minLength={5} placeholder="Titre du rapport" className="input-field" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
+    <select className="input-field" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}><option>Operational</option><option>Santé et sécurité</option><option>Infrastructure</option><option>Transport</option><option>Événement</option><option>Administration</option><option>Autre</option></select>
+    <input required type="datetime-local" className="input-field" value={form.occurredAt} onChange={e=>setForm({...form,occurredAt:e.target.value})}/>
+    <input required placeholder="Lieu exact" className="input-field" value={form.location} onChange={e=>setForm({...form,location:e.target.value})}/>
+    <textarea required minLength={20} placeholder="Description factuelle et chronologique" className="input-field min-h-36 md:col-span-2" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/>
+    <textarea placeholder="Personnes concernées ou témoins" className="input-field min-h-24" value={form.peopleInvolved} onChange={e=>setForm({...form,peopleInvolved:e.target.value})}/>
+    <textarea placeholder="Mesures prises immédiatement" className="input-field min-h-24" value={form.immediateActions} onChange={e=>setForm({...form,immediateActions:e.target.value})}/>
+    <label className="rounded-2xl border-2 border-dashed border-kcs-blue-200 p-4 text-sm dark:text-white"><FileText className="mb-2"/><b>Preuve PDF ou Word</b><span className="block text-xs text-gray-500">PDF, DOC, DOCX — 10 Mo maximum</span><input className="mt-3 block w-full" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>
+    <label className="flex items-center gap-3 rounded-2xl border p-4 dark:text-white"><input type="checkbox" checked={form.confidentiality==='CONFIDENTIAL'} onChange={e=>setForm({...form,confidentiality:e.target.checked?'CONFIDENTIAL':'STANDARD'})}/> Rapport confidentiel</label>
+    <button disabled={busy} className="md:col-span-2 flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-5 py-3 font-bold text-white disabled:opacity-60"><Send size={18}/>{busy?'Transmission…':'Transmettre au SuperAdmin'}</button>
+   </form>}
+   {message&&<p className="rounded-xl border border-kcs-gold-200 bg-kcs-gold-50 p-3 text-sm text-kcs-blue-900">{message}</p>}
+   <section className="space-y-4"><h2 className="font-display text-2xl font-bold dark:text-white">{superAdmin?'Rapports reçus':'Mes rapports'}</h2>{reports.length===0&&<div className="rounded-2xl bg-white p-8 text-center text-gray-500 dark:bg-kcs-blue-900">Aucun rapport disponible.</div>}
+    {reports.map(r=><article key={r.id} className="rounded-3xl bg-white p-5 shadow dark:bg-kcs-blue-900 dark:text-white"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold text-kcs-gold-700">{r.reference}</p><h3 className="text-lg font-bold">{r.title}</h3><p className="text-sm text-gray-500">{r.authorName} · {new Date(r.occurredAt).toLocaleString('fr-CD')} · {r.location}</p></div><span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-800">{labels[r.status]}</span></div><p className="mt-4 whitespace-pre-wrap text-sm">{r.description}</p><div className="mt-4 flex flex-wrap gap-2">{r.attachmentName&&<button onClick={()=>void download(r)} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"><Download size={16}/>{r.attachmentName}</button>}<button onClick={()=>print(r)} className="flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm text-white"><Printer size={16}/>PDF officiel</button>{superAdmin&&<><button onClick={()=>void update(r,'UNDER_REVIEW')} className="rounded-xl border px-3 py-2 text-sm">Mettre en analyse</button><button onClick={()=>void update(r,'CLOSED')} className="flex items-center gap-2 rounded-xl bg-green-700 px-3 py-2 text-sm text-white"><FileCheck2 size={16}/>Clôturer</button></>}</div><p className="mt-3 break-all text-[10px] text-gray-400">SHA-256 : {r.verificationHash}</p></article>)}
+   </section>
+  </div>
+ </main></div>
+}

@@ -27,6 +27,7 @@ const tabItems = [
   ["activity", "Activity", "Log"],
   ["inbox", "Inbox", "New"],
   ["guide", "Guide", "?"],
+  ["settings", "Réglages", "Key"],
 ];
 
 const featureGuide = [
@@ -93,6 +94,8 @@ export default function DashboardPanel() {
   const [entityForm, setEntityForm] = useState({ entityType: "parent", fullName: "", email: "", phone: "", className: "", parentOrbitId: "", subject: "" });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [busyChat, setBusyChat] = useState(false);
   const [announcementForm, setAnnouncementForm] = useState({
     title: "Weekly reminder",
@@ -195,6 +198,21 @@ export default function DashboardPanel() {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const changePassword = async (event) => {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    if (!passwordForm.current) return setError("Saisissez votre mot de passe actuel.");
+    if (passwordForm.next.length < 8) return setError("Le nouveau mot de passe doit contenir au moins 8 caractères.");
+    if (passwordForm.next !== passwordForm.confirm) return setError("Les nouveaux mots de passe ne correspondent pas.");
+    setPasswordBusy(true);
+    try {
+      await apiRequest("/auth/change-password", "POST", { current_password: passwordForm.current, new_password: passwordForm.next }, token);
+      setPasswordForm({ current: "", next: "", confirm: "" });
+      setNotice("Mot de passe modifié. Utilisez-le lors de votre prochaine connexion.");
+    } catch (err) { setError(err.message); } finally { setPasswordBusy(false); }
   };
 
   useEffect(() => {
@@ -713,6 +731,19 @@ export default function DashboardPanel() {
                 );
               })}
               {!notifications.length && <EmptyState>No notifications.</EmptyState>}
+            </section>
+          )}
+
+          {activeTab === "settings" && (
+            <section className="action-view">
+              <div className="section-title"><div><p className="eyebrow">Sécurité du compte</p><h2>Changer mon mot de passe</h2></div></div>
+              <p className="mobile-empty">Le mot de passe actuel n’est jamais affiché. Saisissez-le pour que son hash soit vérifié.</p>
+              <form className="workflow-form" onSubmit={changePassword} autoComplete="off">
+                <label>Mot de passe actuel<input required type="password" autoComplete="off" data-lpignore="true" value={passwordForm.current} onChange={(event) => setPasswordForm((current) => ({ ...current, current: event.target.value }))} placeholder="Saisissez le mot de passe actuel" /></label>
+                <label>Nouveau mot de passe<input required minLength={8} type="password" autoComplete="new-password" value={passwordForm.next} onChange={(event) => setPasswordForm((current) => ({ ...current, next: event.target.value }))} placeholder="8 caractères minimum" /></label>
+                <label>Confirmer<input required minLength={8} type="password" autoComplete="new-password" value={passwordForm.confirm} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm: event.target.value }))} /></label>
+                <button type="submit" disabled={passwordBusy}>{passwordBusy ? "Vérification…" : "Changer le mot de passe"}</button>
+              </form>
             </section>
           )}
 

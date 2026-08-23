@@ -18,6 +18,7 @@ import { intelligenceRouter } from './intelligence.routes.js'
 import { financeRouter } from './finance.routes.js'
 import { messagesRouter } from './messages.routes.js'
 import { suggestionsRouter } from './suggestions.routes.js'
+import { incidentReportsRouter } from './incident-reports.routes.js'
 
 export const router = Router()
 
@@ -40,3 +41,4 @@ router.use('/intelligence', intelligenceRouter)
 router.use('/finance', financeRouter)
 router.use('/messages', messagesRouter)
 router.use('/suggestions', suggestionsRouter)
+router.use('/incident-reports', incidentReportsRouter)
