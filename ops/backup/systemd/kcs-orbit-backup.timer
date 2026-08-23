@@ -5,7 +5,7 @@ Description=Nightly KCS ecosystem backup
 OnCalendar=*-*-* 02:15:00
 RandomizedDelaySec=15m
 Persistent=true
-Unit=kcs-ecosystem-backup.service
+Unit=kcs-orbit-backup.service
 
 [Install]
 WantedBy=timers.target

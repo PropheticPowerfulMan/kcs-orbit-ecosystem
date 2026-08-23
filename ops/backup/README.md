@@ -14,19 +14,19 @@ Ce dispositif sauvegarde les bases PostgreSQL, les bases SQLite de transition et
 ## Installation sur le VPS Linux
 
 1. Installer `postgresql-client`, `sqlite3`, `tar`, et facultativement `age` et `rclone`.
-2. Placer le depot sous `/opt/kcs-ecosystem`, ou adapter `ExecStart` dans le service systemd.
-3. Copier `backup.env.example` vers `/etc/kcs-ecosystem/backup.env`.
-4. Renseigner les URL et chemins reels, puis appliquer `chmod 600 /etc/kcs-ecosystem/backup.env`.
+2. Placer le depot sous `/opt/kcs-orbit/app`, ou adapter `ExecStart` dans le service systemd.
+3. Copier `backup.env.example` vers `/etc/kcs-orbit/backup.env`.
+4. Renseigner les URL et chemins reels, puis appliquer `chmod 600 /etc/kcs-orbit/backup.env`.
 5. Copier les fichiers de `systemd/` sous `/etc/systemd/system/`.
-6. Executer `systemctl daemon-reload` puis `systemctl enable --now kcs-ecosystem-backup.timer`.
-7. Tester avec `systemctl start kcs-ecosystem-backup.service` et lire `journalctl -u kcs-ecosystem-backup.service`.
+6. Executer `systemctl daemon-reload` puis `systemctl enable --now kcs-orbit-backup.timer`.
+7. Tester avec `systemctl start kcs-orbit-backup.service` et lire `journalctl -u kcs-orbit-backup.service`.
 
 ## Test de restauration
 
 Toujours extraire dans un dossier temporaire distinct :
 
 ```bash
-sudo ./restore.sh --archive /var/backups/kcs-ecosystem/daily/ARCHIVE.tar.gz --extract-to /var/tmp/kcs-restore-test
+sudo ./restore.sh --archive /opt/kcs-orbit/backups/daily/ARCHIVE.tar.gz --extract-to /var/tmp/kcs-restore-test
 ```
 
 Pour une archive chiffree, ajouter `--age-identity /chemin/identity.txt`. Restaurer un dump dans une base de test, jamais directement en production pendant la verification :

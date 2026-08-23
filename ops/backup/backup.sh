@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 umask 077
 
-CONFIG_FILE="${BACKUP_CONFIG_FILE:-/etc/kcs-ecosystem/backup.env}"
+CONFIG_FILE="${BACKUP_CONFIG_FILE:-/etc/kcs-orbit/backup.env}"
 [[ -r "$CONFIG_FILE" ]] || { echo "Backup configuration is not readable: $CONFIG_FILE" >&2; exit 1; }
 set -a
 # shellcheck disable=SC1090
@@ -98,7 +98,7 @@ hostname=$HOST
 EOF
 (cd "$WORK_DIR" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 
-ARCHIVE="$BACKUP_ROOT/daily/kcs-ecosystem-${HOST}-${STAMP}.tar.gz"
+ARCHIVE="$BACKUP_ROOT/daily/kcs-orbit-${HOST}-${STAMP}.tar.gz"
 tar -C "$WORK_DIR" -czf "$ARCHIVE" .
 tar -tzf "$ARCHIVE" >/dev/null
 
