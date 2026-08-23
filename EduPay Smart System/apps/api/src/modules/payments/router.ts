@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import { PNG } from "pngjs";
 import { z } from "zod";
 import { prisma } from "../../prisma";
-import { syncPaymentToOrbit } from "../../integrations/orbit";
+import { enqueuePaymentOrbitEvent } from "../../integrations/orbit";
 import { amountToWords } from "../../utils/amount-words";
 import { orbitRegistryIsEnabled, syncOrbitRegistryMirror } from "../../integrations/orbitRegistry";
 import { sendEmail, sendSms } from "../../utils/messaging";
@@ -653,77 +653,61 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       payload.studentIds = requestedStudentIds;
     }
 
-    const payment = await prisma.payment.create({
-      data: {
-        schoolId: req.user!.schoolId,
-        transactionNumber: txNumber,
-        parentId,
-        reason: payload.reason,
-        amount: payload.amount,
-        amountInWords: `${amountToWords(payload.amount, "fr")} dollars americains`,
-        method: payload.method,
-        status: payload.status,
-        notes: buildPaymentNotes(payload.bankTransferDetails),
-        createdById: req.user!.sub,
-        ...(payload.studentIds && payload.studentIds.length > 0
-          ? { students: { connect: payload.studentIds.map((id) => ({ id })) } }
-          : {})
-      },
-      include: { parent: true, students: { include: { class: true } } }
+    const payment = await prisma.$transaction(async (tx) => {
+      const created = await tx.payment.create({
+        data: {
+          schoolId: req.user!.schoolId,
+          transactionNumber: txNumber,
+          parentId,
+          reason: payload.reason,
+          amount: payload.amount,
+          amountInWords: `${amountToWords(payload.amount, "fr")} dollars americains`,
+          method: payload.method,
+          status: payload.status,
+          notes: buildPaymentNotes(payload.bankTransferDetails),
+          createdById: req.user!.sub,
+          ...(payload.studentIds && payload.studentIds.length > 0
+            ? { students: { connect: payload.studentIds.map((id) => ({ id })) } }
+            : {})
+        },
+        include: { parent: true, students: { include: { class: true } } }
+      });
+      await tx.auditLog.create({
+        data: {
+          schoolId: req.user!.schoolId,
+          userId: req.user!.sub,
+          action: "PAYMENT_CREATED",
+          metadata: { paymentId: created.id, transactionNumber: created.transactionNumber, amount: created.amount }
+        }
+      });
+      if (payload.paymentCategory === "TUITION") {
+        const externalIds = payload.studentExternalIds.length > 0
+          ? payload.studentExternalIds
+          : created.students.map((student) => student.externalStudentId).filter((value): value is string => Boolean(value));
+        const allStudentsLinked = created.students.every((student) => Boolean(student.externalStudentId));
+        if (!orbitRegistryIsEnabled() || (externalIds.length > 0 && allStudentsLinked)) {
+          await enqueuePaymentOrbitEvent(tx, {
+            payment: created,
+            studentExternalIds: externalIds,
+            localStudentIds: created.students.map((student) => student.id)
+          });
+        }
+        await applyPaymentToFinanceLedger({
+          schoolId: req.user!.schoolId,
+          paymentId: created.id,
+          parentId,
+          studentIds: created.students.map((student) => student.id),
+          client: tx
+        });
+      }
+      return created;
     });
 
     if (payload.paymentCategory === "TUITION") {
-      await applyPaymentToFinanceLedger({
-        schoolId: req.user!.schoolId,
-        paymentId: payment.id,
-        parentId,
-        studentIds: payment.students.map((student) => student.id)
-      }).catch((error) => console.error("Finance ledger sync failed", error));
       await runOverdueTuitionReminderSweep({
         schoolId: req.user!.schoolId,
         parentId
       }).catch((error) => console.error("Overdue tuition reminder sweep failed", error));
-    }
-
-    try {
-      const syncedStudentExternalIds = payload.studentExternalIds.length > 0
-        ? payload.studentExternalIds
-        : payment.students
-          .map((student) => student.externalStudentId)
-          .filter((value): value is string => Boolean(value));
-
-      const studentsMissingExternalIds = payment.students.filter((student) => !student.externalStudentId);
-
-      if (payload.paymentCategory !== "TUITION") {
-        console.info("Orbit tuition payment sync skipped for non-tuition payment", {
-          paymentId: payment.id,
-          paymentCategory: payload.paymentCategory
-        });
-      } else if (orbitRegistryIsEnabled() && (syncedStudentExternalIds.length === 0 || studentsMissingExternalIds.length > 0)) {
-        console.warn("Orbit payment sync skipped: one or more EduPay students are not linked to a shared external student id", {
-          paymentId: payment.id,
-          localStudentIds: studentsMissingExternalIds.map((student) => student.id),
-          requestedStudentExternalIds: payload.studentExternalIds
-        });
-      } else {
-        await syncPaymentToOrbit({
-          payment: {
-            id: payment.id,
-            transactionNumber: payment.transactionNumber,
-            amount: payment.amount,
-            reason: payment.reason,
-            method: payment.method,
-            status: payment.status,
-            createdAt: payment.createdAt,
-            schoolId: payment.schoolId,
-            parentId: payment.parentId
-          },
-          studentExternalIds: syncedStudentExternalIds,
-          localStudentIds: payment.students.map((student) => student.id)
-        });
-      }
-    } catch (error) {
-      console.error("Orbit payment sync failed", error);
     }
 
     const paymentWithRelations = payment as typeof payment & { parent?: { fullName: string } | null };
@@ -755,7 +739,11 @@ paymentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       }),
       notificationStatus
     });
-  } catch (_dbErr) {
+  } catch (dbErr) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("Payment creation failed", dbErr);
+      return res.status(503).json({ message: "Payment service temporarily unavailable" });
+    }
     // Demo mode — no DB available
     return res.status(201).json({
       payment: {

@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
 import { createOrbitParent, createOrbitStudent, deleteOrbitParent, deleteOrbitStudent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { enqueueOrbitEvent } from "../../integrations/orbit";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
@@ -739,7 +740,7 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
 
   // Suppression de la vérification d’unicité email/téléphone pour respecter la règle de l’écosystème
 
-  if (orbitRegistryIsEnabled()) {
+  if (orbitRegistryIsEnabled() && process.env.KCS_ORBIT_REGISTRY_DIRECT_WRITES === "true") {
     try {
       const accessCode = await generateUniqueParentAccessCode(prisma);
       const classIdResolution = await resolveStudentClassIds(req.user!.schoolId, payload.students);
@@ -889,6 +890,11 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
 
   try {
     const classIdResolution = await resolveStudentClassIds(req.user!.schoolId, payload.students);
+    const resolvedClassRows = await prisma.class.findMany({
+      where: { schoolId: req.user!.schoolId, id: { in: [...new Set(classIdResolution.values())] } },
+      select: { id: true, name: true }
+    });
+    const classNameById = new Map(resolvedClassRows.map((classRow) => [classRow.id, classRow.name]));
     const parent = await prisma.$transaction(async (tx) => {
       const passwordHash = await bcrypt.hash(temporaryPassword, 10);
       const parentId = await generateUniqueParentId(tx as typeof prisma, req.user!.schoolId, payload.fullName);
@@ -954,6 +960,39 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
           specialAgreement: st.specialAgreement
         });
       }
+      const parentName = splitPersonName(payload.fullName);
+      await enqueueOrbitEvent(tx, {
+        eventType: "parent.created",
+        aggregateType: "Parent",
+        aggregateId: p.id,
+        path: "/api/integration/registry/family",
+        idempotencyKey: `EDUPAY:PARENT:CREATE:${p.id}`,
+        payload: {
+          organizationId: process.env.KCS_ORBIT_ORGANIZATION_ID || "",
+          parent: {
+            fullName: payload.fullName,
+            firstName: payload.prenom || parentName.firstName,
+            middleName: payload.postnom || undefined,
+            lastName: payload.nom || parentName.lastName,
+            email: normalizedEmail,
+            phone: normalizedPhone,
+            physicalAddress: payload.physicalAddress,
+            accessCode: user.accessCode,
+            mustChangePassword: true
+          },
+          students: payload.students.map((student, index) => ({
+            firstName: student.firstName,
+            middleName: student.middleName || undefined,
+            lastName: student.lastName,
+            fullName: student.fullName,
+            dateOfBirth: student.dateOfBirth || undefined,
+            gender: student.gender || "O",
+            className: classNameById.get(classIdResolution.get(student.classId) ?? student.classId) || fallbackClassNameFromId(student.classId),
+            studentNumber: createdStudents[index]?.id,
+            mustChangePassword: true
+          }))
+        }
+      });
       return { parentId: p.id, createdStudents, accessCode: user.accessCode };
     });
     await assignOnboardingFinance({

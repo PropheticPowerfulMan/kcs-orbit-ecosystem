@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { PaymentOptionType } from "@prisma/client";
 import { createOrbitStudent, deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { enqueueOrbitEvent } from "../../integrations/orbit";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { notifyParentEntityChange } from "../notifications/entityChange";
@@ -44,7 +45,7 @@ studentRouter.use(authGuard);
 
 studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   const payload = createStudentSchema.parse(req.body);
-  if (orbitRegistryIsEnabled()) {
+  if (orbitRegistryIsEnabled() && process.env.KCS_ORBIT_REGISTRY_DIRECT_WRITES === "true") {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
     const parent = mirrored.parents.find((entry) =>
       entry.id === payload.parentId
@@ -138,22 +139,52 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
     });
   }
 
-  const student = await prisma.student.create({
-    data: {
-      parentId: payload.parentId,
-      classId: payload.classId,
-      externalStudentId: payload.externalStudentId,
-      fullName: payload.fullName,
-      firstName: payload.firstName || null,
-      middleName: payload.middleName || null,
-      lastName: payload.lastName || null,
-      email: payload.email || null,
-      phone: payload.phone || null,
-      dateOfBirth: payload.dateOfBirth || null,
-      gender: payload.gender || null,
-      annualFee: payload.annualFee,
-      schoolId: req.user!.schoolId
-    }
+  const student = await prisma.$transaction(async (tx) => {
+    const [parent, classRow] = await Promise.all([
+      tx.parent.findFirst({ where: { id: payload.parentId, schoolId: req.user!.schoolId }, select: { orbitId: true } }),
+      tx.class.findFirst({ where: { id: payload.classId, schoolId: req.user!.schoolId }, select: { name: true } })
+    ]);
+    const created = await tx.student.create({
+      data: {
+        parentId: payload.parentId,
+        classId: payload.classId,
+        externalStudentId: payload.externalStudentId,
+        fullName: payload.fullName,
+        firstName: payload.firstName || null,
+        middleName: payload.middleName || null,
+        lastName: payload.lastName || null,
+        email: payload.email || null,
+        phone: payload.phone || null,
+        dateOfBirth: payload.dateOfBirth || null,
+        gender: payload.gender || null,
+        annualFee: payload.annualFee,
+        schoolId: req.user!.schoolId
+      }
+    });
+    const nameParts = payload.fullName.trim().split(/\s+/);
+    await enqueueOrbitEvent(tx, {
+      eventType: "student.created",
+      aggregateType: "Student",
+      aggregateId: created.id,
+      path: "/api/integration/registry/student",
+      idempotencyKey: `EDUPAY:STUDENT:CREATE:${created.id}`,
+      payload: {
+        organizationId: process.env.KCS_ORBIT_ORGANIZATION_ID || "",
+        firstName: payload.firstName || nameParts[nameParts.length - 1] || "Student",
+        middleName: payload.middleName || undefined,
+        lastName: payload.lastName || nameParts[0] || "Student",
+        gender: payload.gender || "O",
+        className: classRow?.name || payload.classId,
+        studentNumber: payload.externalStudentId || created.id,
+        email: payload.email || undefined,
+        phone: payload.phone || undefined,
+        dateOfBirth: payload.dateOfBirth || undefined,
+        parentOrbitId: parent?.orbitId || undefined,
+        __edupayParentId: payload.parentId,
+        mustChangePassword: true
+      }
+    });
+    return created;
   });
 
   await upsertParentPlanAssignment({

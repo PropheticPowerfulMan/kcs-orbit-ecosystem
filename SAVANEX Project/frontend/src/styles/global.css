@@ -1211,3 +1211,186 @@ body {
   .kcs-card-subtitle { font-size: 6px; }
   .kcs-flag { width: 17px; height: 10px; }
 }
+
+/* Production responsive pass: phones, foldables and tablets. */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+@media (max-width: 1023px) {
+  body {
+    min-width: 0;
+    background-attachment: scroll;
+  }
+
+  .savanex-shell {
+    min-height: 100dvh;
+  }
+
+  .savanex-workspace {
+    min-height: 100dvh;
+  }
+
+  .savanex-topbar {
+    padding-top: max(.75rem, env(safe-area-inset-top));
+  }
+
+  .savanex-sidebar-panel {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .savanex-workspace > main > *,
+  .savanex-dedicated-page > *,
+  .card > * {
+    min-width: 0;
+  }
+
+  .recharts-responsive-container,
+  .recharts-wrapper,
+  .recharts-surface {
+    max-width: 100% !important;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1023px) {
+  .savanex-workspace > main {
+    padding: 1.25rem !important;
+  }
+
+  .savanex-modal-panel,
+  .savanex-entity-detail-panel,
+  .savanex-entity-edit-panel {
+    width: calc(100vw - 2rem) !important;
+    min-height: auto !important;
+    max-height: calc(100dvh - 2rem) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .savanex-shell {
+    display: block;
+  }
+
+  .savanex-topbar {
+    gap: .5rem;
+  }
+
+  .savanex-topbar > div:first-child {
+    overflow: hidden;
+  }
+
+  .savanex-workspace > main {
+    padding: .75rem !important;
+  }
+
+  .card,
+  .kpi-tile,
+  .github-glass {
+    padding: .9rem !important;
+  }
+
+  .savanex-dedicated-page {
+    gap: .75rem;
+  }
+
+  .savanex-dedicated-page > header {
+    padding: 1rem !important;
+  }
+
+  .savanex-dedicated-page > header > div:first-child {
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .savanex-dedicated-page > header > div:first-child > div:first-child {
+    width: 5rem;
+    height: 5rem;
+  }
+
+  .savanex-dedicated-page > header h2 {
+    font-size: 1.4rem !important;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .savanex-dedicated-page > header > div:last-child,
+  .savanex-modal-panel form > .flex:last-child {
+    width: 100%;
+  }
+
+  .savanex-dedicated-page > header a,
+  .savanex-modal-panel form > .flex:last-child button {
+    flex: 1 1 8rem;
+    justify-content: center;
+  }
+
+  .savanex-family-route {
+    padding: .375rem;
+  }
+
+  .savanex-family-route .savanex-family-modal,
+  .savanex-modal-panel,
+  .savanex-entity-detail-panel,
+  .savanex-entity-edit-panel {
+    width: calc(100vw - .75rem) !important;
+    min-height: calc(100dvh - .75rem) !important;
+    max-height: calc(100dvh - .75rem) !important;
+    padding: .9rem !important;
+    border-radius: 14px !important;
+  }
+
+  .savanex-responsive-table td {
+    grid-template-columns: minmax(5.8rem, 38%) minmax(0, 1fr);
+    padding: .65rem .75rem;
+  }
+
+  .overflow-x-auto {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .grid.grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  button,
+  a {
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 360px) {
+  .savanex-topbar h1 {
+    font-size: .76rem;
+  }
+
+  .savanex-topbar p {
+    display: none;
+  }
+
+  .savanex-responsive-table td {
+    grid-template-columns: minmax(0, 1fr);
+    text-align: left;
+  }
+}

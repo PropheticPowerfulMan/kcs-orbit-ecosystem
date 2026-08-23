@@ -2,13 +2,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
-from sqlalchemy.engine import Connection
 
 from app.api.routes import analytics, auth, chat, directory, messaging, notifications, registry, workflows
 from app.core.config import settings
-from app.db.base import Base
-from app.db.session import engine, SessionLocal
+from app.db.session import SessionLocal
 from app import models  # noqa: F401
 from app.models.user import Role, User
 from app.core.security import get_password_hash, verify_password
@@ -17,9 +14,8 @@ from app.workers.scheduler import flush_orbit_outbox, scheduler
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    ensure_user_identity_columns()
-    seed_default_admin()
+    if settings.app_env.lower() not in {"prod", "production"}:
+        seed_default_admin()
     if settings.scheduler_enabled:
         flush_orbit_outbox()
         scheduler.start()
@@ -28,36 +24,6 @@ async def lifespan(_: FastAPI):
     finally:
         if scheduler.running:
             scheduler.shutdown(wait=False)
-
-
-def ensure_user_identity_columns() -> None:
-    inspector = inspect(engine)
-    if "users" not in inspector.get_table_names():
-        return
-
-    columns = {column["name"] for column in inspector.get_columns("users")}
-    statements: list[str] = []
-    if "access_code" not in columns:
-        statements.append("ALTER TABLE users ADD COLUMN access_code VARCHAR(32)")
-
-    def ensure_role_values(connection: Connection) -> None:
-        if connection.dialect.name != "postgresql":
-            return
-
-        for role_value in (Role.PARENT.value, Role.STUDENT.value):
-            connection.execute(text(f"ALTER TYPE role ADD VALUE IF NOT EXISTS '{role_value}'"))
-
-    if not statements:
-        with engine.begin() as connection:
-            ensure_role_values(connection)
-            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_access_code_unique ON users (access_code) WHERE access_code IS NOT NULL"))
-        return
-
-    with engine.begin() as connection:
-        ensure_role_values(connection)
-        for statement in statements:
-            connection.execute(text(statement))
-        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_access_code_unique ON users (access_code) WHERE access_code IS NOT NULL"))
 
 
 def seed_default_admin() -> None:

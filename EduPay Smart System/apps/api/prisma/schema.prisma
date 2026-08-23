@@ -147,6 +147,14 @@ enum ExpenseStatus {
   ARCHIVED
 }
 
+enum IntegrationOutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
 enum FinancialPeriodType {
   MONTHLY
   QUARTERLY
@@ -510,6 +518,29 @@ model ExpenseCategory {
   @@unique([schoolId, slug])
   @@index([schoolId, type, isActive])
   @@index([schoolId, accountClass, accountCode])
+}
+
+model IntegrationOutboxEvent {
+  id             String                  @id @default(cuid())
+  eventType      String
+  aggregateType  String
+  aggregateId    String
+  path           String
+  httpMethod     String                  @default("POST")
+  payload        Json
+  status         IntegrationOutboxStatus @default(PENDING)
+  retryCount     Int                     @default(0)
+  maxRetries     Int                     @default(12)
+  lastAttemptAt  DateTime?
+  nextAttemptAt  DateTime                @default(now())
+  errorMessage   String?
+  idempotencyKey String                  @unique
+  completedAt    DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([aggregateType, aggregateId])
 }
 
 model Vendor {

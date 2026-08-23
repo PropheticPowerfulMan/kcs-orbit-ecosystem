@@ -232,7 +232,7 @@ export function getMessagingConfigStatus(): MessagingConfigStatus {
       configured: hasSmsConfig(),
       providerUrl: getSmsApiUrl(),
       usernameConfigured: Boolean(getSmsUsername()),
-      sender: getSmsSender()
+      sender: getSmsSender() || ""
     }
   };
 }

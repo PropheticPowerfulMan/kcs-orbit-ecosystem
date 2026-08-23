@@ -1348,9 +1348,6 @@ const EMPTY_FORM: FormState = {
 const PAYMENT_NOTIFICATION_STORAGE_KEY = "edupay-payment-notifications-enabled";
 const PAYMENT_PARENT_NOTIFICATION_STORAGE_KEY = "edupay-parent-payment-notifications-v1";
 
-const STORAGE_KEY = "edupay_payments_v3";
-const LEGACY_STORAGE_KEYS = ["edupay_payments_v2"];
-
 function normalizeParentStudentOption(student: Partial<ParentStudentOption> | null | undefined, index: number): ParentStudentOption {
   const id = String(student?.id || student?.externalStudentId || `student-${index + 1}`);
   return {
@@ -1374,26 +1371,6 @@ function normalizeParentOption(parent: Partial<ParentOption> | null | undefined,
       ? parent.students.map(normalizeParentStudentOption).filter((student) => student.id && student.fullName)
       : []
   };
-}
-
-function loadPayments(): PaymentRecord[] {
-  try {
-    const current = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as PaymentRecord[];
-    if (Array.isArray(current) && current.length > 0) return current;
-
-    for (const legacyKey of LEGACY_STORAGE_KEYS) {
-      const legacy = JSON.parse(localStorage.getItem(legacyKey) ?? "[]") as PaymentRecord[];
-      if (Array.isArray(legacy) && legacy.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));
-        return legacy;
-      }
-    }
-
-    return Array.isArray(current) ? current : [];
-  } catch { return []; }
-}
-function savePayments(ps: PaymentRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(ps));
 }
 
 function loadParentNotificationPreferences(): Record<string, boolean> {
@@ -1800,7 +1777,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
 export function PaymentsPage() {
   const { t, lang } = useI18n();
   const [view, setView]                     = useState<View>("form");
-  const [payments, setPayments]             = useState<PaymentRecord[]>(loadPayments);
+  const [payments, setPayments]             = useState<PaymentRecord[]>([]);
   const [form, setForm]                     = useState<FormState>(EMPTY_FORM);
   const [txNumber]                          = useState<string>(generateTxNumber);
   const [fieldErrors, setFieldErrors]       = useState<Partial<Record<keyof FormState, string>>>({});
@@ -1836,7 +1813,17 @@ export function PaymentsPage() {
   // État
   const [reportSearch, setReportSearch]     = useState("");
 
-  useEffect(() => { savePayments(payments); }, [payments]);
+  useEffect(() => {
+    let active = true;
+    api<PaymentRecord[]>("/api/payments")
+      .then((items) => {
+        if (active) setPayments(Array.isArray(items) ? items : []);
+      })
+      .catch((error) => {
+        if (active) setApiError(error instanceof Error ? error.message : "Impossible de charger les paiements officiels.");
+      });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     api<{ paymentNotificationsEnabled: boolean }>("/api/payments/settings/notifications")

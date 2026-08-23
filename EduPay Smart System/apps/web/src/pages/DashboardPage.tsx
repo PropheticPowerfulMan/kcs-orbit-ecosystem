@@ -110,7 +110,6 @@ type MonthlyPoint = {
   count: number;
 };
 
-const LOCAL_PAYMENT_KEY = "edupay_payments_v2";
 const USD = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 function asNumber(value: unknown) {
@@ -183,20 +182,6 @@ function monthKey(date: Date) {
 
 function monthLabel(date: Date) {
   return date.toLocaleDateString("fr-FR", { month: "short" });
-}
-
-function loadLocalPayments(): Payment[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(LOCAL_PAYMENT_KEY) ?? "[]") as Payment[];
-    return raw.map((p) => ({
-      ...p,
-      id: p.id ?? p.transactionNumber ?? `local-${Math.random()}`,
-      amount: asNumber(p.amount),
-      status: p.status ?? "COMPLETED"
-    }));
-  } catch {
-    return [];
-  }
 }
 
 function linearForecast(points: MonthlyPoint[]) {
@@ -452,13 +437,10 @@ export function DashboardPage() {
 
       if (cancelled) return;
 
-      const localPayments = loadLocalPayments();
       const apiPayments = paymentsResult.map((p) => ({ ...p, amount: asNumber(p.amount), status: p.status ?? "COMPLETED" }));
-      const knownIds = new Set(apiPayments.map((p) => p.id || p.transactionNumber));
-      const mergedLocal = localPayments.filter((p) => !knownIds.has(p.id) && !knownIds.has(p.transactionNumber));
 
       setOverview(overviewResult);
-      setPayments([...apiPayments, ...mergedLocal]);
+      setPayments(apiPayments);
       setParents(directoryResult ? parentsFromSharedDirectory(directoryResult) : parentsResult);
       setLoading(false);
     }

@@ -53,7 +53,6 @@ type Payment = {
   date?: string;
 };
 
-const LOCAL_PAYMENT_KEY = "edupay_payments_v2";
 const SCHOOL_MONTHS = 10;
 
 function asNumber(value: unknown) {
@@ -77,20 +76,6 @@ function parsePaymentDate(payment: Payment) {
 
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function loadLocalPayments(): Payment[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(LOCAL_PAYMENT_KEY) ?? "[]") as Payment[];
-    return raw.map((payment) => ({
-      ...payment,
-      id: payment.id ?? payment.transactionNumber ?? `local-${Math.random()}`,
-      amount: asNumber(payment.amount),
-      status: payment.status ?? "COMPLETED"
-    }));
-  } catch {
-    return [];
-  }
 }
 
 function formatCurrency(value: number) {
@@ -166,10 +151,8 @@ export function AdminParentPaymentsPage() {
         amount: asNumber(payment.amount),
         status: payment.status ?? "COMPLETED"
       }));
-      const known = new Set(apiPayments.map((payment) => payment.id || payment.transactionNumber));
-      const local = loadLocalPayments().filter((payment) => !known.has(payment.id) && !known.has(payment.transactionNumber));
       setParents(parentsResult);
-      setPayments([...apiPayments, ...local]);
+      setPayments(apiPayments);
       setSelectedId((current) => current || parentsResult[0]?.id || "");
     });
     return () => { active = false; };
