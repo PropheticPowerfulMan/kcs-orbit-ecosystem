@@ -29,3 +29,11 @@
 {$EDUSYNC_API_DOMAIN} {
   reverse_proxy edusync_api:8000
 }
+
+{$STAGING_DOMAIN} {
+  header {
+    X-Robots-Tag "noindex, nofollow, noarchive"
+    Cache-Control "no-store"
+  }
+  reverse_proxy staging_web:8080
+}

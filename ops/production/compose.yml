@@ -9,7 +9,7 @@ services:
   proxy:
     <<: *service-defaults
     image: caddy:2.9-alpine
-    networks: [kcs_edge]
+    networks: [kcs_edge, kcs_staging]
     ports:
       - "80:80"
       - "443:443"
@@ -19,7 +19,17 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api]
+    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api, staging_web]
+
+  staging_web:
+    <<: *service-defaults
+    image: caddy:2.9-alpine
+    networks: [kcs_staging]
+    command: ["caddy", "file-server", "--root", "/srv", "--listen", ":8080"]
+    read_only: true
+    tmpfs: [/config, /data]
+    volumes: [../staging:/srv:ro]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"], interval: 15s, timeout: 5s, retries: 5 }
 
   orbit_db:
     <<: *service-defaults
@@ -141,6 +151,8 @@ services:
 networks:
   kcs_edge:
   kcs_private:
+    internal: true
+  kcs_staging:
     internal: true
 
 volumes:
