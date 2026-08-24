@@ -2,10 +2,6 @@
   reverse_proxy orbit_api:4500
 }
 
-{$NEXUS_DOMAIN} {
-  reverse_proxy nexus_web:80
-}
-
 {$NEXUS_API_DOMAIN} {
   reverse_proxy nexus_api:5000
 }
