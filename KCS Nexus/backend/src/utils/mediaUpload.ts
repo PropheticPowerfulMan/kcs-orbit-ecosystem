@@ -2,7 +2,9 @@ import path from 'node:path'
 
 export const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024
 
-const allowedMedia = new Map([
+type MediaRule = { mime: string; signatures: readonly (readonly number[])[] }
+
+const allowedMedia: ReadonlyMap<string, MediaRule> = new Map([
   ['.gif', { mime: 'image/gif', signatures: [[0x47, 0x49, 0x46, 0x38]] }],
   ['.jpg', { mime: 'image/jpeg', signatures: [[0xff, 0xd8, 0xff]] }],
   ['.jpeg', { mime: 'image/jpeg', signatures: [[0xff, 0xd8, 0xff]] }],
@@ -18,7 +20,7 @@ function hasSignature(buffer: Buffer, signature: readonly number[], offset = 0) 
 
 export function validateMediaUpload(file: Express.Multer.File) {
   const extension = path.extname(file.originalname).toLowerCase()
-  const rule = allowedMedia.get(extension as keyof typeof allowedMedia)
+  const rule = allowedMedia.get(extension)
   if (!rule || rule.mime !== file.mimetype) return false
   if (extension === '.webp') {
     return hasSignature(file.buffer, rule.signatures[0]) && file.buffer.subarray(8, 12).toString('ascii') === 'WEBP'
