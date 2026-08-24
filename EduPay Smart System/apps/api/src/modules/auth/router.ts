@@ -7,7 +7,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { syncOrbitRegistryMirror, type SharedParentOption, type SharedTeacherOption } from "../../integrations/orbitRegistry";
-import { authGuard, AuthenticatedRequest } from "../../middlewares/auth";
+import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { sendEmail } from "../../utils/messaging";
 import { resolveCurrentParent } from "../parents/currentParent";
 
@@ -63,23 +63,6 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(8)
 });
 
-const demoUsers = [
-  {
-    email: "admin@school.com",
-    password: "password123",
-    role: "ADMIN" as const,
-    fullName: "Admin User",
-    schoolId: "demo-school"
-  },
-  {
-    email: "parent@school.com",
-    password: "password123",
-    role: "PARENT" as const,
-    fullName: "Parent Demo",
-    schoolId: "demo-school",
-    parentId: "demo-parent-1"
-  }
-];
 
 function buildToken(user: { id: string; role: StaffRole; schoolId: string }) {
   return jwt.sign({ sub: user.id, role: user.role, schoolId: user.schoolId }, env.JWT_SECRET, {
@@ -434,7 +417,7 @@ const recoveryLimiter = rateLimit({
   message: { message: "Trop de tentatives de récupération. Réessayez plus tard." }
 });
 
-authRouter.post("/register", async (req, res) => {
+authRouter.post("/register", authGuard, authorize("SUPER_ADMIN", "OWNER", "ADMIN"), async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -567,14 +550,6 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     return res.status(401).json({ message: "Identifiants invalides" });
   }
 
-  const demoUser = demoUsers.find((entry) =>
-    entry.email.toLowerCase() === normalizedIdentifier && entry.password === payload.password
-  );
-
-  if (demoUser) {
-    const token = buildToken({ id: `demo-${demoUser.role.toLowerCase()}`, role: demoUser.role, schoolId: demoUser.schoolId });
-    return res.json({ token, role: demoUser.role, fullName: demoUser.fullName, parentId: "parentId" in demoUser ? demoUser.parentId : undefined, accessCode: `ACC-${demoUser.role.slice(0, 3)}-DEMO01` });
-  }
 
   return res.status(401).json({ message: "Identifiants invalides" });
 });
