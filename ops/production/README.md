@@ -31,3 +31,8 @@ Before the first deployment, create mode-600 files under `/etc/kcs-orbit/`:
 Database URLs must use the private Compose service names (`orbit_db`, `nexus_db`, `edupay_db`, `savanex_db`, `edusync_db`), never `localhost`.
 
 Set `NODE_ENV=production` for Node APIs, `APP_ENV=production` and `APP_DEBUG=false` for EduSync, and `DJANGO_SETTINGS_MODULE=config.settings.production` for Savanex. Disable every demo fallback. Use independent random secrets of at least 32 characters for JWT, refresh JWT, integration keys, Redis, Django and database passwords.
+For authenticated LWS e-mail delivery, copy the corresponding blocks from
+`smtp-service-env.example` into `nexus-api.env`, `edupay-api.env`, and
+`savanex-api.env`. Replace `CHANGE_ME_LWS_MAILBOX_PASSWORD` only on the server,
+keep these files mode 600, and restart the three API containers. Port 587 uses
+STARTTLS (`SMTP_SECURE=false` for Nodemailer and `EMAIL_USE_TLS=True` for Django).

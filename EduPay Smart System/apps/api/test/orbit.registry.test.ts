@@ -12,6 +12,7 @@ describe("mapOrbitDirectoryToSharedOptions", () => {
           id: "parent-1",
           fullName: "Mireille Tshisekedi",
           firstName: "Mireille",
+          middleName: "Mukendi",
           lastName: "Tshisekedi",
           phone: "+243000000111",
           email: "mireille@example.com",
@@ -44,7 +45,7 @@ describe("mapOrbitDirectoryToSharedOptions", () => {
 
     expect(mapped.classes).toEqual(["Grade 2 - B", "Grade 4 - A"]);
     expect(mapped.parents).toHaveLength(1);
-    expect(mapped.parents[0].fullName).toBe("Mireille Tshisekedi");
+    expect(mapped.parents[0].fullName).toBe("Tshisekedi Mukendi Mireille");
     expect(mapped.parents[0].students).toMatchObject([
       {
         id: "student-1",

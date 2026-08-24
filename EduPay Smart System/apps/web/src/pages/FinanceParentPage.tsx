@@ -456,6 +456,7 @@ function normalizeFinanceSnapshot(snapshot: FinanceSnapshot): FinanceSnapshot {
 export function FinanceParentPage() {
   const { lang } = useI18n();
   const setPhotoUrl = useAuthStore((state) => state.setPhotoUrl);
+  const setFullName = useAuthStore((state) => state.setFullName);
   const [snapshot, setSnapshot] = useState<FinanceSnapshot | null>(null);
   const [photoUrl, setPhotoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -502,6 +503,7 @@ export function FinanceParentPage() {
         }));
         setPhotoPreview(parentLight.photoUrl || financeData.parent.photoUrl || null);
         setPhotoUrl(parentLight.photoUrl || financeData.parent.photoUrl || null);
+        setFullName(financeData.parent.fullName);
         setLoadError(null);
       })
       .catch((error) => {
@@ -520,7 +522,7 @@ export function FinanceParentPage() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [setPhotoUrl]);
+  }, [setFullName, setPhotoUrl]);
 
   const money = useMemo(
     () => new Intl.NumberFormat(lang === "fr" ? "fr-FR" : "en-US", {

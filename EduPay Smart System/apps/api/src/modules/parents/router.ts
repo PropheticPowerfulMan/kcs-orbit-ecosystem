@@ -11,6 +11,7 @@ import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/au
 import { sendEmail, sendSms } from "../../utils/messaging";
 import { createSpecialFinancialAgreement, getPaymentOptionLabel, upsertParentPlanAssignment } from "../finance/service";
 import { notifyParentEntityChange } from "../notifications/entityChange";
+import { resolveCurrentParent } from "./currentParent";
 
 type OwnerAgreementInstallmentMode = "ONE_TIME" | "TWO_INSTALLMENTS" | "THREE_INSTALLMENTS";
 
@@ -674,8 +675,14 @@ parentRouter.get("/me", authorize("PARENT"), async (req: AuthenticatedRequest, r
   }
 
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.sub },
+      select: { id: true, schoolId: true, fullName: true, email: true }
+    });
+    const currentParent = user ? await resolveCurrentParent(user) : null;
+    if (!currentParent) return res.status(404).json({ message: "Parent non trouve" });
     const parent = await prisma.parent.findFirst({
-      where: { schoolId: req.user!.schoolId, userId: req.user!.sub },
+      where: { id: currentParent.id, schoolId: req.user!.schoolId },
       include: {
         user: { select: { accessCode: true } },
         students: {
@@ -980,25 +987,27 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
         });
       }
       const parentName = splitPersonName(payload.fullName);
+      const orbitParentPayload = {
+        fullName: payload.fullName,
+        firstName: payload.prenom || parentName.firstName,
+        middleName: payload.postnom || undefined,
+        lastName: payload.nom || parentName.lastName,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        physicalAddress: payload.physicalAddress,
+        accessCode: user.accessCode,
+        mustChangePassword: true
+      };
+      const hasStudents = payload.students.length > 0;
       await enqueueOrbitEvent(tx, {
         eventType: "parent.created",
         aggregateType: "Parent",
         aggregateId: p.id,
-        path: "/api/integration/registry/family",
+        path: hasStudents ? "/api/integration/registry/family" : "/api/integration/registry/parent",
         idempotencyKey: `EDUPAY:PARENT:CREATE:${p.id}`,
-        payload: {
+        payload: hasStudents ? {
           organizationId: process.env.KCS_ORBIT_ORGANIZATION_ID || "",
-          parent: {
-            fullName: payload.fullName,
-            firstName: payload.prenom || parentName.firstName,
-            middleName: payload.postnom || undefined,
-            lastName: payload.nom || parentName.lastName,
-            email: normalizedEmail,
-            phone: normalizedPhone,
-            physicalAddress: payload.physicalAddress,
-            accessCode: user.accessCode,
-            mustChangePassword: true
-          },
+          parent: orbitParentPayload,
           students: payload.students.map((student, index) => ({
             firstName: student.firstName,
             middleName: student.middleName || undefined,
@@ -1010,6 +1019,9 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
             studentNumber: createdStudents[index]?.id,
             mustChangePassword: true
           }))
+        } : {
+          organizationId: process.env.KCS_ORBIT_ORGANIZATION_ID || "",
+          ...orbitParentPayload
         }
       });
       return { parentId: p.id, createdStudents, accessCode: user.accessCode };

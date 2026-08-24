@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { prisma } from "../../prisma";
+import { resolveCurrentParent } from "../parents/currentParent";
 import {
   createSpecialFinancialAgreement,
   ensureOfficialKcsCatalog,
@@ -118,14 +119,15 @@ financeRouter.get("/parents/:parentId/profile", authorize("ADMIN", "ACCOUNTANT")
 
 financeRouter.get("/me/profile", authorize("PARENT"), async (req: AuthenticatedRequest, res) => {
   try {
-    const parentRecord = await prisma.parent.findFirst({
-      where: { schoolId: req.user!.schoolId, userId: req.user!.sub },
-      select: { id: true }
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.sub },
+      select: { id: true, schoolId: true, fullName: true, email: true }
     });
-    const parent = parentRecord?.id ?? ((req.user && req.user.role === "PARENT") ? req.user.sub : "");
+    const parentRecord = user ? await resolveCurrentParent(user) : null;
+    if (!parentRecord) return res.status(404).json({ message: "Parent finance profile not found." });
     const snapshot = await getParentFinancialSnapshot({
       schoolId: req.user!.schoolId,
-      parentId: parent,
+      parentId: parentRecord.id,
       academicYearName: typeof req.query.academicYear === "string" ? req.query.academicYear : undefined
     });
     return res.json(snapshot);

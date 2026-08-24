@@ -9,6 +9,7 @@ import { env } from "../../config/env";
 import { syncOrbitRegistryMirror, type SharedParentOption, type SharedTeacherOption } from "../../integrations/orbitRegistry";
 import { authGuard, AuthenticatedRequest } from "../../middlewares/auth";
 import { sendEmail } from "../../utils/messaging";
+import { resolveCurrentParent } from "../parents/currentParent";
 
 type StaffRole = "SUPER_ADMIN" | "OWNER" | "ADMIN" | "FINANCIAL_MANAGER" | "ACCOUNTANT" | "CASHIER" | "HR_MANAGER" | "AUDITOR" | "PARENT" | "EMPLOYEE";
 
@@ -86,34 +87,9 @@ function buildToken(user: { id: string; role: StaffRole; schoolId: string }) {
   });
 }
 
-async function resolveParentForUser(user: { id: string; role: StaffRole; schoolId: string; email: string }) {
+async function resolveParentForUser(user: { id: string; role: StaffRole; schoolId: string; email: string; fullName: string }) {
   if (user.role !== "PARENT") return null;
-
-  const linkedParent = await prisma.parent.findUnique({
-    where: { userId: user.id },
-    select: { id: true, photoUrl: true }
-  });
-  if (linkedParent) return linkedParent;
-
-  const parentByEmail = await prisma.parent.findFirst({
-    where: {
-      schoolId: user.schoolId,
-      email: { equals: user.email, mode: "insensitive" }
-    },
-    select: { id: true, userId: true, photoUrl: true }
-  });
-
-  if (!parentByEmail) return null;
-  if (parentByEmail.userId && parentByEmail.userId !== user.id) return null;
-
-  if (!parentByEmail.userId) {
-    await prisma.parent.update({
-      where: { id: parentByEmail.id },
-      data: { userId: user.id }
-    });
-  }
-
-  return { id: parentByEmail.id, photoUrl: parentByEmail.photoUrl };
+  return resolveCurrentParent(user);
 }
 
 function hashResetToken(token: string) {
@@ -527,7 +503,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
         return res.json({
           token,
           role: user.role,
-          fullName: user.fullName,
+          fullName: parent?.fullName || user.fullName,
           parentId: parent?.id,
           photoUrl: parent?.photoUrl,
           accessCode: user.accessCode,

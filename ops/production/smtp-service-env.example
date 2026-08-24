@@ -1,0 +1,27 @@
+# Copy the matching block into each mode-600 service env file on the LWS server.
+# Never commit the real mailbox password.
+
+# /etc/kcs-orbit/nexus-api.env
+SMTP_HOST=mail.kinshasachristianschool.org
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=notifications@kinshasachristianschool.org
+SMTP_PASS=CHANGE_ME_LWS_MAILBOX_PASSWORD
+SMTP_FROM="Kinshasa Christian School <notifications@kinshasachristianschool.org>"
+
+# /etc/kcs-orbit/edupay-api.env
+SMTP_HOST=mail.kinshasachristianschool.org
+SMTP_PORT=587
+SMTP_USER=notifications@kinshasachristianschool.org
+SMTP_PASS=CHANGE_ME_LWS_MAILBOX_PASSWORD
+SMTP_FROM="Kinshasa Christian School <notifications@kinshasachristianschool.org>"
+
+# /etc/kcs-orbit/savanex-api.env
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=mail.kinshasachristianschool.org
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=notifications@kinshasachristianschool.org
+EMAIL_HOST_PASSWORD=CHANGE_ME_LWS_MAILBOX_PASSWORD
+DEFAULT_FROM_EMAIL="Kinshasa Christian School <notifications@kinshasachristianschool.org>"

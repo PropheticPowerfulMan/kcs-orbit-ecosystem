@@ -62,6 +62,7 @@ type AuthState = {
   mustChangePassword: boolean;
   setAuth: (token: string, role: Role | string | null | undefined, fullName: string, parentId?: string | null, photoUrl?: string | null, mustChangePassword?: boolean) => void;
   setPhotoUrl: (photoUrl: string | null) => void;
+  setFullName: (fullName: string) => void;
   setMustChangePassword: (mustChangePassword: boolean) => void;
   logout: () => void;
 };
@@ -111,6 +112,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.removeItem(PHOTO_STORAGE_KEY);
     }
     set({ photoUrl });
+  },
+  setFullName: (fullName) => {
+    localStorage.setItem(NAME_STORAGE_KEY, fullName);
+    set({ fullName });
   },
   setMustChangePassword: (mustChangePassword) => {
     if (mustChangePassword) {

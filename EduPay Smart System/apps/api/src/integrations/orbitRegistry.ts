@@ -188,6 +188,10 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
   const studentsById = new Map(directory.students.map((student) => [student.id, student]));
 
   const parents = directory.parents.map((parent) => {
+    const administrativeFullName = [parent.lastName, parent.middleName, parent.firstName]
+      .map((name) => name?.trim())
+      .filter((name): name is string => Boolean(name))
+      .join(" ") || parent.fullName;
     const students = parent.studentIds
       .map((studentId) => studentsById.get(studentId))
       .filter((student): student is OrbitSharedDirectory["students"][number] => Boolean(student))
@@ -227,11 +231,11 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
       accessCode: parent.accessCode,
       mustChangePassword: parent.mustChangePassword,
       lookupKey: buildParentLookupKey({
-        fullName: parent.fullName,
+        fullName: administrativeFullName,
         email: parent.email || undefined,
         phone: parent.phone || undefined,
       }),
-      fullName: parent.fullName,
+      fullName: administrativeFullName,
       phone: parent.phone || "",
       email: parent.email || "",
       physicalAddress: parent.physicalAddress || "",
@@ -735,7 +739,7 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
     }
   }
 
-  if (options.pruneMissing !== false) {
+  if (options.pruneMissing === true) {
     const activeOrbitStudentIds = mapped.students
       .map((student) => student.orbitId)
       .filter((orbitId): orbitId is string => Boolean(orbitId));
@@ -761,7 +765,7 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
   }
 
   const activeParentIds = Array.from(parentIdByLookupKey.values());
-  if (options.pruneMissing !== false && activeParentIds.length > 0) {
+  if (options.pruneMissing === true && activeParentIds.length > 0) {
     await prisma.parent.deleteMany({
       where: {
         schoolId,
