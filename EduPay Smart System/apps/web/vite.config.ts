@@ -55,19 +55,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: appBasePath + "index.html",
-        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff2}"],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "edupay-api-cache",
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 160, maxAgeSeconds: 60 * 60 * 24 * 14 },
-              cacheableResponse: { statuses: [0, 200] }
-            }
-          }
-        ]
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,woff2}"]
       }
     })
   ],

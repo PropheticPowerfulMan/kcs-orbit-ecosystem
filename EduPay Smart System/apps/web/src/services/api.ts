@@ -33,6 +33,26 @@ const DEMO_EMPLOYEES_KEY = "edupay_demo_employees_v2";
 const DEMO_EMPLOYEE_MESSAGES_KEY = "edupay_demo_employee_messages_v1";
 const API_RESPONSE_CACHE_PREFIX = "edupay_api_cache_v1:";
 const OFFLINE_MUTATION_QUEUE_KEY = "edupay_offline_mutation_queue_v1";
+const LOCAL_DEMO_STORAGE_KEYS = [
+  DEMO_PARENTS_KEY,
+  DEMO_PAYMENTS_KEY,
+  DEMO_NOTIFICATIONS_KEY,
+  DEMO_MANUAL_MESSAGES_KEY,
+  DEMO_PARENT_CREDENTIALS_KEY,
+  DEMO_ADMIN_PASSWORD_KEY,
+  DEMO_PARENT_PASSWORD_KEY,
+  DEMO_PASSWORD_RESET_TOKENS_KEY,
+  DEMO_FINANCE_OVERRIDES_KEY,
+  DEMO_EXPENSE_CATEGORIES_KEY,
+  DEMO_EXPENSE_VENDORS_KEY,
+  DEMO_EXPENSE_BUDGETS_KEY,
+  DEMO_EXPENSE_ITEMS_KEY,
+  DEMO_SALARY_PROFILES_KEY,
+  DEMO_PAYROLL_RUNS_KEY,
+  DEMO_EMPLOYEE_OBLIGATIONS_KEY,
+  DEMO_EMPLOYEES_KEY,
+  DEMO_EMPLOYEE_MESSAGES_KEY,
+] as const;
 const DEMO_FALLBACK_ENABLED = (import.meta.env.VITE_ENABLE_DEMO_FALLBACK ?? "").trim().toLowerCase() === "true";
 const RUNTIME_STATIC_APP_FALLBACK_ENABLED = typeof window !== "undefined" && (
   window.location.hostname.endsWith(".github.io")
@@ -61,6 +81,11 @@ if (typeof window !== "undefined" && !LOCAL_API_FALLBACK_ENABLED) {
   Object.keys(localStorage)
     .filter((key) => key.startsWith("edupay_demo_") || key.startsWith(API_RESPONSE_CACHE_PREFIX))
     .forEach((key) => localStorage.removeItem(key));
+  LOCAL_DEMO_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+
+  if ("caches" in window) {
+    void caches.delete("edupay-api-cache");
+  }
 }
 const LOCAL_AUTH_RECOVERY_FALLBACK_PATHS = new Set([
   "/api/auth/login",
