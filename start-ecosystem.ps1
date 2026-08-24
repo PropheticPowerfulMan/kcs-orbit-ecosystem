@@ -65,7 +65,7 @@ $logRoot = Join-Path $repoRoot 'var\logs'
 $stateRoot = Join-Path $repoRoot 'var'
 $preparationMarkerPath = Join-Path $stateRoot 'ecosystem-prepared.json'
 $eduSyncFallbackApiPorts = @(8010, 8011, 8012)
-$eduPayAccessCodeMigrationPath = Join-Path $eduPayApiPath 'prisma\migrations\20260510053000_add_user_access_code\migration.sql'
+$eduPayAccessCodeMigrationPath = Join-Path $eduPayApiPath 'prisma\migrations_legacy\20260510053000_add_user_access_code\migration.sql'
 
 function Get-ConfigValue {
   param(
