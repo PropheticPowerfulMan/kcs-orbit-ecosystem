@@ -1,6 +1,7 @@
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, KeyRound, Printer, Trash2, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
@@ -213,6 +214,15 @@ type FinanceCatalog = {
   plans: TuitionPlan[];
 };
 
+type SpecialAgreementInstallmentMode = "ONE_TIME" | "TWO_INSTALLMENTS" | "THREE_INSTALLMENTS";
+type SpecialAgreementDraft = {
+  title: string;
+  customTotal: string;
+  reductionAmount: string;
+  notes: string;
+  installmentMode: SpecialAgreementInstallmentMode;
+};
+
 type StudentFormState = {
   lastName: string;
   middleName: string;
@@ -225,6 +235,8 @@ type StudentFormState = {
   parentId: string;
   annualFee: string;
   paymentOptionType: string;
+  studentNumber: string;
+  specialAgreement?: SpecialAgreementDraft;
 };
 
 const PAYMENT_OPTION_LABELS: Record<string, string> = {
@@ -232,8 +244,32 @@ const PAYMENT_OPTION_LABELS: Record<string, string> = {
   TWO_INSTALLMENTS: "Paiement en 2 tranches",
   THREE_INSTALLMENTS: "Paiement en 3 tranches",
   STANDARD_MONTHLY: "Paiement mensuel standard",
+  SPECIAL_OWNER_AGREEMENT: "Arrangement avec l'école",
 };
 
+const EMPTY_SPECIAL_AGREEMENT: SpecialAgreementDraft = {
+  title: "",
+  customTotal: "",
+  reductionAmount: "0",
+  notes: "",
+  installmentMode: "THREE_INSTALLMENTS",
+};
+
+function withSchoolArrangement(plans: TuitionPlan[]): TuitionPlan[] {
+  return [...plans, { id: "school-arrangement", name: "Arrangement personnalisé avec l'école", paymentOptionType: "SPECIAL_OWNER_AGREEMENT", gradeGroup: plans[0]?.gradeGroup || "CUSTOM", finalAmount: 0 }];
+}
+
+function normalizeSpecialAgreementDraft(form: StudentFormState): SpecialAgreementDraft {
+  const current = form.specialAgreement || EMPTY_SPECIAL_AGREEMENT;
+  const studentName = [form.lastName, form.middleName, form.firstName].filter(Boolean).join(" ").trim();
+  return {
+    title: current.title || (studentName ? `Accord spécial - ${studentName}` : "Accord spécial parent-école"),
+    customTotal: current.customTotal || "",
+    reductionAmount: current.reductionAmount || "0",
+    notes: current.notes || "",
+    installmentMode: current.installmentMode || "THREE_INSTALLMENTS",
+  };
+}
 function resolveStudentGradeGroup(className?: string) {
   const normalized = String(className || "").trim().toLowerCase();
   if (/^k\d?/.test(normalized) || normalized.includes("maternelle")) return "K";
@@ -1112,18 +1148,32 @@ function StudentEditModal({
     classId: student.classId || "",
     parentId: parent?.id || student.parentId || "",
     annualFee: typeof student.annualFee === "number" ? String(student.annualFee) : "",
-    paymentOptionType: student.paymentOptionType || "STANDARD_MONTHLY"
+    paymentOptionType: student.paymentOptionType || "STANDARD_MONTHLY",
+    studentNumber: student.studentNumber || student.displayId || student.externalStudentId || student.id || ""
   });
+  const [specialAgreementOpen, setSpecialAgreementOpen] = useState(false);
   const selectedClassName = classOptions.find((item) => item.id === form.classId)?.name || "";
   const matchingPlans = useMemo(() => {
     const gradeGroup = resolveStudentGradeGroup(selectedClassName);
-    return (catalog?.plans ?? []).filter((plan) => plan.gradeGroup === gradeGroup && PAYMENT_OPTION_LABELS[plan.paymentOptionType]);
-  }, [catalog, selectedClassName]);
+    return withSchoolArrangement((catalog?.plans ?? []).filter((plan) => plan.gradeGroup === gradeGroup && PAYMENT_OPTION_LABELS[plan.paymentOptionType]));
+  }, [catalog, selectedClassName, form.annualFee]);
 
+  useEffect(() => {
+    if (!creating || !form.firstName.trim() || !form.lastName.trim()) return;
+    const timer = window.setTimeout(() => {
+      const fullName = composeAdministrativeFullName(form);
+      void api<{ email: string }>("/api/students/school-email-preview", {
+        method: "POST",
+        body: JSON.stringify({ fullName, firstName: form.firstName.trim(), middleName: form.middleName.trim() || null, lastName: form.lastName.trim() }),
+      }).then((result) => setForm((current) => ({ ...current, email: result.email })))
+        .catch((error) => console.error("School email preview failed", error));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [creating, form.firstName, form.middleName, form.lastName]);
   const applyClass = (classId: string) => {
     const className = classOptions.find((item) => item.id === classId)?.name || "";
     const gradeGroup = resolveStudentGradeGroup(className);
-    const plans = (catalog?.plans ?? []).filter((plan) => plan.gradeGroup === gradeGroup && PAYMENT_OPTION_LABELS[plan.paymentOptionType]);
+    const plans = withSchoolArrangement((catalog?.plans ?? []).filter((plan) => plan.gradeGroup === gradeGroup && PAYMENT_OPTION_LABELS[plan.paymentOptionType]));
     const selected = plans.find((plan) => plan.paymentOptionType === form.paymentOptionType)
       || plans.find((plan) => plan.paymentOptionType === "STANDARD_MONTHLY")
       || plans[0];
@@ -1136,12 +1186,25 @@ function StudentEditModal({
   };
 
   const applyTuitionPlan = (paymentOptionType: string) => {
+    if (paymentOptionType === "SPECIAL_OWNER_AGREEMENT") {
+      setForm((current) => ({
+        ...current,
+        paymentOptionType,
+        annualFee: "",
+        specialAgreement: normalizeSpecialAgreementDraft({ ...current, annualFee: "" }),
+      }));
+      setSpecialAgreementOpen(true);
+      return;
+    }
     const selected = matchingPlans.find((plan) => plan.paymentOptionType === paymentOptionType);
-    setForm((current) => ({
-      ...current,
-      paymentOptionType,
-      annualFee: selected ? String(selected.finalAmount) : current.annualFee,
-    }));
+    setForm((current) => ({ ...current, paymentOptionType, annualFee: selected ? String(selected.finalAmount) : current.annualFee }));
+  };
+
+  const updateSpecialAgreement = (key: keyof SpecialAgreementDraft, value: string) => {
+    setForm((current) => {
+      const specialAgreement = { ...normalizeSpecialAgreementDraft(current), [key]: value };
+      return { ...current, paymentOptionType: "SPECIAL_OWNER_AGREEMENT", annualFee: specialAgreement.customTotal, specialAgreement };
+    });
   };
 
   return (
@@ -1159,7 +1222,7 @@ function StudentEditModal({
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Prénom *<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Ex. Marie" required /></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Adresse e-mail de l’élève<input className="input text-base" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="eleve@exemple.com" /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Adresse e-mail scolaire<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="prenom.nom@ourkcs.org" readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? "Attribuée automatiquement selon le nom, postnom et prénom." : "Adresse scolaire actuelle de l’élève."}</span></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Téléphone de l’élève<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Date de naissance<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Genre<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
@@ -1175,7 +1238,7 @@ function StudentEditModal({
               </optgroup>
             </select></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">Tuition plan *<select className="input text-base" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
-              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{PAYMENT_OPTION_LABELS[plan.paymentOptionType] || plan.name} · $ {Number(plan.finalAmount).toFixed(2)}</option>)}
+              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{PAYMENT_OPTION_LABELS[plan.paymentOptionType] || plan.name}{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? " · À définir" : ` · $ ${Number(plan.finalAmount).toFixed(2)}`}</option>)}
             </select></label>
           </div>
           <div className="grid gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:grid-cols-[1fr_0.7fr] sm:items-end">
@@ -1183,8 +1246,9 @@ function StudentEditModal({
               <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-200">Frais calculés depuis le tuition plan</p>
               <p className="mt-2 text-sm text-slate-200">Le montant est automatiquement adapté à la classe et au plan sélectionnés.</p>
             </div>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Frais scolaires annuels (USD)<input className="input text-base bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" value={form.annualFee} readOnly required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">Frais scolaires annuels (USD)<input className="input text-base bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" min="0" step="0.01" value={form.annualFee} readOnly required />{form.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? <button type="button" onClick={() => setSpecialAgreementOpen(true)} className="mt-2 rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-bold text-amber-200">Ouvrir l'accord spécial</button> : null}</label>
           </div>
+          <label className="grid gap-1 text-sm font-semibold text-slate-200">Numéro / identifiant de l’élève<input className="input text-base font-mono" value={form.studentNumber} onChange={(event) => setForm((current) => ({ ...current, studentNumber: event.target.value }))} placeholder={creating ? "Attribué automatiquement après création" : "Identifiant actuel"} readOnly={creating} /></label>
           <label className="grid gap-1 text-sm font-semibold text-slate-200">Parent responsable *<select className="input text-base" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
             <option value="">Parent</option>
             {parents.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
@@ -1196,6 +1260,23 @@ function StudentEditModal({
             </button>
           </div>
         </form>
+        {specialAgreementOpen && typeof document !== "undefined" ? createPortal(
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setSpecialAgreementOpen(false)} aria-label="Fermer l'accord spécial" />
+            <div className="edupay-scrollbar relative max-h-[96vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-amber-300/20 bg-slate-950/95 p-6 shadow-2xl sm:p-7">
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Accord spécial parent-école</p><h3 className="mt-2 font-display text-2xl font-bold text-white">{composeAdministrativeFullName(form) || "Nouvel élève"}</h3><p className="mt-2 text-sm text-slate-300">Définissez le montant, la remise et l'échéancier propres à cet élève.</p></div><button type="button" onClick={() => setSpecialAgreementOpen(false)} className="text-slate-300 hover:text-white"><X className="h-5 w-5" /></button></div>
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">Nom du plan spécial<input className="input" value={normalizeSpecialAgreementDraft(form).title} onChange={(event) => updateSpecialAgreement("title", event.target.value)} placeholder="Accord spécial parent-école" /></label>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200">Montant convenu (USD)<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).customTotal} onChange={(event) => updateSpecialAgreement("customTotal", event.target.value)} placeholder="650" /></label>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200">Réduction spéciale (USD)<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).reductionAmount} onChange={(event) => updateSpecialAgreement("reductionAmount", event.target.value)} placeholder="0" /></label>
+                <div className="md:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300">Cadence de paiement</p><div className="mt-2 grid gap-3 sm:grid-cols-3">{([{ value: "ONE_TIME", label: "Versement unique" }, { value: "TWO_INSTALLMENTS", label: "2 tranches" }, { value: "THREE_INSTALLMENTS", label: "3 tranches" }] as const).map((option) => <button key={option.value} type="button" onClick={() => updateSpecialAgreement("installmentMode", option.value)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black ${normalizeSpecialAgreementDraft(form).installmentMode === option.value ? "border-amber-300 bg-amber-400/15 text-white" : "border-white/10 bg-slate-900/60 text-slate-300"}`}>{option.label}</button>)}</div></div>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">Notes internes<textarea className="input min-h-24" value={normalizeSpecialAgreementDraft(form).notes} onChange={(event) => updateSpecialAgreement("notes", event.target.value)} placeholder="Accord approuvé par la direction, conditions particulières..." /></label>
+              </div>
+              <div className="mt-5 grid gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 sm:grid-cols-3"><div><p className="text-xs text-slate-300">Montant convenu</p><p className="text-lg font-black text-white">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).customTotal || 0))}</p></div><div><p className="text-xs text-slate-300">Réduction</p><p className="text-lg font-black text-emerald-300">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0))}</p></div><div><p className="text-xs text-slate-300">Net à payer</p><p className="text-lg font-black text-cyan-200">{formatCurrency(Math.max(Number(normalizeSpecialAgreementDraft(form).customTotal || 0) - Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0), 0))}</p></div></div>
+              <div className="mt-5 flex gap-3"><button type="button" onClick={() => setSpecialAgreementOpen(false)} className="flex-1 rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200">Fermer</button><button type="button" disabled={Number(normalizeSpecialAgreementDraft(form).customTotal) <= 0} onClick={() => setSpecialAgreementOpen(false)} className="flex-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">Valider l'accord spécial</button></div>
+            </div>
+          </div>
+        , document.body) : null}
       </div>
     </div>
   );
@@ -1330,7 +1411,8 @@ export function StudentsDirectoryPage() {
           classId: state.classId,
           className: getSchoolClassOptions(classes).find((item) => item.id === state.classId)?.name || "",
           parentId: state.parentId,
-          annualFee: Number(state.annualFee)
+          annualFee: Number(state.annualFee),
+          studentNumber: state.studentNumber.trim() || null
         })
       });
       setMutationNotice([
@@ -1342,7 +1424,7 @@ export function StudentsDirectoryPage() {
         `E-mail administrateur : ${updated.notificationStatus?.adminEmail ?? "SKIPPED"}`,
       ].join("\n"));
       setEditTarget(null);
-      await load();
+      void load(true);
     } catch (error) {
       setApiError(error instanceof Error ? error.message : "Impossible de modifier l'élève.");
     } finally {
@@ -1370,6 +1452,7 @@ export function StudentsDirectoryPage() {
           classId: state.classId,
           annualFee: Number(state.annualFee),
           paymentOptionType: state.paymentOptionType,
+          specialAgreement: state.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? state.specialAgreement : undefined,
         }),
       });
       setCreateOpen(false);
@@ -1405,7 +1488,6 @@ export function StudentsDirectoryPage() {
     setDirectory((current) => current ? { ...current, students: current.students.filter((student) => student.id !== removedStudent.id) } : current);
     try {
       await api(`/api/students/${removedStudent.id}`, { method: "DELETE" });
-      void load(true);
     } catch (error) {
       setDirectory((current) => current && !current.students.some((student) => student.id === removedStudent.id) ? { ...current, students: [...current.students, removedStudent] } : current);
       setApiError(error instanceof Error ? error.message : "Impossible de supprimer l'élève.");

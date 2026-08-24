@@ -92,6 +92,14 @@ const App = () => {
       <GlobalTextTranslator />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+          <Route
+            path="/incident-reports"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'staff', 'teacher', 'student', 'parent']}>
+                <IncidentReportsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/about" element={<AboutPage />} />
@@ -106,14 +114,6 @@ const App = () => {
             <Route path="/sitemap" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
 
-            <Route
-              path="/incident-reports"
-              element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'teacher', 'student', 'parent']}>
-                  <IncidentReportsPage />
-                </ProtectedRoute>
-              }
-            />
 
             <Route
               path="/portal"

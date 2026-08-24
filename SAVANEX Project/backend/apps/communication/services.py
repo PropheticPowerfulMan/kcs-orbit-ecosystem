@@ -9,9 +9,10 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db.models import Avg, Count, Q
 from django.utils import timezone
+from django.utils.html import escape, linebreaks
 
 from .models import Notification
 
@@ -33,18 +34,33 @@ def _normalize_phone(phone):
     return ''.join(char for char in (phone or '').strip() if char == '+' or char.isdigit())
 
 
+LOGO_URL = 'https://kinshasachristianschool.org/Images/logo.png'
+SCHOOL_URL = 'https://kinshasachristianschool.org/'
+
+
+def build_branded_email_html(subject, body, action_url='', action_label='Ouvrir SAVANEX'):
+    safe_subject = escape(subject)
+    safe_body = linebreaks(escape(body))
+    action = f'<a href="{escape(action_url)}" style="display:inline-block;background:#ffcb05;color:#071d3a;text-decoration:none;font-weight:800;border-radius:999px;padding:13px 22px;font-size:14px">{escape(action_label)}</a>' if action_url else ''
+    return f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{safe_subject}</title></head>
+<body style="margin:0;background:#eef4fb;font-family:Arial,Helvetica,sans-serif;color:#0f172a"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef4fb;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:26px;box-shadow:0 20px 55px rgba(8,38,76,.16)">
+<tr><td style="height:7px;background:#ffcb05"></td></tr><tr><td style="background:#08264c;padding:26px 30px"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="width:76px;height:76px;background:#fff;border-radius:20px;padding:8px"><img src="{LOGO_URL}" width="60" height="60" alt="Kinshasa Christian School" style="display:block;object-fit:contain"></td><td style="padding-left:18px"><p style="margin:0 0 5px;color:#ffcb05;font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase">SAVANEX · MESSAGE OFFICIEL</p><h1 style="margin:0;color:#fff;font-size:24px;line-height:1.25">{safe_subject}</h1><p style="margin:7px 0 0;color:#bdd7f5;font-size:13px">Letting Our Light Shine</p></td></tr></table></td></tr>
+<tr><td style="background:#fff;padding:30px"><div style="border-left:5px solid #ffcb05;background:#f8fbff;border-radius:16px;padding:18px 20px;margin-bottom:22px"><strong style="color:#004080;font-size:13px">Kinshasa Christian School</strong><p style="margin:6px 0 0;color:#64748b;font-size:13px;line-height:1.55">Une communication academique securisee de SAVANEX.</p></div><div style="font-size:15px;line-height:1.65;color:#334155">{safe_body}</div><div style="margin-top:26px">{action}</div></td></tr>
+<tr><td style="background:#004080;padding:20px 28px;text-align:center"><img src="{LOGO_URL}" width="34" height="34" alt="KCS" style="display:inline-block;vertical-align:middle;background:#fff;border-radius:9px;padding:3px"><p style="margin:9px 0 0;color:#fff;font-size:13px;font-weight:700">Kinshasa Christian School</p><p style="margin:5px 0 0;color:#b9d7f7;font-size:11px">Macampagne, Ngaliema · Notification automatisee SAVANEX</p></td></tr></table></td></tr></table></body></html>'''
+
+
+def send_branded_email(to, subject, body, action_url='', action_label='Ouvrir SAVANEX'):
+    message = EmailMultiAlternatives(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [to])
+    message.attach_alternative(build_branded_email_html(subject, body, action_url, action_label), 'text/html')
+    return message.send(fail_silently=False)
+
 def _send_user_email(user, subject, body, label='User'):
     if not user.email:
         return DeliveryResult('email', 'skipped', f'{label} email is missing.')
 
     try:
-        sent_count = send_mail(
-            subject=subject,
-            message=body,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
+        sent_count = send_branded_email(user.email, subject, body)
+
     except Exception as exc:
         logger.exception('Unable to send %s email to %s', label.lower(), user.email)
         return DeliveryResult('email', 'failed', str(exc))

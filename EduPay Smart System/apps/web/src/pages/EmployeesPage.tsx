@@ -549,7 +549,7 @@ function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSn
               <p>${escapeHtml(employee.fullName)} • ${escapeHtml(infoValue(employee.jobTitle))} • ${escapeHtml(infoValue(employee.department))}</p>
             </div>
           </div>
-          <div class="meta-badge">ID système: ${escapeHtml(employee.displayId || employee.employeeId || employee.id)}</div>
+          <div class="meta-badge">Bénéficiaire : EMPLOYÉ<br />ID système : ${escapeHtml(employee.displayId || employee.employeeId || employee.id)}</div>
         </div>
       </div>
 
@@ -1114,6 +1114,12 @@ export function EmployeesPage() {
           onClose={() => setSelectedEmployee(null)}
           actions={(
             <>
+              <span
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200"
+                title="Les paiements, factures et fiches affichés concernent cet employé"
+              >
+                Bénéficiaire : Employé
+              </span>
               <button
                 type="button"
                 onClick={() => void handleResetEmployeeAccess(selectedEmployee)}
@@ -1386,7 +1392,10 @@ export function EmployeesPage() {
                         {employeeFinanceSnapshot.payrollRecords.length > 0 ? employeeFinanceSnapshot.payrollRecords.map(({ run, item }) => (
                           <tr key={item.id} className="border-b border-white/5 last:border-b-0">
                             <td className="px-4 py-3 text-ink-dim">{formatDateTimeLabel(run.processedAt)}</td>
-                            <td className="px-4 py-3 font-medium text-white">{item.salarySlipNumber}</td>
+                            <td className="px-4 py-3 font-medium text-white">
+                              <span className="block">{item.salarySlipNumber}</span>
+                              <span className="mt-1 inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">Employé</span>
+                            </td>
                             <td className="px-4 py-3 text-ink-dim">{run.title}</td>
                             <td className="px-4 py-3 text-white">{formatCurrency(Number(item.baseSalary ?? item.salaryProfile.baseSalary ?? 0), employeeFinanceSnapshot.currency)}</td>
                             <td className="px-4 py-3 text-emerald-300">{formatCurrency(Number(item.bonuses ?? item.salaryProfile.defaultBonus ?? 0), employeeFinanceSnapshot.currency)}</td>

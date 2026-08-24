@@ -3007,7 +3007,6 @@ export function ParentsManagementPage() {
     setParents((current) => current.filter((parent) => parent.id !== removedParent.id));
     try {
       await api(`/api/parents/${removedParent.id}`, { method: "DELETE" });
-      void load(true);
     } catch (error) {
       setParents((current) => sortParentsForUi([...current, removedParent]));
       const message = error instanceof Error ? error.message : "Erreur API";

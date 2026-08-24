@@ -1,12 +1,20 @@
 import { Router } from "express";
 import { z } from "zod";
-import { PaymentOptionType } from "@prisma/client";
+import { AgreementStatus, PaymentOptionType } from "@prisma/client";
 import { createOrbitStudent, deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { enqueueOrbitEvent } from "../../integrations/orbit";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { notifyParentEntityChange } from "../notifications/entityChange";
-import { upsertParentPlanAssignment } from "../finance/service";
+import { createSpecialFinancialAgreement, upsertParentPlanAssignment } from "../finance/service";
+
+const specialAgreementSchema = z.object({
+  title: z.string().trim().min(1),
+  customTotal: z.coerce.number().positive(),
+  reductionAmount: z.coerce.number().nonnegative().default(0),
+  notes: z.string().trim().default(""),
+  installmentMode: z.enum(["ONE_TIME", "TWO_INSTALLMENTS", "THREE_INSTALLMENTS"]).default("THREE_INSTALLMENTS")
+});
 
 const createStudentSchema = z.object({
   parentId: z.string().min(1),
@@ -21,7 +29,8 @@ const createStudentSchema = z.object({
   dateOfBirth: z.coerce.date().nullable().optional(),
   gender: z.string().trim().min(1).nullable().optional(),
   annualFee: z.number().positive(),
-  paymentOptionType: z.nativeEnum(PaymentOptionType).default(PaymentOptionType.STANDARD_MONTHLY)
+  paymentOptionType: z.nativeEnum(PaymentOptionType).default(PaymentOptionType.STANDARD_MONTHLY),
+  specialAgreement: specialAgreementSchema.optional()
 });
 
 const updateStudentSchema = z.object({
@@ -40,11 +49,57 @@ const updateStudentSchema = z.object({
   mustChangePassword: z.boolean().optional()
 });
 
+function buildSpecialAgreementInstallments(total: number, reduction: number, mode: "ONE_TIME" | "TWO_INSTALLMENTS" | "THREE_INSTALLMENTS") {
+  const balance = Math.round(Math.max(total - reduction, 0) * 100) / 100;
+  const now = new Date();
+  const startYear = now.getUTCMonth() >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  const dueDate = (month: number, day: number) => new Date(Date.UTC(month >= 8 ? startYear : startYear + 1, month - 1, day, 23, 59, 59, 999)).toISOString();
+  if (mode === "ONE_TIME") return [{ label: "Versement unique", dueDate: dueDate(8, 31), amountDue: balance }];
+  if (mode === "TWO_INSTALLMENTS") {
+    const first = Math.round(balance * 0.6 * 100) / 100;
+    return [{ label: "Premier versement", dueDate: dueDate(8, 31), amountDue: first }, { label: "Solde", dueDate: dueDate(1, 31), amountDue: Math.round((balance - first) * 100) / 100 }];
+  }
+  const first = Math.round(balance * 0.4 * 100) / 100;
+  const second = Math.round(balance * 0.3 * 100) / 100;
+  return [{ label: "Engagement initial", dueDate: dueDate(8, 31), amountDue: first }, { label: "Regularisation mi-annee", dueDate: dueDate(1, 31), amountDue: second }, { label: "Solde final", dueDate: dueDate(5, 31), amountDue: Math.round((balance - first - second) * 100) / 100 }];
+}
+
 export const studentRouter = Router();
 studentRouter.use(authGuard);
 
+function schoolEmailToken(value?: string | null) {
+  return (value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+function studentNameParts(payload: { fullName: string; firstName?: string; middleName?: string | null; lastName?: string }) {
+  const parts = payload.fullName.trim().split(/\s+/).filter(Boolean);
+  return { firstName: payload.firstName || parts[parts.length - 1] || "user", middleName: payload.middleName || (parts.length > 2 ? parts.slice(1, -1).join(" ") : ""), lastName: payload.lastName || parts[0] || "kcs" };
+}
+async function generateSchoolEmail(payload: { fullName: string; firstName?: string; middleName?: string | null; lastName?: string }, schoolId: string) {
+  const names = studentNameParts(payload);
+  const first = schoolEmailToken(names.firstName) || "user";
+  const middle = schoolEmailToken(names.middleName);
+  const last = schoolEmailToken(names.lastName) || "kcs";
+  const bases = [first + "." + last];
+  if (middle) bases.push(first + "." + middle[0] + "." + last, first + "." + middle + "." + last);
+  const [students, parents, users] = await Promise.all([
+    prisma.student.findMany({ where: { schoolId, email: { not: null } }, select: { email: true } }),
+    prisma.parent.findMany({ where: { schoolId }, select: { email: true } }),
+    prisma.user.findMany({ where: { schoolId }, select: { email: true } }),
+  ]);
+  const unavailable = new Set([...students, ...parents, ...users].map((entry) => entry.email?.trim().toLowerCase()).filter((email): email is string => Boolean(email)));
+  for (const base of bases) { const candidate = base + "@ourkcs.org"; if (!unavailable.has(candidate)) return candidate; }
+  for (let sequence = 2; sequence < 10_000; sequence += 1) { const candidate = bases[0] + sequence + "@ourkcs.org"; if (!unavailable.has(candidate)) return candidate; }
+  return bases[0] + Date.now() + "@ourkcs.org";
+}
+
+studentRouter.post("/school-email-preview", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+  const payload = z.object({ fullName: z.string().trim().min(1), firstName: z.string().trim().optional(), middleName: z.string().trim().nullable().optional(), lastName: z.string().trim().optional() }).parse(req.body);
+  return res.json({ email: await generateSchoolEmail(payload, req.user!.schoolId) });
+});
+
 studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   const payload = createStudentSchema.parse(req.body);
+  const studentEmail = payload.email?.trim().toLowerCase() || await generateSchoolEmail(payload, req.user!.schoolId);
   if (orbitRegistryIsEnabled() && process.env.KCS_ORBIT_REGISTRY_DIRECT_WRITES === "true") {
     const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
     const parent = mirrored.parents.find((entry) =>
@@ -66,7 +121,7 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       className: classRow?.name || payload.classId,
       gender: payload.gender,
       studentNumber: payload.externalStudentId,
-      email: payload.email,
+      email: studentEmail,
       dateOfBirth: payload.dateOfBirth,
     });
     await syncOrbitRegistryMirror(req.user!.schoolId);
@@ -96,7 +151,7 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
           firstName: payload.firstName || null,
           middleName: payload.middleName || null,
           lastName: payload.lastName || null,
-          email: payload.email || null,
+          email: studentEmail,
           phone: payload.phone || null,
           dateOfBirth: payload.dateOfBirth || null,
           gender: payload.gender || null,
@@ -106,12 +161,20 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
       });
     let financeStatus = "SYNCED";
     try {
-      await upsertParentPlanAssignment({
-        schoolId: req.user!.schoolId,
-        parentId: savedStudent.parentId,
-        studentId: savedStudent.id,
-        paymentOptionType: payload.paymentOptionType,
-      });
+      if (payload.paymentOptionType === PaymentOptionType.SPECIAL_OWNER_AGREEMENT) {
+        await createSpecialFinancialAgreement({
+          schoolId: req.user!.schoolId, parentId: savedStudent.parentId, studentId: savedStudent.id,
+          title: payload.specialAgreement?.title || "Arrangement avec l ecole - " + savedStudent.fullName,
+          customTotal: payload.specialAgreement?.customTotal ?? payload.annualFee, reductionAmount: payload.specialAgreement?.reductionAmount ?? 0, status: AgreementStatus.APPROVED,
+          notes: payload.specialAgreement?.notes || "Arrangement cree depuis la liste des eleves",
+          installments: buildSpecialAgreementInstallments(payload.specialAgreement?.customTotal ?? payload.annualFee, payload.specialAgreement?.reductionAmount ?? 0, payload.specialAgreement?.installmentMode ?? "THREE_INSTALLMENTS"),
+        });
+      } else {
+        await upsertParentPlanAssignment({
+          schoolId: req.user!.schoolId, parentId: savedStudent.parentId, studentId: savedStudent.id,
+          paymentOptionType: payload.paymentOptionType,
+        });
+      }
     } catch (error) {
       financeStatus = "PENDING";
       console.error("Student created and propagated; tuition plan assignment is pending", error);
@@ -139,21 +202,23 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
     });
   }
 
+  const [parent, classRow] = await Promise.all([
+    prisma.parent.findFirst({ where: { schoolId: req.user!.schoolId, OR: [{ id: payload.parentId }, { orbitId: payload.parentId }] }, select: { id: true, orbitId: true } }),
+    prisma.class.findFirst({ where: { schoolId: req.user!.schoolId, OR: [{ id: payload.classId }, { name: { equals: payload.classId, mode: "insensitive" } }] }, select: { id: true, name: true } }),
+  ]);
+  if (!parent) return res.status(404).json({ message: "Parent introuvable dans EduPay ou dans le registre partagé." });
+  if (!classRow) return res.status(404).json({ message: "Classe introuvable dans EduPay." });
   const student = await prisma.$transaction(async (tx) => {
-    const [parent, classRow] = await Promise.all([
-      tx.parent.findFirst({ where: { id: payload.parentId, schoolId: req.user!.schoolId }, select: { orbitId: true } }),
-      tx.class.findFirst({ where: { id: payload.classId, schoolId: req.user!.schoolId }, select: { name: true } })
-    ]);
     const created = await tx.student.create({
       data: {
-        parentId: payload.parentId,
-        classId: payload.classId,
+        parentId: parent.id,
+        classId: classRow.id,
         externalStudentId: payload.externalStudentId,
         fullName: payload.fullName,
         firstName: payload.firstName || null,
         middleName: payload.middleName || null,
         lastName: payload.lastName || null,
-        email: payload.email || null,
+        email: studentEmail,
         phone: payload.phone || null,
         dateOfBirth: payload.dateOfBirth || null,
         gender: payload.gender || null,
@@ -176,25 +241,52 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
         gender: payload.gender || "O",
         className: classRow?.name || payload.classId,
         studentNumber: payload.externalStudentId || created.id,
-        email: payload.email || undefined,
+        email: studentEmail,
         phone: payload.phone || undefined,
         dateOfBirth: payload.dateOfBirth || undefined,
         parentOrbitId: parent?.orbitId || undefined,
-        __edupayParentId: payload.parentId,
+        __edupayParentId: parent.id,
         mustChangePassword: true
       }
     });
     return created;
   });
 
-  await upsertParentPlanAssignment({
-    schoolId: req.user!.schoolId,
-    parentId: student.parentId,
-    studentId: student.id,
-    paymentOptionType: payload.paymentOptionType,
-  });
+  if (payload.paymentOptionType === PaymentOptionType.SPECIAL_OWNER_AGREEMENT) {
+    await createSpecialFinancialAgreement({
+      schoolId: req.user!.schoolId, parentId: student.parentId, studentId: student.id,
+      title: payload.specialAgreement?.title || "Arrangement avec l ecole - " + student.fullName,
+      customTotal: payload.specialAgreement?.customTotal ?? payload.annualFee, reductionAmount: payload.specialAgreement?.reductionAmount ?? 0, status: AgreementStatus.APPROVED,
+      notes: payload.specialAgreement?.notes || "Arrangement cree depuis la liste des eleves",
+          installments: buildSpecialAgreementInstallments(payload.specialAgreement?.customTotal ?? payload.annualFee, payload.specialAgreement?.reductionAmount ?? 0, payload.specialAgreement?.installmentMode ?? "THREE_INSTALLMENTS"),
+    });
+  } else {
+    await upsertParentPlanAssignment({
+      schoolId: req.user!.schoolId, parentId: student.parentId, studentId: student.id,
+      paymentOptionType: payload.paymentOptionType,
+    });
+  }
 
-  res.status(201).json({ ...student, paymentOptionType: payload.paymentOptionType, propagatedToOrbit: false });
+  let propagatedToOrbit = false;
+  let propagatedStudent = student;
+  if (orbitRegistryIsEnabled() && parent.orbitId) {
+    try {
+      const orbitStudent = await createOrbitStudent({
+        fullName: payload.fullName, parentOrbitId: parent.orbitId, className: classRow.name,
+        gender: payload.gender, studentNumber: payload.externalStudentId || student.id,
+        email: studentEmail, dateOfBirth: payload.dateOfBirth,
+      });
+      propagatedStudent = await prisma.student.update({
+        where: { id: student.id },
+        data: { orbitId: orbitStudent.orbitId, externalStudentId: orbitStudent.externalId || payload.externalStudentId || student.id },
+      });
+      propagatedToOrbit = true;
+    } catch (error) {
+      console.error("Immediate Orbit propagation failed; queued outbox event will retry", error);
+    }
+  }
+
+  res.status(201).json({ ...propagatedStudent, email: studentEmail, paymentOptionType: payload.paymentOptionType, propagatedToOrbit });
 });
 
 studentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
@@ -218,15 +310,15 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
   const payload = updateStudentSchema.parse(req.body);
 
   const [parent, classRow] = await Promise.all([
-    prisma.parent.findFirst({ where: { id: payload.parentId, schoolId: req.user!.schoolId }, select: { id: true } }),
-    prisma.class.findFirst({ where: { id: payload.classId, schoolId: req.user!.schoolId }, select: { id: true } })
+    prisma.parent.findFirst({ where: { schoolId: req.user!.schoolId, OR: [{ id: payload.parentId }, { orbitId: payload.parentId }] }, select: { id: true } }),
+    prisma.class.findFirst({ where: { schoolId: req.user!.schoolId, OR: [{ id: payload.classId }, { name: { equals: payload.classId, mode: "insensitive" } }] }, select: { id: true } })
   ]);
 
   if (!parent) return res.status(404).json({ message: "Parent introuvable." });
   if (!classRow) return res.status(404).json({ message: "Classe introuvable." });
 
   const existing = await prisma.student.findFirst({
-    where: { id: req.params.id, schoolId: req.user!.schoolId },
+    where: { schoolId: req.user!.schoolId, OR: [{ id: req.params.id }, { orbitId: req.params.id }, { externalStudentId: req.params.id }] },
     select: { id: true, orbitId: true, externalStudentId: true }
   });
   if (!existing) return res.status(404).json({ message: "Eleve introuvable." });
@@ -240,6 +332,9 @@ studentRouter.put("/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenti
         firstName: payload.firstName || nameParts[nameParts.length - 1] || null,
         middleName: payload.middleName ?? (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : null),
         lastName: payload.lastName || nameParts[0] || null,
+        email: payload.email ?? null,
+        phone: payload.phone ?? null,
+        externalStudentId: payload.studentNumber ?? existing.externalStudentId,
         dateOfBirth: payload.dateOfBirth ?? null,
         gender: payload.gender ?? null,
         classId: payload.classId,

@@ -78,7 +78,7 @@ const LoginPage = () => {
           <p className="mt-2 text-sm text-slate-400">{t('auth.signInSubtitle')}</p>
         </div>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+        <form className="mt-6 space-y-4" onSubmit={onSubmit} autoComplete="off">
           {demoMode && (
             <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-left text-sm text-sky-100">
               <p className="font-semibold">Demonstration autonome</p>
@@ -94,6 +94,7 @@ const LoginPage = () => {
               value={form.username}
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               className="w-full rounded-xl border border-github-border bg-slate-950/55 px-3 py-2 text-sm text-slate-100 backdrop-blur focus:border-kcs-blue focus:outline-none focus:ring-2 focus:ring-kcs-blue/20"
+              autoComplete="off"
               placeholder="Nom d'utilisateur, email ou code d'accès"
               required
             />
@@ -107,7 +108,7 @@ const LoginPage = () => {
                 value={form.password}
                 onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
                 className="w-full rounded-xl border border-github-border bg-slate-950/55 px-3 py-2 pr-11 text-sm text-slate-100 backdrop-blur focus:border-kcs-blue focus:outline-none focus:ring-2 focus:ring-kcs-blue/20"
-                autoComplete="current-password"
+                autoComplete="new-password"
                 required
               />
               <button type="button" onClick={() => setPasswordVisible((current) => !current)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-sky-200" aria-label={passwordVisible ? 'Cacher le mot de passe' : 'Afficher le mot de passe'}>

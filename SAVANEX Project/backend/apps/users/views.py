@@ -3,7 +3,6 @@ from django.db.models import Q
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
 from django.utils.encoding import force_bytes, force_str
@@ -13,7 +12,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
-from apps.communication.services import deliver_direct_parent_contact
+from apps.communication.services import deliver_direct_parent_contact, send_branded_email
 from apps.teachers.services import deactivate_teacher
 from .models import User
 from .serializers import (
@@ -173,6 +172,18 @@ def reset_entity_access(request, entity_type, identifier):
             Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier)
             | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
         ).first()
+        if not user:
+            email = str(request.data.get('email') or '').strip()
+            phone = str(request.data.get('phone') or '').strip()
+            contact_filter = Q()
+            if email:
+                contact_filter |= Q(email__iexact=email)
+            if phone:
+                contact_filter |= Q(phone=phone)
+            if contact_filter:
+                user = User.objects.filter(role=User.ROLE_PARENT, is_active=True).filter(contact_filter).first()
+        if not user:
+            user = provision_parent_access_identity(identifier, request.data)
     elif entity_type == 'student':
         from apps.students.models import Student
         student = Student.objects.select_related('user').filter(is_active=True).filter(
@@ -190,6 +201,40 @@ def reset_entity_access(request, entity_type, identifier):
         return Response({'detail': 'Compte utilisateur introuvable pour cette entite.'}, status=status.HTTP_404_NOT_FOUND)
     return Response(reset_user_access_credentials(user))
 
+
+def provision_parent_access_identity(identifier, data=None):
+    data = data or {}
+    email = str(data.get('email') or '').strip().lower()
+    phone = str(data.get('phone') or '').strip()
+    if email:
+        existing = User.objects.filter(email__iexact=email, is_active=True).first()
+        if existing:
+            return existing if existing.role == User.ROLE_PARENT else None
+
+    full_name = str(data.get('fullName') or '').strip()
+    parts = full_name.split()
+    last_name = str(data.get('lastName') or (parts[0] if parts else '')).strip()
+    first_name = str(data.get('firstName') or (parts[-1] if len(parts) > 1 else '')).strip()
+    middle_name = str(data.get('middleName') or (' '.join(parts[1:-1]) if len(parts) > 2 else '')).strip()
+    username = str(data.get('parentNumber') or identifier).strip()[:150]
+    if not username:
+        return None
+    collision = User.objects.filter(username__iexact=username).first()
+    if collision:
+        return collision if collision.role == User.ROLE_PARENT else None
+
+    user = User(
+        username=username,
+        role=User.ROLE_PARENT,
+        first_name=first_name,
+        middle_name=middle_name,
+        last_name=last_name,
+        email=email,
+        phone=phone,
+    )
+    user.set_unusable_password()
+    user.save()
+    return user
 
 def provision_student_access_identity(identifier, data=None):
     data = data or {}
@@ -255,7 +300,7 @@ def reset_user_access_credentials(user):
         phone=user.phone,
         subject=subject,
         body=body,
-        channels=['email', 'sms'],
+        channels=['email'] if user.role == User.ROLE_STUDENT else ['email', 'sms'],
     )
 
     return {
@@ -290,13 +335,8 @@ def forgot_password(request):
             "Ignorez ce message si vous n'etes pas a l'origine de la demande."
         )
         try:
-            send_mail(
-                'SAVANEX password reset',
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=False,
-            )
+            send_branded_email(user.email, 'SAVANEX password reset', message, reset_url, 'Reinitialiser mon mot de passe')
+
         except Exception:
             print(f'[auth] SAVANEX password reset link for {user.email}: {reset_url}')
 

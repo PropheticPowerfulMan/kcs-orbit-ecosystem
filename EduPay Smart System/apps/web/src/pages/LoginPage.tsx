@@ -382,7 +382,7 @@ export function LoginPage() {
                   placeholder="email@school.com ou ACC-PAR-XXXXXX"
                   className="w-full"
                   type="text"
-                  autoComplete="username"
+                  autoComplete="off"
                 />
                 {errors.email && <p className="text-xs text-danger">{errors.email.message}</p>}
               </div>
@@ -405,7 +405,7 @@ export function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     placeholder={t("password")}
                     className="w-full !pr-11"
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"

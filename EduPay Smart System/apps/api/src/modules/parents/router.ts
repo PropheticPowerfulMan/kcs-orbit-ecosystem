@@ -609,7 +609,16 @@ async function assignOnboardingFinance(options: {
           preferences: { notifyEmail?: boolean; notifySms?: boolean }
         ) {
           try {
-            return await sendParentWelcomeNotifications(parent, temporaryPassword, schoolId, preferences);
+            const notificationPromise = sendParentWelcomeNotifications(parent, temporaryPassword, schoolId, preferences);
+            return await Promise.race([
+              notificationPromise,
+              new Promise<{ email: string; sms: string }>((resolve) => {
+                setTimeout(() => resolve({
+                  email: preferences.notifyEmail ? "PENDING" : "SKIPPED",
+                  sms: preferences.notifySms ? "PENDING" : "SKIPPED"
+                }), 12_000);
+              })
+            ]);
           } catch (error) {
             console.error("[PARENT_CREATE_CREDENTIALS] Notification failed", error);
             return {
@@ -738,7 +747,17 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
   const normalizedEmail = payload.email.trim().toLowerCase();
   const normalizedPhone = payload.phone.replace(/\s+/g, "");
 
-  // Suppression de la vérification d’unicité email/téléphone pour respecter la règle de l’écosystème
+  const existingPortalUser = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, schoolId: true, role: true }
+  });
+  if (existingPortalUser) {
+    return res.status(409).json({
+      message: existingPortalUser.schoolId === req.user!.schoolId
+        ? "Un compte utilise déjà cette adresse e-mail dans cette école."
+        : "Cette adresse e-mail est déjà utilisée par un compte de l’écosystème."
+    });
+  }
 
   if (orbitRegistryIsEnabled() && process.env.KCS_ORBIT_REGISTRY_DIRECT_WRITES === "true") {
     try {
@@ -1033,6 +1052,9 @@ parentRouter.post("/", async (req: AuthenticatedRequest, res) => {
     if (error instanceof Error && error.message.includes("classes sont introuvables")) {
       return res.status(404).json({ message: error.message });
     }
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+      return res.status(409).json({ message: "L’adresse e-mail ou l’identifiant du parent existe déjà." });
+    }
     if (!demoDataFallbackEnabled()) {
       return res.status(503).json({ message: "Création parent temporairement indisponible. Vérifiez la base de données." });
     }
@@ -1141,6 +1163,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
   const normalizedEmail = payload.email.trim().toLowerCase();
   const normalizedPhone = payload.phone.replace(/\s+/g, "");
   let orbitUpdateSucceeded = false;
+  let resolvedOrbitParentId: string | null = null;
   try {
     const sharedDirectory = orbitRegistryIsEnabled()
       ? await syncOrbitRegistryMirror(req.user!.schoolId)
@@ -1171,6 +1194,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
           matchesSharedParentIdentifier(entry, parentExists.orbitId || id)
         );
         const orbitParentId = parentExists.orbitId || mirroredParent?.orbitId;
+        resolvedOrbitParentId = orbitParentId || null;
 
         if (orbitParentId) {
           const { firstName, lastName } = splitPersonName(payload.fullName);
@@ -1257,6 +1281,7 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
       await tx.parent.update({
         where: { id: localParentId },
         data: {
+          ...(resolvedOrbitParentId && !parentExists.orbitId ? { orbitId: resolvedOrbitParentId } : {}),
           fullName: payload.fullName,
           phone: normalizedPhone,
           email: normalizedEmail,
@@ -1281,13 +1306,14 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
         select: { id: true, orbitId: true }
       });
 
-      if (parentExists.orbitId) {
+      if (resolvedOrbitParentId || parentExists.orbitId) {
+        const orbitParentId = resolvedOrbitParentId || parentExists.orbitId!;
         const { firstName, lastName } = splitPersonName(payload.fullName);
         await enqueueOrbitEvent(tx, {
           eventType: "parent.updated",
           aggregateType: "Parent",
           aggregateId: localParentId,
-          path: `/api/integration/registry/parent/${encodeURIComponent(parentExists.orbitId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
+          path: `/api/integration/registry/parent/${encodeURIComponent(orbitParentId)}?identifierType=orbitId&organizationId=${encodeURIComponent(process.env.KCS_ORBIT_ORGANIZATION_ID || "")}`,
           httpMethod: "PUT",
           payload: {
             fullName: payload.fullName,
@@ -1460,7 +1486,11 @@ parentRouter.put("/:id", async (req: AuthenticatedRequest, res) => {
         ].join("\n"),
       })
       : undefined;
-    return res.json({ ...enrichParent({ ...parent, nom: payload.nom, postnom: payload.postnom, prenom: payload.prenom }), notificationStatus });
+    return res.json({
+      ...enrichParent({ ...parent, nom: payload.nom, postnom: payload.postnom, prenom: payload.prenom }),
+      notificationStatus,
+      syncMode: orbitRegistryIsEnabled() ? (orbitUpdateSucceeded ? "ORBIT_CONFIRMED" : "ORBIT_QUEUED") : "LOCAL_ONLY"
+    });
   } catch (error) {
     console.error("DB unavailable on parent update", error);
     if (error instanceof Error && error.message.includes("classes sont introuvables")) {

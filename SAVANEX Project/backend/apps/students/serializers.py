@@ -1,4 +1,6 @@
 from uuid import uuid4
+import re
+import unicodedata
 
 from django.db import transaction
 from django.db.models import Q
@@ -15,6 +17,30 @@ from apps.users.serializers import generate_temporary_password, UserCreateSerial
 def _generate_ecosystem_id(entity_prefix: str) -> str:
     return f"SAV-{entity_prefix}-{uuid4().hex[:8].upper()}"
 
+
+def _school_email_token(value: str | None) -> str:
+    normalized = unicodedata.normalize('NFKD', value or '')
+    return re.sub(r'[^a-z0-9]+', '', ''.join(char for char in normalized if not unicodedata.combining(char)).lower())
+
+
+def _generate_school_email(first_name: str, middle_name: str, last_name: str) -> str:
+    first = _school_email_token(first_name) or 'user'
+    middle = _school_email_token(middle_name)
+    last = _school_email_token(last_name) or 'kcs'
+    bases = [f'{first}.{last}']
+    if middle:
+        bases.extend([f'{first}.{middle[0]}.{last}', f'{first}.{middle}.{last}'])
+    for base in bases:
+        candidate = f'{base}@ourkcs.org'
+        if not User.objects.filter(email__iexact=candidate).exists():
+            return candidate
+    sequence = 2
+    while sequence < 10000:
+        candidate = f'{bases[0]}{sequence}@ourkcs.org'
+        if not User.objects.filter(email__iexact=candidate).exists():
+            return candidate
+        sequence += 1
+    return f'{bases[0]}{uuid4().hex[:8]}@ourkcs.org'
 
 def _generate_student_id() -> str:
     for _ in range(5):
@@ -223,6 +249,12 @@ class StudentCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
+        if not (user_data.get('email') or '').strip():
+            user_data['email'] = _generate_school_email(
+                user_data.get('first_name', ''),
+                user_data.get('middle_name', ''),
+                user_data.get('last_name', ''),
+            )
         user_data['role'] = 'student'
         user_serializer = UserCreateSerializer(data=user_data)
         user_serializer.is_valid(raise_exception=True)
@@ -426,6 +458,12 @@ class FamilyRegistrationSerializer(serializers.Serializer):
             created_students = []
             for student_data in students_data:
                 user_data = student_data.pop('user')
+                if not (user_data.get('email') or '').strip():
+                    user_data['email'] = _generate_school_email(
+                        user_data.get('first_name', ''),
+                        user_data.get('middle_name', ''),
+                        user_data.get('last_name', ''),
+                    )
                 student_email = (user_data.get('email') or '').strip()
                 inactive_user = None
                 if student_email:

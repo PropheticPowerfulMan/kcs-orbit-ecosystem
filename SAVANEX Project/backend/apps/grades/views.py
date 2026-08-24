@@ -6,6 +6,7 @@ from apps.integration.orbit import sync_grade
 from apps.intelligence.services import observe_grade, observe_report_card
 from .models import Grade, ReportCard
 from .serializers import GradeSerializer, ReportCardSerializer
+from .promotion import promote_student_from_final_report
 from apps.users.permissions import IsTeacherOrAdmin
 
 
@@ -90,5 +91,9 @@ def generate_report_card(request):
         },
     )
     observe_report_card(report)
+
+    promotion = promote_student_from_final_report(report)
+    if promotion:
+        report.refresh_from_db()
 
     return Response(ReportCardSerializer(report).data, status=status.HTTP_201_CREATED)
