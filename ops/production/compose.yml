@@ -105,7 +105,7 @@ services:
 
   edupay_api:
     <<: *service-defaults
-    image: kcs/edupay-api:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/edupay-api:${EDUPAY_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/edupay-api.env
     volumes: [edupay_receipts:/app/storage]
