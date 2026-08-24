@@ -4,8 +4,12 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
+import { MAX_MEDIA_UPLOAD_BYTES, safeMediaFilename, validateMediaUpload } from '../utils/mediaUpload.js'
 
-const upload = multer({ storage: multer.memoryStorage() })
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_MEDIA_UPLOAD_BYTES, files: 1 },
+})
 
 export const mediaRouter = Router()
 
@@ -26,6 +30,9 @@ mediaRouter.get('/categories', asyncHandler(async (_req, res) => {
 
 mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) throw new ApiError(400, 'No file uploaded')
+  if (!validateMediaUpload(req.file)) throw new ApiError(415, 'Unsupported or invalid media file')
+
+  const filename = safeMediaFilename(req.file.originalname)
 
   const item = await prisma.mediaItem.create({
     data: {
@@ -33,7 +40,7 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
       description: req.body.description,
       category: String(req.body.category || 'General'),
       type: String(req.body.type || 'IMAGE').toUpperCase() as 'IMAGE' | 'VIDEO',
-      url: `uploads/media/${req.file.originalname}`,
+      url: `uploads/media/${filename}`,
       thumbnailUrl: req.body.thumbnailUrl,
       tags: Array.isArray(req.body.tags) ? req.body.tags : [],
     },

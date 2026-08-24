@@ -1,36 +1,54 @@
+(security_headers) {
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    X-Frame-Options "DENY"
+    Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:"
+  }
+}
 {$ORBIT_API_DOMAIN} {
+  import security_headers
   reverse_proxy orbit_api:4500
 }
 
 {$NEXUS_API_DOMAIN} {
+  import security_headers
   reverse_proxy nexus_api:5000
 }
 
 {$EDUPAY_DOMAIN} {
+  import security_headers
   reverse_proxy edupay_web:80
 }
 
 {$EDUPAY_API_DOMAIN} {
+  import security_headers
   reverse_proxy edupay_api:4000
 }
 
 {$SAVANEX_DOMAIN} {
+  import security_headers
   reverse_proxy savanex_web:80
 }
 
 {$SAVANEX_API_DOMAIN} {
+  import security_headers
   reverse_proxy savanex_api:8000
 }
 
 {$EDUSYNC_DOMAIN} {
+  import security_headers
   reverse_proxy edusync_web:80
 }
 
 {$EDUSYNC_API_DOMAIN} {
+  import security_headers
   reverse_proxy edusync_api:8000
 }
 
 {$STAGING_DOMAIN} {
+  import security_headers
   header {
     X-Robots-Tag "noindex, nofollow, noarchive"
     Cache-Control "no-store"

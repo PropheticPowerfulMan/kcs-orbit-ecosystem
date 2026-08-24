@@ -18,6 +18,7 @@ import { expenseRouter } from "./modules/expenses/router";
 import { sharedDirectoryRouter } from "./modules/shared-directory/router";
 import { startOrbitOutboxWorker } from "./integrations/orbit";
 import { prisma } from "./prisma";
+import { createCorsOptions } from "./cors";
 
 const app = express();
 
@@ -65,21 +66,7 @@ if (env.FRONTEND_URL) {
 }
 
 app.use(helmet());
-app.use(cors({
-  origin(origin, callback) {
-    let hostname = "";
-    try {
-      hostname = origin ? new URL(origin).hostname : "";
-    } catch {
-      hostname = "";
-    }
-    if (!origin || allowedOrigins.has(origin) || hostname.endsWith(".github.io")) {
-      callback(null, true);
-      return;
-    }
-    callback(new Error(`CORS origin not allowed: ${origin}`));
-  }
-}));
+app.use(cors(createCorsOptions(allowedOrigins)));
 app.use(express.json({ limit: "3mb" }));
 app.use(morgan("combined"));
 app.use(rateLimit({
