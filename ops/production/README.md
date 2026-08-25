@@ -36,3 +36,16 @@ For authenticated LWS e-mail delivery, copy the corresponding blocks from
 `savanex-api.env`. Replace `CHANGE_ME_LWS_MAILBOX_PASSWORD` only on the server,
 keep these files mode 600, and restart the three API containers. Port 587 uses
 STARTTLS (`SMTP_SECURE=false` for Nodemailer and `EMAIL_USE_TLS=True` for Django).
+## GitHub Actions production deployment
+
+The `Deploy production VPS` workflow is manual and uses the protected GitHub environment named `production`. Configure:
+
+- environment secret `VPS_DEPLOY_SSH_PRIVATE_KEY`: the dedicated forced-command private key;
+- environment secret `VPS_SSH_KNOWN_HOSTS`: the pinned `ssh-keyscan -H` line for the VPS;
+- environment variable `VPS_HOST`: the VPS hostname or IP address.
+
+Configure required reviewers on the `production` environment when the GitHub plan supports deployment protection rules. The workflow never receives the general administrator SSH key or application secrets.
+
+For a deployment, select `deploy`, leave `release` blank, and type `DEPLOY_PRODUCTION`. Only the current immutable head of `main` is accepted. The VPS builds every image, creates and verifies a complete backup, runs deploy-only migrations, waits for health checks, and automatically restores the previous application images if a check fails.
+
+For an application rollback, select `rollback`, enter the full 40-character SHA of an image release retained on the VPS, and type `ROLLBACK_PRODUCTION`. Rollback never reverses database migrations or removes volumes, so every migration must remain backward-compatible.

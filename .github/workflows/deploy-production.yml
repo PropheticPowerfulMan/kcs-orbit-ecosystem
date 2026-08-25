@@ -1,0 +1,101 @@
+name: Deploy production VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Deployment operation
+        required: true
+        type: choice
+        options:
+          - deploy
+          - rollback
+      release:
+        description: Full 40-character commit SHA from main (blank deploys current main)
+        required: false
+        type: string
+      confirmation:
+        description: Type DEPLOY_PRODUCTION or ROLLBACK_PRODUCTION
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kcs-orbit-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Resolve and validate release
+        id: release
+        env:
+          REQUESTED_RELEASE: ${{ inputs.release }}
+          DEPLOY_ACTION: ${{ inputs.action }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          expected="${DEPLOY_ACTION^^}_PRODUCTION"
+          [[ "$CONFIRMATION" == "$expected" ]] || { echo "Confirmation must be $expected" >&2; exit 1; }
+          if [[ "$DEPLOY_ACTION" == "rollback" && -z "$REQUESTED_RELEASE" ]]; then
+            echo "Rollback requires the full SHA of an existing image release." >&2
+            exit 1
+          fi
+          sha="${REQUESTED_RELEASE:-$(git rev-parse origin/main)}"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Release must be a full Git SHA." >&2; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main
+          if [[ "$DEPLOY_ACTION" == "deploy" && "$sha" != "$(git rev-parse origin/main)" ]]; then
+            echo "Deployments must use the current head of main. Use rollback for an older release." >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Validate production scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n ops/production/*.sh ops/backup/*.sh
+          test -f ops/production/compose.yml
+          test -f ops/production/Caddyfile
+
+  production:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 90
+    steps:
+      - name: Install restricted deployment key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.VPS_DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/kcs_deploy
+          chmod 600 ~/.ssh/kcs_deploy
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Run restricted production operation
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          RELEASE: ${{ needs.validate.outputs.release }}
+          DEPLOY_ACTION: ${{ inputs.action }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -i ~/.ssh/kcs_deploy \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            root@"$VPS_HOST" "$DEPLOY_ACTION $RELEASE $CONFIRMATION"
