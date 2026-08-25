@@ -15,7 +15,7 @@ export type MailResult =
   | { sent: true }
   | { sent: false; reason: 'SMTP_NOT_CONFIGURED' | 'SMTP_SEND_FAILED' }
 
-const LOGO_URL = 'https://kinshasachristianschool.org/Images/logo.png'
+const LOGO_URL = 'https://kinshasachristianschool.org/images/kcs-logo.png'
 const SCHOOL_URL = 'https://kinshasachristianschool.org/'
 const hasSmtpConfig = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS)
 

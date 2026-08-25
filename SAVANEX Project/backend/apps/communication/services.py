@@ -40,7 +40,7 @@ def _normalize_phone(phone):
     return cleaned
 
 
-LOGO_URL = 'https://kinshasachristianschool.org/Images/logo.png'
+LOGO_URL = 'https://kinshasachristianschool.org/images/kcs-logo.png'
 SCHOOL_URL = 'https://kinshasachristianschool.org/'
 
 
