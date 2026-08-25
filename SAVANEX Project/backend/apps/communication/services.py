@@ -3,6 +3,7 @@ import json
 import logging
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
@@ -31,7 +32,12 @@ def _school_sender_name():
 
 
 def _normalize_phone(phone):
-    return ''.join(char for char in (phone or '').strip() if char == '+' or char.isdigit())
+    cleaned = ''.join(char for char in (phone or '').strip() if char == '+' or char.isdigit())
+    if cleaned.startswith('0') and 9 <= len(cleaned) - 1 <= 11:
+        return f'+243{cleaned[1:]}'
+    if cleaned.startswith('243') and 11 <= len(cleaned) <= 14:
+        return f'+{cleaned}'
+    return cleaned
 
 
 LOGO_URL = 'https://kinshasachristianschool.org/Images/logo.png'
@@ -133,27 +139,48 @@ def _send_sms_with_africas_talking(phone, body):
     if not all([api_url, api_key, username]):
         return None
 
-    payload = {'username': username, 'to': phone, 'message': body}
-    if sender:
-        payload['from'] = sender
-    request = urllib.request.Request(
-        api_url,
-        data=urllib.parse.urlencode(payload).encode('utf-8'),
-        headers={'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'apiKey': api_key},
-        method='POST',
-    )
-    with urllib.request.urlopen(request, timeout=15) as response:
-        response_body = response.read().decode('utf-8', errors='ignore')
-        parsed = json.loads(response_body or '{}')
+    def submit(include_sender):
+        payload = {'username': username, 'to': phone, 'message': body}
+        if include_sender and sender:
+            payload['from'] = sender
+        request = urllib.request.Request(
+            api_url,
+            data=urllib.parse.urlencode(payload).encode('utf-8'),
+            headers={'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'apiKey': api_key},
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                return response.status, response.read().decode('utf-8', errors='ignore')
+        except HTTPError as exc:
+            return exc.code, exc.read().decode('utf-8', errors='ignore')
+
+    def provider_accepted(status, response_body):
+        try:
+            parsed = json.loads(response_body or '{}')
+        except json.JSONDecodeError:
+            return False
         recipients = parsed.get('SMSMessageData', {}).get('Recipients', [])
-        accepted = any(
+        return 200 <= status < 300 and bool(recipients) and any(
             str(recipient.get('statusCode', '')) == '101'
             or any(label in str(recipient.get('status', '')).lower() for label in ('success', 'sent', 'submitted'))
             for recipient in recipients
         )
-        if not 200 <= response.status < 300 or (recipients and not accepted):
-            return DeliveryResult('sms', 'failed', response_body[:160])
+
+    status, response_body = submit(bool(sender))
+    if provider_accepted(status, response_body):
         return DeliveryResult('sms', 'sent', response_body[:160])
+
+    sender_rejected = any(label in response_body.lower() for label in (
+        'sender', 'from', 'short code', 'shortcode', 'not allowed', 'not registered', 'invalid sender',
+    ))
+    if sender and sender_rejected:
+        status, response_body = submit(False)
+        if provider_accepted(status, response_body):
+            logger.warning("SMS accepted after retrying without an Africa's Talking Sender ID.")
+            return DeliveryResult('sms', 'sent', response_body[:160])
+
+    return DeliveryResult('sms', 'failed', response_body[:160])
 
 
 def _send_user_sms(user, body, label='User'):
