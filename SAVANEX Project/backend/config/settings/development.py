@@ -19,8 +19,13 @@ else:
         }
     }
 
-# Email — print to console
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Send real notifications when local SMTP credentials are configured. The
+# console backend remains the safe fallback for contributors without secrets.
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or (
+    'django.core.mail.backends.smtp.EmailBackend'
+    if os.environ.get('EMAIL_HOST_USER') and os.environ.get('EMAIL_HOST_PASSWORD')
+    else 'django.core.mail.backends.console.EmailBackend'
+)
 
 # Django Debug Toolbar (optional)
 INSTALLED_APPS += ['django_extensions']
