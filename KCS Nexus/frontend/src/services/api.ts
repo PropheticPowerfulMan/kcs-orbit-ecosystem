@@ -100,8 +100,8 @@ export const authAPI = {
     api.post('/auth/register', data),
   googleAuth: (token: string) =>
     api.post('/auth/google', { token }),
-  forgotPassword: (email: string) =>
-    api.post('/auth/forgot-password', { email }),
+  forgotPassword: (email: string, channel: 'email' | 'sms' = 'email') =>
+    api.post('/auth/forgot-password', { email, channel }),
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
   changePassword: (currentPassword: string, newPassword: string) =>

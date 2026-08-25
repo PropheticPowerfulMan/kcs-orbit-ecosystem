@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
   );
 
   const forgotPassword = useCallback(
-    (email) => apiRequest("/auth/forgot-password", "POST", { email }),
+    (email, channel = "email") => apiRequest("/auth/forgot-password", "POST", { email, channel }),
     []
   );
 

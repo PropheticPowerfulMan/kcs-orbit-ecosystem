@@ -17,6 +17,7 @@ const LoginPage = () => {
   const [resetMessage, setResetMessage] = useState('');
   const [resetError, setResetError] = useState('');
   const [resetOpen, setResetOpen] = useState(false);
+  const [resetChannel, setResetChannel] = useState('email');
   const [loading, setLoading] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const demoMode = isDemoModeEnabled();
@@ -58,8 +59,8 @@ const LoginPage = () => {
         setResetForm({ email: resetForm.email, uid: '', token: '', password: '' });
         window.history.replaceState({}, document.title, window.location.pathname);
       } else {
-        await authService.forgotPassword(resetForm.email || form.username);
-        setResetMessage('Si ce compte existe, un lien securise a ete envoye.');
+        await authService.forgotPassword(resetForm.email || form.username, resetChannel);
+        setResetMessage(`Si ce compte existe, un lien securise a ete envoye par ${resetChannel === 'sms' ? 'SMS' : 'e-mail'}.`);
       }
     } catch (err) {
       setResetError(err?.response?.data?.detail || 'Recuperation temporairement indisponible.');
@@ -143,6 +144,12 @@ const LoginPage = () => {
           {resetOpen && (
             <div className="rounded-xl border border-github-border bg-slate-950/55 p-4 text-left">
               <form className="space-y-3" onSubmit={onResetSubmit}>
+                {!resetForm.uid && !resetForm.token && (
+                  <div className="grid grid-cols-2 gap-2" role="group" aria-label="Canal de recuperation">
+                    <button type="button" onClick={() => setResetChannel('email')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${resetChannel === 'email' ? 'bg-kcs-blue text-slate-950' : 'border border-github-border text-slate-200'}`}>E-mail</button>
+                    <button type="button" onClick={() => setResetChannel('sms')} className={`rounded-lg px-3 py-2 text-sm font-semibold ${resetChannel === 'sms' ? 'bg-kcs-blue text-slate-950' : 'border border-github-border text-slate-200'}`}>SMS</button>
+                  </div>
+                )}
                 <input
                   value={resetForm.email}
                   onChange={(e) => setResetForm((prev) => ({ ...prev, email: e.target.value }))}

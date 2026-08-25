@@ -93,5 +93,15 @@ class EduSyncSharedAuthTests(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 503)
 
 
+
+    @patch.object(auth.settings, "savanex_api_url", "http://savanex")
+    @patch.object(auth.settings, "edupay_api_url", "http://edupay")
+    @patch("app.api.routes.auth.request.urlopen")
+    def test_password_recovery_forwards_selected_channel(self, mock_urlopen):
+        auth.forward_password_recovery("user@example.com", "sms")
+        self.assertEqual(mock_urlopen.call_count, 2)
+        for call in mock_urlopen.call_args_list:
+            request_body = json.loads(call.args[0].data.decode("utf-8"))
+            self.assertEqual(request_body["channel"], "sms")
 if __name__ == "__main__":
     unittest.main()

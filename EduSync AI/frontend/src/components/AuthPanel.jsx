@@ -16,6 +16,7 @@ export default function AuthPanel() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recoveryChannel, setRecoveryChannel] = useState("email");
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -42,7 +43,7 @@ export default function AuthPanel() {
     setBusy(true);
     try {
       if (mode === "recovery") {
-        const result = await forgotPassword(form.email);
+        const result = await forgotPassword(form.email, recoveryChannel);
         setMessage(result.message);
         return;
       }
@@ -79,7 +80,7 @@ export default function AuthPanel() {
             <h2>{mode === "recovery" ? "Recover access" : mode === "login" ? "Open the portal" : "Create access"}</h2>
           </div>
         </div>
-        <p className="subtle">{mode === "recovery" ? "Enter the email attached to your school account." : "Use your school email or shared access code to open the dashboard."}</p>
+        <p className="subtle">{mode === "recovery" ? "Choose email or SMS, then enter the email attached to your school account." : "Use your school email or shared access code to open the dashboard."}</p>
 
         {mode === "login" && (
           <button type="button" className="credential-chip" onClick={fillDemoCredentials}>
@@ -103,6 +104,12 @@ export default function AuthPanel() {
           onChange={(e) => updateField("email", e.target.value)}
           required
         />
+        {mode === "recovery" && (
+          <div className="recovery-channel" role="group" aria-label="Password recovery channel">
+            <button type="button" className={recoveryChannel === "email" ? "active" : "secondary"} onClick={() => setRecoveryChannel("email")}>Email</button>
+            <button type="button" className={recoveryChannel === "sms" ? "active" : "secondary"} onClick={() => setRecoveryChannel("sms")}>SMS</button>
+          </div>
+        )}
         {mode !== "recovery" && (
           <input
             type="password"

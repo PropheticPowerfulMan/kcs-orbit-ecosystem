@@ -8,7 +8,7 @@ import { prisma } from "../../prisma";
 import { env } from "../../config/env";
 import { syncOrbitRegistryMirror, type SharedParentOption, type SharedTeacherOption } from "../../integrations/orbitRegistry";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
-import { sendEmail } from "../../utils/messaging";
+import { sendEmail, sendSms } from "../../utils/messaging";
 import { resolveCurrentParent } from "../parents/currentParent";
 
 type StaffRole = "SUPER_ADMIN" | "OWNER" | "ADMIN" | "FINANCIAL_MANAGER" | "ACCOUNTANT" | "CASHIER" | "HR_MANAGER" | "AUDITOR" | "PARENT" | "EMPLOYEE";
@@ -54,7 +54,8 @@ const loginSchema = z.object({
 });
 
 const forgotPasswordSchema = z.object({
-  identifier: z.string().min(3).max(120)
+  identifier: z.string().min(3).max(120),
+  channel: z.enum(["email", "sms"]).default("email")
 });
 
 const resetPasswordSchema = z.object({
@@ -556,7 +557,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
 
 authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
   const payload = forgotPasswordSchema.safeParse(req.body);
-  const genericMessage = "Si ce compte existe, un code de réinitialisation vient d'être envoyé.";
+  const genericMessage = "Si ce compte existe, un lien sécurisé sera envoyé via le canal sélectionné.";
   if (!payload.success) return res.json({ message: genericMessage });
 
   try {
@@ -567,7 +568,8 @@ authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
           { email: identifier.toLowerCase() },
           { accessCode: normalizeAccessCode(identifier) }
         ]
-      }
+      },
+      include: { parent: true }
     });
     if (user) {
       await prisma.passwordResetToken.updateMany({
@@ -582,7 +584,15 @@ authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
           expiresAt: new Date(Date.now() + 30 * 60 * 1000)
         }
       });
-      await sendEmail({
+      if (payload.data.channel === "sms") {
+        if (user.parent?.phone) {
+          await sendSms({
+            to: user.parent.phone,
+            text: `EduPay: reinitialisez votre mot de passe (lien valable 30 min): ${buildPasswordResetLink(token)}`
+          });
+        }
+      } else {
+        await sendEmail({
         to: user.email,
         subject: "Réinitialisation de mot de passe EduPay",
         text: [
@@ -597,11 +607,12 @@ authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
           "",
           "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message."
         ].join("\n")
-      });
+        });
+      }
     }
     return res.json({ message: genericMessage });
   } catch (error) {
-    console.error("Forgot password email flow failed", error);
+    console.error("Forgot password delivery flow failed", error);
     return res.json({ message: genericMessage });
   }
 });

@@ -118,3 +118,36 @@ class SchoolEmailGenerationTests(TestCase):
 
         self.assertEqual(employee.email, 'paul.ilunga@ourkcs.org')
         self.assertEqual(teacher.email, 'paul.a.ilunga@ourkcs.org')
+
+class PasswordRecoveryChannelTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='recovery-channel-user',
+            email='recovery.channel@example.com',
+            password='ParentPass123!',
+            phone='+243816300058',
+            role=User.ROLE_PARENT,
+        )
+
+    @patch('apps.users.views.send_branded_email')
+    @patch('apps.users.views._send_user_sms')
+    def test_sms_channel_uses_sms_only(self, send_sms, send_email):
+        response = self.client.post('/api/auth/forgot-password/', {
+            'email': self.user.email,
+            'channel': 'sms',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        send_sms.assert_called_once()
+        send_email.assert_not_called()
+
+    @patch('apps.users.views.send_branded_email')
+    @patch('apps.users.views._send_user_sms')
+    def test_email_channel_uses_email_only(self, send_sms, send_email):
+        response = self.client.post('/api/auth/forgot-password/', {
+            'email': self.user.email,
+            'channel': 'email',
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        send_email.assert_called_once()
+        send_sms.assert_not_called()

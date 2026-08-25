@@ -12,7 +12,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
-from apps.communication.services import deliver_direct_parent_contact, send_branded_email
+from apps.communication.services import _send_user_sms, deliver_direct_parent_contact, send_branded_email
 from apps.teachers.services import deactivate_teacher
 from .models import User
 from .serializers import (
@@ -26,7 +26,7 @@ from .serializers import (
 from .permissions import IsAdminUser
 
 
-PASSWORD_RESET_RESPONSE = {'detail': 'If an account exists, a reset link will be sent.'}
+PASSWORD_RESET_RESPONSE = {'detail': 'If an account exists, a secure reset link will be sent through the selected channel.'}
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -317,10 +317,13 @@ def reset_user_access_credentials(user):
 @permission_classes([permissions.AllowAny])
 def forgot_password(request):
     email = (request.data.get('email') or '').strip().lower()
+    channel = (request.data.get('channel') or 'email').strip().lower()
+    if channel not in ('email', 'sms'):
+        return Response(PASSWORD_RESET_RESPONSE)
     try:
         validate_email(email)
     except ValidationError:
-        return Response({'email': ['Enter a valid email address.']}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(PASSWORD_RESET_RESPONSE)
 
     user = User.objects.filter(email__iexact=email, is_active=True).first()
     if user:
@@ -335,10 +338,12 @@ def forgot_password(request):
             "Ignorez ce message si vous n'etes pas a l'origine de la demande."
         )
         try:
-            send_branded_email(user.email, 'SAVANEX password reset', message, reset_url, 'Reinitialiser mon mot de passe')
-
+            if channel == 'sms':
+                _send_user_sms(user, f'Reinitialisez votre mot de passe (lien securise): {reset_url}', 'Password recovery')
+            else:
+                send_branded_email(user.email, 'SAVANEX password reset', message, reset_url, 'Reinitialiser mon mot de passe')
         except Exception:
-            print(f'[auth] SAVANEX password reset link for {user.email}: {reset_url}')
+            print(f'[auth] SAVANEX password reset delivery failed via {channel}.')
 
     return Response(PASSWORD_RESET_RESPONSE)
 

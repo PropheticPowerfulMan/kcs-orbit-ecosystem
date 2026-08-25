@@ -244,18 +244,18 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 
-def forward_password_recovery(email: str) -> None:
+def forward_password_recovery(email: str, channel: str = "email") -> None:
     targets: list[tuple[str, dict, dict]] = []
     if settings.savanex_api_url.strip():
         targets.append((
             f"{settings.savanex_api_url.rstrip('/')}/api/auth/forgot-password/",
-            {"email": email},
+            {"email": email, "channel": channel},
             {},
         ))
     if settings.edupay_api_url.strip():
         targets.append((
             f"{settings.edupay_api_url.rstrip('/')}/api/auth/forgot-password",
-            {"identifier": email},
+            {"identifier": email, "channel": channel},
             {},
         ))
 
@@ -272,8 +272,11 @@ def forward_password_recovery(email: str) -> None:
 
 @router.post("/forgot-password")
 def forgot_password(payload: ForgotPasswordRequest):
-    forward_password_recovery(str(payload.email).strip().lower())
-    return {"message": "If this account exists, a secure reset link has been sent by email."}
+    channel = payload.channel.strip().lower()
+    if channel not in {"email", "sms"}:
+        channel = "email"
+    forward_password_recovery(str(payload.email).strip().lower(), channel)
+    return {"message": "If this account exists, a secure reset link has been sent through the selected channel."}
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):

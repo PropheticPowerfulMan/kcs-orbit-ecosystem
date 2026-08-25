@@ -33,6 +33,7 @@ class ChangePasswordRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+    channel: str = 'email'
 
 
 class TokenResponse(BaseModel):

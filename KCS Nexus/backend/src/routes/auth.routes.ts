@@ -9,13 +9,14 @@ import { env } from '../config/env.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { sendSchoolMail } from '../utils/mail.js'
+import { sendSchoolSms } from '../utils/sms.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
 import { ensureUserAccessCodeColumn, isMissingAccessCodeColumnError } from '../utils/userAccessCode.js'
 import { generateTotpSecret, verifyTotp } from '../utils/totp.js'
 
 const RESET_TOKEN_TTL_MINUTES = 30
 const RESET_TOKEN_BYTES = 32
-const PASSWORD_RESET_RESPONSE = 'If an account exists, a reset link will be sent.'
+const PASSWORD_RESET_RESPONSE = 'If an account exists, a secure reset link will be sent through the selected channel.'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -652,7 +653,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   return success(res, { token, user: buildSafeUser(synchronizedUser) }, 'Token refreshed')
 }))
 
-async function forwardPasswordRecovery(email: string, sources: string[] = []) {
+async function forwardPasswordRecovery(email: string, channel: 'email' | 'sms', sources: string[] = []) {
   const requests: Promise<unknown>[] = []
   const useSavanex = sources.length === 0 || sources.includes('savanex')
   const useEduPay = sources.length === 0 || sources.includes('edupay')
@@ -661,7 +662,7 @@ async function forwardPasswordRecovery(email: string, sources: string[] = []) {
     requests.push(fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/auth/forgot-password/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, channel }),
       signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
     }).catch(() => null))
   }
@@ -669,7 +670,7 @@ async function forwardPasswordRecovery(email: string, sources: string[] = []) {
     requests.push(fetch(`${env.EDUPAY_API_URL.replace(/\/$/, '')}/api/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: email }),
+      body: JSON.stringify({ identifier: email, channel }),
       signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
     }).catch(() => null))
   }
@@ -677,15 +678,15 @@ async function forwardPasswordRecovery(email: string, sources: string[] = []) {
   await Promise.allSettled(requests)
 }
 authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
-  const schema = z.object({ email: z.string().email() })
-  const { email } = schema.parse(req.body)
+  const schema = z.object({ email: z.string().email(), channel: z.enum(['email', 'sms']).default('email') })
+  const { email, channel } = schema.parse(req.body)
   const normalizedEmail = email.trim().toLowerCase()
   const user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   const recoverySources = user?.permissions
     .filter((permission) => permission.startsWith('ecosystem:'))
     .map((permission) => permission.slice('ecosystem:'.length)) ?? []
 
-  await forwardPasswordRecovery(normalizedEmail, recoverySources)
+  await forwardPasswordRecovery(normalizedEmail, channel, recoverySources)
 
   if (user?.passwordHash && recoverySources.length === 0 && !isConfiguredSuperAdminUser(user.id)) {
     const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('base64url')
@@ -713,15 +714,17 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
 
     const resetUrl = buildPasswordResetUrl(rawToken)
     const emailContent = buildPasswordResetEmail(user.firstName, resetUrl)
-    const result = await sendSchoolMail({
-      to: user.email,
-      subject: 'KCS Nexus password reset',
-      text: emailContent.text,
-      html: emailContent.html,
-    })
+    const result = channel === 'sms'
+      ? await sendSchoolSms(user.phone, `KCS Nexus: reinitialisez votre mot de passe (lien valable ${RESET_TOKEN_TTL_MINUTES} min): ${resetUrl}`)
+      : await sendSchoolMail({
+          to: user.email,
+          subject: 'KCS Nexus password reset',
+          text: emailContent.text,
+          html: emailContent.html,
+        })
 
     if (!result.sent) {
-      console.warn(`[auth] Password reset link for ${user.email}: ${resetUrl}`)
+      console.warn(`[auth] Password reset delivery failed via ${channel}.`)
     }
   }
 

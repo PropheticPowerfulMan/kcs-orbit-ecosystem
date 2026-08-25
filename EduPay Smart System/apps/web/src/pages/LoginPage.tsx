@@ -30,6 +30,7 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
   const [step, setStep] = useState<ForgotStep>("form");
   const [adminRecovery, setAdminRecovery] = useState(false);
   const [identifier, setIdentifier] = useState("");
+  const [recoveryChannel, setRecoveryChannel] = useState<"email" | "sms">("email");
   const [resetToken, setResetToken] = useState(initialResetToken);
   const [recoveryCode, setRecoveryCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -56,7 +57,7 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
     try {
       const result = await api<{ message?: string; resetToken?: string }>("/api/auth/forgot-password", {
         method: "POST",
-        body: JSON.stringify({ identifier: identifier.trim() })
+        body: JSON.stringify({ identifier: identifier.trim(), channel: recoveryChannel })
       });
       if (result.resetToken) {
         setResetToken(result.resetToken);
@@ -169,6 +170,10 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
               <p className="text-sm text-ink-dim mt-2">{t("forgotSubtitle")}</p>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Canal de récupération">
+                <button type="button" onClick={() => setRecoveryChannel("email")} className={recoveryChannel === "email" ? "btn-primary py-2" : "rounded-lg border border-slate-600 py-2 text-sm font-semibold text-ink-dim"}>E-mail</button>
+                <button type="button" onClick={() => setRecoveryChannel("sms")} className={recoveryChannel === "sms" ? "btn-primary py-2" : "rounded-lg border border-slate-600 py-2 text-sm font-semibold text-ink-dim"}>SMS</button>
+              </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-ink-dim">E-mail ou code d'accès</label>
                 <input

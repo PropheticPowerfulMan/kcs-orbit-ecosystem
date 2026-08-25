@@ -401,8 +401,8 @@ export const authService = {
     const res = await api.post('/auth/login/', { username, password });
     return res.data;
   },
-  async forgotPassword(email) {
-    const res = await api.post('/auth/forgot-password/', { email });
+  async forgotPassword(email, channel = 'email') {
+    const res = await api.post('/auth/forgot-password/', { email, channel });
     return res.data;
   },
   async resetPassword(uid, token, password) {
