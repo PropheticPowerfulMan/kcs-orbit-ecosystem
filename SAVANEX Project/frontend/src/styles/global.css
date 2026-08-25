@@ -1051,7 +1051,7 @@ body {
 
 /* Mobile and tablet layout: keep every workflow usable without horizontal page overflow. */
 @media (max-width: 1023px) {
-  html, body, #root { width: 100%; max-width: 100%; overflow-x: hidden; }
+  html, body, #root { width: 100%; height: 100%; max-width: 100%; margin: 0; overflow: hidden; }
   .savanex-shell, .savanex-workspace, .savanex-workspace > main, .savanex-dedicated-page {
     width: 100%; max-width: 100%; min-width: 0;
   }
@@ -1237,10 +1237,13 @@ textarea {
   }
 
   .savanex-shell {
+    height: 100dvh;
     min-height: 100dvh;
+    overflow: hidden;
   }
 
   .savanex-workspace {
+    height: 100dvh;
     min-height: 100dvh;
   }
 

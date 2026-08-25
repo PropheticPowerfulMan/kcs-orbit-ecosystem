@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { useAuthStore } from '../../store/authStore';
@@ -19,6 +19,10 @@ const DashboardLayout = ({ children }) => {
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
 
   return (
     <div className="savanex-shell flex min-h-screen overflow-x-hidden bg-transparent lg:h-screen lg:overflow-hidden lg:gap-6 lg:px-5 lg:py-5 xl:px-6">

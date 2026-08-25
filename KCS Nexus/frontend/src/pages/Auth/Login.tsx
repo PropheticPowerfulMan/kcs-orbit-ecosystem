@@ -92,14 +92,14 @@ const LoginPage = () => {
       <div className="absolute inset-0 dots-bg opacity-25"/>
       <div className="relative container-custom flex min-h-screen items-center justify-center py-10 sm:py-16">
         <div className="grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl lg:grid-cols-[0.9fr_1.1fr]">
-          <aside className="border-b border-white/10 p-7 text-white lg:border-b-0 lg:border-r lg:p-10">
+          <aside className="border-b border-kcs-blue-700 bg-kcs-blue-950 p-7 text-white shadow-[inset_-1px_0_0_rgba(255,255,255,0.08)] lg:border-b-0 lg:border-r lg:p-10">
             <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-1.5 text-sm text-emerald-200"><ShieldCheck size={14}/> Accès sécurisé de production</span>
             <h1 className="mt-7 font-display text-3xl font-bold leading-tight sm:text-4xl">Votre espace scolaire, selon vos autorisations</h1>
             <p className="mt-4 max-w-lg text-sm leading-6 text-kcs-blue-100">Élèves, parents et enseignants utilisent les identifiants personnels créés par l’administration. Aucun compte collectif ou mot de passe de démonstration n’est accepté.</p>
             <div className="mt-8 space-y-3">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-300">Identifiants administratifs réservés</p>
               {import.meta.env.DEV && administrativeIdentifiers.map((account) => (
-                <button key={account.identifier} type="button" onClick={() => { form.setValue('email', account.identifier, { shouldValidate: true }); form.setFocus('password') }} className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition hover:border-kcs-gold-300/40 hover:bg-white/10">
+                <button key={account.identifier} type="button" onClick={() => { form.setValue('email', account.identifier, { shouldValidate: true }); form.setFocus('password') }} className="flex w-full items-center gap-3 rounded-2xl border border-white/20 bg-white/10 p-4 text-left text-white shadow-sm transition hover:border-kcs-gold-300/60 hover:bg-white/15">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-kcs-gold-400/15 text-kcs-gold-300"><Building2 size={18}/></span>
                   <span className="min-w-0 flex-1"><span className="block font-semibold">{account.label}</span><span className="block truncate text-sm text-kcs-blue-200">{account.identifier}</span><span className="mt-1 block text-xs text-kcs-blue-300">{account.detail}</span></span>
                 </button>

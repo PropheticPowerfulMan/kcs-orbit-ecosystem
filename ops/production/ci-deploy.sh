@@ -46,7 +46,7 @@ export NEXUS_API_URL="https://${NEXUS_API_DOMAIN}/api"
 export EDUPAY_API_URL="https://${EDUPAY_API_DOMAIN}"
 export EDUPAY_PUBLIC_URL="https://${EDUPAY_DOMAIN}"
 export SAVANEX_API_URL="https://${SAVANEX_API_DOMAIN}/api"
-export EDUSYNC_API_URL="https://${EDUSYNC_API_DOMAIN}"
+export EDUSYNC_API_URL="https://${EDUSYNC_API_DOMAIN}/api/v1"
 
 "$ROOT_DIR/ops/production/build-images.sh" "$RELEASE"
 "$ROOT_DIR/ops/production/deploy.sh" "$RELEASE"

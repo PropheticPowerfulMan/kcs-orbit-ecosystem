@@ -41,7 +41,7 @@ function imageFileToAvatar(file: File): Promise<string> {
   });
 }
 
-function ChangePasswordModal({ onClose, onChanged, required = false }: { onClose: () => void; onChanged?: () => void; required?: boolean }) {
+function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: { onClose: () => void; onChanged?: () => void; temporaryPassword?: boolean }) {
   const { t } = useI18n();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -81,12 +81,12 @@ function ChangePasswordModal({ onClose, onChanged, required = false }: { onClose
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={required ? undefined : onClose}>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <form onSubmit={submit} className="edupay-dialog-panel-sm glass relative w-full rounded-2xl p-8 space-y-5 animate-fadeInUp sm:p-9" onClick={(e) => e.stopPropagation()}>
         <div>
           <h3 className="font-display text-xl font-bold text-white">{t("changePasswordTitle")}</h3>
-          <p className="mt-1 text-sm text-ink-dim">{required ? "Pour sécuriser ce compte réel, changez le mot de passe temporaire avant de continuer." : t("changePasswordSubtitle")}</p>
+          <p className="mt-1 text-sm text-ink-dim">{temporaryPassword ? "Ce compte utilise encore un mot de passe temporaire. Vous pouvez le changer maintenant ou revenir plus tard depuis le menu du profil." : t("changePasswordSubtitle")}</p>
         </div>
         <input
           type="password"
@@ -115,7 +115,7 @@ function ChangePasswordModal({ onClose, onChanged, required = false }: { onClose
           <button disabled={saving} className="flex-1 btn-primary py-3 text-sm font-bold disabled:opacity-60">
             {saving ? t("pmSaving") : t("pmSave")}
           </button>
-          <button type="button" onClick={onClose} disabled={required} className="rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">
             {t("close")}
           </button>
         </div>
@@ -131,7 +131,7 @@ export function Navbar() {
   const isMobileNavOpen = useUiStore((s) => s.isMobileNavOpen);
   const toggleDesktopSidebar = useUiStore((s) => s.toggleDesktopSidebar);
   const toggleMobileNav = useUiStore((s) => s.toggleMobileNav);
-  const requiresImmediatePasswordChange = mustChangePassword && role !== "PARENT";
+  const shouldSuggestPasswordChange = mustChangePassword && role !== "PARENT";
   const hasDeferredPasswordReminder = mustChangePassword && role === "PARENT";
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -160,8 +160,8 @@ export function Navbar() {
   }, [isUserMenuOpen]);
 
   useEffect(() => {
-    if (requiresImmediatePasswordChange) setShowPasswordModal(true);
-  }, [requiresImmediatePasswordChange]);
+    if (shouldSuggestPasswordChange) setShowPasswordModal(true);
+  }, [shouldSuggestPasswordChange]);
 
   const updatePhoto = async (file?: File) => {
     if (!file) return;
@@ -197,13 +197,10 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 bg-[linear-gradient(180deg,rgba(2,6,23,0.92),rgba(5,16,24,0.78))] shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
-      {showPasswordModal && <ChangePasswordModal required={requiresImmediatePasswordChange} onChanged={() => {
+      {showPasswordModal && <ChangePasswordModal temporaryPassword={mustChangePassword} onChanged={() => {
         setMustChangePassword(false);
         setShowPasswordModal(false);
-      }} onClose={() => {
-        if (requiresImmediatePasswordChange) return;
-        setShowPasswordModal(false);
-      }} />}
+      }} onClose={() => setShowPasswordModal(false)} />}
       <div className="relative w-full px-3 py-2.5 sm:px-5 sm:py-3 lg:px-6 xl:px-8">
         <div className="flex items-center justify-between gap-2 rounded-[2rem] bg-white/[0.04] px-2.5 py-2 shadow-[0_20px_45px_rgba(2,6,23,0.18)] sm:px-3">
           {/* Logo Section */}
