@@ -10,6 +10,7 @@ import { buildReceiptAllocationSnapshot } from "../utils/receiptAllocation";
 import { buildReceiptVerificationQrUrl, buildReceiptVerificationUrl } from "../utils/receiptVerification";
 import { exportWorkbook } from "../utils/financeExcel";
 import { printHtmlDocument } from "../utils/printDocument";
+import { normalizeUsdInput, parseUsdInput } from "../utils/currencyInput";
 
 /* --- Transaction number generator ---------------------------------------- */
 function generateTxNumber(): string {
@@ -1863,7 +1864,7 @@ export function PaymentsPage() {
     }
   };
 
-  const amountNum = parseFloat(form.amount) || 0;
+  const amountNum = parseUsdInput(form.amount);
   const amountWords = useMemo(() => {
     if (amountNum <= 0) return "-";
     return amountToWords(amountNum, lang as "fr" | "en");
@@ -2370,7 +2371,7 @@ export function PaymentsPage() {
     setSaving(true);
     setApiError(null);
 
-    const finalAmount = roundMoney(parseFloat(form.amount));
+    const finalAmount = parseUsdInput(form.amount);
     const now = new Date();
     const dateStr = now.toLocaleString(lang === "fr" ? "fr-FR" : "en-US", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -3761,11 +3762,12 @@ export function PaymentsPage() {
                 <span className="pointer-events-none absolute inset-y-0 left-0 flex w-10 items-center justify-center text-sm font-bold text-brand-300">$</span>
                 <input
                   type="number"
-                  step="0.00001"
-                  min="0.00001"
+                  step="0.01"
+                  min="0.01"
                   value={form.amount}
                   onChange={(e) => setField("amount", e.target.value)}
-                  placeholder="0.00000"
+                  onBlur={(e) => setField("amount", normalizeUsdInput(e.target.value))}
+                  placeholder="0.00"
                   className={`w-full !pl-11 font-mono tabular-nums ${fieldErrors.amount ? "border-danger" : ""}`}
                 />
               </div>

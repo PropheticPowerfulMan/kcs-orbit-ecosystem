@@ -342,7 +342,11 @@ export async function sendEmail(input: EmailInput): Promise<DeliveryStatus> {
 export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
   if (!input.to) return "SKIPPED";
   const to = normalizePhoneNumber(input.to);
-  const message = /^\s*(?:\[?EduPay\]?\s*[:—-])/i.test(input.text) ? input.text : `EduPay: ${input.text}`;
+  // NFC preserves accents while producing stable UTF-8 form data for SMS providers.
+  const normalizedText = input.text.normalize("NFC");
+  const message = /^\s*(?:\[?EduPay\]?\s*[:—-])/iu.test(normalizedText)
+    ? normalizedText
+    : `EduPay: ${normalizedText}`;
   if (!to) return "SKIPPED";
 
   if (!hasSmsConfig()) {
@@ -369,14 +373,14 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
         sender,
         from: sender,
         to,
-        message: input.text
+        message: normalizedText
       });
     const response = await fetch(endpoint, {
       method: "POST",
       headers: isAfricaTalking
         ? {
           Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
           apiKey
         }
         : {
@@ -398,7 +402,7 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
         method: "POST",
         headers: {
           Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
           apiKey
         },
         body: buildAfricaTalkingBody(false)

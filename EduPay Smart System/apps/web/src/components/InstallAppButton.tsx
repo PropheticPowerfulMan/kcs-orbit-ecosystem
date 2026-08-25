@@ -46,7 +46,7 @@ export default function InstallAppButton() {
   };
 
   return (
-    <button type="button" onClick={() => void install()} aria-label="Installer EduPay" style={{ position: "fixed", right: "max(1rem, env(safe-area-inset-right))", bottom: "max(1rem, env(safe-area-inset-bottom))", zIndex: 10000, minHeight: "44px", display: "inline-flex", alignItems: "center", gap: ".5rem", border: "1px solid #7de8ff", borderRadius: "999px", padding: ".65rem .95rem", background: "linear-gradient(135deg, #14b8de, #0786ad)", color: "#03131d", fontWeight: 800, boxShadow: "0 12px 30px rgba(5, 16, 24, .38)", cursor: "pointer" }}>
+    <button type="button" onClick={() => void install()} aria-label="Installer EduPay" title="Installer EduPay" style={{ position: "fixed", right: "max(1rem, env(safe-area-inset-right))", bottom: "max(1rem, env(safe-area-inset-bottom))", zIndex: 2147483647, minHeight: "44px", display: "inline-flex", alignItems: "center", gap: ".5rem", border: "1px solid #7de8ff", borderRadius: "999px", padding: ".65rem .95rem", background: "linear-gradient(135deg, #14b8de, #0786ad)", color: "#03131d", fontWeight: 800, boxShadow: "0 12px 30px rgba(5, 16, 24, .38)", cursor: "pointer", visibility: "visible", opacity: 1 }}>
       <Download size={17} aria-hidden="true" />
       <span>Installer EduPay</span>
     </button>

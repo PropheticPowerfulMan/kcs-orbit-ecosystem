@@ -14,9 +14,15 @@ function resolveReceiptBaseUrl(
 ) {
   const configured = configuredBaseUrl.trim();
   const origin = locationLike.origin;
+  const originIsPublic = !/^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin);
+  const configuredIsLocal = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(configured);
   const configuredLooksLikePlaceholder = /votredomaine|votre-site-public|mon-backend/i.test(configured);
   const configuredIsUndeployedRenderDefault = /edupay-web\.onrender\.com/i.test(configured) && !/edupay-web\.onrender\.com/i.test(origin);
-  const safeConfiguredBaseUrl = configuredLooksLikePlaceholder || configuredIsUndeployedRenderDefault ? "" : configured;
+  const safeConfiguredBaseUrl = configuredLooksLikePlaceholder
+    || configuredIsUndeployedRenderDefault
+    || (originIsPublic && configuredIsLocal)
+    ? ""
+    : configured;
   const baseCandidate = normalizeReceiptBaseUrl(
     safeConfiguredBaseUrl || import.meta.env.BASE_URL || DEFAULT_RECEIPT_VERIFICATION_BASE_URL
   );
