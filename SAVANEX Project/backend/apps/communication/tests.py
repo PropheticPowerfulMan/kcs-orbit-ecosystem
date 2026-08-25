@@ -40,3 +40,23 @@ class SmsDeliveryTests(SimpleTestCase):
         second_payload = urlopen.call_args_list[1].args[0].data.decode()
         self.assertIn('from=KCS', first_payload)
         self.assertNotIn('from=', second_payload)
+
+class NotificationOrderingTests(SimpleTestCase):
+    @patch('apps.communication.services._send_user_email')
+    @patch('apps.communication.services._send_user_sms')
+    def test_sms_starts_before_email_without_changing_response_contract(self, send_sms, send_email):
+        from .services import DeliveryResult, deliver_direct_parent_contact
+
+        calls = []
+        send_sms.side_effect = lambda *_args: calls.append('sms') or DeliveryResult('sms', 'sent')
+        send_email.side_effect = lambda *_args: calls.append('email') or DeliveryResult('email', 'sent')
+
+        results = deliver_direct_parent_contact(
+            email='parent@example.com',
+            phone='+243812345678',
+            subject='Test',
+            body='Test',
+        )
+
+        self.assertEqual(calls, ['sms', 'email'])
+        self.assertEqual([result.channel for result in results], ['email', 'sms'])

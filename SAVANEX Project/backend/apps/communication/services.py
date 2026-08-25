@@ -225,10 +225,9 @@ def deliver_parent_communication(parent, subject, body, notif_type=Notification.
         link=link,
     )
 
-    return [
-        _send_parent_email(parent, subject, body),
-        _send_parent_sms(parent, _short_sms(subject, body)),
-    ]
+    sms_result = _send_parent_sms(parent, _short_sms(subject, body))
+    email_result = _send_parent_email(parent, subject, body)
+    return [email_result, sms_result]
 
 
 def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE_MESSAGE, link=''):
@@ -243,29 +242,26 @@ def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE
         link=link,
     )
 
-    return [
-        _send_user_email(user, subject, body),
-        _send_user_sms(user, _short_sms(subject, body)),
-    ]
+    sms_result = _send_user_sms(user, _short_sms(subject, body))
+    email_result = _send_user_email(user, subject, body)
+    return [email_result, sms_result]
 
 
 def deliver_direct_parent_contact(name='', email='', phone='', subject='', body='', channels=None):
     enabled_channels = set(channels or ['email', 'sms'])
     contact = SimpleNamespace(email=email or '', phone=phone or '')
     label = name or 'Parent'
-    results = []
-
-    if 'email' in enabled_channels:
-        results.append(_send_user_email(contact, subject, body, label))
-    else:
-        results.append(DeliveryResult('email', 'skipped', 'Email channel disabled.'))
-
-    if 'sms' in enabled_channels:
-        results.append(_send_user_sms(contact, _short_sms(subject, body), label))
-    else:
-        results.append(DeliveryResult('sms', 'skipped', 'SMS channel disabled.'))
-
-    return results
+    sms_result = (
+        _send_user_sms(contact, _short_sms(subject, body), label)
+        if 'sms' in enabled_channels
+        else DeliveryResult('sms', 'skipped', 'SMS channel disabled.')
+    )
+    email_result = (
+        _send_user_email(contact, subject, body, label)
+        if 'email' in enabled_channels
+        else DeliveryResult('email', 'skipped', 'Email channel disabled.')
+    )
+    return [email_result, sms_result]
 
 
 def summarize_student_evolution(student):
