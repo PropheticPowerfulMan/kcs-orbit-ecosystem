@@ -14,6 +14,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <ThemeProvider>
       <AuthProvider>
         <App />
+        <InstallAppButton />
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>

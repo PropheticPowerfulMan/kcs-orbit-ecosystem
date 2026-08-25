@@ -61,6 +61,7 @@ if (!isReceiptRedirecting) {
         <HashRouter>
           <App />
           <MutationFeedback />
+          <InstallAppButton />
         </HashRouter>
       </I18nProvider>
     </React.StrictMode>

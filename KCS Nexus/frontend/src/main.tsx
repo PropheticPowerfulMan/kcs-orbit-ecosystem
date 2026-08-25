@@ -31,6 +31,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <BrowserRouter basename={routerBasePath}>
         <App />
         <MutationFeedback />
+        <InstallAppButton />
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

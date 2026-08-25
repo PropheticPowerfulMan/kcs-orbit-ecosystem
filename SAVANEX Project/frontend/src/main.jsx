@@ -15,6 +15,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HashRouter>
       <App />
       <MutationFeedback />
+      <InstallAppButton />
     </HashRouter>
   </React.StrictMode>
 );
