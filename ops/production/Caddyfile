@@ -16,6 +16,15 @@
   import security_headers
   reverse_proxy nexus_api:5000
 }
+{$NEXUS_DOMAIN} {
+  import security_headers
+  reverse_proxy nexus_web:80
+}
+
+www.{$NEXUS_DOMAIN} {
+  import security_headers
+  redir https://{$NEXUS_DOMAIN}{uri} permanent
+}
 
 {$EDUPAY_DOMAIN} {
   import security_headers
