@@ -34,7 +34,7 @@ export type MessagingConfigStatus = {
 const SCHOOL_NAME = "Kinshasa Christian School";
 const SCHOOL_SHORT_NAME = "KCS";
 const SCHOOL_TAGLINE = "Letting Our Light Shine";
-const SCHOOL_LOGO_URL = "https://kinshasachristianschool.org/images/kcs-logo.png";
+const SCHOOL_LOGO_URL = "https://kinshasachristianschool.org/icons/nexus-192.png";
 const SCHOOL_WEBSITE = "https://kinshasachristianschool.org/";
 const BRAND_BLUE = "#004080";
 const BRAND_NAVY = "#08264c";
@@ -138,8 +138,8 @@ function buildBrandedEmailHtml(input: EmailInput) {
                     <td style="vertical-align:middle">
                       <table role="presentation" cellspacing="0" cellpadding="0">
                         <tr>
-                          <td style="width:74px;height:74px;border-radius:22px;background:#ffffff;padding:8px;box-shadow:0 12px 30px rgba(0,0,0,.18)">
-                            <img src="${SCHOOL_LOGO_URL}" width="58" height="58" alt="${SCHOOL_NAME}" style="display:block;width:58px;height:58px;object-fit:contain;border:0">
+                          <td style="width:64px;height:64px;border-radius:50%;background:#ffffff;padding:2px;box-shadow:0 12px 30px rgba(0,0,0,.18)">
+                            <img src="${SCHOOL_LOGO_URL}" width="60" height="60" alt="${SCHOOL_NAME}" style="display:block;width:60px;height:60px;border-radius:50%;object-fit:cover;border:0">
                           </td>
                           <td style="padding-left:16px">
                             <p style="margin:0 0 4px;color:${BRAND_GOLD};font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.14em">${SCHOOL_SHORT_NAME} · ${escapeHtml(audience.label)}</p>
