@@ -74,7 +74,7 @@ function n2wEn(n: number): string {
   if (n === 0) return "zero";
   const u = [
     "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    "ten", "élèven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
     "seventeen", "eighteen", "nineteen",
   ];
   const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
@@ -210,29 +210,30 @@ async function generateReceiptQrSvgMarkup(r: PaymentRecord): Promise<string> {
   return markup;
 }
 
-function analyzeReceiptRisk(r: Pick<PaymentRecord, "parentFullName" | "paymentSubjectName" | "studentNames" | "reason" | "amount" | "status" | "method">) {
+function analyzeReceiptRisk(r: Pick<PaymentRecord, "parentFullName" | "paymentSubjectName" | "studentNames" | "reason" | "amount" | "status" | "method">, lang: string = "fr") {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const flags: string[] = [];
-  if (r.amount >= 5000) flags.push("Montant élevé : double validation conseillée");
-  if (r.status !== "COMPLETED") flags.push("Statut non réglé : ne pas libérer de quittance définitive");
-  if (getPaymentSubjectName(r).trim().split(/\s+/).length < 2) flags.push("Identité courte : vérifier le dossier élève");
-  if (r.reason.trim().length < 8) flags.push("Motif trop court pour un audit robuste");
-  if (r.method === "BANK_TRANSFER") flags.push("Virement bancaire : vérifier la référence et le compte bénéficiaire");
-  else if (r.method !== "CASH") flags.push("Paiement mobile : vérifier la référence opérateur");
+  if (r.amount >= 5000) flags.push(L("Montant élevé : double validation conseillée", "High amount: double approval recommended"));
+  if (r.status !== "COMPLETED") flags.push(L("Statut non réglé : ne pas libérer de quittance définitive", "Unsettled status: do not issue a final receipt"));
+  if (getPaymentSubjectName(r).trim().split(/\s+/).length < 2) flags.push(L("Identité courte : vérifier le dossier élève", "Short identity: verify the student record"));
+  if (r.reason.trim().length < 8) flags.push(L("Motif trop court pour un audit robuste", "Reason too short for a reliable audit"));
+  if (r.method === "BANK_TRANSFER") flags.push(L("Virement bancaire : vérifier la référence et le compte bénéficiaire", "Bank transfer: verify the reference and beneficiary account"));
+  else if (r.method !== "CASH") flags.push(L("Paiement mobile : vérifier la référence opérateur", "Mobile payment: verify the operator reference"));
   const score = Math.min(100, flags.length * 22 + (r.amount >= 10000 ? 18 : 0));
   return {
     score,
-    level: score >= 60 ? "Vérification renforcée" : score >= 25 ? "Contrôle standard" : "Faible risque",
+    level: score >= 60 ? L("Vérification renforcée", "Enhanced verification") : score >= 25 ? L("Contrôle standard", "Standard review") : L("Faible risque", "Low risk"),
     flags
   };
 }
 
-function getMethodLabel(method: string) {
+function getMethodLabel(method: string, lang: string = "fr") {
   const methodLabel: Record<string, string> = {
-    CASH: "Cash / Espèces",
+    CASH: lang === "fr" ? "Cash / Espèces" : "Cash",
     AIRTEL_MONEY: "Airtel Money",
     MPESA: "M-Pesa",
     ORANGE_MONEY: "Orange Money",
-    BANK_TRANSFER: "Virement bancaire",
+    BANK_TRANSFER: lang === "fr" ? "Virement bancaire" : "Bank transfer",
   };
   return methodLabel[method] ?? method;
 }
@@ -245,26 +246,26 @@ type BankTransferDetails = {
   beneficiaryAccountNumber: string;
 };
 
-function getBankTransferDetailRows(details?: BankTransferDetails | null) {
+function getBankTransferDetailRows(details?: BankTransferDetails | null, lang: string = "fr") {
   if (!details) return [];
   const transferDateLabel = details.transferDate
-    ? new Date(`${details.transferDate}T00:00:00`).toLocaleDateString("fr-FR")
+    ? new Date(`${details.transferDate}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")
     : "";
   return [
-    ["Banque", details.bankName],
-    ["Référence bancaire", details.referenceNumber],
-    ["Date du virement", transferDateLabel],
-    ["Compte émetteur", details.senderAccountNumber || ""],
-    ["Compte bénéficiaire", details.beneficiaryAccountNumber],
+    [lang === "fr" ? "Banque" : "Bank", details.bankName],
+    [lang === "fr" ? "Référence bancaire" : "Bank reference", details.referenceNumber],
+    [lang === "fr" ? "Date du virement" : "Transfer date", transferDateLabel],
+    [lang === "fr" ? "Compte émetteur" : "Sender account", details.senderAccountNumber || ""],
+    [lang === "fr" ? "Compte bénéficiaire" : "Beneficiary account", details.beneficiaryAccountNumber],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]));
 }
 
-function getStatusLabel(status: string) {
+function getStatusLabel(status: string, lang: string = "fr") {
   const statusLabel: Record<string, string> = {
-    COMPLETED: "Réglé",
-    PENDING: "En attente",
-    FAILED: "Échoué",
-    CANCELLED: "Annulé",
+    COMPLETED: lang === "fr" ? "Réglé" : "Completed",
+    PENDING: lang === "fr" ? "En attente" : "Pending",
+    FAILED: lang === "fr" ? "Échoué" : "Failed",
+    CANCELLED: lang === "fr" ? "Annulé" : "Cancelled",
   };
   return statusLabel[status] ?? status;
 }
@@ -378,6 +379,7 @@ function getReceiptPrintFonts(): ReceiptPrintFonts {
 
 /* --- Reçu individuel HTML (A5 paysage) ------------------------------------ */
 async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string> {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const fonts = getReceiptPrintFonts();
   const layout = getReceiptLayoutMode(r);
   const compactAllocation = r.method === "BANK_TRANSFER" || layout.mode !== "standard";
@@ -391,8 +393,8 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
     paymentSubject: escapeHtml(getPaymentSubjectName(r)),
     reason: escapeHtml(layout.compactReason),
     amountWords: escapeHtml(layout.compactAmountWords),
-    method: escapeHtml(getMethodLabel(r.method)),
-    status: escapeHtml(getStatusLabel(r.status)),
+    method: escapeHtml(getMethodLabel(r.method, lang)),
+    status: escapeHtml(getStatusLabel(r.status, lang)),
     schoolName: escapeHtml(schoolBranding.schoolName),
     shortName: escapeHtml(schoolBranding.shortName),
     appName: escapeHtml(schoolBranding.appName),
@@ -401,11 +403,11 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
     detailNote: escapeHtml(layout.detailNote)
   };
   const security = buildReceiptSecurity(r);
-  const risk = analyzeReceiptRisk(r);
+  const risk = analyzeReceiptRisk(r, lang);
   const qrMarkup = await generateReceiptQrSvgMarkup(r).catch(() => "");
   const microText = escapeHtml(buildReceiptMicroText(r));
   const parentSecondaryLine = safe.parentCaption
-    ? `<div class="value-sub"><span class="value-sub-badge">Parent concerne</span><span>${safe.parentCaption}</span></div>`
+    ? `<div class="value-sub"><span class="value-sub-badge">${escapeHtml(L("Parent concerne","Parent concerned"))}</span><span>${safe.parentCaption}</span></div>`
     : "";
   const allocationSnapshot = r.tuitionAllocationSummary
     ? buildReceiptAllocationSnapshot(r.tuitionAllocationSummary, {
@@ -420,10 +422,10 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
               <strong>${escapeHtml(child.studentName)}</strong>
               <span>$ ${formatMoney(child.allocated)}</span>
             </div>
-            <div class="allocation-item-sub">Reste à couvrir : $ ${formatMoney(child.remaining)}</div>
+            <div class="allocation-item-sub">${escapeHtml(L("Reste à couvrir :","Remaining balance:"))} $ ${formatMoney(child.remaining)}</div>
           </div>`).join("")}</div>`
       : `<table>
-          <thead><tr><th>Bénéficiaire</th><th>Montant imputé</th><th>Solde restant</th></tr></thead>
+          <thead><tr><th>${escapeHtml(L("Bénéficiaire","Beneficiary"))}</th><th>${escapeHtml(L("Montant imputé","Allocated amount"))}</th><th>${escapeHtml(L("Solde restant","Remaining balance"))}</th></tr></thead>
           <tbody>${allocationSnapshot.perChild.map((child) => `<tr>
             <td>${escapeHtml(child.studentName)}</td>
             <td>$ ${formatMoney(child.allocated)}</td>
@@ -434,23 +436,23 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
   const allocationSummaryHtml = allocationSnapshot
     ? `<div class="allocation ${compactAllocation ? "compact" : ""}">
         <div class="allocation-head">
-          <div class="allocation-title">Ventilation du paiement</div>
+          <div class="allocation-title">${escapeHtml(L("Ventilation du paiement","Payment allocation"))}</div>
           <div class="allocation-pill">${escapeHtml(allocationSnapshot.modeLabel)}</div>
         </div>
         <div class="allocation-metrics">${allocationSnapshot.metrics.map((metric) => `<div class="allocation-metric"><span>${escapeHtml(metric.label)}</span><strong>$ ${formatMoney(metric.amount)}</strong></div>`).join("")}</div>
         <div class="allocation-note">${escapeHtml(allocationSnapshot.statusNote)}</div>
         ${allocationBodyHtml}
-        ${allocationSnapshot.overflowChildCount > 0 ? `<div class="allocation-overflow">+ ${allocationSnapshot.overflowChildCount} autre(s) dossier(s) figurent dans le detail complet EduPay.</div>` : ""}
+        ${allocationSnapshot.overflowChildCount > 0 ? `<div class="allocation-overflow">+ ${allocationSnapshot.overflowChildCount} ${escapeHtml(L("autre(s) dossier(s) figurent dans le detail complet EduPay.","other record(s) appear in the full EduPay details."))}</div>` : ""}
       </div>`
     : "";
   const bankTransferHtml = r.method === "BANK_TRANSFER" && r.bankTransferDetails
     ? `<div class="allocation compact allocation-bank">
         <div class="allocation-head">
-          <div class="allocation-title">Détails du virement bancaire</div>
-          <div class="allocation-pill">Virement</div>
+          <div class="allocation-title">${escapeHtml(L("Détails du virement bancaire","Bank transfer details"))}</div>
+          <div class="allocation-pill">${escapeHtml(L("Virement","Transfer"))}</div>
         </div>
         <table>
-          <tbody>${getBankTransferDetailRows(r.bankTransferDetails).map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody>
+          <tbody>${getBankTransferDetailRows(r.bankTransferDetails, lang).map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}</tbody>
         </table>
       </div>`
     : "";
@@ -458,7 +460,7 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
 <html lang="${lang}">
 <head>
   <meta charset="UTF-8"/>
-  <title>Reçu ${safe.tx}</title>
+  <title>${escapeHtml(L("Reçu", "Receipt"))} ${safe.tx}</title>
   <style>
     @page { size: A5 landscape; margin: 3mm; }
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -548,28 +550,28 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
       <div>
         <div class="school">${safe.schoolName}</div>
         <div class="sub">${safe.tagline} - ${safe.appName}</div>
-        <div class="official">Reçu officiel</div>
+        <div class="official">${escapeHtml(L("Reçu officiel","Official receipt"))}</div>
       </div>
     </div>
     <div class="tx">
       <div class="tx-label">Transaction</div>
       <div class="tx-value">${safe.tx}</div>
-      <div class="tx-label" style="margin-top:2mm">Vérification</div>
+      <div class="tx-label" style="margin-top:2mm">${escapeHtml(L("Vérification","Verification"))}</div>
       <div class="tx-value">${security.verificationCode}</div>
     </div>
   </div>
 
   <div class="grid">
     <div>
-      <div class="field"><div class="label">Date et heure</div><div class="value">${safe.date}</div></div>
-      <div class="field"><div class="label">Paiement pour</div><div class="value-stack"><div class="value parent">${safe.paymentSubject}</div>${parentSecondaryLine}</div></div>
-      <div class="field"><div class="label">Motif</div><div class="value">${safe.reason}</div></div>
-      <div class="field"><div class="label">Méthode</div><div class="value">${safe.method}</div></div>
-      <div class="field"><div class="label">Statut</div><div class="value">${safe.status}</div></div>
+      <div class="field"><div class="label">${escapeHtml(L("Date et heure","Date and time"))}</div><div class="value">${safe.date}</div></div>
+      <div class="field"><div class="label">${escapeHtml(L("Paiement pour","Payment for"))}</div><div class="value-stack"><div class="value parent">${safe.paymentSubject}</div>${parentSecondaryLine}</div></div>
+      <div class="field"><div class="label">${escapeHtml(L("Motif","Reason"))}</div><div class="value">${safe.reason}</div></div>
+      <div class="field"><div class="label">${escapeHtml(L("Méthode","Method"))}</div><div class="value">${safe.method}</div></div>
+      <div class="field"><div class="label">${escapeHtml(L("Statut","Status"))}</div><div class="value">${safe.status}</div></div>
       <div class="amount">
-        <div class="amount-label">Montant reçu en dollars américains</div>
+        <div class="amount-label">${escapeHtml(L("Montant reçu en dollars américains","Amount received in US dollars"))}</div>
         <div class="amount-value">$ ${formatMoney(r.amount)}</div>
-        <div class="words"><strong>En toutes lettres:</strong> ${safe.amountWords}</div>
+        <div class="words"><strong>${escapeHtml(L("En toutes lettres:","In words:"))}</strong> ${safe.amountWords}</div>
       </div>
       ${bankTransferHtml}
       ${allocationSummaryHtml}
@@ -579,37 +581,37 @@ async function buildReceiptHtml(r: PaymentRecord, lang: string): Promise<string>
       <div class="security">
         <div class="security-head">
           <div>
-            <div class="tx-label">Bloc sécurité</div>
-            <div style="margin-top:1.2mm; font-size:6.6px; color:#64748b; line-height:1.4; max-width:38mm;">Scanner le QR pour ouvrir la page de vérification EduPay de cette transaction.</div>
+            <div class="tx-label">${escapeHtml(L("Bloc sécurité","Security block"))}</div>
+            <div style="margin-top:1.2mm; font-size:6.6px; color:#64748b; line-height:1.4; max-width:38mm;">${escapeHtml(L("Scanner le QR pour ouvrir la page de vérification EduPay de cette transaction.","Scan the QR code to open the EduPay verification page for this transaction."))}</div>
           </div>
           ${qrMarkup
-            ? `<div class="qr">${qrMarkup}<div class="qr-copy">Vérifier ce reçu<br/>${safe.tx}</div></div>`
-            : `<div class="qr-fallback">QR indisponible<br/>Ref ${safe.tx}</div>`}
+            ? `<div class="qr">${qrMarkup}<div class="qr-copy">${escapeHtml(L("Vérifier ce reçu","Verify this receipt"))}<br/>${safe.tx}</div></div>`
+            : `<div class="qr-fallback">${escapeHtml(L("QR indisponible","QR unavailable"))}<br/>Ref ${safe.tx}</div>`}
         </div>
         <div class="field" style="grid-template-columns:23mm 1fr"><div class="label">Hash</div><div class="value">${security.hash}</div></div>
-        <div class="field" style="grid-template-columns:23mm 1fr"><div class="label">Sceau</div><div class="value">${security.sealCode}</div></div>
-        <div class="field" style="grid-template-columns:23mm 1fr"><div class="label">Contrôle</div><div class="value">${risk.level}</div></div>
+        <div class="field" style="grid-template-columns:23mm 1fr"><div class="label">${escapeHtml(L("Sceau","Seal"))}</div><div class="value">${security.sealCode}</div></div>
+        <div class="field" style="grid-template-columns:23mm 1fr"><div class="label">${escapeHtml(L("Contrôle","Control"))}</div><div class="value">${risk.level}</div></div>
         ${safe.detailNote ? `<div class="compact-note">${safe.detailNote}</div>` : ""}
       </div>
       <div class="warning">
-        Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification. Reçu valable uniquement avec signature du caissier et sceau de l'école.
+        ${escapeHtml(L("Toute modification des données du paiement invalide le code de vérification. Reçu valable uniquement avec signature et sceau scolaires.", "Any change to the payment data invalidates the verification code. The receipt is valid only with cashier signature and school seal."))}
       </div>
       <div class="seal-row">
         <div class="box">
-          <div class="box-title">Signature du caissier</div>
-          <div class="line">Nom, signature et date</div>
+          <div class="box-title">${escapeHtml(L("Signature du caissier","Cashier signature"))}</div>
+          <div class="line">${escapeHtml(L("Nom, signature et date","Name, signature and date"))}</div>
         </div>
         <div class="box stamp">
-          <div class="box-title">Sceau de l'école</div>
-          <div class="stamp-circle">Emplacement réservé</div>
+          <div class="box-title">${escapeHtml(L("Sceau scolaire", "School seal"))}</div>
+          <div class="stamp-circle">${escapeHtml(L("Emplacement réservé","Reserved area"))}</div>
         </div>
       </div>
     </div>
   </div>
 
   <div class="footer">
-    <span>${safe.schoolName} - ${safe.appName} - Norme interne RCT-01</span>
-    <span>Ref: ${safe.tx} - ${new Date().toLocaleDateString("fr-FR")}</span>
+    <span>${safe.schoolName} - ${safe.appName} - ${escapeHtml(L("Norme interne RCT-01","Internal standard RCT-01"))}</span>
+    <span>Ref: ${safe.tx} - ${new Date().toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</span>
   </div>
   <div class="micro">${microText} ${microText} ${microText}</div>
 </div></div>
@@ -677,15 +679,16 @@ function paymentMatchesDateRange(payment: PaymentRecord, dateFrom: string, dateT
   return paymentDay >= fromTime && paymentDay <= toTime;
 }
 
-function buildPaymentScopeLabel(scope?: PaymentExportScope) {
+function buildPaymentScopeLabel(scope: PaymentExportScope | undefined, lang: string = "fr") {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   if (!scope) return "";
   return [
     scope.search?.trim() ? `Recherche : ${scope.search.trim()}` : "Recherche : toutes categories",
     scope.className && scope.className !== "ALL" ? `Classe : ${scope.className}` : "Classe : toutes",
     scope.status && scope.status !== "ALL" ? `Statut : ${getStatusLabel(scope.status)}` : "Statut : tous",
     scope.method && scope.method !== "ALL" ? `Mode : ${getMethodLabel(scope.method as PaymentRecord["method"])}` : "Mode : tous",
-    scope.dateFrom ? `Du : ${new Date(`${scope.dateFrom}T00:00:00`).toLocaleDateString("fr-FR")}` : "",
-    scope.dateTo ? `Au : ${new Date(`${scope.dateTo}T00:00:00`).toLocaleDateString("fr-FR")}` : ""
+    scope.dateFrom ? `Du : ${new Date(`${scope.dateFrom}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}` : "",
+    scope.dateTo ? `Au : ${new Date(`${scope.dateTo}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}` : ""
   ].filter(Boolean).join(" | ");
 }
 
@@ -699,7 +702,7 @@ function buildPaymentExportFilename(prefix: string, scope: PaymentExportScope) {
 }
 
 /* --- État financier HTML (général ou par parent) -------------------------- */
-function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope?: PaymentExportScope): string {
+function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope?: PaymentExportScope, lang: string = "fr"): string {
   const filtered = filterParent
     ? payments.filter((p) => getPaymentSubjectName(p).toLowerCase().includes(filterParent.toLowerCase()))
     : payments;
@@ -1033,32 +1036,34 @@ async function printReceiptDocument(payment: PaymentRecord, lang: string) {
   });
 }
 
-function exportReceiptExcel(payment: PaymentRecord) {
+function exportReceiptExcel(payment: PaymentRecord, lang: string = "fr") {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   exportWorkbook(`reçu-${payment.transactionNumber}`, [
     {
-      name: "Recu",
+      name: L("Reçu", "Receipt"),
       rows: [{
-        "No Transaction": payment.transactionNumber,
+        [L("No Transaction", "Transaction No.")]: payment.transactionNumber,
         "Date": payment.date,
-        "Paiement pour": getPaymentSubjectName(payment),
-        "Parent concerné": getPaymentParentCaption(payment) || payment.parentFullName,
-        "Motif": payment.reason,
+        [L("Paiement pour", "Payment for")]: getPaymentSubjectName(payment),
+        [L("Parent concerné", "Parent concerned")]: getPaymentParentCaption(payment) || payment.parentFullName,
+        [L("Motif", "Reason")]: payment.reason,
         "Montant USD": payment.amount,
-        "Montant en lettres": payment.amountWords,
-        "Mode": getMethodLabel(payment.method),
-        "Statut": getStatusLabel(payment.status),
-        "Banque": payment.bankTransferDetails?.bankName || "-",
-        "Référence bancaire": payment.bankTransferDetails?.referenceNumber || "-",
-        "Date du virement": payment.bankTransferDetails?.transferDate || "-",
-        "Compte émetteur": payment.bankTransferDetails?.senderAccountNumber || "-",
-        "Compte bénéficiaire": payment.bankTransferDetails?.beneficiaryAccountNumber || "-",
-        "Code verification": buildReceiptSecurity(payment).verificationCode
+        [L("Montant en lettres", "Amount in words")]: payment.amountWords,
+        [L("Mode", "Method")]: getMethodLabel(payment.method, lang),
+        [L("Statut", "Status")]: getStatusLabel(payment.status, lang),
+        [L("Banque", "Bank")]: payment.bankTransferDetails?.bankName || "-",
+        [L("Référence bancaire", "Bank reference")]: payment.bankTransferDetails?.referenceNumber || "-",
+        [L("Date du virement", "Transfer date")]: payment.bankTransferDetails?.transferDate || "-",
+        [L("Compte émetteur", "Sender account")]: payment.bankTransferDetails?.senderAccountNumber || "-",
+        [L("Compte bénéficiaire", "Beneficiary account")]: payment.bankTransferDetails?.beneficiaryAccountNumber || "-",
+        [L("Code de vérification", "Verification code")]: buildReceiptSecurity(payment).verificationCode
       }]
     }
   ]);
 }
 
-function exportPaymentsExcel(filename: string, records: PaymentRecord[], parentFilter?: string, scope?: PaymentExportScope) {
+function exportPaymentsExcel(filename: string, records: PaymentRecord[], parentFilter?: string, scope?: PaymentExportScope, lang: string = "fr") {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const filtered = parentFilter
     ? records.filter((payment) => getPaymentSubjectName(payment) === parentFilter)
     : records;
@@ -1071,47 +1076,47 @@ function exportPaymentsExcel(filename: string, records: PaymentRecord[], parentF
   const cancelled = filtered.filter((payment) => payment.status === "CANCELLED");
 
   const byMethod = activePayments.reduce<Record<string, number>>((acc, payment) => {
-    const key = getMethodLabel(payment.method);
+    const key = getMethodLabel(payment.method, lang);
     acc[key] = (acc[key] ?? 0) + payment.amount;
     return acc;
   }, {});
 
   exportWorkbook(filename, [
     {
-      name: "Synthese",
+      name: L("Synthèse", "Summary"),
       rows: [{
-        "Portée": parentFilter || "Globale",
-        "Filtres appliqués": buildPaymentScopeLabel(scope) || "Aucun filtre spécifique",
-        "Période du": scope?.dateFrom || "-",
-        "Période au": scope?.dateTo || "-",
-        "Paiements": filtered.length,
+        [L("Portée", "Scope")]: parentFilter || L("Globale", "Global"),
+        [L("Filtres appliqués", "Applied filters")]: buildPaymentScopeLabel(scope, lang) || L("Aucun filtre spécifique", "No specific filter"),
+        [L("Période du", "Period from")]: scope?.dateFrom || "-",
+        [L("Période au", "Period to")]: scope?.dateTo || "-",
+        [L("Paiements", "Payments")]: filtered.length,
         "Total USD": total,
-        "Réglés USD": completed.reduce((sum, payment) => sum + payment.amount, 0),
-        "En attente USD": pending.reduce((sum, payment) => sum + payment.amount, 0),
-        "Echoues USD": failed.reduce((sum, payment) => sum + payment.amount, 0),
-        "Annules USD": cancelled.reduce((sum, payment) => sum + payment.amount, 0)
+        [L("Réglés USD", "Completed USD")]: completed.reduce((sum, payment) => sum + payment.amount, 0),
+        [L("En attente USD", "Pending USD")]: pending.reduce((sum, payment) => sum + payment.amount, 0),
+        [L("Échoués USD", "Failed USD")]: failed.reduce((sum, payment) => sum + payment.amount, 0),
+        [L("Annulés USD", "Cancelled USD")]: cancelled.reduce((sum, payment) => sum + payment.amount, 0)
       }]
     },
     {
-      name: "Paiements",
+      name: L("Paiements", "Payments"),
       rows: filtered.map((payment) => ({
-        "No Transaction": payment.transactionNumber,
+        [L("No Transaction", "Transaction No.")]: payment.transactionNumber,
         "Date": payment.date,
-        "Paiement pour": getPaymentSubjectName(payment),
-        "Parent concerné": getPaymentParentCaption(payment) || payment.parentFullName,
-        "Motif": payment.reason,
-        "Mode": getMethodLabel(payment.method),
+        [L("Paiement pour", "Payment for")]: getPaymentSubjectName(payment),
+        [L("Parent concerné", "Parent concerned")]: getPaymentParentCaption(payment) || payment.parentFullName,
+        [L("Motif", "Reason")]: payment.reason,
+        [L("Mode", "Method")]: getMethodLabel(payment.method, lang),
         "Montant USD": payment.amount,
-        "Statut": getStatusLabel(payment.status),
-        "Categorie recherche": scope?.search || "-",
-        "Période export": scope?.dateFrom || scope?.dateTo ? `${scope?.dateFrom || "debut"} - ${scope?.dateTo || "fin"}` : "Toutes dates",
-        "Code verification": buildReceiptSecurity(payment).verificationCode
+        [L("Statut", "Status")]: getStatusLabel(payment.status, lang),
+        [L("Catégorie recherchée", "Search category")]: scope?.search || "-",
+        [L("Période export", "Export period")]: scope?.dateFrom || scope?.dateTo ? `${scope?.dateFrom || "debut"} - ${scope?.dateTo || "fin"}` : L("Toutes dates", "All dates"),
+        [L("Code de vérification", "Verification code")]: buildReceiptSecurity(payment).verificationCode
       }))
     },
     {
-      name: "Par mode",
+      name: L("Par mode", "By method"),
       rows: Object.entries(byMethod).map(([method, amount]) => ({
-        "Mode": method,
+        [L("Mode", "Method")]: method,
         "Total USD": amount
       }))
     }
@@ -1561,7 +1566,7 @@ function StatusBadge({ status }: { status: string }) {
     CANCELLED: "bg-slate-500/15 text-slate-300 border-slate-500/30",
   };
   const lbl: Record<string, string> = {
-    COMPLETED: "Réglé", PENDING: "En attente", FAILED: "Échoué",
+    COMPLETED: lang === "fr" ? "Réglé" : "Completed", PENDING: "En attente", FAILED: "Échoué",
     CANCELLED: "Annule",
   };
   return (
@@ -1597,7 +1602,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
   const { lang } = useI18n();
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const security = buildReceiptSecurity(receipt);
-  const risk = analyzeReceiptRisk(receipt);
+  const risk = analyzeReceiptRisk(receipt, lang);
   const parentCaption = getPaymentParentCaption(receipt);
   const [qrMarkup, setQrMarkup] = useState("");
   const riskTone = risk.score >= 60
@@ -1753,7 +1758,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
           </div>
 
           <div className="mt-3 border-l-4 border-amber-600 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-            {L("Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification.","Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification.")}
+            {L("Toute modification des données du paiement invalide le code de vérification.", "Any change to the payment data invalidates the verification code.")}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -1762,7 +1767,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
               <p className="border-t border-slate-500 pt-1 text-center text-[10px] text-slate-500">{L("Nom, signature et date","Name, signature and date")}</p>
             </div>
             <div className="flex min-h-24 flex-col items-center justify-between border border-slate-600 p-3 text-center">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{L("Sceau de l'école","Sceau de l'école")}</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{L("Sceau scolaire", "School seal")}</p>
               <div className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-slate-900 bg-white p-2 text-[9px] font-black uppercase tracking-wide text-slate-400">
                 {L("Emplacement réservé","Reserved area")}
               </div>
@@ -1932,7 +1937,7 @@ export function PaymentsPage() {
   const triggerHistoryPrint = () => {
     setHistoryPrintBusy(true);
     try {
-      printHtml(buildReportHtml(filteredPayments, undefined, historyExportScope));
+      printHtml(buildReportHtml(filteredPayments, undefined, historyExportScope, lang));
     } finally {
       window.setTimeout(() => setHistoryPrintBusy(false), 900);
     }
@@ -1941,7 +1946,7 @@ export function PaymentsPage() {
   const triggerHistoryExcel = () => {
     setHistoryExcelBusy(true);
     try {
-      exportPaymentsExcel(buildPaymentExportFilename("historique-paiements", historyExportScope), filteredPayments, undefined, historyExportScope);
+      exportPaymentsExcel(buildPaymentExportFilename("historique-paiements", historyExportScope), filteredPayments, undefined, historyExportScope, lang);
     } finally {
       window.setTimeout(() => setHistoryExcelBusy(false), 700);
     }
@@ -2691,7 +2696,7 @@ export function PaymentsPage() {
             <PrintIcon className="w-5 h-5" /> {receiptPrintingId === r.id ? "Préparation..." : t("printPdf")}
           </button>
           <button
-            onClick={() => exportReceiptExcel(r)}
+            onClick={() => exportReceiptExcel(r, lang)}
             className="flex items-center gap-2 px-6 py-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 font-bold transition-all active:scale-95"
           >
             <ExcelIcon className="w-5 h-5" /> {L("Exporter en Excel","Export to Excel")}
@@ -2909,7 +2914,7 @@ export function PaymentsPage() {
                         </button>
                         <button
                           title={L("Exporter le reçu en Excel", "Export receipt to Excel")}
-                          onClick={() => exportReceiptExcel(p)}
+                          onClick={() => exportReceiptExcel(p, lang)}
                           className="p-1.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40 transition-colors"
                         >
                           <ExcelIcon className="w-3.5 h-3.5" />
@@ -3004,7 +3009,7 @@ export function PaymentsPage() {
             />
           </div>
           <button
-            onClick={() => printHtml(buildReportHtml(reportPayments))}
+            onClick={() => printHtml(buildReportHtml(reportPayments, undefined, undefined, lang))}
             className="flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold transition-all active:scale-95 shadow-lg shadow-brand-500/20 whitespace-nowrap"
           >
             <PrintIcon className="w-5 h-5" />
@@ -3099,7 +3104,7 @@ export function PaymentsPage() {
                             </button>
                             <button
                               title={L("Exporter le reçu en Excel", "Export receipt to Excel")}
-                              onClick={() => exportReceiptExcel(r)}
+                              onClick={() => exportReceiptExcel(r, lang)}
                               className="ml-1 p-1.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40 transition-colors"
                             >
                               <ExcelIcon className="w-3.5 h-3.5" />
@@ -3121,13 +3126,13 @@ export function PaymentsPage() {
                 {/* Bouton impression par parent */}
                 <div className="mt-4 flex justify-end">
                   <button
-                    onClick={() => exportPaymentsExcel(`etat-${subject.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}`, payments, subject)}
+                    onClick={() => exportPaymentsExcel(`etat-${subject.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}`, payments, subject, undefined, lang)}
                     className="mr-3 flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-all text-sm font-semibold"
                   >
                     <ExcelIcon /> {L("Exporter l'état de","Exporter l'état de")} {subject}
                   </button>
                   <button
-                    onClick={() => printHtml(buildReportHtml(payments, subject))}
+                    onClick={() => printHtml(buildReportHtml(payments, subject, undefined, lang))}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-500/40 text-brand-300 hover:bg-brand-600/20 transition-all text-sm font-semibold"
                   >
                     <PrintIcon /> {L("Imprimer l'état de","Imprimer l'état de")} {subject}
