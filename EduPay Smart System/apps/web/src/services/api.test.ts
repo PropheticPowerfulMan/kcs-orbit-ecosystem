@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, flushOfflineMutationQueue } from "./api";
+import { api, flushOfflineMutationQueue, normalizeDemoPayment } from "./api";
 
 if (typeof globalThis.localStorage === "undefined") {
   const storage = new Map<string, string>();
@@ -63,6 +63,23 @@ describe("EduPay offline mutation queue", () => {
     expect(login).toMatchObject({ token: "local-admin-token", role: "ADMIN" });
   });
 
+  it("repairs legacy local payments for history and payment status views", async () => {
+    const payment = normalizeDemoPayment({
+      id: "legacy-1",
+      transactionNumber: "LOCAL-OLD-1",
+      amount: 40,
+      status: "COMPLETED",
+      reason: "Paiement historique"
+    }, 0);
+
+    expect(payment).toEqual(expect.objectContaining({
+      parentFullName: "Parent EduPay",
+      paymentSubjectName: "Parent EduPay",
+      method: "CASH",
+      amount: 40,
+      date: expect.any(String)
+    }));
+  });
   it("records parent dashboard, email, and sms messages for local payments", async () => {
     const fetchMock = vi.fn()
       .mockRejectedValueOnce(new TypeError("offline"))
