@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { Download, FileSpreadsheet, Landmark, Printer, ReceiptText, TrendingUp, WalletCards } from "lucide-react";
 import { schoolBranding } from "../config/branding";
+import { useI18n } from "../i18n";
 import { api } from "../services/api";
 import { exportWorkbook } from "../utils/financeExcel";
 import { printHtmlDocument } from "../utils/printDocument";
@@ -138,7 +139,9 @@ function SectionCard({ title, subtitle, children }: { title: string; subtitle: s
 }
 
 export function ReportsPage() {
-  const currency = useMemo(() => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "USD" }), []);
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
+  const currency = useMemo(() => new Intl.NumberFormat(lang === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: "USD" }), [lang]);
   const [financeOverview, setFinanceOverview] = useState<FinanceOverviewResponse | null>(null);
   const [expenseOverview, setExpenseOverview] = useState<ExpenseOverviewResponse | null>(null);
   const [accountingEntries, setAccountingEntries] = useState<AccountingEntry[]>([]);
@@ -256,21 +259,21 @@ export function ReportsPage() {
     ];
     const budgetRows = filteredBudgets.slice(0, 30).map((budget) => `<tr><td>${plainPrintText(budget.name)}</td><td>${plainPrintText(budget.department)}</td><td>${plainPrintText(budget.categoryName || "Global")}</td><td>${plainPrintText(currency.format(budget.plannedAmount))}</td><td>${plainPrintText(currency.format(budget.consumedAmount))}</td><td>${budget.utilization.toFixed(1)}%</td><td>${plainPrintText(budget.status)}</td></tr>`).join("");
     const alertRows = filteredBudgetAlerts.slice(0, 20).map((budget) => `<tr><td>${plainPrintText(budget.name)}</td><td>${plainPrintText(budget.department)}</td><td>${plainPrintText(currency.format(budget.remainingAmount))}</td><td>${budget.utilization.toFixed(1)}%</td><td>${plainPrintText(budget.status)}</td></tr>`).join("");
-    const accountingRows = filteredAccountingEntries.slice(0, 35).map((entry) => `<tr><td>${plainPrintText(new Date(entry.entryDate).toLocaleDateString("fr-FR"))}</td><td>${plainPrintText(entry.entryType)}</td><td>${plainPrintText(entry.direction)}</td><td>${plainPrintText(entry.title)}</td><td>${plainPrintText(entry.department || "-")}</td><td>${plainPrintText(currency.format(entry.amount))}</td></tr>`).join("");
-    const cashRows = filteredCashflowEntries.slice(0, 30).map((entry) => `<tr><td>${plainPrintText(new Date(entry.referenceDate).toLocaleDateString("fr-FR"))}</td><td>${plainPrintText(entry.sourceType)}</td><td>${plainPrintText(entry.direction)}</td><td>${plainPrintText(entry.method || "")}</td><td>${plainPrintText(currency.format(entry.amount))}</td><td>${plainPrintText(entry.notes || "")}</td></tr>`).join("");
+    const accountingRows = filteredAccountingEntries.slice(0, 35).map((entry) => `<tr><td>${plainPrintText(new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"))}</td><td>${plainPrintText(entry.entryType)}</td><td>${plainPrintText(entry.direction)}</td><td>${plainPrintText(entry.title)}</td><td>${plainPrintText(entry.department || "-")}</td><td>${plainPrintText(currency.format(entry.amount))}</td></tr>`).join("");
+    const cashRows = filteredCashflowEntries.slice(0, 30).map((entry) => `<tr><td>${plainPrintText(new Date(entry.referenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"))}</td><td>${plainPrintText(entry.sourceType)}</td><td>${plainPrintText(entry.direction)}</td><td>${plainPrintText(entry.method || "")}</td><td>${plainPrintText(currency.format(entry.amount))}</td><td>${plainPrintText(entry.notes || "")}</td></tr>`).join("");
     const payrollRows = filteredPayrollRuns.slice(0, 25).map((run) => `<tr><td>${plainPrintText(run.title)}</td><td>${plainPrintText(run.department || "Tous")}</td><td>${plainPrintText(run.period?.name || "-")}</td><td>${plainPrintText(run.status)}</td><td>${plainPrintText(currency.format(run.totalNet))}</td><td>${run.items.length}</td></tr>`).join("");
     const signalRows = executiveSignals.map((signal) => `<li>${plainPrintText(signal)}</li>`).join("");
-    return `<!doctype html><html><head><meta charset="utf-8" /><title>Rapport exécutif EduPay</title><style>
+    return `<!doctype html><html><head><meta charset="utf-8" /><title>${plainPrintText(L("Rapport exécutif EduPay", "EduPay executive report"))}</title><style>
       @page{size:A4;margin:12mm}body{font-family:Inter,Arial,sans-serif;color:#0f172a}header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid ${schoolBranding.colors.primary};padding-bottom:12px;margin-bottom:14px}.brand{display:flex;gap:12px;align-items:center}.logo{width:58px;height:58px;object-fit:contain}.kicker{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:#64748b}h1{font-size:21px;margin:2px 0}.meta{text-align:right;font-size:11px;color:#475569}.scope,.signals{border:1px solid #cbd5e1;background:#f8fafc;padding:9px 11px;margin:10px 0 14px;font-size:11px}.signals{background:#ecfeff;border-color:#bae6fd}.signals ul{margin:6px 0 0 16px;padding:0}.signals li{margin:3px 0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}.metric{border:1px solid #cbd5e1;padding:8px;background:#fff}.metric b{display:block;font-size:14px;margin-top:3px}.metric small{color:#64748b}table{width:100%;border-collapse:collapse;font-size:9.5px;margin:8px 0 14px;table-layout:fixed}th{background:#0f172a;color:white;text-align:left;padding:6px;border:1px solid #0f172a}td{border:1px solid #cbd5e1;padding:5px;vertical-align:top;word-break:break-word}h2{font-size:13px;margin-top:14px}.two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}.page-soft{break-inside:avoid}footer{border-top:1px solid #cbd5e1;margin-top:14px;padding-top:8px;font-size:10px;color:#64748b}</style></head><body>
-      <header><div class="brand"><img class="logo" src="${logoSrc}" alt="Logo ${plainPrintText(schoolBranding.schoolName)}" /><div><div class="kicker">${plainPrintText(schoolBranding.appName)}</div><h1>Rapport exécutif financier</h1><div>${plainPrintText(schoolBranding.schoolName)}</div></div></div><div class="meta">Document administratif<br/>${plainPrintText(generatedAt.toLocaleString("fr-FR"))}<br/>${plainPrintText(schoolBranding.shortName)}</div></header>
+      <header><div class="brand"><img class="logo" src="${logoSrc}" alt="Logo ${plainPrintText(schoolBranding.schoolName)}" /><div><div class="kicker">${plainPrintText(schoolBranding.appName)}</div><h1>${plainPrintText(L("Rapport exécutif financier", "Executive financial report"))}</h1><div>${plainPrintText(schoolBranding.schoolName)}</div></div></div><div class="meta">Document administratif<br/>${plainPrintText(generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US"))}<br/>${plainPrintText(schoolBranding.shortName)}</div></header>
       <div class="scope">Filtre analytique: ${plainPrintText(reportSearch || "Toutes les données")} · Budgets visibles: ${filteredBudgets.length} · Écritures: ${filteredAccountingEntries.length} · Cashflow: ${filteredCashflowEntries.length} · Paie: ${filteredPayrollRuns.length}</div>
-      <div class="signals"><strong>Lecture de direction</strong><ul>${signalRows}</ul></div>
+      <div class="signals"><strong>${plainPrintText(L("Lecture de direction", "Management overview"))}</strong><ul>${signalRows}</ul></div>
       <div class="grid">${rows.map(([label, value, note]) => `<div class="metric"><span>${plainPrintText(label)}</span><b>${plainPrintText(value)}</b><small>${plainPrintText(note)}</small></div>`).join("")}</div>
-      <div class="grid"><div class="metric"><span>Taux de collecte</span><b>${collectionRate.toFixed(1)}%</b><small>Collecte / attendu</small></div><div class="metric"><span>Utilisation budgets</span><b>${budgetUtilization.toFixed(1)}%</b><small>${plainPrintText(currency.format(budgetConsumedTotal))} consomme</small></div><div class="metric"><span>Journaux filtres</span><b>${filteredAccountingEntries.length}</b><small>${plainPrintText(currency.format(accountingTotal))}</small></div><div class="metric"><span>Paie filtree</span><b>${plainPrintText(currency.format(payrollTotal))}</b><small>${filteredPayrollRuns.length} run(s)</small></div></div>
-      <h2>Synthèse budgétaire filtrée</h2><table><thead><tr><th>Budget</th><th>Département</th><th>Catégorie</th><th>Planifié</th><th>Consommé</th><th>Utilisation</th><th>Statut</th></tr></thead><tbody>${budgetRows || "<tr><td colspan='7'>Aucune ligne budgétaire.</td></tr>"}</tbody></table>
-      <div class="two-col"><section class="page-soft"><h2>Alertes budgetaires</h2><table><thead><tr><th>Budget</th><th>Departement</th><th>Reste</th><th>Utilisation</th><th>Statut</th></tr></thead><tbody>${alertRows || "<tr><td colspan='5'>Aucune alerte.</td></tr>"}</tbody></table></section><section class="page-soft"><h2>Paie</h2><table><thead><tr><th>Run</th><th>Departement</th><th>Periode</th><th>Statut</th><th>Net</th><th>Bulletins</th></tr></thead><tbody>${payrollRows || "<tr><td colspan='6'>Aucun run de paie.</td></tr>"}</tbody></table></section></div>
-      <h2>Journaux comptables filtres</h2><table><thead><tr><th>Date</th><th>Type</th><th>Direction</th><th>Titre</th><th>Departement</th><th>Montant</th></tr></thead><tbody>${accountingRows || "<tr><td colspan='6'>Aucune ecriture comptable.</td></tr>"}</tbody></table>
-      <h2>Trésorerie filtrée</h2><table><thead><tr><th>Date</th><th>Source</th><th>Direction</th><th>Méthode</th><th>Montant</th><th>Notes</th></tr></thead><tbody>${cashRows || "<tr><td colspan='6'>Aucune ligne de trésorerie.</td></tr>"}</tbody></table>
+      <div class="grid"><div class="metric"><span>{L("Taux de collecte", "Collection rate")}</span><b>${collectionRate.toFixed(1)}%</b><small>${plainPrintText(L("Collecte / attendu", "Collected / expected"))}</small></div><div class="metric"><span>{L("Utilisation des budgets", "Budget utilization")}</span><b>${budgetUtilization.toFixed(1)}%</b><small>${plainPrintText(currency.format(budgetConsumedTotal))} consomme</small></div><div class="metric"><span>${plainPrintText(L("Journaux filtrés", "Filtered journals"))}</span><b>${filteredAccountingEntries.length}</b><small>${plainPrintText(currency.format(accountingTotal))}</small></div><div class="metric"><span>${plainPrintText(L("Paie filtrée", "Filtered payroll"))}</span><b>${plainPrintText(currency.format(payrollTotal))}</b><small>${filteredPayrollRuns.length} run(s)</small></div></div>
+      <h2>${plainPrintText(L("Synthèse budgétaire filtrée", "Filtered budget summary"))}</h2><table><thead><tr><th>${plainPrintText(L("Budget", "Budget"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>${plainPrintText(L("Catégorie", "Category"))}</th><th>{L("Planifié", "Planned")}</th><th>{L("Consommé", "Consumed")}</th><th>${plainPrintText(L("Utilisation", "Utilization"))}</th><th>${plainPrintText(L("Statut", "Status"))}</th></tr></thead><tbody>${budgetRows || "<tr><td colspan='7'>Aucune ligne budgétaire.</td></tr>"}</tbody></table>
+      <div class="two-col"><section class="page-soft"><h2>${plainPrintText(L("Alertes budgétaires", "Budget alerts"))}</h2><table><thead><tr><th>${plainPrintText(L("Budget", "Budget"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>{L("Reste", "Remaining")}</th><th>${plainPrintText(L("Utilisation", "Utilization"))}</th><th>${plainPrintText(L("Statut", "Status"))}</th></tr></thead><tbody>${alertRows || "<tr><td colspan='5'>Aucune alerte.</td></tr>"}</tbody></table></section><section class="page-soft"><h2>${plainPrintText(L("Paie", "Payroll"))}</h2><table><thead><tr><th>Run</th><th>${plainPrintText(L("Département", "Department"))}</th><th>Periode</th><th>${plainPrintText(L("Statut", "Status"))}</th><th>Net</th><th>Bulletins</th></tr></thead><tbody>${payrollRows || "<tr><td colspan='6'>Aucun run de paie.</td></tr>"}</tbody></table></section></div>
+      <h2>${plainPrintText(L("Journaux comptables filtrés", "Filtered accounting journals"))}</h2><table><thead><tr><th>${plainPrintText(L("Date", "Date"))}</th><th>${plainPrintText(L("Type", "Type"))}</th><th>${plainPrintText(L("Direction", "Direction"))}</th><th>${plainPrintText(L("Titre", "Title"))}</th><th>${plainPrintText(L("Département", "Department"))}</th><th>${plainPrintText(L("Montant", "Amount"))}</th></tr></thead><tbody>${accountingRows || "<tr><td colspan='6'>Aucune ecriture comptable.</td></tr>"}</tbody></table>
+      <h2>${plainPrintText(L("Trésorerie filtrée", "Filtered cash flow"))}</h2><table><thead><tr><th>${plainPrintText(L("Date", "Date"))}</th><th>${plainPrintText(L("Source", "Source"))}</th><th>${plainPrintText(L("Direction", "Direction"))}</th><th>${plainPrintText(L("Méthode", "Method"))}</th><th>${plainPrintText(L("Montant", "Amount"))}</th><th>${plainPrintText(L("Notes", "Notes"))}</th></tr></thead><tbody>${cashRows || "<tr><td colspan='6'>Aucune ligne de trésorerie.</td></tr>"}</tbody></table>
       <footer>Rapport généré depuis EduPay selon la charte administrative ${plainPrintText(schoolBranding.shortName)}. Total cashflow filtre: ${plainPrintText(currency.format(cashflowTotal))}.</footer>
     </body></html>`;
   }
@@ -341,7 +344,7 @@ export function ReportsPage() {
       {
         name: "Comptabilité",
         rows: filteredAccountingEntries.map((entry) => ({
-          "Date": new Date(entry.entryDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Type": entry.entryType,
           "Direction": entry.direction,
           "Titre": entry.title,
@@ -354,7 +357,7 @@ export function ReportsPage() {
       {
         name: "Trésorerie",
         rows: filteredCashflowEntries.map((entry) => ({
-          "Date": new Date(entry.referenceDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.referenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Source": entry.sourceType,
           "Direction": entry.direction,
           "Méthode": entry.method || "",
@@ -375,7 +378,7 @@ export function ReportsPage() {
           "Net": run.totalNet,
           "Déductions": run.totalDeductions,
           "Bulletins": run.items.length,
-          "Traité le": run.processedAt ? new Date(run.processedAt).toLocaleDateString("fr-FR") : ""
+          "Traité le": run.processedAt ? new Date(run.processedAt).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : ""
         }))
       }
     ]);
@@ -386,8 +389,8 @@ export function ReportsPage() {
       <div className="space-y-6 animate-fadeInUp">
         <section className="card glass overflow-hidden border border-white/10 shadow-xl">
           <div className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.24),_transparent_30%),linear-gradient(135deg,rgba(8,47,73,0.94),rgba(2,6,23,0.98))] p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">Rapports exécutifs</p>
-            <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">Préparation du centre de rapports</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">{L("Rapports exécutifs", "Executive reports")}</p>
+            <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Préparation du centre de rapports", "Preparing the report center")}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
               Les données principales se préchargent en arrière-plan pour éviter un écran vide trop long à l'ouverture.
             </p>
@@ -422,15 +425,15 @@ export function ReportsPage() {
           <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">Rapports exécutifs</p>
-              <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">Centre de pilotage financier visible et exportable</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">{L("Rapports exécutifs", "Executive reports")}</p>
+              <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Centre de pilotage financier visible et exportable", "Visible and exportable financial control center")}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
                 Cette vue consolide revenu, budgets, comptabilité, trésorerie et masse salariale. Elle sert de preuve visible dans l'interface et de point d'export Excel.
               </p>
               <input
                 value={reportSearch}
                 onChange={(event) => setReportSearch(event.target.value)}
-                placeholder="Recherche rapport: departement, budget, statut, cashflow, paie, montant..."
+                placeholder={L("Rechercher : département, budget, statut, trésorerie, paie, montant...", "Search: department, budget, status, cash flow, payroll, amount...")}
                 className="mt-5 w-full rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/40"
               />
             </div>
@@ -469,25 +472,25 @@ export function ReportsPage() {
         </div>
       </section>
 
-      <SectionCard title="Diagnostic du rapport" subtitle="Signaux ajoutés au document imprimable et au pack Excel.">
+      <SectionCard title={L("Diagnostic du rapport", "Report diagnostics")} subtitle={L("Signaux ajoutés au document imprimable et au pack Excel.", "Signals added to the printable document and Excel package.")}>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Taux de collecte</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Taux de collecte", "Collection rate")}</p>
             <p className="mt-3 text-2xl font-bold text-emerald-200">{collectionRate.toFixed(1)}%</p>
-            <p className="mt-2 text-sm text-ink-dim">Revenu collecté sur revenu attendu.</p>
+            <p className="mt-2 text-sm text-ink-dim">{L("Revenu collecté sur revenu attendu.", "Revenue collected against expected revenue.")}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Utilisation budgets</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Utilisation des budgets", "Budget utilization")}</p>
             <p className="mt-3 text-2xl font-bold text-amber-200">{budgetUtilization.toFixed(1)}%</p>
             <p className="mt-2 text-sm text-ink-dim">{currency.format(budgetConsumedTotal)} consommé sur le filtre.</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Journaux filtrés</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Journaux filtrés", "Filtered journals")}</p>
             <p className="mt-3 text-2xl font-bold text-cyan-200">{filteredAccountingEntries.length}</p>
             <p className="mt-2 text-sm text-ink-dim">{currency.format(accountingTotal)} en écritures visibles.</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Paie filtrée</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Paie filtrée", "Filtered payroll")}</p>
             <p className="mt-3 text-2xl font-bold text-white">{currency.format(payrollTotal)}</p>
             <p className="mt-2 text-sm text-ink-dim">{filteredPayrollRuns.length} run(s) dans le périmètre.</p>
           </div>
@@ -502,7 +505,7 @@ export function ReportsPage() {
       </SectionCard>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <SectionCard title="Compte de résultat simplifié" subtitle="Revenu, dépenses et résultat mensuel sur la période courante.">
+        <SectionCard title={L("Compte de résultat simplifié", "Simplified income statement")} subtitle={L("Revenu, dépenses et résultat mensuel sur la période courante.", "Revenue, expenses and monthly results for the current period.")}>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={expenseOverview.monthlyPerformance}>
@@ -527,7 +530,7 @@ export function ReportsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="Position budgétaire" subtitle="Alertes et taux de consommation à surveiller maintenant.">
+        <SectionCard title={L("Position budgétaire", "Budget position")} subtitle={L("Alertes et taux de consommation à surveiller maintenant.", "Alerts and consumption rates to monitor now.")}>
           <div className="space-y-3">
             {filteredBudgetAlerts.map((budget) => (
               <article key={budget.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -539,19 +542,19 @@ export function ReportsPage() {
                   <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">{budget.utilization.toFixed(1)}%</span>
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
-                  <div><p className="text-ink-dim">Planifié</p><p className="font-semibold text-white">{currency.format(budget.plannedAmount)}</p></div>
-                  <div><p className="text-ink-dim">Consommé</p><p className="font-semibold text-amber-200">{currency.format(budget.consumedAmount)}</p></div>
-                  <div><p className="text-ink-dim">Reste</p><p className="font-semibold text-emerald-300">{currency.format(budget.remainingAmount)}</p></div>
+                  <div><p className="text-ink-dim">{L("Planifié", "Planned")}</p><p className="font-semibold text-white">{currency.format(budget.plannedAmount)}</p></div>
+                  <div><p className="text-ink-dim">{L("Consommé", "Consumed")}</p><p className="font-semibold text-amber-200">{currency.format(budget.consumedAmount)}</p></div>
+                  <div><p className="text-ink-dim">{L("Reste", "Remaining")}</p><p className="font-semibold text-emerald-300">{currency.format(budget.remainingAmount)}</p></div>
                 </div>
               </article>
             ))}
-            {!filteredBudgetAlerts.length && <p className="text-sm text-ink-dim">Aucune alerte budgétaire sur la période.</p>}
+            {!filteredBudgetAlerts.length && <p className="text-sm text-ink-dim">{L("Aucune alerte budgétaire sur la période.", "No budget alert for this period.")}</p>}
           </div>
         </SectionCard>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <SectionCard title="Dépenses par département" subtitle="Lecture immédiate des postes qui consomment le plus.">
+        <SectionCard title={L("Dépenses par département", "Expenses by department")} subtitle={L("Lecture immédiate des postes qui consomment le plus.", "Immediate view of the highest spending items.")}>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={filteredDepartmentSpending} layout="vertical" margin={{ left: 24 }}>
@@ -565,25 +568,25 @@ export function ReportsPage() {
           </div>
         </SectionCard>
 
-        <SectionCard title="Synthèse comptable et cash" subtitle="Volumes visibles avant de descendre dans les journaux détaillés.">
+        <SectionCard title={L("Synthèse comptable et trésorerie", "Accounting and cash summary")} subtitle={L("Volumes visibles avant de descendre dans les journaux détaillés.", "Visible totals before reviewing detailed journals.")}>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Écritures comptables</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Écritures comptables", "Accounting entries")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{accountingEntries.length}</p>
               <p className="mt-2 text-sm text-ink-dim">Montant total : {currency.format(accountingEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Lignes de trésorerie</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Lignes de trésorerie", "Cash-flow entries")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{cashflowEntries.length}</p>
               <p className="mt-2 text-sm text-ink-dim">Sorties : {currency.format(cashflowEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Runs de paie</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Cycles de paie", "Payroll runs")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{payrollRuns.length}</p>
               <p className="mt-2 text-sm text-ink-dim">Masse nette : {currency.format(payrollRuns.reduce((sum, run) => sum + run.totalNet, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Dette institutionnelle</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Dette institutionnelle", "Institutional debt")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{currency.format(expenseOverview.liabilities.institutionalObligations)}</p>
               <p className="mt-2 text-sm text-ink-dim">Dette fournisseurs : {currency.format(expenseOverview.liabilities.supplierDebt)}</p>
             </div>

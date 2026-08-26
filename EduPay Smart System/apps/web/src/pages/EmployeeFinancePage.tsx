@@ -2,6 +2,7 @@ import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CircleDollarSign, MailCheck, MessageSquareText, ShieldAlert, WalletCards } from "lucide-react";
 import { api } from "../services/api";
+import { useI18n } from "../i18n";
 
 type EmployeeRepayment = {
   id: string;
@@ -132,6 +133,8 @@ function modeLabel(value?: string) {
 }
 
 export function EmployeeFinancePage() {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [snapshot, setSnapshot] = useState<EmployeeFinanceSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +168,7 @@ export function EmployeeFinancePage() {
   }, [snapshot, query]);
 
   if (loading && !snapshot) {
-    return <div className="glass rounded-2xl p-6 text-sm text-ink-dim">Chargement de votre dashboard financier...</div>;
+    return <div className="glass rounded-2xl p-6 text-sm text-ink-dim">{L("Chargement de votre tableau financier...", "Loading your financial dashboard...")}</div>;
   }
 
   if (error) {
@@ -179,24 +182,24 @@ export function EmployeeFinancePage() {
       <section className="rounded-2xl border border-white/10 bg-slate-950/55 p-5 shadow-xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">Espace employe</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">{L("Espace employé", "Employee area")}</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-white">{snapshot.profile.fullName}</h1>
             <p className="mt-2 text-sm text-ink-dim">{snapshot.profile.employeeCode} - {snapshot.profile.position} - {snapshot.profile.department}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <DateSelect value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-11" />
             <DateSelect value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-11" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Recherche precise..." className="h-11" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={L("Recherche précise...", "Search...")} className="h-11" />
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { label: "Salaire mensuel", value: money(snapshot.salaryProjection.grossSalary, currency), sub: modeLabel(snapshot.salaryProjection.mode), icon: WalletCards, color: "text-white" },
-          { label: "Net previsionnel", value: money(snapshot.salaryProjection.netSalary, currency), sub: `${snapshot.salaryProjection.salaryPressure.toFixed(1)}% deduit`, icon: CircleDollarSign, color: "text-emerald-300" },
-          { label: "Deductions mois", value: money(snapshot.salaryProjection.totalDeductions, currency), sub: `Plafond ${snapshot.salaryProjection.maxDeductionRate.toFixed(0)}%`, icon: ShieldAlert, color: "text-amber-300" },
-          { label: "Transparence", value: `${snapshot.communicationHistory.length} avis`, sub: "SMS / email / dashboard", icon: MailCheck, color: "text-cyan-300" },
+          { label: L("Salaire mensuel", "Monthly salary"), value: money(snapshot.salaryProjection.grossSalary, currency), sub: modeLabel(snapshot.salaryProjection.mode), icon: WalletCards, color: "text-white" },
+          { label: L("Net prévisionnel", "Projected net"), value: money(snapshot.salaryProjection.netSalary, currency), sub: `${snapshot.salaryProjection.salaryPressure.toFixed(1)}% deduit`, icon: CircleDollarSign, color: "text-emerald-300" },
+          { label: L("Déductions du mois", "Monthly deductions"), value: money(snapshot.salaryProjection.totalDeductions, currency), sub: `Plafond ${snapshot.salaryProjection.maxDeductionRate.toFixed(0)}%`, icon: ShieldAlert, color: "text-amber-300" },
+          { label: L("Transparence", "Transparency"), value: `${snapshot.communicationHistory.length} avis`, sub: "SMS / email / dashboard", icon: MailCheck, color: "text-cyan-300" },
         ].map((card) => (
           <div key={card.label} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
             <card.icon className={`h-5 w-5 ${card.color}`} />
@@ -209,10 +212,10 @@ export function EmployeeFinancePage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         {[
-          { label: "Solde total", value: money(snapshot.totals.totalBalance, currency), icon: WalletCards, color: "text-cyan-300" },
-          { label: "Avances", value: money(snapshot.totals.salaryAdvanceBalance, currency), icon: CircleDollarSign, color: "text-emerald-300" },
-          { label: "Dettes ecole", value: money(snapshot.totals.schoolDebtBalance, currency), icon: ShieldAlert, color: "text-amber-300" },
-          { label: "Prochaine echeance", value: money(snapshot.totals.nextRepaymentAmount, currency), sub: dateLabel(snapshot.totals.nextRepaymentDueDate), icon: CalendarClock, color: "text-brand-200" }
+          { label: L("Solde total", "Total balance"), value: money(snapshot.totals.totalBalance, currency), icon: WalletCards, color: "text-cyan-300" },
+          { label: L("Avances", "Advances"), value: money(snapshot.totals.salaryAdvanceBalance, currency), icon: CircleDollarSign, color: "text-emerald-300" },
+          { label: L("Dettes école", "School debts"), value: money(snapshot.totals.schoolDebtBalance, currency), icon: ShieldAlert, color: "text-amber-300" },
+          { label: L("Prochaine échéance", "Next due date"), value: money(snapshot.totals.nextRepaymentAmount, currency), sub: dateLabel(snapshot.totals.nextRepaymentDueDate), icon: CalendarClock, color: "text-brand-200" }
         ].map((card) => (
           <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <card.icon className={`h-5 w-5 ${card.color}`} />
@@ -226,7 +229,7 @@ export function EmployeeFinancePage() {
       <section className="rounded-2xl border border-white/10 bg-slate-950/45 p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Analyse intelligente</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Analyse intelligente", "Smart analysis")}</p>
             <h2 className="mt-1 text-xl font-semibold text-white">Risque {snapshot.intelligence.riskLevel}</h2>
           </div>
           <span className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">
@@ -236,15 +239,15 @@ export function EmployeeFinancePage() {
         <p className="mt-3 text-sm text-ink-dim">{snapshot.intelligence.recommendation}</p>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Avances recuperees ce mois</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Avances récupérées ce mois", "Advances recovered this month")}</p>
             <p className="mt-2 text-lg font-semibold text-cyan-300">{money(snapshot.salaryProjection.advancesRecovered, currency)}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dettes recuperees ce mois</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Dettes récupérées ce mois", "Debts recovered this month")}</p>
             <p className="mt-2 text-lg font-semibold text-amber-300">{money(snapshot.salaryProjection.debtRecovered, currency)}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Reports intelligents</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Reports intelligents", "Smart deferrals")}</p>
             <p className="mt-2 text-lg font-semibold text-white">{snapshot.salaryProjection.deferredRepayments.length}</p>
           </div>
         </div>
@@ -252,7 +255,7 @@ export function EmployeeFinancePage() {
 
       <section className="overflow-hidden rounded-2xl border border-white/10">
         <div className="border-b border-white/10 bg-white/[0.04] px-4 py-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">Notifications administratives</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">{L("Notifications administratives", "Administrative notifications")}</h2>
         </div>
         <div className="divide-y divide-white/5">
           {snapshot.communicationHistory.slice(0, 6).map((message) => (
@@ -271,24 +274,24 @@ export function EmployeeFinancePage() {
             </div>
           ))}
           {snapshot.communicationHistory.length === 0 ? (
-            <div className="px-4 py-6 text-center text-sm text-ink-dim">Aucune notification administrative n'a encore ete publiee.</div>
+            <div className="px-4 py-6 text-center text-sm text-ink-dim">{L("Aucune notification administrative publiée pour le moment.", "No administrative notification has been published yet.")}</div>
           ) : null}
         </div>
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-white/10">
         <div className="border-b border-white/10 bg-white/[0.04] px-4 py-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">Engagements et echeances</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-white">{L("Engagements et échéances", "Obligations and due dates")}</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-950/60 text-left text-xs uppercase tracking-[0.14em] text-ink-dim">
               <tr>
-                <th className="px-4 py-3">Engagement</th>
-                <th className="px-4 py-3">Mode</th>
-                <th className="px-4 py-3">Solde</th>
-                <th className="px-4 py-3">Echeance</th>
-                <th className="px-4 py-3">Statut</th>
+                <th className="px-4 py-3">{L("Engagement", "Obligation")}</th>
+                <th className="px-4 py-3">{L("Mode", "Mode")}</th>
+                <th className="px-4 py-3">{L("Solde", "Balance")}</th>
+                <th className="px-4 py-3">{L("Échéance", "Due date")}</th>
+                <th className="px-4 py-3">{L("Statut", "Status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -296,7 +299,7 @@ export function EmployeeFinancePage() {
                 <tr key={item.id} className="border-t border-white/5">
                   <td className="px-4 py-3">
                     <p className="font-semibold text-white">{item.title}</p>
-                    <p className="text-xs text-ink-dim">{typeLabel(item.type)} - risque {item.riskLevel}</p>
+                    <p className="text-xs text-ink-dim">{typeLabel(item.type)} - {L("risque", "risk")} {item.riskLevel}</p>
                   </td>
                   <td className="px-4 py-3 text-ink-dim">{methodLabel(item.repaymentMethod)}</td>
                   <td className="px-4 py-3 font-semibold text-white">{money(item.balance, item.currency)}</td>
@@ -305,7 +308,7 @@ export function EmployeeFinancePage() {
                 </tr>
               ))}
               {filteredObligations.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-dim">Aucun engagement trouve pour cette recherche.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-ink-dim">{L("Aucun engagement trouvé pour cette recherche.", "No obligation matches this search.")}</td></tr>
               ) : null}
             </tbody>
           </table>

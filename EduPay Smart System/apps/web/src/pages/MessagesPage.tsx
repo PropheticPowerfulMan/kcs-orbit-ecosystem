@@ -2,6 +2,7 @@ import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { Eye, Mail, MessageSquare, Send, Trash2, Users, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
+import { useI18n } from "../i18n";
 import { api } from "../services/api";
 
 type ParentOption = {
@@ -67,6 +68,8 @@ function messageMatchesDateRange(log: ManualMessageLog, dateFrom: string, dateTo
 }
 
 export function MessagesPage() {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [parents, setParents] = useState<ParentOption[]>([]);
   const [logs, setLogs] = useState<ManualMessageLog[]>([]);
   const [search, setSearch] = useState("");
@@ -233,8 +236,8 @@ export function MessagesPage() {
   return (
     <div className="space-y-6">
       <section className="glass rounded-3xl border border-brand-300/20 p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Messagerie financière</p>
-        <h1 className="mt-3 font-display text-3xl font-bold text-white">Messages entre le financier et les parents</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">{L("Messagerie financière", "Financial messaging")}</p>
+        <h1 className="mt-3 font-display text-3xl font-bold text-white">{L("Messages entre le financier et les parents", "Messages between finance staff and parents")}</h1>
         <p className="mt-2 max-w-3xl text-sm text-ink-dim">
           Le message saisi ici peut être transmis à un ou plusieurs parents, envoyé par e-mail et/ou SMS, puis conservé dans leur espace EduPay sous Messages reçus.
         </p>
@@ -242,19 +245,19 @@ export function MessagesPage() {
 
       <section className="grid gap-4 md:grid-cols-4">
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Messages envoyés</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Messages envoyés", "Messages sent")}</p>
           <p className="mt-2 text-3xl font-black text-white">{stats.total}</p>
         </article>
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Parents contactés</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Parents contactés", "Parents contacted")}</p>
           <p className="mt-2 text-3xl font-black text-cyan-300">{stats.parents}</p>
         </article>
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Envois e-mail</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Envois e-mail", "Email deliveries")}</p>
           <p className="mt-2 text-3xl font-black text-brand-100">{stats.email}</p>
         </article>
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Envois SMS</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Envois SMS", "SMS deliveries")}</p>
           <p className="mt-2 text-3xl font-black text-emerald-300">{stats.sms}</p>
         </article>
       </section>
@@ -265,7 +268,7 @@ export function MessagesPage() {
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-brand-200" />
               <div>
-                <h2 className="font-display text-xl font-bold text-white">Choisir les parents</h2>
+                <h2 className="font-display text-xl font-bold text-white">{L("Choisir les parents", "Choose parents")}</h2>
                 <p className="text-sm text-ink-dim">Tous les noms de parents sont chargés automatiquement. Sélection multiple autorisée.</p>
               </div>
             </div>
@@ -285,7 +288,7 @@ export function MessagesPage() {
            <SearchField
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filtrer un parent, un téléphone ou un élève..."
+              placeholder={L("Filtrer un parent, un téléphone ou un élève...", "Filter by parent, phone or student...")}
               wrapperClassName="mt-4"
             />
 
@@ -323,7 +326,7 @@ export function MessagesPage() {
             <div className="flex items-center gap-3">
               <Send className="h-5 w-5 text-emerald-300" />
               <div>
-                <h2 className="font-display text-xl font-bold text-white">Rédiger et transmettre</h2>
+                <h2 className="font-display text-xl font-bold text-white">{L("Rédiger et transmettre", "Compose and send")}</h2>
                 <p className="text-sm text-ink-dim">Le tableau de bord parent est toujours alimenté en même temps.</p>
               </div>
             </div>
@@ -341,13 +344,13 @@ export function MessagesPage() {
                 value={subject}
                 onChange={(event) => setSubject(event.target.value)}
                 className="w-full"
-                placeholder="Objet du message (facultatif)"
+                placeholder={L("Objet du message (facultatif)", "Message subject (optional)")}
               />
               <textarea
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 className="min-h-[12rem] w-full"
-                placeholder="Écrivez ici le message à transmettre aux parents sélectionnés..."
+                placeholder={L("Écrivez ici le message à transmettre aux parents sélectionnés...", "Write the message to send to selected parents...")}
               />
             </div>
 
@@ -380,7 +383,7 @@ export function MessagesPage() {
         </div>
 
         <div className="glass rounded-3xl border border-white/10 p-5">
-          <h2 className="font-display text-xl font-bold text-white">Historique des messages transmis</h2>
+          <h2 className="font-display text-xl font-bold text-white">{L("Historique des messages transmis", "Sent message history")}</h2>
           <p className="mt-1 text-sm text-ink-dim">Tous les envois manuels du financier vers les parents sont conservés ici, avec filtres précis et actions directes.</p>
 
           <div className="mt-5 grid gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2 xl:grid-cols-3">
@@ -462,7 +465,7 @@ export function MessagesPage() {
                   </div>
                   <div className="text-right">
                     <span className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">{log.type}</span>
-                    <p className="mt-2 text-xs text-ink-dim">{new Date(log.createdAt).toLocaleString("fr-FR")}</p>
+                    <p className="mt-2 text-xs text-ink-dim">{new Date(log.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                   </div>
                 </div>
                 <pre className="mt-4 whitespace-pre-wrap rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-ink">{parsed.body || log.content}</pre>
@@ -508,26 +511,26 @@ export function MessagesPage() {
                 onClick={() => setSelectedLog(null)}
                 className="absolute top-5 right-5 z-10 rounded-xl border border-white/10 bg-white/[0.04] p-2 text-ink-dim hover:text-white"
                 style={{ background: 'rgba(0,0,0,0.15)' }}
-                aria-label="Fermer"
+                aria-label={L("Fermer", "Close")}
               >
                 <X className="h-5 w-5" />
               </button>
               <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Message détaillé</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">{L("Message détaillé", "Message details")}</p>
                   <h2 className="mt-2 font-display text-2xl font-bold text-white">{selectedLog.parentName}</h2>
-                  <p className="mt-2 text-sm text-ink-dim">{new Date(selectedLog.createdAt).toLocaleString("fr-FR")}</p>
+                  <p className="mt-2 text-sm text-ink-dim">{new Date(selectedLog.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                 </div>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-ink">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">Contact</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Contact", "Contact")}</p>
                   <p className="mt-2 font-semibold text-white">{selectedLog.parentEmail || "Email non renseigné"}</p>
                   <p className="mt-1 font-semibold text-white">{selectedLog.parentPhone || "Téléphone non renseigné"}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-ink">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">Trace technique</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Trace technique", "Technical trace")}</p>
                   <p className="mt-2 text-white">Type: {selectedLog.type}</p>
                   <p className="mt-1 text-white">Langue: {selectedLog.language}</p>
                   <p className="mt-1 text-white">Canal principal: {selectedLog.channel}</p>
@@ -537,13 +540,13 @@ export function MessagesPage() {
 
               {parsed.subject ? (
                 <div className="mt-5 rounded-2xl border border-brand-300/20 bg-brand-500/10 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-200">Objet</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-200">{L("Objet", "Subject")}</p>
                   <p className="mt-2 text-lg font-semibold text-white">{parsed.subject}</p>
                 </div>
               ) : null}
 
               <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">Contenu</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Contenu", "Content")}</p>
                 <pre className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink break-words">{parsed.body || selectedLog.content}</pre>
               </div>
             </div>

@@ -147,6 +147,7 @@ function imageFileToAvatar(file: File): Promise<string> {
 
 export function ParentTrackingPage() {
   const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const setPhotoUrl = useAuthStore((s) => s.setPhotoUrl);
   const [data, setData] = useState<ParentData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -283,7 +284,7 @@ export function ParentTrackingPage() {
     const debtRatio = totalExpected > 0 ? totalDebt / totalExpected : 0;
     const incidentRatio = allPayments.length > 0 ? (pendingPayments.length + failedPayments.length) / allPayments.length : 0;
     const aiScore = clamp(100 - debtRatio * 52 - incidentRatio * 16 - Math.max(-trendRate, 0) * 0.2 - unpaidMonthEquivalent * 2.1);
-    const riskLevel = aiScore >= 82 ? "Situation saine" : aiScore >= 62 ? "À surveiller" : aiScore >= 42 ? "Risque élevé" : "Risque critique";
+    const riskLevel = aiScore >= 82 ? L("Situation saine", "Healthy situation") : aiScore >= 62 ? L("À surveiller", "Monitor") : aiScore >= 42 ? L("Risque élevé", "High risk") : L("Risque critique", "Critical risk");
     const recommendedMonthly = totalDebt > 0
       ? Math.max(nextInstallment, totalDebt / Math.max(1, Math.ceil(Math.min(monthsToClearDebt, SCHOOL_MONTHS))))
       : 0;
@@ -292,50 +293,50 @@ export function ParentTrackingPage() {
     if (completionRate >= 90) {
       insights.push({
         tone: "good",
-        title: "Excellent niveau de couverture",
-        body: "Le dossier financier est presque totalement réglé. Conservez ce rythme pour éviter les pénalités de fin d'année."
+        title: L("Excellent niveau de couverture", "Excellent coverage level"),
+        body: L("Le dossier financier est presque totalement réglé. Conservez ce rythme pour éviter les pénalités de fin d'année.", "The financial account is almost fully settled. Maintain this pace to avoid year-end penalties.")
       });
     } else if (completionRate >= 60) {
       insights.push({
         tone: "warn",
-        title: "Règlement partiel à stabiliser",
-        body: `Il reste ${formatMoney(totalDebt)} à couvrir. Un paiement régulier de ${formatMoney(recommendedMonthly)} aiderait à terminer sans pression.`
+        title: L("Règlement partiel à stabiliser", "Partial payment needs stabilization"),
+        body: L(`Il reste ${formatMoney(totalDebt)} à couvrir. Un paiement régulier de ${formatMoney(recommendedMonthly)} aiderait à terminer sans pression.`, `${formatMoney(totalDebt)} remains outstanding. Regular payments of ${formatMoney(recommendedMonthly)} would help clear it smoothly.`)
       });
     } else {
       insights.push({
         tone: "danger",
-        title: "Priorité au plan de rattrapage",
-        body: `Le taux de couverture est de ${completionRate.toFixed(1)} %. L'IA recommande de prioriser les mensualités fixes.`
+        title: L("Priorité au plan de rattrapage", "Catch-up plan is the priority"),
+        body: L(`Le taux de couverture est de ${completionRate.toFixed(1)} %. L'IA recommande de prioriser les mensualités fixes.`, `Coverage is ${completionRate.toFixed(1)}%. The AI recommends prioritizing fixed monthly payments.`)
       });
     }
 
     if (worstStudent && worstStudent.debt > 0) {
       insights.push({
         tone: worstStudent.risk >= 65 ? "danger" : "info",
-        title: `Attention sur ${worstStudent.fullName}`,
-        body: `Dette restante : ${formatMoney(worstStudent.debt)}. Score de risque estimé : ${worstStudent.risk.toFixed(0)} %.`
+        title: L(`Attention sur ${worstStudent.fullName}`, `Attention required for ${worstStudent.fullName}`),
+        body: L(`Dette restante : ${formatMoney(worstStudent.debt)}. Score de risque estimé : ${worstStudent.risk.toFixed(0)} %.`, `Outstanding debt: ${formatMoney(worstStudent.debt)}. Estimated risk score: ${worstStudent.risk.toFixed(0)}%.`)
       });
     }
 
     if (trendRate < -15) {
       insights.push({
         tone: "warn",
-        title: "Baisse du rythme de paiement",
-        body: `Le mois courant est en recul de ${Math.abs(trendRate).toFixed(1)} % par rapport au mois précédent.`
+        title: L("Baisse du rythme de paiement", "Payment pace is decreasing"),
+        body: L(`Le mois courant est en recul de ${Math.abs(trendRate).toFixed(1)} % par rapport au mois précédent.`, `The current month is down ${Math.abs(trendRate).toFixed(1)}% compared with the previous month.`)
       });
     } else if (trendRate > 10) {
       insights.push({
         tone: "good",
-        title: "Rythme de paiement en amélioration",
-        body: `Les paiements progressent de ${trendRate.toFixed(1)} % par rapport au mois précédent.`
+        title: L("Rythme de paiement en amélioration", "Payment pace is improving"),
+        body: L(`Les paiements progressent de ${trendRate.toFixed(1)} % par rapport au mois précédent.`, `Payments increased by ${trendRate.toFixed(1)}% compared with the previous month.`)
       });
     }
 
     if (pendingAmount > 0) {
       insights.push({
         tone: "info",
-        title: "Paiements en attente",
-        body: `${formatMoney(pendingAmount)} sont encore en attente de validation. Vérifiez leur confirmation avec l'école.`
+        title: L("Paiements en attente", "Pending payments"),
+        body: L(`${formatMoney(pendingAmount)} sont encore en attente de validation. Vérifiez leur confirmation avec l'école.`, `${formatMoney(pendingAmount)} is still awaiting validation. Confirm it with the school.`)
       });
     }
 
@@ -347,9 +348,9 @@ export function ParentTrackingPage() {
     }));
 
     const statusDistribution = [
-      { name: "Réglé", value: totalPaid },
-      { name: "En attente", value: pendingAmount },
-      { name: "Reste", value: totalDebt }
+      { name: L("Réglé", "Paid"), value: totalPaid },
+      { name: L("En attente", "Pending"), value: pendingAmount },
+      { name: L("Reste", "Outstanding"), value: totalDebt }
     ].filter((item) => item.value > 0);
 
     return {
@@ -394,10 +395,10 @@ export function ParentTrackingPage() {
     return (
       <div className="flex min-h-[65vh] items-center justify-center px-4">
         <div className="glass max-w-md rounded-2xl border border-amber-500/25 p-8 text-center shadow-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">Espace parent</p>
-          <h1 className="mt-3 font-display text-2xl font-bold text-white">Données indisponibles</h1>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">{L("Espace parent", "Parent area")}</p>
+          <h1 className="mt-3 font-display text-2xl font-bold text-white">{L("Données indisponibles", "Data unavailable")}</h1>
           <p className="mt-3 text-sm text-ink-dim">
-            {loadError ?? "Le backend ne repond pas pour le moment. Reessayez dans quelques instants."}
+            {loadError ?? L("Le service ne répond pas pour le moment. Réessayez dans quelques instants.", "The service is currently unavailable. Please try again shortly.")}
           </p>
         </div>
       </div>
@@ -415,7 +416,7 @@ export function ParentTrackingPage() {
       <div className="glass max-w-full overflow-hidden rounded-2xl border border-brand-500/20 px-4 py-6 shadow-xl animate-fadeInDown sm:px-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-300">Espace parent intelligent</p>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-300">{L("Espace parent intelligent", "Smart parent area")}</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-white">{t("parentTracking")}</h1>
             <p className="mt-2 max-w-3xl text-sm text-ink-dim">{t("parentFinancialDeepSubtitle")}</p>
           </div>
@@ -423,7 +424,7 @@ export function ParentTrackingPage() {
             <div className="flex items-center gap-3">
               <BrainCircuit className="h-6 w-6 text-cyan-300" />
               <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Score IA</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Score IA", "AI score")}</p>
                 <p className="font-mono text-2xl font-black text-white">{summary.aiScore.toFixed(0)}/100</p>
               </div>
             </div>
@@ -483,8 +484,8 @@ export function ParentTrackingPage() {
         <div className="card glass min-w-0 overflow-hidden border border-cyan-500/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-xl font-bold text-white">Diagnostic IA</h2>
-              <p className="mt-1 text-sm text-ink-dim">Synthèse automatique de votre situation de paiement.</p>
+              <h2 className="font-display text-xl font-bold text-white">{L("Diagnostic IA", "AI assessment")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Synthèse automatique de votre situation de paiement.", "Automated summary of your payment situation.")}</p>
             </div>
             <Gauge className="h-7 w-7 text-cyan-300" />
           </div>
@@ -496,17 +497,17 @@ export function ParentTrackingPage() {
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div>
-              <p className="text-xs text-ink-dim">Prochain mois prévu</p>
+              <p className="text-xs text-ink-dim">{L("Prochain mois prévu", "Next-month forecast")}</p>
               <p className="font-mono text-sm font-bold text-cyan-200">{formatMoney(summary.forecastNextMonth)}</p>
             </div>
             <div>
-              <p className="text-xs text-ink-dim">Tendance</p>
+              <p className="text-xs text-ink-dim">{L("Tendance", "Trend")}</p>
               <p className={`font-mono text-sm font-bold ${summary.trendRate >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                 {summary.trendRate >= 0 ? "+" : ""}{summary.trendRate.toFixed(1)}%
               </p>
             </div>
             <div>
-              <p className="text-xs text-ink-dim">Mensualité conseillée</p>
+              <p className="text-xs text-ink-dim">{L("Mensualité conseillée", "Recommended monthly payment")}</p>
               <p className="font-mono text-sm font-bold text-amber-200">{formatMoney(summary.recommendedMonthly)}</p>
             </div>
           </div>
@@ -534,8 +535,8 @@ export function ParentTrackingPage() {
         <div className="card glass min-w-0 overflow-hidden border border-brand-500/10 shadow-lg xl:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-xl font-bold text-white">Évolution mensuelle</h2>
-              <p className="mt-1 text-sm text-ink-dim">Comparaison entre les paiements reçus et l'objectif mensuel.</p>
+              <h2 className="font-display text-xl font-bold text-white">{L("Évolution mensuelle", "Monthly progress")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Comparaison entre les paiements reçus et l'objectif mensuel.", "Comparison between payments received and the monthly target.")}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-slate-900/40 px-3 py-1 text-xs font-semibold text-cyan-200">
               Objectif : {formatMoney(summary.expectedPerMonth)} / mois
@@ -565,8 +566,8 @@ export function ParentTrackingPage() {
         </div>
 
         <div className="card glass min-w-0 overflow-hidden border border-emerald-500/10 shadow-lg">
-          <h2 className="font-display text-xl font-bold text-white">Répartition financière</h2>
-          <p className="mt-1 text-sm text-ink-dim">Vue rapide entre payé, attente et reste à payer.</p>
+          <h2 className="font-display text-xl font-bold text-white">{L("Répartition financière", "Financial breakdown")}</h2>
+          <p className="mt-1 text-sm text-ink-dim">{L("Vue rapide entre payé, attente et reste à payer.", "Quick overview of paid, pending and outstanding amounts.")}</p>
           <div className="mt-5 h-56">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -601,8 +602,8 @@ export function ParentTrackingPage() {
           <div className="flex items-center gap-3">
             <Lightbulb className="h-6 w-6 text-amber-300" />
             <div>
-              <h2 className="font-display text-xl font-bold text-white">Recommandations IA</h2>
-              <p className="text-sm text-ink-dim">Actions prioritaires générées à partir de vos paiements.</p>
+              <h2 className="font-display text-xl font-bold text-white">{L("Recommandations IA", "AI recommendations")}</h2>
+              <p className="text-sm text-ink-dim">{L("Actions prioritaires générées à partir de vos paiements.", "Priority actions generated from your payments.")}</p>
             </div>
           </div>
           <div className="mt-5 space-y-3">
@@ -618,8 +619,8 @@ export function ParentTrackingPage() {
         <div className="card glass min-w-0 overflow-hidden border border-brand-500/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-xl font-bold text-white">Plan de paiement conseillé</h2>
-              <p className="mt-1 text-sm text-ink-dim">Simulation automatique pour ramener le dossier à zéro.</p>
+              <h2 className="font-display text-xl font-bold text-white">{L("Plan de paiement conseillé", "Recommended payment plan")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Simulation automatique pour ramener le dossier à zéro.", "Automated plan to clear the outstanding balance.")}</p>
             </div>
             <ShieldCheck className="h-7 w-7 text-emerald-300" />
           </div>
@@ -629,11 +630,11 @@ export function ParentTrackingPage() {
               <p className="mt-2 break-words font-mono text-lg font-bold text-amber-300">{formatMoney(summary.nextInstallment)}</p>
             </div>
             <div className="min-w-0 rounded-xl border border-white/10 bg-slate-900/30 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Mensualité IA</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Mensualité IA", "AI monthly payment")}</p>
               <p className="mt-2 break-words font-mono text-lg font-bold text-cyan-300">{formatMoney(summary.recommendedMonthly)}</p>
             </div>
             <div className="min-w-0 rounded-xl border border-white/10 bg-slate-900/30 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Délai estimé</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Délai estimé", "Estimated time")}</p>
               <p className="mt-2 font-mono text-lg font-bold text-white">
                 {Number.isFinite(summary.monthsToClearDebt) ? `${Math.ceil(summary.monthsToClearDebt)} mois` : "À définir"}
               </p>
@@ -715,7 +716,7 @@ export function ParentTrackingPage() {
                     <p className="mt-1 text-lg font-bold text-amber-300">{student.missingMonths}</p>
                   </div>
                   <div className="min-w-0 rounded-xl border border-slate-700/50 bg-slate-900/25 p-3">
-                    <p className="text-xs text-ink-dim">Risque IA</p>
+                    <p className="text-xs text-ink-dim">{L("Risque IA", "AI risk")}</p>
                     <p className={`mt-1 text-lg font-bold ${student.risk >= 65 ? "text-red-300" : student.risk >= 35 ? "text-amber-300" : "text-emerald-300"}`}>
                       {student.risk.toFixed(0)}%
                     </p>
