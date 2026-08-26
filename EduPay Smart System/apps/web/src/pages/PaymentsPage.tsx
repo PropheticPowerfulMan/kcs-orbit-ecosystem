@@ -683,12 +683,12 @@ function buildPaymentScopeLabel(scope: PaymentExportScope | undefined, lang: str
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   if (!scope) return "";
   return [
-    scope.search?.trim() ? `Recherche : ${scope.search.trim()}` : "Recherche : toutes categories",
-    scope.className && scope.className !== "ALL" ? `Classe : ${scope.className}` : "Classe : toutes",
-    scope.status && scope.status !== "ALL" ? `Statut : ${getStatusLabel(scope.status)}` : "Statut : tous",
-    scope.method && scope.method !== "ALL" ? `Mode : ${getMethodLabel(scope.method as PaymentRecord["method"])}` : "Mode : tous",
-    scope.dateFrom ? `Du : ${new Date(`${scope.dateFrom}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}` : "",
-    scope.dateTo ? `Au : ${new Date(`${scope.dateTo}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}` : ""
+    scope.search?.trim() ? `${L("Recherche", "Search")} : ${scope.search.trim()}` : L("Recherche : toutes catégories", "Search: all categories"),
+    scope.className && scope.className !== "ALL" ? `${L("Classe", "Class")} : ${scope.className}` : L("Classe : toutes", "Class: all"),
+    scope.status && scope.status !== "ALL" ? `${L("Statut", "Status")} : ${getStatusLabel(scope.status, lang)}` : L("Statut : tous", "Status: all"),
+    scope.method && scope.method !== "ALL" ? `${L("Mode", "Method")} : ${getMethodLabel(scope.method as PaymentRecord["method"], lang)}` : L("Mode : tous", "Method: all"),
+    scope.dateFrom ? `${L("Du", "From")} : ${new Date(`${scope.dateFrom}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}` : "",
+    scope.dateTo ? `${L("Au", "To")} : ${new Date(`${scope.dateTo}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}` : ""
   ].filter(Boolean).join(" | ");
 }
 
@@ -703,6 +703,7 @@ function buildPaymentExportFilename(prefix: string, scope: PaymentExportScope) {
 
 /* --- État financier HTML (général ou par parent) -------------------------- */
 function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope?: PaymentExportScope, lang: string = "fr"): string {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const filtered = filterParent
     ? payments.filter((p) => getPaymentSubjectName(p).toLowerCase().includes(filterParent.toLowerCase()))
     : payments;
@@ -722,7 +723,7 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
   const cancelledTotal = filtered.filter((p) => p.status === "CANCELLED").reduce((s, p) => s + p.amount, 0);
 
   const methodLabel: Record<string, string> = {
-    CASH: "Cash / Especes",
+    CASH: lang === "fr" ? "Cash / Espèces" : "Cash",
     AIRTEL_MONEY: "Airtel Money",
     MPESA: "M-Pesa",
     ORANGE_MONEY: "Orange Money"
@@ -734,10 +735,10 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
     CANCELLED: "#64748b"
   };
   const statusLabel: Record<string, string> = {
-    COMPLETED: "Réglé",
-    PENDING: "En attente",
-    FAILED: "Échoué",
-    CANCELLED: "Annulé"
+    COMPLETED: lang === "fr" ? "Réglé" : "Completed",
+    PENDING: lang === "fr" ? "En attente" : "Pending",
+    FAILED: lang === "fr" ? "Échoué" : "Failed",
+    CANCELLED: lang === "fr" ? "Annulé" : "Cancelled"
   };
 
   const generatedAt = new Date();
@@ -808,11 +809,11 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
 
   const title = scope?.title
     ? plainPrintText(scope.title)
-    : filterParent ? `État financier - ${plainPrintText(filterParent)}` : "État général des paiements";
-  const scopeLabel = plainPrintText(buildPaymentScopeLabel(scope));
+    : filterParent ? `${L("État financier", "Financial statement")} - ${plainPrintText(filterParent)}` : L("État général des paiements", "General payment statement");
+  const scopeLabel = plainPrintText(buildPaymentScopeLabel(scope, lang));
 
-  return `<!DOCTYPE html>
-<html lang="fr">
+  const html = `<!DOCTYPE html>
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8"/>
   <title>${title}</title>
@@ -952,8 +953,8 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
       </div>
       <div style="text-align:right;">
         <div style="font-size:11px; color:#64748b">Imprime le</div>
-        <div style="font-weight:bold; font-size:13px">${generatedAt.toLocaleDateString("fr-FR")}</div>
-        <div style="font-size:11px; color:#64748b">${generatedAt.toLocaleTimeString("fr-FR")}</div>
+        <div style="font-weight:bold; font-size:13px">${generatedAt.toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</div>
+        <div style="font-size:11px; color:#64748b">${generatedAt.toLocaleTimeString(lang === "fr" ? "fr-FR" : "en-US")}</div>
       </div>
     </div>
 
@@ -1016,11 +1017,25 @@ function buildReportHtml(payments: PaymentRecord[], filterParent?: string, scope
     </div>
     <div style="margin-top:28px; text-align:center; font-size:10px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:14px;">
       Document généré officiellement par <strong>${brand.appName}</strong> pour <strong>${brand.schoolName}</strong> -
-      ${generatedAt.toLocaleString("fr-FR")}
+      ${generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}
     </div>
   </div>
 </body>
 </html>`;
+  if (lang === "fr") return html;
+  const translations: Array<[string, string]> = [
+    ["état officiel des paiements", "official payment statement"], ["Référence", "Reference"],
+    ["Tous montants en USD (dollars americains)", "All amounts in USD (US dollars)"], ["Imprime le", "Printed on"],
+    ["Total encaisse (USD)", "Total received (USD)"], ["Paiements réglés", "Completed payments"],
+    ["En attente", "Pending"], ["Échoués", "Failed"], ["Annules:", "Cancelled:"],
+    ["Repartition par mode de paiement", "Breakdown by payment method"], ["Aucun paiement trouvé.", "No payment found."],
+    ["Parent concerne :", "Parent concerned:"], ["No Transaction", "Transaction No."], ["Motif", "Reason"],
+    ["Mode", "Method"], ["Montant (USD)", "Amount (USD)"], ["Statut", "Status"], ["Sous-total :", "Subtotal:"],
+    ["TOTAL GENERAL (USD)", "GRAND TOTAL (USD)"], ["Validation comptable", "Accounting approval"],
+    ["Service financier", "Finance department"], ["Visa de direction", "Management approval"],
+    ["Direction de l'établissement", "School management"], ["Document généré officiellement par", "Document officially generated by"]
+  ];
+  return translations.reduce((document, [fr, en]) => document.replaceAll(fr, en), html);
 }
 
 /* --- Ouverture popup + impression ---------------------------------------- */
