@@ -12,6 +12,11 @@
     respond "staging gateway healthy" 200
   }
 
+  handle /api/health {
+    rewrite * /health
+    reverse_proxy edupay_api:4000
+  }
+
   handle /api/* {
     reverse_proxy edupay_api:4000
   }
