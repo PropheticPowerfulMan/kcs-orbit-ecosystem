@@ -41,7 +41,10 @@ function violations(file: string) {
 
 describe("EduPay bilingual UI coverage", () => {
   it("does not allow untranslated visible JSX literals", () => {
-    const found = SCANNED_DIRS.flatMap((directory) => sourceFiles(join(SOURCE_ROOT, directory))).flatMap(violations);
+    const filter = process.env.I18N_COVERAGE_FILE;
+    const files = SCANNED_DIRS.flatMap((directory) => sourceFiles(join(SOURCE_ROOT, directory)))
+      .filter((file) => !filter || file.endsWith(filter));
+    const found = files.flatMap(violations);
     expect(found, found.join("\n")).toEqual([]);
   });
 });
