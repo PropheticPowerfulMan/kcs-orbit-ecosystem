@@ -1,7 +1,7 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from apps.communication.models import Notification
-from apps.communication.services import deliver_user_communication
+from apps.communication.services import deliver_employee_communication
 from apps.integration.orbit import sync_teacher
 from .services import deactivate_teacher
 from .models import Teacher
@@ -28,15 +28,22 @@ class TeacherListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         teacher = serializer.save()
         sync_teacher(teacher)
-        subject = 'Acces SAVANEX employe active'
+        temporary_password = getattr(teacher.user, '_generated_password', None)
+        application_names = ['EduPay']
+        if teacher.is_teaching_employee:
+            application_names.append('KCS Nexus')
+        subject = 'Vos acces institutionnels KCS sont actifs'
         body = (
-            f"Bonjour {teacher.full_name or teacher.user.username}, votre profil employe SAVANEX est active. "
-            f"Matricule: {teacher.employee_id}. Identifiant: {teacher.user.username}. "
-            f"Code d'acces: {teacher.user.access_code}. "
-            "Le mot de passe temporaire doit etre change a la premiere connexion."
+            f"Bonjour {teacher.full_name or teacher.user.username}, votre profil employe KCS est actif.\n\n"
+            f"Applications: {', '.join(application_names)}.\n"
+            f"Matricule: {teacher.employee_id}.\n"
+            f"Identifiant: {teacher.user.email}.\n"
+            f"Code d'acces: {teacher.user.access_code}.\n"
+            + (f"Mot de passe temporaire: {temporary_password}.\n" if temporary_password else '')
+            + "Ce mot de passe doit etre change a la premiere connexion."
         )
-        deliver_user_communication(
-            teacher.user,
+        deliver_employee_communication(
+            teacher,
             subject,
             body,
             notif_type=Notification.TYPE_ANNOUNCEMENT,

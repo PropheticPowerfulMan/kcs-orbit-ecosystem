@@ -39,12 +39,15 @@ class TeacherSerializer(serializers.ModelSerializer):
         model = Teacher
         fields = [
             'id', 'teacher_id', 'employee_id', 'employee_type', 'employee_label',
-            'gender', 'department', 'job_title', 'contract_type', 'employment_status',
+            'gender', 'department', 'job_title', 'contract_type', 'contract_duration_months',
+            'birth_date', 'birth_place', 'nationality', 'identity_document_type', 'identity_document_other',
+            'residential_address', 'secondary_phone', 'personal_email', 'email_contact_preference', 'employment_status',
             'work_location', 'work_email', 'office_phone_extension',
             'payroll_reference', 'national_id_number', 'social_security_number',
-            'tax_number', 'bank_name', 'bank_account_number', 'salary_grade',
+            'tax_number', 'onem_number', 'bank_name', 'bank_account_number', 'bank_swift_iban', 'salary_grade',
             'base_salary', 'pay_frequency', 'supervisor_name', 'emergency_contact_name',
-            'emergency_contact_phone', 'full_name', 'email', 'first_name', 'middle_name', 'last_name',
+            'emergency_contact_relationship', 'emergency_contact_phone', 'emergency_contact_phone_secondary',
+            'marital_status', 'spouse_full_name', 'spouse_phone', 'spouse_occupation', 'children', 'full_name', 'email', 'first_name', 'middle_name', 'last_name',
             'user_email', 'phone', 'avatar', 'contact_phone',
             'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
@@ -136,11 +139,15 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
         fields = [
             'user', 'teacher_id', 'employee_id', 'employee_type', 'gender', 'department',
             'job_title', 'qualification', 'specialization', 'hire_date', 'end_date',
-            'contract_type', 'employment_status', 'work_location', 'work_email',
+            'contract_type', 'contract_duration_months', 'birth_date', 'birth_place', 'nationality',
+            'identity_document_type', 'identity_document_other', 'residential_address', 'secondary_phone',
+            'personal_email', 'email_contact_preference', 'employment_status', 'work_location', 'work_email',
             'office_phone_extension', 'payroll_reference', 'national_id_number',
-            'social_security_number', 'tax_number', 'bank_name', 'bank_account_number',
+            'social_security_number', 'onem_number', 'tax_number', 'bank_name', 'bank_account_number', 'bank_swift_iban',
             'salary_grade', 'base_salary', 'pay_frequency', 'supervisor_name',
-            'emergency_contact_name', 'emergency_contact_phone', 'bio', 'employment_notes',
+            'emergency_contact_name', 'emergency_contact_relationship', 'emergency_contact_phone',
+            'emergency_contact_phone_secondary', 'marital_status', 'spouse_full_name', 'spouse_phone',
+            'spouse_occupation', 'children', 'bio', 'employment_notes',
         ]
         extra_kwargs = {
             'teacher_id': {'required': False, 'allow_blank': True},
@@ -153,6 +160,16 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             'specialization': {'required': False, 'allow_blank': True},
             'end_date': {'required': False, 'allow_null': True},
             'contract_type': {'required': False, 'allow_blank': True},
+            'contract_duration_months': {'required': False, 'allow_null': True},
+            'birth_date': {'required': False, 'allow_null': True},
+            'birth_place': {'required': False, 'allow_blank': True},
+            'nationality': {'required': False, 'allow_blank': True},
+            'identity_document_type': {'required': False, 'allow_blank': True},
+            'identity_document_other': {'required': False, 'allow_blank': True},
+            'residential_address': {'required': False, 'allow_blank': True},
+            'secondary_phone': {'required': False, 'allow_blank': True},
+            'personal_email': {'required': False, 'allow_blank': True},
+            'email_contact_preference': {'required': False, 'allow_blank': True},
             'employment_status': {'required': False},
             'work_location': {'required': False, 'allow_blank': True},
             'work_email': {'required': False, 'allow_blank': True},
@@ -160,15 +177,24 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             'payroll_reference': {'required': False, 'allow_blank': True},
             'national_id_number': {'required': False, 'allow_blank': True},
             'social_security_number': {'required': False, 'allow_blank': True},
+            'onem_number': {'required': False, 'allow_blank': True},
             'tax_number': {'required': False, 'allow_blank': True},
             'bank_name': {'required': False, 'allow_blank': True},
             'bank_account_number': {'required': False, 'allow_blank': True},
+            'bank_swift_iban': {'required': False, 'allow_blank': True},
             'salary_grade': {'required': False, 'allow_blank': True},
             'base_salary': {'required': False, 'allow_null': True},
             'pay_frequency': {'required': False, 'allow_blank': True},
             'supervisor_name': {'required': False, 'allow_blank': True},
             'emergency_contact_name': {'required': False, 'allow_blank': True},
             'emergency_contact_phone': {'required': False, 'allow_blank': True},
+            'emergency_contact_relationship': {'required': False, 'allow_blank': True},
+            'emergency_contact_phone_secondary': {'required': False, 'allow_blank': True},
+            'marital_status': {'required': False, 'allow_blank': True},
+            'spouse_full_name': {'required': False, 'allow_blank': True},
+            'spouse_phone': {'required': False, 'allow_blank': True},
+            'spouse_occupation': {'required': False, 'allow_blank': True},
+            'children': {'required': False},
             'bio': {'required': False, 'allow_blank': True},
             'employment_notes': {'required': False, 'allow_blank': True},
         }
@@ -180,6 +206,8 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
         user_serializer = UserCreateSerializer(data=user_data)
         user_serializer.is_valid(raise_exception=True)
         user = user_serializer.save()
+        if not validated_data.get('work_email'):
+            validated_data['work_email'] = user.email
         validated_data.setdefault('employee_type', Teacher.EMPLOYEE_TYPE_TEACHER)
         employee_id = (validated_data.get('employee_id') or '').strip()
         teacher_id = (validated_data.get('teacher_id') or '').strip()
@@ -201,9 +229,15 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
             **TeacherSerializer(instance).data,
             'temporaryCredentials': {
                 'username': instance.user.username,
+                'email': instance.user.email,
                 'accessCode': instance.user.access_code,
                 'temporaryPassword': getattr(instance.user, '_generated_password', None),
                 'mustChangePassword': instance.user.must_change_password,
+                'applications': [
+                    {'key': 'edupay', 'label': 'EduPay'},
+                    *([{'key': 'nexus', 'label': 'KCS Nexus'}] if instance.is_teaching_employee else []),
+                ],
+                'emailPreference': instance.email_contact_preference or 'work',
             },
         }
 

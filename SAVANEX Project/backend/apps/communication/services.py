@@ -247,6 +247,42 @@ def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE
     return [email_result, sms_result]
 
 
+def deliver_employee_communication(employee, subject, body, notif_type=Notification.TYPE_MESSAGE, link=''):
+    """Deliver once in-app, by SMS, and to the employee's selected email targets."""
+    user = getattr(employee, 'user', None)
+    if not user:
+        return []
+
+    Notification.objects.create(
+        user=user,
+        title=subject[:200],
+        body=body,
+        notif_type=notif_type,
+        link=link,
+    )
+
+    preference = (getattr(employee, 'email_contact_preference', '') or 'work').lower()
+    work_email = (getattr(employee, 'work_email', '') or user.email or '').strip().lower()
+    personal_email = (getattr(employee, 'personal_email', '') or '').strip().lower()
+    candidates = {
+        'work': [work_email],
+        'personal': [personal_email],
+        'both': [work_email, personal_email],
+    }.get(preference, [work_email])
+    emails = list(dict.fromkeys(email for email in candidates if email))
+    if not emails and work_email:
+        emails = [work_email]
+
+    sms_result = _send_user_sms(user, _short_sms(subject, body), 'Employee')
+    email_results = [
+        _send_user_email(SimpleNamespace(email=email), subject, body, 'Employee')
+        for email in emails
+    ]
+    if not email_results:
+        email_results = [DeliveryResult('email', 'skipped', 'Employee email is missing.')]
+
+    return [*email_results, sms_result]
+
 def deliver_direct_parent_contact(name='', email='', phone='', subject='', body='', channels=None):
     enabled_channels = set(channels or ['email', 'sms'])
     contact = SimpleNamespace(email=email or '', phone=phone or '')

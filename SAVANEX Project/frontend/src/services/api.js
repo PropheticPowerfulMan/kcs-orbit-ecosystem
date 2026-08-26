@@ -800,3 +800,10 @@ export const teachersService = {
     return res.data;
   },
 };
+
+export const documentsService = {
+  async createVerification(payload) {
+    const response = await api.post('/integration/document-verification/issue/', payload);
+    return response.data;
+  },
+};

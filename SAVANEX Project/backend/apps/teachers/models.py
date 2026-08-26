@@ -36,12 +36,14 @@ class Teacher(models.Model):
     CONTRACT_TYPE_TEMPORARY = 'temporary'
     CONTRACT_TYPE_PART_TIME = 'part_time'
     CONTRACT_TYPE_CONSULTANT = 'consultant'
+    CONTRACT_TYPE_INTERNSHIP = 'internship'
 
     CONTRACT_TYPE_CHOICES = [
         (CONTRACT_TYPE_PERMANENT, _('Permanent')),
         (CONTRACT_TYPE_TEMPORARY, _('Temporary')),
         (CONTRACT_TYPE_PART_TIME, _('Part Time')),
         (CONTRACT_TYPE_CONSULTANT, _('Consultant')),
+        (CONTRACT_TYPE_INTERNSHIP, _('Internship')),
     ]
 
     STATUS_ACTIVE = 'active'
@@ -129,6 +131,21 @@ class Teacher(models.Model):
         choices=CONTRACT_TYPE_CHOICES,
         verbose_name=_('Contract Type'),
     )
+    contract_duration_months = models.PositiveSmallIntegerField(blank=True, null=True, verbose_name=_('Contract Duration (Months)'))
+    birth_date = models.DateField(blank=True, null=True, verbose_name=_('Birth Date'))
+    birth_place = models.CharField(max_length=120, blank=True, verbose_name=_('Birth Place'))
+    nationality = models.CharField(max_length=80, blank=True, verbose_name=_('Nationality'))
+    identity_document_type = models.CharField(max_length=40, blank=True, verbose_name=_('Identity Document Type'))
+    identity_document_other = models.CharField(max_length=80, blank=True, verbose_name=_('Other Identity Document'))
+    residential_address = models.TextField(blank=True, verbose_name=_('Residential Address'))
+    secondary_phone = models.CharField(max_length=20, blank=True, verbose_name=_('Secondary Phone'))
+    personal_email = models.EmailField(blank=True, verbose_name=_('Personal Email'))
+    email_contact_preference = models.CharField(
+        max_length=20,
+        blank=True,
+        default='work',
+        verbose_name=_('Email Contact Preference'),
+    )
     employment_status = models.CharField(
         max_length=20,
         choices=EMPLOYMENT_STATUS_CHOICES,
@@ -155,6 +172,7 @@ class Teacher(models.Model):
         blank=True,
         verbose_name=_('Social Security Number'),
     )
+    onem_number = models.CharField(max_length=60, blank=True, verbose_name=_('ONEM Number'))
     tax_number = models.CharField(
         max_length=60,
         blank=True,
@@ -170,6 +188,7 @@ class Teacher(models.Model):
         blank=True,
         verbose_name=_('Bank Account Number'),
     )
+    bank_swift_iban = models.CharField(max_length=80, blank=True, verbose_name=_('SWIFT / IBAN'))
     salary_grade = models.CharField(
         max_length=50,
         blank=True,
@@ -213,6 +232,13 @@ class Teacher(models.Model):
         blank=True,
         verbose_name=_('Emergency Contact Phone'),
     )
+    emergency_contact_relationship = models.CharField(max_length=60, blank=True, verbose_name=_('Emergency Contact Relationship'))
+    emergency_contact_phone_secondary = models.CharField(max_length=20, blank=True, verbose_name=_('Secondary Emergency Phone'))
+    marital_status = models.CharField(max_length=20, blank=True, verbose_name=_('Marital Status'))
+    spouse_full_name = models.CharField(max_length=120, blank=True, verbose_name=_('Spouse Full Name'))
+    spouse_phone = models.CharField(max_length=20, blank=True, verbose_name=_('Spouse Phone'))
+    spouse_occupation = models.CharField(max_length=120, blank=True, verbose_name=_('Spouse Occupation'))
+    children = models.JSONField(default=list, blank=True, verbose_name=_('Children'))
     bio = models.TextField(blank=True, verbose_name=_('Biography'))
     employment_notes = models.TextField(blank=True, verbose_name=_('Employment Notes'))
     is_active = models.BooleanField(default=True, verbose_name=_('Active'))

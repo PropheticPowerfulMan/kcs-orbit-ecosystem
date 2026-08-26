@@ -407,7 +407,7 @@ export const PrintableKcsCard = ({ entity }) => {
 
     window.addEventListener('afterprint', cleanup);
     window.print();
-    window.setTimeout(cleanup, 800);
+    window.setTimeout(cleanup, 60000);
   };
 
   return (

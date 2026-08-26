@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
+import EntityPdfButton from '../../components/ui/EntityPdfButton';
 import StatCard from '../../components/ui/StatCard';
 import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard } from '../../components/ui/KcsIdentityTools';
 import SearchField from '../../components/ui/SearchField';
@@ -407,6 +408,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setSelectedStudent({ ...row, role: 'Élève' })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
+          <EntityPdfButton entity={row} type="student" />
           {row.is_read_only ? (
             <span className="savanex-entity-action savanex-entity-action-muted">Lecture seule</span>
           ) : (

@@ -2,6 +2,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
+from django.core import signing
+from django.utils import timezone
 from django.db.models import Q
 
 from apps.students.models import Student
@@ -207,3 +209,39 @@ def reset_ecosystem_identity_access_view(request, entity_type, identifier):
     if not user:
         return Response({'detail': 'Compte SAVANEX introuvable pour cette entite.'}, status=404)
     return Response(reset_user_access_credentials(user))
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def document_verification_issue_view(request):
+    entity_type = str(request.data.get('entity_type', '')).strip().lower()
+    reference = str(request.data.get('reference', '')).strip()
+    full_name = str(request.data.get('full_name', '')).strip()
+    if entity_type not in {'student', 'parent', 'employee'} or not reference or not full_name:
+        return Response({'detail': 'Données du document invalides.'}, status=400)
+    payload = {
+        'entity_type': entity_type,
+        'reference': reference[:120],
+        'full_name': full_name[:180],
+        'issued_at': timezone.now().isoformat(),
+    }
+    token = signing.dumps(payload, salt='savanex.entity-document.v1', compress=True)
+    url = request.build_absolute_uri(f'/api/integration/document-verification/{token}/')
+    return Response({'verification_url': url, 'document_reference': reference, 'issued_at': payload['issued_at']})
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def document_verification_view(_request, token):
+    try:
+        payload = signing.loads(token, salt='savanex.entity-document.v1')
+    except signing.BadSignature:
+        return Response({'valid': False, 'detail': 'Document SAVANEX non authentique.'}, status=400)
+    return Response({
+        'valid': True,
+        'institution': 'Kinshasa Christian School',
+        'system': 'SAVANEX',
+        'entity_type': payload.get('entity_type'),
+        'reference': payload.get('reference'),
+        'full_name': payload.get('full_name'),
+        'issued_at': payload.get('issued_at'),
+    })

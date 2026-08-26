@@ -6,6 +6,7 @@ import { IdentityCapturePanel } from '../../components/ui/KcsIdentityTools';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
+import EntityPdfButton from '../../components/ui/EntityPdfButton';
 import SearchField from '../../components/ui/SearchField';
 import StatCard from '../../components/ui/StatCard';
 import { parentsService, sharedDirectoryService, studentsService } from '../../services/api';
@@ -458,6 +459,7 @@ const ParentsPage = () => {
       render: (_value, row) => (
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => navigate(`/parents/${encodeURIComponent(row.id)}`, { state: { entity: { ...row, full_name: row.family_name, role: 'Parent' } } })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
+          <EntityPdfButton entity={row} type="parent" />
           <button type="button" onClick={() => navigate(`/parents/${encodeURIComponent(row.id)}/edit`, { state: { entity: row } })} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
           <button type="button" onClick={() => void handleResetAccess(row)} className="savanex-entity-action border border-amber-300/40 bg-amber-300/10 text-amber-100">Réinitialiser accès</button>
           <button type="button" onClick={() => void handleDelete(row)} className="savanex-entity-action savanex-entity-action-danger">Supprimer</button>
