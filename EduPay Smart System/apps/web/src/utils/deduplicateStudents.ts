@@ -10,7 +10,10 @@ function normalizeIdentifier(value: string | null | undefined) {
 }
 
 function normalizeFingerprintPart(value: string | null | undefined) {
-  return normalizeIdentifier(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return normalizeIdentifier(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 export function deduplicateStudents<T extends StudentIdentifier>(students: T[]): T[] {

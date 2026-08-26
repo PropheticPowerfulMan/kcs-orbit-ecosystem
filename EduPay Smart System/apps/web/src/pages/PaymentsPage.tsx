@@ -1594,6 +1594,8 @@ function ExcelIcon({ className = "w-4 h-4" }: { className?: string }) {
 }
 
 function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord; compact?: boolean }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const security = buildReceiptSecurity(receipt);
   const risk = analyzeReceiptRisk(receipt);
   const parentCaption = getPaymentParentCaption(receipt);
@@ -1641,13 +1643,13 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
           <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
               {schoolBranding.tagline} - {schoolBranding.appName}
             </p>
-            <span className="mt-2 inline-flex border border-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em]">Reçu officiel</span>
+            <span className="mt-2 inline-flex border border-slate-900 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em]">{L("Reçu officiel","Official receipt")}</span>
           </div>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Transaction</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{L("Transaction","Transaction")}</p>
           <p data-receipt-preview-mono className="mt-1 font-mono text-sm font-black text-slate-900">{receipt.transactionNumber}</p>
-          <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vérification</p>
+          <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{L("Vérification","Verification")}</p>
           <p className="mt-1 font-mono text-sm font-black text-slate-900">{security.verificationCode}</p>
         </div>
       </div>
@@ -1655,14 +1657,14 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
       <div className="relative mt-3 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
         <div>
           <div className="grid grid-cols-[120px_1fr] gap-3 border-b border-dotted border-slate-300 py-2">
-            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">Date et heure</span>
+            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">{L("Date et heure","Date and time")}</span>
             <span className="text-sm font-bold text-slate-700">{receipt.date}</span>
           </div>
           <div className="grid grid-cols-[120px_1fr] gap-3 border-b border-dotted border-slate-300 py-2">
-            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">Paiement pour</span>
+            <span className="text-[10px] font-black uppercase tracking-wide text-slate-500">{L("Paiement pour","Payment for")}</span>
             <span className="flex flex-col gap-1">
               <span className="text-sm font-bold text-slate-950">{getPaymentSubjectName(receipt)}</span>
-              {parentCaption ? <span className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600"><span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">Parent</span>{parentCaption}</span> : null}
+              {parentCaption ? <span className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600"><span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{L("Parent","Parent")}</span>{parentCaption}</span> : null}
             </span>
           </div>
           {[
@@ -1682,10 +1684,10 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
             </div>
           )) : null}
           <div className="mt-3 border-2 border-slate-900 bg-slate-50 p-3">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Montant reçu en dollars américains</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{L("Montant reçu en dollars américains","Amount received in US dollars")}</p>
             <p className="mt-1 font-mono text-2xl font-black text-slate-900">$ {formatMoney(receipt.amount)}</p>
             <p className="mt-2 border-t border-slate-300 pt-2 text-xs italic text-slate-700">
-              <strong>En toutes lettres:</strong> {receipt.amountWords}
+              <strong>{L("En toutes lettres:","In words:")}</strong> {receipt.amountWords}
             </p>
           </div>
           {receipt.tuitionAllocationSummary && (() => {
@@ -1693,7 +1695,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
             return (
               <div className="mt-3 border border-slate-300 bg-slate-50 p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Ventilation du paiement</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{L("Ventilation du paiement","Payment allocation")}</p>
                   <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-700">{allocationSnapshot.modeLabel}</span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
@@ -1710,13 +1712,13 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
                     <div key={child.studentName} className="rounded-md border border-slate-200 bg-white p-2 text-[11px]">
                       <div className="flex justify-between gap-3 font-bold text-slate-900">
                         <span>{child.studentName}</span>
-                        <span>Imputé $ {formatMoney(child.allocated)} - Solde $ {formatMoney(child.remaining)}</span>
+                        <span>{L("Imputé $","Allocated $")} {formatMoney(child.allocated)} {L("- Solde $","- Balance $")} {formatMoney(child.remaining)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
                 {allocationSnapshot.overflowChildCount > 0 ? (
-                  <p className="mt-2 text-[11px] font-semibold text-slate-500">+ {allocationSnapshot.overflowChildCount} autre(s) dossier(s) dans le detail complet.</p>
+                  <p className="mt-2 text-[11px] font-semibold text-slate-500">+ {allocationSnapshot.overflowChildCount} {L("autre(s) dossier(s) dans le detail complet.","other record(s) in the full details.")}</p>
                 ) : null}
               </div>
             );
@@ -1727,42 +1729,42 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
           <div className="border border-slate-900 p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Bloc sécurité</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">{L("Bloc sécurité","Security block")}</p>
                 <p className="mt-1 max-w-[210px] text-[11px] font-semibold leading-5 text-slate-500">
-                  Scanner le QR pour ouvrir la page de vérification EduPay de cette transaction.
+                  {L("Scanner le QR pour ouvrir la page de vérification EduPay de cette transaction.","Scan the QR code to open the EduPay verification page for this transaction.")}
                 </p>
-                <p className="mt-2 text-xs font-bold text-slate-700">Hash: <span className="font-mono text-slate-950">{security.hash}</span></p>
-                <p className="text-xs font-bold text-slate-700">Sceau: <span className="font-mono text-slate-950">{security.sealCode}</span></p>
+                <p className="mt-2 text-xs font-bold text-slate-700">{L("Hash:","Hash:")} <span className="font-mono text-slate-950">{security.hash}</span></p>
+                <p className="text-xs font-bold text-slate-700">{L("Sceau:","Seal:")} <span className="font-mono text-slate-950">{security.sealCode}</span></p>
               </div>
               {qrMarkup ? (
                 <div className="w-28 overflow-hidden border border-slate-900 bg-white p-1.5">
                   <div className="h-24 w-24 overflow-hidden [&_svg]:block [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: qrMarkup }} />
-                  <p className="mt-1 text-center text-[10px] font-black leading-4 text-slate-700">Vérifier ce reçu<br />{receipt.transactionNumber}</p>
+                  <p className="mt-1 text-center text-[10px] font-black leading-4 text-slate-700">{L("Vérifier ce reçu","Verify this receipt")}<br />{receipt.transactionNumber}</p>
                 </div>
               ) : (
                 <div className="flex h-28 w-28 items-center justify-center border border-dashed border-slate-400 bg-slate-50 p-3 text-center text-[10px] font-bold text-slate-500">
-                  Génération du QR...
+                  {L("Génération du QR...","Generating QR code...")}
                 </div>
               )}
             </div>
             <div className={`mt-3 rounded-md border px-3 py-2 text-xs font-bold ${riskTone}`}>
-              {risk.level} - score {risk.score}/100
+              {risk.level} {L("- score","- score")} {risk.score}/100
             </div>
           </div>
 
           <div className="mt-3 border-l-4 border-amber-600 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-            Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification.
+            {L("Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification.","Toute modification du montant, de l'élève, du statut ou du motif invalide le code de vérification.")}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="flex min-h-24 flex-col justify-between border border-dashed border-slate-600 p-3">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Signature du caissier</p>
-              <p className="border-t border-slate-500 pt-1 text-center text-[10px] text-slate-500">Nom, signature et date</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{L("Signature du caissier","Cashier signature")}</p>
+              <p className="border-t border-slate-500 pt-1 text-center text-[10px] text-slate-500">{L("Nom, signature et date","Name, signature and date")}</p>
             </div>
             <div className="flex min-h-24 flex-col items-center justify-between border border-slate-600 p-3 text-center">
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Sceau de l'école</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{L("Sceau de l'école","Sceau de l'école")}</p>
               <div className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-slate-900 bg-white p-2 text-[9px] font-black uppercase tracking-wide text-slate-400">
-                Emplacement réservé
+                {L("Emplacement réservé","Reserved area")}
               </div>
             </div>
           </div>
@@ -1770,7 +1772,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
       </div>
 
       <div className="relative mt-4 flex flex-wrap justify-between gap-2 border-t border-slate-300 pt-2 text-[10px] font-semibold text-slate-500">
-        <span>{schoolBranding.schoolName} - {schoolBranding.appName} - Norme interne RCT-01</span>
+        <span>{schoolBranding.schoolName} - {schoolBranding.appName} {L("- Norme interne RCT-01","- Internal standard RCT-01")}</span>
         <span>{buildReceiptMicroText(receipt)}</span>
       </div>
     </div>
@@ -1780,6 +1782,7 @@ function ReceiptA5Preview({ receipt, compact = false }: { receipt: PaymentRecord
 /* --- Page principale ------------------------------------------------------ */
 export function PaymentsPage() {
   const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [view, setView]                     = useState<View>("form");
   const [payments, setPayments]             = useState<PaymentRecord[]>([]);
   const [form, setForm]                     = useState<FormState>(EMPTY_FORM);
@@ -1947,7 +1950,7 @@ export function PaymentsPage() {
   const validate = () => {
     const errs: Partial<Record<keyof FormState, string>> = {};
     if (paymentNotificationsEnabled && !form.parentId) errs.parentId = "Choisissez le parent qui recevra l'email et le SMS.";
-    if (form.paymentScope === "TUITION" && selectedParent && (selectedParent.students?.length ?? 0) > 0 && form.studentIds.length === 0) errs.studentIds = "Sélectionnez au moins un élève pour synchroniser ce paiement.";
+    if (form.paymentScope === "TUITION" && selectedParent && displayedParentStudents.length > 0 && form.studentIds.length === 0) errs.studentIds = "Sélectionnez au moins un élève pour synchroniser ce paiement.";
     if (!form.parentFullName.trim()) errs.parentFullName = t("pmRequired");
     if (!form.reason.trim())         errs.reason         = t("pmRequired");
     if (!form.amount || parseFloat(form.amount) <= 0) errs.amount = t("pmRequired");
@@ -1964,6 +1967,11 @@ export function PaymentsPage() {
   const selectedParent = useMemo(
     () => parents.find((parent) => parent.id === form.parentId) ?? null,
     [form.parentId, parents]
+  );
+
+  const displayedParentStudents = useMemo(
+    () => deduplicateStudents(selectedParent?.students ?? []),
+    [selectedParent]
   );
 
   useEffect(() => {
@@ -2067,7 +2075,7 @@ export function PaymentsPage() {
   };
 
   const selectedStudents = useMemo(
-    () => (selectedParent?.students ?? []).filter((student) => form.studentIds.includes(student.id)),
+    () => displayedParentStudents.filter((student) => form.studentIds.includes(student.id)),
     [form.studentIds, selectedParent]
   );
 
@@ -2249,7 +2257,7 @@ export function PaymentsPage() {
       setApiError("Choisissez un parent et entrez un montant avant la prévisualisation tuition.");
       return;
     }
-    if (selectedParent && (selectedParent.students?.length ?? 0) > 0 && form.studentIds.length === 0) {
+    if (selectedParent && displayedParentStudents.length > 0 && form.studentIds.length === 0) {
       setApiError("Sélectionnez au moins un enfant avant la prévisualisation tuition.");
       return;
     }
@@ -2274,7 +2282,7 @@ export function PaymentsPage() {
       setApiError("Le moteur de scolarité et la répartition manuelle s'appliquent uniquement aux paiements réglés. Utilisez le statut « Réglé » pour affecter les échéances.");
       return;
     }
-    if (selectedParent && (selectedParent.students?.length ?? 0) > 0 && form.studentIds.length === 0) {
+    if (selectedParent && displayedParentStudents.length > 0 && form.studentIds.length === 0) {
       setApiError("Sélectionnez au moins un enfant avant de confirmer le paiement de scolarité.");
       return;
     }
@@ -2356,7 +2364,7 @@ export function PaymentsPage() {
     &&
     form.parentId
     && selectedParent
-    && (selectedParent.students?.length ?? 0) > 0
+    && displayedParentStudents.length > 0
     && form.status === "COMPLETED"
     && (
       form.reason.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes("paiement scolaire")
@@ -2524,7 +2532,7 @@ export function PaymentsPage() {
               : "border border-slate-600 text-ink-dim hover:text-white hover:border-slate-400"
           }`}
         >
-          Dernier reçu
+          {L("Dernier reçu","Latest receipt")}
         </button>
       )}
     </div>
@@ -2583,7 +2591,7 @@ export function PaymentsPage() {
           <p className="mt-2 text-xs font-semibold text-cyan-200">{t("paymentNotificationsChannels")}</p>
           {compact && (
             <p className="mt-2 text-xs text-ink-dim">
-              {parents.length} parent(s) configurables. Les réglages détaillés sont repliés pour alléger l'historique.
+              {parents.length} {L("parent(s) configurables. Les réglages détaillés sont repliés pour alléger l'historique.","parent(s) configurables. Les réglages détaillés sont repliés pour alléger l'historique.")}
             </p>
           )}
           {selectedParent && (
@@ -2592,7 +2600,7 @@ export function PaymentsPage() {
                 ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-100"
                 : "border-amber-400/30 bg-amber-400/10 text-amber-100"
             }`}>
-              Parent cible : {selectedParent.fullName} - Email & SMS {selectedParentNotificationsEnabled ? t("enabled") : t("disabled")}
+              {L("Parent cible :","Target parent:")} {selectedParent.fullName} {L("- Email & SMS","- Email & SMS")} {selectedParentNotificationsEnabled ? t("enabled") : t("disabled")}
               {selectedParent.email ? ` - ${selectedParent.email}` : ""}
               {selectedParent.phone ? ` - ${selectedParent.phone}` : ""}
             </p>
@@ -2615,7 +2623,7 @@ export function PaymentsPage() {
                   >
                     <span className="block truncate text-xs font-black uppercase tracking-wide">{parent.fullName}</span>
                     <span className="mt-1 block text-[11px] font-semibold">
-                      Email & SMS {active ? t("enabled") : t("disabled")}
+                      {L("Email & SMS","Email & SMS")} {active ? t("enabled") : t("disabled")}
                       {!paymentNotificationsEnabled && active ? " - en attente globale" : ""}
                     </span>
                   </button>
@@ -2669,7 +2677,7 @@ export function PaymentsPage() {
 
         {receiptPrintingId === r.id && (
           <div className="rounded-xl border border-brand-500/25 bg-brand-500/10 px-4 py-3 text-sm font-semibold text-brand-100">
-            Préparation du reçu officiel pour impression...
+            {L("Préparation du reçu officiel pour impression...","Preparing official receipt for printing...")}
           </div>
         )}
 
@@ -2686,19 +2694,19 @@ export function PaymentsPage() {
             onClick={() => exportReceiptExcel(r)}
             className="flex items-center gap-2 px-6 py-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 font-bold transition-all active:scale-95"
           >
-            <ExcelIcon className="w-5 h-5" /> Exporter en Excel
+            <ExcelIcon className="w-5 h-5" /> {L("Exporter en Excel","Export to Excel")}
           </button>
           <button
             onClick={() => setView("history")}
             className="px-5 py-3 rounded-xl border border-slate-600 text-ink-dim hover:text-white hover:border-slate-400 transition-all font-semibold text-sm"
           >
-            Voir l'historique
+            {L("Voir l'historique","Voir l'historique")}
           </button>
           <button
             onClick={() => setView("report")}
             className="px-5 py-3 rounded-xl border border-slate-600 text-ink-dim hover:text-white hover:border-slate-400 transition-all font-semibold text-sm"
           >
-            État des paiements
+            {L("État des paiements","Payment status")}
           </button>
         </div>
       </div>
@@ -2712,31 +2720,31 @@ export function PaymentsPage() {
     return (
       <div className="space-y-6 pb-10">
         <div className="animate-fadeInDown">
-          <h1 className="font-display text-3xl font-bold text-white">Historique des Paiements</h1>
-          <p className="text-ink-dim mt-2 text-sm">Tous les paiements enregistrés - Montants en dollars américains (USD)</p>
+          <h1 className="font-display text-3xl font-bold text-white">{L("Historique des paiements", "Payment history")}</h1>
+          <p className="text-ink-dim mt-2 text-sm">{L("Tous les paiements enregistrés - Montants en dollars américains (USD)","All recorded payments - Amounts in US dollars (USD)")}</p>
         </div>
         <NavBar />
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <StatsBanner compact />
           <div className="card flex flex-col justify-between gap-4 border border-brand-500/20 bg-brand-500/10">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Actions rapides</p>
-              <h2 className="mt-2 font-display text-xl font-bold text-white">Exporter ou imprimer sans descendre en bas</h2>
-              <p className="mt-2 text-sm text-ink-dim">La liste filtrée courante reste disponible ici avec le total réellement réglé.</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{L("Actions rapides", "Quick actions")}</p>
+              <h2 className="mt-2 font-display text-xl font-bold text-white">{L("Exporter ou imprimer sans descendre en bas", "Export or print without scrolling down")}</h2>
+              <p className="mt-2 text-sm text-ink-dim">{L("La liste filtrée courante reste disponible ici avec le total réellement réglé.","The current filtered list remains available here with the actual amount paid.")}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="rounded-xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">Liste filtrée</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">{L("Liste filtrée", "Filtered list")}</p>
                 <p className="mt-1 font-mono text-lg font-bold text-white">{filteredPayments.length}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">Montant réglé</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">{L("Montant réglé", "Amount paid")}</p>
                 <p className="mt-1 font-mono text-lg font-bold text-brand-200">{fmtUsd(filteredPayments.filter((p) => p.status === "COMPLETED").reduce((sum, p) => sum + p.amount, 0))}</p>
               </div>
               <button
                 onClick={triggerHistoryPrint}
                 disabled={historyPrintBusy}
-                title="Ouvre la boîte d'impression pour enregistrer la liste filtrée en PDF"
+                title={L("Ouvre la boîte d’impression pour enregistrer la liste filtrée en PDF", "Open the print dialog to save the filtered list as PDF")}
                 className="flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-brand-700 active:scale-95"
               >
                 <PrintIcon /> {historyPrintBusy ? "Préparation..." : "PDF / Imprimer"}
@@ -2744,7 +2752,7 @@ export function PaymentsPage() {
               <button
                 onClick={triggerHistoryExcel}
                 disabled={historyExcelBusy}
-                title="Exporte exactement la liste filtrée courante au format Excel"
+                title={L("Exporte exactement la liste filtrée courante au format Excel", "Export the current filtered list to Excel")}
                 className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-3 text-sm font-bold text-emerald-200 transition-all hover:bg-emerald-500/20 active:scale-95"
               >
                 <ExcelIcon /> {historyExcelBusy ? "Export..." : "Exporter Excel"}
@@ -2758,9 +2766,9 @@ export function PaymentsPage() {
         <div className="card">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(118px,1fr))] xl:items-start">
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Recherche</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Recherche", "Search")}</label>
               <SearchField
-                placeholder="Ex: Grade 5 paye, parent Kabongo, frais scolaires..."
+                placeholder={L("Ex. Grade 5 payé, parent Kabongo, frais scolaires...", "E.g. Grade 5 paid, parent Kabongo, tuition fees...")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 inputClassName="text-sm"
@@ -2782,32 +2790,32 @@ export function PaymentsPage() {
                 ))}
               </div>
               <p className="mt-2 text-xs text-ink-dim">
-                Recherche intelligente par élève, parent, classe, statut payé/non payé, numéro, motif ou produit scolaire.
+                {L("Recherche intelligente par élève, parent, classe, statut payé/non payé, numéro, motif ou produit scolaire.","Smart search by student, parent, class, paid/unpaid status, number, reason or school product.")}
               </p>
             </div>
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Statut</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Statut","Status")}</label>
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full">
-                <option value="ALL">Tous les statuts</option>
+                <option value="ALL">{L("Tous les statuts", "All statuses")}</option>
                 {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Classe</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Classe","Class")}</label>
               <select value={filterClass} onChange={(e) => setFilterClass(e.target.value)} className="w-full">
-                <option value="ALL">Toutes les classes</option>
+                <option value="ALL">{L("Toutes les classes", "All classes")}</option>
                 {historyClassOptions.map((className) => <option key={className} value={className}>{className}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Mode de paiement</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Mode de paiement", "Payment method")}</label>
               <select value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)} className="w-full">
-                <option value="ALL">Tous les modes</option>
+                <option value="ALL">{L("Tous les modes", "All methods")}</option>
                 {METHOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Du</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Du", "From")}</label>
               <DateSelect
                 value={historyDateFrom}
                 onChange={(e) => setHistoryDateFrom(e.target.value)}
@@ -2815,7 +2823,7 @@ export function PaymentsPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">Au</label>
+              <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">{L("Au", "To")}</label>
               <DateSelect
                 value={historyDateTo}
                 onChange={(e) => setHistoryDateTo(e.target.value)}
@@ -2830,7 +2838,7 @@ export function PaymentsPage() {
                   }}
                   className="mt-2 text-xs font-semibold text-brand-200 hover:text-white"
                 >
-                  Effacer la periode
+                  {L("Effacer la periode","Clear period")}
                 </button>
               )}
             </div>
@@ -2840,7 +2848,7 @@ export function PaymentsPage() {
         {/* Tableau */}
         <div className="card edupay-scrollbar overflow-x-auto">
           {filteredPayments.length === 0 ? (
-            <p className="text-center text-ink-dim py-12">Aucun paiement trouvé.</p>
+            <p className="text-center text-ink-dim py-12">{L("Aucun paiement trouvé.","No payment found.")}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -2862,7 +2870,7 @@ export function PaymentsPage() {
                     <td className="px-3 py-2.5">
                       <div className="min-w-[190px] max-w-[250px]">
                         <p className="font-semibold text-white">{getPaymentSubjectName(p)}</p>
-                        {getPaymentParentCaption(p) ? <p className="mt-0.5 text-xs text-ink-dim">Parent: {getPaymentParentCaption(p)}</p> : null}
+                        {getPaymentParentCaption(p) ? <p className="mt-0.5 text-xs text-ink-dim">{L("Parent:","Parent:")} {getPaymentParentCaption(p)}</p> : null}
                         {p.tuitionAllocationSummary && (() => {
                           const allocationSnapshot = buildReceiptAllocationSnapshot(p.tuitionAllocationSummary, {
                             maxVisibleChildren: 1,
@@ -2872,9 +2880,9 @@ export function PaymentsPage() {
                           return (
                             <div className="mt-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1.5 text-[11px] text-emerald-50">
                               <p className="font-black uppercase tracking-[0.12em]">{allocationSnapshot.modeLabel}</p>
-                              {leadChild ? <p className="mt-1">{leadChild.studentName}: imputé {fmtUsd(leadChild.allocated)} · solde {fmtUsd(leadChild.remaining)}</p> : null}
+                              {leadChild ? <p className="mt-1">{leadChild.studentName}{L(": imputé",": allocated")} {fmtUsd(leadChild.allocated)} {L("· solde","· balance")} {fmtUsd(leadChild.remaining)}</p> : null}
                               {allocationSnapshot.overflowChildCount > 0 && (
-                                <p className="mt-1 text-emerald-100/80">+ {allocationSnapshot.overflowChildCount} autre(s) dossier(s)</p>
+                                <p className="mt-1 text-emerald-100/80">+ {allocationSnapshot.overflowChildCount} {L("autre(s) dossier(s)","other record(s)")}</p>
                               )}
                             </div>
                           );
@@ -2890,7 +2898,7 @@ export function PaymentsPage() {
                     <td className="px-3 py-2.5 last:pr-0">
                       <div className="flex flex-wrap gap-1.5">
                         <button
-                          title="Imprimer le reçu"
+                          title={L("Imprimer le reçu", "Print receipt")}
                           onClick={() => {
                             triggerReceiptPrint(p);
                           }}
@@ -2900,7 +2908,7 @@ export function PaymentsPage() {
                           <PrintIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          title="Exporter le reçu en Excel"
+                          title={L("Exporter le reçu en Excel", "Export receipt to Excel")}
                           onClick={() => exportReceiptExcel(p)}
                           className="p-1.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40 transition-colors"
                         >
@@ -2911,15 +2919,15 @@ export function PaymentsPage() {
                           onChange={(e) => changeStatus(p.id, e.target.value as PaymentRecord["status"])}
                           disabled={p.status === "CANCELLED"}
                           className="text-xs rounded px-1.5 py-1 bg-slate-700 border-slate-600 text-white"
-                          title="Changer le statut"
+                          title={L("Changer le statut", "Change status")}
                         >
-                          {p.status === "CANCELLED" ? <option value="CANCELLED">Annule</option> : null}
+                          {p.status === "CANCELLED" ? <option value="CANCELLED">{L("Annule","Cancelled")}</option> : null}
                           {STATUS_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
                         </select>
                         <button
-                          title="Annuler ce paiement et recalculer les compteurs"
+                          title={L("Annuler ce paiement et recalculer les compteurs", "Cancel this payment and recalculate totals")}
                           onClick={() => void cancelPayment(p)}
                           disabled={p.status === "CANCELLED"}
                           className="p-1.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
@@ -2936,7 +2944,7 @@ export function PaymentsPage() {
               <tfoot>
                 <tr className="border-t-2 border-brand-500/30">
                   <td colSpan={5} className="py-4 pl-0 text-sm font-bold text-ink-dim uppercase tracking-wide">
-                    Total ({filteredPayments.length} paiement{filteredPayments.length > 1 ? "s" : ""})
+                    {L("Total (","Total (")}{filteredPayments.length} {L("paiement","payment")}{filteredPayments.length > 1 ? "s" : ""})
                   </td>
                   <td className="py-4 font-mono font-bold text-xl text-brand-300">
                     $ {formatMoney(filteredPayments.filter((p) => p.status === "COMPLETED").reduce((s, p) => s + p.amount, 0))}
@@ -2972,9 +2980,9 @@ export function PaymentsPage() {
     return (
       <div className="space-y-6 pb-10">
         <div className="animate-fadeInDown">
-          <h1 className="font-display text-3xl font-bold text-white">État des paiements</h1>
+          <h1 className="font-display text-3xl font-bold text-white">{L("État des paiements", "Payment status")}</h1>
           <p className="text-ink-dim mt-2 text-sm">
-            Situation financière {reportSearch ? `- ${reportSearch}` : "générale"} - Tous les montants en USD
+            {L("Situation financière","Financial overview")} {reportSearch ? `- ${reportSearch}` : "générale"} {L("- Tous les montants en USD","- All amounts in USD")}
           </p>
         </div>
         <NavBar />
@@ -2985,11 +2993,11 @@ export function PaymentsPage() {
         <div className="card flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1">
             <label className="text-xs font-bold uppercase tracking-wide text-ink-dim block mb-2">
-              Filtrer par élève (laisser vide = état général)
+              {L("Filtrer par élève (laisser vide = état général)","Filter by student (leave blank for overall status)")}
             </label>
             <input
               type="text"
-              placeholder="Nom de l'élève..."
+              placeholder={L("Nom de l’élève...", "Student name...")}
               value={reportSearch}
               onChange={(e) => setReportSearch(e.target.value)}
               className="w-full"
@@ -3013,7 +3021,7 @@ export function PaymentsPage() {
 
         {/* Cartes par élève */}
         {Object.keys(bySubject).length === 0 ? (
-          <div className="card text-center py-12 text-ink-dim">Aucun paiement enregistré.</div>
+          <div className="card text-center py-12 text-ink-dim">{L("Aucun paiement enregistré.","No payment recorded.")}</div>
         ) : (
           Object.entries(bySubject).map(([subject, recs]) => {
             const parentTotal  = recs.filter((r) => r.status === "COMPLETED").reduce((s, r) => s + r.amount, 0);
@@ -3032,12 +3040,12 @@ export function PaymentsPage() {
                     </div>
                     <div>
                       <p className="font-bold text-white text-base">{subject}</p>
-                      {parentCaptions.length > 0 ? <p className="mt-1 text-xs text-ink-dim">Parent: {parentCaptions.join(" / ")}</p> : null}
-                      <p className="text-xs text-ink-dim">{recs.length} transaction{recs.length > 1 ? "s" : ""}</p>
+                      {parentCaptions.length > 0 ? <p className="mt-1 text-xs text-ink-dim">{L("Parent:","Parent:")} {parentCaptions.join(" / ")}</p> : null}
+                      <p className="text-xs text-ink-dim">{recs.length} {L("transaction","transaction")}{recs.length > 1 ? "s" : ""}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-ink-dim uppercase tracking-wide">Total payé</p>
+                    <p className="text-xs text-ink-dim uppercase tracking-wide">{L("Total payé", "Total paid")}</p>
                     <p className="font-mono font-bold text-xl text-brand-300">$ {formatMoney(parentTotal)}</p>
                   </div>
                 </div>
@@ -3045,15 +3053,15 @@ export function PaymentsPage() {
                 {/* Mini stats parent */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
-                    <p className="text-xs text-ink-dim mb-1">Réglé</p>
+                    <p className="text-xs text-ink-dim mb-1">{L("Réglé", "Paid")}</p>
                     <p className="font-mono text-sm font-bold text-emerald-300">$ {formatMoney(completedAmt)}</p>
                   </div>
                   <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
-                    <p className="text-xs text-ink-dim mb-1">En attente</p>
+                    <p className="text-xs text-ink-dim mb-1">{L("En attente", "Pending")}</p>
                     <p className="font-mono text-sm font-bold text-amber-300">$ {formatMoney(pendingAmt)}</p>
                   </div>
                   <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
-                    <p className="text-xs text-ink-dim mb-1">Échoués</p>
+                    <p className="text-xs text-ink-dim mb-1">{L("Échoués", "Failed")}</p>
                     <p className="font-mono text-sm font-bold text-red-300">$ {formatMoney(failedAmt)}</p>
                   </div>
                 </div>
@@ -3083,14 +3091,14 @@ export function PaymentsPage() {
                           <td className="py-2.5 px-2"><StatusBadge status={r.status} /></td>
                           <td className="py-2.5 px-2 last:pr-0">
                             <button
-                              title="Imprimer le reçu"
+                              title={L("Imprimer le reçu", "Print receipt")}
                               onClick={() => void printReceiptDocument(r, lang)}
                               className="p-1.5 rounded bg-brand-600/20 text-brand-300 hover:bg-brand-600/40 transition-colors"
                             >
                               <PrintIcon className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              title="Exporter le reçu en Excel"
+                              title={L("Exporter le reçu en Excel", "Export receipt to Excel")}
                               onClick={() => exportReceiptExcel(r)}
                               className="ml-1 p-1.5 rounded bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/40 transition-colors"
                             >
@@ -3102,7 +3110,7 @@ export function PaymentsPage() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-brand-500/30">
-                        <td colSpan={4} className="py-3 pl-0 text-xs font-bold text-ink-dim uppercase">Sous-total</td>
+                        <td colSpan={4} className="py-3 pl-0 text-xs font-bold text-ink-dim uppercase">{L("Sous-total", "Subtotal")}</td>
                         <td className="py-3 font-mono font-bold text-brand-300">$ {formatMoney(parentTotal)}</td>
                         <td colSpan={2} />
                       </tr>
@@ -3116,13 +3124,13 @@ export function PaymentsPage() {
                     onClick={() => exportPaymentsExcel(`etat-${subject.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}`, payments, subject)}
                     className="mr-3 flex items-center gap-2 px-4 py-2 rounded-lg border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-all text-sm font-semibold"
                   >
-                    <ExcelIcon /> Exporter l'état de {subject}
+                    <ExcelIcon /> {L("Exporter l'état de","Exporter l'état de")} {subject}
                   </button>
                   <button
                     onClick={() => printHtml(buildReportHtml(payments, subject))}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-500/40 text-brand-300 hover:bg-brand-600/20 transition-all text-sm font-semibold"
                   >
-                    <PrintIcon /> Imprimer l'état de {subject}
+                    <PrintIcon /> {L("Imprimer l'état de","Imprimer l'état de")} {subject}
                   </button>
                 </div>
               </div>
@@ -3138,7 +3146,7 @@ export function PaymentsPage() {
             </p>
             <div className="text-right">
               <p className="font-mono text-2xl font-bold text-brand-300">$ {formatMoney(reportTotal)}</p>
-              <p className="text-xs text-ink-dim mt-0.5">Dollars américains (USD)</p>
+              <p className="text-xs text-ink-dim mt-0.5">{L("Dollars américains (USD)","US dollars (USD)")}</p>
             </div>
           </div>
         )}
@@ -3164,14 +3172,14 @@ export function PaymentsPage() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-200">{t("paymentDetails")}</p>
           <h2 className="mt-2 font-display text-xl font-bold text-white">{t("newPaymentBtn")}</h2>
-          <p className="mt-1 text-sm text-ink-dim">Le formulaire de paiement s'ouvre dans une boîte dédiée au centre de l'écran.</p>
+          <p className="mt-1 text-sm text-ink-dim">{L("Le formulaire de paiement s'ouvre dans une boîte dédiée au centre de l'écran.","Le formulaire de paiement s'ouvre dans une boîte dédiée au centre de l'écran.")}</p>
         </div>
         <button
           type="button"
           onClick={() => setPaymentDetailsDialogOpen(true)}
           className="rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-500/20 transition-all hover:bg-brand-700 active:scale-95"
         >
-          Ouvrir Payment details
+          {L("Ouvrir Payment details","Open payment details")}
         </button>
       </div>
 
@@ -3188,7 +3196,7 @@ export function PaymentsPage() {
                 onClick={() => setPaymentDetailsDialogOpen(false)}
                 className="rounded-xl border border-slate-600 bg-slate-950/60 px-4 py-2 text-sm font-semibold text-ink-dim transition-all hover:border-slate-400 hover:text-white"
               >
-                Fermer
+                {L("Fermer","Close")}
               </button>
             </div>
 
@@ -3211,14 +3219,14 @@ export function PaymentsPage() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">
-                Parent destinataire email/SMS
+                {L("Parent destinataire email/SMS","Email/SMS recipient parent")}
               </label>
               <div className="space-y-2">
                 <input
                   type="search"
                   value={parentLookupQuery}
                   onChange={(event) => setParentLookupQuery(event.target.value)}
-                  placeholder="Tapez le nom du parent ou d'un enfant"
+                  placeholder={L("Tapez le nom du parent ou d’un enfant", "Enter the parent or child name")}
                   className="w-full"
                 />
                 <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/50 p-2">
@@ -3269,19 +3277,19 @@ export function PaymentsPage() {
                     );
                   }) : (
                     <p className="px-3 py-2 text-xs font-semibold text-ink-dim">
-                      Aucun parent trouve pour cette recherche.
+                      {L("Aucun parent trouve pour cette recherche.","No parent found for this search.")}
                     </p>
                   )}
                 </div>
               </div>
               <p className="text-xs text-ink-dim">
-                Cherchez par parent ou par enfant; choisir une famille remplit le parent cible et sélectionne les enfants correspondants.
+                {L("Cherchez par parent ou par enfant; choisir une famille remplit le parent cible et sélectionne les enfants correspondants.","Search by parent or child; selecting a family fills the target parent and selects the corresponding children.")}
               </p>
               {fieldErrors.parentId && <p className="text-xs text-danger">{fieldErrors.parentId}</p>}
             </div>
 
             <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Type de paiement</p>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{L("Type de paiement", "Payment type")}</p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 {([
                   { value: "TUITION" as const, title: "Scolarité / tuition plan", detail: "Plans officiels, arrangement spécial, répartition sur échéances et suivi de dette." },
@@ -3304,23 +3312,23 @@ export function PaymentsPage() {
               </div>
             </div>
 
-            {selectedParent && (selectedParent.students?.length ?? 0) > 0 && (
+            {selectedParent && displayedParentStudents.length > 0 && (
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">
-                    Eleves concernes {form.paymentScope === "TUITION" && <span className="text-danger">*</span>}
+                    {L("Eleves concernes","Students concerned")} {form.paymentScope === "TUITION" && <span className="text-danger">*</span>}
                   </label>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => {
-                        setForm((prev) => ({ ...prev, studentIds: selectedParent.students?.map((student) => student.id) ?? [] }));
+                        setForm((prev) => ({ ...prev, studentIds: displayedParentStudents.map((student) => student.id) }));
                         setFieldErrors((prev) => ({ ...prev, studentIds: undefined }));
                         setTuitionPreview(null);
                       }}
                       className="rounded-lg border border-brand-500/30 px-2.5 py-1 text-[11px] font-bold text-brand-200 hover:bg-brand-500/10"
                     >
-                      Tous
+                      {L("Tous","All")}
                     </button>
                     <button
                       type="button"
@@ -3330,20 +3338,20 @@ export function PaymentsPage() {
                       }}
                       className="rounded-lg border border-slate-600 px-2.5 py-1 text-[11px] font-bold text-ink-dim hover:text-white"
                     >
-                      Aucun
+                      {L("Aucun","None")}
                     </button>
                   </div>
                 </div>
                 <div className="space-y-2 rounded-xl border border-slate-700 bg-slate-950/50 p-3">
                   <p className="text-xs font-semibold text-ink-dim">
-                    {form.studentIds.length} sur {selectedParent.students?.length ?? 0} enfant(s) sélectionné(s). Le paiement, les échéances, la répartition manuelle et le reçu seront limités à cette sélection.
+                    {form.studentIds.length} {L("sur","of")} {displayedParentStudents.length} {L("enfant(s) sélectionné(s). Le paiement, les échéances, la répartition manuelle et le reçu seront limités à cette sélection.","selected child(ren). The payment, installments, manual allocation and receipt will be limited to this selection.")}
                   </p>
                   {form.paymentScope === "SERVICE" && (
                     <p className="text-xs font-semibold text-amber-100/80">
-                      Pour un service, la sélection sert seulement à préciser le reçu. Le plan tuition, les échéances et la dette restent inchangés.
+                      {L("Pour un service, la sélection sert seulement à préciser le reçu. Le plan tuition, les échéances et la dette restent inchangés.","For a service, the selection only specifies the receipt. The tuition plan, installments and debt remain unchanged.")}
                     </p>
                   )}
-                  {selectedParent.students?.map((student) => {
+                  {displayedParentStudents.map((student) => {
                     const active = form.studentIds.includes(student.id);
                     return (
                       <button
@@ -3358,7 +3366,7 @@ export function PaymentsPage() {
                       >
                         <span>
                           <span className="block text-sm font-semibold">{student.fullName}</span>
-                          <span className="block text-xs">{student.className} · Frais annuels $ {student.annualFee.toFixed(2)}</span>
+                          <span className="block text-xs">{student.className} {L("· Frais annuels $","· Annual fees $")} {student.annualFee.toFixed(2)}</span>
                         </span>
                         <span className="text-xs font-bold uppercase tracking-wide">{active ? "Sélectionné" : "Choisir"}</span>
                       </button>
@@ -3373,21 +3381,21 @@ export function PaymentsPage() {
               <div className="lg:col-span-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Contexte financier</p>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{L("Contexte financier", "Financial context")}</p>
                     <h3 className="mt-1 text-lg font-bold text-white">{selectedParentFinance.profile.activeTuitionPlan}</h3>
                     <p className="mt-1 text-sm text-cyan-100">
-                      Paid {fmtUsd(selectedParentFinance.profile.totalPaid)} · Debt {fmtUsd(selectedParentFinance.profile.totalDebt)} · Reductions {fmtUsd(selectedParentFinance.profile.totalReduction)}
+                      {L("Paid","Paid")} {fmtUsd(selectedParentFinance.profile.totalPaid)} {L("· Debt","· Debt")} {fmtUsd(selectedParentFinance.profile.totalDebt)} {L("· Reductions","· Reductions")} {fmtUsd(selectedParentFinance.profile.totalReduction)}
                     </p>
                     <p className="mt-1 text-xs text-cyan-100/85">
-                      Couverture {selectedParentFinance.profile.completionRate.toFixed(1)} % · {selectedParentFinance.profile.overdueInstallments} échéance(s) en retard.
+                      {L("Couverture","Coverage")} {selectedParentFinance.profile.completionRate.toFixed(1)} % · {selectedParentFinance.profile.overdueInstallments} {L("échéance(s) en retard.","overdue installment(s).")}
                     </p>
                   </div>
-                  {financeLoading && <p className="text-xs font-semibold text-cyan-100">Actualisation du profil finance...</p>}
+                  {financeLoading && <p className="text-xs font-semibold text-cyan-100">{L("Actualisation du profil finance...","Updating financial profile...")}</p>}
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {financeInstallmentSuggestions.length === 0 ? (
-                    <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3 text-sm text-cyan-100">Aucune échéance ouverte pour la sélection actuelle.</div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/30 p-3 text-sm text-cyan-100">{L("Aucune échéance ouverte pour la sélection actuelle.","No open installment for the current selection.")}</div>
                   ) : financeInstallmentSuggestions.map((suggestion) => (
                     <button
                       key={`${suggestion.studentId}-${suggestion.label}-${suggestion.dueDate}`}
@@ -3411,7 +3419,7 @@ export function PaymentsPage() {
                         </span>
                       </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-cyan-100/85">
-                        <span>Échéance {new Date(suggestion.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</span>
+                        <span>{L("Échéance","Installment")} {new Date(suggestion.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</span>
                         <span className="font-mono font-bold text-white">{fmtUsd(suggestion.balance)}</span>
                       </div>
                     </button>
@@ -3424,17 +3432,17 @@ export function PaymentsPage() {
               <div className="lg:col-span-2 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">EduPay Tuition Payment Engine</p>
-                    <h3 className="mt-1 text-lg font-bold text-white">Family discount first, plan discount second</h3>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">{L("EduPay Tuition Payment Engine","EduPay Tuition Payment Engine")}</p>
+                    <h3 className="mt-1 text-lg font-bold text-white">{L("Réduction familiale en premier, réduction du plan ensuite", "Family discount first, plan discount second")}</h3>
                     <p className="mt-1 text-sm text-emerald-100/85">
-                      {selectedParent.students?.length ?? 0} child account{(selectedParent.students?.length ?? 0) > 1 ? "s" : ""}. Family discount applies when there are 2 or more linked children.
+                      {displayedParentStudents.length} {L("child account","child account")}{displayedParentStudents.length > 1 ? "s" : ""}{L(". Family discount applies when there are 2 or more linked children.",". Family discount applies when there are 2 or more linked children.")}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => void previewTuitionAllocation()}
-                      disabled={tuitionEngineBusy || !form.parentId || amountNum <= 0 || ((selectedParent?.students?.length ?? 0) > 0 && form.studentIds.length === 0)}
+                      disabled={tuitionEngineBusy || !form.parentId || amountNum <= 0 || (displayedParentStudents.length > 0 && form.studentIds.length === 0)}
                       className="rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-2 text-sm font-bold text-emerald-50 hover:bg-emerald-500/30 disabled:opacity-50"
                     >
                       {tuitionEngineBusy ? "Calcul..." : allocationMode === "MANUAL" && tuitionPreview ? "Recalculer manuellement" : "Prévisualiser la répartition"}
@@ -3442,14 +3450,14 @@ export function PaymentsPage() {
                     <button
                       type="button"
                       onClick={() => void confirmTuitionPayment()}
-                      disabled={tuitionEngineBusy || !form.parentId || amountNum <= 0 || !tuitionPreview || ((selectedParent?.students?.length ?? 0) > 0 && form.studentIds.length === 0)}
+                      disabled={tuitionEngineBusy || !form.parentId || amountNum <= 0 || !tuitionPreview || (displayedParentStudents.length > 0 && form.studentIds.length === 0)}
                       className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-700 disabled:opacity-50"
                     >
-                      Confirmer le paiement tuition
+                      {L("Confirmer le paiement tuition","Confirm tuition payment")}
                     </button>
                     {!tuitionPreview && (
                       <p className="w-full text-xs font-semibold text-emerald-100/80">
-                        La confirmation est active seulement après la prévisualisation, pour que le financier voie la répartition avant l'enregistrement.
+                        {L("La confirmation est active seulement après la prévisualisation, pour que le financier voie la répartition avant l'enregistrement.","La confirmation est active seulement après la prévisualisation, pour que le financier voie la répartition avant l'enregistrement.")}
                       </p>
                     )}
                   </div>
@@ -3457,7 +3465,7 @@ export function PaymentsPage() {
 
                 <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
                   <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-100">Payment plan</p>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-100">{L("Plan de paiement", "Payment plan")}</p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {TUITION_PLAN_OPTIONS.map((plan) => (
                         <button
@@ -3478,7 +3486,7 @@ export function PaymentsPage() {
                   </div>
 
                   <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-100">Allocation mode</p>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-100">{L("Mode de répartition", "Allocation mode")}</p>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
                       {(["AUTO", "MANUAL"] as AllocationMode[]).map((mode) => (
                         <button
@@ -3502,22 +3510,22 @@ export function PaymentsPage() {
                   <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-100">Répartition manuelle exacte</p>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-100">{L("Répartition manuelle exacte", "Exact manual allocation")}</p>
                         <p className="mt-1 text-sm font-semibold text-amber-50">
-                          Le financier saisit le montant exact à appliquer sur chaque enfant et chaque échéance ouverte.
+                          {L("Le financier saisit le montant exact à appliquer sur chaque enfant et chaque échéance ouverte.","Enter the exact amount to apply to each child and each open installment.")}
                         </p>
                       </div>
                       <div className="rounded-lg border border-amber-200/25 bg-slate-950/30 px-3 py-2 text-right text-xs">
                         <p className={`font-mono font-black ${manualAllocationExceedsAmount ? "text-red-200" : "text-white"}`}>
-                          Saisi {fmtUsd(manualAllocationTotal)} / {fmtUsd(amountNum)}
+                          {L("Saisi","Entered")} {fmtUsd(manualAllocationTotal)} / {fmtUsd(amountNum)}
                         </p>
-                        <p className="mt-1 font-mono text-emerald-100">Avance {fmtUsd(manualAdvanceAmount)}</p>
+                        <p className="mt-1 font-mono text-emerald-100">{L("Avance","Advance")} {fmtUsd(manualAdvanceAmount)}</p>
                       </div>
                     </div>
 
                     {manualAllocationExceedsAmount && (
                       <div className="mt-3 rounded-lg border border-red-300/35 bg-red-400/10 p-3 text-xs font-bold text-red-100">
-                        Le total manuel dépasse le montant reçu. Corrigez les champs avant de confirmer.
+                        {L("Le total manuel dépasse le montant reçu. Corrigez les champs avant de confirmer.","The manual total exceeds the amount received. Correct the fields before confirming.")}
                       </div>
                     )}
 
@@ -3536,12 +3544,12 @@ export function PaymentsPage() {
                                 {row.label} · {new Date(row.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")} · {row.planName} · {row.paymentOptionLabel}
                               </p>
                               <p className="mt-1 text-xs font-mono text-amber-100">
-                                Solde ouvert {fmtUsd(row.balance)} sur {fmtUsd(row.amountDue)}
+                                {L("Solde ouvert","Open balance")} {fmtUsd(row.balance)} {L("sur","of")} {fmtUsd(row.amountDue)}
                               </p>
                             </div>
                             <div>
                               <label className="mb-1 block text-[11px] font-black uppercase tracking-wide text-amber-100">
-                                Montant à allouer
+                                {L("Montant à allouer","Amount to allocate")}
                               </label>
                               <input
                                 type="number"
@@ -3559,7 +3567,7 @@ export function PaymentsPage() {
                       </div>
                     ) : (
                       <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 p-3 text-sm font-semibold text-ink-dim">
-                        Aucune échéance ouverte disponible pour les enfants sélectionnés.
+                        {L("Aucune échéance ouverte disponible pour les enfants sélectionnés.","No open installment is available for the selected children.")}
                       </div>
                     )}
                   </div>
@@ -3568,7 +3576,7 @@ export function PaymentsPage() {
                 {tuitionPreview && (
                   <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
                     <div className="rounded-xl border border-white/10 bg-slate-950/35 p-3">
-                      <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-100">Calcul de scolarité</p>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-100">{L("Calcul de scolarité", "Tuition calculation")}</p>
                       <div className="mt-3 space-y-3">
                         {tuitionPreview.calculations.map((row) => (
                           <div key={row.studentId} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -3580,11 +3588,11 @@ export function PaymentsPage() {
                               <p className="font-mono text-sm font-bold text-emerald-100">{fmtUsd(row.finalTuition)}</p>
                             </div>
                             <div className="mt-3 grid gap-2 text-xs text-emerald-50/85 sm:grid-cols-2">
-                              <span>Base {fmtUsd(row.baseAnnualTuition)}</span>
-                              <span>Family -{fmtUsd(row.familyDiscountAmount)}</span>
-                              <span>After family {fmtUsd(row.familyAdjustedTuition)}</span>
-                              <span>Plan -{fmtUsd(row.planDiscountAmount)}</span>
-                              {row.monthlyAmount ? <span>Monthly {fmtUsd(row.monthlyAmount)}</span> : null}
+                              <span>{L("Base","Base")} {fmtUsd(row.baseAnnualTuition)}</span>
+                              <span>{L("Family -","Family -")}{fmtUsd(row.familyDiscountAmount)}</span>
+                              <span>{L("After family","After family discount")} {fmtUsd(row.familyAdjustedTuition)}</span>
+                              <span>{L("Plan -","Plan -")}{fmtUsd(row.planDiscountAmount)}</span>
+                              {row.monthlyAmount ? <span>{L("Monthly","Monthly payment")} {fmtUsd(row.monthlyAmount)}</span> : null}
                             </div>
                           </div>
                         ))}
@@ -3594,11 +3602,11 @@ export function PaymentsPage() {
                     <div className="rounded-xl border border-white/10 bg-slate-950/35 p-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Allocation preview</p>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">{L("Aperçu de la répartition", "Allocation preview")}</p>
                           <p className="mt-1 text-xs text-ink-dim">{tuitionPreview.allocationPreview.message}</p>
                           {allocationMode === "AUTO" && (
                             <div className="mt-2 rounded-lg border border-cyan-300/20 bg-cyan-300/10 p-3 text-xs font-semibold text-cyan-50">
-                              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-100">Comment le système a réparti</p>
+                              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-100">{L("Comment le système a réparti", "How the system allocated it")}</p>
                               <ol className="mt-2 list-decimal space-y-1 pl-4">
                                 {buildAllocationNarrative(tuitionPreview.allocationPreview, allocationMode).map((step) => (
                                   <li key={step}>{step}</li>
@@ -3608,15 +3616,15 @@ export function PaymentsPage() {
                           )}
                           {allocationMode === "MANUAL" && (
                             <div className="mt-2 rounded-lg border border-amber-300/20 bg-amber-300/10 p-3 text-xs font-semibold text-amber-50">
-                              <p>Les montants saisis dans la section manuelle ci-dessus sont recalculés ici avant enregistrement. Si le total est inférieur au montant reçu, le reste sera conservé en avance.</p>
-                              <p className="mt-2 font-mono">Saisi {fmtUsd(manualAllocationTotal)} / {fmtUsd(amountNum)}</p>
+                              <p>{L("Les montants saisis dans la section manuelle ci-dessus sont recalculés ici avant enregistrement. Si le total est inférieur au montant reçu, le reste sera conservé en avance.","Amounts entered in the manual section above are recalculated here before recording. If the total is less than the amount received, the remainder will be kept as an advance.")}</p>
+                              <p className="mt-2 font-mono">{L("Saisi","Entered")} {fmtUsd(manualAllocationTotal)} / {fmtUsd(amountNum)}</p>
                             </div>
                           )}
                         </div>
                         <div className="text-right text-xs">
-                          <p className="font-mono font-bold text-white">Allocated {fmtUsd(tuitionPreview.allocationPreview.allocatedTotal)}</p>
-                          <p className="font-mono text-amber-100">Missing {fmtUsd(tuitionPreview.allocationPreview.missingAmount)}</p>
-                          {tuitionPreview.allocationPreview.advanceBalance > 0 && <p className="font-mono text-emerald-100">Advance {fmtUsd(tuitionPreview.allocationPreview.advanceBalance)}</p>}
+                          <p className="font-mono font-bold text-white">{L("Allocated","Allocated")} {fmtUsd(tuitionPreview.allocationPreview.allocatedTotal)}</p>
+                          <p className="font-mono text-amber-100">{L("Missing","Missing")} {fmtUsd(tuitionPreview.allocationPreview.missingAmount)}</p>
+                          {tuitionPreview.allocationPreview.advanceBalance > 0 && <p className="font-mono text-emerald-100">{L("Advance","Advance")} {fmtUsd(tuitionPreview.allocationPreview.advanceBalance)}</p>}
                         </div>
                       </div>
 
@@ -3629,15 +3637,15 @@ export function PaymentsPage() {
                       <div className="edupay-scrollbar mt-3 max-h-80 space-y-2 overflow-y-auto pr-1">
                         {tuitionPreview.allocationPreview.lines.length > 0 && (
                           <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3">
-                            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">Detail unitaire par enfant</p>
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-100">{L("Détail par enfant", "Per-child details")}</p>
                             <div className="mt-2 grid gap-2 sm:grid-cols-2">
                               {buildAllocationChildSummaries(tuitionPreview.allocationPreview).map((summary) => {
                                 return (
                                   <div key={summary.studentName} className="rounded-md border border-white/10 bg-slate-950/40 p-2 text-xs">
                                     <p className="font-semibold text-white">{summary.studentName}</p>
-                                    <p className="mt-1 text-cyan-100">D? avant paiement {fmtUsd(summary.before)}</p>
-                                    <p className="mt-1 text-emerald-100">Appliqu? {fmtUsd(summary.allocated)}</p>
-                                    <p className="text-amber-100">Reste {fmtUsd(summary.remaining)}</p>
+                                    <p className="mt-1 text-cyan-100">{L("Dette avant paiement","Debt before payment")} {fmtUsd(summary.before)}</p>
+                                    <p className="mt-1 text-emerald-100">{L("Appliqué","Applied")} {fmtUsd(summary.allocated)}</p>
+                                    <p className="text-amber-100">{L("Reste","Remaining")} {fmtUsd(summary.remaining)}</p>
                                   </div>
                                 );
                               })}
@@ -3652,9 +3660,9 @@ export function PaymentsPage() {
                                 <p className="mt-1 text-xs text-ink-dim">{line.label} · {new Date(line.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")} · {getDueBucketLabel(line.dueBucket)}</p>
                               </div>
                               <div className="text-right text-xs">
-                                <p className="font-mono text-cyan-100">Avant {fmtUsd(line.outstandingBefore)}</p>
-                                <p className="font-mono text-emerald-100">Appliqu? {fmtUsd(line.allocated)}</p>
-                                <p className="font-mono text-ink-dim">Reste {fmtUsd(line.outstandingAfter)}</p>
+                                <p className="font-mono text-cyan-100">{L("Avant","Before")} {fmtUsd(line.outstandingBefore)}</p>
+                                <p className="font-mono text-emerald-100">{L("Appliqué","Applied")} {fmtUsd(line.allocated)}</p>
+                                <p className="font-mono text-ink-dim">{L("Reste","Remaining")} {fmtUsd(line.outstandingAfter)}</p>
                               </div>
                             </div>
                           </div>
@@ -3680,7 +3688,7 @@ export function PaymentsPage() {
                     setField("parentId", "");
                   }
                 }}
-                placeholder="Ex. Kabila wa Muzuri Jean"
+                placeholder={L("Ex. Kabila wa Muzuri Jean", "E.g. Kabila wa Muzuri Jean")}
                 className={`w-full ${fieldErrors.parentFullName ? "border-danger" : ""}`}
               />
               {fieldErrors.parentFullName && (
@@ -3689,10 +3697,10 @@ export function PaymentsPage() {
             </div>
 
             <div className="lg:col-span-2 rounded-2xl border border-brand-500/20 bg-gradient-to-r from-brand-500/10 via-slate-950/60 to-transparent p-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand-200">Identité du paiement</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-brand-200">{L("Identité du paiement", "Payment identity")}</p>
               <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-dim">Paiement pour</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-ink-dim">{L("Paiement pour", "Payment for")}</p>
                   <p className="mt-1 truncate font-display text-2xl font-bold text-white">
                     {selectedStudentDisplayName || "Sélectionnez l'élève concerné"}
                   </p>
@@ -3703,7 +3711,7 @@ export function PaymentsPage() {
                   </p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-ink-dim">
-                  <p className="font-semibold text-white">Rendu du reçu</p>
+                  <p className="font-semibold text-white">{L("Rendu du reçu", "Receipt display")}</p>
                   <p className="mt-1">{getPaymentAudienceText({
                     paymentSubjectName: selectedStudentDisplayName,
                     studentNames: selectedStudents.map((student) => student.fullName),
@@ -3795,27 +3803,27 @@ export function PaymentsPage() {
           {form.method === "BANK_TRANSFER" ? (
             <div className="grid gap-5 md:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Banque</label>
-                <input value={form.bankName} onChange={(e) => setField("bankName", e.target.value)} className="w-full" placeholder="Nom de la banque" />
+                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{L("Banque", "Bank")}</label>
+                <input value={form.bankName} onChange={(e) => setField("bankName", e.target.value)} className="w-full" placeholder={L("Nom de la banque", "Bank name")} />
                 {fieldErrors.bankName && <p className="text-xs text-danger">{fieldErrors.bankName}</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Référence bancaire</label>
-                <input value={form.transferReference} onChange={(e) => setField("transferReference", e.target.value)} className="w-full" placeholder="Référence du virement" />
+                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{L("Référence bancaire", "Bank reference")}</label>
+                <input value={form.transferReference} onChange={(e) => setField("transferReference", e.target.value)} className="w-full" placeholder={L("Référence du virement", "Transfer reference")} />
                 {fieldErrors.transferReference && <p className="text-xs text-danger">{fieldErrors.transferReference}</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Date du virement</label>
+                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{L("Date du virement", "Transfer date")}</label>
                 <DateSelect value={form.transferDate} onChange={(e) => setField("transferDate", e.target.value)} className="w-full" />
                 {fieldErrors.transferDate && <p className="text-xs text-danger">{fieldErrors.transferDate}</p>}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Compte émetteur</label>
-                <input value={form.senderAccountNumber} onChange={(e) => setField("senderAccountNumber", e.target.value)} className="w-full" placeholder="Compte débité" />
+                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{L("Compte émetteur", "Sender account")}</label>
+                <input value={form.senderAccountNumber} onChange={(e) => setField("senderAccountNumber", e.target.value)} className="w-full" placeholder={L("Compte débité", "Debited account")} />
               </div>
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Compte bénéficiaire</label>
-                <input value={form.beneficiaryAccountNumber} onChange={(e) => setField("beneficiaryAccountNumber", e.target.value)} className="w-full" placeholder="Compte crédité" />
+                <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{L("Compte bénéficiaire", "Beneficiary account")}</label>
+                <input value={form.beneficiaryAccountNumber} onChange={(e) => setField("beneficiaryAccountNumber", e.target.value)} className="w-full" placeholder={L("Compte crédité", "Credited account")} />
                 {fieldErrors.beneficiaryAccountNumber && <p className="text-xs text-danger">{fieldErrors.beneficiaryAccountNumber}</p>}
               </div>
             </div>
@@ -3823,7 +3831,7 @@ export function PaymentsPage() {
 
           {/* Statut */}
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">Statut du paiement</label>
+            <label className="text-sm font-semibold text-ink-dim uppercase tracking-wide">{L("Statut du paiement", "Payment status")}</label>
             <div className="flex flex-wrap gap-3">
               {STATUS_OPTIONS.map((o) => (
                 <label

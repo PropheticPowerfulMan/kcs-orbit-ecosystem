@@ -45,4 +45,12 @@ describe("deduplicateStudents", () => {
 
     expect(deduplicateStudents(students)).toEqual(students);
   });
+  it("removes duplicate children despite invisible spacing and punctuation differences", () => {
+    const students = [
+      { id: "student-a", fullName: "MUTOMBO NOSSA FAITH", className: "K1" },
+      { id: "student-b", fullName: "Mutombo  Nossa-Faith", className: "K 1" }
+    ];
+
+    expect(deduplicateStudents(students)).toEqual([students[0]]);
+  });
 });
