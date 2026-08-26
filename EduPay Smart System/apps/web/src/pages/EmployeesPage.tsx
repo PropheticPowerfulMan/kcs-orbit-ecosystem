@@ -571,11 +571,11 @@ function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSn
           <div class="panel">
             <h3>Référentiel salarial</h3>
             <div class="detail-list">
-              <div class="detail-row"><span>Code employé</span><strong>${escapeHtml(profile?.employeeCode || employee.displayId || employee.employeeId || employee.id)}</strong></div>
+              <div class="detail-row"><span>{L("Code employé", "Employee code")}</span><strong>${escapeHtml(profile?.employeeCode || employee.displayId || employee.employeeId || employee.id)}</strong></div>
               <div class="detail-row"><span>${escapeHtml(T("Poste", "Position"))}</span><strong>${escapeHtml(infoValue(profile?.position || employee.jobTitle))}</strong></div>
               <div class="detail-row"><span>${escapeHtml(T("Département", "Department"))}</span><strong>${escapeHtml(infoValue(profile?.department || employee.department))}</strong></div>
-              <div class="detail-row"><span>Bonus par défaut</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultBonus ?? 0), currency))}</strong></div>
-              <div class="detail-row"><span>Déductions par défaut</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultDeduction ?? 0), currency))}</strong></div>
+              <div class="detail-row"><span>{L("Bonus par défaut", "Default bonus")}</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultBonus ?? 0), currency))}</strong></div>
+              <div class="detail-row"><span>{L("Déductions par défaut", "Default deductions")}</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultDeduction ?? 0), currency))}</strong></div>
               <div class="detail-row"><span>Net versé cumulé</span><strong>${escapeHtml(formatCurrency(snapshot.totals.totalNetPaid, currency))}</strong></div>
             </div>
           </div>
@@ -603,7 +603,7 @@ function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSn
               <tr>
                 <th>${escapeHtml(T("Date", "Date"))}</th>
                 <th>${escapeHtml(T("Fiche", "Payslip"))}</th>
-                <th>Run</th>
+                <th>{L("Cycle", "Run")}</th>
                 <th>Période</th>
                 <th>${escapeHtml(T("Brut", "Gross"))}</th>
                 <th>${escapeHtml(T("Bonus", "Bonus"))}</th>
@@ -970,7 +970,7 @@ export function EmployeesPage() {
                 onClick={() => setMutationNotice(null)}
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-400"
               >
-                Compris
+                {L("Compris", "Got it")}
               </button>
             </div>
           </div>
@@ -981,7 +981,7 @@ export function EmployeesPage() {
         <div className="min-w-0">
           <h1 className="font-display text-3xl font-bold text-white">{L("Répertoire des employés", "Employee directory")}</h1>
           <p className="mt-1 text-ink-dim">
-            Liste centralisée du personnel synchronisé depuis SAVANEX, avec une lecture plus proche des surfaces Élèves et Gestion parents.
+            {L("Liste centralisée du personnel synchronisé depuis SAVANEX, avec une lecture plus proche des surfaces Élèves et Gestion parents.", "Centralized staff list synchronized from SAVANEX, aligned with the Students and Parent Management views.")}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -993,7 +993,7 @@ export function EmployeesPage() {
             onClick={() => void loadEmployees()}
             className="inline-flex h-[52px] items-center justify-center rounded-xl border border-brand-300/25 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-brand-300/45 hover:bg-brand-500/12"
           >
-            Actualiser la liste
+            {L("Actualiser la liste", "Refresh list")}
           </button>
         </div>
       </div>
@@ -1008,7 +1008,7 @@ export function EmployeesPage() {
           <p className="mt-1 font-display text-3xl font-bold text-brand-300">{stats.departments}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Codes d'accès</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Codes d'accès", "Access codes")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-emerald-300">{stats.withAccessCode}</p>
         </div>
         <div className="card">
@@ -1036,7 +1036,7 @@ export function EmployeesPage() {
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-brand-500/30 border-t-brand-500" />
           </div>
         ) : filteredEmployees.length === 0 ? (
-          <div className="p-12 text-center text-ink-dim">Aucun employé ne correspond à votre recherche.</div>
+          <div className="p-12 text-center text-ink-dim">{L("Aucun employé ne correspond à votre recherche.", "No employee matches your search.")}</div>
         ) : (
           <div className="edupay-scrollbar overflow-x-auto">
             <table className="w-full text-sm">
@@ -1063,7 +1063,7 @@ export function EmployeesPage() {
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-ink-dim">{infoValue(employee.jobTitle)}</span>
                         {employee.accessCode?.trim() ? (
-                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">Code d'accès actif</span>
+                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">{L("Code d'accès actif", "Active access code")}</span>
                         ) : null}
                       </div>
                     </td>
@@ -1116,15 +1116,15 @@ export function EmployeesPage() {
       {selectedEmployee ? (
         <ModalShell
           title={selectedEmployee.fullName}
-          subtitle="Fiche détaillée de l'employé dans le registre partagé."
+          subtitle={L("Fiche détaillée de l'employé dans le registre partagé.", "Detailed employee record in the shared registry.")}
           onClose={() => setSelectedEmployee(null)}
           actions={(
             <>
               <span
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200"
-                title="Les paiements, factures et fiches affichés concernent cet employé"
+                title={L("Les paiements, factures et fiches affichés concernent cet employé", "The displayed payments, invoices and records concern this employee")}
               >
-                Bénéficiaire : Employé
+                {L("Bénéficiaire : Employé", "Beneficiary: Employee")}
               </span>
               <button
                 type="button"
@@ -1154,7 +1154,7 @@ export function EmployeesPage() {
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 title={L("Imprimer le rapport", "Print report")}
               >
-                <Printer className="h-4 w-4" /> Impression
+                <Printer className="h-4 w-4" /> {L("Impression", "Print")}
               </button>
               <button
                 type="button"
@@ -1202,7 +1202,7 @@ export function EmployeesPage() {
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.subject)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Type d'employé</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Type d'employé", "Employee type")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.employeeType)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
@@ -1289,7 +1289,7 @@ export function EmployeesPage() {
                             </tr>
                           )) : (
                             <tr>
-                              <td colSpan={5} className="px-4 py-6 text-center text-ink-dim">Aucune avance ou dette trouvee pour cette periode.</td>
+                              <td colSpan={5} className="px-4 py-6 text-center text-ink-dim">{L("Aucune avance ni dette trouvée pour cette période.", "No advance or debt found for this period.")}</td>
                             </tr>
                           )}
                         </tbody>
@@ -1301,7 +1301,7 @@ export function EmployeesPage() {
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Net mensuel prévu", "Projected monthly net")}</p>
                       <p className="mt-2 text-lg font-semibold text-emerald-300">{formatCurrency(Number(employeeFinanceSnapshot.salaryProjection?.netSalary ?? employeeFinanceSnapshot.primaryProfile?.baseSalary ?? 0), employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Mode {employeeFinanceSnapshot.salaryProjection?.mode || employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Mode", "Mode")} {employeeFinanceSnapshot.salaryProjection?.mode || employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}</p>
                       <select
                         className="mt-3 h-10 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 text-sm text-white"
                         value={employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}
@@ -1316,12 +1316,12 @@ export function EmployeesPage() {
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Déductions du mois", "Monthly deductions")}</p>
                       <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(Number(employeeFinanceSnapshot.salaryProjection?.totalDeductions ?? 0), employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Pression {Number(employeeFinanceSnapshot.salaryProjection?.salaryPressure ?? 0).toFixed(1)}%</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Pression", "Pressure")} {Number(employeeFinanceSnapshot.salaryProjection?.salaryPressure ?? 0).toFixed(1)}%</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Avis envoyés", "Notices sent")}</p>
                       <p className="mt-2 text-lg font-semibold text-cyan-300">{employeeFinanceSnapshot.communicationHistory?.length ?? 0}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Dashboard / email / SMS</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Tableau de bord / e-mail / SMS", "Dashboard / email / SMS")}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Action de transparence", "Transparency action")}</p>
@@ -1350,12 +1350,12 @@ export function EmployeesPage() {
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Dettes recouvrées", "Debts recovered")}</p>
                       <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(employeeFinanceSnapshot.totals.totalDebtRecovered, employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Taux {Number(employeeFinanceSnapshot.primaryProfile?.debtRecoveryRate ?? 0).toFixed(2)}%</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Taux", "Rate")} {Number(employeeFinanceSnapshot.primaryProfile?.debtRecoveryRate ?? 0).toFixed(2)}%</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                       <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Avances en cours", "Current advances")}</p>
                       <p className="mt-2 text-lg font-semibold text-cyan-300">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.advanceBalance ?? 0), employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Récupérées: {formatCurrency(employeeFinanceSnapshot.totals.totalAdvancesRecovered, employeeFinanceSnapshot.currency)}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Récupérées", "Recovered")}: {formatCurrency(employeeFinanceSnapshot.totals.totalAdvancesRecovered, employeeFinanceSnapshot.currency)}</p>
                     </div>
                   </div>
 
@@ -1363,9 +1363,9 @@ export function EmployeesPage() {
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                       <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Paramètres salariaux", "Salary settings")}</p>
                       <div className="mt-3 space-y-3 text-sm text-ink-dim">
-                        <div className="flex items-center justify-between gap-3"><span>Code employé</span><span className="font-semibold text-white">{employeeFinanceSnapshot.primaryProfile?.employeeCode || selectedEmployee.displayId || selectedEmployee.employeeId || selectedEmployee.id}</span></div>
-                        <div className="flex items-center justify-between gap-3"><span>Bonus par défaut</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultBonus ?? 0), employeeFinanceSnapshot.currency)}</span></div>
-                        <div className="flex items-center justify-between gap-3"><span>Déductions par défaut</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultDeduction ?? 0), employeeFinanceSnapshot.currency)}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Code employé", "Employee code")}</span><span className="font-semibold text-white">{employeeFinanceSnapshot.primaryProfile?.employeeCode || selectedEmployee.displayId || selectedEmployee.employeeId || selectedEmployee.id}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Bonus par défaut", "Default bonus")}</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultBonus ?? 0), employeeFinanceSnapshot.currency)}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Déductions par défaut", "Default deductions")}</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultDeduction ?? 0), employeeFinanceSnapshot.currency)}</span></div>
                         <div className="flex items-center justify-between gap-3"><span>{L("Net payé cumulé", "Total net paid")}</span><span className="font-semibold text-white">{formatCurrency(employeeFinanceSnapshot.totals.totalNetPaid, employeeFinanceSnapshot.currency)}</span></div>
                       </div>
                     </div>
@@ -1385,7 +1385,7 @@ export function EmployeesPage() {
                         <tr className="border-b border-white/10 bg-white/[0.04] text-left text-xs uppercase tracking-[0.14em] text-ink-dim">
                           <th className="px-4 py-3">{L("Date", "Date")}</th>
                           <th className="px-4 py-3">{L("Fiche", "Payslip")}</th>
-                          <th className="px-4 py-3">Run</th>
+                          <th className="px-4 py-3">{L("Cycle", "Run")}</th>
                           <th className="px-4 py-3">{L("Brut", "Gross")}</th>
                           <th className="px-4 py-3">{L("Bonus", "Bonus")}</th>
                           <th className="px-4 py-3">{L("Déductions", "Deductions")}</th>
@@ -1412,7 +1412,7 @@ export function EmployeesPage() {
                           </tr>
                         )) : (
                           <tr>
-                            <td colSpan={9} className="px-4 py-6 text-center text-ink-dim">Aucune fiche salariale disponible pour cet employé.</td>
+                            <td colSpan={9} className="px-4 py-6 text-center text-ink-dim">{L("Aucune fiche salariale disponible pour cet employé.", "No payroll record available for this employee.")}</td>
                           </tr>
                         )}
                       </tbody>
@@ -1421,7 +1421,7 @@ export function EmployeesPage() {
                 </div>
               ) : employeeFinanceLoading ? null : (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-ink-dim">
-                  Aucun profil de paie ou historique salarial n'a encore été trouvé pour cet employé.
+                  {L("Aucun profil de paie ou historique salarial n'a encore été trouvé pour cet employé.", "No payroll profile or salary history has been found for this employee yet.")}
                 </div>
               )}
             </div>
@@ -1430,15 +1430,15 @@ export function EmployeesPage() {
       ) : null}
 
       {editingEmployee ? (
-        <ModalShell title="Modifier un employé" subtitle="Chaque champ est explicite et peut être vidé si l'information n'est plus valable." onClose={closeEditModal}>
+        <ModalShell title={L("Modifier un employé", "Edit employee")} subtitle={L("Chaque champ est explicite et peut être vidé si l'information n'est plus valable.", "Each field is explicit and can be cleared if the information is no longer valid.")} onClose={closeEditModal}>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm font-medium text-white">{L("Nom complet", "Full name")}</span>
-              <input className="w-full" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Ex. Mireille Ilunga" />
+              <input className="w-full" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder={L("Ex. Mireille Ilunga", "E.g. Mireille Ilunga")} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">{L("E-mail", "Email")}</span>
-              <input className="w-full" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="nom@ecole.cd" />
+              <input className="w-full" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder={L("nom@ecole.cd", "name@school.cd")} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">{L("Téléphone", "Phone")}</span>
@@ -1446,42 +1446,42 @@ export function EmployeesPage() {
             </label>
             <label className="space-y-2 md:col-span-2">
               <span className="text-sm font-medium text-white">{L("Adresse physique", "Physical address")}</span>
-              <input className="w-full" value={form.physicalAddress} onChange={(event) => setForm((current) => ({ ...current, physicalAddress: event.target.value }))} placeholder="Avenue, quartier, commune, ville" />
+              <input className="w-full" value={form.physicalAddress} onChange={(event) => setForm((current) => ({ ...current, physicalAddress: event.target.value }))} placeholder={L("Avenue, quartier, commune, ville", "Street, district, municipality, city")} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">{L("Matricule employé", "Employee ID")}</span>
-              <input className="w-full cursor-not-allowed opacity-70" value={form.employeeId} readOnly disabled placeholder="Généré par le système" />
-              <p className="text-xs text-ink-dim">Ce matricule est généré par le système et ne peut pas être modifié ici.</p>
+              <input className="w-full cursor-not-allowed opacity-70" value={form.employeeId} readOnly disabled placeholder={L("Généré par le système", "Generated by the system")} />
+              <p className="text-xs text-ink-dim">{L("Ce matricule est généré par le système et ne peut pas être modifié ici.", "This employee number is system-generated and cannot be edited here.")}</p>
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Type d'employé</span>
-              <input className="w-full" value={form.employeeType} onChange={(event) => setForm((current) => ({ ...current, employeeType: event.target.value }))} placeholder="TEACHING ou STAFF" />
+              <span className="text-sm font-medium text-white">{L("Type d'employé", "Employee type")}</span>
+              <input className="w-full" value={form.employeeType} onChange={(event) => setForm((current) => ({ ...current, employeeType: event.target.value }))} placeholder={L("ENSEIGNANT ou PERSONNEL", "TEACHING or STAFF")} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">{L("Département", "Department")}</span>
-              <input className="w-full" value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} placeholder="Académique" />
+              <input className="w-full" value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} placeholder={L("Académique", "Academic")} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">{L("Poste", "Position")}</span>
-              <input className="w-full" value={form.jobTitle} onChange={(event) => setForm((current) => ({ ...current, jobTitle: event.target.value }))} placeholder="Teacher" />
+              <input className="w-full" value={form.jobTitle} onChange={(event) => setForm((current) => ({ ...current, jobTitle: event.target.value }))} placeholder={L("Enseignant", "Teacher")} />
             </label>
             <label className="space-y-2">
               <span className="text-sm font-medium text-white">{L("Matière ou spécialité", "Subject or specialty")}</span>
-              <input className="w-full" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} placeholder="Mathématiques" />
+              <input className="w-full" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} placeholder={L("Mathématiques", "Mathematics")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Code d'accès</span>
-              <input className="w-full" value={form.accessCode} onChange={(event) => setForm((current) => ({ ...current, accessCode: event.target.value }))} placeholder="ACC-TCH-..." />
+              <span className="text-sm font-medium text-white">{L("Code d'accès", "Access code")}</span>
+              <input className="w-full" value={form.accessCode} onChange={(event) => setForm((current) => ({ ...current, accessCode: event.target.value }))} placeholder={L("ACC-TCH-...", "ACC-TCH-...")} />
             </label>
             <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 md:col-span-2">
               <input type="checkbox" checked={form.mustChangePassword} onChange={(event) => setForm((current) => ({ ...current, mustChangePassword: event.target.checked }))} />
-              <span className="text-sm text-white">Exiger un changement de mot de passe à la prochaine connexion</span>
+              <span className="text-sm text-white">{L("Exiger un changement de mot de passe à la prochaine connexion", "Require a password change at the next sign-in")}</span>
             </label>
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button onClick={closeEditModal} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-ink-dim transition hover:text-white">
-              Annuler
+              {L("Annuler", "Cancel")}
             </button>
             <button
               onClick={() => void handleSaveEmployee()}
@@ -1495,13 +1495,13 @@ export function EmployeesPage() {
       ) : null}
 
       {deleteTarget ? (
-        <ModalShell title="Supprimer cet employé" subtitle="Cette action retire l'employé du registre partagé pour l'application." onClose={() => setDeleteTarget(null)}>
+        <ModalShell title={L("Supprimer cet employé", "Delete this employee")} subtitle={L("Cette action retire l'employé du registre partagé pour l'application.", "This action removes the employee from the application's shared registry.")} onClose={() => setDeleteTarget(null)}>
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
-            Vous êtes sur le point de supprimer <span className="font-semibold text-white">{deleteTarget.fullName}</span>. Cette opération est irréversible.
+            {L("Vous êtes sur le point de supprimer", "You are about to delete")} <span className="font-semibold text-white">{deleteTarget.fullName}</span>. {L("Cette opération est irréversible.", "This operation cannot be undone.")}
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button onClick={() => setDeleteTarget(null)} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-ink-dim transition hover:text-white">
-              Annuler
+              {L("Annuler", "Cancel")}
             </button>
             <button
               onClick={() => void handleDeleteEmployee()}

@@ -1194,7 +1194,7 @@ export function FinanceParentPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">{L("Alertes financières", "Financial alerts")}</h2>
-                <p className="mt-1 text-sm text-ink-dim">Retards, accumulations de dette et anomalies detectees automatiquement.</p>
+                <p className="mt-1 text-sm text-ink-dim">{L("Retards, accumulations de dette et anomalies détectées automatiquement.", "Late payments, accumulated debt and automatically detected anomalies.")}</p>
               </div>
               <AlertTriangle className="h-6 w-6 text-amber-300" />
             </div>
@@ -1219,7 +1219,7 @@ export function FinanceParentPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">{L("Historique des dettes", "Debt history")}</h2>
-                <p className="mt-1 text-sm text-ink-dim">Dette active, reports d'annees precedentes et soldes restants.</p>
+                <p className="mt-1 text-sm text-ink-dim">{L("Dette active, reports d'années précédentes et soldes restants.", "Active debt, previous-year carry-overs and remaining balances.")}</p>
               </div>
               <FileText className="h-6 w-6 text-red-300" />
             </div>
@@ -1236,11 +1236,11 @@ export function FinanceParentPage() {
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 text-sm">
                     <div>
-                      <p className="text-ink-dim">Remaining</p>
+                      <p className="text-ink-dim">{L("Restant", "Remaining")}</p>
                       <p className="font-mono font-bold text-red-300">{money.format(debt.amountRemaining)}</p>
                     </div>
                     <div>
-                      <p className="text-ink-dim">Origin</p>
+                      <p className="text-ink-dim">{L("Origine", "Origin")}</p>
                       <p className="font-semibold text-white">{debt.carriedOverFromYearId ? `Carry-over ${debt.carriedOverFromYearId}` : snapshot.academicYear.name}</p>
                     </div>
                   </div>
@@ -1257,12 +1257,12 @@ export function FinanceParentPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">{L("Réductions reçues", "Discounts received")}</h2>
-                <p className="mt-1 text-sm text-ink-dim">Toutes les reductions sont tracees separement du plan de base.</p>
+                <p className="mt-1 text-sm text-ink-dim">{L("Toutes les réductions sont tracées séparément du plan de base.", "All discounts are tracked separately from the base plan.")}</p>
               </div>
               <HandCoins className="h-6 w-6 text-cyan-300" />
             </div>
             <div className="mt-5 space-y-3">
-              {visibleReductions.length === 0 && <p className="text-sm text-ink-dim">Aucune reduction appliquee.</p>}
+              {visibleReductions.length === 0 && <p className="text-sm text-ink-dim">{L("Aucune réduction appliquée.", "No discount applied.")}</p>}
               {visibleReductions.map((reduction) => (
                 <div key={reduction.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -1284,7 +1284,7 @@ export function FinanceParentPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">{L("Accords", "Agreements")}</h2>
-                <p className="mt-1 text-sm text-ink-dim">Accords speciaux du proprietaire, notes et statut d'approbation.</p>
+                <p className="mt-1 text-sm text-ink-dim">{L("Accords spéciaux du propriétaire, notes et statut d'approbation.", "Owner special agreements, notes and approval status.")}</p>
               </div>
               <ShieldCheck className="h-6 w-6 text-amber-300" />
             </div>
@@ -1301,7 +1301,7 @@ export function FinanceParentPage() {
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3 text-sm">
                     <div>
-                      <p className="text-ink-dim">Custom total</p>
+                      <p className="text-ink-dim">{L("Total personnalisé", "Custom total")}</p>
                       <p className="font-mono font-semibold text-white">{money.format(agreement.customTotal)}</p>
                     </div>
                     <div>
@@ -1309,7 +1309,7 @@ export function FinanceParentPage() {
                       <p className="font-mono font-semibold text-cyan-300">{money.format(agreement.reductionAmount)}</p>
                     </div>
                     <div>
-                      <p className="text-ink-dim">Balance due</p>
+                      <p className="text-ink-dim">{L("Solde dû", "Balance due")}</p>
                       <p className="font-mono font-semibold text-red-300">{money.format(agreement.balanceDue)}</p>
                     </div>
                   </div>
@@ -1324,7 +1324,7 @@ export function FinanceParentPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">{L("Historique des paiements", "Payment history")}</h2>
-                <p className="mt-1 text-sm text-ink-dim">Historique des paiements, reçus et enfants associés.</p>
+                <p className="mt-1 text-sm text-ink-dim">{L("Historique des paiements, reçus et enfants associés.", "History of payments, receipts and associated children.")}</p>
               </div>
               <ReceiptText className="h-6 w-6 text-emerald-300" />
             </div>
@@ -1359,7 +1359,7 @@ export function FinanceParentPage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-display text-2xl font-bold text-white">{L("Reçus historiques", "Historical receipts")}</h2>
-                <p className="mt-1 text-sm text-ink-dim">Archive des reçus financiers sur le long terme.</p>
+                <p className="mt-1 text-sm text-ink-dim">{L("Archive des reçus financiers sur le long terme.", "Long-term financial receipt archive.")}</p>
               </div>
               <CalendarClock className="h-6 w-6 text-brand-200" />
             </div>

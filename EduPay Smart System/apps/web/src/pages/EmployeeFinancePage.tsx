@@ -230,10 +230,10 @@ export function EmployeeFinancePage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Analyse intelligente", "Smart analysis")}</p>
-            <h2 className="mt-1 text-xl font-semibold text-white">Risque {snapshot.intelligence.riskLevel}</h2>
+            <h2 className="mt-1 text-xl font-semibold text-white">{L("Risque", "Risk")} {snapshot.intelligence.riskLevel}</h2>
           </div>
           <span className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">
-            Pression salaire: {snapshot.totals.salaryPressure.toFixed(1)}%
+            {L("Pression salariale", "Salary pressure")}: {snapshot.totals.salaryPressure.toFixed(1)}%
           </span>
         </div>
         <p className="mt-3 text-sm text-ink-dim">{snapshot.intelligence.recommendation}</p>

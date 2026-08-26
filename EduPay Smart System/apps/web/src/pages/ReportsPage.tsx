@@ -573,17 +573,17 @@ export function ReportsPage() {
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Écritures comptables", "Accounting entries")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{accountingEntries.length}</p>
-              <p className="mt-2 text-sm text-ink-dim">Montant total : {currency.format(accountingEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
+              <p className="mt-2 text-sm text-ink-dim">{L("Montant total", "Total amount")} : {currency.format(accountingEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Lignes de trésorerie", "Cash-flow entries")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{cashflowEntries.length}</p>
-              <p className="mt-2 text-sm text-ink-dim">Sorties : {currency.format(cashflowEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
+              <p className="mt-2 text-sm text-ink-dim">{L("Sorties", "Outflows")} : {currency.format(cashflowEntries.reduce((sum, entry) => sum + entry.amount, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Cycles de paie", "Payroll runs")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{payrollRuns.length}</p>
-              <p className="mt-2 text-sm text-ink-dim">Masse nette : {currency.format(payrollRuns.reduce((sum, run) => sum + run.totalNet, 0))}</p>
+              <p className="mt-2 text-sm text-ink-dim">{L("Masse nette", "Net payroll")} : {currency.format(payrollRuns.reduce((sum, run) => sum + run.totalNet, 0))}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Dette institutionnelle", "Institutional debt")}</p>
