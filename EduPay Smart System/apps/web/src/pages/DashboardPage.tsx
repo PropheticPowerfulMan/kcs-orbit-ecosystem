@@ -582,17 +582,17 @@ export function DashboardPage() {
                 <XAxis dataKey="label" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" tickFormatter={(v) => `$${Number(v) / 1000}k`} />
                 <Tooltip contentStyle={{ background: "#0b1a24", border: "1px solid rgba(20,184,222,.25)", borderRadius: 8 }} formatter={(v) => USD.format(Number(v))} />
-                <Area type="monotone" dataKey="expected" name="Objectif" stroke="#64748b" fill="rgba(100,116,139,.12)" />
-                <Area type="monotone" dataKey="revenue" name="Encaisse" stroke="#14b8de" fill="rgba(20,184,222,.22)" />
-                <Line type="monotone" dataKey="pending" name="En attente" stroke="#f59e0b" strokeWidth={2} />
+                <Area type="monotone" dataKey="expected" name={lang === "fr" ? "Objectif" : "Target"} stroke="#64748b" fill="rgba(100,116,139,.12)" />
+                <Area type="monotone" dataKey="revenue" name={lang === "fr" ? "Encaissé" : "Collected"} stroke="#14b8de" fill="rgba(20,184,222,.22)" />
+                <Line type="monotone" dataKey="pending" name={lang === "fr" ? "En attente" : "Pending"} stroke="#f59e0b" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         <div className="card glass border border-brand-500/10 shadow-lg">
-          <h2 className="font-display text-xl font-bold text-white">Matrice de santé financière</h2>
-          <p className="mt-1 text-xs text-ink-dim">Lecture multi-axes pour détecter les fragilités systémiques.</p>
+          <h2 className="font-display text-xl font-bold text-white">{lang === "fr" ? "Matrice de santé financière" : "Financial health matrix"}</h2>
+          <p className="mt-1 text-xs text-ink-dim">{lang === "fr" ? "Lecture multi-axes pour détecter les fragilités systémiques." : "Multi-axis analysis to detect systemic weaknesses."}</p>
           <div className="h-96 overflow-visible sm:h-80 [&_.recharts-surface]:overflow-visible">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={radar} outerRadius="58%" margin={{ top: 36, right: 46, bottom: 34, left: 46 }}>
@@ -638,8 +638,8 @@ export function DashboardPage() {
                 <XAxis dataKey="name" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" tickFormatter={(v) => `$${Number(v) / 1000}k`} />
                 <Tooltip contentStyle={{ background: "#0b1a24", border: "1px solid rgba(20,184,222,.25)", borderRadius: 8 }} formatter={(v) => USD.format(Number(v))} />
-                <Bar dataKey="gap" name="Dette" radius={[8, 8, 0, 0]} fill="#f43f5e" />
-                <Bar dataKey="paid" name="Réglé" radius={[8, 8, 0, 0]} fill="#10b981" />
+                <Bar dataKey="gap" name={lang === "fr" ? "Dette" : "Debt"} radius={[8, 8, 0, 0]} fill="#f43f5e" />
+                <Bar dataKey="paid" name={lang === "fr" ? "Réglé" : "Settled"} radius={[8, 8, 0, 0]} fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -648,8 +648,8 @@ export function DashboardPage() {
         <div className="card glass border border-brand-500/10 shadow-lg">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <h2 className="font-display text-xl font-bold text-white">Statut des flux</h2>
-              <p className="mt-1 text-xs text-ink-dim">Répartition opérationnelle et tendance à court terme.</p>
+              <h2 className="font-display text-xl font-bold text-white">{lang === "fr" ? "Statut des flux" : "Cash-flow status"}</h2>
+              <p className="mt-1 text-xs text-ink-dim">{lang === "fr" ? "Répartition opérationnelle et tendance à court terme." : "Operational breakdown and short-term trend."}</p>
             </div>
             {analysis.trend >= 0 ? <ArrowUpRight className="h-5 w-5 text-emerald-300" /> : <ArrowDownRight className="h-5 w-5 text-red-300" />}
           </div>
@@ -666,16 +666,16 @@ export function DashboardPage() {
             </div>
             <div className="space-y-3">
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-ink-dim">En attente</p>
+                <p className="text-xs text-ink-dim">{lang === "fr" ? "En attente" : "Pending"}</p>
                 <p className="font-mono text-xl font-bold text-amber-300">{USD.format(analysis.pendingAmount)}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-ink-dim">Échoués</p>
+                <p className="text-xs text-ink-dim">{lang === "fr" ? "Échoués" : "Failed"}</p>
                 <p className="font-mono text-xl font-bold text-red-300">{USD.format(analysis.failedAmount)}</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs text-ink-dim">Couverture temporelle</p>
-                <p className="font-mono text-xl font-bold text-cyan-300">{analysis.runwayMonths.toFixed(1)} mois</p>
+                <p className="text-xs text-ink-dim">{lang === "fr" ? "Couverture temporelle" : "Cash runway"}</p>
+                <p className="font-mono text-xl font-bold text-cyan-300">{analysis.runwayMonths.toFixed(1)} {lang === "fr" ? "mois" : "months"}</p>
               </div>
             </div>
           </div>
