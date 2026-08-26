@@ -6,6 +6,7 @@ import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
 import { useI18n } from "../i18n";
 import { api } from "../services/api";
+import { deduplicateStudents } from "../utils/deduplicateStudents";
 import { buildReceiptAllocationSnapshot } from "../utils/receiptAllocation";
 import { buildReceiptVerificationQrUrl, buildReceiptVerificationUrl } from "../utils/receiptVerification";
 import { exportWorkbook } from "../utils/financeExcel";
@@ -1369,7 +1370,9 @@ function normalizeParentOption(parent: Partial<ParentOption> | null | undefined,
     phone: parent?.phone ? String(parent.phone) : "",
     email: parent?.email ? String(parent.email) : "",
     students: Array.isArray(parent?.students)
-      ? parent.students.map(normalizeParentStudentOption).filter((student) => student.id && student.fullName)
+      ? deduplicateStudents(
+          parent.students.map(normalizeParentStudentOption).filter((student) => student.id && student.fullName)
+        )
       : []
   };
 }

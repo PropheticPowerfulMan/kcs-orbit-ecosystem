@@ -625,8 +625,44 @@ function getDemoParents() {
   return parents;
 }
 
+export function normalizeDemoPayment(payment: Partial<DemoPayment>, index: number): DemoPayment {
+  const createdAt = typeof payment.createdAt === "string" && payment.createdAt.trim()
+    ? payment.createdAt
+    : new Date().toISOString();
+  const studentNames = Array.isArray(payment.studentNames)
+    ? payment.studentNames.filter((name): name is string => typeof name === "string" && Boolean(name.trim()))
+    : [];
+  const parentFullName = typeof payment.parentFullName === "string" && payment.parentFullName.trim()
+    ? payment.parentFullName.trim()
+    : (typeof payment.paymentSubjectName === "string" && payment.paymentSubjectName.trim())
+      ? payment.paymentSubjectName.trim()
+      : studentNames[0] || "Parent EduPay";
+  const amount = Number(payment.amount);
+
+  return {
+    ...payment,
+    id: typeof payment.id === "string" && payment.id ? payment.id : `legacy-payment-${index + 1}`,
+    transactionNumber: typeof payment.transactionNumber === "string" && payment.transactionNumber
+      ? payment.transactionNumber
+      : `LOCAL-${String(index + 1).padStart(4, "0")}`,
+    parentFullName,
+    paymentSubjectName: typeof payment.paymentSubjectName === "string" && payment.paymentSubjectName.trim()
+      ? payment.paymentSubjectName.trim()
+      : studentNames.join(" / ") || parentFullName,
+    studentIds: Array.isArray(payment.studentIds) ? payment.studentIds.filter(Boolean) : [],
+    studentNames,
+    reason: typeof payment.reason === "string" && payment.reason.trim() ? payment.reason : "Paiement EduPay",
+    method: typeof payment.method === "string" && payment.method ? payment.method : "CASH",
+    amount: Number.isFinite(amount) ? amount : 0,
+    status: typeof payment.status === "string" && payment.status ? payment.status : "COMPLETED",
+    createdAt,
+    date: typeof payment.date === "string" && payment.date.trim() ? payment.date : createdAt
+  };
+}
+
 function getDemoPayments() {
-  const payments = readJson<DemoPayment[]>(DEMO_PAYMENTS_KEY, seedPayments);
+  const storedPayments = readJson<Array<Partial<DemoPayment>>>(DEMO_PAYMENTS_KEY, seedPayments);
+  const payments = storedPayments.map(normalizeDemoPayment);
   writeJson(DEMO_PAYMENTS_KEY, payments);
   return payments;
 }
