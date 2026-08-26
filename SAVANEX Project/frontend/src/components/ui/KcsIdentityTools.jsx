@@ -388,26 +388,60 @@ export const PrintableKcsCard = ({ entity }) => {
 
   const printCard = () => {
     const source = sheetRef.current;
-    if (!source) {
-      window.print();
+    if (!source) return;
+
+    const frame = document.createElement('iframe');
+    frame.setAttribute('title', 'Aperçu impression carte KCS');
+    frame.style.position = 'fixed';
+    frame.style.right = '0';
+    frame.style.bottom = '0';
+    frame.style.width = '1px';
+    frame.style.height = '1px';
+    frame.style.border = '0';
+    frame.style.opacity = '0';
+    document.body.appendChild(frame);
+
+    const printDocument = frame.contentDocument;
+    const printWindow = frame.contentWindow;
+    if (!printDocument || !printWindow) {
+      frame.remove();
       return;
     }
 
-    const portal = document.createElement('div');
-    portal.className = `kcs-print-portal kcs-print-side-${printSide}`;
-    portal.appendChild(source.cloneNode(true));
-    document.body.appendChild(portal);
-    document.body.classList.add('kcs-card-print-mode');
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join('\n');
+    printDocument.open();
+    printDocument.write(`<!doctype html><html><head><meta charset="utf-8"><base href="${window.location.href}">${styles}<style>
+      @page { size: 85.6mm 53.98mm; margin: 0; }
+      html, body { margin: 0 !important; padding: 0 !important; width: 85.6mm !important; background: #fff !important; }
+      .kcs-print-sheet, .kcs-card-set, .kcs-biometric-card { width: 85.6mm !important; min-width: 85.6mm !important; max-width: 85.6mm !important; }
+      .kcs-card-set { display: block !important; gap: 0 !important; }
+      .kcs-biometric-card { height: 53.98mm !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; break-after: page; page-break-after: always; print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important; }
+      .kcs-biometric-card:last-child { break-after: auto; page-break-after: auto; }
+      body.print-front .kcs-card-back, body.print-back .kcs-card-front { display: none !important; }
+      body.print-back .kcs-card-back { break-before: auto !important; page-break-before: auto !important; }
+    </style></head><body class="print-${printSide}">${source.outerHTML}</body></html>`);
+    printDocument.close();
 
-    const cleanup = () => {
-      document.body.classList.remove('kcs-card-print-mode');
-      portal.remove();
-      window.removeEventListener('afterprint', cleanup);
+    const cleanup = () => frame.remove();
+    const startPrint = async () => {
+      try {
+        await printDocument.fonts?.ready;
+        const images = Array.from(printDocument.images);
+        await Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+        })));
+        printWindow.focus();
+        printWindow.print();
+      } catch (_error) {
+        cleanup();
+      }
     };
 
-    window.addEventListener('afterprint', cleanup);
-    window.print();
-    window.setTimeout(cleanup, 60000);
+    window.setTimeout(() => void startPrint(), 250);
+    window.setTimeout(cleanup, 120000);
   };
 
   return (
