@@ -1381,7 +1381,7 @@ export function FinanceParentAdminPage() {
                               <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ink-dim">
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{getReductionScopeLabel(group.scope)}</span>
                                 {group.paymentOptionType && <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">{getPaymentOptionLabel(group.paymentOptionType)}</span>}
-                                {group.gradeGroup && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{copy.grade}: {group.gradeGroup}</span>}
+                                {group.gradeGroup && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{copy.gradeK}: {group.gradeGroup}</span>}
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{group.rows.length} ligne(s)</span>
                               </div>
                             </div>
@@ -1835,3 +1835,4 @@ export function FinanceParentAdminPage() {
     </div>
   );
 }
+
