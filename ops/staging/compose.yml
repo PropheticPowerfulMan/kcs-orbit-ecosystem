@@ -20,7 +20,7 @@ services:
   edupay_db:
     <<: *service-defaults
     image: postgres:16-alpine
-    env_file: ${STAGING_ENV_FILE:-/etc/kcs-orbit/staging.env}
+    env_file: ${STAGING_ENV_FILE:-.env}
     environment:
       POSTGRES_DB: ${STAGING_POSTGRES_DB:?set STAGING_POSTGRES_DB}
       POSTGRES_USER: ${STAGING_POSTGRES_USER:?set STAGING_POSTGRES_USER}
@@ -32,7 +32,7 @@ services:
     <<: *service-defaults
     build: { context: ../.., dockerfile: ops/production/docker/edupay-api.Dockerfile }
     image: kcs/edupay-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
-    env_file: ${STAGING_ENV_FILE:-/etc/kcs-orbit/staging.env}
+    env_file: ${STAGING_ENV_FILE:-.env}
     environment:
       NODE_ENV: staging
       DATABASE_URL: postgresql://${STAGING_POSTGRES_USER}:${STAGING_POSTGRES_PASSWORD}@edupay_db:5432/${STAGING_POSTGRES_DB}?schema=public

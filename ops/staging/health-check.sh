@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/ops/staging/compose.yml"
-ENV_FILE="${STAGING_ENV_FILE:-/etc/kcs-orbit/staging.env}"
+ENV_FILE="${STAGING_ENV_FILE:-$ROOT_DIR/ops/staging/.env}"
 set -a
 source "$ENV_FILE"
 set +a

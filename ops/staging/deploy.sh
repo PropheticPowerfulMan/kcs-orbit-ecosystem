@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMPOSE_FILE="$ROOT_DIR/ops/staging/compose.yml"
-ENV_FILE="${STAGING_ENV_FILE:-/etc/kcs-orbit/staging.env}"
+ENV_FILE="${STAGING_ENV_FILE:-$ROOT_DIR/ops/staging/.env}"
 BRANCH="$(git -C "$ROOT_DIR" branch --show-current)"
 RELEASE="$(git -C "$ROOT_DIR" rev-parse HEAD)"
 [[ "$BRANCH" != "main" ]] || { echo "Refusing to deploy staging from main." >&2; exit 1; }
