@@ -19,6 +19,7 @@ import {
 import { useI18n } from "../i18n";
 import { api, getCachedApiResponse } from "../services/api";
 import { useAuthStore } from "../store/auth";
+import { deduplicateStudents } from "../utils/deduplicateStudents";
 
 type FinanceSnapshot = {
   academicYear: { id: string; name: string; startDate: string; endDate: string };
@@ -204,7 +205,7 @@ function getReductionScopeLabel(scope: string) {
     case "PARENT":
       return "Réduction familiale";
     case "PAYMENT_OPTION":
-      return "Tuition plan";
+      return "Plan de scolarité";
     case "MANUAL":
       return "Bourse / ajustement manuel";
     case "AGREEMENT":
@@ -293,6 +294,22 @@ function imageFileToAvatar(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("Image non lisible."));
     reader.readAsDataURL(file);
   });
+}
+
+function localizedCode(value: string, lang: string) {
+  const code = String(value ?? "").trim().toUpperCase();
+  const labels: Record<string, [string, string]> = {
+    PAID: ["Payé", "Paid"], COMPLETED: ["Terminé", "Completed"], PARTIALLY_PAID: ["Partiellement payé", "Partially paid"],
+    PENDING: ["En attente", "Pending"], OVERDUE: ["En retard", "Overdue"], FAILED: ["Échoué", "Failed"],
+    ACTIVE: ["Actif", "Active"], APPROVED: ["Approuvé", "Approved"], SETTLED: ["Réglé", "Settled"],
+    CANCELLED: ["Annulé", "Cancelled"], CANCELED: ["Annulé", "Canceled"], SENT: ["Envoyé", "Sent"],
+    DELIVERED: ["Livré", "Delivered"], READ: ["Lu", "Read"], HIGH: ["Élevée", "High"],
+    MEDIUM: ["Moyenne", "Medium"], LOW: ["Faible", "Low"], CRITICAL: ["Critique", "Critical"],
+    EMAIL: ["E-mail", "Email"], DASHBOARD: ["Tableau de bord", "Dashboard"], SMS: ["SMS", "SMS"],
+    CASH: ["Espèces", "Cash"], BANK_TRANSFER: ["Virement bancaire", "Bank transfer"], CARD: ["Carte", "Card"],
+    MOBILE_MONEY: ["Mobile Money", "Mobile Money"]
+  };
+  return labels[code]?.[lang === "fr" ? 0 : 1] ?? value.replace(/_/g, " ").toLocaleLowerCase(lang === "fr" ? "fr-FR" : "en-US");
 }
 
 function statusTone(status: string) {
@@ -387,7 +404,7 @@ function AllocationTraceBlock({ trace, money, lang }: { trace?: AllocationTrace 
             <div className="mt-2 space-y-1 text-xs text-ink-dim">
               {child.lines.map((line) => (
                 <p key={line.allocationId}>
-                  {line.label} ({new Date(line.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}): {money.format(line.allocated)} appliqué, solde {money.format(line.outstandingAfter)} · {line.status}
+                  {line.label} ({new Date(line.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}): {money.format(line.allocated)} appliqué, solde {money.format(line.outstandingAfter)} · {localizedCode(line.status, lang)}
                 </p>
               ))}
             </div>
@@ -402,20 +419,22 @@ function ParentFinanceDialog({
   title,
   subtitle,
   children,
-  onClose
+  onClose,
+  lang
 }: {
   title: string;
   subtitle: string;
   children: React.ReactNode;
   onClose: () => void;
+  lang: string;
 }) {
   return (
     <div className="edupay-parent-tracking-dialog fixed inset-0 z-50 flex items-end justify-center px-3 py-4 sm:items-center sm:px-5">
-      <button aria-label="Fermer" className="absolute inset-0 bg-slate-950/78 backdrop-blur-md" onClick={onClose} />
+      <button aria-label={lang === "fr" ? "Fermer" : "Close"} className="absolute inset-0 bg-slate-950/78 backdrop-blur-md" onClick={onClose} />
       <section className="edupay-parent-tracking-modal relative flex max-h-[98vh] w-full max-w-8xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-slate-950/95 shadow-2xl">
         <header className="flex flex-col gap-4 border-b border-white/10 bg-white/[0.04] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Suivi parent</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">{lang === "fr" ? "Suivi parent" : "Parent tracking"}</p>
             <h2 className="mt-1 font-display text-2xl font-bold text-white">{title}</h2>
             <p className="mt-1 text-sm text-ink-dim">{subtitle}</p>
           </div>
@@ -423,7 +442,7 @@ function ParentFinanceDialog({
             type="button"
             onClick={onClose}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-ink-dim hover:border-brand-300/30 hover:text-white"
-            aria-label="Fermer la boite de dialogue"
+            aria-label={lang === "fr" ? "Fermer la boîte de dialogue" : "Close dialog"}
           >
             <X className="h-5 w-5" />
           </button>
@@ -439,10 +458,10 @@ function ParentFinanceDialog({
 function normalizeFinanceSnapshot(snapshot: FinanceSnapshot): FinanceSnapshot {
   return {
     ...snapshot,
-    students: (snapshot.students ?? []).map((student) => ({
+    students: deduplicateStudents((snapshot.students ?? []).map((student) => ({
       ...student,
       installments: student.installments ?? []
-    })),
+    }))),
     reductions: snapshot.reductions ?? [],
     debts: snapshot.debts ?? [],
     agreements: snapshot.agreements ?? [],
@@ -783,7 +802,7 @@ export function FinanceParentPage() {
       </section>
 
       {selectedModule && (
-        <ParentFinanceDialog title={selectedModule.title} subtitle={selectedModule.subtitle} onClose={() => setActiveModule(null)}>
+        <ParentFinanceDialog title={selectedModule.title} subtitle={selectedModule.subtitle} onClose={() => setActiveModule(null)} lang={lang}>
           {activeModule === "students" && (
             <div className="space-y-5">
               {snapshot.students.map((student) => {
@@ -822,7 +841,7 @@ export function FinanceParentPage() {
                               <td className="px-3 py-3 font-mono text-white">{moneyInstallment.format(installment.amountDue)}</td>
                               <td className="px-3 py-3 font-mono text-emerald-300">{moneyInstallment.format(installment.amountPaid)}</td>
                               <td className="px-3 py-3 font-mono text-red-300">{moneyInstallment.format(installment.balance)}</td>
-                              <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(installment.status)}`}>{installment.status}</span></td>
+                              <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(installment.status)}`}>{localizedCode(installment.status, lang)}</span></td>
                             </tr>
                           ))}
                         </tbody>
@@ -853,7 +872,7 @@ export function FinanceParentPage() {
                           <p className="font-semibold text-white">{installment.studentName} - {installment.label}</p>
                           <p className="mt-1 text-sm text-ink-dim">{installment.planName} · {installment.className || "Classe non renseignée"}</p>
                         </div>
-                        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(installment.status)}`}>{installment.status}</span>
+                        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(installment.status)}`}>{localizedCode(installment.status, lang)}</span>
                       </div>
                       <div className="mt-4 grid gap-3 sm:grid-cols-4 text-sm">
                         <div><p className="text-ink-dim">Échéance</p><p className="font-semibold text-white">{new Date(installment.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p></div>
@@ -930,7 +949,7 @@ export function FinanceParentPage() {
                         <p className="mt-1 text-sm text-ink-dim">{debt.reason || "Dette suivie par le moteur financier."}</p>
                         {isHistorical && <p className="mt-2 text-xs font-bold uppercase tracking-[0.14em] text-amber-200">Dette d'année antérieure / report historique</p>}
                       </div>
-                      <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(debt.status)}`}>{debt.status}</span>
+                      <span className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(debt.status)}`}>{localizedCode(debt.status, lang)}</span>
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3"><p className="text-xs text-ink-dim">Montant initial</p><p className="mt-1 font-mono font-bold text-white">{money.format(debt.originalAmount)}</p></div>
@@ -958,7 +977,7 @@ export function FinanceParentPage() {
               {snapshot.alerts.length === 0 && <p className="text-sm text-ink-dim">Aucune alerte active.</p>}
               {snapshot.alerts.map((alert) => (
                 <div key={alert.id} className={`rounded-2xl border p-4 ${severityTone(alert.severity)}`}>
-                  <div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{alert.title}</p><p className="mt-1 text-sm opacity-90">{alert.message}</p></div><span className="text-xs font-bold uppercase tracking-[0.16em]">{alert.severity}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{alert.title}</p><p className="mt-1 text-sm opacity-90">{alert.message}</p></div><span className="text-xs font-bold uppercase tracking-[0.16em]">{localizedCode(alert.severity, lang)}</span></div>
                   <p className="mt-3 text-xs opacity-80">{new Date(alert.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                 </div>
               ))}
@@ -1007,7 +1026,7 @@ export function FinanceParentPage() {
               {snapshot.agreements.length === 0 && <p className="text-sm text-ink-dim">Aucun accord spécial actif.</p>}
               {snapshot.agreements.map((agreement) => (
                 <div key={agreement.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                  <div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{agreement.title}</p><p className="mt-1 text-sm text-ink-dim">{agreement.notes || "Accord personnalisé validé par l'administration."}</p></div><span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(agreement.status)}`}>{agreement.status}</span></div>
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{agreement.title}</p><p className="mt-1 text-sm text-ink-dim">{agreement.notes || "Accord personnalisé validé par l'administration."}</p></div><span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(agreement.status)}`}>{localizedCode(agreement.status, lang)}</span></div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3 text-sm"><div><p className="text-ink-dim">Total personnalisé</p><p className="font-mono font-semibold text-white">{money.format(agreement.customTotal)}</p></div><div><p className="text-ink-dim">Réduction</p><p className="font-mono font-semibold text-cyan-300">{money.format(agreement.reductionAmount)}</p></div><div><p className="text-ink-dim">Solde dû</p><p className="font-mono font-semibold text-red-300">{money.format(agreement.balanceDue)}</p></div></div>
                 </div>
               ))}
@@ -1021,8 +1040,8 @@ export function FinanceParentPage() {
                 {snapshot.paymentHistory.length === 0 && <p className="text-sm text-ink-dim">Aucun paiement historique disponible.</p>}
                 {snapshot.paymentHistory.map((payment) => (
                   <div key={payment.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-white">{payment.reason}</p><p className="mt-1 text-xs text-ink-dim">{payment.transactionNumber} - {new Date(payment.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p></div><div className="text-right"><p className="font-mono text-lg font-bold text-emerald-300">{money.format(payment.amount)}</p><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(payment.status)}`}>{payment.status}</span></div></div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{payment.method}</span>{payment.receiptNumber && <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-cyan-200">{payment.receiptNumber}</span>}{payment.students.map((student) => <span key={student.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{student.fullName}</span>)}</div>
+                    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-semibold text-white">{payment.reason}</p><p className="mt-1 text-xs text-ink-dim">{payment.transactionNumber} - {new Date(payment.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p></div><div className="text-right"><p className="font-mono text-lg font-bold text-emerald-300">{money.format(payment.amount)}</p><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(payment.status)}`}>{localizedCode(payment.status, lang)}</span></div></div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{localizedCode(payment.method, lang)}</span>{payment.receiptNumber && <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-cyan-200">{payment.receiptNumber}</span>}{payment.students.map((student) => <span key={student.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{student.fullName}</span>)}</div>
                     <AllocationTraceBlock trace={payment.allocationTrace} money={moneyInstallment} lang={lang} />
                   </div>
                 ))}
@@ -1051,12 +1070,12 @@ export function FinanceParentPage() {
                   <article key={log.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="font-semibold text-white">{log.type}</p>
+                        <p className="font-semibold text-white">{localizedCode(log.type, lang)}</p>
                         <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-ink-dim">{log.content}</p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
-                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${channelTone(log.channel)}`}>{log.channel}</span>
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-ink-dim">{log.status}</span>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${channelTone(log.channel)}`}>{localizedCode(log.channel, lang)}</span>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-ink-dim">{localizedCode(log.status, lang)}</span>
                       </div>
                     </div>
                     <p className="mt-3 text-xs text-ink-dim">{new Date(log.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
@@ -1137,7 +1156,7 @@ export function FinanceParentPage() {
                           <td className="px-3 py-3 font-mono text-red-300">{moneyInstallment.format(installment.balance)}</td>
                           <td className="px-3 py-3">
                             <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(installment.status)}`}>
-                              {installment.status}
+                              {localizedCode(installment.status, lang)}
                             </span>
                           </td>
                         </tr>
@@ -1168,7 +1187,7 @@ export function FinanceParentPage() {
                       <p className="font-semibold text-white">{alert.title}</p>
                       <p className="mt-1 text-sm opacity-90">{alert.message}</p>
                     </div>
-                    <span className="text-xs font-bold uppercase tracking-[0.16em]">{alert.severity}</span>
+                    <span className="text-xs font-bold uppercase tracking-[0.16em]">{localizedCode(alert.severity, lang)}</span>
                   </div>
                   <p className="mt-3 text-xs opacity-80">{new Date(alert.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                 </div>
@@ -1193,7 +1212,7 @@ export function FinanceParentPage() {
                       <p className="font-semibold text-white">{debt.title}</p>
                       <p className="mt-1 text-sm text-ink-dim">{debt.reason || "Dette suivie par le moteur financier."}</p>
                     </div>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(debt.status)}`}>{debt.status}</span>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(debt.status)}`}>{localizedCode(debt.status, lang)}</span>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 text-sm">
                     <div>
@@ -1258,7 +1277,7 @@ export function FinanceParentPage() {
                       <p className="font-semibold text-white">{agreement.title}</p>
                       <p className="mt-1 text-sm text-ink-dim">{agreement.notes || "Accord personnalise valide par l'administration."}</p>
                     </div>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(agreement.status)}`}>{agreement.status}</span>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(agreement.status)}`}>{localizedCode(agreement.status, lang)}</span>
                   </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3 text-sm">
                     <div>
@@ -1300,11 +1319,11 @@ export function FinanceParentPage() {
                     </div>
                     <div className="text-right">
                       <p className="font-mono text-lg font-bold text-emerald-300">{money.format(payment.amount)}</p>
-                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(payment.status)}`}>{payment.status}</span>
+                      <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTone(payment.status)}`}>{localizedCode(payment.status, lang)}</span>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{payment.method}</span>
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{localizedCode(payment.method, lang)}</span>
                     {payment.receiptNumber && <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-cyan-200">{payment.receiptNumber}</span>}
                     {payment.students.map((student) => (
                       <span key={student.id} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-ink-dim">{student.fullName}</span>
