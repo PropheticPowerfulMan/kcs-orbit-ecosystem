@@ -1,0 +1,4 @@
+[submodule "KCS Nexus Academy"]
+	path = KCS Nexus Academy
+	url = https://github.com/PropheticPowerfulMan/KCS-Nexus-Academy.git
+	branch = feature/orbit-sso-integration

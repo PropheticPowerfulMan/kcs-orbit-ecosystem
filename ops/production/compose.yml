@@ -103,6 +103,15 @@ services:
     networks: [kcs_edge]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
 
+
+  academy:
+    <<: *service-defaults
+    image: kcs/academy:${ACADEMY_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/academy.env
+    depends_on: { orbit_api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
+
   edupay_api:
     <<: *service-defaults
     image: kcs/edupay-api:${EDUPAY_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}

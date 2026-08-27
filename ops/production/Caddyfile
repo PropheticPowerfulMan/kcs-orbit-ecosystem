@@ -26,6 +26,12 @@ www.{$NEXUS_DOMAIN} {
   redir https://{$NEXUS_DOMAIN}{uri} permanent
 }
 
+
+{$ACADEMY_DOMAIN} {
+  import security_headers
+  reverse_proxy academy:3000
+}
+
 {$EDUPAY_DOMAIN} {
   import security_headers
   reverse_proxy edupay_web:80
