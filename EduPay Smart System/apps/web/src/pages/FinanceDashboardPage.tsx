@@ -1460,7 +1460,7 @@ export function FinanceDashboardPage() {
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">{L("Indice scientifique", "Scientific index")}</p>
               <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Santé financière de l'école", "School financial health")}</h2>
               <p className="mt-2 text-sm text-ink-dim">
-                Score composite sur revenus, dettes, cash, passifs, alertes et comportement parent.
+                {L("Score composite sur revenus, dettes, cash, passifs, alertes et comportement parent.", "Composite score based on revenue, debt, cash, liabilities, alerts and parent payment behavior.")}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -1495,7 +1495,7 @@ export function FinanceDashboardPage() {
               <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Ouvrir une analyse ciblée", "Open a targeted analysis")}</h2>
             </div>
             <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100">
-              Dashboard principal
+              {L("Dashboard principal", "Main dashboard")}
             </span>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1537,7 +1537,7 @@ export function FinanceDashboardPage() {
             <div>
               <h2 className="font-display text-2xl font-bold text-white">{L("Centre de commandement financier", "Finance command center")}</h2>
               <p className="mt-1 text-sm text-ink-dim">
-                Vue instantanee des revenus, sorties de cash, dettes institutionnelles et alertes budgetaires.
+                {L("Vue instantanee des revenus, sorties de cash, dettes institutionnelles et alertes budgetaires.", "Instant overview of revenue, cash outflows, institutional debt and budget alerts.")}
               </p>
             </div>
             <BarChart3 className="h-6 w-6 text-brand-200" />
@@ -1828,7 +1828,7 @@ export function FinanceDashboardPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{row.parentName}</p>
-                    <p className="mt-1 text-xs text-ink-dim">{row.overdueInstallments} échéances en retard</p>
+                    <p className="mt-1 text-xs text-ink-dim">{row.overdueInstallments} {L("échéances en retard", "overdue installments")}</p>
                   </div>
                   <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-200">
                     {money.format(row.totalDebt)}
@@ -1867,7 +1867,7 @@ export function FinanceDashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{row.className}</p>
-                    <p className="text-xs text-ink-dim">{row.students} élèves suivis</p>
+                    <p className="text-xs text-ink-dim">{row.students} {L("élèves suivis", "students tracked")}</p>
                   </div>
                   <p className="font-mono font-bold text-emerald-300">{money.format(row.collected)}</p>
                 </div>
@@ -1894,7 +1894,7 @@ export function FinanceDashboardPage() {
           <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Période d'analyse des réductions", "Discount analysis period")}</p>
             <p className="mt-2 font-display text-2xl font-bold text-white">{revenueOverview.reductionStatistics.periodLabel}</p>
-            <p className="mt-1 text-sm text-cyan-100">{revenueOverview.reductionStatistics.reductionCount} reduction(s) tracee(s) pour {money.format(revenueOverview.reductionStatistics.totalReductions)}.</p>
+            <p className="mt-1 text-sm text-cyan-100">{revenueOverview.reductionStatistics.reductionCount} {L("réduction(s) tracée(s) pour", "discount(s) tracked for")} {money.format(revenueOverview.reductionStatistics.totalReductions)}.</p>
           </div>
         </div>
       </section>
@@ -1904,30 +1904,30 @@ export function FinanceDashboardPage() {
           <div>
             <h2 className="font-display text-2xl font-bold text-white">{L("Cadre officiel de facturation parentale", "Official parent billing framework")}</h2>
             <p className="mt-1 text-sm text-ink-dim">
-              Le referentiel KCS reste une logique metier interne qui structure automatiquement la facturation des parents lors des inscriptions, reinscriptions et suivis multi-enfants.
+              {L("Le referentiel KCS reste une logique metier interne qui structure automatiquement la facturation des parents lors des inscriptions, reinscriptions et suivis multi-enfants.", "The KCS framework remains an internal business rule that automatically structures parent billing for enrollment, re-enrollment and multi-child tracking.")}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-ink-dim">
-            Le dashboard ERP n'expose pas les cas d'inscription en detail; il consolide seulement leurs effets sur les encaissements, ajustements, réductions et échéances.
+            {L("Le dashboard ERP n'expose pas les cas d'inscription en detail; il consolide seulement leurs effets sur les encaissements, ajustements, réductions et échéances.", "The ERP dashboard does not expose individual enrollment cases; it only consolidates their effects on collections, adjustments, discounts and installments.")}
           </div>
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-brand-300">{L("Rôle du référentiel", "Role of the framework")}</p>
             <p className="mt-3 text-sm text-ink-dim">
-              Il alimente les calculs de tuition, réductions, échéances et reports sans surcharger l'interface opérationnelle.
+              {L("Il alimente les calculs de tuition, réductions, échéances et reports sans surcharger l'interface opérationnelle.", "It powers tuition, discount, installment and carry-over calculations without overloading the operational interface.")}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-brand-300">{L("Portée parentale", "Parent scope")}</p>
             <p className="mt-3 text-sm text-ink-dim">
-              La logique couvre les foyers avec un ou plusieurs enfants, puis consolide automatiquement les obligations de paiement au niveau parent.
+              {L("La logique couvre les foyers avec un ou plusieurs enfants, puis consolide automatiquement les obligations de paiement au niveau parent.", "The logic covers households with one or more children and automatically consolidates payment obligations at parent level.")}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-brand-300">{L("Vision ERP", "ERP vision")}</p>
             <p className="mt-3 text-sm text-ink-dim">
-              Le cockpit conserve une vue de pilotage: dettes, encaissements, réductions et impacts sur la trésorerie, sans exposer la mécanique d'inscription.
+              {L("Le cockpit conserve une vue de pilotage: dettes, encaissements, réductions et impacts sur la trésorerie, sans exposer la mécanique d'inscription.", "The cockpit retains a management view of debts, collections, discounts and cash-flow impacts without exposing enrollment mechanics.")}
             </p>
           </div>
         </div>
@@ -1949,14 +1949,14 @@ export function FinanceDashboardPage() {
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => printFinanceModuleReport(activeModule)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
-                    <Printer className="h-4 w-4" /> PDF / Imprimer
+                    <Printer className="h-4 w-4" /> {L("PDF / Imprimer", "PDF / Print")}
                   </button>
                   <button type="button" onClick={() => exportFinanceModuleExcel(activeModule)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
                     <FileSpreadsheet className="h-4 w-4" /> Excel
                   </button>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-ink-dim">{activeFinanceModuleRows.length} ligne(s) retenue(s) pour le rapport.</p>
+              <p className="mt-3 text-xs text-ink-dim">{activeFinanceModuleRows.length} {L("ligne(s) retenue(s) pour le rapport.", "line(s) selected for the report.")}</p>
             </div>
           )}
           {activeModule === "health" && (
@@ -1966,9 +1966,7 @@ export function FinanceDashboardPage() {
                 <p className={`mt-3 font-display text-5xl font-bold ${healthTone}`}>{healthScore.toFixed(1)}</p>
                 <p className="mt-2 text-lg font-semibold text-white">{healthLabel}</p>
                 <p className="mt-3 text-sm leading-relaxed text-ink-dim">
-                  L'indice combine la performance de recouvrement, l'exposition aux dettes, la pression budgetaire, les alertes,
-                  la liquidite et le comportement de paiement des parents. Il donne une lecture rapide de la capacite de l'ecole
-                  a financer ses opérations sans tension excessive.
+                  {L("L'indice combine la performance de recouvrement, l'exposition aux dettes, la pression budgétaire, les alertes, la liquidité et le comportement de paiement des parents. Il donne une lecture rapide de la capacité de l'école à financer ses opérations sans tension excessive.", "The index combines collection performance, debt exposure, budget pressure, alerts, liquidity and parent payment behavior. It provides a quick view of the school's ability to fund operations without excessive strain.")}
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -2014,7 +2012,7 @@ export function FinanceDashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{row.parentName}</p>
-                        <p className="text-xs text-ink-dim">{row.overdueInstallments} échéance(s) en retard · score {formatPercent(row.paymentBehaviorScore)}</p>
+                        <p className="text-xs text-ink-dim">{row.overdueInstallments} {L("échéance(s) en retard · score", "overdue installment(s) · score")} {formatPercent(row.paymentBehaviorScore)}</p>
                       </div>
                       <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-200">{money.format(row.totalDebt)}</span>
                     </div>
@@ -2032,7 +2030,7 @@ export function FinanceDashboardPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{row.className}</p>
-                        <p className="text-xs text-ink-dim">{row.students} élèves · attendu {money.format(row.expected)}</p>
+                        <p className="text-xs text-ink-dim">{row.students} {L("élèves · attendu", "students · expected")} {money.format(row.expected)}</p>
                       </div>
                       <p className="font-mono text-sm font-bold text-emerald-300">{formatPercent(row.collectionRate)}</p>
                     </div>
@@ -2093,7 +2091,7 @@ export function FinanceDashboardPage() {
                       }))}
                       className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
                     >
-                      <Printer className="h-4 w-4" /> PDF / Imprimer
+                      <Printer className="h-4 w-4" /> {L("PDF / Imprimer", "PDF / Print")}
                     </button>
                     <button
                       type="button"
@@ -2105,7 +2103,7 @@ export function FinanceDashboardPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-dim">
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{filteredScholarshipRows.length} ligne(s) visibles</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{filteredScholarshipRows.length} {L("ligne(s) visibles", "visible line(s)")}</span>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{L("Montant visible", "Visible amount")}: {money.format(filteredScholarshipTotal)}</span>
                   <button
                     type="button"
@@ -2118,7 +2116,7 @@ export function FinanceDashboardPage() {
                     }}
                     className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-semibold text-white transition hover:bg-white/[0.08]"
                   >
-                    Réinitialiser les filtres
+                    {L("Réinitialiser les filtres", "Reset filters")}
                   </button>
                 </div>
               </div>

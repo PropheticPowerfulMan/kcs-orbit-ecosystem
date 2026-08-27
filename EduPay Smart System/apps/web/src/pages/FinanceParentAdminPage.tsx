@@ -1382,7 +1382,7 @@ export function FinanceParentAdminPage() {
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{getReductionScopeLabel(group.scope)}</span>
                                 {group.paymentOptionType && <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">{getPaymentOptionLabel(group.paymentOptionType)}</span>}
                                 {group.gradeGroup && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{copy.gradeK}: {group.gradeGroup}</span>}
-                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{group.rows.length} ligne(s)</span>
+                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{group.rows.length} {lang === "fr" ? "ligne(s)" : "line(s)"}</span>
                               </div>
                             </div>
                             <span className="w-fit shrink-0 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-200">{money.format(group.amount)}</span>
@@ -1506,7 +1506,7 @@ export function FinanceParentAdminPage() {
                           className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400"
                         >
                           <Plus className="h-4 w-4" />
-                          Ouvrir la boite de dialogue
+                          {lang === "fr" ? "Ouvrir la boîte de dialogue" : "Open dialog"}
                         </button>
                       </div>
                     )}
@@ -1796,7 +1796,7 @@ export function FinanceParentAdminPage() {
                             <div className="min-w-0">
                               <p className="break-words font-semibold text-white">{group.origin}</p>
                               <p className="mt-1 break-words text-xs text-ink-dim">{group.beneficiary}</p>
-                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim">{group.rows.length} ligne(s) detaillee(s)</p>
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim">{group.rows.length} {lang === "fr" ? "ligne(s) détaillée(s)" : "detailed line(s)"}</p>
                             </div>
                             <span className="shrink-0 font-mono font-semibold text-cyan-200">{money.format(group.amount)}</span>
                           </div>
