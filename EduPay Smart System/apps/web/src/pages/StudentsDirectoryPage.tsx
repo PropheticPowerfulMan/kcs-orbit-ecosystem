@@ -953,7 +953,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-sm font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Printer className="h-4 w-4" /> Impression
+              <Printer className="h-4 w-4" /> {L("Impression", "Print")}
             </button>
             <button
               type="button"
@@ -991,27 +991,27 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
             <p className="text-sm text-slate-300">{L("Frais annuels", "Annual tuition")}</p>
             <p className="mt-1 font-mono font-bold text-emerald-300">{typeof displayedAnnualFee === "number" ? `$ ${displayedAnnualFee.toFixed(2)}` : "-"}</p>
             {student.tuitionPlanName ? <p className="mt-1 text-sm text-cyan-200">{student.tuitionPlanName}</p> : null}
-            {typeof originalAnnualFee === "number" && reductionTotal > 0 ? <p className="mt-1 text-sm text-amber-200">Base $ {originalAnnualFee.toFixed(2)} · Reduction $ {reductionTotal.toFixed(2)}</p> : null}
+            {typeof originalAnnualFee === "number" && reductionTotal > 0 ? <p className="mt-1 text-sm text-amber-200">{L("Base $", "Base $")} {originalAnnualFee.toFixed(2)} {L("· Reduction $", "· Discount $")} {reductionTotal.toFixed(2)}</p> : null}
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-sm text-slate-300">{L("Total attendu", "Expected total")}</p>
             <p className="mt-1 font-mono font-bold text-white">{formatCurrency(financeStudent?.expectedTotal ?? displayedAnnualFee ?? null)}</p>
-            <p className="mt-1 text-sm text-slate-300">Payé {formatCurrency(financeStudent?.paid ?? 0)} · Solde {formatCurrency(financeStudent?.balance ?? 0)}</p>
+            <p className="mt-1 text-sm text-slate-300">{L("Payé", "Paid")} {formatCurrency(financeStudent?.paid ?? 0)} {L("· Solde", "· Balance")} {formatCurrency(financeStudent?.balance ?? 0)}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
             <p className="text-sm text-slate-300">{L("État du dossier", "Record status")}</p>
-            <p className="mt-1 font-semibold text-white">{(financeStudent?.completionRate ?? 0).toFixed(1)}% de completion</p>
-            <p className="mt-1 text-sm text-slate-300">{financeStudent?.overdueInstallments ?? 0} échéance(s) en retard</p>
+            <p className="mt-1 font-semibold text-white">{(financeStudent?.completionRate ?? 0).toFixed(1)}{L("% de completion", "% complete")}</p>
+            <p className="mt-1 text-sm text-slate-300">{financeStudent?.overdueInstallments ?? 0} {L("échéance(s) en retard", "overdue installment(s)")}</p>
           </div>
         </div>
 
         <div className="mt-5 space-y-5">
           {financeLoading ? (
-            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 text-sm text-cyan-100">Chargement du dossier financier de l'élève...</div>
+            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 text-sm text-cyan-100">{L("Chargement du dossier financier de l'élève...", "Loading the student financial record...")}</div>
           ) : financeError ? (
             <div className="rounded-2xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">{financeError}</div>
           ) : !financeStudent ? (
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">Aucune ligne financière détaillée n'a été trouvée pour cet élève.</div>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">{L("Aucune ligne financière détaillée n'a été trouvée pour cet élève.", "No detailed financial record was found for this student.")}</div>
           ) : (
             <>
               <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -1057,7 +1057,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                     <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Traçabilité des paiements", "Payment traceability")}</p>
                     <div className="mt-4 space-y-3">
                       {paymentHistory.length === 0 ? (
-                        <p className="text-sm text-slate-300">Aucun paiement rattaché à cet élève.</p>
+                        <p className="text-sm text-slate-300">{L("Aucun paiement rattaché à cet élève.", "No payment linked to this student.")}</p>
                       ) : paymentHistory.map((payment) => (
                         <div key={payment.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                           <div className="flex items-start justify-between gap-3">
@@ -1075,7 +1075,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                               {payment.allocationTrace.lines.filter((line) => line.studentId === student.id).map((line, index) => (
                                 <div key={`${payment.id}-${line.installmentId || index}`} className="flex items-center justify-between gap-3 text-sm text-slate-300">
                                   <span>{line.label} · {formatDateLabel(line.dueDate)}</span>
-                                  <span className="font-mono text-cyan-200">Alloué {formatCurrency(line.allocated)} · Reste {formatCurrency(line.outstandingAfter)}</span>
+                                  <span className="font-mono text-cyan-200">{L("Alloué", "Allocated")} {formatCurrency(line.allocated)} {L("· Reste", "· Remaining")} {formatCurrency(line.outstandingAfter)}</span>
                                 </div>
                               ))}
                             </div>
@@ -1103,7 +1103,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                         <div key={agreement.id} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3">
                           <p className="font-semibold text-white">{agreement.title}</p>
                           <p className="mt-1 text-sm text-slate-300">{agreement.paymentOptionType || L("Accord spécial", "Special agreement")} · {getCodeLabel(agreement.status, lang)}</p>
-                          <p className="mt-2 text-sm text-cyan-100">Total {formatCurrency(agreement.customTotal)} · Réduction {formatCurrency(agreement.reductionAmount)} · Solde {formatCurrency(agreement.balanceDue)}</p>
+                          <p className="mt-2 text-sm text-cyan-100">{L("Total", "Total")} {formatCurrency(agreement.customTotal)} {L("· Réduction", "· Discount")} {formatCurrency(agreement.reductionAmount)} {L("· Solde", "· Balance")} {formatCurrency(agreement.balanceDue)}</p>
                         </div>
                       ))}
                       {reductions.length === 0 && agreements.length === 0 ? <p className="text-sm text-slate-300">{L("Aucune réduction ni accord spécial enregistré.", "No discount or special agreement recorded.")}</p> : null}
@@ -1117,7 +1117,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                   <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Dettes et reports", "Debts and carryovers")}</p>
                   <div className="mt-4 space-y-3">
                     {debts.length === 0 ? (
-                      <p className="text-sm text-slate-300">Aucune dette spécifique trouvée pour cet élève.</p>
+                      <p className="text-sm text-slate-300">{L("Aucune dette spécifique trouvée pour cet élève.", "No student-specific debt found.")}</p>
                     ) : debts.map((debt) => (
                       <div key={debt.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                         <div className="flex items-start justify-between gap-3">
@@ -1141,7 +1141,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                   <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Alertes et suivi", "Alerts and follow-up")}</p>
                   <div className="mt-4 space-y-3">
                     {alerts.length === 0 ? (
-                      <p className="text-sm text-slate-300">Aucune alerte spécifique pour cet élève.</p>
+                      <p className="text-sm text-slate-300">{L("Aucune alerte spécifique pour cet élève.", "No specific alert for this student.")}</p>
                     ) : alerts.map((alert) => (
                       <div key={alert.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                         <div className="flex items-start gap-3">
@@ -1269,13 +1269,13 @@ function StudentEditModal({
         <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? "Ajouter un élève" : "Modifier l'élève"}</h2>
         <form className="mt-6 grid gap-5" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Nom de famille *", "Last name *")}<input className="input text-base" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Postnom", "Middle name")}<input className="input text-base" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Ex. Kabongo" /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Prénom *", "First name *")}<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Ex. Marie" required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Nom de famille *", "Last name *")}<input className="input text-base" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder={L("Ex. Ilunga", "E.g. Ilunga")} required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Postnom", "Middle name")}<input className="input text-base" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder={L("Ex. Kabongo", "E.g. Kabongo")} /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Prénom *", "First name *")}<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder={L("Ex. Marie", "E.g. Marie")} required /></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Adresse e-mail scolaire", "School email address")}<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="prenom.nom@ourkcs.org" readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? "Attribuée automatiquement selon le nom, postnom et prénom." : "Adresse scolaire actuelle de l’élève."}</span></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Téléphone de l’élève<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Adresse e-mail scolaire", "School email address")}<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder={L("prenom.nom@ourkcs.org", "first.last@ourkcs.org")} readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? "Attribuée automatiquement selon le nom, postnom et prénom." : "Adresse scolaire actuelle de l’élève."}</span></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Téléphone de l’élève", "Student phone")}<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Date de naissance", "Date of birth")}<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
             <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Genre", "Gender")}<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">{L("Sélectionner le genre", "Select gender")}</option><option value="F">{L("Fille", "Female")}</option><option value="M">{L("Garçon", "Male")}</option><option value="O">{L("Autre", "Other")}</option></select></label>
           </div>
@@ -1342,7 +1342,7 @@ function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="edupay-dialog-panel-sm relative w-full rounded-2xl border border-danger/30 glass p-6 shadow-2xl sm:p-7">
         <h2 className="font-display text-xl font-bold text-white">{L("Supprimer cet élève", "Delete student")}</h2>
-        <p className="mt-3 text-sm text-ink-dim">Cette action supprimera {student.fullName} de la liste des élèves.</p>
+        <p className="mt-3 text-sm text-ink-dim">{L("Cette action supprimera", "This action will remove")} {student.fullName} {L("de la liste des élèves.", "from the student list.")}</p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
           <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">{L("Annuler", "Cancel")}</button>
           <button type="button" onClick={() => void onConfirm()} disabled={deleting} className="flex-1 rounded-xl bg-danger px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
@@ -1637,12 +1637,12 @@ export function StudentsDirectoryPage() {
         <div>
           <h1 className="font-display text-3xl font-bold text-white">{L("Annuaire des élèves", "Student directory")}</h1>
           <p className="mt-1 text-ink-dim">
-            Liste centralisée des élèves venant du registre partage Orbit via Savanex, comme pour les parents.
+            {L("Liste centralisée des élèves venant du registre partage Orbit via Savanex, comme pour les parents.", "Centralized student list from the shared Orbit registry via Savanex, as with parents.")}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           <button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 hover:bg-cyan-300">
-            Ajouter un élève
+            {L("Ajouter un élève", "Add student")}
           </button>
           <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{L("Source", "Source")}</p>
@@ -1711,7 +1711,7 @@ export function StudentsDirectoryPage() {
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-semibold text-white">{student.fullName}</p>
-                        <p className="text-xs text-ink-dim">Inscrit le {student.createdAt ? new Date(student.createdAt).toLocaleString("fr-FR") : "-"}</p>
+                        <p className="text-xs text-ink-dim">{L("Inscrit le", "Registered on")} {student.createdAt ? new Date(student.createdAt).toLocaleString("fr-FR") : "-"}</p>
                         <p className="text-xs text-ink-dim">{student.externalStudentId || student.id}</p>
                       </td>
                       <td className="px-5 py-4 text-ink-dim">{student.className || student.classId || L("Classe non renseignée", "Class not provided")}</td>

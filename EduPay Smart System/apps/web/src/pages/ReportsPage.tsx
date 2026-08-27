@@ -392,7 +392,7 @@ export function ReportsPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">{L("Rapports exécutifs", "Executive reports")}</p>
             <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Préparation du centre de rapports", "Preparing the report center")}</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
-              Les données principales se préchargent en arrière-plan pour éviter un écran vide trop long à l'ouverture.
+              {L("Les données principales se préchargent en arrière-plan pour éviter un écran vide trop long à l'ouverture.", "Core data loads in the background to avoid a prolonged blank screen.")}
             </p>
             <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {Array.from({ length: 4 }, (_, index) => (
@@ -428,7 +428,7 @@ export function ReportsPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200">{L("Rapports exécutifs", "Executive reports")}</p>
               <h1 className="mt-3 font-display text-3xl font-bold text-white sm:text-4xl">{L("Centre de pilotage financier visible et exportable", "Visible and exportable financial control center")}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
-                Cette vue consolide revenu, budgets, comptabilité, trésorerie et masse salariale. Elle sert de preuve visible dans l'interface et de point d'export Excel.
+                {L("Cette vue consolide revenu, budgets, comptabilité, trésorerie et masse salariale. Elle sert de preuve visible dans l'interface et de point d'export Excel.", "This view consolidates revenue, budgets, accounting, treasury and payroll. It provides visible evidence in the interface and an Excel export point.")}
               </p>
               <input
                 value={reportSearch}
@@ -439,13 +439,13 @@ export function ReportsPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <button onClick={printExecutiveReport} className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-400/20">
-                <Printer className="h-4 w-4" /> PDF / Imprimer
+                <Printer className="h-4 w-4" /> {L("PDF / Imprimer", "PDF / Print")}
               </button>
               <button onClick={exportExecutiveWorkbook} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-white hover:bg-cyan-400/20">
-                <FileSpreadsheet className="h-4 w-4" /> Exporter pack Excel
+                <FileSpreadsheet className="h-4 w-4" /> {L("Exporter pack Excel", "Export Excel pack")}
               </button>
               <Link to="/operations" className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white hover:border-cyan-300/25 hover:bg-white/[0.1]">
-                <ReceiptText className="h-4 w-4" /> Ouvrir les opérations
+                <ReceiptText className="h-4 w-4" /> {L("Ouvrir les opérations", "Open operations")}
               </Link>
             </div>
           </div>
@@ -482,17 +482,17 @@ export function ReportsPage() {
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Utilisation des budgets", "Budget utilization")}</p>
             <p className="mt-3 text-2xl font-bold text-amber-200">{budgetUtilization.toFixed(1)}%</p>
-            <p className="mt-2 text-sm text-ink-dim">{currency.format(budgetConsumedTotal)} consommé sur le filtre.</p>
+            <p className="mt-2 text-sm text-ink-dim">{currency.format(budgetConsumedTotal)} {L("consommé sur le filtre.", "consumed for the filter.")}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Journaux filtrés", "Filtered journals")}</p>
             <p className="mt-3 text-2xl font-bold text-cyan-200">{filteredAccountingEntries.length}</p>
-            <p className="mt-2 text-sm text-ink-dim">{currency.format(accountingTotal)} en écritures visibles.</p>
+            <p className="mt-2 text-sm text-ink-dim">{currency.format(accountingTotal)} {L("en écritures visibles.", "in visible entries.")}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
             <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Paie filtrée", "Filtered payroll")}</p>
             <p className="mt-3 text-2xl font-bold text-white">{currency.format(payrollTotal)}</p>
-            <p className="mt-2 text-sm text-ink-dim">{filteredPayrollRuns.length} run(s) dans le périmètre.</p>
+            <p className="mt-2 text-sm text-ink-dim">{filteredPayrollRuns.length} {L("run(s) dans le périmètre.", "run(s) in scope.")}</p>
           </div>
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -588,7 +588,7 @@ export function ReportsPage() {
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Dette institutionnelle", "Institutional debt")}</p>
               <p className="mt-3 text-3xl font-bold text-white">{currency.format(expenseOverview.liabilities.institutionalObligations)}</p>
-              <p className="mt-2 text-sm text-ink-dim">Dette fournisseurs : {currency.format(expenseOverview.liabilities.supplierDebt)}</p>
+              <p className="mt-2 text-sm text-ink-dim">{L("Dette fournisseurs :", "Supplier debt:")} {currency.format(expenseOverview.liabilities.supplierDebt)}</p>
             </div>
           </div>
         </SectionCard>
