@@ -539,7 +539,7 @@ export function ParentTrackingPage() {
               <p className="mt-1 text-sm text-ink-dim">{L("Comparaison entre les paiements reçus et l'objectif mensuel.", "Comparison between payments received and the monthly target.")}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-slate-900/40 px-3 py-1 text-xs font-semibold text-cyan-200">
-              Objectif : {formatMoney(summary.expectedPerMonth)} / mois
+              {L("Objectif :", "Target:")} {formatMoney(summary.expectedPerMonth)} {L("/ mois", "/ month")}
             </div>
           </div>
           <div className="mt-5 h-72 min-w-0">
