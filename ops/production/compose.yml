@@ -82,7 +82,7 @@ services:
 
   orbit_api:
     <<: *service-defaults
-    image: kcs/orbit-api:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/orbit-api:${ORBIT_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/orbit-api.env
     depends_on: { orbit_db: { condition: service_healthy } }
@@ -90,7 +90,7 @@ services:
 
   nexus_api:
     <<: *service-defaults
-    image: kcs/nexus-api:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/nexus-api:${NEXUS_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/nexus-api.env
     volumes: [nexus_uploads:/app/uploads]
