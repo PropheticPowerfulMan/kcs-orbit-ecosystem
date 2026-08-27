@@ -30,8 +30,9 @@ financeRouter.get('/edupay-summary', requireRoles('admin'), asyncHandler(async (
     throw new ApiError(503, 'EduPay finance synchronization is not configured. Set EDUPAY_API_URL and EDUPAY_SERVICE_TOKEN on KCS Nexus.')
   }
 
+  const serviceToken = await getEduPayServiceToken()
   const response = await fetch(`${env.EDUPAY_API_URL.replace(/\/$/, '')}/api/finance/overview`, {
-    headers: { Authorization: `Bearer ${env.EDUPAY_SERVICE_TOKEN}` },
+    headers: { Authorization: `Bearer ${serviceToken}` },
     signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
   })
 
