@@ -1448,6 +1448,8 @@ function AccessNotificationModal({
   onConfirm: (channels: { notifyEmail: boolean; notifySms: boolean }) => void;
   loading: boolean;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [notifyEmail, setNotifyEmail] = useState(Boolean(parent.email));
   const [notifySms, setNotifySms] = useState(Boolean(parent.phone));
   const disabled = loading || (!notifyEmail && !notifySms);
@@ -1509,7 +1511,7 @@ function AccessNotificationModal({
 }
 
 class ParentDetailBoundary extends Component<
-  { children: ReactNode; onClose: () => void },
+  { children: ReactNode; onClose: () => void; lang: "fr" | "en" },
   { error: Error | null }
 > {
   state = { error: null as Error | null };
@@ -1523,6 +1525,7 @@ class ParentDetailBoundary extends Component<
   }
 
   render() {
+    const L = (fr: string, en: string) => this.props.lang === "fr" ? fr : en;
     if (!this.state.error) return this.props.children;
 
     return (
@@ -1558,6 +1561,8 @@ function DetailModal({
   onClose: () => void;
   t: (k: string) => string;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [pdfExporting, setPdfExporting] = useState(false);
   const parentStudents = Array.isArray(parent.students) ? parent.students : [];
   const safeFinanceSnapshot = useMemo(() => normalizeParentFinanceSnapshot(financeSnapshot), [financeSnapshot]);
@@ -3070,7 +3075,7 @@ export function ParentsManagementPage() {
         </div>
       )}
       {viewTarget && (
-        <ParentDetailBoundary onClose={() => setViewTarget(null)}>
+        <ParentDetailBoundary onClose={() => setViewTarget(null)} lang={lang}>
           <DetailModal
             parent={normalizeParentForUi(viewTarget)}
             financeSnapshot={financeSnapshot}
