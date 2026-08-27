@@ -1,3 +1,4 @@
+import LegacyImportLink from '../../components/common/LegacyImportLink';
 import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -520,6 +521,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.students')}</h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-400">Enregistrement des familles, classes normalisées et vue fusionnée SAVANEX + Orbit avec entrées externes en lecture seule.</p>
         </div>
+        <LegacyImportLink entity="STUDENT" />
       </section>
 
       <section className="mb-6 card p-5">

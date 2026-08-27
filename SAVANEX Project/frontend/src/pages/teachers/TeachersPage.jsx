@@ -1,3 +1,4 @@
+import LegacyImportLink from '../../components/common/LegacyImportLink';
 import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -470,6 +471,8 @@ const TeachersPage = () => {
         <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.teachers')}</h2>
         <p className="mt-2 text-sm text-slate-400">Gestion globale des employés KCS : enseignants, administration, support, leadership et spécialistes.</p>
       </section>
+
+      <div className="mb-4"><LegacyImportLink entity="TEACHER" /></div>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatCard title="Employés actifs" value={activeTeachers} accent="text-cyan-300" />

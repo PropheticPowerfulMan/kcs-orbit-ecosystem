@@ -20,6 +20,78 @@ model PasswordResetToken {
   @@index([userId, expiresAt])
 }
 
+enum ImportJobStatus {
+  UPLOADED
+  MAPPED
+  VALIDATED
+  READY
+  IMPORTING
+  COMPLETED
+  PARTIAL
+  FAILED
+  ROLLED_BACK
+  ROLLBACK_PARTIAL
+  ROLLBACK_BLOCKED
+}
+
+model ImportJob {
+  id String @id @default(cuid())
+  actorId String
+  organizationId String?
+  sourceSystem String @default("GENERIC")
+  entityType String
+  originalFileName String
+  fileHash String
+  status ImportJobStatus @default(UPLOADED)
+  mapping Json?
+  report Json?
+  totalRows Int @default(0)
+  createdRows Int @default(0)
+  updatedRows Int @default(0)
+  skippedRows Int @default(0)
+  failedRows Int @default(0)
+  mergedRows Int @default(0)
+  invitationsSent Boolean @default(false)
+  confirmedAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([actorId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status])
+}
+
+model ImportMappingTemplate {
+  id String @id @default(cuid())
+  name String
+  actorId String
+  organizationId String?
+  sourceSystem String @default("GENERIC")
+  entityType String
+  sourceColumns String[]
+  mapping Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId, name, entityType])
+  @@index([organizationId, entityType])
+}
+
+
+model ImportChange {
+  id String @id @default(cuid())
+  importJobId String
+  entityType String
+  entityId String
+  operation String
+  oldValue Json?
+  newValue Json?
+  changedAt DateTime @default(now())
+  rolledBackAt DateTime?
+  rollbackError String?
+  @@index([importJobId, changedAt])
+  @@index([entityType, entityId])
+}
+
 enum UserRole {
   ADMIN
   STAFF

@@ -144,14 +144,16 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         role = validated_data.get('role', User.ROLE_STUDENT)
-        if role in {User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE}:
+        submitted_email = (validated_data.get('email') or '').strip().lower()
+        trusted_legacy_import = bool(self.context.get('legacy_import'))
+        if role in {User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE} and (not submitted_email or not trusted_legacy_import):
             validated_data['email'] = generate_school_email(
                 first_name=validated_data.get('first_name', ''),
                 middle_name=validated_data.get('middle_name', ''),
                 last_name=validated_data.get('last_name', ''),
             )
-        elif validated_data.get('email'):
-            validated_data['email'] = validated_data['email'].strip().lower()
+        elif submitted_email:
+            validated_data['email'] = submitted_email
         password = (validated_data.pop('password', '') or '').strip()
         generated_by_system = not password
         if generated_by_system:

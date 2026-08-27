@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
-from apps.users.models import User
+from apps.users.models import InstitutionalEmailAudit, User
 from apps.users.serializers import UserCreateSerializer
 from apps.users.views import UserMeView, reset_user_access_credentials
 
@@ -151,3 +151,37 @@ class PasswordRecoveryChannelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         send_email.assert_called_once()
         send_sms.assert_not_called()
+
+class LegacyInstitutionalEmailTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_trusted_student_and_staff_import_preserves_email(self):
+        for role, email in [(User.ROLE_STUDENT, 'student.old@kinshasachristianschool.org'), (User.ROLE_EMPLOYEE, 'staff.old@kinshasachristianschool.org')]:
+            serializer = UserCreateSerializer(data={'first_name':'Legacy','last_name':role,'email':email,'role':role}, context={'legacy_import':True})
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            self.assertEqual(serializer.save().email, email)
+
+    def test_trusted_import_generates_when_email_missing(self):
+        serializer = UserCreateSerializer(data={'first_name':'Generated','last_name':'Student','role':User.ROLE_STUDENT}, context={'legacy_import':True})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertTrue(serializer.save().email.endswith('@ourkcs.org'))
+
+    @patch('apps.users.views.sync_student')
+    def test_admin_can_change_email_with_audit_and_duplicate_is_rejected(self, _sync):
+        admin=User.objects.create_user(username='legacy-admin',email='admin@ourkcs.org',password='AdminPass123!',role=User.ROLE_ADMIN)
+        student=User.objects.create_user(username='legacy-student',email='old@ourkcs.org',password='StudentPass123!',role=User.ROLE_STUDENT)
+        other=User.objects.create_user(username='other-student',email='taken@ourkcs.org',password='StudentPass123!',role=User.ROLE_STUDENT)
+        self.client.force_authenticate(admin)
+        response=self.client.patch(f'/api/users/{student.pk}/institutional-email/',{'institutionalEmail':'historic@kinshasachristianschool.org','reason':'QuickSchool migration'},format='json')
+        self.assertEqual(response.status_code,200)
+        student.refresh_from_db(); self.assertEqual(student.email,'historic@kinshasachristianschool.org')
+        audit=InstitutionalEmailAudit.objects.get(user=student); self.assertEqual(audit.old_value,'old@ourkcs.org'); self.assertEqual(audit.changed_by,admin)
+        conflict=self.client.patch(f'/api/users/{student.pk}/institutional-email/',{'institutionalEmail':other.email,'reason':'test conflict'},format='json')
+        self.assertEqual(conflict.status_code,409)
+
+    def test_non_admin_forbidden(self):
+        student=User.objects.create_user(username='ordinary',email='ordinary@ourkcs.org',password='StudentPass123!',role=User.ROLE_STUDENT)
+        self.client.force_authenticate(student)
+        response=self.client.patch(f'/api/users/{student.pk}/institutional-email/',{'institutionalEmail':'new@ourkcs.org','reason':'no permission'},format='json')
+        self.assertEqual(response.status_code,403)

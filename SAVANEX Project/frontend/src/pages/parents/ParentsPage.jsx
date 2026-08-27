@@ -1,3 +1,4 @@
+import LegacyImportLink from '../../components/common/LegacyImportLink';
 import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -477,6 +478,7 @@ const ParentsPage = () => {
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">Classement des familles et parents</h2>
           <p className="mt-2 max-w-2xl text-sm text-slate-400">Recherche et regroupement des foyers par famille et par classe à partir des élèves reliés dans SAVANEX.</p>
         </div>
+        <LegacyImportLink entity="PARENT" />
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">

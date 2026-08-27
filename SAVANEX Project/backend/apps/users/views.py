@@ -14,7 +14,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
 from apps.communication.services import _send_user_sms, deliver_direct_parent_contact, send_branded_email
 from apps.teachers.services import deactivate_teacher
-from .models import User
+from .models import InstitutionalEmailAudit, User
 from .serializers import (
     CustomTokenObtainPairSerializer,
     UserMeSerializer,
@@ -374,3 +374,35 @@ def reset_password(request):
     user.password_generated_by_system = False
     user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
     return Response({'detail': 'Password reset completed.'})
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAdminUser])
+def update_institutional_email(request, pk):
+    user = User.objects.filter(pk=pk, is_active=True).first()
+    if not user:
+        return Response({'detail': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+    if user.role not in {User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE}:
+        return Response({'detail': 'Institutional email applies only to students and staff.'}, status=status.HTTP_400_BAD_REQUEST)
+    email = str(request.data.get('institutionalEmail') or '').strip().lower()
+    reason = str(request.data.get('reason') or '').strip()
+    if not reason:
+        return Response({'reason': 'A change reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_email(email)
+    except ValidationError:
+        return Response({'institutionalEmail': 'Invalid email.'}, status=status.HTTP_400_BAD_REQUEST)
+    if User.objects.exclude(pk=user.pk).filter(email__iexact=email).exists():
+        return Response({'institutionalEmail': 'Email already belongs to another person.'}, status=status.HTTP_409_CONFLICT)
+    old_value = user.email or ''
+    if old_value.lower() == email:
+        return Response({'detail': 'Email is unchanged.', 'email': email})
+    with transaction.atomic():
+        user.email = email
+        user.save(update_fields=['email', 'updated_at'])
+        InstitutionalEmailAudit.objects.create(user=user, old_value=old_value, new_value=email, changed_by=request.user, reason=reason)
+        if user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
+            transaction.on_commit(lambda: sync_student(user.student_profile))
+        elif user.role in {User.ROLE_TEACHER, User.ROLE_EMPLOYEE} and hasattr(user, 'teacher_profile'):
+            transaction.on_commit(lambda: sync_teacher(user.teacher_profile))
+    return Response({'email': email, 'oldValue': old_value, 'changedBy': request.user.pk, 'reason': reason})

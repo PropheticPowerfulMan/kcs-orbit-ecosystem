@@ -22,6 +22,7 @@ const TeacherPortal = lazy(() => import('@/pages/TeacherPortal'))
 const StaffPortal = lazy(() => import('@/pages/StaffPortal'))
 const IncidentReportsPage = lazy(() => import('@/pages/IncidentReports'))
 const AdminDashboard = lazy(() => import('@/pages/Admin'))
+const DataMigrationCenter = lazy(() => import('@/pages/Admin/DataMigrationCenter'))
 
 class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
@@ -311,6 +312,14 @@ const App = () => {
             />
             <Route path="/portal/admin" element={<Navigate to="/admin" replace />} />
             <Route path="/admin/dashboard" element={<Navigate to="/admin" replace />} />
+            <Route
+              path="/admin/data-migration"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <DataMigrationCenter />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin/*"
               element={

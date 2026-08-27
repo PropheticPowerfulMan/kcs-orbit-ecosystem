@@ -124,3 +124,16 @@ class User(AbstractUser):
     @property
     def is_parent(self):
         return self.role == self.ROLE_PARENT
+
+
+class InstitutionalEmailAudit(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='institutional_email_audits')
+    old_value = models.EmailField(blank=True)
+    new_value = models.EmailField()
+    changed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='institutional_email_changes')
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField()
+
+    class Meta:
+        db_table = 'institutional_email_audits'
+        ordering = ['-changed_at']

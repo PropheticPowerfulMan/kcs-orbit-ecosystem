@@ -287,6 +287,21 @@ export const adminAPI = {
   exportData: (type: string) => api.get(`/admin/export/${type}`, { responseType: 'blob' }),
 }
 
+export const dataMigrationAPI = {
+  preview: (data: FormData) => api.post('/data-migration/preview', data),
+  jobs: () => api.get('/data-migration/jobs'),
+  job: (id: string) => api.get(`/data-migration/jobs/${id}`),
+  confirmation: (id: string) => api.get(`/data-migration/jobs/${id}/confirmation`),
+  confirm: (id: string, data: { confirmation: string; batchSize?: number }) => api.post(`/data-migration/jobs/${id}/confirm`, data),
+  rollback: (id: string, confirmation: string) => api.post(`/data-migration/jobs/${id}/rollback`, { confirmation }),
+  mappingTemplates: () => api.get('/data-migration/mapping-templates'),
+  saveMappingTemplate: (data: object) => api.post('/data-migration/mapping-templates', data),
+  errorReport: (id: string) => api.get(`/data-migration/jobs/${id}/errors.csv`, { responseType: 'blob' }),
+  successReport: (id: string) => api.get(`/data-migration/jobs/${id}/success.csv`, { responseType: 'blob' }),
+  rollbackReport: (id: string) => api.get(`/data-migration/jobs/${id}/rollback.csv`, { responseType: 'blob' }),
+  template: (entity: string) => api.get(`/data-migration/templates/${entity}`, { responseType: 'blob' }),
+}
+
 export const financeAPI = {
   getEduPaySummary: () => api.get('/finance/edupay-summary'),
   getStudentClearance: () => api.get('/finance/student-clearance'),

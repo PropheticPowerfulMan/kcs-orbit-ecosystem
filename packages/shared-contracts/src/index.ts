@@ -1,5 +1,6 @@
 import { z } from "zod";
 export * from "./academic-year.js";
+export * from "./data-migration.js";
 
 const TrimmedStringSchema = z.string().trim().min(1);
 

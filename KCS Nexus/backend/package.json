@@ -12,7 +12,8 @@
     "demo-users:seed": "tsx scripts/seed-demo-users.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "test:migration": "tsx --test src/modules/data-migration/*.test.ts ../../packages/shared-contracts/src/data-migration.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.13.0",
@@ -28,7 +29,9 @@
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
     "openai": "^4.42.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@ecosystem/shared-contracts": "file:../../packages/shared-contracts",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
