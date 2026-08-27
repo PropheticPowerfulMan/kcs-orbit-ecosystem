@@ -9,6 +9,7 @@ import {
   Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { academyAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 import type { UserRole } from '@/types'
 
@@ -225,6 +226,15 @@ const PortalSidebar = () => {
       </nav>
 
       <div className={isMobile ? 'nexus-mobile-menu-actions' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}>
+        {(user.role === "teacher" || user.role === "admin") && (
+          <button type="button" onClick={async () => { const response = await academyAPI.launch(); window.location.assign(response.data.data.url) }}
+            className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
+            title={!isMobile && sidebarCollapsed ? "KCS Nexus Academy" : undefined}>
+            <GraduationCap size={18} />
+            {(isMobile || !sidebarCollapsed) && <span>KCS Nexus Academy</span>}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={toggleLanguage}

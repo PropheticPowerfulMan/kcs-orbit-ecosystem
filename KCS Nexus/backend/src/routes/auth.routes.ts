@@ -405,6 +405,7 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
         ...(typeof entity.lastName === 'string' && entity.lastName.trim() ? { lastName: entity.lastName.trim() } : {}),
         ...(canAdoptCanonicalEmail ? { email: canonicalEmail! } : {}),
         ...(typeof entity.phone === 'string' ? { phone: entity.phone.trim() || null } : {}),
+        ...(typeof entity.userId === 'string' && entity.userId.trim() ? { orbitUserId: entity.userId.trim(), orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID } : {}),
         avatar: typeof entity.photoData === 'string' ? entity.photoData : null,
       },
     })

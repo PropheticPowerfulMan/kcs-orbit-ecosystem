@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   STAFF
   TEACHER
@@ -83,8 +84,40 @@ model User {
   organizationId String?
   organization Organization? @relation(fields: [organizationId], references: [id])
   auditLogs     AuditLog[]
+  academyLaunchTickets AcademyLaunchTicket[]
+  academySessions AcademySession[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model AcademyLaunchTicket {
+  id             String   @id @default(cuid())
+  tokenHash      String   @unique
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  role           String
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([organizationId, expiresAt])
+}
+
+model AcademySession {
+  id             String   @id @default(cuid())
+  tokenHash      String   @unique
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  role           String
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+  @@index([userId, expiresAt])
+  @@index([organizationId, expiresAt])
 }
 
 model SharedProfile {

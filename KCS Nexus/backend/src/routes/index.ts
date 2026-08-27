@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { academyRouter } from './academy.routes.js'
 import { adminRouter } from './admin.routes.js'
 import { admissionsRouter } from './admissions.routes.js'
 import { aiRouter } from './ai.routes.js'
@@ -23,6 +24,7 @@ import { incidentReportsRouter } from './incident-reports.routes.js'
 export const router = Router()
 
 router.use('/auth', authRouter)
+router.use('/academy', academyRouter)
 router.use('/news', newsRouter)
 router.use('/events', eventsRouter)
 router.use('/students', studentsRouter)

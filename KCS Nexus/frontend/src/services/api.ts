@@ -307,3 +307,7 @@ export const incidentReportsAPI = {
   updateStatus: (id: string, data: { status: 'SUBMITTED' | 'UNDER_REVIEW' | 'CLOSED'; adminNotes?: string }) => api.patch(`/incident-reports/${id}/status`, data),
   verify: (reference: string) => api.get(`/incident-reports/verify/${encodeURIComponent(reference)}`),
 }
+
+export const academyAPI = {
+  launch: () => api.post<{ data: { url: string } }>("/academy/launch"),
+}

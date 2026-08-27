@@ -9,6 +9,7 @@ import integrationIngestRoutes from "./routes/integration.ingest.routes";
 import integrationRegistryRoutes from "./routes/integration.registry.routes";
 import integrationReadRoutes from "./routes/integration.read.routes";
 import integrationRoutes from "./routes/integration.routes";
+import academySsoRoutes from "./routes/academy-sso.routes";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 import { prisma } from "./db";
 
@@ -78,6 +79,7 @@ export function createApp() {
   });
 
   app.use("/api/auth", authRateLimit(15 * 60 * 1000, 20), authRoutes);
+  app.use("/api/academy/sso", authRateLimit(60 * 1000, 30), academySsoRoutes);
   app.use("/api", coreRoutes);
   app.use("/api/integration/academic-year", academicYearRoutes);
   app.use("/api/integration", integrationRoutes);
