@@ -41,6 +41,7 @@ const envSchema = z.object({
   KCS_ORBIT_API_KEY: z.string().optional(),
   KCS_ORBIT_ORGANIZATION_ID: z.string().optional(),
   ACADEMY_PUBLIC_URL: z.string().url().optional(),
+  ACADEMY_INTEGRATION_KEY: z.string().min(32).optional(),
   EDUPAY_API_URL: z.string().optional(),
   EDUPAY_SERVICE_TOKEN: z.string().optional(),
   EDUPAY_SERVICE_EMAIL: z.string().email().optional(),
