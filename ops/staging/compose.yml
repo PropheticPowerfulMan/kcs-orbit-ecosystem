@@ -16,6 +16,10 @@ services:
     depends_on:
       edupay_web: { condition: service_healthy }
       edupay_api: { condition: service_healthy }
+      nexus_web: { condition: service_healthy }
+      nexus_api: { condition: service_healthy }
+      savanex_web: { condition: service_healthy }
+      savanex_api: { condition: service_healthy }
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"], interval: 15s, timeout: 5s, retries: 10 }
   edupay_db:
     <<: *service-defaults
@@ -74,6 +78,119 @@ services:
     tmpfs: [/var/cache/nginx, /var/run]
     networks: [staging_internal]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
+  nexus_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-nexus-db-staging
+    environment:
+      POSTGRES_DB: ${NEXUS_STAGING_POSTGRES_DB:?set NEXUS_STAGING_POSTGRES_DB}
+      POSTGRES_USER: ${NEXUS_STAGING_POSTGRES_USER:?set NEXUS_STAGING_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${NEXUS_STAGING_POSTGRES_PASSWORD:?set NEXUS_STAGING_POSTGRES_PASSWORD}
+    volumes: [staging_nexus_db_data:/var/lib/postgresql/data]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 15 }
+  nexus_api:
+    <<: *service-defaults
+    build: { context: ../.., dockerfile: ops/staging/docker/nexus-api.Dockerfile }
+    image: kcs/nexus-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-nexus-api-staging
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+      DATABASE_URL: postgresql://${NEXUS_STAGING_POSTGRES_USER}:${NEXUS_STAGING_POSTGRES_PASSWORD}@nexus_db:5432/${NEXUS_STAGING_POSTGRES_DB}?schema=public
+      FRONTEND_URL: https://${STAGING_DOMAIN}/nexus
+      JWT_SECRET: ${NEXUS_STAGING_JWT_SECRET:?set NEXUS_STAGING_JWT_SECRET}
+      JWT_REFRESH_SECRET: ${NEXUS_STAGING_JWT_REFRESH_SECRET:?set NEXUS_STAGING_JWT_REFRESH_SECRET}
+      KCS_ORBIT_API_URL: ""
+      KCS_ORBIT_API_KEY: ""
+      KCS_ORBIT_ORGANIZATION_ID: ""
+      EDUPAY_API_URL: http://edupay_api:4000
+      SAVANEX_API_URL: http://savanex_api:8000
+      SAVANEX_INTELLIGENCE_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      SMTP_HOST: ""
+      SMTP_USER: ""
+      SMTP_PASS: ""
+    volumes: [staging_nexus_uploads:/app/uploads]
+    networks: [staging_internal]
+    depends_on:
+      nexus_db: { condition: service_healthy }
+      savanex_api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
+  nexus_web:
+    <<: *service-defaults
+    build:
+      context: ../..
+      dockerfile: ops/staging/docker/nexus-web.Dockerfile
+      args:
+        VITE_API_URL: https://${STAGING_DOMAIN}/nexus/api
+        VITE_BASE_PATH: /nexus/
+    image: kcs/nexus-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-nexus-web-staging
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
+  savanex_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-savanex-db-staging
+    environment:
+      POSTGRES_DB: ${SAVANEX_STAGING_POSTGRES_DB:?set SAVANEX_STAGING_POSTGRES_DB}
+      POSTGRES_USER: ${SAVANEX_STAGING_POSTGRES_USER:?set SAVANEX_STAGING_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${SAVANEX_STAGING_POSTGRES_PASSWORD:?set SAVANEX_STAGING_POSTGRES_PASSWORD}
+    volumes: [staging_savanex_db_data:/var/lib/postgresql/data]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 15 }
+  savanex_api:
+    <<: *service-defaults
+    build: { context: "../../SAVANEX Project/backend" }
+    image: kcs/savanex-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-savanex-api-staging
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      SECRET_KEY: ${SAVANEX_STAGING_SECRET_KEY:?set SAVANEX_STAGING_SECRET_KEY}
+      ALLOWED_HOSTS: ${STAGING_DOMAIN},savanex_api,localhost,127.0.0.1
+      CORS_ALLOWED_ORIGINS: https://${STAGING_DOMAIN}
+      CSRF_TRUSTED_ORIGINS: https://${STAGING_DOMAIN}
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: ${SAVANEX_STAGING_POSTGRES_DB}
+      DB_USER: ${SAVANEX_STAGING_POSTGRES_USER}
+      DB_PASSWORD: ${SAVANEX_STAGING_POSTGRES_PASSWORD}
+      DB_HOST: savanex_db
+      DB_PORT: "5432"
+      FRONTEND_URL: https://${STAGING_DOMAIN}/savanex
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      SMS_ENABLED: "False"
+      KCS_ORBIT_API_URL: ""
+      KCS_ORBIT_API_KEY: ""
+      KCS_ORBIT_ORGANIZATION_ID: ""
+      KCS_NEXUS_API_URL: http://nexus_api:5000
+      KCS_NEXUS_AUTH_KEY: ${STAGING_INTEGRATION_KEY}
+      EDUPAY_API_URL: http://edupay_api:4000
+      INTELLIGENCE_INGEST_API_KEY: ${STAGING_INTEGRATION_KEY}
+    command: ["sh", "-c", "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"]
+    volumes: [staging_savanex_media:/app/media, staging_savanex_static:/app/staticfiles]
+    networks: [staging_internal]
+    depends_on: { savanex_db: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=4)"], interval: 15s, timeout: 5s, retries: 15, start_period: 60s }
+  savanex_web:
+    <<: *service-defaults
+    build:
+      context: "../../SAVANEX Project/frontend"
+      args:
+        VITE_API_URL: https://${STAGING_DOMAIN}/savanex/api
+        VITE_BASE_PATH: /savanex/
+    image: kcs/savanex-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-savanex-web-staging
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
 networks:
   staging_internal: { internal: true }
   staging_ingress:
@@ -81,4 +198,9 @@ networks:
     name: kcs-orbit-production_kcs_staging
 volumes:
   staging_edupay_db_data:
+  staging_nexus_db_data:
+  staging_nexus_uploads:
+  staging_savanex_db_data:
+  staging_savanex_media:
+  staging_savanex_static:
   staging_caddy_data:
