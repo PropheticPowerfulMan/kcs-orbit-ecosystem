@@ -62,5 +62,5 @@ www.{$NEXUS_DOMAIN} {
     X-Robots-Tag "noindex, nofollow, noarchive"
     Cache-Control "no-store"
   }
-  reverse_proxy staging_web:8080
+  reverse_proxy staging_gateway:8080
 }

@@ -28,4 +28,29 @@ describe("deduplicateStudents", () => {
 
     expect(deduplicateStudents(students)).toEqual(students);
   });
+  it("removes mirrored records with different identifiers but the same child name and class", () => {
+    const students = [
+      { id: "local-1", externalStudentId: "STU-001", fullName: "Élodie K.", className: "6e A" },
+      { id: "local-2", externalStudentId: "STU-999", fullName: "elodie k.", className: " 6E A " }
+    ];
+
+    expect(deduplicateStudents(students)).toEqual([students[0]]);
+  });
+
+  it("keeps children with the same name when their classes differ", () => {
+    const students = [
+      { id: "student-1", fullName: "Chris K.", className: "5e A" },
+      { id: "student-2", fullName: "Chris K.", className: "6e A" }
+    ];
+
+    expect(deduplicateStudents(students)).toEqual(students);
+  });
+  it("removes duplicate children despite invisible spacing and punctuation differences", () => {
+    const students = [
+      { id: "student-a", fullName: "MUTOMBO NOSSA FAITH", className: "K1" },
+      { id: "student-b", fullName: "Mutombo  Nossa-Faith", className: "K 1" }
+    ];
+
+    expect(deduplicateStudents(students)).toEqual([students[0]]);
+  });
 });

@@ -1,0 +1,84 @@
+name: kcs-orbit-staging
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+services:
+  gateway:
+    <<: *service-defaults
+    image: caddy:2.9-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
+    read_only: true
+    tmpfs: [/config]
+    volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", "staging_caddy_data:/data"]
+    networks:
+      staging_ingress: { aliases: [staging_gateway] }
+      staging_internal:
+    depends_on:
+      edupay_web: { condition: service_healthy }
+      edupay_api: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"], interval: 15s, timeout: 5s, retries: 10 }
+  edupay_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    env_file: ${STAGING_ENV_FILE:-.env}
+    environment:
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:?set STAGING_POSTGRES_DB}
+      POSTGRES_USER: ${STAGING_POSTGRES_USER:?set STAGING_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD:?set STAGING_POSTGRES_PASSWORD}
+    volumes: [staging_edupay_db_data:/var/lib/postgresql/data]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 15 }
+  edupay_api:
+    <<: *service-defaults
+    build: { context: ../.., dockerfile: ops/production/docker/edupay-api.Dockerfile }
+    image: kcs/edupay-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    env_file: ${STAGING_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: staging
+      DATABASE_URL: postgresql://${STAGING_POSTGRES_USER}:${STAGING_POSTGRES_PASSWORD}@edupay_db:5432/${STAGING_POSTGRES_DB}?schema=public
+      API_PORT: "4000"
+      FRONTEND_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}
+      ENABLE_DEMO_AUTH_FALLBACK: "true"
+      ENABLE_DEMO_DATA_FALLBACK: "true"
+      KCS_ORBIT_API_URL: ""
+      KCS_ORBIT_API_KEY: ""
+      KCS_ORBIT_ORGANIZATION_ID: ""
+      SAVANEX_API_URL: ""
+      KCS_NEXUS_API_URL: ""
+      SMTP_HOST: ""
+      SMTP_USER: ""
+      SMTP_PASS: CHANGE_ME
+      AFRIKTALK_USERNAME: ""
+      AFRIKTALK_API_KEY: CHANGE_ME
+      AFRICASTALKING_USERNAME: ""
+      AFRICASTALKING_API_KEY: ""
+    networks: [staging_internal]
+    depends_on: { edupay_db: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
+  edupay_web:
+    <<: *service-defaults
+    build:
+      context: ../..
+      dockerfile: ops/production/docker/edupay-web.Dockerfile
+      args:
+        VITE_API_BASE_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}
+        VITE_RECEIPT_VERIFICATION_BASE_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}
+        VITE_BASE_PATH: /
+    image: kcs/edupay-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
+networks:
+  staging_internal: { internal: true }
+  staging_ingress:
+    external: true
+    name: kcs-orbit-production_kcs_staging
+volumes:
+  staging_edupay_db_data:
+  staging_caddy_data:

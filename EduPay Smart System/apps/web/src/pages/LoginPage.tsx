@@ -26,7 +26,8 @@ function EyeIcon({ open }: { open: boolean }) {
 
 type ForgotStep = "form" | "sent";
 
-function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: () => void; t: (k: string) => string; initialResetToken?: string }) {
+function ForgotPasswordModal({ onClose, t, lang, initialResetToken = "" }: { onClose: () => void; t: (k: string) => string; lang: "fr" | "en"; initialResetToken?: string }) {
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [step, setStep] = useState<ForgotStep>("form");
   const [adminRecovery, setAdminRecovery] = useState(false);
   const [identifier, setIdentifier] = useState("");
@@ -156,7 +157,7 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-ink-dim hover:text-white transition-colors"
-          aria-label="Fermer"
+          aria-label={L("Fermer", "Close")}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -170,17 +171,17 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
               <p className="text-sm text-ink-dim mt-2">{t("forgotSubtitle")}</p>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Canal de récupération">
-                <button type="button" onClick={() => setRecoveryChannel("email")} className={recoveryChannel === "email" ? "btn-primary py-2" : "rounded-lg border border-slate-600 py-2 text-sm font-semibold text-ink-dim"}>E-mail</button>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label={L("Canal de récupération", "Recovery channel")}>
+                <button type="button" onClick={() => setRecoveryChannel("email")} className={recoveryChannel === "email" ? "btn-primary py-2" : "rounded-lg border border-slate-600 py-2 text-sm font-semibold text-ink-dim"}>{L("E-mail", "Email")}</button>
                 <button type="button" onClick={() => setRecoveryChannel("sms")} className={recoveryChannel === "sms" ? "btn-primary py-2" : "rounded-lg border border-slate-600 py-2 text-sm font-semibold text-ink-dim"}>SMS</button>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-ink-dim">E-mail ou code d'accès</label>
+                <label className="text-sm font-medium text-ink-dim">{L("E-mail ou code d'accès", "Email or access code")}</label>
                 <input
                   type="text"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="email@exemple.com ou ACC-PAR-XXXXXX"
+                  placeholder={L("email@exemple.com ou ACC-PAR-XXXXXX", "email@example.com or ACC-PAR-XXXXXX")}
                   className="w-full"
                   autoFocus
                 />
@@ -218,7 +219,7 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
               <p className="text-sm text-ink-dim mt-2">{t("adminRecoverySubtitle")}</p>
             </div>
             <form onSubmit={handleAdminRecovery} className="space-y-4">
-              <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="E-mail administrateur" className="w-full" />
+              <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder={L("E-mail administrateur", "Administrator email")} className="w-full" />
               <input type="password" value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} placeholder={t("adminRecoveryCode")} className="w-full" />
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t("newPasswordField")} className="w-full" />
               <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t("confirmNewPassword")} className="w-full" />
@@ -256,13 +257,13 @@ function ForgotPasswordModal({ onClose, t, initialResetToken = "" }: { onClose: 
                 type="text"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="E-mail ou code d'accès du compte"
+                placeholder={L("E-mail ou code d'accès du compte", "Account email or access code")}
                 className="w-full"
               />
               <textarea
                 value={resetToken}
                 onChange={(e) => setResetToken(e.target.value)}
-                placeholder="Code de réinitialisation reçu par e-mail"
+                placeholder={L("Code de réinitialisation reçu par e-mail", "Reset code received by email")}
                 className="min-h-20 w-full resize-none"
               />
               <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder={t("newPasswordField")} className="w-full" />
@@ -289,7 +290,8 @@ const loginSchema = z.object({
 type LoginInput = z.infer<typeof loginSchema>;
 
 export function LoginPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const { setAuth } = useAuthStore();
   const resetTokenFromUrl = new URLSearchParams((window.location.hash.split("?")[1] ?? "")).get("resetToken") ?? "";
   const [apiError, setApiError] = useState<string | null>(null);
@@ -330,7 +332,7 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen grid place-items-center relative overflow-hidden px-4 py-8">
-      {showForgot && <ForgotPasswordModal initialResetToken={resetTokenFromUrl} onClose={() => setShowForgot(false)} t={t} />}
+      {showForgot && <ForgotPasswordModal initialResetToken={resetTokenFromUrl} onClose={() => setShowForgot(false)} t={t} lang={lang} />}
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 -right-20 w-96 h-96 bg-brand-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
@@ -381,10 +383,10 @@ export function LoginPage() {
             <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
               {/* Email input */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-ink-dim">E-mail ou code d'accès</label>
+                <label className="text-sm font-medium text-ink-dim">{L("E-mail ou code d'accès", "Email or access code")}</label>
                 <input 
                   {...register("email")} 
-                  placeholder="email@school.com ou ACC-PAR-XXXXXX"
+                  placeholder={L("email@ecole.cd ou ACC-PAR-XXXXXX", "email@school.com or ACC-PAR-XXXXXX")}
                   className="w-full"
                   type="text"
                   autoComplete="off"
@@ -465,7 +467,7 @@ export function LoginPage() {
 
         {/* Bottom decoration */}
         <div className="mt-4 text-center">
-          <p className="text-xs text-ink-dim">© 2026 {schoolBranding.schoolName}. All rights reserved.</p>
+          <p className="text-xs text-ink-dim">© 2026 {schoolBranding.schoolName} . {L("Tous droits réservés.", "All rights reserved.")}</p>
         </div>
       </div>
     </div>

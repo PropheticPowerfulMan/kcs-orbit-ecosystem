@@ -2,6 +2,7 @@ import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { Eye, Mail, MessageSquare, Send, Trash2, Users, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
+import { useI18n } from "../i18n";
 import { api } from "../services/api";
 
 type ParentOption = {
@@ -67,6 +68,16 @@ function messageMatchesDateRange(log: ManualMessageLog, dateFrom: string, dateTo
 }
 
 export function MessagesPage() {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
+  const messageTypeLabel = (value: string) => ({ MANUAL: L("Manuel", "Manual"), MANUAL_PARENT_MESSAGE: L("Message parent manuel", "Manual parent message"), NOTIFICATION: "Notification" } as Record<string, string>)[value] ?? value.replace(/_/g, " ");
+  const messageLanguageLabel = (value: string) => value.toLowerCase().startsWith("fr") ? L("Français", "French") : value.toLowerCase().startsWith("en") ? L("Anglais", "English") : value;
+  const deliveryStatusLabel = (value: string) => value.split(/\s*[|,;]\s*/).map((part) => {
+    const [channel, state] = part.split(":");
+    const channelLabel = ({ DASHBOARD: L("Tableau de bord", "Dashboard"), EMAIL: L("E-mail", "Email"), SMS: "SMS" } as Record<string, string>)[channel] ?? channel;
+    const stateLabel = ({ OPEN: L("actif", "active"), SENT: L("envoyé", "sent"), SIMULATED: L("simulé", "simulated"), SKIPPED: L("ignoré", "skipped"), PENDING: L("en attente", "pending"), FAILED: L("échoué", "failed") } as Record<string, string>)[state] ?? state;
+    return state ? `${channelLabel}: ${stateLabel}` : channelLabel;
+  }).join(" · ");
   const [parents, setParents] = useState<ParentOption[]>([]);
   const [logs, setLogs] = useState<ManualMessageLog[]>([]);
   const [search, setSearch] = useState("");
@@ -170,7 +181,7 @@ export function MessagesPage() {
   };
 
   const deleteMessage = async (log: ManualMessageLog) => {
-    const confirmed = window.confirm(`Supprimer le message envoyé à ${log.parentName} ?`);
+    const confirmed = window.confirm(L(`Supprimer le message envoyé à ${log.parentName} ?`, `Delete the message sent to ${log.parentName}?`));
     if (!confirmed) return;
 
     setDeletingId(log.id);
@@ -193,15 +204,15 @@ export function MessagesPage() {
     setStatus(null);
 
     if (selectedParentIds.length === 0) {
-      setError("Sélectionnez au moins un parent.");
+      setError(L("Sélectionnez au moins un parent.", "Select at least one parent."));
       return;
     }
     if (!body.trim()) {
-      setError("Le message est obligatoire.");
+      setError(L("Le message est obligatoire.", "The message is required."));
       return;
     }
     if (!sendEmail && !sendSms) {
-      setError("Choisissez au moins un canal direct: e-mail ou SMS.");
+      setError(L("Choisissez au moins un canal direct : e-mail ou SMS.", "Select at least one direct channel: email or SMS."));
       return;
     }
 
@@ -233,28 +244,28 @@ export function MessagesPage() {
   return (
     <div className="space-y-6">
       <section className="glass rounded-3xl border border-brand-300/20 p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Messagerie financière</p>
-        <h1 className="mt-3 font-display text-3xl font-bold text-white">Messages entre le financier et les parents</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">{L("Messagerie financière", "Financial messaging")}</p>
+        <h1 className="mt-3 font-display text-3xl font-bold text-white">{L("Messages entre le financier et les parents", "Messages between finance staff and parents")}</h1>
         <p className="mt-2 max-w-3xl text-sm text-ink-dim">
-          Le message saisi ici peut être transmis à un ou plusieurs parents, envoyé par e-mail et/ou SMS, puis conservé dans leur espace EduPay sous Messages reçus.
+          {L("Le message saisi ici peut être transmis à un ou plusieurs parents, envoyé par e-mail et/ou SMS, puis conservé dans leur espace EduPay sous Messages reçus.", "The message entered here can be sent to one or more parents by email and/or SMS, then saved under Received messages in their EduPay account.")}
         </p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-4">
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Messages envoyés</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Messages envoyés", "Messages sent")}</p>
           <p className="mt-2 text-3xl font-black text-white">{stats.total}</p>
         </article>
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Parents contactés</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Parents contactés", "Parents contacted")}</p>
           <p className="mt-2 text-3xl font-black text-cyan-300">{stats.parents}</p>
         </article>
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Envois e-mail</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Envois e-mail", "Email deliveries")}</p>
           <p className="mt-2 text-3xl font-black text-brand-100">{stats.email}</p>
         </article>
         <article className="glass rounded-2xl border border-white/10 p-4">
-          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Envois SMS</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Envois SMS", "SMS deliveries")}</p>
           <p className="mt-2 text-3xl font-black text-emerald-300">{stats.sms}</p>
         </article>
       </section>
@@ -265,19 +276,19 @@ export function MessagesPage() {
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-brand-200" />
               <div>
-                <h2 className="font-display text-xl font-bold text-white">Choisir les parents</h2>
-                <p className="text-sm text-ink-dim">Tous les noms de parents sont chargés automatiquement. Sélection multiple autorisée.</p>
+                <h2 className="font-display text-xl font-bold text-white">{L("Choisir les parents", "Choose parents")}</h2>
+                <p className="text-sm text-ink-dim">{L("Tous les noms de parents sont chargés automatiquement. Sélection multiple autorisée.", "All parent names are loaded automatically. Multiple selection is allowed.")}</p>
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-ink-dim">
-              <span>{parents.length} parent(s) disponible(s) immédiatement dans la sélection.</span>
+              <span>{parents.length} {L("parent(s) disponible(s) immédiatement dans la sélection.", "parent(s) immediately available for selection.")}</span>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={selectAllVisibleParents} className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">
-                  Tout sélectionner
+                  {L("Tout sélectionner", "Select all")}
                 </button>
                 <button type="button" onClick={clearParentSelection} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-ink-dim hover:text-white">
-                  Effacer
+                  {L("Effacer", "Clear")}
                 </button>
               </div>
             </div>
@@ -285,7 +296,7 @@ export function MessagesPage() {
            <SearchField
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filtrer un parent, un téléphone ou un élève..."
+              placeholder={L("Filtrer un parent, un téléphone ou un élève...", "Filter by parent, phone or student...")}
               wrapperClassName="mt-4"
             />
 
@@ -323,8 +334,8 @@ export function MessagesPage() {
             <div className="flex items-center gap-3">
               <Send className="h-5 w-5 text-emerald-300" />
               <div>
-                <h2 className="font-display text-xl font-bold text-white">Rédiger et transmettre</h2>
-                <p className="text-sm text-ink-dim">Le tableau de bord parent est toujours alimenté en même temps.</p>
+                <h2 className="font-display text-xl font-bold text-white">{L("Rédiger et transmettre", "Compose and send")}</h2>
+                <p className="text-sm text-ink-dim">{L("Le tableau de bord parent est toujours alimenté en même temps.", "The parent dashboard is always updated at the same time.")}</p>
               </div>
             </div>
 
@@ -333,7 +344,7 @@ export function MessagesPage() {
                 <span key={parent.id} className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">
                   {parent.fullName}
                 </span>
-              )) : <span className="text-sm text-ink-dim">Aucun parent sélectionné.</span>}
+              )) : <span className="text-sm text-ink-dim">{L("Aucun parent sélectionné.", "No parent selected.")}</span>}
             </div>
 
             <div className="mt-4 grid gap-4">
@@ -341,27 +352,27 @@ export function MessagesPage() {
                 value={subject}
                 onChange={(event) => setSubject(event.target.value)}
                 className="w-full"
-                placeholder="Objet du message (facultatif)"
+                placeholder={L("Objet du message (facultatif)", "Message subject (optional)")}
               />
               <textarea
                 value={body}
                 onChange={(event) => setBody(event.target.value)}
                 className="min-h-[12rem] w-full"
-                placeholder="Écrivez ici le message à transmettre aux parents sélectionnés..."
+                placeholder={L("Écrivez ici le message à transmettre aux parents sélectionnés...", "Write the message to send to selected parents...")}
               />
             </div>
 
             <div className="mt-4 flex flex-wrap gap-3">
               <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white">
                 <input type="checkbox" checked={sendEmail} onChange={(event) => setSendEmail(event.target.checked)} />
-                <Mail className="h-4 w-4 text-brand-200" /> E-mail
+                <Mail className="h-4 w-4 text-brand-200" /> {L("E-mail", "Email")}
               </label>
               <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white">
                 <input type="checkbox" checked={sendSms} onChange={(event) => setSendSms(event.target.checked)} />
                 <MessageSquare className="h-4 w-4 text-emerald-300" /> SMS
               </label>
               <span className="inline-flex items-center rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-200">
-                Dashboard parent: actif automatiquement
+                {L("Dashboard parent: actif automatiquement", "Parent dashboard: automatically enabled")}
               </span>
             </div>
 
@@ -380,51 +391,51 @@ export function MessagesPage() {
         </div>
 
         <div className="glass rounded-3xl border border-white/10 p-5">
-          <h2 className="font-display text-xl font-bold text-white">Historique des messages transmis</h2>
-          <p className="mt-1 text-sm text-ink-dim">Tous les envois manuels du financier vers les parents sont conservés ici, avec filtres précis et actions directes.</p>
+          <h2 className="font-display text-xl font-bold text-white">{L("Historique des messages transmis", "Sent message history")}</h2>
+          <p className="mt-1 text-sm text-ink-dim">{L("Tous les envois manuels du financier vers les parents sont conservés ici, avec filtres précis et actions directes.", "All manual messages sent by finance staff to parents are stored here, with precise filters and direct actions.")}</p>
 
           <div className="mt-5 grid gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4 md:grid-cols-2 xl:grid-cols-3">
             <div className="xl:col-span-3">
            <SearchField
               value={historySearch}
               onChange={(event) => setHistorySearch(event.target.value)}
-              placeholder="Recherche précise: parent, objet, contenu, statut, téléphone, email..."
+              placeholder={L("Recherche précise : parent, objet, contenu, statut, téléphone, e-mail...", "Detailed search: parent, subject, content, status, phone, email...")}
             />
             </div>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
-              Parent
+              {L("Parent", "Parent")}
               <select value={historyParentId} onChange={(event) => setHistoryParentId(event.target.value)} className="w-full">
-                <option value="ALL">Tous les parents</option>
+                <option value="ALL">{L("Tous les parents", "All parents")}</option>
                 {parents.map((parent) => <option key={parent.id} value={parent.id}>{parent.fullName}</option>)}
               </select>
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
-              Livraison
+              {L("Livraison", "Delivery")}
               <select value={historyDelivery} onChange={(event) => setHistoryDelivery(event.target.value as HistoryDeliveryFilter)} className="w-full">
-                <option value="ALL">Toutes</option>
-                <option value="DASHBOARD">Dashboard parent</option>
-                <option value="EMAIL">Email activé</option>
-                <option value="SMS">SMS activé</option>
-                <option value="EMAIL_SENT">Email envoyé</option>
-                <option value="SMS_SENT">SMS envoyé</option>
-                <option value="EMAIL_SKIPPED">Email ignoré</option>
-                <option value="SMS_SKIPPED">SMS ignoré</option>
+                <option value="ALL">{L("Toutes", "All")}</option>
+                <option value="DASHBOARD">{L("Dashboard parent", "Parent dashboard")}</option>
+                <option value="EMAIL">{L("Email activé", "Email enabled")}</option>
+                <option value="SMS">{L("SMS activé", "SMS enabled")}</option>
+                <option value="EMAIL_SENT">{L("Email envoyé", "Email sent")}</option>
+                <option value="SMS_SENT">{L("SMS envoyé", "SMS sent")}</option>
+                <option value="EMAIL_SKIPPED">{L("Email ignoré", "Email skipped")}</option>
+                <option value="SMS_SKIPPED">{L("SMS ignoré", "SMS skipped")}</option>
               </select>
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
-              Langue
+              {L("Langue", "Language")}
               <select value={historyLanguage} onChange={(event) => setHistoryLanguage(event.target.value)} className="w-full">
-                <option value="ALL">Toutes</option>
-                <option value="fr">Français</option>
-                <option value="en">English</option>
+                <option value="ALL">{L("Toutes", "All")}</option>
+                <option value="fr">{L("Français", "French")}</option>
+                <option value="en">{L("English", "English")}</option>
               </select>
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
-              Du
+              {L("Du", "From")}
               <DateSelect value={historyDateFrom} onChange={(event) => setHistoryDateFrom(event.target.value)} className="w-full" />
             </label>
             <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">
-              Au
+              {L("Au", "To")}
               <DateSelect value={historyDateTo} onChange={(event) => setHistoryDateTo(event.target.value)} className="w-full" />
             </label>
             <div className="flex items-end">
@@ -440,17 +451,17 @@ export function MessagesPage() {
                 }}
                 className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white"
               >
-                Réinitialiser les filtres
+                {L("Réinitialiser les filtres", "Reset filters")}
               </button>
             </div>
           </div>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-ink-dim">
-            {filteredLogs.length} message(s) affiché(s) sur {logs.length}.
+            {filteredLogs.length} {L("message(s) affiché(s) sur", "message(s) shown out of")} {logs.length}.
           </div>
 
           <div className="mt-5 space-y-3">
-            {filteredLogs.length === 0 ? <p className="text-sm text-ink-dim">Aucun message manuel ne correspond aux critères courants.</p> : filteredLogs.map((log) => {
+            {filteredLogs.length === 0 ? <p className="text-sm text-ink-dim">{L("Aucun message manuel ne correspond aux critères courants.", "No manual message matches the current criteria.")}</p> : filteredLogs.map((log) => {
               const parsed = parseManualMessageContent(log.content);
               return (
               <article key={log.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -461,19 +472,19 @@ export function MessagesPage() {
                     {parsed.subject ? <p className="mt-2 text-sm font-semibold text-brand-100">{parsed.subject}</p> : null}
                   </div>
                   <div className="text-right">
-                    <span className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">{log.type}</span>
-                    <p className="mt-2 text-xs text-ink-dim">{new Date(log.createdAt).toLocaleString("fr-FR")}</p>
+                    <span className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">{messageTypeLabel(log.type)}</span>
+                    <p className="mt-2 text-xs text-ink-dim">{new Date(log.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                   </div>
                 </div>
                 <pre className="mt-4 whitespace-pre-wrap rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-ink">{parsed.body || log.content}</pre>
-                <p className="mt-3 text-xs font-semibold text-cyan-200">{log.status}</p>
+                <p className="mt-3 text-xs font-semibold text-cyan-200">{deliveryStatusLabel(log.status)}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedLog(log)}
                     className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100"
                   >
-                    <Eye className="h-4 w-4" /> Voir
+                    <Eye className="h-4 w-4" /> {L("Voir", "View")}
                   </button>
                   <button
                     type="button"
@@ -508,42 +519,42 @@ export function MessagesPage() {
                 onClick={() => setSelectedLog(null)}
                 className="absolute top-5 right-5 z-10 rounded-xl border border-white/10 bg-white/[0.04] p-2 text-ink-dim hover:text-white"
                 style={{ background: 'rgba(0,0,0,0.15)' }}
-                aria-label="Fermer"
+                aria-label={L("Fermer", "Close")}
               >
                 <X className="h-5 w-5" />
               </button>
               <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">Message détaillé</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-300">{L("Message détaillé", "Message details")}</p>
                   <h2 className="mt-2 font-display text-2xl font-bold text-white">{selectedLog.parentName}</h2>
-                  <p className="mt-2 text-sm text-ink-dim">{new Date(selectedLog.createdAt).toLocaleString("fr-FR")}</p>
+                  <p className="mt-2 text-sm text-ink-dim">{new Date(selectedLog.createdAt).toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                 </div>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-ink">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">Contact</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Contact", "Contact")}</p>
                   <p className="mt-2 font-semibold text-white">{selectedLog.parentEmail || "Email non renseigné"}</p>
                   <p className="mt-1 font-semibold text-white">{selectedLog.parentPhone || "Téléphone non renseigné"}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-ink">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">Trace technique</p>
-                  <p className="mt-2 text-white">Type: {selectedLog.type}</p>
-                  <p className="mt-1 text-white">Langue: {selectedLog.language}</p>
-                  <p className="mt-1 text-white">Canal principal: {selectedLog.channel}</p>
-                  <p className="mt-1 text-cyan-200">{selectedLog.status}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Trace technique", "Technical trace")}</p>
+                  <p className="mt-2 text-white">{L("Type:", "Type:")} {messageTypeLabel(selectedLog.type)}</p>
+                  <p className="mt-1 text-white">{L("Langue:", "Language:")} {messageLanguageLabel(selectedLog.language)}</p>
+                  <p className="mt-1 text-white">{L("Canal principal:", "Primary channel:")} {selectedLog.channel}</p>
+                  <p className="mt-1 text-cyan-200">{deliveryStatusLabel(selectedLog.status)}</p>
                 </div>
               </div>
 
               {parsed.subject ? (
                 <div className="mt-5 rounded-2xl border border-brand-300/20 bg-brand-500/10 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-200">Objet</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-200">{L("Objet", "Subject")}</p>
                   <p className="mt-2 text-lg font-semibold text-white">{parsed.subject}</p>
                 </div>
               ) : null}
 
               <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">Contenu</p>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-ink-dim">{L("Contenu", "Content")}</p>
                 <pre className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink break-words">{parsed.body || selectedLog.content}</pre>
               </div>
             </div>

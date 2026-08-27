@@ -658,7 +658,7 @@ function AdminParentDialog({
             type="button"
             onClick={onClose}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-ink-dim hover:border-brand-300/30 hover:text-white"
-            aria-label="Fermer la boîte de dialogue"
+            aria-label={copy.close}
           >
             <X className="h-5 w-5" />
           </button>
@@ -676,7 +676,7 @@ function AllocationTraceBlock({ trace, money, lang }: { trace?: AllocationTrace 
   return (
     <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3">
       <div className="flex flex-wrap justify-between gap-2 text-xs">
-        <p className="font-black uppercase tracking-[0.16em] text-emerald-100">Répartition tracée par EduPay {trace.mode ? `(${trace.mode})` : ""}</p>
+        <p className="font-black uppercase tracking-[0.16em] text-emerald-100">{lang === "fr" ? "Répartition tracée par EduPay" : "Allocation tracked by EduPay"} {trace.mode ? `(${trace.mode})` : ""}</p>
         <p className="font-mono font-bold text-emerald-200">{money.format(trace.allocatedTotal)} / {money.format(trace.totalReceived)}</p>
       </div>
       <div className="mt-3 grid gap-2">
@@ -684,19 +684,19 @@ function AllocationTraceBlock({ trace, money, lang }: { trace?: AllocationTrace 
           <div key={`${child.studentId ?? child.studentName}-${child.allocated}`} className="rounded-xl border border-white/10 bg-slate-950/35 p-3">
             <div className="flex flex-wrap justify-between gap-2 text-sm">
               <p className="font-semibold text-white">{child.studentName}</p>
-              <p className="font-mono text-emerald-200">{money.format(child.allocated)} applique · reste {money.format(child.remaining)}</p>
+              <p className="font-mono text-emerald-200">{money.format(child.allocated)} {lang === "fr" ? "appliqué · reste" : "applied · remaining"} {money.format(child.remaining)}</p>
             </div>
             <div className="mt-2 space-y-1 text-xs text-ink-dim">
               {child.lines.map((line) => (
                 <p key={line.allocationId}>
-                  {line.label} ({new Date(line.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}): {money.format(line.allocated)} applique, solde {money.format(line.outstandingAfter)} · {line.status}
+                  {line.label} ({new Date(line.dueDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}): {money.format(line.allocated)} {lang === "fr" ? "appliqué, solde" : "applied, balance"} {money.format(line.outstandingAfter)} · {statusLabel(line.status, pageCopy[lang as PageLang])}
                 </p>
               ))}
             </div>
           </div>
         ))}
       </div>
-      {trace.advanceBalance > 0 && <p className="mt-2 text-xs text-emerald-100">Avance conservée : {money.format(trace.advanceBalance)}</p>}
+      {trace.advanceBalance > 0 && <p className="mt-2 text-xs text-emerald-100">{lang === "fr" ? "Avance conservée" : "Credit retained"}: {money.format(trace.advanceBalance)}</p>}
     </div>
   );
 }
@@ -1381,8 +1381,8 @@ export function FinanceParentAdminPage() {
                               <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ink-dim">
                                 <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{getReductionScopeLabel(group.scope)}</span>
                                 {group.paymentOptionType && <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-cyan-100">{getPaymentOptionLabel(group.paymentOptionType)}</span>}
-                                {group.gradeGroup && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">Niveau: {group.gradeGroup}</span>}
-                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{group.rows.length} ligne(s)</span>
+                                {group.gradeGroup && <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{copy.gradeK}: {group.gradeGroup}</span>}
+                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{group.rows.length} {lang === "fr" ? "ligne(s)" : "line(s)"}</span>
                               </div>
                             </div>
                             <span className="w-fit shrink-0 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-200">{money.format(group.amount)}</span>
@@ -1497,7 +1497,7 @@ export function FinanceParentAdminPage() {
 
                     {isManualScholarshipPlan && (
                       <div className="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 p-4">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">Accord spécial parent-école</p>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">{copy.optionSpecialOwnerAgreement}</p>
                         <h3 className="mt-1 font-display text-xl font-bold text-white">{copy.scholarshipAgreementTitle}</h3>
                         <p className="mt-1 text-sm text-ink-dim">{copy.scholarshipAgreementHelp}</p>
                         <button
@@ -1506,7 +1506,7 @@ export function FinanceParentAdminPage() {
                           className="mt-4 inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-400"
                         >
                           <Plus className="h-4 w-4" />
-                          Ouvrir la boite de dialogue
+                          {lang === "fr" ? "Ouvrir la boîte de dialogue" : "Open dialog"}
                         </button>
                       </div>
                     )}
@@ -1796,7 +1796,7 @@ export function FinanceParentAdminPage() {
                             <div className="min-w-0">
                               <p className="break-words font-semibold text-white">{group.origin}</p>
                               <p className="mt-1 break-words text-xs text-ink-dim">{group.beneficiary}</p>
-                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim">{group.rows.length} ligne(s) detaillee(s)</p>
+                              <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim">{group.rows.length} {lang === "fr" ? "ligne(s) détaillée(s)" : "detailed line(s)"}</p>
                             </div>
                             <span className="shrink-0 font-mono font-semibold text-cyan-200">{money.format(group.amount)}</span>
                           </div>
@@ -1835,3 +1835,4 @@ export function FinanceParentAdminPage() {
     </div>
   );
 }
+

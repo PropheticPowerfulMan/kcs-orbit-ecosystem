@@ -649,16 +649,25 @@ function isPrecisionFinanceQuestion(query: string) {
 }
 
 function ResponseSections({ response }: { response: { answer?: string; text?: string; facts?: string[]; actions?: string[]; confidence?: string; tableRows?: StudentPaymentTableRow[] } }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const answer = response.answer ?? response.text ?? "";
+  const statusLabel = (status: string) => {
+    const normalized = normalize(status);
+    if (["paye", "paid", "completed"].includes(normalized)) return L("Payé", "Paid");
+    if (["partiel", "partial", "pending"].includes(normalized)) return L("Partiel", "Partial");
+    if (["impaye", "unpaid", "failed"].includes(normalized)) return L("Impayé", "Unpaid");
+    return status;
+  };
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-300">Diagnostic</p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-300">{L("Diagnostic", "Assessment")}</p>
         <p className="mt-1 leading-relaxed text-ink-dim">{answer}</p>
       </div>
       {response.facts && response.facts.length > 0 && (
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300">Chiffres cles</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300">{L("Chiffres clés", "Key figures")}</p>
           <div className="mt-2 grid gap-2 md:grid-cols-2">
             {response.facts.map((fact) => (
               <div key={fact} className="rounded-lg border border-slate-700/50 bg-slate-900/35 px-3 py-2 text-sm text-ink-dim">
@@ -670,18 +679,18 @@ function ResponseSections({ response }: { response: { answer?: string; text?: st
       )}
       {response.tableRows && response.tableRows.length > 0 && (
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300">Tableau exact</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-300">{L("Tableau détaillé", "Detailed table")}</p>
           <div className="mt-2 overflow-x-auto rounded-xl border border-slate-700/60">
             <table className="min-w-[760px] w-full text-left text-sm">
               <thead className="bg-slate-950/80 text-xs uppercase tracking-[0.12em] text-cyan-200">
                 <tr>
-                  <th className="px-3 py-3">Élève</th>
-                  <th className="px-3 py-3">Classe</th>
-                  <th className="px-3 py-3">Parent</th>
-                  <th className="px-3 py-3 text-right">Attendu</th>
-                  <th className="px-3 py-3 text-right">Payé</th>
-                  <th className="px-3 py-3 text-right">Reste</th>
-                  <th className="px-3 py-3">Statut</th>
+                  <th className="px-3 py-3">{L("Élève", "Student")}</th>
+                  <th className="px-3 py-3">{L("Classe", "Class")}</th>
+                  <th className="px-3 py-3">{L("Parent", "Parent")}</th>
+                  <th className="px-3 py-3 text-right">{L("Attendu", "Expected")}</th>
+                  <th className="px-3 py-3 text-right">{L("Payé", "Paid")}</th>
+                  <th className="px-3 py-3 text-right">{L("Reste", "Balance")}</th>
+                  <th className="px-3 py-3">{L("Statut", "Status")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 bg-slate-900/35 text-ink-dim">
@@ -693,7 +702,7 @@ function ResponseSections({ response }: { response: { answer?: string; text?: st
                     <td className="px-3 py-3 text-right font-mono">{USD.format(row.expected)}</td>
                     <td className="px-3 py-3 text-right font-mono">{USD.format(row.paid)}</td>
                     <td className="px-3 py-3 text-right font-mono text-amber-200">{USD.format(row.balance)}</td>
-                    <td className="px-3 py-3">{row.status}</td>
+                    <td className="px-3 py-3">{statusLabel(row.status)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -703,7 +712,7 @@ function ResponseSections({ response }: { response: { answer?: string; text?: st
       )}
       {response.actions && response.actions.length > 0 && (
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-300">Actions recommandees</p>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-300">{L("Actions recommandées", "Recommended actions")}</p>
           <ol className="mt-2 space-y-2">
             {response.actions.map((action, index) => (
               <li key={action} className="flex gap-2 text-sm text-ink-dim">
@@ -863,7 +872,7 @@ export function AIAssistantPage() {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <MessageSquareText className="h-5 w-5 text-brand-300" />
-              <h3 className="font-display text-lg font-bold text-white">Conversation IA</h3>
+              <h3 className="font-display text-lg font-bold text-white">{lang === "fr" ? "Conversation IA" : "AI conversation"}</h3>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -884,7 +893,7 @@ export function AIAssistantPage() {
                 className="inline-flex items-center gap-2 rounded-lg border border-danger/35 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger hover:bg-danger/20"
               >
                 <Trash2 className="h-4 w-4" />
-                Effacer
+                {lang === "fr" ? "Effacer" : "Clear"}
               </button>
             </div>
           </div>
@@ -918,7 +927,7 @@ export function AIAssistantPage() {
             </div>
           ) : (
             <p className="rounded-lg border border-slate-700/50 bg-slate-900/35 px-4 py-3 text-sm text-ink-dim">
-              Historique masqué. Les nouvelles réponses continueront ? être enregistrées jusqu’à effacement.
+              {lang === "fr" ? "Historique masqué. Les nouvelles réponses continueront à être enregistrées jusqu’à leur effacement." : "History hidden. New responses will continue to be saved until you clear them."}
             </p>
           )}
         </div>

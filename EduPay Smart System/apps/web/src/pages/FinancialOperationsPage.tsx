@@ -25,7 +25,7 @@ import { SearchField } from "../components/SearchField";
 import { api } from "../services/api";
 import { useI18n } from "../i18n";
 import { useAuthStore } from "../store/auth";
-import { exportWorkbook } from "../utils/financeExcel";
+import { exportWorkbook, type WorkbookSheet } from "../utils/financeExcel";
 import { printHtmlDocument as sharedPrintHtmlDocument } from "../utils/printDocument";
 
 type ExpenseAttachment = {
@@ -549,7 +549,315 @@ function InfoPill({ label, value }: { label: string; value: string }) {
   );
 }
 
+const FINANCIAL_EN = new Map<string, string>(String.raw`
+/ Crédit|||/ Credit
+· Crédit|||· Credit
+• Net|||• Net
+Actions du journal|||Ledger actions
+Actions trésorerie|||Cash-flow actions
+Adresse|||Address
+Afficher les comptes clés du plan scolaire|||Show key accounts in the school chart of accounts
+Ajouter le fournisseur|||Add vendor
+Ajouter le profil salarial|||Add salary profile
+Ajoutez des justificatifs depuis l'onglet Dépenses avec un vrai upload de fichiers ou une référence URL.|||Add supporting documents from the Expenses tab using a file upload or URL reference.
+Annulée|||Cancelled
+Annuler|||Cancel
+Annuler l'opération|||Cancel operation
+Approved|||Approved
+Arborescence budgétaire|||Budget actions
+Arborescence des actions|||Action menu
+Arborescence paie|||Payroll actions
+Aucun beneficiaire existant|||No existing beneficiary
+Aucun budget li?|||No linked budget
+Aucun flux pour le filtre actuel.|||No cash flow matches the current filter.
+Aucun fournisseur ne correspond a cette recherche.|||No vendor matches this search.
+Aucun mouvement de trésorerie disponible pour le filtre actuel.|||No cash movement is available for the current filter.
+Aucun run de paie généré pour l'instant.|||No payroll run has been generated yet.
+Aucune avance, dette ou échéance employé n'est encore enregistrée.|||No employee advance, debt or installment has been recorded yet.
+Aucune dépense ne correspond au filtre actuel.|||No expense matches the current filter.
+Aucune écriture comptable disponible pour le filtre actuel.|||No accounting entry is available for the current filter.
+Aucune écriture pour le filtre actuel.|||No entry matches the current filter.
+Aucune piece justificative indexee pour le moment.|||No supporting document is indexed yet.
+Autre dette|||Other debt
+Avance sur salaire|||Salary advance
+Avances récupérées|||Recovered advances
+Balance disponible|||Available balance
+Base fournisseurs|||Vendor directory
+Beneficiaire|||Beneficiary
+Beneficiaire libre|||Custom beneficiary
+Beneficiaire repertorie|||Registered beneficiary
+Bonus par défaut|||Default bonus
+Budget|||Budget
+Budget associe|||Linked budget
+Budget workspace|||Budget workspace
+Bulletin de paie|||Payslip
+Bulletin de paie officiel|||Official payslip
+Bulletins|||Payslips
+Cardinal du journal comptable actif.|||Number of entries in the active accounting ledger.
+Catégorie associée|||Linked category
+Catégorie de dépense|||Expense category
+Catégorisation et suivi|||Categorization and monitoring
+Champs clés|||Key fields
+Chargement des données opérationnelles en arrière-plan. La page reste disponible pendant la synchronisation.|||Operational data is loading in the background. The page remains available during synchronization.
+Cheque, facture, transaction|||Check, invoice or transaction
+Choisir la catégorie analytique|||Select an analytical category
+Choisir le compte à créditer|||Select the account to credit
+Choisir le compte à débiter|||Select the account to debit
+Choisir une catégorie principale|||Select a main category
+Code employé|||Employee code
+Commentaires|||Comments
+Compte / wallet|||Account / wallet
+Compte à créditer — soustraire|||Account to credit — subtract
+Compte à débiter — ajouter|||Account to debit — add
+Consomme|||Used
+Contact beneficiaire|||Beneficiary contact
+Contexte, période couverte, justification, limites ou remarques de gestion|||Context, covered period, justification, limits or management notes
+Convention EduPay : débiter ajoute le montant au compte ; créditer soustrait le montant du compte.|||EduPay convention: a debit adds the amount to the account; a credit subtracts it from the account.
+Couverture cash|||Cash coverage
+Couverture documentaire|||Document coverage
+Crédit · −|||Credit · −
+Créer une enveloppe budgétaire propre et traçable|||Create a clear and traceable budget envelope
+CSV|||CSV
+Date de la depense|||Expense date
+Date debut depenses|||Expense start date
+Date début trésorerie|||Cash-flow start date
+Date fin depenses|||Expense end date
+Date fin trésorerie|||Cash-flow end date
+Débit|||Debit
+Débit · +|||Debit · +
+Déclenche une alerte visuelle lorsque la consommation approche la limite.|||Triggers a visual alert when usage approaches the limit.
+Déduction par défaut|||Default deduction
+Déduction sur salaire|||Payroll deduction
+Deductions|||Deductions
+Définissez clairement le nom, le département et le volume financier prévu.|||Clearly define the name, department and planned financial amount.
+Departement|||Department
+Département|||Department
+Département concerné|||Relevant department
+Département dominant|||Leading department
+Departements touches|||Departments involved
+depense(s)|||expense(s)
+Depense:|||Expense:
+Dépenses|||Expenses
+Dépenses approuvées sur l'ensemble du pipeline.|||Expenses approved across the entire workflow.
+Dépenses documentees|||Documented expenses
+Dépenses liées|||Linked expenses
+Depot documentaire|||Document repository
+Dette employé|||Employee debt
+Dette envers l'école|||Debt owed to the school
+Dettes récupérées|||Recovered debts
+Documents indexes|||Indexed documents
+du volume comptable total.|||of total accounting volume.
+du volume de trésorerie.|||of total cash-flow volume.
+Échéance|||Due date
+Échéance à encaisser|||Installment to collect
+Écriture comptable|||Accounting entry
+écriture(s) • moyenne|||entry/entries • average
+Email|||Email
+Employé|||Employee
+Encaisse encore disponible après les sorties enregistrées.|||Cash still available after recorded outflows.
+Encaisser et générer le reçu|||Collect and generate receipt
+Enregistrer|||Save
+Enregistrer et générer le reçu|||Save and generate receipt
+Enregistrer le budget|||Save budget
+Ex : Paie Août 2026|||Example: August 2026 payroll
+Ex: 15|||Example: 15
+Ex: 25|||Example: 25
+Ex: 2500|||Example: 2500
+Ex: 450|||Example: 450
+Ex: 5|||Example: 5
+Ex: 80|||Example: 80
+Ex: Académique|||Example: Academic
+Ex: Achat de fournitures|||Example: Purchase of supplies
+Ex: Administration, Académique, Transport|||Example: Administration, Academic, Transport
+Ex: Administration, Transport, Academique|||Example: Administration, Transport, Academic
+Ex: Budget transport T3 2026|||Example: Q3 2026 transport budget
+Ex: EMP-ACAD-004|||Example: EMP-ACAD-004
+Ex: Enseignant de mathématiques|||Example: Mathematics teacher
+Ex: Facture, bon de livraison|||Example: Invoice, delivery note
+Ex: Grâce Mukendi|||Example: Grace Mukendi
+Export Excel|||Export to Excel
+Exporter Excel|||Export to Excel
+Fermer|||Close
+Fermer la boite de dialogue|||Close dialog
+Fermer le sous-dialogue|||Close sub-dialog
+Fiche fournisseur|||Vendor profile
+Fiche:|||Payslip:
+Fiches de paie disponibles|||Available payslips
+Finance employé|||Employee finance
+Flux sortants consolidés du journal de trésorerie.|||Consolidated outflows from the cash ledger.
+Fréquence|||Frequency
+Fréquence de paie|||Pay frequency
+Générer la paie|||Generate payroll
+IBAN, compte, MPESA, Airtel...|||IBAN, account, MPESA, Airtel...
+Identité du budget|||Budget identity
+Imprimer / enregistrer en PDF|||Print / save as PDF
+Imprimer / PDF|||Print / PDF
+Imprimer le journal|||Print ledger
+imputés à la masse salariale.|||allocated to payroll.
+Informations principales|||Main information
+Informations utiles sur ce profil salarial|||Useful information about this salary profile
+Intitulé de la paie|||Payroll title
+Journal de cashflow|||Cash-flow ledger
+Journal general|||General ledger
+Justificatifs|||Supporting documents
+Laisser le système appliquer le mensuel par défaut|||Let the system apply the monthly default
+Lancer une paie|||Run payroll
+Lecture comptable|||Accounting overview
+ligne(s)|||line(s)
+ligne(s) • moyenne|||line(s) • average
+Lignes de trésorerie|||Cash-flow entries
+Mixte|||Mixed
+Mode / etape|||Method / step
+Mode de paiement|||Payment method
+Modification fournisseur|||Edit vendor
+Modifier|||Edit
+Montant|||Amount
+Montant en USD|||Amount in USD
+Montant payé|||Amount paid
+Montant planifié|||Planned amount
+Montant total prévu pour l'enveloppe, en USD.|||Total amount planned for the envelope, in USD.
+Motif, periode concernee, validation attendue...|||Reason, relevant period, expected approval...
+Moyenne = volume comptabilisé / nombre d'écritures.|||Average = accounting volume / number of entries.
+Moyenne des opérations classées OUTFLOW.|||Average of operations classified as OUTFLOW.
+Net|||Net
+Net à payer|||Net payable
+Nom complet|||Full name
+Nom de la personne, societe ou compte paye|||Name of person, company or account paid
+Nom de la piece|||Document name
+Nom du budget|||Budget name
+Nom fournisseur|||Vendor name
+Nom lisible dans les journaux, les tableaux et les exports.|||A clear name used in ledgers, tables and exports.
+Nom, département, montant, catégorie, seuil d'alerte.|||Name, department, amount, category and alert threshold.
+Nombre d'enregistrements utilisés pour la lecture de cashflow.|||Number of records used for the cash-flow analysis.
+Non précisé|||Not specified
+Notes|||Notes
+Notes budgétaires|||Budget notes
+Notes de caisse ou observation|||Cash desk notes or comments
+Notes de validation, motif ou référence interne|||Approval notes, reason or internal reference
+Notes du run|||Payroll run notes
+Notes fournisseur|||Vendor notes
+Notes RH|||HR notes
+Nouveau budget|||New budget
+Nouveau fournisseur|||New vendor
+Nouvelle depense|||New expense
+Operations|||Operations
+Ouvrir|||Open
+Paie|||Payroll
+Paie:|||Payroll:
+Paiement hors salaire|||Payment outside payroll
+Part paie|||Payroll share
+Pending|||Pending
+Periodicite appliquee:|||Applied frequency:
+Permet d'ancrer le budget dans une famille de dépenses.|||Links the budget to an expense category.
+Personne contact|||Contact person
+Piece:|||Document:
+Pièces jointes présentes sur les dépenses source.|||Attachments available on source expenses.
+Pieces justificatives|||Supporting documents
+Pilotage|||Management
+Pilotage budgetaire|||Budget management
+Plan comptable scolaire|||School chart of accounts
+Poste|||Position
+Préparez le budget pour le suivi analytique et les alertes de consommation.|||Prepare the budget for analytical monitoring and usage alerts.
+Prévisualisation de l'écriture|||Entry preview
+Prevu|||Planned
+Profil de rémunération|||Compensation profile
+Profil salarial|||Salary profile
+Profils actifs|||Active profiles
+Ratio = cash disponible / sorties consolidées.|||Ratio = available cash / consolidated outflows.
+Recherche fine...|||Detailed search...
+Recherche fournisseur, contact, telephone, email, departement, montant ou note|||Search vendor, contact, phone, email, department, amount or note
+Recherche precise: motif, beneficiaire, service, mode...|||Detailed search: reason, beneficiary, department, method...
+Rechercher une écriture, un département ou une source...|||Search an entry, department or source...
+Référence document|||Document reference
+Référence paiement|||Payment reference
+Rejected|||Rejected
+Rejeter|||Reject
+Remboursement|||Repayment
+Remboursement employé|||Employee repayment
+Renseignez explicitement les champs utiles. Les éléments optionnels laissés vides seront gérés par défaut côté système.|||Complete the relevant fields explicitly. Optional fields left empty will use system defaults.
+Renseignez manuellement chaque champ important pour éviter les budgets implicites, mal catégorisés ou mal ventilés.|||Complete each important field manually to avoid implicit, incorrectly categorized or poorly allocated budgets.
+Répartition par département|||Breakdown by department
+Répartition par source|||Breakdown by source
+Reste|||Remaining
+Résultat attendu|||Expected result
+Retenues ordinaires|||Regular deductions
+Run:|||Run:
+Salaire brut|||Gross salary
+Salaire de base|||Base salary
+salarié(s) actif(s) seront inclus et recevront chacun une fiche de paie.|||active employee(s) will be included and each will receive a payslip.
+Sélectionner un profil salarial|||Select a salary profile
+Sélectionner une échéance|||Select an installment
+Sélectionnez un fournisseur pour afficher sa fiche détaillée.|||Select a vendor to view its detailed profile.
+Service ou unité qui consommera ce budget.|||Department or unit that will use this budget.
+Seuil d'alerte (%)|||Alert threshold (%)
+Somme scientifique de toutes les écritures enregistrées.|||Exact sum of all recorded entries.
+Sorties cumulees|||Cumulative outflows
+sortis pour la paie.|||paid out for payroll.
+Soumettre la depense|||Submit expense
+Source dominante|||Leading source
+Supprimer|||Delete
+Taux d'approbation|||Approval rate
+Taux de recouvrement (%)|||Recovery rate (%)
+Télécharger|||Download
+Telephone, email ou contact|||Phone, email or contact
+Ticket moyen|||Average amount
+Ticket moyen sortie|||Average outflow
+Titre de l'opération|||Operation title
+Titre ou motif de la depense|||Expense title or reason
+Total ecritures|||Total entries
+Tous les départements|||All departments
+Tous les statuts|||All statuses
+Toutes les sources|||All sources
+Trésorerie|||Cash flow
+Type|||Type
+Un budget exploitable immédiatement dans le suivi des dépenses.|||A budget ready for immediate use in expense monitoring.
+URL, numéro ou référence interne|||URL, number or internal reference
+Utilisation:|||Usage:
+Valider l'etape|||Approve step
+Visible pour garder une trace de la logique budgétaire choisie.|||Visible to preserve the rationale behind the selected budget.
+Voir|||View
+Volume comptabilisé|||Accounting volume
+Votre role est en lecture seule. Les formulaires de création restent masques, mais les journaux et statuts restent consultables.|||Your role is read-only. Creation forms remain hidden, while ledgers and statuses remain available.
+Workflow des depenses|||Expense workflow
+Workflow principal: consulter, filtrer, valider ou rejeter les demandes.|||Main workflow: review, filter, approve or reject requests.
+`.trim().split("\n").map((line) => {
+  const [fr, en] = line.split("|||");
+  return [fr, en] as const;
+}));
+
+function F(fr: string, lang: "fr" | "en") {
+  return lang === "fr" ? fr : FINANCIAL_EN.get(fr) ?? fr;
+}
+const FINANCIAL_EXPORT_EN: Record<string, string> = {
+  "Synthese": "Summary", "Synthèse": "Summary", "Repartition departements": "Breakdown by department", "Repartition sources": "Breakdown by source", "Journal comptable": "Accounting ledger", "Journal trésorerie": "Cash-flow ledger", "Registre depenses": "Expense register",
+  "Date": "Date", "Type": "Type", "Direction": "Direction", "Titre": "Title", "Titre ou motif": "Title or reason", "Departement": "Department", "Département": "Department", "Montant": "Amount", "Devise": "Currency", "Source": "Source", "Méthode": "Method", "Référence": "Reference", "Notes": "Notes",
+  "Ecritures filtrées": "Filtered entries", "Volume comptabilisé": "Accounting volume", "Ticket moyen": "Average amount", "Part paie %": "Payroll share %", "Couverture documentaire %": "Document coverage %", "Taux approbation %": "Approval rate %", "Ecritures": "Entries", "Volume": "Volume", "Moyenne": "Average", "Poids %": "Weight %",
+  "Lignes filtrées": "Filtered lines", "Sorties cumulées": "Cumulative outflows", "Ticket moyen sortie": "Average outflow", "Couverture cash": "Cash coverage", "Variation nette": "Net change", "Lignes": "Lines",
+  "Dépenses filtrées": "Filtered expenses", "Période": "Period", "Statut": "Status", "Total": "Total", "Approuvees": "Approved", "En attente": "Pending", "Beneficiaire": "Beneficiary", "Contact beneficiaire": "Beneficiary contact", "Categorie": "Category", "Compte débité": "Debited account", "Classe": "Class", "Compte crédité": "Credited account", "Mode": "Method", "Budget": "Budget", "Commentaires": "Comments", "Pieces": "Documents",
+  "Bulletin de paie": "Payslip", "Numero de fiche": "Payslip number", "Run": "Run", "Employe": "Employee", "Code employe": "Employee code", "Poste": "Position", "Frequence": "Frequency", "Salaire de base": "Base salary", "Primes et bonus": "Allowances and bonuses", "Salaire brut": "Gross salary", "Retenues ordinaires": "Regular deductions", "Avances recuperees": "Recovered advances", "Dettes recuperees": "Recovered debts", "Total des retenues": "Total deductions", "Net a payer": "Net payable", "Statut du run": "Run status",
+  "Dépenses": "Expenses", "Budgets": "Budgets", "Paies": "Payroll runs", "Comptabilité": "Accounting", "Trésorerie": "Cash flow", "Documents": "Documents", "Cash disponible": "Available cash", "Nom": "Name", "Planifie": "Planned", "Consomme": "Used", "Reste": "Remaining", "Utilisation %": "Usage %", "Fournisseur": "Vendor", "Bulletins": "Payslips", "Deductions": "Deductions"
+};
+function financialExportText(value: string, lang: "fr" | "en") {
+  if (lang === "fr") return value;
+  return FINANCIAL_EXPORT_EN[value] ?? FINANCIAL_EN.get(value) ?? dynamicFinancialLabel(value, lang);
+}
+const DYNAMIC_FINANCIAL_LABELS: Record<string, { fr: string; en: string }> = {
+  APPROVED: { fr: "Approuvé", en: "Approved" }, PENDING: { fr: "En attente", en: "Pending" }, REJECTED: { fr: "Rejeté", en: "Rejected" }, CANCELLED: { fr: "Annulé", en: "Cancelled" },
+  PAID: { fr: "Payé", en: "Paid" }, PARTIALLY_PAID: { fr: "Partiellement payé", en: "Partially paid" }, OPEN: { fr: "Ouvert", en: "Open" }, CLOSED: { fr: "Clôturé", en: "Closed" },
+  DRAFT: { fr: "Brouillon", en: "Draft" }, EXCEEDED: { fr: "Dépassé", en: "Exceeded" }, ACTIVE: { fr: "Actif", en: "Active" }, INACTIVE: { fr: "Inactif", en: "Inactive" },
+  DEBIT: { fr: "Débit", en: "Debit" }, CREDIT: { fr: "Crédit", en: "Credit" }, INFLOW: { fr: "Entrée", en: "Inflow" }, OUTFLOW: { fr: "Sortie", en: "Outflow" },
+  EXPENSE: { fr: "Dépense", en: "Expense" }, PAYROLL: { fr: "Paie", en: "Payroll" }, PAYROLL_RUN: { fr: "Cycle de paie", en: "Payroll run" }, PAYROLL_ITEM: { fr: "Fiche de paie", en: "Payslip" },
+  SALARY_ADVANCE: { fr: "Avance sur salaire", en: "Salary advance" }, SCHOOL_DEBT: { fr: "Dette envers l’école", en: "Debt owed to the school" }, OTHER_DEBT: { fr: "Autre dette", en: "Other debt" },
+  SALARY_DEDUCTION: { fr: "Déduction sur salaire", en: "Payroll deduction" }, EXTERNAL_PAYMENT: { fr: "Paiement hors salaire", en: "Payment outside payroll" }, MIXED: { fr: "Mixte", en: "Mixed" },
+  CASH: { fr: "Espèces", en: "Cash" }, BANK_TRANSFER: { fr: "Virement bancaire", en: "Bank transfer" }, MOBILE_MONEY: { fr: "Mobile Money", en: "Mobile Money" }, CHEQUE: { fr: "Chèque", en: "Check" },
+  MONTHLY: { fr: "Mensuel", en: "Monthly" }, BI_MONTHLY: { fr: "Bimensuel", en: "Twice monthly" }, QUARTERLY: { fr: "Trimestriel", en: "Quarterly" }, ANNUAL: { fr: "Annuel", en: "Annual" }
+};
+function dynamicFinancialLabel(value: string | null | undefined, lang: "fr" | "en") {
+  if (!value) return "";
+  return DYNAMIC_FINANCIAL_LABELS[value]?.[lang] ?? value.replace(/_/g, " ").toLowerCase().replace(/^./, (letter: string) => letter.toUpperCase());
+}
 function StatusBadge({ value }: { value: string }) {
+  const { lang } = useI18n();
   const tone = value === "APPROVED" || value === "PAID"
     ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
     : value === "REJECTED" || value === "EXCEEDED" || value === "CANCELLED"
@@ -557,7 +865,7 @@ function StatusBadge({ value }: { value: string }) {
       : value === "PENDING" || value === "DRAFT"
         ? "border-amber-500/25 bg-amber-500/10 text-amber-200"
         : "border-brand-500/25 bg-brand-500/10 text-brand-100";
-  return <span className={`inline-flex max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>{value}</span>;
+  return <span className={`inline-flex max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>{dynamicFinancialLabel(value, lang)}</span>;
 }
 
 function OperationsDialog({
@@ -571,13 +879,14 @@ function OperationsDialog({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const { lang } = useI18n();
   return (
     <div className="edupay-operations-dialog fixed inset-0 z-50 flex items-end justify-center px-3 py-4 sm:items-center sm:px-5">
-      <button aria-label="Fermer" className="absolute inset-0 bg-slate-950/78 backdrop-blur-md" onClick={onClose} />
+      <button aria-label={F("Fermer", lang)} className="absolute inset-0 bg-slate-950/78 backdrop-blur-md" onClick={onClose} />
       <section className="edupay-operations-modal relative flex max-h-[98vh] w-full max-w-8xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-slate-950/95 shadow-2xl">
         <header className="flex flex-col gap-4 border-b border-white/10 bg-white/[0.04] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Operations</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">{F("Operations", lang)}</p>
             <h2 className="mt-1 font-display text-2xl font-bold text-white">{title}</h2>
             <p className="mt-1 text-sm text-ink-dim">{subtitle}</p>
           </div>
@@ -585,7 +894,7 @@ function OperationsDialog({
             type="button"
             onClick={onClose}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-ink-dim hover:border-brand-300/30 hover:text-white"
-            aria-label="Fermer la boite de dialogue"
+            aria-label={F("Fermer la boite de dialogue", lang)}
           >
             <X className="h-5 w-5" />
           </button>
@@ -609,13 +918,14 @@ function OperationsSubDialog({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const { lang } = useI18n();
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-slate-950/78 p-4 backdrop-blur-md sm:p-6">
-      <button aria-label="Fermer le sous-dialogue" className="fixed inset-0 cursor-default" onClick={onClose} />
+      <button aria-label={F("Fermer le sous-dialogue", lang)} className="fixed inset-0 cursor-default" onClick={onClose} />
       <section className="edupay-operations-submodal relative my-auto flex max-h-[98vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-slate-950 shadow-2xl shadow-cyan-950/30">
         <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-slate-950/95 px-4 py-4 backdrop-blur sm:px-6">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Paie</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">{F("Paie", lang)}</p>
             <h3 className="mt-1 font-display text-xl font-bold text-white sm:text-2xl">{title}</h3>
             <p className="mt-1 text-sm text-ink-dim">{subtitle}</p>
           </div>
@@ -623,7 +933,7 @@ function OperationsSubDialog({
             type="button"
             onClick={onClose}
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-ink-dim hover:border-brand-300/30 hover:text-white"
-            aria-label="Fermer le sous-dialogue"
+            aria-label={F("Fermer le sous-dialogue", lang)}
           >
             <X className="h-5 w-5" />
           </button>
@@ -636,14 +946,8 @@ function OperationsSubDialog({
   );
 }
 
-function labelizeFrequency(value: string) {
-  const map: Record<string, string> = {
-    MONTHLY: "Mensuel",
-    BI_MONTHLY: "Bimensuel",
-    QUARTERLY: "Trimestriel",
-    ANNUAL: "Annuel"
-  };
-  return map[value] ?? value;
+function labelizeFrequency(value: string, lang: "fr" | "en") {
+  return dynamicFinancialLabel(value, lang);
 }
 
 function escapeHtml(value: string | number | null | undefined) {
@@ -705,13 +1009,15 @@ function isWithinPeriod(value: string, period: string, from: string, to: string)
   return (!start || date >= start) && (!end || date <= end);
 }
 
-function periodLabel(period: string, from: string, to: string) {
+function periodLabel(period: string, from: string, to: string, lang: "fr" | "en") {
   if (period === "CUSTOM") {
-    const start = from ? new Date(from).toLocaleDateString("fr-FR") : "debut libre";
-    const end = to ? new Date(to).toLocaleDateString("fr-FR") : "fin libre";
+    const start = from ? new Date(from).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : lang === "fr" ? "début libre" : "open start";
+    const end = to ? new Date(to).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US") : lang === "fr" ? "fin libre" : "open end";
     return `${start} - ${end}`;
   }
-  return PERIOD_FILTERS.find((item) => item.value === period)?.label ?? "Toute periode";
+  const label = PERIOD_FILTERS.find((item) => item.value === period)?.label;
+  if (lang === "en") return ({ TODAY: "Today", LAST_7_DAYS: "Last 7 days", CURRENT_MONTH: "Current month", CURRENT_QUARTER: "Current quarter", CURRENT_YEAR: "Current year", ALL: "All periods" } as Record<string, string>)[period] ?? label ?? "All periods";
+  return label ?? "Toute période";
 }
 
 function buildBeneficiaryNotes(form: ExpenseFormState) {
@@ -731,6 +1037,21 @@ export function FinancialOperationsPage() {
   const canWrite = role !== "AUDITOR" && role !== "PARENT";
   const currency = useMemo(() => new Intl.NumberFormat(lang === "fr" ? "fr-FR" : "en-US", { style: "currency", currency: "USD" }), [lang]);
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
+  const exportLocalizedWorkbook = (filename: string, sheets: WorkbookSheet[]) => {
+    const englishFilename = filename
+      .replace("bulletin-de-paie", "payslip")
+      .replace("journal-comptable", "accounting-ledger")
+      .replace("journal-trésorerie", "cash-flow-ledger")
+      .replace("registre-depenses", "expense-register")
+      .replace("pack-financier-opérations", "financial-operations-pack");
+    exportWorkbook(lang === "fr" ? filename : englishFilename, sheets.map((sheet) => ({
+      name: financialExportText(sheet.name, lang),
+      rows: sheet.rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [
+        financialExportText(key, lang),
+        typeof value === "string" && DYNAMIC_FINANCIAL_LABELS[value] ? dynamicFinancialLabel(value, lang) : value
+      ])))
+    })));
+  };
 
   const [activeTab, setActiveTab] = useState<OperationTab>("expenses");
   const [activeDialog, setActiveDialog] = useState<OperationTab | null>(null);
@@ -808,7 +1129,7 @@ export function FinancialOperationsPage() {
       })
       .catch((loadError) => {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : "Impossible de charger les opérations financières.");
+        setError(loadError instanceof Error ? loadError.message : L("Impossible de charger les opérations financières.", "Unable to load financial operations."));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -1149,7 +1470,7 @@ export function FinancialOperationsPage() {
     const totalDeductions = Number(item.deductions || 0) + Number(item.advancesRecovered || 0) + Number(item.debtRecovered || 0);
     const documentReference = escapeHtml(`KCS-PAYROLL-${generatedAt.toISOString().slice(0, 10)}-${item.salarySlipNumber}`);
     const html = `<!DOCTYPE html>
-<html lang="fr">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <title>Bulletin de paie ${item.salarySlipNumber}</title>
@@ -1194,41 +1515,41 @@ export function FinancialOperationsPage() {
         <img class="hero-logo" src="${logoSrc}" alt="Logo ${escapeHtml(brand.schoolName)}" />
         <div>
           <div class="label" style="color:${escapeHtml(brand.colors.accent)}">${escapeHtml(brand.appName)}</div>
-          <h1>Bulletin de paie</h1>
+          <h1>${L("Bulletin de paie", "Payslip")}</h1>
           <p>${item.salaryProfile.fullName} • ${item.salaryProfile.position} • ${run.period?.name ?? "Période active"}</p>
         </div>
       </div>
       <div class="hero-meta">
         <div style="font-weight:700;">${escapeHtml(brand.schoolName)}</div>
         <div style="margin-top:4px;">${escapeHtml(brand.tagline)}</div>
-        <div style="margin-top:10px;">${escapeHtml(generatedAt.toLocaleDateString("fr-FR"))}</div>
-        <div>${escapeHtml(generatedAt.toLocaleTimeString("fr-FR"))}</div>
+        <div style="margin-top:10px;">${escapeHtml(generatedAt.toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"))}</div>
+        <div>${escapeHtml(generatedAt.toLocaleTimeString(lang === "fr" ? "fr-FR" : "en-US"))}</div>
       </div>
     </div>
     <div class="grid">
-      <div class="card"><div class="label">Numero de fiche</div><div class="value">${item.salarySlipNumber}</div></div>
-      <div class="card"><div class="label">Run de paie</div><div class="value">${run.title}</div></div>
-      <div class="card"><div class="label">Employe</div><div class="value">${item.salaryProfile.fullName}</div></div>
-      <div class="card"><div class="label">Code employe</div><div class="value">${item.salaryProfile.employeeCode}</div></div>
-      <div class="card"><div class="label">Departement</div><div class="value">${item.salaryProfile.department}</div></div>
-      <div class="card"><div class="label">Net a payer</div><div class="value">${currency.format(item.netSalary)}</div></div>
+      <div class="card"><div class="label">${L("Numéro de fiche", "Payslip number")}</div><div class="value">${item.salarySlipNumber}</div></div>
+      <div class="card"><div class="label">${L("Cycle de paie", "Payroll run")}</div><div class="value">${run.title}</div></div>
+      <div class="card"><div class="label">${L("Employé", "Employee")}</div><div class="value">${item.salaryProfile.fullName}</div></div>
+      <div class="card"><div class="label">${L("Code employé", "Employee code")}</div><div class="value">${item.salaryProfile.employeeCode}</div></div>
+      <div class="card"><div class="label">${L("Département", "Department")}</div><div class="value">${item.salaryProfile.department}</div></div>
+      <div class="card"><div class="label">${L("Net à payer", "Net payable")}</div><div class="value">${currency.format(item.netSalary)}</div></div>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Element</th><th>Valeur</th></tr>
+          <tr><th>${L("Élément", "Item")}</th><th>${L("Valeur", "Value")}</th></tr>
         </thead>
         <tbody>
-          <tr><td>Salaire de base</td><td>${currency.format(item.baseSalary)}</td></tr>
-          <tr><td>Primes et bonus</td><td>${currency.format(item.bonuses)}</td></tr>
-          <tr><td>Salaire brut</td><td>${currency.format(grossSalary)}</td></tr>
-          <tr><td>Retenues ordinaires</td><td>${currency.format(item.deductions)}</td></tr>
-          <tr><td>Avances recuperees</td><td>${currency.format(item.advancesRecovered)}</td></tr>
-          <tr><td>Dettes recuperees</td><td>${currency.format(item.debtRecovered)}</td></tr>
-          <tr><td>Total des retenues</td><td>${currency.format(totalDeductions)}</td></tr>
-          <tr><td><strong>Net a payer</strong></td><td><strong>${currency.format(item.netSalary)}</strong></td></tr>
-          <tr><td>Frequence</td><td>${labelizeFrequency(item.salaryProfile.frequency)}</td></tr>
-          <tr><td>Statut du run</td><td>${run.status}</td></tr>
+          <tr><td>${L("Salaire de base", "Base salary")}</td><td>${currency.format(item.baseSalary)}</td></tr>
+          <tr><td>${L("Primes et bonus", "Allowances and bonuses")}</td><td>${currency.format(item.bonuses)}</td></tr>
+          <tr><td>${L("Salaire brut", "Gross salary")}</td><td>${currency.format(grossSalary)}</td></tr>
+          <tr><td>${L("Retenues ordinaires", "Regular deductions")}</td><td>${currency.format(item.deductions)}</td></tr>
+          <tr><td>${L("Avances récupérées", "Recovered advances")}</td><td>${currency.format(item.advancesRecovered)}</td></tr>
+          <tr><td>${L("Dettes récupérées", "Recovered debts")}</td><td>${currency.format(item.debtRecovered)}</td></tr>
+          <tr><td>${L("Total des retenues", "Total deductions")}</td><td>${currency.format(totalDeductions)}</td></tr>
+          <tr><td><strong>${L("Net à payer", "Net payable")}</strong></td><td><strong>${currency.format(item.netSalary)}</strong></td></tr>
+          <tr><td>${L("Fréquence", "Frequency")}</td><td>${labelizeFrequency(item.salaryProfile.frequency, lang)}</td></tr>
+          <tr><td>${L("Statut du cycle", "Run status")}</td><td>${run.status}</td></tr>
         </tbody>
       </table>
     </div>
@@ -1237,7 +1558,7 @@ export function FinancialOperationsPage() {
       <div class="signature-box"><div class="signature-title">Validation RH</div><div class="signature-line">Ressources humaines</div></div>
       <div class="signature-box"><div class="signature-title">Visa financier</div><div class="signature-line">Service paie / comptabilité</div></div>
     </div>
-    <div class="foot"><span>Document généré par ${escapeHtml(brand.appName)} pour ${escapeHtml(brand.schoolName)}.</span><span>${escapeHtml(generatedAt.toLocaleString("fr-FR"))}</span></div>
+    <div class="foot"><span>Document généré par ${escapeHtml(brand.appName)} pour ${escapeHtml(brand.schoolName)}.</span><span>${escapeHtml(generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US"))}</span></div>
   </div>
 </body>
 </html>`;
@@ -1246,7 +1567,7 @@ export function FinancialOperationsPage() {
   }
 
   function exportSalarySlipExcel(run: PayrollRun, item: PayrollRun["items"][number]) {
-    exportWorkbook(`bulletin-de-paie-${item.salarySlipNumber}`, [
+    exportLocalizedWorkbook(`bulletin-de-paie-${item.salarySlipNumber}`, [
       {
         name: "Bulletin de paie",
         rows: [{
@@ -1257,7 +1578,7 @@ export function FinancialOperationsPage() {
           "Code employe": item.salaryProfile.employeeCode,
           "Departement": item.salaryProfile.department,
           "Poste": item.salaryProfile.position,
-          "Frequence": labelizeFrequency(item.salaryProfile.frequency),
+          "Frequence": labelizeFrequency(item.salaryProfile.frequency, lang),
           "Salaire de base": item.baseSalary,
           "Primes et bonus": item.bonuses,
           "Salaire brut": Number(item.baseSalary || 0) + Number(item.bonuses || 0),
@@ -1310,7 +1631,7 @@ export function FinancialOperationsPage() {
         : `<div class="source-box"><div class="label">Source / reference</div><div class="source-text">${escapeHtml(sourceLabel)}</div></div>`;
 
     return `<!DOCTYPE html>
-<html lang="fr">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
   <title>Piece justificative ${escapeHtml(file.fileName)}</title>
@@ -1363,26 +1684,26 @@ export function FinancialOperationsPage() {
         <img class="hero-logo" src="${logoSrc}" alt="Logo ${escapeHtml(brand.schoolName)}" />
         <div>
           <div class="label">${escapeHtml(brand.appName)}</div>
-          <h1>Piece justificative de depense</h1>
+          <h1>${L("Pièce justificative de dépense", "Expense supporting document")}</h1>
           <p>${escapeHtml(file.fileName)} · ${escapeHtml(expense?.title ?? ("expenseTitle" in file ? file.expenseTitle : "Depense non liee"))}</p>
         </div>
       </div>
       <div class="hero-meta">
         <div style="font-weight:700;">${escapeHtml(brand.schoolName)}</div>
         <div style="margin-top:4px;">${escapeHtml(brand.tagline)}</div>
-        <div style="margin-top:10px;">${escapeHtml(generatedAt.toLocaleDateString("fr-FR"))}</div>
-        <div>${escapeHtml(generatedAt.toLocaleTimeString("fr-FR"))}</div>
+        <div style="margin-top:10px;">${escapeHtml(generatedAt.toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"))}</div>
+        <div>${escapeHtml(generatedAt.toLocaleTimeString(lang === "fr" ? "fr-FR" : "en-US"))}</div>
       </div>
     </div>
     <div class="grid">
-      <div class="card"><div class="label">Reference document</div><div class="value">${escapeHtml(documentReference)}</div></div>
-      <div class="card"><div class="label">Statut workflow</div><div class="value">${escapeHtml(expense?.status ?? ("status" in file ? file.status : "Non renseigne"))}</div></div>
-      <div class="card"><div class="label">Depense</div><div class="value">${escapeHtml(expense?.title ?? ("expenseTitle" in file ? file.expenseTitle : "-"))}</div></div>
-      <div class="card"><div class="label">Montant</div><div class="value amount">${escapeHtml(expense ? currency.format(expense.amount) : "-")}</div></div>
-      <div class="card"><div class="label">Departement</div><div class="value">${escapeHtml(expense?.department ?? ("department" in file ? file.department : "-"))}</div></div>
-      <div class="card"><div class="label">Beneficiaire</div><div class="value">${escapeHtml(expense?.vendor?.name ?? expense?.supplierName ?? "-")}</div></div>
-      <div class="card"><div class="label">Categorie</div><div class="value">${escapeHtml(expense?.category?.name ?? "-")}</div></div>
-      <div class="card"><div class="label">Date depense</div><div class="value">${escapeHtml(new Date(expense?.expenseDate ?? ("expenseDate" in file ? file.expenseDate : Date.now())).toLocaleDateString("fr-FR"))}</div></div>
+      <div class="card"><div class="label">${L("Référence du document", "Document reference")}</div><div class="value">${escapeHtml(documentReference)}</div></div>
+      <div class="card"><div class="label">${L("Statut du workflow", "Workflow status")}</div><div class="value">${escapeHtml(expense?.status ?? ("status" in file ? file.status : "Non renseigne"))}</div></div>
+      <div class="card"><div class="label">${L("Dépense", "Expense")}</div><div class="value">${escapeHtml(expense?.title ?? ("expenseTitle" in file ? file.expenseTitle : "-"))}</div></div>
+      <div class="card"><div class="label">${L("Montant", "Amount")}</div><div class="value amount">${escapeHtml(expense ? currency.format(expense.amount) : "-")}</div></div>
+      <div class="card"><div class="label">${L("Département", "Department")}</div><div class="value">${escapeHtml(expense?.department ?? ("department" in file ? file.department : "-"))}</div></div>
+      <div class="card"><div class="label">${L("Bénéficiaire", "Beneficiary")}</div><div class="value">${escapeHtml(expense?.vendor?.name ?? expense?.supplierName ?? "-")}</div></div>
+      <div class="card"><div class="label">${L("Catégorie", "Category")}</div><div class="value">${escapeHtml(expense?.category?.name ?? "-")}</div></div>
+      <div class="card"><div class="label">${L("Date de la dépense", "Expense date")}</div><div class="value">${escapeHtml(new Date(expense?.expenseDate ?? ("expenseDate" in file ? file.expenseDate : Date.now())).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"))}</div></div>
     </div>
     <div class="attachment">
       <div class="attachment-head"><span>Piece source</span><span>${escapeHtml(file.mimeType || "type non precise")}</span></div>
@@ -1400,7 +1721,7 @@ export function FinancialOperationsPage() {
       <div class="signature-box"><div class="signature-title">Controle operationnel</div><div class="signature-line">Responsable departement</div></div>
       <div class="signature-box"><div class="signature-title">Visa finance</div><div class="signature-line">Comptabilite / Direction</div></div>
     </div>
-    <div class="foot"><span>Document officiel ${escapeHtml(brand.appName)} genere pour ${escapeHtml(brand.schoolName)}.</span><span>${escapeHtml(generatedAt.toLocaleString("fr-FR"))}</span></div>
+    <div class="foot"><span>Document officiel ${escapeHtml(brand.appName)} genere pour ${escapeHtml(brand.schoolName)}.</span><span>${escapeHtml(generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US"))}</span></div>
   </div>
 </body>
 </html>`;
@@ -1476,7 +1797,9 @@ export function FinancialOperationsPage() {
   }
 
   function downloadCsv(filename: string, headers: string[], rows: Array<Array<string | number | null | undefined>>) {
-    const content = [headers, ...rows]
+    const localizedHeaders = headers.map((header) => financialExportText(header, lang));
+    const localizedRows = rows.map((row) => row.map((cell) => typeof cell === "string" && DYNAMIC_FINANCIAL_LABELS[cell] ? dynamicFinancialLabel(cell, lang) : cell));
+    const content = [localizedHeaders, ...localizedRows]
       .map((row) => row.map((cell) => escapeCsv(cell)).join(","))
       .join("\n");
 
@@ -1484,7 +1807,7 @@ export function FinancialOperationsPage() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = filename;
+    link.download = lang === "fr" ? filename : filename.replace("journal-comptable", "accounting-ledger").replace("journal-trésorerie", "cash-flow-ledger");
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1506,20 +1829,22 @@ export function FinancialOperationsPage() {
     const surface = brand.colors.surface;
     const generatedAt = new Date();
     const documentReference = escapeHtml(`KCS-LEDGER-${generatedAt.toISOString().slice(0, 10)}-${String(rows.length).padStart(4, "0")}`);
-    const headHtml = headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("");
+    const localizedTitle = financialExportText(title, lang);
+    const localizedSubtitle = financialExportText(subtitle, lang);
+    const headHtml = headers.map((header) => `<th>${escapeHtml(financialExportText(header, lang))}</th>`).join("");
     const rowsHtml = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("");
     const metricHtml = metrics.map((metric) => `
       <div class="metric-card">
-        <div class="metric-label">${escapeHtml(metric.label)}</div>
+        <div class="metric-label">${escapeHtml(financialExportText(metric.label, lang))}</div>
         <div class="metric-value">${escapeHtml(metric.value)}</div>
-        <div class="metric-detail">${escapeHtml(metric.detail)}</div>
+        <div class="metric-detail">${escapeHtml(financialExportText(metric.detail, lang))}</div>
       </div>
     `).join("");
     const html = `<!DOCTYPE html>
-<html lang="fr">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8" />
-  <title>${title}</title>
+  <title>${localizedTitle}</title>
   <style>
     @page { size: landscape; margin: 12mm; }
     body { font-family: Arial, Helvetica, sans-serif; color: #0f172a; margin: 0; padding: 24px; background: ${surface}; }
@@ -1563,15 +1888,15 @@ export function FinancialOperationsPage() {
         <img class="hero-logo" src="${logoSrc}" alt="Logo ${escapeHtml(brand.schoolName)}" />
         <div>
           <div style="font-size:12px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:${accent};">${escapeHtml(brand.shortName)} Financial Report</div>
-          <h1>${escapeHtml(title)}</h1>
-          <p>${escapeHtml(subtitle)}</p>
+          <h1>${escapeHtml(localizedTitle)}</h1>
+          <p>${escapeHtml(localizedSubtitle)}</p>
         </div>
       </div>
       <div class="hero-meta">
         <div style="font-weight:700;">${escapeHtml(brand.schoolName)}</div>
         <div style="margin-top:4px;">${escapeHtml(brand.tagline)}</div>
-        <div style="margin-top:10px;">${generatedAt.toLocaleDateString("fr-FR")}</div>
-        <div>${generatedAt.toLocaleTimeString("fr-FR")}</div>
+        <div style="margin-top:10px;">${generatedAt.toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</div>
+        <div>${generatedAt.toLocaleTimeString(lang === "fr" ? "fr-FR" : "en-US")}</div>
       </div>
     </div>
     <div class="metrics">${metricHtml}</div>
@@ -1583,7 +1908,7 @@ export function FinancialOperationsPage() {
     </div>
     <div class="compliance">Ce journal financier est édité selon la charte ${escapeHtml(brand.shortName)} pour audit, pilotage et archivage. Les indicateurs de synthèse et le tableau détaillé correspondent aux lignes visibles dans l'interface au moment de l'impression.</div>
     <div class="signatures"><div class="signature-box"><div class="signature-title">Contrôle comptable</div><div class="signature-line">Service financier</div></div><div class="signature-box"><div class="signature-title">Visa de direction</div><div class="signature-line">Direction administrative</div></div></div>
-    <div class="foot"><span>Document officiel ${escapeHtml(brand.appName)} généré pour ${escapeHtml(brand.schoolName)}.</span><span>${generatedAt.toLocaleString("fr-FR")}</span></div>
+    <div class="foot"><span>Document officiel ${escapeHtml(brand.appName)} généré pour ${escapeHtml(brand.schoolName)}.</span><span>${generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US")}</span></div>
   </div>
 </body>
 </html>`;
@@ -1596,7 +1921,7 @@ export function FinancialOperationsPage() {
       `journal-comptable-${new Date().toISOString().slice(0, 10)}.csv`,
       ["Date", "Type", "Direction", "Titre", "Departement", "Montant", "Devise", "Source"],
       filteredAccountingEntries.map((entry) => [
-        new Date(entry.entryDate).toLocaleDateString("fr-FR"),
+        new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
         entry.entryType,
         entry.direction,
         entry.title,
@@ -1609,7 +1934,7 @@ export function FinancialOperationsPage() {
   }
 
   function exportAccountingExcel() {
-    exportWorkbook(`journal-comptable-${new Date().toISOString().slice(0, 10)}`, [
+    exportLocalizedWorkbook(`journal-comptable-${new Date().toISOString().slice(0, 10)}`, [
       {
         name: "Synthese",
         rows: [{
@@ -1634,7 +1959,7 @@ export function FinancialOperationsPage() {
       {
         name: "Journal comptable",
         rows: filteredAccountingEntries.map((entry) => ({
-          "Date": new Date(entry.entryDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Type": entry.entryType,
           "Direction": entry.direction,
           "Titre": entry.title,
@@ -1652,7 +1977,7 @@ export function FinancialOperationsPage() {
       `journal-trésorerie-${new Date().toISOString().slice(0, 10)}.csv`,
       ["Date", "Source", "Direction", "Méthode", "Montant", "Devise", "Référence", "Notes"],
       filteredCashflowEntries.map((entry) => [
-        new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
+        new Date(entry.référenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
         entry.sourceType,
         entry.direction,
         entry.method || "",
@@ -1665,7 +1990,7 @@ export function FinancialOperationsPage() {
   }
 
   function exportCashflowExcel() {
-    exportWorkbook(`journal-trésorerie-${new Date().toISOString().slice(0, 10)}`, [
+    exportLocalizedWorkbook(`journal-trésorerie-${new Date().toISOString().slice(0, 10)}`, [
       {
         name: "Synthese",
         rows: [{
@@ -1690,7 +2015,7 @@ export function FinancialOperationsPage() {
       {
         name: "Journal trésorerie",
         rows: filteredCashflowEntries.map((entry) => ({
-          "Date": new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.référenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Source": entry.sourceType,
           "Direction": entry.direction,
           "Méthode": entry.method || "",
@@ -1704,12 +2029,12 @@ export function FinancialOperationsPage() {
   }
 
   function exportExpensesExcel() {
-    exportWorkbook(`registre-depenses-${new Date().toISOString().slice(0, 10)}`, [
+    exportLocalizedWorkbook(`registre-depenses-${new Date().toISOString().slice(0, 10)}`, [
       {
         name: "Synthese",
         rows: [{
           "Dépenses filtrées": filteredExpenses.length,
-          "Période": periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo),
+          "Période": periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo, lang),
           "Statut": statusFilter === "ALL" ? "Tous" : statusFilter,
           "Total": filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0),
           "Approuvees": filteredExpenses.filter((expense) => expense.status === "APPROVED").length,
@@ -1719,7 +2044,7 @@ export function FinancialOperationsPage() {
       {
         name: "Registre depenses",
         rows: filteredExpenses.map((expense) => ({
-          "Date": new Date(expense.expenseDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(expense.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Titre ou motif": expense.title,
           "Beneficiaire": expense.vendor?.name || expense.supplierName || "",
           "Contact beneficiaire": expense.vendor?.phone || expense.vendor?.email || expense.vendor?.contactName || "",
@@ -1743,10 +2068,10 @@ export function FinancialOperationsPage() {
   function printExpensesReport() {
     printLedgerReport(
       "Registre des depenses",
-      `Recherche strategique des depenses filtrées. Période: ${periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo)}.`,
+      `Recherche strategique des depenses filtrées. Période: ${periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo, lang)}.`,
       ["Date", "Titre ou motif", "Beneficiaire", "Departement", "Compte débité", "Compte crédité", "Statut", "Montant"],
       filteredExpenses.map((expense) => [
-        new Date(expense.expenseDate).toLocaleDateString("fr-FR"),
+        new Date(expense.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
         expense.title,
         expense.vendor?.name || expense.supplierName || "",
         expense.department,
@@ -1758,7 +2083,7 @@ export function FinancialOperationsPage() {
       [
         { label: "Dépenses filtrées", value: String(filteredExpenses.length), detail: `Statut: ${statusFilter === "ALL" ? "Tous" : statusFilter}` },
         { label: "Volume filtre", value: currency.format(filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0)), detail: "Somme des depenses correspondant aux critères" },
-        { label: "Période", value: periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo), detail: "Intervalle d'analyse applique au registre" },
+        { label: "Période", value: periodLabel(expensePeriodFilter, expenseDateFrom, expenseDateTo, lang), detail: "Intervalle d'analyse applique au registre" },
         { label: "Taux approuve", value: formatPercent(ratioPercent(filteredExpenses.filter((expense) => expense.status === "APPROVED").length, filteredExpenses.length)), detail: "Dépenses approuvees / lignes filtrées" }
       ]
     );
@@ -1770,7 +2095,7 @@ export function FinancialOperationsPage() {
       "Vue consolidee des ecritures issues des depenses et de la paie.",
       ["Date", "Type", "Direction", "Titre", "Departement", "Montant", "Source"],
       filteredAccountingEntries.map((entry) => [
-        new Date(entry.entryDate).toLocaleDateString("fr-FR"),
+        new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
         entry.entryType,
         entry.direction,
         entry.title,
@@ -1790,10 +2115,10 @@ export function FinancialOperationsPage() {
   function printCashflowReport() {
     printLedgerReport(
       "Journal de trésorerie",
-      `Vue consolidée des sorties et références de cash liées aux opérations financières. Période : ${periodLabel(cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo)}.`,
+      `Vue consolidée des sorties et références de cash liées aux opérations financières. Période : ${periodLabel(cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo, lang)}.`,
       ["Date", "Source", "Direction", "Méthode", "Montant", "Référence", "Notes"],
       filteredCashflowEntries.map((entry) => [
-        new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
+        new Date(entry.référenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
         entry.sourceType,
         entry.direction,
         entry.method || "",
@@ -1835,7 +2160,7 @@ export function FinancialOperationsPage() {
 
   function exportOperationsWorkbook() {
     if (!overview) return;
-    exportWorkbook(`pack-financier-opérations-${new Date().toISOString().slice(0, 10)}`, [
+    exportLocalizedWorkbook(`pack-financier-opérations-${new Date().toISOString().slice(0, 10)}`, [
       {
         name: "Synthese",
         rows: [{
@@ -1851,7 +2176,7 @@ export function FinancialOperationsPage() {
       {
         name: "Dépenses",
         rows: expenses.map((expense) => ({
-          "Date": new Date(expense.expenseDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(expense.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Titre": expense.title,
           "Departement": expense.department,
           "Categorie": expense.category.name,
@@ -1891,7 +2216,7 @@ export function FinancialOperationsPage() {
       {
         name: "Comptabilité",
         rows: accountingEntries.map((entry) => ({
-          "Date": new Date(entry.entryDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Type": entry.entryType,
           "Direction": entry.direction,
           "Titre": entry.title,
@@ -1903,7 +2228,7 @@ export function FinancialOperationsPage() {
       {
         name: "Trésorerie",
         rows: cashflowEntries.map((entry) => ({
-          "Date": new Date(entry.référenceDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.référenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Source": entry.sourceType,
           "Direction": entry.direction,
           "Montant": entry.amount,
@@ -1915,7 +2240,7 @@ export function FinancialOperationsPage() {
       {
         name: "Documents",
         rows: documentEntries.map((entry) => ({
-          "Date": new Date(entry.expenseDate).toLocaleDateString("fr-FR"),
+          "Date": new Date(entry.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US"),
           "Document": entry.fileName,
           "Depense": entry.expenseTitle,
           "Departement": entry.department,
@@ -2403,7 +2728,7 @@ export function FinancialOperationsPage() {
     <div className="edupay-operations space-y-6 pb-10 animate-fadeInUp">
       {loading && (
         <div className="rounded-2xl border border-brand-300/20 bg-brand-500/10 px-4 py-3 text-sm text-brand-100">
-          Chargement des données opérationnelles en arrière-plan. La page reste disponible pendant la synchronisation.
+          {F("Chargement des données opérationnelles en arrière-plan. La page reste disponible pendant la synchronisation.", lang)}
         </div>
       )}
       <section className="glass min-w-0 border border-brand-300/15 px-4 py-5 shadow-xl sm:px-6 sm:py-6">
@@ -2515,7 +2840,7 @@ export function FinancialOperationsPage() {
 
       {!canWrite && (
         <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          Votre role est en lecture seule. Les formulaires de création restent masques, mais les journaux et statuts restent consultables.
+          {F("Votre role est en lecture seule. Les formulaires de création restent masques, mais les journaux et statuts restent consultables.", lang)}
         </div>
       )}
 
@@ -2526,7 +2851,7 @@ export function FinancialOperationsPage() {
         <OperationsDialog title={activeModule.title} subtitle={activeModule.description} onClose={handleCloseOperationsDialog}>
       {activeTab === "expenses" && (
         <div className="space-y-6">
-          <SectionCard title="Plan comptable scolaire" subtitle="Référentiel complet des classes 1 à 9. Le compte débité ajoute le montant ; le compte crédité le soustrait, selon la convention EduPay.">
+          <SectionCard title={F("Plan comptable scolaire", lang)} subtitle="Référentiel complet des classes 1 à 9. Le compte débité ajoute le montant ; le compte crédité le soustrait, selon la convention EduPay.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {SCHOOL_ACCOUNT_CLASSES.map(([code, title, examples]) => (
                 <div key={code} className={`rounded-2xl border p-4 ${["2", "3", "5", "6", "8"].includes(code) ? "border-brand-300/25 bg-brand-500/10" : "border-white/10 bg-slate-950/35"}`}>
@@ -2535,20 +2860,20 @@ export function FinancialOperationsPage() {
               ))}
             </div>
             <details className="mt-4 rounded-2xl border border-white/10 bg-slate-950/35 p-4">
-              <summary className="cursor-pointer font-semibold text-white">Afficher les comptes clés du plan scolaire</summary>
+              <summary className="cursor-pointer font-semibold text-white">{F("Afficher les comptes clés du plan scolaire", lang)}</summary>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">{SCHOOL_KEY_ACCOUNTS.map(([group, accounts]) => <div key={group} className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="font-semibold text-brand-100">{group}</p><div className="mt-3 flex flex-wrap gap-2">{accounts.map((account) => <span key={account} className="rounded-lg bg-slate-950/60 px-2.5 py-1.5 text-xs text-ink-dim">{account}</span>)}</div></div>)}</div>
             </details>
           </SectionCard>
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <SectionCard title="Workflow des depenses" subtitle="Recherche, suivi de statut et traitement des approbations en cours.">
+            <SectionCard title={F("Workflow des depenses", lang)} subtitle="Recherche, suivi de statut et traitement des approbations en cours.">
               <div className="grid gap-3 xl:grid-cols-[minmax(220px,0.9fr)_auto_auto_auto]">
-                <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Recherche precise: motif, beneficiaire, service, mode..." />
+                <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder={F("Recherche precise: motif, beneficiaire, service, mode...", lang)} />
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="input min-w-[180px]">
-                  <option value="ALL">Tous les statuts</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="CANCELLED">Annulée</option>
+                  <option value="ALL">{F("Tous les statuts", lang)}</option>
+                  <option value="PENDING">{F("Pending", lang)}</option>
+                  <option value="APPROVED">{F("Approved", lang)}</option>
+                  <option value="REJECTED">{F("Rejected", lang)}</option>
+                  <option value="CANCELLED">{F("Annulée", lang)}</option>
                 </select>
                 <select value={expensePeriodFilter} onChange={(event) => setExpensePeriodFilter(event.target.value)} className="input min-w-[180px]">
                   {PERIOD_FILTERS.map((period) => <option key={period.value} value={period.value}>{period.label}</option>)}
@@ -2564,8 +2889,8 @@ export function FinancialOperationsPage() {
               </div>
               {expensePeriodFilter === "CUSTOM" && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <DateSelect className="input"  value={expenseDateFrom} onChange={(event) => setExpenseDateFrom(event.target.value)} aria-label="Date debut depenses" />
-                  <DateSelect className="input"  value={expenseDateTo} onChange={(event) => setExpenseDateTo(event.target.value)} aria-label="Date fin depenses" />
+                  <DateSelect className="input"  value={expenseDateFrom} onChange={(event) => setExpenseDateFrom(event.target.value)} aria-label={F("Date debut depenses", lang)} />
+                  <DateSelect className="input"  value={expenseDateTo} onChange={(event) => setExpenseDateTo(event.target.value)} aria-label={F("Date fin depenses", lang)} />
                 </div>
               )}
 
@@ -2577,7 +2902,7 @@ export function FinancialOperationsPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-white">{expense.title}</p>
-                          <p className="mt-1 text-xs text-ink-dim">{expense.department} • {expense.category.accountCode || "-"} - {expense.category.name} • {new Date(expense.expenseDate).toLocaleDateString("fr-FR")}</p>
+                          <p className="mt-1 text-xs text-ink-dim">{expense.department} • {expense.category.accountCode || "-"} - {expense.category.name} • {new Date(expense.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusBadge value={expense.status} />
@@ -2586,19 +2911,19 @@ export function FinancialOperationsPage() {
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-3 text-sm">
                         <div>
-                          <p className="text-ink-dim">Écriture comptable</p>
-                          <p className="font-semibold text-white">Débit {expenseDebitAccountCode(expense) || "-"} / Crédit {expenseCreditAccountCode(expense) || "-"}</p>
+                          <p className="text-ink-dim">{F("Écriture comptable", lang)}</p>
+                          <p className="font-semibold text-white">{F("Débit", lang)} {expenseDebitAccountCode(expense) || "-"} {F("/ Crédit", lang)} {expenseCreditAccountCode(expense) || "-"}</p>
                         </div>
                         <div>
-                          <p className="text-ink-dim">Budget</p>
+                          <p className="text-ink-dim">{F("Budget", lang)}</p>
                           <p className="font-semibold text-white">{expense.budget?.name ?? "Hors budget"}</p>
                         </div>
                         <div>
-                          <p className="text-ink-dim">Beneficiaire</p>
+                          <p className="text-ink-dim">{F("Beneficiaire", lang)}</p>
                           <p className="font-semibold text-white">{expense.vendor?.name ?? expense.supplierName ?? "Non précisé"}</p>
                         </div>
                         <div>
-                          <p className="text-ink-dim">Mode / etape</p>
+                          <p className="text-ink-dim">{F("Mode / etape", lang)}</p>
                           <p className="font-semibold text-white">{expense.paymentMethod || "Mode non precise"} - {currentStep ? `${currentStep.role} / stage ${currentStep.stage}` : "Workflow termine"}</p>
                         </div>
                       </div>
@@ -2611,7 +2936,7 @@ export function FinancialOperationsPage() {
                               onClick={() => openExpenseSupportDocument(attachment)}
                               className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 hover:border-brand-300/25 hover:text-white"
                             >
-                              Piece: {attachment.fileName}
+                              {F("Piece:", lang)} {attachment.fileName}
                             </button>
                           ))}
                         </div>
@@ -2623,14 +2948,14 @@ export function FinancialOperationsPage() {
                             disabled={submittingKey === `approval-${expense.id}-APPROVED`}
                             className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                           >
-                            Valider l'etape
+                            {F("Valider l'etape", lang)}
                           </button>
                           <button
                             onClick={() => void handleApproval(expense.id, "REJECTED")}
                             disabled={submittingKey === `approval-${expense.id}-REJECTED`}
                             className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 hover:bg-red-500/20 disabled:opacity-60"
                           >
-                            Rejeter
+                            {F("Rejeter", lang)}
                           </button>
                         </div>
                       )}
@@ -2641,32 +2966,32 @@ export function FinancialOperationsPage() {
                             disabled={submittingKey === `cancel-${expense.id}`}
                             className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 disabled:opacity-60"
                           >
-                            Annuler l'opération
+                            {F("Annuler l'opération", lang)}
                           </button>
                         </div>
                       )}
                     </article>
                   );
                 })}
-                {!filteredExpenses.length && <p className="text-sm text-ink-dim">Aucune dépense ne correspond au filtre actuel.</p>}
+                {!filteredExpenses.length && <p className="text-sm text-ink-dim">{F("Aucune dépense ne correspond au filtre actuel.", lang)}</p>}
               </div>
             </SectionCard>
 
-            <SectionCard title="Arborescence des actions" subtitle="Choisissez une branche, puis travaillez dans une boite de dialogue dédiée.">
+            <SectionCard title={F("Arborescence des actions", lang)} subtitle="Choisissez une branche, puis travaillez dans une boite de dialogue dédiée.">
               <div className="grid gap-3">
                 <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4">
                   <div className="flex items-start gap-3">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-200" />
                     <div>
-                      <p className="font-semibold text-white">Dépenses</p>
-                      <p className="mt-1 text-sm text-ink-dim">Workflow principal: consulter, filtrer, valider ou rejeter les demandes.</p>
+                      <p className="font-semibold text-white">{F("Dépenses", lang)}</p>
+                      <p className="mt-1 text-sm text-ink-dim">{F("Workflow principal: consulter, filtrer, valider ou rejeter les demandes.", lang)}</p>
                     </div>
                   </div>
                 </div>
                 {canWrite && (
                   <>
                     <ActionNodeCard
-                      title="Nouvelle depense"
+                      title={F("Nouvelle depense", lang)}
                       subtitle="Sortie de cash, budget, fournisseur et justificatifs."
                       detail={`${leafCategories.length} categories disponibles`}
                       icon={FilePlus2}
@@ -2674,7 +2999,7 @@ export function FinancialOperationsPage() {
                       onClick={() => setActiveSubDialog("expense-create")}
                     />
                     <ActionNodeCard
-                      title="Nouveau fournisseur"
+                      title={F("Nouveau fournisseur", lang)}
                       subtitle="Créer un tiers payable avant de lier une depense."
                       detail={`${vendors.length} fournisseurs actifs`}
                       icon={UserPlus}
@@ -2684,7 +3009,7 @@ export function FinancialOperationsPage() {
                   </>
                 )}
                 <ActionNodeCard
-                  title="Base fournisseurs"
+                  title={F("Base fournisseurs", lang)}
                   subtitle="Voir, rechercher, modifier et supprimer les tiers payables."
                   detail={`${filteredVendors.length}/${vendors.length} fournisseur(s)`}
                   icon={Users}
@@ -2692,7 +3017,7 @@ export function FinancialOperationsPage() {
                   onClick={() => setActiveSubDialog("vendor-registry")}
                 />
                 <ActionNodeCard
-                  title="Justificatifs"
+                  title={F("Justificatifs", lang)}
                   subtitle="Voir les pieces indexees dans la branche Documents."
                   detail={`${documentEntries.length} piece(s)`}
                   icon={BriefcaseBusiness}
@@ -2704,33 +3029,33 @@ export function FinancialOperationsPage() {
           </div>
 
           {activeSubDialog === "expense-create" && canWrite && (
-            <OperationsSubDialog title="Nouvelle depense" subtitle="Soumettre une sortie de cash avec categorie, budget et piece justificative." onClose={() => setActiveSubDialog(null)}>
+            <OperationsSubDialog title={F("Nouvelle depense", lang)} subtitle="Soumettre une sortie de cash avec categorie, budget et piece justificative." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-3" onSubmit={handleCreateExpense}>
                     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                      Titre ou motif de la depense
-                      <input className="input" value={expenseForm.title} onChange={(event) => setExpenseForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ex: Achat de fournitures" required />
+                      {F("Titre ou motif de la depense", lang)}
+                      <input className="input" value={expenseForm.title} onChange={(event) => setExpenseForm((current) => ({ ...current, title: event.target.value }))} placeholder={F("Ex: Achat de fournitures", lang)} required />
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Catégorie de dépense
+                        {F("Catégorie de dépense", lang)}
                         <select className="input" value={expenseForm.categoryId} onChange={(event) => setExpenseForm((current) => ({ ...current, categoryId: event.target.value }))} required>
-                          <option value="">Choisir la catégorie analytique</option>
+                          <option value="">{F("Choisir la catégorie analytique", lang)}</option>
                           {leafCategories.map((category) => <option key={category.id} value={category.id}>{category.accountCode} — {category.name}</option>)}
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Budget associe
+                        {F("Budget associe", lang)}
                         <select className="input" value={expenseForm.budgetId} onChange={(event) => setExpenseForm((current) => ({ ...current, budgetId: event.target.value }))}>
-                          <option value="">Aucun budget li?</option>
+                          <option value="">{F("Aucun budget li?", lang)}</option>
                           {budgets.map((budget) => <option key={budget.id} value={budget.id}>{budget.name}</option>)}
                         </select>
                       </label>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Compte à débiter — ajouter
+                        {F("Compte à débiter — ajouter", lang)}
                         <select className="input" value={expenseForm.debitAccountCode} onChange={(event) => setExpenseForm((current) => ({ ...current, debitAccountCode: event.target.value }))} required>
-                          <option value="">Choisir le compte à débiter</option>
+                          <option value="">{F("Choisir le compte à débiter", lang)}</option>
                           {SCHOOL_ACCOUNT_OPTIONS.map((group) => (
                             <optgroup key={`debit-${group.group}`} label={group.group}>
                               {group.accounts.map((account) => <option key={`debit-${group.group}-${account.code}`} value={account.code}>{account.code} — {account.label}</option>)}
@@ -2739,9 +3064,9 @@ export function FinancialOperationsPage() {
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Compte à créditer — soustraire
+                        {F("Compte à créditer — soustraire", lang)}
                         <select className="input" value={expenseForm.creditAccountCode} onChange={(event) => setExpenseForm((current) => ({ ...current, creditAccountCode: event.target.value }))} required>
-                          <option value="">Choisir le compte à créditer</option>
+                          <option value="">{F("Choisir le compte à créditer", lang)}</option>
                           {SCHOOL_ACCOUNT_OPTIONS.map((group) => (
                             <optgroup key={`credit-${group.group}`} label={group.group}>
                               {group.accounts.map((account) => <option key={`credit-${group.group}-${account.code}`} value={account.code}>{account.code} — {account.label}</option>)}
@@ -2752,71 +3077,71 @@ export function FinancialOperationsPage() {
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Beneficiaire repertorie
+                        {F("Beneficiaire repertorie", lang)}
                         <select className="input" value={expenseForm.vendorId} onChange={(event) => setExpenseForm((current) => ({ ...current, vendorId: event.target.value }))}>
-                          <option value="">Aucun beneficiaire existant</option>
+                          <option value="">{F("Aucun beneficiaire existant", lang)}</option>
                           {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Beneficiaire libre
-                        <input className="input" value={expenseForm.beneficiaryName} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryName: event.target.value, supplierName: event.target.value }))} placeholder="Nom de la personne, societe ou compte paye" />
+                        {F("Beneficiaire libre", lang)}
+                        <input className="input" value={expenseForm.beneficiaryName} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryName: event.target.value, supplierName: event.target.value }))} placeholder={F("Nom de la personne, societe ou compte paye", lang)} />
                       </label>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Contact beneficiaire
-                        <input className="input" value={expenseForm.beneficiaryContact} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryContact: event.target.value }))} placeholder="Telephone, email ou contact" />
+                        {F("Contact beneficiaire", lang)}
+                        <input className="input" value={expenseForm.beneficiaryContact} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryContact: event.target.value }))} placeholder={F("Telephone, email ou contact", lang)} />
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Compte / wallet
-                        <input className="input" value={expenseForm.beneficiaryAccount} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryAccount: event.target.value }))} placeholder="IBAN, compte, MPESA, Airtel..." />
+                        {F("Compte / wallet", lang)}
+                        <input className="input" value={expenseForm.beneficiaryAccount} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryAccount: event.target.value }))} placeholder={F("IBAN, compte, MPESA, Airtel...", lang)} />
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Référence paiement
-                        <input className="input" value={expenseForm.beneficiaryRéférence} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryRéférence: event.target.value }))} placeholder="Cheque, facture, transaction" />
-                      </label>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Departement
-                        <input className="input" value={expenseForm.department} onChange={(event) => setExpenseForm((current) => ({ ...current, department: event.target.value }))} placeholder="Ex: Administration, Transport, Academique" required />
-                      </label>
-                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Montant
-                        <input className="input" type="number" min="0" step="0.01" value={expenseForm.amount} onChange={(event) => setExpenseForm((current) => ({ ...current, amount: event.target.value }))} placeholder="Montant en USD" required />
+                        {F("Référence paiement", lang)}
+                        <input className="input" value={expenseForm.beneficiaryRéférence} onChange={(event) => setExpenseForm((current) => ({ ...current, beneficiaryRéférence: event.target.value }))} placeholder={F("Cheque, facture, transaction", lang)} />
                       </label>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Mode de paiement
+                        {F("Departement", lang)}
+                        <input className="input" value={expenseForm.department} onChange={(event) => setExpenseForm((current) => ({ ...current, department: event.target.value }))} placeholder={F("Ex: Administration, Transport, Academique", lang)} required />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        {F("Montant", lang)}
+                        <input className="input" type="number" min="0" step="0.01" value={expenseForm.amount} onChange={(event) => setExpenseForm((current) => ({ ...current, amount: event.target.value }))} placeholder={F("Montant en USD", lang)} required />
+                      </label>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                        {F("Mode de paiement", lang)}
                         <select className="input" value={expenseForm.paymentMethod} onChange={(event) => setExpenseForm((current) => ({ ...current, paymentMethod: event.target.value }))}>
-                          <option value="">Non précisé</option>
+                          <option value="">{F("Non précisé", lang)}</option>
                           {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
                         </select>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Date de la depense
+                        {F("Date de la depense", lang)}
                         <DateSelect className="input"  value={expenseForm.expenseDate} onChange={(event) => setExpenseForm((current) => ({ ...current, expenseDate: event.target.value }))} required />
                       </label>
                     </div>
                     <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-4 text-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">Prévisualisation de l'écriture</p>
-                      <p className="mt-2 text-xs text-cyan-100">Convention EduPay : débiter ajoute le montant au compte ; créditer soustrait le montant du compte.</p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2"><p className="rounded-xl bg-slate-950/40 p-3 text-white"><span className="text-ink-dim">Débit · + {expenseForm.amount || "0"}</span><br/><strong>{selectedDebitAccount?.code || "—"} · {selectedDebitAccount?.label || "Compte à débiter à sélectionner"}</strong></p><p className="rounded-xl bg-slate-950/40 p-3 text-white"><span className="text-ink-dim">Crédit · − {expenseForm.amount || "0"}</span><br/><strong>{selectedCreditAccount?.code || "—"} · {selectedCreditAccount?.label || "Compte à créditer à sélectionner"}</strong></p></div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">{F("Prévisualisation de l'écriture", lang)}</p>
+                      <p className="mt-2 text-xs text-cyan-100">{F("Convention EduPay : débiter ajoute le montant au compte ; créditer soustrait le montant du compte.", lang)}</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2"><p className="rounded-xl bg-slate-950/40 p-3 text-white"><span className="text-ink-dim">{F("Débit · +", lang)} {expenseForm.amount || "0"}</span><br/><strong>{selectedDebitAccount?.code || "—"} · {selectedDebitAccount?.label || "Compte à débiter à sélectionner"}</strong></p><p className="rounded-xl bg-slate-950/40 p-3 text-white"><span className="text-ink-dim">{F("Crédit · −", lang)} {expenseForm.amount || "0"}</span><br/><strong>{selectedCreditAccount?.code || "—"} · {selectedCreditAccount?.label || "Compte à créditer à sélectionner"}</strong></p></div>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Nom de la piece
-                        <input className="input" value={expenseForm.attachmentName} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentName: event.target.value }))} placeholder="Ex: Facture, bon de livraison" />
+                        {F("Nom de la piece", lang)}
+                        <input className="input" value={expenseForm.attachmentName} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentName: event.target.value }))} placeholder={F("Ex: Facture, bon de livraison", lang)} />
                       </label>
                       <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                        Référence document
-                        <input className="input" value={expenseForm.attachmentUrl} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentUrl: event.target.value }))} placeholder="URL, numéro ou référence interne" />
+                        {F("Référence document", lang)}
+                        <input className="input" value={expenseForm.attachmentUrl} onChange={(event) => setExpenseForm((current) => ({ ...current, attachmentUrl: event.target.value }))} placeholder={F("URL, numéro ou référence interne", lang)} />
                       </label>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-dim">Depot documentaire</label>
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-dim">{F("Depot documentaire", lang)}</label>
                       <input
                         type="file"
                         multiple
@@ -2840,39 +3165,39 @@ export function FinancialOperationsPage() {
                       )}
                     </div>
                     <label className="grid gap-1 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                      Commentaires
-                      <textarea className="input min-h-24" value={expenseForm.comments} onChange={(event) => setExpenseForm((current) => ({ ...current, comments: event.target.value }))} placeholder="Motif, periode concernee, validation attendue..." />
+                      {F("Commentaires", lang)}
+                      <textarea className="input min-h-24" value={expenseForm.comments} onChange={(event) => setExpenseForm((current) => ({ ...current, comments: event.target.value }))} placeholder={F("Motif, periode concernee, validation attendue...", lang)} />
                     </label>
                     <button type="submit" disabled={submittingKey === "expense"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
-                      Soumettre la depense
+                      {F("Soumettre la depense", lang)}
                     </button>
               </form>
             </OperationsSubDialog>
           )}
 
           {activeSubDialog === "vendor-create" && canWrite && (
-            <OperationsSubDialog title="Nouveau fournisseur" subtitle="Créer un tiers payable pour les achats, abonnements et utilities." onClose={() => setActiveSubDialog(null)}>
+            <OperationsSubDialog title={F("Nouveau fournisseur", lang)} subtitle="Créer un tiers payable pour les achats, abonnements et utilities." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-3" onSubmit={handleCreateVendor}>
-                    <input className="input" value={vendorForm.name} onChange={(event) => setVendorForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nom fournisseur" required />
-                    <input className="input" value={vendorForm.contactName} onChange={(event) => setVendorForm((current) => ({ ...current, contactName: event.target.value }))} placeholder="Personne contact" />
+                    <input className="input" value={vendorForm.name} onChange={(event) => setVendorForm((current) => ({ ...current, name: event.target.value }))} placeholder={F("Nom fournisseur", lang)} required />
+                    <input className="input" value={vendorForm.contactName} onChange={(event) => setVendorForm((current) => ({ ...current, contactName: event.target.value }))} placeholder={F("Personne contact", lang)} />
                     <InternationalPhoneInput value={vendorForm.phone} onChange={(value) => setVendorForm((current) => ({ ...current, phone: value }))} />
-                    <input className="input" value={vendorForm.email} onChange={(event) => setVendorForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" />
-                    <input className="input" value={vendorForm.address} onChange={(event) => setVendorForm((current) => ({ ...current, address: event.target.value }))} placeholder="Adresse" />
-                    <textarea className="input min-h-20" value={vendorForm.notes} onChange={(event) => setVendorForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes fournisseur" />
+                    <input className="input" value={vendorForm.email} onChange={(event) => setVendorForm((current) => ({ ...current, email: event.target.value }))} placeholder={F("Email", lang)} />
+                    <input className="input" value={vendorForm.address} onChange={(event) => setVendorForm((current) => ({ ...current, address: event.target.value }))} placeholder={F("Adresse", lang)} />
+                    <textarea className="input min-h-20" value={vendorForm.notes} onChange={(event) => setVendorForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Notes fournisseur", lang)} />
                     <button type="submit" disabled={submittingKey === "vendor"} className="rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-500/20 disabled:opacity-60">
-                      Ajouter le fournisseur
+                      {F("Ajouter le fournisseur", lang)}
                     </button>
               </form>
             </OperationsSubDialog>
           )}
 
           {activeSubDialog === "vendor-registry" && (
-            <OperationsSubDialog title="Base fournisseurs" subtitle="Registre consultable des tiers payables, avec lecture, modification, suppression et recherche strategique." onClose={() => { setActiveSubDialog(null); setEditingVendorId(null); }}>
+            <OperationsSubDialog title={F("Base fournisseurs", lang)} subtitle="Registre consultable des tiers payables, avec lecture, modification, suppression et recherche strategique." onClose={() => { setActiveSubDialog(null); setEditingVendorId(null); }}>
               <div className="grid gap-4">
                 <SearchField
                   value={vendorSearch}
                   onChange={(event) => setVendorSearch(event.target.value)}
-                  placeholder="Recherche fournisseur, contact, telephone, email, departement, montant ou note"
+                  placeholder={F("Recherche fournisseur, contact, telephone, email, departement, montant ou note", lang)}
                 />
                 <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
                   <div className="max-h-[56vh] space-y-2 overflow-auto pr-1">
@@ -2886,19 +3211,19 @@ export function FinancialOperationsPage() {
                               <p className="font-semibold text-white">{vendor.name}</p>
                               <p className="mt-1 text-xs text-ink-dim">{vendor.contactName || vendor.phone || vendor.email || "Contact non renseigne"}</p>
                             </div>
-                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-semibold text-ink-dim">{usage?.count ?? 0} depense(s)</span>
+                            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-semibold text-ink-dim">{usage?.count ?? 0} {F("depense(s)", lang)}</span>
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button type="button" onClick={() => { setSelectedVendorId(vendor.id); setEditingVendorId(null); }} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs font-semibold text-white hover:bg-white/10">
-                              <Eye className="h-3.5 w-3.5" /> Voir
+                              <Eye className="h-3.5 w-3.5" /> {F("Voir", lang)}
                             </button>
                             {canWrite && (
                               <>
                                 <button type="button" onClick={() => beginVendorEdit(vendor)} className="inline-flex items-center gap-1 rounded-lg border border-cyan-300/20 bg-cyan-500/10 px-2 py-1 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20">
-                                  <Pencil className="h-3.5 w-3.5" /> Modifier
+                                  <Pencil className="h-3.5 w-3.5" /> {F("Modifier", lang)}
                                 </button>
                                 <button type="button" disabled={submittingKey === `vendor-delete-${vendor.id}`} onClick={() => void handleDeleteVendor(vendor)} className="inline-flex items-center gap-1 rounded-lg border border-red-300/20 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-100 hover:bg-red-500/20 disabled:opacity-60">
-                                  <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                                  <Trash2 className="h-3.5 w-3.5" /> {F("Supprimer", lang)}
                                 </button>
                               </>
                             )}
@@ -2906,27 +3231,27 @@ export function FinancialOperationsPage() {
                         </div>
                       );
                     })}
-                    {!filteredVendors.length && <p className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-ink-dim">Aucun fournisseur ne correspond a cette recherche.</p>}
+                    {!filteredVendors.length && <p className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-ink-dim">{F("Aucun fournisseur ne correspond a cette recherche.", lang)}</p>}
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     {editingVendorId ? (
                       <form className="grid gap-3" onSubmit={handleUpdateVendor}>
-                        <p className="text-sm font-semibold text-white">Modification fournisseur</p>
-                        <input className="input" value={vendorEditForm.name} onChange={(event) => setVendorEditForm((current) => ({ ...current, name: event.target.value }))} placeholder="Nom fournisseur" required />
-                        <input className="input" value={vendorEditForm.contactName} onChange={(event) => setVendorEditForm((current) => ({ ...current, contactName: event.target.value }))} placeholder="Personne contact" />
+                        <p className="text-sm font-semibold text-white">{F("Modification fournisseur", lang)}</p>
+                        <input className="input" value={vendorEditForm.name} onChange={(event) => setVendorEditForm((current) => ({ ...current, name: event.target.value }))} placeholder={F("Nom fournisseur", lang)} required />
+                        <input className="input" value={vendorEditForm.contactName} onChange={(event) => setVendorEditForm((current) => ({ ...current, contactName: event.target.value }))} placeholder={F("Personne contact", lang)} />
                         <InternationalPhoneInput value={vendorEditForm.phone} onChange={(value) => setVendorEditForm((current) => ({ ...current, phone: value }))} />
-                        <input className="input" value={vendorEditForm.email} onChange={(event) => setVendorEditForm((current) => ({ ...current, email: event.target.value }))} placeholder="Email" />
-                        <input className="input" value={vendorEditForm.address} onChange={(event) => setVendorEditForm((current) => ({ ...current, address: event.target.value }))} placeholder="Adresse" />
-                        <textarea className="input min-h-24" value={vendorEditForm.notes} onChange={(event) => setVendorEditForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes fournisseur" />
+                        <input className="input" value={vendorEditForm.email} onChange={(event) => setVendorEditForm((current) => ({ ...current, email: event.target.value }))} placeholder={F("Email", lang)} />
+                        <input className="input" value={vendorEditForm.address} onChange={(event) => setVendorEditForm((current) => ({ ...current, address: event.target.value }))} placeholder={F("Adresse", lang)} />
+                        <textarea className="input min-h-24" value={vendorEditForm.notes} onChange={(event) => setVendorEditForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Notes fournisseur", lang)} />
                         <div className="flex flex-wrap gap-2">
-                          <button type="submit" disabled={submittingKey === "vendor-update"} className="btn-primary px-4 py-2 text-sm font-semibold disabled:opacity-60">Enregistrer</button>
-                          <button type="button" onClick={() => setEditingVendorId(null)} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">Annuler</button>
+                          <button type="submit" disabled={submittingKey === "vendor-update"} className="btn-primary px-4 py-2 text-sm font-semibold disabled:opacity-60">{F("Enregistrer", lang)}</button>
+                          <button type="button" onClick={() => setEditingVendorId(null)} className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10">{F("Annuler", lang)}</button>
                         </div>
                       </form>
                     ) : selectedVendor ? (
                       <div className="grid gap-4">
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-dim">Fiche fournisseur</p>
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-dim">{F("Fiche fournisseur", lang)}</p>
                           <h3 className="mt-1 text-2xl font-bold text-white">{selectedVendor.name}</h3>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -2938,16 +3263,16 @@ export function FinancialOperationsPage() {
                           <InfoPill label="Volume total" value={currency.format(vendorUsage[selectedVendor.id]?.total ?? 0)} />
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">Departements touches</p>
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{F("Departements touches", lang)}</p>
                           <p className="mt-2 text-sm text-white">{vendorUsage[selectedVendor.id] ? Array.from(vendorUsage[selectedVendor.id].departments).join(", ") : "Aucun historique"}</p>
                         </div>
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">Notes</p>
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">{F("Notes", lang)}</p>
                           <p className="mt-2 whitespace-pre-wrap text-sm text-ink-dim">{selectedVendor.notes || "Aucune note."}</p>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm text-ink-dim">Sélectionnez un fournisseur pour afficher sa fiche détaillée.</p>
+                      <p className="text-sm text-ink-dim">{F("Sélectionnez un fournisseur pour afficher sa fiche détaillée.", lang)}</p>
                     )}
                   </div>
                 </div>
@@ -2960,10 +3285,10 @@ export function FinancialOperationsPage() {
       {activeTab === "budgets" && (
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           {canWrite && (
-            <SectionCard title="Arborescence budgétaire" subtitle="Les actions d'écriture s'ouvrent dans une boîte dédiée, le suivi reste visible.">
+            <SectionCard title={F("Arborescence budgétaire", lang)} subtitle="Les actions d'écriture s'ouvrent dans une boîte dédiée, le suivi reste visible.">
               <div className="grid gap-3">
                 <ActionNodeCard
-                  title="Nouveau budget"
+                  title={F("Nouveau budget", lang)}
                   subtitle="Planifier une enveloppe avec departement, categorie et seuil."
                   detail={`${budgets.length} budget(s) existant(s)`}
                   icon={WalletCards}
@@ -2971,7 +3296,7 @@ export function FinancialOperationsPage() {
                   onClick={openBudgetDialog}
                 />
                 <ActionNodeCard
-                  title="Dépenses liées"
+                  title={F("Dépenses liées", lang)}
                   subtitle="Retourner vers le workflow pour relier les budgets aux sorties."
                   detail={`${expenseStats.pending} validation(s)`}
                   icon={ReceiptText}
@@ -2982,7 +3307,7 @@ export function FinancialOperationsPage() {
             </SectionCard>
           )}
 
-          <SectionCard title="Pilotage budgetaire" subtitle="Lecture planned vs actual, taux de consommation et depassements detectes.">
+          <SectionCard title={F("Pilotage budgetaire", lang)} subtitle="Lecture planned vs actual, taux de consommation et depassements detectes.">
             <div className="space-y-3">
               {budgets.map((budget) => (
                 <article key={budget.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
@@ -2995,22 +3320,22 @@ export function FinancialOperationsPage() {
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
                     <div>
-                      <p className="text-ink-dim">Prevu</p>
+                      <p className="text-ink-dim">{F("Prevu", lang)}</p>
                       <p className="font-semibold text-white">{currency.format(budget.plannedAmount)}</p>
                     </div>
                     <div>
-                      <p className="text-ink-dim">Consomme</p>
+                      <p className="text-ink-dim">{F("Consomme", lang)}</p>
                       <p className="font-semibold text-amber-200">{currency.format(budget.consumedAmount)}</p>
                     </div>
                     <div>
-                      <p className="text-ink-dim">Reste</p>
+                      <p className="text-ink-dim">{F("Reste", lang)}</p>
                       <p className="font-semibold text-emerald-300">{currency.format(budget.remainingAmount)}</p>
                     </div>
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
                     <div className={`h-full rounded-full ${budget.utilization >= 100 ? "bg-gradient-to-r from-red-500 to-orange-400" : "bg-gradient-to-r from-brand-500 to-cyan-400"}`} style={{ width: `${Math.min(100, Math.max(0, budget.utilization))}%` }} />
                   </div>
-                  <p className="mt-2 text-xs text-ink-dim">Utilisation: {budget.utilization.toFixed(1)}%</p>
+                  <p className="mt-2 text-xs text-ink-dim">{F("Utilisation:", lang)} {budget.utilization.toFixed(1)}%</p>
                 </article>
               ))}
             </div>
@@ -3022,10 +3347,10 @@ export function FinancialOperationsPage() {
         <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
           <div className="space-y-6">
             {canWrite && (
-              <SectionCard title="Arborescence paie" subtitle="Separez les profils RH du lancement de paie pour garder la lecture claire.">
+              <SectionCard title={F("Arborescence paie", lang)} subtitle="Separez les profils RH du lancement de paie pour garder la lecture claire.">
                 <div className="grid gap-3">
                   <ActionNodeCard
-                    title="Profil salarial"
+                    title={F("Profil salarial", lang)}
                     subtitle="Base salariale, bonus, deductions et recovery rate."
                     detail={`${salaryProfiles.length} profil(s) actif(s)`}
                     icon={Users}
@@ -3033,7 +3358,7 @@ export function FinancialOperationsPage() {
                     onClick={openSalaryProfileDialog}
                   />
                   <ActionNodeCard
-                    title="Lancer une paie"
+                    title={F("Lancer une paie", lang)}
                     subtitle="Générer un run depuis les profils salariaux actifs."
                     detail={`${payrollRuns.length} run(s)`}
                     icon={CircleDollarSign}
@@ -3041,7 +3366,7 @@ export function FinancialOperationsPage() {
                     onClick={openPayrollRunDialog}
                   />
                   <ActionNodeCard
-                    title="Avance sur salaire"
+                    title={F("Avance sur salaire", lang)}
                     subtitle="Décaisser une avance à un employé et générer le reçu."
                     detail={currency.format(employeeFinanceTotals.advances)}
                     icon={WalletCards}
@@ -3049,7 +3374,7 @@ export function FinancialOperationsPage() {
                     onClick={() => openEmployeeObligationDialog("SALARY_ADVANCE")}
                   />
                   <ActionNodeCard
-                    title="Dette employé"
+                    title={F("Dette employé", lang)}
                     subtitle="Enregistrer une dette ou une obligation envers l'école."
                     detail={currency.format(employeeFinanceTotals.debts)}
                     icon={FilePlus2}
@@ -3057,7 +3382,7 @@ export function FinancialOperationsPage() {
                     onClick={() => openEmployeeObligationDialog("SCHOOL_DEBT")}
                   />
                   <ActionNodeCard
-                    title="Remboursement"
+                    title={F("Remboursement", lang)}
                     subtitle="Encaisser une échéance et produire un reçu de paiement."
                     detail={`${openEmployeeRepayments.length} échéance(s) ouverte(s)`}
                     icon={ReceiptText}
@@ -3068,14 +3393,14 @@ export function FinancialOperationsPage() {
               </SectionCard>
             )}
 
-            <SectionCard title="Profils actifs" subtitle="Base des salaries utilises pour calculer la paie institutionnelle.">
+            <SectionCard title={F("Profils actifs", lang)} subtitle="Base des salaries utilises pour calculer la paie institutionnelle.">
               <div className="space-y-3">
                 {salaryProfiles.map((profile) => (
                   <div key={profile.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{profile.fullName}</p>
-                        <p className="mt-1 text-xs text-ink-dim">{profile.position} • {profile.department} • {labelizeFrequency(profile.frequency)}</p>
+                        <p className="mt-1 text-xs text-ink-dim">{profile.position} • {profile.department} • {labelizeFrequency(profile.frequency, lang)}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-mono text-sm font-bold text-white">{currency.format(profile.baseSalary)}</p>
@@ -3086,7 +3411,7 @@ export function FinancialOperationsPage() {
                 ))}
               </div>
             </SectionCard>
-            <SectionCard title="Finance employé" subtitle="Avances, dettes, remboursements et reçus liés à la paie.">
+            <SectionCard title={F("Finance employé", lang)} subtitle="Avances, dettes, remboursements et reçus liés à la paie.">
               <div className="grid gap-3 sm:grid-cols-3">
                 <InfoPill label="Solde ouvert" value={currency.format(employeeFinanceTotals.totalBalance)} />
                 <InfoPill label="Avances" value={currency.format(employeeFinanceTotals.advances)} />
@@ -3099,7 +3424,7 @@ export function FinancialOperationsPage() {
                       <div>
                         <p className="font-semibold text-white">{obligation.title}</p>
                         <p className="mt-1 text-xs text-ink-dim">
-                          {obligation.salaryProfile?.fullName ?? salaryProfiles.find((profile) => profile.id === obligation.salaryProfileId)?.fullName ?? "Employé"} • {obligation.type} • {obligation.status}
+                          {obligation.salaryProfile?.fullName ?? salaryProfiles.find((profile) => profile.id === obligation.salaryProfileId)?.fullName ?? "Employé"} • {dynamicFinancialLabel(obligation.type, lang)} • {dynamicFinancialLabel(obligation.status, lang)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -3109,34 +3434,34 @@ export function FinancialOperationsPage() {
                     </div>
                   </div>
                 ))}
-                {!employeeObligations.length && <p className="text-sm text-ink-dim">Aucune avance, dette ou échéance employé n'est encore enregistrée.</p>}
+                {!employeeObligations.length && <p className="text-sm text-ink-dim">{F("Aucune avance, dette ou échéance employé n'est encore enregistrée.", lang)}</p>}
               </div>
             </SectionCard>
           </div>
 
           <div className="space-y-6">
-            <SectionCard title="Fiches de paie disponibles" subtitle="Chaque salarié d'un run possède ici son bulletin consultable, imprimable en PDF et exportable en Excel.">
+            <SectionCard title={F("Fiches de paie disponibles", lang)} subtitle="Chaque salarié d'un run possède ici son bulletin consultable, imprimable en PDF et exportable en Excel.">
               <div className="space-y-3">
                 {payrollRuns.map((run) => (
                   <article key={run.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{run.title}</p>
-                        <p className="mt-1 text-xs text-ink-dim">{run.department || "Tous departements"} • {run.period?.name ?? "Période active"} • {labelizeFrequency(run.frequency)}</p>
+                        <p className="mt-1 text-xs text-ink-dim">{run.department || "Tous departements"} • {run.period?.name ?? "Période active"} • {labelizeFrequency(run.frequency, lang)}</p>
                       </div>
                       <StatusBadge value={run.status} />
                     </div>
                     <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
                       <div>
-                        <p className="text-ink-dim">Net</p>
+                        <p className="text-ink-dim">{F("Net", lang)}</p>
                         <p className="font-semibold text-white">{currency.format(run.totalNet)}</p>
                       </div>
                       <div>
-                        <p className="text-ink-dim">Deductions</p>
+                        <p className="text-ink-dim">{F("Deductions", lang)}</p>
                         <p className="font-semibold text-amber-200">{currency.format(run.totalDeductions)}</p>
                       </div>
                       <div>
-                        <p className="text-ink-dim">Bulletins</p>
+                        <p className="text-ink-dim">{F("Bulletins", lang)}</p>
                         <p className="font-semibold text-cyan-200">{run.items.length}</p>
                       </div>
                     </div>
@@ -3145,7 +3470,7 @@ export function FinancialOperationsPage() {
                         <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3">
                           <div>
                             <p className="text-sm font-semibold text-white">{item.salaryProfile.fullName}</p>
-                            <p className="mt-1 text-xs text-ink-dim">{item.salarySlipNumber} • Net {currency.format(item.netSalary)}</p>
+                            <p className="mt-1 text-xs text-ink-dim">{item.salarySlipNumber} {F("• Net", lang)} {currency.format(item.netSalary)}</p>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                           <button
@@ -3153,14 +3478,14 @@ export function FinancialOperationsPage() {
                             onClick={() => openPayslipPreview(run, item)}
                             className="inline-flex items-center gap-1 rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
                           >
-                            <Eye className="h-3.5 w-3.5" /> Bulletin de paie
+                            <Eye className="h-3.5 w-3.5" /> {F("Bulletin de paie", lang)}
                           </button>
                           <button
                             type="button"
                             onClick={() => printSalarySlip(run, item)}
                             className="inline-flex items-center gap-1 rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-100 hover:bg-violet-500/20"
                           >
-                            <Printer className="h-3.5 w-3.5" /> Imprimer / PDF
+                            <Printer className="h-3.5 w-3.5" /> {F("Imprimer / PDF", lang)}
                           </button>
                           <button
                             type="button"
@@ -3175,81 +3500,81 @@ export function FinancialOperationsPage() {
                     </div>
                   </article>
                 ))}
-                {!payrollRuns.length && <p className="text-sm text-ink-dim">Aucun run de paie généré pour l'instant.</p>}
+                {!payrollRuns.length && <p className="text-sm text-ink-dim">{F("Aucun run de paie généré pour l'instant.", lang)}</p>}
               </div>
             </SectionCard>
           </div>
 
           {activeSubDialog === "salary-profile-create" && canWrite && (
-            <OperationsSubDialog title="Profil salarial" subtitle="Créer un profil de paie clair, sans valeurs injectées d'avance, pour les futurs runs." onClose={() => setActiveSubDialog(null)}>
+            <OperationsSubDialog title={F("Profil salarial", lang)} subtitle="Créer un profil de paie clair, sans valeurs injectées d'avance, pour les futurs runs." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-5" onSubmit={handleCreateSalaryProfile}>
                 <div className="rounded-2xl border border-brand-300/15 bg-brand-500/10 p-4">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Profil de rémunération</p>
-                  <p className="mt-2 text-sm text-ink-dim">Renseignez explicitement les champs utiles. Les éléments optionnels laissés vides seront gérés par défaut côté système.</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{F("Profil de rémunération", lang)}</p>
+                  <p className="mt-2 text-sm text-ink-dim">{F("Renseignez explicitement les champs utiles. Les éléments optionnels laissés vides seront gérés par défaut côté système.", lang)}</p>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Code employé
-                    <input className="input" value={salaryForm.employeeCode} onChange={(event) => setSalaryForm((current) => ({ ...current, employeeCode: event.target.value }))} placeholder="Ex: EMP-ACAD-004" required />
+                    {F("Code employé", lang)}
+                    <input className="input" value={salaryForm.employeeCode} onChange={(event) => setSalaryForm((current) => ({ ...current, employeeCode: event.target.value }))} placeholder={F("Ex: EMP-ACAD-004", lang)} required />
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Nom complet
-                    <input className="input" value={salaryForm.fullName} onChange={(event) => setSalaryForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Ex: Grâce Mukendi" required />
-                  </label>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Département
-                    <input className="input" value={salaryForm.department} onChange={(event) => setSalaryForm((current) => ({ ...current, department: event.target.value }))} placeholder="Ex: Académique" required />
-                  </label>
-                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Poste
-                    <input className="input" value={salaryForm.position} onChange={(event) => setSalaryForm((current) => ({ ...current, position: event.target.value }))} placeholder="Ex: Enseignant de mathématiques" required />
+                    {F("Nom complet", lang)}
+                    <input className="input" value={salaryForm.fullName} onChange={(event) => setSalaryForm((current) => ({ ...current, fullName: event.target.value }))} placeholder={F("Ex: Grâce Mukendi", lang)} required />
                   </label>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Salaire de base
-                    <input className="input" type="number" min="0" step="0.01" value={salaryForm.baseSalary} onChange={(event) => setSalaryForm((current) => ({ ...current, baseSalary: event.target.value }))} placeholder="Ex: 450" required />
+                    {F("Département", lang)}
+                    <input className="input" value={salaryForm.department} onChange={(event) => setSalaryForm((current) => ({ ...current, department: event.target.value }))} placeholder={F("Ex: Académique", lang)} required />
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Fréquence de paie
+                    {F("Poste", lang)}
+                    <input className="input" value={salaryForm.position} onChange={(event) => setSalaryForm((current) => ({ ...current, position: event.target.value }))} placeholder={F("Ex: Enseignant de mathématiques", lang)} required />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                    {F("Salaire de base", lang)}
+                    <input className="input" type="number" min="0" step="0.01" value={salaryForm.baseSalary} onChange={(event) => setSalaryForm((current) => ({ ...current, baseSalary: event.target.value }))} placeholder={F("Ex: 450", lang)} required />
+                  </label>
+                  <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
+                    {F("Fréquence de paie", lang)}
                     <select className="input" value={salaryForm.frequency} onChange={(event) => setSalaryForm((current) => ({ ...current, frequency: event.target.value }))}>
-                      <option value="">Laisser le système appliquer le mensuel par défaut</option>
-                      {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency)}</option>)}
+                      <option value="">{F("Laisser le système appliquer le mensuel par défaut", lang)}</option>
+                      {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency, lang)}</option>)}
                     </select>
                   </label>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Bonus par défaut
-                    <input className="input" type="number" min="0" step="0.01" value={salaryForm.defaultBonus} onChange={(event) => setSalaryForm((current) => ({ ...current, defaultBonus: event.target.value }))} placeholder="Ex: 25" />
+                    {F("Bonus par défaut", lang)}
+                    <input className="input" type="number" min="0" step="0.01" value={salaryForm.defaultBonus} onChange={(event) => setSalaryForm((current) => ({ ...current, defaultBonus: event.target.value }))} placeholder={F("Ex: 25", lang)} />
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Déduction par défaut
-                    <input className="input" type="number" min="0" step="0.01" value={salaryForm.defaultDeduction} onChange={(event) => setSalaryForm((current) => ({ ...current, defaultDeduction: event.target.value }))} placeholder="Ex: 15" />
+                    {F("Déduction par défaut", lang)}
+                    <input className="input" type="number" min="0" step="0.01" value={salaryForm.defaultDeduction} onChange={(event) => setSalaryForm((current) => ({ ...current, defaultDeduction: event.target.value }))} placeholder={F("Ex: 15", lang)} />
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Taux de recouvrement (%)
-                    <input className="input" type="number" min="0" max="100" step="0.01" value={salaryForm.debtRecoveryRate} onChange={(event) => setSalaryForm((current) => ({ ...current, debtRecoveryRate: event.target.value }))} placeholder="Ex: 5" />
+                    {F("Taux de recouvrement (%)", lang)}
+                    <input className="input" type="number" min="0" max="100" step="0.01" value={salaryForm.debtRecoveryRate} onChange={(event) => setSalaryForm((current) => ({ ...current, debtRecoveryRate: event.target.value }))} placeholder={F("Ex: 5", lang)} />
                   </label>
                 </div>
 
                 <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                  Notes RH
-                  <textarea className="input min-h-24" value={salaryForm.notes} onChange={(event) => setSalaryForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Informations utiles sur ce profil salarial" />
+                  {F("Notes RH", lang)}
+                  <textarea className="input min-h-24" value={salaryForm.notes} onChange={(event) => setSalaryForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Informations utiles sur ce profil salarial", lang)} />
                 </label>
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <button type="button" onClick={() => setActiveSubDialog(null)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white hover:border-brand-300/30 hover:bg-brand-500/10">
-                    Annuler
+                    {F("Annuler", lang)}
                   </button>
                   <button type="submit" disabled={submittingKey === "salary"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
-                    Ajouter le profil salarial
+                    {F("Ajouter le profil salarial", lang)}
                   </button>
                 </div>
               </form>
@@ -3257,32 +3582,32 @@ export function FinancialOperationsPage() {
           )}
 
           {activeSubDialog === "payroll-run-create" && canWrite && (
-            <OperationsSubDialog title="Générer la paie" subtitle="Calcule la paie, crée les écritures et produit immédiatement une fiche par salarié." onClose={() => setActiveSubDialog(null)}>
+            <OperationsSubDialog title={F("Générer la paie", lang)} subtitle="Calcule la paie, crée les écritures et produit immédiatement une fiche par salarié." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-4" onSubmit={handleCreatePayrollRun}>
                 {actionError && <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100">{actionError}</div>}
                 <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                  Intitulé de la paie
-                  <input className="input" value={payrollForm.title} onChange={(event) => setPayrollForm((current) => ({ ...current, title: event.target.value }))} placeholder="Ex : Paie Août 2026" required />
+                  {F("Intitulé de la paie", lang)}
+                  <input className="input" value={payrollForm.title} onChange={(event) => setPayrollForm((current) => ({ ...current, title: event.target.value }))} placeholder={F("Ex : Paie Août 2026", lang)} required />
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Département
+                    {F("Département", lang)}
                     <select className="input" value={payrollForm.department} onChange={(event) => setPayrollForm((current) => ({ ...current, department: event.target.value }))}>
-                      <option value="">Tous les départements</option>
+                      <option value="">{F("Tous les départements", lang)}</option>
                       {payrollDepartments.map((department) => <option key={department} value={department}>{department}</option>)}
                     </select>
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Fréquence
+                    {F("Fréquence", lang)}
                     <select className="input" value={payrollForm.frequency} onChange={(event) => setPayrollForm((current) => ({ ...current, frequency: event.target.value }))}>
-                      {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency)}</option>)}
+                      {PAYROLL_FREQUENCIES.map((frequency) => <option key={frequency} value={frequency}>{labelizeFrequency(frequency, lang)}</option>)}
                     </select>
                   </label>
                 </div>
                 <div className="rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-                  {eligiblePayrollProfiles.length} salarié(s) actif(s) seront inclus et recevront chacun une fiche de paie.
+                  {eligiblePayrollProfiles.length} {F("salarié(s) actif(s) seront inclus et recevront chacun une fiche de paie.", lang)}
                 </div>
-                <textarea className="input min-h-24" value={payrollForm.notes} onChange={(event) => setPayrollForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes du run" />
+                <textarea className="input min-h-24" value={payrollForm.notes} onChange={(event) => setPayrollForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Notes du run", lang)} />
                 <button type="submit" disabled={submittingKey === "payroll" || !eligiblePayrollProfiles.length} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
                   {submittingKey === "payroll" ? "Génération en cours..." : `Générer la paie et ${eligiblePayrollProfiles.length} fiche(s)`}
                 </button>
@@ -3299,7 +3624,7 @@ export function FinancialOperationsPage() {
                 <div className="rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-cyan-500/15 to-blue-600/10 p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Bulletin de paie officiel</p>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{F("Bulletin de paie officiel", lang)}</p>
                       <h4 className="mt-2 font-display text-2xl font-bold text-white">{selectedPayslip.item.salaryProfile.fullName}</h4>
                       <p className="mt-1 text-sm text-ink-dim">{selectedPayslip.item.salaryProfile.employeeCode} • {selectedPayslip.item.salaryProfile.position} • {selectedPayslip.item.salaryProfile.department}</p>
                     </div>
@@ -3324,21 +3649,21 @@ export function FinancialOperationsPage() {
                 <div className="overflow-hidden rounded-2xl border border-white/10">
                   <table className="w-full text-sm">
                     <tbody className="divide-y divide-white/10">
-                      <tr><td className="px-4 py-3 text-ink-dim">Salaire brut</td><td className="px-4 py-3 text-right font-semibold text-white">{currency.format(Number(selectedPayslip.item.baseSalary || 0) + Number(selectedPayslip.item.bonuses || 0))}</td></tr>
-                      <tr><td className="px-4 py-3 text-ink-dim">Retenues ordinaires</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.deductions)}</td></tr>
-                      <tr><td className="px-4 py-3 text-ink-dim">Avances récupérées</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.advancesRecovered)}</td></tr>
-                      <tr><td className="px-4 py-3 text-ink-dim">Dettes récupérées</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.debtRecovered)}</td></tr>
-                      <tr className="bg-cyan-500/10"><td className="px-4 py-4 font-bold text-white">Net à payer</td><td className="px-4 py-4 text-right text-lg font-black text-cyan-200">{currency.format(selectedPayslip.item.netSalary)}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">{F("Salaire brut", lang)}</td><td className="px-4 py-3 text-right font-semibold text-white">{currency.format(Number(selectedPayslip.item.baseSalary || 0) + Number(selectedPayslip.item.bonuses || 0))}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">{F("Retenues ordinaires", lang)}</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.deductions)}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">{F("Avances récupérées", lang)}</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.advancesRecovered)}</td></tr>
+                      <tr><td className="px-4 py-3 text-ink-dim">{F("Dettes récupérées", lang)}</td><td className="px-4 py-3 text-right font-semibold text-amber-200">{currency.format(selectedPayslip.item.debtRecovered)}</td></tr>
+                      <tr className="bg-cyan-500/10"><td className="px-4 py-4 font-bold text-white">{F("Net à payer", lang)}</td><td className="px-4 py-4 text-right text-lg font-black text-cyan-200">{currency.format(selectedPayslip.item.netSalary)}</td></tr>
                     </tbody>
                   </table>
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <button type="button" onClick={() => exportSalarySlipExcel(selectedPayslip.run, selectedPayslip.item)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20">
-                    <Download className="h-4 w-4" /> Exporter Excel
+                    <Download className="h-4 w-4" /> {F("Exporter Excel", lang)}
                   </button>
                   <button type="button" onClick={() => printSalarySlip(selectedPayslip.run, selectedPayslip.item)} className="btn-primary justify-center px-5 py-3 text-sm font-semibold">
-                    <Printer className="h-4 w-4" /> Imprimer / enregistrer en PDF
+                    <Printer className="h-4 w-4" /> {F("Imprimer / enregistrer en PDF", lang)}
                   </button>
                 </div>
               </div>
@@ -3353,29 +3678,29 @@ export function FinancialOperationsPage() {
               <form className="grid gap-5" onSubmit={handleCreateEmployeeObligation}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Employé
+                    {F("Employé", lang)}
                     <select className="input" value={employeeObligationForm.salaryProfileId} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, salaryProfileId: event.target.value }))} required>
-                      <option value="">Sélectionner un profil salarial</option>
+                      <option value="">{F("Sélectionner un profil salarial", lang)}</option>
                       {salaryProfiles.map((profile) => (
                         <option key={profile.id} value={profile.id}>{profile.fullName} - {profile.employeeCode}</option>
                       ))}
                     </select>
                   </label>
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Type
+                    {F("Type", lang)}
                     <select className="input" value={employeeObligationForm.type} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, type: event.target.value }))}>
-                      <option value="SALARY_ADVANCE">Avance sur salaire</option>
-                      <option value="SCHOOL_DEBT">Dette envers l'école</option>
-                      <option value="OTHER_DEBT">Autre dette</option>
+                      <option value="SALARY_ADVANCE">{F("Avance sur salaire", lang)}</option>
+                      <option value="SCHOOL_DEBT">{F("Dette envers l'école", lang)}</option>
+                      <option value="OTHER_DEBT">{F("Autre dette", lang)}</option>
                     </select>
                   </label>
                 </div>
 
-                <input className="input" value={employeeObligationForm.title} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, title: event.target.value }))} placeholder="Titre de l'opération" required />
+                <input className="input" value={employeeObligationForm.title} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, title: event.target.value }))} placeholder={F("Titre de l'opération", lang)} required />
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <input className="input" type="number" min="0" step="0.01" value={employeeObligationForm.principalAmount} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, principalAmount: event.target.value }))} placeholder="Montant" required />
-                  <input className="input" type="number" min="0" step="0.01" value={employeeObligationForm.installmentAmount} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, installmentAmount: event.target.value }))} placeholder="Échéance" required />
+                  <input className="input" type="number" min="0" step="0.01" value={employeeObligationForm.principalAmount} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, principalAmount: event.target.value }))} placeholder={F("Montant", lang)} required />
+                  <input className="input" type="number" min="0" step="0.01" value={employeeObligationForm.installmentAmount} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, installmentAmount: event.target.value }))} placeholder={F("Échéance", lang)} required />
                   <select className="input" value={employeeObligationForm.disbursementMethod} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, disbursementMethod: event.target.value }))}>
                     {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
                   </select>
@@ -3383,22 +3708,22 @@ export function FinancialOperationsPage() {
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <select className="input" value={employeeObligationForm.repaymentMethod} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, repaymentMethod: event.target.value }))}>
-                    <option value="SALARY_DEDUCTION">Déduction sur salaire</option>
-                    <option value="EXTERNAL_PAYMENT">Paiement hors salaire</option>
-                    <option value="MIXED">Mixte</option>
+                    <option value="SALARY_DEDUCTION">{F("Déduction sur salaire", lang)}</option>
+                    <option value="EXTERNAL_PAYMENT">{F("Paiement hors salaire", lang)}</option>
+                    <option value="MIXED">{F("Mixte", lang)}</option>
                   </select>
                   <DateSelect className="input"  value={employeeObligationForm.startDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, startDate: event.target.value }))} required />
                   <DateSelect className="input"  value={employeeObligationForm.dueDate} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, dueDate: event.target.value }))} required />
                 </div>
 
-                <textarea className="input min-h-24" value={employeeObligationForm.notes} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes de validation, motif ou référence interne" />
+                <textarea className="input min-h-24" value={employeeObligationForm.notes} onChange={(event) => setEmployeeObligationForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Notes de validation, motif ou référence interne", lang)} />
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <button type="button" onClick={() => setActiveSubDialog(null)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white hover:border-brand-300/30 hover:bg-brand-500/10">
-                    Annuler
+                    {F("Annuler", lang)}
                   </button>
                   <button type="submit" disabled={submittingKey === "employee-obligation"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
-                    Enregistrer et générer le reçu
+                    {F("Enregistrer et générer le reçu", lang)}
                   </button>
                 </div>
               </form>
@@ -3406,10 +3731,10 @@ export function FinancialOperationsPage() {
           )}
 
           {activeSubDialog === "employee-repayment-create" && canWrite && (
-            <OperationsSubDialog title="Remboursement employé" subtitle="Encaisser une échéance ouverte et générer le reçu de paiement." onClose={() => setActiveSubDialog(null)}>
+            <OperationsSubDialog title={F("Remboursement employé", lang)} subtitle="Encaisser une échéance ouverte et générer le reçu de paiement." onClose={() => setActiveSubDialog(null)}>
               <form className="grid gap-5" onSubmit={handleRecordEmployeeRepayment}>
                 <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                  Échéance à encaisser
+                  {F("Échéance à encaisser", lang)}
                   <select className="input" value={employeeRepaymentForm.repaymentId} onChange={(event) => {
                     const selected = openEmployeeRepayments.find((entry) => entry.repayment.id === event.target.value);
                     setEmployeeRepaymentForm((current) => ({
@@ -3418,7 +3743,7 @@ export function FinancialOperationsPage() {
                       paidAmount: selected ? String(Math.max(Number(selected.repayment.expectedAmount || 0) - Number(selected.repayment.paidAmount || 0), 0)) : current.paidAmount
                     }));
                   }} required>
-                    <option value="">Sélectionner une échéance</option>
+                    <option value="">{F("Sélectionner une échéance", lang)}</option>
                     {openEmployeeRepayments.map(({ obligation, repayment }) => (
                       <option key={repayment.id} value={repayment.id}>
                         {(obligation.salaryProfile?.fullName ?? salaryProfiles.find((profile) => profile.id === obligation.salaryProfileId)?.fullName ?? "Employé")} - {obligation.title} - {currency.format(Math.max(Number(repayment.expectedAmount || 0) - Number(repayment.paidAmount || 0), 0))}
@@ -3428,21 +3753,21 @@ export function FinancialOperationsPage() {
                 </label>
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <input className="input" type="number" min="0" step="0.01" value={employeeRepaymentForm.paidAmount} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder="Montant payé" required />
+                  <input className="input" type="number" min="0" step="0.01" value={employeeRepaymentForm.paidAmount} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, paidAmount: event.target.value }))} placeholder={F("Montant payé", lang)} required />
                   <select className="input" value={employeeRepaymentForm.paymentMethod} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, paymentMethod: event.target.value }))}>
                     {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
                   </select>
-                  <input className="input" value={employeeRepaymentForm.reference} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Référence paiement" />
+                  <input className="input" value={employeeRepaymentForm.reference} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder={F("Référence paiement", lang)} />
                 </div>
 
-                <textarea className="input min-h-24" value={employeeRepaymentForm.notes} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Notes de caisse ou observation" />
+                <textarea className="input min-h-24" value={employeeRepaymentForm.notes} onChange={(event) => setEmployeeRepaymentForm((current) => ({ ...current, notes: event.target.value }))} placeholder={F("Notes de caisse ou observation", lang)} />
 
                 <div className="flex flex-wrap justify-end gap-3">
                   <button type="button" onClick={() => setActiveSubDialog(null)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white hover:border-brand-300/30 hover:bg-brand-500/10">
-                    Annuler
+                    {F("Annuler", lang)}
                   </button>
                   <button type="submit" disabled={submittingKey === "employee-repayment"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
-                    Encaisser et générer le reçu
+                    {F("Encaisser et générer le reçu", lang)}
                   </button>
                 </div>
               </form>
@@ -3453,63 +3778,63 @@ export function FinancialOperationsPage() {
 
       {activeTab === "accounting" && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <SectionCard title="Lecture comptable" subtitle="Journal des ecritures generees par les depenses et la paie.">
+          <SectionCard title={F("Lecture comptable", lang)} subtitle="Journal des ecritures generees par les depenses et la paie.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Total ecritures</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Total ecritures", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-white">{accountingEntries.length}</p>
-                <p className="mt-2 text-xs text-ink-dim">Cardinal du journal comptable actif.</p>
+                <p className="mt-2 text-xs text-ink-dim">{F("Cardinal du journal comptable actif.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Volume comptabilisé</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Volume comptabilisé", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-red-300">{currency.format(accountingMetrics.totalVolume)}</p>
-                <p className="mt-2 text-xs text-red-100/80">Somme scientifique de toutes les écritures enregistrées.</p>
+                <p className="mt-2 text-xs text-red-100/80">{F("Somme scientifique de toutes les écritures enregistrées.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Ticket moyen</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Ticket moyen", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-white">{currency.format(accountingMetrics.averageEntry)}</p>
-                <p className="mt-2 text-xs text-brand-100/80">Moyenne = volume comptabilisé / nombre d'écritures.</p>
+                <p className="mt-2 text-xs text-brand-100/80">{F("Moyenne = volume comptabilisé / nombre d'écritures.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Part paie</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Part paie", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-cyan-100">{formatPercent(accountingMetrics.payrollWeight)}</p>
-                <p className="mt-2 text-xs text-cyan-100/80">{currency.format(accountingMetrics.payrollVolume)} imputés à la masse salariale.</p>
+                <p className="mt-2 text-xs text-cyan-100/80">{currency.format(accountingMetrics.payrollVolume)} {F("imputés à la masse salariale.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Département dominant</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Département dominant", lang)}</p>
                 <p className="mt-2 text-lg font-bold text-white">{accountingMetrics.topDepartmentName}</p>
-                <p className="mt-2 text-xs text-amber-100/80">{formatPercent(accountingMetrics.topDepartmentWeight)} du volume comptable total.</p>
+                <p className="mt-2 text-xs text-amber-100/80">{formatPercent(accountingMetrics.topDepartmentWeight)} {F("du volume comptable total.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Couverture documentaire</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Couverture documentaire", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-emerald-200">{formatPercent(accountingMetrics.documentationCoverage)}</p>
-                <p className="mt-2 text-xs text-emerald-100/80">Pièces jointes présentes sur les dépenses source.</p>
+                <p className="mt-2 text-xs text-emerald-100/80">{F("Pièces jointes présentes sur les dépenses source.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Taux d'approbation</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Taux d'approbation", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-violet-100">{formatPercent(accountingMetrics.approvalCoverage)}</p>
-                <p className="mt-2 text-xs text-violet-100/80">Dépenses approuvées sur l'ensemble du pipeline.</p>
+                <p className="mt-2 text-xs text-violet-100/80">{F("Dépenses approuvées sur l'ensemble du pipeline.", lang)}</p>
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="Journal general" subtitle="Chaque ligne relie la comptabilisation a son objet source.">
+          <SectionCard title={F("Journal general", lang)} subtitle="Chaque ligne relie la comptabilisation a son objet source.">
             <div className="mb-4 flex flex-wrap gap-3">
-              <SearchField value={accountingSearch} onChange={(event) => setAccountingSearch(event.target.value)} placeholder="Rechercher une écriture, un département ou une source..." />
+              <SearchField value={accountingSearch} onChange={(event) => setAccountingSearch(event.target.value)} placeholder={F("Rechercher une écriture, un département ou une source...", lang)} />
               <select value={accountingDepartmentFilter} onChange={(event) => setAccountingDepartmentFilter(event.target.value)} className="input min-w-[220px]">
-                <option value="ALL">Tous les départements</option>
+                <option value="ALL">{F("Tous les départements", lang)}</option>
                 {accountingDepartmentOptions.map((department) => <option key={department} value={department}>{department}</option>)}
               </select>
             </div>
             <div className="mb-4 grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Répartition par département</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{F("Répartition par département", lang)}</p>
                 <div className="mt-3 space-y-2">
                   {accountingBreakdown.slice(0, 5).map((entry) => (
                     <div key={entry.department} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
                       <div>
                         <p className="font-semibold text-white">{entry.department}</p>
-                        <p className="text-xs text-ink-dim">{entry.count} écriture(s) • moyenne {currency.format(entry.average)}</p>
+                        <p className="text-xs text-ink-dim">{entry.count} {F("écriture(s) • moyenne", lang)} {currency.format(entry.average)}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-mono font-bold text-white">{currency.format(entry.volume)}</p>
@@ -3517,20 +3842,20 @@ export function FinancialOperationsPage() {
                       </div>
                     </div>
                   ))}
-                  {!accountingBreakdown.length && <p className="text-sm text-ink-dim">Aucune écriture pour le filtre actuel.</p>}
+                  {!accountingBreakdown.length && <p className="text-sm text-ink-dim">{F("Aucune écriture pour le filtre actuel.", lang)}</p>}
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Actions du journal</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{F("Actions du journal", lang)}</p>
                 <div className="mt-3 flex flex-wrap gap-2 xl:flex-col xl:items-stretch">
                   <button onClick={printAccountingReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-300/25 bg-brand-500/10 px-4 py-2.5 text-sm font-semibold text-white hover:border-brand-200/40 hover:bg-brand-500/20">
-                    <Printer className="h-4 w-4" /> Imprimer le journal
+                    <Printer className="h-4 w-4" /> {F("Imprimer le journal", lang)}
                   </button>
                   <button onClick={exportAccountingExcel} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20">
-                    <Download className="h-4 w-4" /> Export Excel
+                    <Download className="h-4 w-4" /> {F("Export Excel", lang)}
                   </button>
                   <button onClick={exportAccountingCsv} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-ink-dim hover:border-brand-300/25 hover:text-white hover:bg-brand-500/10">
-                    <Download className="h-3.5 w-3.5" /> CSV
+                    <Download className="h-3.5 w-3.5" /> {F("CSV", lang)}
                   </button>
                 </div>
               </div>
@@ -3541,7 +3866,7 @@ export function FinancialOperationsPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-white">{entry.title}</p>
-                      <p className="mt-1 text-xs text-ink-dim">{entry.entryType} • {entry.department || "Departement non renseigne"} • {new Date(entry.entryDate).toLocaleDateString("fr-FR")}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{entry.entryType} • {entry.department || "Departement non renseigne"} • {new Date(entry.entryDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge value={entry.direction} />
@@ -3549,14 +3874,14 @@ export function FinancialOperationsPage() {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink-dim">
-                    {entry.metadata?.debitAccountCode && <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-1 text-cyan-100">Débit {entry.metadata.debitAccountCode} · Crédit {entry.metadata.creditAccountCode || "-"}</span>}
-                    {entry.expense && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Depense: {entry.expense.title}</span>}
-                    {entry.payrollRun && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Run: {entry.payrollRun.title}</span>}
-                    {entry.payrollItem && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Fiche: {entry.payrollItem.salarySlipNumber}</span>}
+                    {entry.metadata?.debitAccountCode && <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-1 text-cyan-100">{F("Débit", lang)} {entry.metadata.debitAccountCode} {F("· Crédit", lang)} {entry.metadata.creditAccountCode || "-"}</span>}
+                    {entry.expense && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">{F("Depense:", lang)} {entry.expense.title}</span>}
+                    {entry.payrollRun && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">{F("Run:", lang)} {entry.payrollRun.title}</span>}
+                    {entry.payrollItem && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">{F("Fiche:", lang)} {entry.payrollItem.salarySlipNumber}</span>}
                   </div>
                 </article>
               ))}
-              {!filteredAccountingEntries.length && <p className="text-sm text-ink-dim">Aucune écriture comptable disponible pour le filtre actuel.</p>}
+              {!filteredAccountingEntries.length && <p className="text-sm text-ink-dim">{F("Aucune écriture comptable disponible pour le filtre actuel.", lang)}</p>}
             </div>
           </SectionCard>
         </div>
@@ -3564,57 +3889,57 @@ export function FinancialOperationsPage() {
 
       {activeTab === "cashflow" && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <SectionCard title="Trésorerie" subtitle="Journal des sorties et mouvements de cash reliés aux opérations financières.">
+          <SectionCard title={F("Trésorerie", lang)} subtitle="Journal des sorties et mouvements de cash reliés aux opérations financières.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Lignes de trésorerie</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Lignes de trésorerie", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-white">{cashflowEntries.length}</p>
-                <p className="mt-2 text-xs text-ink-dim">Nombre d'enregistrements utilisés pour la lecture de cashflow.</p>
+                <p className="mt-2 text-xs text-ink-dim">{F("Nombre d'enregistrements utilisés pour la lecture de cashflow.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Sorties cumulees</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Sorties cumulees", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-red-300">{currency.format(cashflowMetrics.totalOutflow)}</p>
-                <p className="mt-2 text-xs text-red-100/80">Flux sortants consolidés du journal de trésorerie.</p>
+                <p className="mt-2 text-xs text-red-100/80">{F("Flux sortants consolidés du journal de trésorerie.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Balance disponible</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Balance disponible", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-emerald-300">{currency.format(safeOverview.cashflow.availableCash)}</p>
-                <p className="mt-2 text-xs text-emerald-100/80">Encaisse encore disponible après les sorties enregistrées.</p>
+                <p className="mt-2 text-xs text-emerald-100/80">{F("Encaisse encore disponible après les sorties enregistrées.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-brand-400/20 bg-brand-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Ticket moyen sortie</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Ticket moyen sortie", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-white">{currency.format(cashflowMetrics.averageOutflow)}</p>
-                <p className="mt-2 text-xs text-brand-100/80">Moyenne des opérations classées OUTFLOW.</p>
+                <p className="mt-2 text-xs text-brand-100/80">{F("Moyenne des opérations classées OUTFLOW.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Part paie</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Part paie", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-cyan-100">{formatPercent(cashflowMetrics.payrollShare)}</p>
-                <p className="mt-2 text-xs text-cyan-100/80">{currency.format(cashflowMetrics.payrollOutflow)} sortis pour la paie.</p>
+                <p className="mt-2 text-xs text-cyan-100/80">{currency.format(cashflowMetrics.payrollOutflow)} {F("sortis pour la paie.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Couverture cash</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Couverture cash", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-amber-100">{cashflowMetrics.coverageRatio.toFixed(2)}x</p>
-                <p className="mt-2 text-xs text-amber-100/80">Ratio = cash disponible / sorties consolidées.</p>
+                <p className="mt-2 text-xs text-amber-100/80">{F("Ratio = cash disponible / sorties consolidées.", lang)}</p>
               </div>
               <div className="rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Source dominante</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Source dominante", lang)}</p>
                 <p className="mt-2 text-lg font-bold text-white">{cashflowMetrics.dominantSourceName}</p>
-                <p className="mt-2 text-xs text-violet-100/80">{formatPercent(cashflowMetrics.dominantSourceWeight)} du volume de trésorerie.</p>
+                <p className="mt-2 text-xs text-violet-100/80">{formatPercent(cashflowMetrics.dominantSourceWeight)} {F("du volume de trésorerie.", lang)}</p>
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="Journal de cashflow" subtitle="Référence, source, moyen de paiement et notes opérationnelles.">
+          <SectionCard title={F("Journal de cashflow", lang)} subtitle="Référence, source, moyen de paiement et notes opérationnelles.">
             <div className="mb-4 grid gap-2 xl:grid-cols-[minmax(180px,0.7fr)_auto_auto]">
               <SearchField
                 value={cashflowSearch}
                 onChange={(event) => setCashflowSearch(event.target.value)}
-                placeholder="Recherche fine..."
+                placeholder={F("Recherche fine...", lang)}
                 wrapperClassName="max-w-xl"
                 inputClassName="h-9 text-xs"
               />
               <select value={cashflowSourceFilter} onChange={(event) => setCashflowSourceFilter(event.target.value)} className="input h-9 min-w-[180px] text-xs">
-                <option value="ALL">Toutes les sources</option>
+                <option value="ALL">{F("Toutes les sources", lang)}</option>
                 {cashflowSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
               </select>
               <select value={cashflowPeriodFilter} onChange={(event) => setCashflowPeriodFilter(event.target.value)} className="input h-9 min-w-[180px] text-xs">
@@ -3623,22 +3948,22 @@ export function FinancialOperationsPage() {
             </div>
             {cashflowPeriodFilter === "CUSTOM" && (
               <div className="mb-4 grid gap-2 sm:grid-cols-2">
-                <DateSelect className="input h-9 text-xs"  value={cashflowDateFrom} onChange={(event) => setCashflowDateFrom(event.target.value)} aria-label="Date début trésorerie" />
-                <DateSelect className="input h-9 text-xs"  value={cashflowDateTo} onChange={(event) => setCashflowDateTo(event.target.value)} aria-label="Date fin trésorerie" />
+                <DateSelect className="input h-9 text-xs"  value={cashflowDateFrom} onChange={(event) => setCashflowDateFrom(event.target.value)} aria-label={F("Date début trésorerie", lang)} />
+                <DateSelect className="input h-9 text-xs"  value={cashflowDateTo} onChange={(event) => setCashflowDateTo(event.target.value)} aria-label={F("Date fin trésorerie", lang)} />
               </div>
             )}
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-100">
-              Periodicite appliquee: {periodLabel(cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo)} - {filteredCashflowEntries.length} ligne(s)
+              {F("Periodicite appliquee:", lang)} {periodLabel(cashflowPeriodFilter, cashflowDateFrom, cashflowDateTo, lang)} - {filteredCashflowEntries.length} {F("ligne(s)", lang)}
             </p>
             <div className="mb-4 grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">Répartition par source</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">{F("Répartition par source", lang)}</p>
                 <div className="mt-3 space-y-2">
                   {cashflowBreakdown.slice(0, 5).map((entry) => (
                     <div key={entry.sourceType} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
                       <div>
-                        <p className="font-semibold text-white">{entry.sourceType}</p>
-                        <p className="text-xs text-ink-dim">{entry.count} ligne(s) • moyenne {currency.format(entry.average)}</p>
+                        <p className="font-semibold text-white">{dynamicFinancialLabel(entry.sourceType, lang)}</p>
+                        <p className="text-xs text-ink-dim">{entry.count} {F("ligne(s) • moyenne", lang)} {currency.format(entry.average)}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-mono font-bold text-white">{currency.format(entry.volume)}</p>
@@ -3646,20 +3971,20 @@ export function FinancialOperationsPage() {
                       </div>
                     </div>
                   ))}
-                  {!cashflowBreakdown.length && <p className="text-sm text-ink-dim">Aucun flux pour le filtre actuel.</p>}
+                  {!cashflowBreakdown.length && <p className="text-sm text-ink-dim">{F("Aucun flux pour le filtre actuel.", lang)}</p>}
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">Actions trésorerie</p>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-100">{F("Actions trésorerie", lang)}</p>
                 <div className="mt-3 flex flex-wrap gap-2 xl:flex-col xl:items-stretch">
                   <button onClick={printCashflowReport} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-semibold text-white hover:border-cyan-200/40 hover:bg-cyan-500/20">
-                    <Printer className="h-4 w-4" /> Imprimer le journal
+                    <Printer className="h-4 w-4" /> {F("Imprimer le journal", lang)}
                   </button>
                   <button onClick={exportCashflowExcel} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20">
-                    <Download className="h-4 w-4" /> Export Excel
+                    <Download className="h-4 w-4" /> {F("Export Excel", lang)}
                   </button>
                   <button onClick={exportCashflowCsv} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-ink-dim hover:border-brand-300/25 hover:text-white hover:bg-brand-500/10">
-                    <Download className="h-3.5 w-3.5" /> CSV
+                    <Download className="h-3.5 w-3.5" /> {F("CSV", lang)}
                   </button>
                 </div>
               </div>
@@ -3669,8 +3994,8 @@ export function FinancialOperationsPage() {
                 <article key={entry.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-white">{entry.sourceType}</p>
-                      <p className="mt-1 text-xs text-ink-dim">{new Date(entry.référenceDate).toLocaleDateString("fr-FR")} • {entry.method || "Sans methode"}</p>
+                      <p className="font-semibold text-white">{dynamicFinancialLabel(entry.sourceType, lang)}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{new Date(entry.référenceDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")} • {entry.method || "Sans methode"}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge value={entry.direction} />
@@ -3678,14 +4003,14 @@ export function FinancialOperationsPage() {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink-dim">
-                    {entry.expense && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Depense: {entry.expense.title}</span>}
-                    {entry.payrollRun && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Paie: {entry.payrollRun.title}</span>}
-                    {entry.payrollItem && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">Fiche: {entry.payrollItem.salarySlipNumber}</span>}
+                    {entry.expense && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">{F("Depense:", lang)} {entry.expense.title}</span>}
+                    {entry.payrollRun && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">{F("Paie:", lang)} {entry.payrollRun.title}</span>}
+                    {entry.payrollItem && <span className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1">{F("Fiche:", lang)} {entry.payrollItem.salarySlipNumber}</span>}
                   </div>
                   {entry.notes && <p className="mt-3 text-sm text-ink-dim">{entry.notes}</p>}
                 </article>
               ))}
-              {!filteredCashflowEntries.length && <p className="text-sm text-ink-dim">Aucun mouvement de trésorerie disponible pour le filtre actuel.</p>}
+              {!filteredCashflowEntries.length && <p className="text-sm text-ink-dim">{F("Aucun mouvement de trésorerie disponible pour le filtre actuel.", lang)}</p>}
             </div>
           </SectionCard>
         </div>
@@ -3693,44 +4018,44 @@ export function FinancialOperationsPage() {
 
       {activeTab === "documents" && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-          <SectionCard title="Depot documentaire" subtitle="Toutes les pieces justificatives attachées aux depenses sont visibles ici.">
+          <SectionCard title={F("Depot documentaire", lang)} subtitle="Toutes les pieces justificatives attachées aux depenses sont visibles ici.">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Documents indexes</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Documents indexes", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-white">{documentEntries.length}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Dépenses documentees</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{F("Dépenses documentees", lang)}</p>
                 <p className="mt-2 text-2xl font-bold text-white">{expenses.filter((expense) => (expense.attachments?.length ?? 0) > 0).length}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-ink-dim">
-                Ajoutez des justificatifs depuis l'onglet Dépenses avec un vrai upload de fichiers ou une référence URL.
+                {F("Ajoutez des justificatifs depuis l'onglet Dépenses avec un vrai upload de fichiers ou une référence URL.", lang)}
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="Pieces justificatives" subtitle="Ouverture directe, telechargement et contexte de la depense associee.">
+          <SectionCard title={F("Pieces justificatives", lang)} subtitle="Ouverture directe, telechargement et contexte de la depense associee.">
             <div className="space-y-3">
               {documentEntries.map((entry) => (
                 <article key={entry.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-white">{entry.fileName}</p>
-                      <p className="mt-1 text-xs text-ink-dim">{entry.expenseTitle} • {entry.department} • {new Date(entry.expenseDate).toLocaleDateString("fr-FR")}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{entry.expenseTitle} • {entry.department} • {new Date(entry.expenseDate).toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US")}</p>
                     </div>
                     <StatusBadge value={entry.status} />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => openExpenseSupportDocument(entry)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">
-                      Ouvrir
+                      {F("Ouvrir", lang)}
                     </button>
                     <button onClick={() => downloadExpenseSupportDocument(entry)} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white hover:border-brand-300/25 hover:bg-brand-500/10">
-                      Télécharger
+                      {F("Télécharger", lang)}
                     </button>
                   </div>
                 </article>
               ))}
-              {!documentEntries.length && <p className="text-sm text-ink-dim">Aucune piece justificative indexee pour le moment.</p>}
+              {!documentEntries.length && <p className="text-sm text-ink-dim">{F("Aucune piece justificative indexee pour le moment.", lang)}</p>}
             </div>
           </SectionCard>
 
@@ -3739,7 +4064,7 @@ export function FinancialOperationsPage() {
 
       {activeSubDialog === "budget-create" && canWrite && (
         <OperationsSubDialog
-          title="Nouveau budget"
+          title={F("Nouveau budget", lang)}
           subtitle="Créer une enveloppe budgétaire claire, avec un département, une catégorie, un montant planifié et un seuil d'alerte." 
           onClose={() => setActiveSubDialog(null)}
         >
@@ -3747,20 +4072,20 @@ export function FinancialOperationsPage() {
             <div className="overflow-hidden rounded-3xl border border-cyan-300/20 bg-gradient-to-br from-cyan-400/14 via-slate-950 to-slate-950 shadow-xl">
               <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
                 <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100">Budget workspace</p>
-                  <h4 className="mt-2 font-display text-2xl font-bold text-white">Créer une enveloppe budgétaire propre et traçable</h4>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-100">{F("Budget workspace", lang)}</p>
+                  <h4 className="mt-2 font-display text-2xl font-bold text-white">{F("Créer une enveloppe budgétaire propre et traçable", lang)}</h4>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-dim">
-                    Renseignez manuellement chaque champ important pour éviter les budgets implicites, mal catégorisés ou mal ventilés.
+                    {F("Renseignez manuellement chaque champ important pour éviter les budgets implicites, mal catégorisés ou mal ventilés.", lang)}
                   </p>
                 </div>
                 <div className="grid gap-2 text-xs sm:min-w-[220px]">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white">
-                    <p className="font-black uppercase tracking-[0.16em] text-cyan-100">Champs clés</p>
-                    <p className="mt-1 text-ink-dim">Nom, département, montant, catégorie, seuil d'alerte.</p>
+                    <p className="font-black uppercase tracking-[0.16em] text-cyan-100">{F("Champs clés", lang)}</p>
+                    <p className="mt-1 text-ink-dim">{F("Nom, département, montant, catégorie, seuil d'alerte.", lang)}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-white">
-                    <p className="font-black uppercase tracking-[0.16em] text-cyan-100">Résultat attendu</p>
-                    <p className="mt-1 text-ink-dim">Un budget exploitable immédiatement dans le suivi des dépenses.</p>
+                    <p className="font-black uppercase tracking-[0.16em] text-cyan-100">{F("Résultat attendu", lang)}</p>
+                    <p className="mt-1 text-ink-dim">{F("Un budget exploitable immédiatement dans le suivi des dépenses.", lang)}</p>
                   </div>
                 </div>
               </div>
@@ -3769,39 +4094,39 @@ export function FinancialOperationsPage() {
             <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
               <section className="rounded-3xl border border-white/10 bg-slate-950/45 p-5 shadow-lg">
                 <div className="mb-4">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">Identité du budget</p>
-                  <h4 className="mt-2 text-lg font-bold text-white">Informations principales</h4>
-                  <p className="mt-1 text-sm text-ink-dim">Définissez clairement le nom, le département et le volume financier prévu.</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-200">{F("Identité du budget", lang)}</p>
+                  <h4 className="mt-2 text-lg font-bold text-white">{F("Informations principales", lang)}</h4>
+                  <p className="mt-1 text-sm text-ink-dim">{F("Définissez clairement le nom, le département et le volume financier prévu.", lang)}</p>
                 </div>
 
                 <div className="grid gap-4">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Nom du budget
+                    {F("Nom du budget", lang)}
                     <input
                       className="input"
                       value={budgetForm.name}
                       onChange={(event) => setBudgetForm((current) => ({ ...current, name: event.target.value }))}
-                      placeholder="Ex: Budget transport T3 2026"
+                      placeholder={F("Ex: Budget transport T3 2026", lang)}
                       required
                     />
-                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">Nom lisible dans les journaux, les tableaux et les exports.</span>
+                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">{F("Nom lisible dans les journaux, les tableaux et les exports.", lang)}</span>
                   </label>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                      Département concerné
+                      {F("Département concerné", lang)}
                       <input
                         className="input"
                         value={budgetForm.department}
                         onChange={(event) => setBudgetForm((current) => ({ ...current, department: event.target.value }))}
-                        placeholder="Ex: Administration, Académique, Transport"
+                        placeholder={F("Ex: Administration, Académique, Transport", lang)}
                         required
                       />
-                      <span className="text-[11px] normal-case tracking-normal text-ink-dim">Service ou unité qui consommera ce budget.</span>
+                      <span className="text-[11px] normal-case tracking-normal text-ink-dim">{F("Service ou unité qui consommera ce budget.", lang)}</span>
                     </label>
 
                     <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                      Montant planifié
+                      {F("Montant planifié", lang)}
                       <input
                         className="input"
                         type="number"
@@ -3809,10 +4134,10 @@ export function FinancialOperationsPage() {
                         step="0.01"
                         value={budgetForm.plannedAmount}
                         onChange={(event) => setBudgetForm((current) => ({ ...current, plannedAmount: event.target.value }))}
-                        placeholder="Ex: 2500"
+                        placeholder={F("Ex: 2500", lang)}
                         required
                       />
-                      <span className="text-[11px] normal-case tracking-normal text-ink-dim">Montant total prévu pour l'enveloppe, en USD.</span>
+                      <span className="text-[11px] normal-case tracking-normal text-ink-dim">{F("Montant total prévu pour l'enveloppe, en USD.", lang)}</span>
                     </label>
                   </div>
                 </div>
@@ -3820,27 +4145,27 @@ export function FinancialOperationsPage() {
 
               <section className="rounded-3xl border border-white/10 bg-slate-950/45 p-5 shadow-lg">
                 <div className="mb-4">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Pilotage</p>
-                  <h4 className="mt-2 text-lg font-bold text-white">Catégorisation et suivi</h4>
-                  <p className="mt-1 text-sm text-ink-dim">Préparez le budget pour le suivi analytique et les alertes de consommation.</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">{F("Pilotage", lang)}</p>
+                  <h4 className="mt-2 text-lg font-bold text-white">{F("Catégorisation et suivi", lang)}</h4>
+                  <p className="mt-1 text-sm text-ink-dim">{F("Préparez le budget pour le suivi analytique et les alertes de consommation.", lang)}</p>
                 </div>
 
                 <div className="grid gap-4">
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Catégorie associée
+                    {F("Catégorie associée", lang)}
                     <select
                       className="input"
                       value={budgetForm.categoryId}
                       onChange={(event) => setBudgetForm((current) => ({ ...current, categoryId: event.target.value }))}
                     >
-                      <option value="">Choisir une catégorie principale</option>
+                      <option value="">{F("Choisir une catégorie principale", lang)}</option>
                       {categories.filter((category) => !category.parentCategoryId).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
                     </select>
-                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">Permet d'ancrer le budget dans une famille de dépenses.</span>
+                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">{F("Permet d'ancrer le budget dans une famille de dépenses.", lang)}</span>
                   </label>
 
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Seuil d'alerte (%)
+                    {F("Seuil d'alerte (%)", lang)}
                     <input
                       className="input"
                       type="number"
@@ -3848,20 +4173,20 @@ export function FinancialOperationsPage() {
                       max="100"
                       value={budgetForm.alertThreshold}
                       onChange={(event) => setBudgetForm((current) => ({ ...current, alertThreshold: event.target.value }))}
-                      placeholder="Ex: 80"
+                      placeholder={F("Ex: 80", lang)}
                     />
-                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">Déclenche une alerte visuelle lorsque la consommation approche la limite.</span>
+                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">{F("Déclenche une alerte visuelle lorsque la consommation approche la limite.", lang)}</span>
                   </label>
 
                   <label className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-ink-dim">
-                    Notes budgétaires
+                    {F("Notes budgétaires", lang)}
                     <textarea
                       className="input min-h-32"
                       value={budgetForm.notes}
                       onChange={(event) => setBudgetForm((current) => ({ ...current, notes: event.target.value }))}
-                      placeholder="Contexte, période couverte, justification, limites ou remarques de gestion"
+                      placeholder={F("Contexte, période couverte, justification, limites ou remarques de gestion", lang)}
                     />
-                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">Visible pour garder une trace de la logique budgétaire choisie.</span>
+                    <span className="text-[11px] normal-case tracking-normal text-ink-dim">{F("Visible pour garder une trace de la logique budgétaire choisie.", lang)}</span>
                   </label>
                 </div>
               </section>
@@ -3873,10 +4198,10 @@ export function FinancialOperationsPage() {
                 onClick={() => setActiveSubDialog(null)}
                 className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white hover:border-brand-300/30 hover:bg-brand-500/10"
               >
-                Annuler
+                {F("Annuler", lang)}
               </button>
               <button type="submit" disabled={submittingKey === "budget"} className="btn-primary justify-center px-5 py-3 text-sm font-semibold disabled:opacity-60">
-                Enregistrer le budget
+                {F("Enregistrer le budget", lang)}
               </button>
             </div>
           </form>

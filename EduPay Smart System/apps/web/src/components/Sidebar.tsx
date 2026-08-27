@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import {
   BadgeDollarSign,
   Bot,
@@ -29,7 +29,8 @@ type SidebarLink = {
 };
 
 export function Sidebar() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const role = useAuthStore((state) => state.role);
   const isDesktopSidebarOpen = useUiStore((state) => state.isDesktopSidebarOpen);
   const isMobileNavOpen = useUiStore((state) => state.isMobileNavOpen);
@@ -39,7 +40,7 @@ export function Sidebar() {
   const links: SidebarLink[] = role === "PARENT"
     ? [{ to: "/parent", label: t("navParent"), icon: <BadgeDollarSign className="h-4 w-4" aria-hidden="true" /> }]
     : role === "EMPLOYEE"
-      ? [{ to: "/employee", label: "Ma situation", icon: <HandCoins className="h-4 w-4" aria-hidden="true" /> }]
+      ? [{ to: "/employee", label: L("Ma situation", "My account"), icon: <HandCoins className="h-4 w-4" aria-hidden="true" /> }]
     : [
         { to: "/", label: t("navDashboard"), icon: <LayoutDashboard className="h-4 w-4" aria-hidden="true" /> },
         { to: "/operations", label: t("navOperations"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> },
@@ -87,8 +88,8 @@ export function Sidebar() {
             type="button"
             onClick={() => setMobileNavOpen(false)}
             className="flex h-12 min-w-12 flex-none items-center justify-center rounded-xl border border-brand-300/30 bg-brand-500/10 text-brand-100 transition hover:border-brand-300/55 hover:bg-brand-500/18 hover:text-white"
-            aria-label="Masquer le menu"
-            title="Masquer le menu"
+            aria-label={L("Masquer le menu", "Hide menu")}
+            title={L("Masquer le menu", "Hide menu")}
           >
             <PanelLeftClose className="h-5 w-5" />
           </button>
@@ -124,11 +125,11 @@ export function Sidebar() {
             type="button"
             onClick={() => setMobileNavOpen(true)}
             className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-brand-300/32 bg-slate-950/86 px-4 text-sm font-bold text-brand-100 shadow-[0_18px_38px_rgba(0,0,0,0.34)] backdrop-blur-2xl transition-all hover:border-brand-300/55 hover:bg-brand-500/18 hover:text-white"
-            aria-label="Afficher la navigation mobile"
-            title="Afficher la navigation"
+            aria-label={L("Afficher la navigation mobile", "Show mobile navigation")}
+            title={L("Afficher la navigation", "Show navigation")}
           >
             <PanelLeftOpen className="h-5 w-5" />
-            Menu
+            {L("Menu", "Menu")}
           </button>
         </div>
       )}
@@ -181,7 +182,7 @@ export function Sidebar() {
 
             <div className="relative space-y-3 border-t border-brand-300/15 pt-4">
               <div className="text-center text-xs text-ink-dim">
-                <p className="font-semibold text-brand-200">EduPay Smart System</p>
+                <p className="font-semibold text-brand-200">{L("EduPay Smart System", "EduPay Smart System")}</p>
                 <p className="text-xs opacity-70">v1.0</p>
               </div>
             </div>
@@ -195,8 +196,8 @@ export function Sidebar() {
                 type="button"
                 onClick={() => setDesktopSidebarOpen(true)}
                 className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-300/32 bg-brand-500/10 text-brand-100 transition-all hover:border-brand-300/55 hover:bg-brand-500/18 hover:text-white"
-                aria-label="Afficher la navigation latérale"
-                title="Afficher la navigation"
+                aria-label={L("Afficher la navigation latérale", "Show sidebar navigation")}
+                title={L("Afficher la navigation", "Show navigation")}
               >
                 <PanelLeftOpen className="h-5 w-5" />
               </button>
@@ -215,8 +216,8 @@ export function Sidebar() {
                 type="button"
                 onClick={() => setDesktopSidebarOpen(true)}
                 className="mt-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-brand-100 transition-all hover:border-brand-300/35 hover:bg-brand-500/10 hover:text-white"
-                aria-label="Déployer la navigation"
-                title="Déployer la navigation"
+                aria-label={L("Déployer la navigation", "Expand navigation")}
+                title={L("Déployer la navigation", "Expand navigation")}
               >
                 <PanelLeftClose className="h-4 w-4 rotate-180" />
               </button>

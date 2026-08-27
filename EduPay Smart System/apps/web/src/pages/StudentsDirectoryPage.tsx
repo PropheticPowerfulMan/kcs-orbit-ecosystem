@@ -9,6 +9,13 @@ import { api } from "../services/api";
 import { exportWorkbook } from "../utils/financeExcel";
 import { exportElementToPdf } from "../utils/pdfDocument";
 import { printHtmlDocument } from "../utils/printDocument";
+import { useI18n } from "../i18n";
+
+type UiLanguage = "fr" | "en";
+
+function localize(lang: UiLanguage, fr: string, en: string) {
+  return lang === "fr" ? fr : en;
+}
 
 type SharedDirectoryStudent = {
   id: string;
@@ -388,18 +395,18 @@ function normalizeDirectoryForUi(directory: SharedDirectoryResponse): SharedDire
   };
 }
 
-function formatDateLabel(value?: string | null) {
+function formatDateLabel(value?: string | null, lang: UiLanguage = "fr") {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("fr-FR");
+  return parsed.toLocaleDateString(lang === "fr" ? "fr-FR" : "en-US");
 }
 
-function formatDateTimeLabel(value?: string | null) {
+function formatDateTimeLabel(value?: string | null, lang: UiLanguage = "fr") {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("fr-FR", {
+  return parsed.toLocaleString(lang === "fr" ? "fr-FR" : "en-US", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -431,6 +438,24 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "") || "dossier-élève";
 }
 
+function getCodeLabel(value: string | null | undefined, lang: UiLanguage) {
+  const code = String(value || "").toUpperCase();
+  const labels: Record<string, [string, string]> = {
+    PAID: ["Payé", "Paid"], PARTIALLY_PAID: ["Partiellement payé", "Partially paid"], PENDING: ["En attente", "Pending"],
+    OPEN: ["Ouvert", "Open"], OVERDUE: ["En retard", "Overdue"], CLEARED: ["Soldé", "Cleared"], FAILED: ["Échoué", "Failed"],
+    APPROVED: ["Approuvé", "Approved"], ACTIVE: ["Actif", "Active"], INACTIVE: ["Inactif", "Inactive"], CANCELLED: ["Annulé", "Cancelled"],
+    CASH: ["Espèces", "Cash"], CARD: ["Carte", "Card"], BANK_TRANSFER: ["Virement bancaire", "Bank transfer"], MOBILE_MONEY: ["Mobile Money", "Mobile Money"],
+    FULL_PRESEPTEMBER: ["Paiement complet avant septembre", "Full payment before September"], TWO_INSTALLMENTS: ["Paiement en 2 tranches", "Payment in 2 installments"],
+    THREE_INSTALLMENTS: ["Paiement en 3 tranches", "Payment in 3 installments"], STANDARD_MONTHLY: ["Paiement mensuel standard", "Standard monthly payment"],
+    SPECIAL_OWNER_AGREEMENT: ["Arrangement avec l’école", "Special school agreement"], HIGH: ["Élevée", "High"], MEDIUM: ["Moyenne", "Medium"], LOW: ["Faible", "Low"],
+    SYNCED: ["Synchronisé", "Synced"], SKIPPED: ["Ignoré", "Skipped"]
+  };
+  return labels[code] ? labels[code][lang === "fr" ? 0 : 1] : (value || "-");
+}
+
+function getPaymentOptionLabel(value: string | null | undefined, lang: UiLanguage) {
+  return getCodeLabel(value, lang);
+}
 function getInstallmentStatusTone(status: string, isOverdue: boolean) {
   if (isOverdue) return "border-red-500/30 bg-red-500/10 text-red-200";
   if (status === "PAID") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
@@ -480,9 +505,31 @@ function buildStudentReportHtml(input: {
   student: SharedDirectoryStudent;
   parent?: SharedDirectoryParent;
   snapshot: StudentFinanceSnapshot | null;
+  lang: UiLanguage;
 }) {
-  const { student, parent, snapshot } = input;
+  const { student, parent, snapshot, lang } = input;
+  const L = (fr: string, en: string) => localize(lang, fr, en);
+  const r = lang === "fr" ? {
+    administrativeRecord: "dossier administratif élève", reference: "Référence", financialRecord: "Dossier financier élève", student: "Élève", issued: "Émis le",
+    identity: "Identité et rattachement", class: "Classe", parent: "Parent", parentPhone: "Téléphone parent", registration: "Inscription", summary: "Résumé financier",
+    expected: "Total attendu", discount: "Réduction", paid: "Montant payé", balance: "Solde", plan: "Plan", option: "Option", overdue: "Échéances en retard", completion: "Taux de complétion",
+    schedule: "Échéancier détaillé", installment: "Échéance", date: "Date", period: "Période", amountDue: "Montant dû", status: "Statut",
+    payments: "Historique des paiements", transaction: "Transaction", reason: "Motif", method: "Méthode", amount: "Montant",
+    reductions: "Réductions et remises", label: "Libellé", source: "Source", rate: "Taux", agreements: "Accords spéciaux", agreement: "Accord", total: "Total",
+    debts: "Dettes et reports", line: "Ligne", initial: "Montant initial", remaining: "Reste à payer", alerts: "Alertes financières",
+    schoolApproval: "Validation scolaire", studiesOffice: "Direction des études", financeApproval: "Visa financier", accounting: "Service comptable"
+  } : {
+    administrativeRecord: "student administrative record", reference: "Reference", financialRecord: "Student financial record", student: "Student", issued: "Issued on",
+    identity: "Identity and links", class: "Class", parent: "Parent", parentPhone: "Parent phone", registration: "Registration", summary: "Financial summary",
+    expected: "Expected total", discount: "Discount", paid: "Amount paid", balance: "Balance", plan: "Plan", option: "Option", overdue: "Overdue installments", completion: "Completion rate",
+    schedule: "Detailed payment schedule", installment: "Installment", date: "Date", period: "Period", amountDue: "Amount due", status: "Status",
+    payments: "Payment history", transaction: "Transaction", reason: "Reason", method: "Method", amount: "Amount",
+    reductions: "Discounts and reductions", label: "Label", source: "Source", rate: "Rate", agreements: "Special agreements", agreement: "Agreement", total: "Total",
+    debts: "Debts and carryovers", line: "Item", initial: "Initial amount", remaining: "Remaining balance", alerts: "Financial alerts",
+    schoolApproval: "School approval", studiesOffice: "Studies office", financeApproval: "Financial approval", accounting: "Accounting department"
+  };
   const brand = schoolBranding;
+
   const generatedAt = new Date();
   const documentReference = escapeHtml(`KCS-STU-${generatedAt.toISOString().slice(0, 10)}-${(student.displayId || student.studentNumber || student.id).replace(/[^A-Za-z0-9-]/g, "")}`);
   const logoSrc = escapeHtml(new URL(brand.logoSrc, window.location.href).toString());
@@ -492,12 +539,12 @@ function buildStudentReportHtml(input: {
     ? installments.map((installment) => `
       <tr>
         <td>${escapeHtml(installment.label)}</td>
-        <td>${escapeHtml(formatDateLabel(installment.dueDate))}</td>
+        <td>${escapeHtml(formatDateLabel(installment.dueDate, lang))}</td>
         <td>${escapeHtml(installment.periodKey || "-")}</td>
         <td>${escapeHtml(formatCurrency(installment.amountDue))}</td>
         <td>${escapeHtml(formatCurrency(installment.amountPaid))}</td>
         <td>${escapeHtml(formatCurrency(installment.balance))}</td>
-        <td>${escapeHtml(installment.status)}</td>
+        <td>${escapeHtml(getCodeLabel(installment.status, lang))}</td>
       </tr>`).join("")
     : `<tr><td colspan="7">Aucune échéance générée.</td></tr>`;
 
@@ -506,10 +553,10 @@ function buildStudentReportHtml(input: {
       <tr>
         <td>${escapeHtml(payment.transactionNumber)}</td>
         <td>${escapeHtml(payment.reason)}</td>
-        <td>${escapeHtml(payment.method)}</td>
-        <td>${escapeHtml(payment.status)}</td>
+        <td>${escapeHtml(getCodeLabel(payment.method, lang))}</td>
+        <td>${escapeHtml(getCodeLabel(payment.status, lang))}</td>
         <td>${escapeHtml(formatCurrency(payment.amount))}</td>
-        <td>${escapeHtml(formatDateTimeLabel(payment.createdAt))}</td>
+        <td>${escapeHtml(formatDateTimeLabel(payment.createdAt, lang))}</td>
       </tr>`).join("")
     : `<tr><td colspan="6">Aucun paiement rattaché à cet élève.</td></tr>`;
 
@@ -520,7 +567,7 @@ function buildStudentReportHtml(input: {
         <td>${escapeHtml(reduction.source || reduction.scope || "-")}</td>
         <td>${escapeHtml(reduction.percentage ? `${reduction.percentage}%` : "-")}</td>
         <td>${escapeHtml(formatCurrency(reduction.amount))}</td>
-        <td>${escapeHtml(formatDateLabel(reduction.effectiveDate))}</td>
+        <td>${escapeHtml(formatDateLabel(reduction.effectiveDate, lang))}</td>
       </tr>`).join("")
     : `<tr><td colspan="5">Aucune réduction enregistrée.</td></tr>`;
 
@@ -531,8 +578,8 @@ function buildStudentReportHtml(input: {
         <td>${escapeHtml(debt.reason || "-")}</td>
         <td>${escapeHtml(formatCurrency(debt.originalAmount))}</td>
         <td>${escapeHtml(formatCurrency(debt.amountRemaining))}</td>
-        <td>${escapeHtml(debt.status)}</td>
-        <td>${escapeHtml(formatDateLabel(debt.dueDate))}</td>
+        <td>${escapeHtml(getCodeLabel(debt.status, lang))}</td>
+        <td>${escapeHtml(formatDateLabel(debt.dueDate, lang))}</td>
       </tr>`).join("")
     : `<tr><td colspan="6">Aucune dette dédiée à cet élève.</td></tr>`;
 
@@ -540,11 +587,11 @@ function buildStudentReportHtml(input: {
     ? agreements.map((agreement) => `
       <tr>
         <td>${escapeHtml(agreement.title)}</td>
-        <td>${escapeHtml(agreement.paymentOptionType || "-")}</td>
+        <td>${escapeHtml(getPaymentOptionLabel(agreement.paymentOptionType, lang))}</td>
         <td>${escapeHtml(formatCurrency(agreement.customTotal))}</td>
         <td>${escapeHtml(formatCurrency(agreement.reductionAmount))}</td>
-        <td>${escapeHtml(agreement.status)}</td>
-        <td>${escapeHtml(formatDateTimeLabel(agreement.approvedAt || agreement.createdAt))}</td>
+        <td>${escapeHtml(getCodeLabel(agreement.status, lang))}</td>
+        <td>${escapeHtml(formatDateTimeLabel(agreement.approvedAt || agreement.createdAt, lang))}</td>
       </tr>`).join("")
     : `<tr><td colspan="6">Aucun accord spécial enregistré.</td></tr>`;
 
@@ -553,15 +600,15 @@ function buildStudentReportHtml(input: {
       <div class="alert alert-${escapeHtml(alert.severity.toLowerCase())}">
         <strong>${escapeHtml(alert.title)}</strong>
         <p>${escapeHtml(alert.message)}</p>
-        <span>${escapeHtml(formatDateTimeLabel(alert.createdAt))}</span>
+        <span>${escapeHtml(formatDateTimeLabel(alert.createdAt, lang))}</span>
       </div>`).join("")
     : `<div class="alert alert-neutral"><strong>Suivi</strong><p>Aucune alerte financière spécifique pour cet élève.</p><span>-</span></div>`;
 
   return `<!DOCTYPE html>
-  <html lang="fr">
+  <html lang="${lang}">
     <head>
       <meta charset="utf-8" />
-      <title>${escapeHtml(brand.schoolName)} - Dossier élève - ${escapeHtml(student.fullName)}</title>
+      <title>${escapeHtml(brand.schoolName)} - ${escapeHtml(r.financialRecord)} - ${escapeHtml(student.fullName)}</title>
       <style>
         :root {
           --brand-primary: ${brand.colors.primary};
@@ -612,59 +659,59 @@ function buildStudentReportHtml(input: {
     </head>
     <body>
       <img class="watermark" src="${logoSrc}" alt="" />
-      <div class="topbar"><span><strong>${escapeHtml(brand.shortName)}</strong> · dossier administratif élève</span><span>Référence ${documentReference}</span></div>
+      <div class="topbar"><span><strong>${escapeHtml(brand.shortName)}</strong> · ${escapeHtml(r.administrativeRecord)}</span><span>${escapeHtml(r.reference)} ${documentReference}</span></div>
       <div class="header">
         <div class="header-brand">
           <img class="header-logo" src="${logoSrc}" alt="Logo ${escapeHtml(brand.schoolName)}" />
           <div>
-            <div class="eyebrow">Dossier financier élève</div>
+            <div class="eyebrow">${escapeHtml(r.financialRecord)}</div>
             <div class="school-name">${escapeHtml(brand.schoolName)}</div>
             <div class="school-meta">${escapeHtml(brand.tagline)} · ${escapeHtml(brand.appName)} · ${escapeHtml(brand.shortName)}</div>
           </div>
         </div>
         <div class="report-box">
-          <div class="eyebrow">Élève</div>
+          <div class="eyebrow">${escapeHtml(r.student)}</div>
           <strong>${escapeHtml(student.fullName)}</strong>
           <div class="school-meta">ID ${escapeHtml(student.displayId || student.studentNumber || student.id)}</div>
-          <div class="school-meta">Émis le ${escapeHtml(generatedAt.toLocaleString("fr-FR"))}</div>
+          <div class="school-meta">${escapeHtml(r.issued)} ${escapeHtml(generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US"))}</div>
         </div>
       </div>
       <section class="panel">
-        <h2>Identité et rattachement</h2>
+        <h2>${escapeHtml(r.identity)}</h2>
         <div class="meta-grid">
-          <div><span>Classe</span><strong>${escapeHtml(student.className || student.classId || "-")}</strong></div>
-          <div><span>Parent</span><strong>${escapeHtml(parent?.fullName || "-")}</strong></div>
-          <div><span>Téléphone parent</span><strong>${escapeHtml(parent?.phone || "-")}</strong></div>
-          <div><span>Inscription</span><strong>${escapeHtml(formatDateTimeLabel(student.createdAt))}</strong></div>
+          <div><span>${escapeHtml(r.class)}</span><strong>${escapeHtml(student.className || student.classId || "-")}</strong></div>
+          <div><span>${escapeHtml(r.parent)}</span><strong>${escapeHtml(parent?.fullName || "-")}</strong></div>
+          <div><span>${escapeHtml(r.parentPhone)}</span><strong>${escapeHtml(parent?.phone || "-")}</strong></div>
+          <div><span>${escapeHtml(r.registration)}</span><strong>${escapeHtml(formatDateTimeLabel(student.createdAt))}</strong></div>
         </div>
       </section>
       <section class="panel">
-        <h2>Résumé financier</h2>
+        <h2>${escapeHtml(r.summary)}</h2>
         <div class="summary-grid">
-          <div><span>Total attendu</span><strong>${escapeHtml(formatCurrency(financeStudent?.expectedTotal ?? student.annualFeeDisplay ?? student.annualFee ?? null))}</strong></div>
-          <div><span>Réduction</span><strong>${escapeHtml(formatCurrency(financeStudent?.reductionTotal ?? student.reductionTotal ?? null))}</strong></div>
-          <div><span>Montant payé</span><strong>${escapeHtml(formatCurrency(financeStudent?.paid ?? 0))}</strong></div>
-          <div><span>Solde</span><strong>${escapeHtml(formatCurrency(financeStudent?.balance ?? 0))}</strong></div>
-          <div><span>Plan</span><strong>${escapeHtml(financeStudent?.planName || student.tuitionPlanName || "-")}</strong></div>
-          <div><span>Option</span><strong>${escapeHtml(financeStudent?.paymentOptionLabel || financeStudent?.paymentOptionType || student.paymentOptionType || "-")}</strong></div>
-          <div><span>Échéances en retard</span><strong>${escapeHtml(String(financeStudent?.overdueInstallments ?? 0))}</strong></div>
-          <div><span>Taux de completion</span><strong>${escapeHtml(`${(financeStudent?.completionRate ?? 0).toFixed(1)}%`)}</strong></div>
+          <div><span>${escapeHtml(r.expected)}</span><strong>${escapeHtml(formatCurrency(financeStudent?.expectedTotal ?? student.annualFeeDisplay ?? student.annualFee ?? null))}</strong></div>
+          <div><span>${escapeHtml(r.discount)}</span><strong>${escapeHtml(formatCurrency(financeStudent?.reductionTotal ?? student.reductionTotal ?? null))}</strong></div>
+          <div><span>${escapeHtml(r.paid)}</span><strong>${escapeHtml(formatCurrency(financeStudent?.paid ?? 0))}</strong></div>
+          <div><span>${escapeHtml(r.balance)}</span><strong>${escapeHtml(formatCurrency(financeStudent?.balance ?? 0))}</strong></div>
+          <div><span>${escapeHtml(r.plan)}</span><strong>${escapeHtml(financeStudent?.planName || student.tuitionPlanName || "-")}</strong></div>
+          <div><span>${escapeHtml(r.option)}</span><strong>${escapeHtml(financeStudent?.paymentOptionLabel || getPaymentOptionLabel(financeStudent?.paymentOptionType || student.paymentOptionType, lang))}</strong></div>
+          <div><span>${escapeHtml(r.overdue)}</span><strong>${escapeHtml(String(financeStudent?.overdueInstallments ?? 0))}</strong></div>
+          <div><span>${escapeHtml(r.completion)}</span><strong>${escapeHtml(`${(financeStudent?.completionRate ?? 0).toFixed(1)}%`)}</strong></div>
         </div>
       </section>
-      <section class="panel"><h2>Échéancier détaillé</h2><table><thead><tr><th>Échéance</th><th>Date</th><th>Période</th><th>Montant dû</th><th>Payé</th><th>Solde</th><th>Statut</th></tr></thead><tbody>${installmentRows}</tbody></table></section>
-      <section class="panel"><h2>Historique des paiements</h2><table><thead><tr><th>Transaction</th><th>Motif</th><th>Méthode</th><th>Statut</th><th>Montant</th><th>Date</th></tr></thead><tbody>${paymentRows}</tbody></table></section>
-      <section class="panel"><h2>Réductions et remises</h2><table><thead><tr><th>Libellé</th><th>Source</th><th>Taux</th><th>Montant</th><th>Date</th></tr></thead><tbody>${reductionRows}</tbody></table></section>
-      <section class="panel"><h2>Accords spéciaux</h2><table><thead><tr><th>Accord</th><th>Option</th><th>Total</th><th>Réduction</th><th>Statut</th><th>Date</th></tr></thead><tbody>${agreementRows}</tbody></table></section>
-      <section class="panel"><h2>Dettes et reports</h2><table><thead><tr><th>Ligne</th><th>Motif</th><th>Montant initial</th><th>Reste à payer</th><th>Statut</th><th>Échéance</th></tr></thead><tbody>${debtRows}</tbody></table></section>
-      <section class="panel"><h2>Alertes financières</h2><div class="alerts">${alertRows}</div></section>
+      <section class="panel"><h2>${escapeHtml(r.schedule)}</h2><table><thead><tr><th>${escapeHtml(r.installment)}</th><th>${escapeHtml(r.date)}</th><th>Période</th><th>${escapeHtml(r.amountDue)}</th><th>${escapeHtml(r.paid)}</th><th>${escapeHtml(r.balance)}</th><th>${escapeHtml(r.status)}</th></tr></thead><tbody>${installmentRows}</tbody></table></section>
+      <section class="panel"><h2>${escapeHtml(r.payments)}</h2><table><thead><tr><th>${escapeHtml(r.transaction)}</th><th>${escapeHtml(r.reason)}</th><th>${escapeHtml(r.method)}</th><th>${escapeHtml(r.status)}</th><th>${escapeHtml(r.amount)}</th><th>${escapeHtml(r.date)}</th></tr></thead><tbody>${paymentRows}</tbody></table></section>
+      <section class="panel"><h2>${escapeHtml(r.reductions)}</h2><table><thead><tr><th>${escapeHtml(r.label)}</th><th>${escapeHtml(r.source)}</th><th>${escapeHtml(r.rate)}</th><th>${escapeHtml(r.amount)}</th><th>${escapeHtml(r.date)}</th></tr></thead><tbody>${reductionRows}</tbody></table></section>
+      <section class="panel"><h2>${escapeHtml(r.agreements)}</h2><table><thead><tr><th>${escapeHtml(r.agreement)}</th><th>${escapeHtml(r.option)}</th><th>${escapeHtml(r.total)}</th><th>${escapeHtml(r.discount)}</th><th>${escapeHtml(r.status)}</th><th>${escapeHtml(r.date)}</th></tr></thead><tbody>${agreementRows}</tbody></table></section>
+      <section class="panel"><h2>${escapeHtml(r.debts)}</h2><table><thead><tr><th>${escapeHtml(r.line)}</th><th>${escapeHtml(r.reason)}</th><th>${escapeHtml(r.initial)}</th><th>${escapeHtml(r.remaining)}</th><th>${escapeHtml(r.status)}</th><th>${escapeHtml(r.installment)}</th></tr></thead><tbody>${debtRows}</tbody></table></section>
+      <section class="panel"><h2>${escapeHtml(r.alerts)}</h2><div class="alerts">${alertRows}</div></section>
       <div class="compliance">Ce dossier reprend l'état académique et financier détaillé de l'élève tel qu'affiché dans EduPay. Il est édité selon la charte ${escapeHtml(brand.shortName)} pour contrôle, suivi et archivage.</div>
-      <div class="signatures"><div class="signature-box"><div class="signature-title">Validation scolaire</div><div class="signature-line">Direction des études</div></div><div class="signature-box"><div class="signature-title">Visa financier</div><div class="signature-line">Service comptable</div></div></div>
-      <div class="footer"><span>Document officiel ${escapeHtml(brand.appName)} généré pour ${escapeHtml(brand.schoolName)}.</span><span>Année académique ${escapeHtml(snapshot?.academicYear.name || "-")} · ${escapeHtml(generatedAt.toLocaleString("fr-FR"))}</span></div>
+      <div class="signatures"><div class="signature-box"><div class="signature-title">${escapeHtml(r.schoolApproval)}</div><div class="signature-line">${escapeHtml(r.studiesOffice)}</div></div><div class="signature-box"><div class="signature-title">${escapeHtml(r.financeApproval)}</div><div class="signature-line">${escapeHtml(r.accounting)}</div></div></div>
+      <div class="footer"><span>Document officiel ${escapeHtml(brand.appName)} généré pour ${escapeHtml(brand.schoolName)}.</span><span>Année académique ${escapeHtml(snapshot?.academicYear.name || "-")} · ${escapeHtml(generatedAt.toLocaleString(lang === "fr" ? "fr-FR" : "en-US"))}</span></div>
     </body>
   </html>`;
 }
 
-async function mountStudentReportFrame(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null) {
+async function mountStudentReportFrame(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null, lang: UiLanguage) {
   const frame = document.createElement("iframe");
   frame.style.position = "fixed";
   frame.style.right = "0";
@@ -682,12 +729,12 @@ async function mountStudentReportFrame(student: SharedDirectoryStudent, parent: 
       frame.remove();
       reject(new Error("Impossible de préparer le document élève."));
     };
-    frame.srcdoc = buildStudentReportHtml({ student, parent, snapshot });
+    frame.srcdoc = buildStudentReportHtml({ student, parent, snapshot, lang });
   });
 }
 
-async function exportStudentReportPdf(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null) {
-  const frame = await mountStudentReportFrame(student, parent, snapshot);
+async function exportStudentReportPdf(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null, lang: UiLanguage) {
+  const frame = await mountStudentReportFrame(student, parent, snapshot, lang);
 
   try {
     const body = frame.contentDocument?.body;
@@ -706,99 +753,100 @@ async function exportStudentReportPdf(student: SharedDirectoryStudent, parent: S
   }
 }
 
-function printStudentReport(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null) {
-  printHtmlDocument(buildStudentReportHtml({ student, parent, snapshot }));
+function printStudentReport(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null, lang: UiLanguage) {
+  printHtmlDocument(buildStudentReportHtml({ student, parent, snapshot, lang }));
 }
 
-function exportStudentReportExcel(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null) {
+function exportStudentReportExcel(student: SharedDirectoryStudent, parent: SharedDirectoryParent | undefined, snapshot: StudentFinanceSnapshot | null, lang: UiLanguage) {
+  const L = (fr: string, en: string) => localize(lang, fr, en);
   const { financeStudent, installments, reductions, debts, agreements, paymentHistory, alerts } = getStudentFinanceData(snapshot, student);
   exportWorkbook(`dossier-élève-${slugify(student.fullName)}-${new Date().toISOString().slice(0, 10)}`, [
     {
-      name: "Résumé",
+      name: L("Résumé", "Summary"),
       rows: [{
-        "ID Élève": student.displayId || student.studentNumber || student.id,
-        "Nom complet": student.fullName,
-        "Classe": student.className || student.classId,
-        "Parent": parent?.fullName || "-",
-        "Téléphone parent": parent?.phone || "-",
-        "Date inscription": formatDateTimeLabel(student.createdAt),
-        "Plan": financeStudent?.planName || student.tuitionPlanName || "-",
-        "Option de paiement": financeStudent?.paymentOptionLabel || financeStudent?.paymentOptionType || student.paymentOptionType || "-",
-        "Montant initial": financeStudent?.originalAmount ?? student.originalAnnualFee ?? student.annualFee ?? null,
-        "Total attendu": financeStudent?.expectedTotal ?? student.annualFeeDisplay ?? student.annualFee ?? null,
-        "Réduction": financeStudent?.reductionTotal ?? student.reductionTotal ?? null,
-        "Payé": financeStudent?.paid ?? 0,
-        "Solde": financeStudent?.balance ?? 0,
-        "Échéances en retard": financeStudent?.overdueInstallments ?? 0,
-        "Taux de completion": financeStudent?.completionRate ?? 0,
-        "Année académique": snapshot?.academicYear.name ?? "-",
+        [L("ID Élève", "Student ID")]: student.displayId || student.studentNumber || student.id,
+        [L("Nom complet", "Full name")]: student.fullName,
+        [L("Classe", "Class")]: student.className || student.classId,
+        [L("Parent", "Parent")]: parent?.fullName || "-",
+        [L("Téléphone parent", "Parent phone")]: parent?.phone || "-",
+        [L("Date inscription", "Registration date")]: formatDateTimeLabel(student.createdAt),
+        [L("Plan", "Plan")]: financeStudent?.planName || student.tuitionPlanName || "-",
+        [L("Option de paiement", "Payment option")]: financeStudent?.paymentOptionLabel || getPaymentOptionLabel(financeStudent?.paymentOptionType || student.paymentOptionType, lang),
+        [L("Montant initial", "Initial amount")]: financeStudent?.originalAmount ?? student.originalAnnualFee ?? student.annualFee ?? null,
+        [L("Total attendu", "Expected total")]: financeStudent?.expectedTotal ?? student.annualFeeDisplay ?? student.annualFee ?? null,
+        [L("Réduction", "Discount")]: financeStudent?.reductionTotal ?? student.reductionTotal ?? null,
+        [L("Payé", "Paid")]: financeStudent?.paid ?? 0,
+        [L("Solde", "Balance")]: financeStudent?.balance ?? 0,
+        [L("Échéances en retard", "Overdue installments")]: financeStudent?.overdueInstallments ?? 0,
+        [L("Taux de complétion", "Completion rate")]: financeStudent?.completionRate ?? 0,
+        [L("Année académique", "Academic year")]: snapshot?.academicYear.name ?? "-",
       }]
     },
     {
-      name: "Échéances",
+      name: L("Échéances", "Installments"),
       rows: installments.map((installment) => ({
-        "Libellé": installment.label,
-        "Période": installment.periodKey || "-",
-        "Date échéance": formatDateLabel(installment.dueDate),
-        "Montant dû": installment.amountDue,
-        "Montant payé": installment.amountPaid,
-        "Solde": installment.balance,
-        "Statut": installment.status,
-        "En retard": installment.isOverdue ? "Oui" : "Non",
+        [L("Libellé", "Label")]: installment.label,
+        [L("Période", "Period")]: installment.periodKey || "-",
+        [L("Date échéance", "Due date")]: formatDateLabel(installment.dueDate),
+        [L("Montant dû", "Amount due")]: installment.amountDue,
+        [L("Montant payé", "Amount paid")]: installment.amountPaid,
+        [L("Solde", "Balance")]: installment.balance,
+        [L("Statut", "Status")]: getCodeLabel(installment.status, lang),
+        [L("En retard", "Overdue")]: installment.isOverdue ? L("Oui", "Yes") : L("Non", "No"),
       }))
     },
     {
-      name: "Paiements",
+      name: L("Paiements", "Payments"),
       rows: paymentHistory.map((payment) => ({
-        "Transaction": payment.transactionNumber,
-        "Motif": payment.reason,
-        "Méthode": payment.method,
-        "Statut": payment.status,
-        "Montant": payment.amount,
-        "Date": formatDateTimeLabel(payment.createdAt),
-        "Reçu": payment.receiptNumber || "-",
+        [L("Transaction", "Transaction")]: payment.transactionNumber,
+        [L("Motif", "Reason")]: payment.reason,
+        [L("Méthode", "Method")]: getCodeLabel(payment.method, lang),
+        [L("Statut", "Status")]: getCodeLabel(payment.status, lang),
+        [L("Montant", "Amount")]: payment.amount,
+        [L("Date", "Date")]: formatDateTimeLabel(payment.createdAt),
+        [L("Reçu", "Receipt")]: payment.receiptNumber || "-",
       }))
     },
     {
-      name: "Réductions",
+      name: L("Réductions", "Discounts"),
       rows: reductions.map((reduction) => ({
-        "Libellé": reduction.title,
-        "Source": reduction.source || reduction.scope || "-",
-        "Pourcentage": reduction.percentage ?? null,
-        "Montant": reduction.amount,
-        "Date": formatDateLabel(reduction.effectiveDate),
+        [L("Libellé", "Label")]: reduction.title,
+        [L("Source", "Source")]: reduction.source || reduction.scope || "-",
+        [L("Pourcentage", "Percentage")]: reduction.percentage ?? null,
+        [L("Montant", "Amount")]: reduction.amount,
+        [L("Date", "Date")]: formatDateLabel(reduction.effectiveDate),
       }))
     },
     {
-      name: "Dettes",
+      name: L("Dettes", "Debts"),
       rows: debts.map((debt) => ({
-        "Ligne": debt.title,
-        "Motif": debt.reason || "-",
-        "Montant initial": debt.originalAmount,
-        "Reste à payer": debt.amountRemaining,
-        "Statut": debt.status,
-        "Échéance": formatDateLabel(debt.dueDate),
-        "Créée le": formatDateTimeLabel(debt.createdAt),
+        [L("Ligne", "Item")]: debt.title,
+        [L("Motif", "Reason")]: debt.reason || "-",
+        [L("Montant initial", "Initial amount")]: debt.originalAmount,
+        [L("Reste à payer", "Remaining balance")]: debt.amountRemaining,
+        [L("Statut", "Status")]: getCodeLabel(debt.status, lang),
+        [L("Échéance", "Due date")]: formatDateLabel(debt.dueDate),
+        [L("Créée le", "Created on")]: formatDateTimeLabel(debt.createdAt),
       }))
     },
     {
-      name: "Accords et alertes",
+      name: L("Accords et alertes", "Agreements and alerts"),
       rows: [
         ...agreements.map((agreement) => ({
-          "Type": "Accord",
-          "Titre": agreement.title,
-          "Détail": agreement.notes || agreement.paymentOptionType || "-",
-          "Montant": agreement.customTotal,
-          "Statut": agreement.status,
-          "Date": formatDateTimeLabel(agreement.approvedAt || agreement.createdAt),
+          [L("Type", "Type")]: "Accord",
+          [L("Titre", "Title")]: agreement.title,
+          [L("Détail", "Details")]: agreement.notes || agreement.paymentOptionType || "-",
+          [L("Montant", "Amount")]: agreement.customTotal,
+          [L("Statut", "Status")]: getCodeLabel(agreement.status, lang),
+          [L("Date", "Date")]: formatDateTimeLabel(agreement.approvedAt || agreement.createdAt),
         })),
         ...alerts.map((alert) => ({
-          "Type": "Alerte",
-          "Titre": alert.title,
-          "Détail": alert.message,
-          "Montant": null,
-          "Statut": alert.severity,
-          "Date": formatDateTimeLabel(alert.createdAt),
+          [L("Type", "Type")]: "Alerte",
+          [L("Titre", "Title")]: alert.title,
+          [L("Détail", "Details")]: alert.message,
+          [L("Montant", "Amount")]: null,
+          [L("Statut", "Status")]: getCodeLabel(alert.severity, lang),
+          [L("Date", "Date")]: formatDateTimeLabel(alert.createdAt),
         }))
       ]
     }
@@ -806,6 +854,8 @@ function exportStudentReportExcel(student: SharedDirectoryStudent, parent: Share
 }
 
 function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, onClose }: { student: SharedDirectoryStudent; parent?: SharedDirectoryParent; resettingAccess: boolean; onResetAccess: () => void; onClose: () => void }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => localize(lang, fr, en);
   const displayedAnnualFee = typeof student.annualFeeDisplay === "number" ? student.annualFeeDisplay : student.annualFee;
   const originalAnnualFee = typeof student.originalAnnualFee === "number" ? student.originalAnnualFee : student.annualFee;
   const reductionTotal = typeof student.reductionTotal === "number" ? student.reductionTotal : 0;
@@ -867,15 +917,15 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
         type="button"
         onClick={onClose}
         className="absolute right-3 top-5 z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/80 text-slate-300 shadow-lg backdrop-blur-xl transition-colors hover:bg-white/10 hover:text-white"
-        aria-label="Fermer"
+        aria-label={L("Fermer", "Close")}
       >
         <X className="h-5 w-5" />
       </button>
         <div className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/10 bg-slate-950/90 px-6 py-5 pr-14 backdrop-blur-xl sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">Fiche élève</p>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">{L("Fiche élève", "Student record")}</p>
             <h2 className="mt-2 font-display text-2xl font-bold text-white">{student.fullName}</h2>
-            <p className="mt-1 text-sm text-slate-300">Traçabilité complète du dossier financier, des échéances, des paiements et des alertes.</p>
+            <p className="mt-1 text-sm text-slate-300">{L("Traçabilité complète du dossier financier, des échéances, des paiements et des alertes.", "Complete traceability of the financial record, installments, payments and alerts.")}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -884,13 +934,13 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
               disabled={resettingAccess}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20 disabled:opacity-50"
             >
-              <KeyRound className="h-4 w-4" /> {resettingAccess ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
+              <KeyRound className="h-4 w-4" /> {resettingAccess ? L("Réinitialisation...", "Resetting...") : L("Réinitialiser le mot de passe", "Reset password")}
             </button>
             <button
               type="button"
               onClick={() => {
                 setPdfExporting(true);
-                void exportStudentReportPdf(student, parent, financeSnapshot).finally(() => setPdfExporting(false));
+                void exportStudentReportPdf(student, parent, financeSnapshot, lang).finally(() => setPdfExporting(false));
               }}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -899,15 +949,15 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
             </button>
             <button
               type="button"
-              onClick={() => printStudentReport(student, parent, financeSnapshot)}
+              onClick={() => printStudentReport(student, parent, financeSnapshot, lang)}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-sm font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Printer className="h-4 w-4" /> Impression
+              <Printer className="h-4 w-4" /> {L("Impression", "Print")}
             </button>
             <button
               type="button"
-              onClick={() => exportStudentReportExcel(student, parent, financeSnapshot)}
+              onClick={() => exportStudentReportExcel(student, parent, financeSnapshot, lang)}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -918,83 +968,83 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
         <div className="edupay-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="grid gap-3 lg:grid-cols-4">
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">ID élève</p>
+            <p className="text-sm text-slate-300">{L("ID élève", "Student ID")}</p>
             <p className="mt-1 break-words font-mono text-sm font-bold text-cyan-200">{student.displayId || student.studentNumber || student.id}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">Classe</p>
-            <p className="mt-1 font-semibold text-white">{student.className || student.classId || "Classe non renseignee"}</p>
+            <p className="text-sm text-slate-300">{L("Classe", "Class")}</p>
+            <p className="mt-1 font-semibold text-white">{student.className || student.classId || L("Classe non renseignée", "Class not provided")}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">Date de naissance</p>
+            <p className="text-sm text-slate-300">{L("Date de naissance", "Date of birth")}</p>
             <p className="mt-1 font-semibold text-white">{formatDateLabel(student.dateOfBirth)}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">Parent</p>
-            <p className="mt-1 font-semibold text-white">{parent?.fullName || "Parent non retrouvé"}</p>
+            <p className="text-sm text-slate-300">{L("Parent", "Parent")}</p>
+            <p className="mt-1 font-semibold text-white">{parent?.fullName || L("Parent non retrouvé", "Parent not found")}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">Inscription</p>
+            <p className="text-sm text-slate-300">{L("Inscription", "Registration")}</p>
             <p className="mt-1 font-semibold text-white">{registrationDate}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">Frais annuels</p>
+            <p className="text-sm text-slate-300">{L("Frais annuels", "Annual tuition")}</p>
             <p className="mt-1 font-mono font-bold text-emerald-300">{typeof displayedAnnualFee === "number" ? `$ ${displayedAnnualFee.toFixed(2)}` : "-"}</p>
             {student.tuitionPlanName ? <p className="mt-1 text-sm text-cyan-200">{student.tuitionPlanName}</p> : null}
-            {typeof originalAnnualFee === "number" && reductionTotal > 0 ? <p className="mt-1 text-sm text-amber-200">Base $ {originalAnnualFee.toFixed(2)} · Reduction $ {reductionTotal.toFixed(2)}</p> : null}
+            {typeof originalAnnualFee === "number" && reductionTotal > 0 ? <p className="mt-1 text-sm text-amber-200">{L("Base $", "Base $")} {originalAnnualFee.toFixed(2)} {L("· Reduction $", "· Discount $")} {reductionTotal.toFixed(2)}</p> : null}
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">Total attendu</p>
+            <p className="text-sm text-slate-300">{L("Total attendu", "Expected total")}</p>
             <p className="mt-1 font-mono font-bold text-white">{formatCurrency(financeStudent?.expectedTotal ?? displayedAnnualFee ?? null)}</p>
-            <p className="mt-1 text-sm text-slate-300">Payé {formatCurrency(financeStudent?.paid ?? 0)} · Solde {formatCurrency(financeStudent?.balance ?? 0)}</p>
+            <p className="mt-1 text-sm text-slate-300">{L("Payé", "Paid")} {formatCurrency(financeStudent?.paid ?? 0)} {L("· Solde", "· Balance")} {formatCurrency(financeStudent?.balance ?? 0)}</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-            <p className="text-sm text-slate-300">État du dossier</p>
-            <p className="mt-1 font-semibold text-white">{(financeStudent?.completionRate ?? 0).toFixed(1)}% de completion</p>
-            <p className="mt-1 text-sm text-slate-300">{financeStudent?.overdueInstallments ?? 0} échéance(s) en retard</p>
+            <p className="text-sm text-slate-300">{L("État du dossier", "Record status")}</p>
+            <p className="mt-1 font-semibold text-white">{(financeStudent?.completionRate ?? 0).toFixed(1)}{L("% de completion", "% complete")}</p>
+            <p className="mt-1 text-sm text-slate-300">{financeStudent?.overdueInstallments ?? 0} {L("échéance(s) en retard", "overdue installment(s)")}</p>
           </div>
         </div>
 
         <div className="mt-5 space-y-5">
           {financeLoading ? (
-            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 text-sm text-cyan-100">Chargement du dossier financier de l'élève...</div>
+            <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6 text-sm text-cyan-100">{L("Chargement du dossier financier de l'élève...", "Loading the student financial record...")}</div>
           ) : financeError ? (
             <div className="rounded-2xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">{financeError}</div>
           ) : !financeStudent ? (
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">Aucune ligne financière détaillée n'a été trouvée pour cet élève.</div>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">{L("Aucune ligne financière détaillée n'a été trouvée pour cet élève.", "No detailed financial record was found for this student.")}</div>
           ) : (
             <>
               <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Échéancier détaillé</p>
-                      <p className="mt-1 text-sm text-slate-300">Chaque échéance, son statut, son reste à payer et sa date limite.</p>
+                      <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Échéancier détaillé", "Detailed payment schedule")}</p>
+                      <p className="mt-1 text-sm text-slate-300">{L("Chaque échéance, son statut, son reste à payer et sa date limite.", "Each installment, its status, remaining balance and due date.")}</p>
                     </div>
                   </div>
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-white/10 text-left text-sm uppercase tracking-[0.12em] text-slate-300">
-                          <th className="px-3 py-3">Libellé</th>
-                          <th className="px-3 py-3">Date</th>
-                          <th className="px-3 py-3">Montant dû</th>
-                          <th className="px-3 py-3">Payé</th>
-                          <th className="px-3 py-3">Solde</th>
-                          <th className="px-3 py-3">Statut</th>
+                          <th className="px-3 py-3">{L("Libellé", "Label")}</th>
+                          <th className="px-3 py-3">{L("Date", "Date")}</th>
+                          <th className="px-3 py-3">{L("Montant dû", "Amount due")}</th>
+                          <th className="px-3 py-3">{L("Payé", "Paid")}</th>
+                          <th className="px-3 py-3">{L("Solde", "Balance")}</th>
+                          <th className="px-3 py-3">{L("Statut", "Status")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {installments.length === 0 ? (
-                          <tr><td colSpan={6} className="px-3 py-4 text-sm text-slate-300">Aucune échéance enregistrée.</td></tr>
+                          <tr><td colSpan={6} className="px-3 py-4 text-sm text-slate-300">{L("Aucune échéance enregistrée.", "No installments recorded.")}</td></tr>
                         ) : installments.map((installment) => (
                           <tr key={installment.id} className="border-b border-white/5">
-                            <td className="px-3 py-3 text-white">{installment.label}<p className="mt-1 text-sm text-slate-300">{installment.periodKey || "Période non renseignée"}</p></td>
+                            <td className="px-3 py-3 text-white">{installment.label}<p className="mt-1 text-sm text-slate-300">{installment.periodKey || L("Période non renseignée", "Period not provided")}</p></td>
                             <td className="px-3 py-3 text-slate-300">{formatDateLabel(installment.dueDate)}</td>
                             <td className="px-3 py-3 font-mono text-white">{formatCurrency(installment.amountDue)}</td>
                             <td className="px-3 py-3 font-mono text-emerald-300">{formatCurrency(installment.amountPaid)}</td>
                             <td className="px-3 py-3 font-mono text-amber-200">{formatCurrency(installment.balance)}</td>
-                            <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getInstallmentStatusTone(installment.status, installment.isOverdue)}`}>{installment.status}</span></td>
+                            <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getInstallmentStatusTone(installment.status, installment.isOverdue)}`}>{getCodeLabel(installment.status, lang)}</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -1004,10 +1054,10 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
 
                 <section className="space-y-5">
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Traçabilité des paiements</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Traçabilité des paiements", "Payment traceability")}</p>
                     <div className="mt-4 space-y-3">
                       {paymentHistory.length === 0 ? (
-                        <p className="text-sm text-slate-300">Aucun paiement rattaché à cet élève.</p>
+                        <p className="text-sm text-slate-300">{L("Aucun paiement rattaché à cet élève.", "No payment linked to this student.")}</p>
                       ) : paymentHistory.map((payment) => (
                         <div key={payment.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                           <div className="flex items-start justify-between gap-3">
@@ -1017,7 +1067,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                             </div>
                             <div className="text-right">
                               <p className="font-mono text-lg font-bold text-emerald-300">{formatCurrency(payment.amount)}</p>
-                              <p className="mt-1 text-sm text-slate-300">{payment.method} · {payment.status}</p>
+                              <p className="mt-1 text-sm text-slate-300">{getCodeLabel(payment.method, lang)} · {getCodeLabel(payment.status, lang)}</p>
                             </div>
                           </div>
                           {payment.allocationTrace?.lines?.filter((line) => line.studentId === student.id).length ? (
@@ -1025,7 +1075,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                               {payment.allocationTrace.lines.filter((line) => line.studentId === student.id).map((line, index) => (
                                 <div key={`${payment.id}-${line.installmentId || index}`} className="flex items-center justify-between gap-3 text-sm text-slate-300">
                                   <span>{line.label} · {formatDateLabel(line.dueDate)}</span>
-                                  <span className="font-mono text-cyan-200">Alloué {formatCurrency(line.allocated)} · Reste {formatCurrency(line.outstandingAfter)}</span>
+                                  <span className="font-mono text-cyan-200">{L("Alloué", "Allocated")} {formatCurrency(line.allocated)} {L("· Reste", "· Remaining")} {formatCurrency(line.outstandingAfter)}</span>
                                 </div>
                               ))}
                             </div>
@@ -1036,14 +1086,14 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Réductions et accords</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Réductions et accords", "Discounts and agreements")}</p>
                     <div className="mt-4 space-y-3">
                       {reductions.map((reduction) => (
                         <div key={reduction.id} className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3">
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <p className="font-semibold text-white">{reduction.title}</p>
-                              <p className="mt-1 text-sm text-slate-300">{reduction.source || reduction.scope || "Remise"} · {formatDateLabel(reduction.effectiveDate)}</p>
+                              <p className="mt-1 text-sm text-slate-300">{reduction.source || reduction.scope || L("Remise", "Discount")} · {formatDateLabel(reduction.effectiveDate)}</p>
                             </div>
                             <p className="font-mono text-sm font-bold text-amber-200">{formatCurrency(reduction.amount)}</p>
                           </div>
@@ -1052,11 +1102,11 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                       {agreements.map((agreement) => (
                         <div key={agreement.id} className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3">
                           <p className="font-semibold text-white">{agreement.title}</p>
-                          <p className="mt-1 text-sm text-slate-300">{agreement.paymentOptionType || "Accord spécial"} · {agreement.status}</p>
-                          <p className="mt-2 text-sm text-cyan-100">Total {formatCurrency(agreement.customTotal)} · Réduction {formatCurrency(agreement.reductionAmount)} · Solde {formatCurrency(agreement.balanceDue)}</p>
+                          <p className="mt-1 text-sm text-slate-300">{agreement.paymentOptionType || L("Accord spécial", "Special agreement")} · {getCodeLabel(agreement.status, lang)}</p>
+                          <p className="mt-2 text-sm text-cyan-100">{L("Total", "Total")} {formatCurrency(agreement.customTotal)} {L("· Réduction", "· Discount")} {formatCurrency(agreement.reductionAmount)} {L("· Solde", "· Balance")} {formatCurrency(agreement.balanceDue)}</p>
                         </div>
                       ))}
-                      {reductions.length === 0 && agreements.length === 0 ? <p className="text-sm text-slate-300">Aucune réduction ni accord spécial enregistré.</p> : null}
+                      {reductions.length === 0 && agreements.length === 0 ? <p className="text-sm text-slate-300">{L("Aucune réduction ni accord spécial enregistré.", "No discount or special agreement recorded.")}</p> : null}
                     </div>
                   </div>
                 </section>
@@ -1064,10 +1114,10 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
 
               <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Dettes et reports</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Dettes et reports", "Debts and carryovers")}</p>
                   <div className="mt-4 space-y-3">
                     {debts.length === 0 ? (
-                      <p className="text-sm text-slate-300">Aucune dette spécifique trouvée pour cet élève.</p>
+                      <p className="text-sm text-slate-300">{L("Aucune dette spécifique trouvée pour cet élève.", "No student-specific debt found.")}</p>
                     ) : debts.map((debt) => (
                       <div key={debt.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                         <div className="flex items-start justify-between gap-3">
@@ -1075,12 +1125,12 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                             <p className="font-semibold text-white">{debt.title}</p>
                             <p className="mt-1 text-sm text-slate-300">{debt.reason || debt.academicYearName || debt.academicYearId}</p>
                           </div>
-                          <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getDebtStatusTone(debt.status)}`}>{debt.status}</span>
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${getDebtStatusTone(debt.status)}`}>{getCodeLabel(debt.status, lang)}</span>
                         </div>
                         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          <div><p className="text-sm text-slate-300">Montant initial</p><p className="mt-1 font-mono font-bold text-white">{formatCurrency(debt.originalAmount)}</p></div>
-                          <div><p className="text-sm text-slate-300">Reste à payer</p><p className="mt-1 font-mono font-bold text-amber-200">{formatCurrency(debt.amountRemaining)}</p></div>
-                          <div><p className="text-sm text-slate-300">Échéance</p><p className="mt-1 font-semibold text-white">{formatDateLabel(debt.dueDate)}</p></div>
+                          <div><p className="text-sm text-slate-300">{L("Montant initial", "Initial amount")}</p><p className="mt-1 font-mono font-bold text-white">{formatCurrency(debt.originalAmount)}</p></div>
+                          <div><p className="text-sm text-slate-300">{L("Reste à payer", "Remaining balance")}</p><p className="mt-1 font-mono font-bold text-amber-200">{formatCurrency(debt.amountRemaining)}</p></div>
+                          <div><p className="text-sm text-slate-300">{L("Échéance", "Due date")}</p><p className="mt-1 font-semibold text-white">{formatDateLabel(debt.dueDate)}</p></div>
                         </div>
                       </div>
                     ))}
@@ -1088,10 +1138,10 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                 </section>
 
                 <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">Alertes et suivi</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-200">{L("Alertes et suivi", "Alerts and follow-up")}</p>
                   <div className="mt-4 space-y-3">
                     {alerts.length === 0 ? (
-                      <p className="text-sm text-slate-300">Aucune alerte spécifique pour cet élève.</p>
+                      <p className="text-sm text-slate-300">{L("Aucune alerte spécifique pour cet élève.", "No specific alert for this student.")}</p>
                     ) : alerts.map((alert) => (
                       <div key={alert.id} className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
                         <div className="flex items-start gap-3">
@@ -1099,7 +1149,7 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
                           <div>
                             <p className="font-semibold text-white">{alert.title}</p>
                             <p className="mt-1 text-sm text-slate-300">{alert.message}</p>
-                            <p className="mt-2 text-sm text-slate-300">{alert.severity} · {formatDateTimeLabel(alert.createdAt)}</p>
+                            <p className="mt-2 text-sm text-slate-300">{getCodeLabel(alert.severity, lang)} · {formatDateTimeLabel(alert.createdAt)}</p>
                           </div>
                         </div>
                       </div>
@@ -1137,6 +1187,8 @@ function StudentEditModal({
   onClose: () => void;
   creating?: boolean;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => localize(lang, fr, en);
   const classOptions = useMemo(() => getSchoolClassOptions(classes), [classes]);
   const identity = resolveStudentIdentity(student);
   const [form, setForm] = useState<StudentFormState>({
@@ -1217,19 +1269,19 @@ function StudentEditModal({
         <h2 className="pr-10 font-display text-2xl font-bold text-white">{creating ? "Ajouter un élève" : "Modifier l'élève"}</h2>
         <form className="mt-6 grid gap-5" onSubmit={(event) => { event.preventDefault(); void onSave(form); }}>
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Nom de famille *<input className="input text-base" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Ex. Ilunga" required /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Postnom<input className="input text-base" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder="Ex. Kabongo" /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Prénom *<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Ex. Marie" required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Nom de famille *", "Last name *")}<input className="input text-base" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder={L("Ex. Ilunga", "E.g. Ilunga")} required /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Postnom", "Middle name")}<input className="input text-base" value={form.middleName} onChange={(event) => setForm((current) => ({ ...current, middleName: event.target.value }))} placeholder={L("Ex. Kabongo", "E.g. Kabongo")} /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Prénom *", "First name *")}<input className="input text-base" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder={L("Ex. Marie", "E.g. Marie")} required /></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Adresse e-mail scolaire<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="prenom.nom@ourkcs.org" readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? "Attribuée automatiquement selon le nom, postnom et prénom." : "Adresse scolaire actuelle de l’élève."}</span></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Téléphone de l’élève<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Date de naissance<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Genre<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">Sélectionner le genre</option><option value="F">Fille</option><option value="M">Garçon</option><option value="O">Autre</option></select></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Adresse e-mail scolaire", "School email address")}<input className="input text-base font-mono" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder={L("prenom.nom@ourkcs.org", "first.last@ourkcs.org")} readOnly={creating} /><span className="text-xs font-normal text-cyan-200">{creating ? "Attribuée automatiquement selon le nom, postnom et prénom." : "Adresse scolaire actuelle de l’élève."}</span></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Téléphone de l’élève", "Student phone")}<InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Date de naissance", "Date of birth")}<DateSelect className="input text-base" value={form.dateOfBirth} onChange={(event) => setForm((current) => ({ ...current, dateOfBirth: event.target.value }))} /></label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Genre", "Gender")}<select className="input text-base" value={form.gender} onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value }))}><option value="">{L("Sélectionner le genre", "Select gender")}</option><option value="F">{L("Fille", "Female")}</option><option value="M">{L("Garçon", "Male")}</option><option value="O">{L("Autre", "Other")}</option></select></label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Classe actuelle *<select className="input text-base" value={form.classId} onChange={(event) => applyClass(event.target.value)} required>
-              <option value="">Classe</option>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Classe actuelle *", "Current class *")}<select className="input text-base" value={form.classId} onChange={(event) => applyClass(event.target.value)} required>
+              <option value="">{L("Classe", "Class")}</option>
               <optgroup label="Maternelle">
                 {classOptions.filter((item) => item.name.startsWith("K")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
@@ -1237,24 +1289,24 @@ function StudentEditModal({
                 {classOptions.filter((item) => item.name.startsWith("G")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </optgroup>
             </select></label>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Tuition plan *<select className="input text-base" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
-              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{PAYMENT_OPTION_LABELS[plan.paymentOptionType] || plan.name}{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? " · À définir" : ` · $ ${Number(plan.finalAmount).toFixed(2)}`}</option>)}
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Plan de scolarité *", "Tuition plan *")}<select className="input text-base" value={form.paymentOptionType} onChange={(event) => applyTuitionPlan(event.target.value)} disabled={!form.classId || matchingPlans.length === 0} required>
+              {matchingPlans.length === 0 ? <option value={form.paymentOptionType}>{form.classId ? "Aucun plan compatible" : "Choisissez d'abord une classe"}</option> : matchingPlans.map((plan) => <option key={plan.id} value={plan.paymentOptionType}>{getPaymentOptionLabel(plan.paymentOptionType, lang) || plan.name}{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? " · À définir" : ` · $ ${Number(plan.finalAmount).toFixed(2)}`}</option>)}
             </select></label>
           </div>
           <div className="grid gap-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:grid-cols-[1fr_0.7fr] sm:items-end">
             <div>
-              <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-200">Frais calculés depuis le tuition plan</p>
-              <p className="mt-2 text-sm text-slate-200">Le montant est automatiquement adapté à la classe et au plan sélectionnés.</p>
+              <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-200">{L("Frais calculés depuis le plan de scolarité", "Fees calculated from the tuition plan")}</p>
+              <p className="mt-2 text-sm text-slate-200">{L("Le montant est automatiquement adapté à la classe et au plan sélectionnés.", "The amount is automatically adjusted to the selected class and plan.")}</p>
             </div>
-            <label className="grid gap-1 text-sm font-semibold text-slate-200">Frais scolaires annuels (USD)<input className="input text-base bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" min="0" step="0.01" value={form.annualFee} readOnly required />{form.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? <button type="button" onClick={() => setSpecialAgreementOpen(true)} className="mt-2 rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-bold text-amber-200">Ouvrir l'accord spécial</button> : null}</label>
+            <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Frais scolaires annuels (USD)", "Annual tuition fees (USD)")}<input className="input text-base bg-slate-950/70 font-mono font-bold text-cyan-100" type="number" min="0" step="0.01" value={form.annualFee} readOnly required />{form.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? <button type="button" onClick={() => setSpecialAgreementOpen(true)} className="mt-2 rounded-lg border border-amber-300/40 px-3 py-2 text-xs font-bold text-amber-200">{L("Ouvrir accord spécial", "Open special agreement")}</button> : null}</label>
           </div>
-          <label className="grid gap-1 text-sm font-semibold text-slate-200">Numéro / identifiant de l’élève<input className="input text-base font-mono" value={form.studentNumber} onChange={(event) => setForm((current) => ({ ...current, studentNumber: event.target.value }))} placeholder={creating ? "Attribué automatiquement après création" : "Identifiant actuel"} readOnly={creating} /></label>
-          <label className="grid gap-1 text-sm font-semibold text-slate-200">Parent responsable *<select className="input text-base" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
-            <option value="">Parent</option>
+          <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Numéro élève / identifiant", "Student number / ID")}<input className="input text-base font-mono" value={form.studentNumber} onChange={(event) => setForm((current) => ({ ...current, studentNumber: event.target.value }))} placeholder={creating ? "Attribué automatiquement après création" : "Identifiant actuel"} readOnly={creating} /></label>
+          <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Parent responsable *", "Responsible parent *")}<select className="input text-base" value={form.parentId} onChange={(event) => setForm((current) => ({ ...current, parentId: event.target.value }))} required>
+            <option value="">{L("Parent", "Parent")}</option>
             {parents.map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
           </select></label>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">Annuler</button>
+            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200 hover:text-white">{L("Annuler", "Cancel")}</button>
             <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-400 disabled:opacity-60">
               {saving ? "Enregistrement..." : "Enregistrer"}
             </button>
@@ -1262,18 +1314,18 @@ function StudentEditModal({
         </form>
         {specialAgreementOpen && typeof document !== "undefined" ? createPortal(
           <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setSpecialAgreementOpen(false)} aria-label="Fermer l'accord spécial" />
+            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setSpecialAgreementOpen(false)} aria-label={L("Fermer accord spécial", "Close special agreement")} />
             <div className="edupay-scrollbar relative max-h-[96vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-amber-300/20 bg-slate-950/95 p-6 shadow-2xl sm:p-7">
-              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Accord spécial parent-école</p><h3 className="mt-2 font-display text-2xl font-bold text-white">{composeAdministrativeFullName(form) || "Nouvel élève"}</h3><p className="mt-2 text-sm text-slate-300">Définissez le montant, la remise et l'échéancier propres à cet élève.</p></div><button type="button" onClick={() => setSpecialAgreementOpen(false)} className="text-slate-300 hover:text-white"><X className="h-5 w-5" /></button></div>
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">{L("Accord spécial parent-école", "Special parent-school agreement")}</p><h3 className="mt-2 font-display text-2xl font-bold text-white">{composeAdministrativeFullName(form) || L("Nouvel élève", "New student")}</h3><p className="mt-2 text-sm text-slate-300">{L("Définissez le montant, la remise et les échéances propres à cet élève.", "Define the amount, discount and payment schedule for this student.")}</p></div><button type="button" onClick={() => setSpecialAgreementOpen(false)} className="text-slate-300 hover:text-white"><X className="h-5 w-5" /></button></div>
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">Nom du plan spécial<input className="input" value={normalizeSpecialAgreementDraft(form).title} onChange={(event) => updateSpecialAgreement("title", event.target.value)} placeholder="Accord spécial parent-école" /></label>
-                <label className="grid gap-1 text-sm font-semibold text-slate-200">Montant convenu (USD)<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).customTotal} onChange={(event) => updateSpecialAgreement("customTotal", event.target.value)} placeholder="650" /></label>
-                <label className="grid gap-1 text-sm font-semibold text-slate-200">Réduction spéciale (USD)<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).reductionAmount} onChange={(event) => updateSpecialAgreement("reductionAmount", event.target.value)} placeholder="0" /></label>
-                <div className="md:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300">Cadence de paiement</p><div className="mt-2 grid gap-3 sm:grid-cols-3">{([{ value: "ONE_TIME", label: "Versement unique" }, { value: "TWO_INSTALLMENTS", label: "2 tranches" }, { value: "THREE_INSTALLMENTS", label: "3 tranches" }] as const).map((option) => <button key={option.value} type="button" onClick={() => updateSpecialAgreement("installmentMode", option.value)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black ${normalizeSpecialAgreementDraft(form).installmentMode === option.value ? "border-amber-300 bg-amber-400/15 text-white" : "border-white/10 bg-slate-900/60 text-slate-300"}`}>{option.label}</button>)}</div></div>
-                <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">Notes internes<textarea className="input min-h-24" value={normalizeSpecialAgreementDraft(form).notes} onChange={(event) => updateSpecialAgreement("notes", event.target.value)} placeholder="Accord approuvé par la direction, conditions particulières..." /></label>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">{L("Nom du plan spécial", "Special plan name")}<input className="input" value={normalizeSpecialAgreementDraft(form).title} onChange={(event) => updateSpecialAgreement("title", event.target.value)} placeholder={L("Accord spécial parent-école", "Special parent-school agreement")} /></label>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Montant convenu (USD)", "Agreed amount (USD)")}<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).customTotal} onChange={(event) => updateSpecialAgreement("customTotal", event.target.value)} placeholder="650" /></label>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200">{L("Réduction spéciale (USD)", "Special discount (USD)")}<input className="input" type="number" min="0" step="0.01" value={normalizeSpecialAgreementDraft(form).reductionAmount} onChange={(event) => updateSpecialAgreement("reductionAmount", event.target.value)} placeholder="0" /></label>
+                <div className="md:col-span-2"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-300">{L("Cadence de paiement", "Payment schedule")}</p><div className="mt-2 grid gap-3 sm:grid-cols-3">{([{ value: "ONE_TIME", label: "Versement unique" }, { value: "TWO_INSTALLMENTS", label: "2 tranches" }, { value: "THREE_INSTALLMENTS", label: "3 tranches" }] as const).map((option) => <button key={option.value} type="button" onClick={() => updateSpecialAgreement("installmentMode", option.value)} className={`rounded-2xl border px-4 py-3 text-left text-sm font-black ${normalizeSpecialAgreementDraft(form).installmentMode === option.value ? "border-amber-300 bg-amber-400/15 text-white" : "border-white/10 bg-slate-900/60 text-slate-300"}`}>{option.label}</button>)}</div></div>
+                <label className="grid gap-1 text-sm font-semibold text-slate-200 md:col-span-2">{L("Notes internes", "Internal notes")}<textarea className="input min-h-24" value={normalizeSpecialAgreementDraft(form).notes} onChange={(event) => updateSpecialAgreement("notes", event.target.value)} placeholder={L("Accord approuvé par la direction, conditions particulières...", "Agreement approved by management, special terms...")} /></label>
               </div>
-              <div className="mt-5 grid gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 sm:grid-cols-3"><div><p className="text-xs text-slate-300">Montant convenu</p><p className="text-lg font-black text-white">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).customTotal || 0))}</p></div><div><p className="text-xs text-slate-300">Réduction</p><p className="text-lg font-black text-emerald-300">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0))}</p></div><div><p className="text-xs text-slate-300">Net à payer</p><p className="text-lg font-black text-cyan-200">{formatCurrency(Math.max(Number(normalizeSpecialAgreementDraft(form).customTotal || 0) - Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0), 0))}</p></div></div>
-              <div className="mt-5 flex gap-3"><button type="button" onClick={() => setSpecialAgreementOpen(false)} className="flex-1 rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200">Fermer</button><button type="button" disabled={Number(normalizeSpecialAgreementDraft(form).customTotal) <= 0} onClick={() => setSpecialAgreementOpen(false)} className="flex-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">Valider l'accord spécial</button></div>
+              <div className="mt-5 grid gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 sm:grid-cols-3"><div><p className="text-xs text-slate-300">{L("Montant convenu", "Agreed amount")}</p><p className="text-lg font-black text-white">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).customTotal || 0))}</p></div><div><p className="text-xs text-slate-300">{L("Réduction", "Discount")}</p><p className="text-lg font-black text-emerald-300">{formatCurrency(Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0))}</p></div><div><p className="text-xs text-slate-300">{L("Net à payer", "Net payable")}</p><p className="text-lg font-black text-cyan-200">{formatCurrency(Math.max(Number(normalizeSpecialAgreementDraft(form).customTotal || 0) - Number(normalizeSpecialAgreementDraft(form).reductionAmount || 0), 0))}</p></div></div>
+              <div className="mt-5 flex gap-3"><button type="button" onClick={() => setSpecialAgreementOpen(false)} className="flex-1 rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200">{L("Fermer", "Close")}</button><button type="button" disabled={Number(normalizeSpecialAgreementDraft(form).customTotal) <= 0} onClick={() => setSpecialAgreementOpen(false)} className="flex-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">{L("Valider accord spécial", "Confirm special agreement")}</button></div>
             </div>
           </div>
         , document.body) : null}
@@ -1283,16 +1335,18 @@ function StudentEditModal({
 }
 
 function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student: SharedDirectoryStudent; deleting: boolean; onConfirm: () => Promise<void>; onClose: () => void }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => localize(lang, fr, en);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="edupay-dialog-panel-sm relative w-full rounded-2xl border border-danger/30 glass p-6 shadow-2xl sm:p-7">
-        <h2 className="font-display text-xl font-bold text-white">Supprimer l'élève</h2>
-        <p className="mt-3 text-sm text-ink-dim">Cette action supprimera {student.fullName} de la liste des élèves.</p>
+        <h2 className="font-display text-xl font-bold text-white">{L("Supprimer cet élève", "Delete student")}</h2>
+        <p className="mt-3 text-sm text-ink-dim">{L("Cette action supprimera", "This action will remove")} {student.fullName} {L("de la liste des élèves.", "from the student list.")}</p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">Annuler</button>
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">{L("Annuler", "Cancel")}</button>
           <button type="button" onClick={() => void onConfirm()} disabled={deleting} className="flex-1 rounded-xl bg-danger px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
-            {deleting ? "Suppression..." : "Supprimer"}
+            {deleting ? L("Suppression...", "Deleting...") : L("Supprimer", "Delete")}
           </button>
         </div>
       </div>
@@ -1301,6 +1355,8 @@ function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student
 }
 
 export function StudentsDirectoryPage() {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => localize(lang, fr, en);
   const [directory, setDirectory] = useState<SharedDirectoryResponse | null>(null);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
@@ -1520,22 +1576,22 @@ export function StudentsDirectoryPage() {
       {accessNotice && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
           <section className="w-full max-w-xl rounded-3xl border border-amber-300/30 bg-slate-950 p-7 shadow-2xl">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-200">Accès réinitialisé</p>
-            <h2 className="mt-2 font-display text-2xl font-bold text-white">Nouveaux identifiants temporaires</h2>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-200">{L("Accès réinitialisé", "Access reset")}</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Nouveaux identifiants temporaires", "New temporary credentials")}</h2>
             <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-sm leading-6 text-amber-50">{accessNotice}</pre>
-            <button type="button" onClick={() => setAccessNotice(null)} className="mt-6 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-slate-950">Compris</button>
+            <button type="button" onClick={() => setAccessNotice(null)} className="mt-6 w-full rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-slate-950">{L("Compris", "Got it")}</button>
           </section>
         </div>
       )}
       {creationNotice && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Confirmation de l'ajout" onClick={() => setCreationNotice(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={L("Confirmation ajout", "Addition confirmation")} onClick={() => setCreationNotice(null)}>
           <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-md" />
           <section className="relative w-full max-w-xl rounded-3xl border border-cyan-300/30 bg-slate-950 p-7 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/15 text-3xl text-emerald-300">✓</div>
-            <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">Ajout synchronisé</p>
-            <h2 className="mt-2 font-display text-2xl font-bold text-white">Élève enregistré</h2>
+            <p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-cyan-200">{L("Ajout synchronisé", "Addition synchronized")}</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Élève enregistré", "Student registered")}</h2>
             <pre className="mt-5 whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-900/70 p-4 text-left text-sm leading-6 text-cyan-50">{creationNotice}</pre>
-            <button type="button" onClick={() => setCreationNotice(null)} className="mt-6 w-full rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200">Continuer</button>
+            <button type="button" onClick={() => setCreationNotice(null)} className="mt-6 w-full rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 hover:bg-cyan-200">{L("Continuer", "Continue")}</button>
           </section>
         </div>
       )}
@@ -1543,10 +1599,10 @@ export function StudentsDirectoryPage() {
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setMutationNotice(null)}>
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
           <section className="relative w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Modification synchronisée</p>
-            <h2 className="mt-2 font-display text-2xl font-bold text-white">Notification envoyée</h2>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">{L("Modification synchronisée", "Update synchronized")}</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Notification envoyée", "Notification sent")}</h2>
             <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-slate-900/70 p-4 text-sm text-emerald-50">{mutationNotice}</pre>
-            <button type="button" onClick={() => setMutationNotice(null)} className="mt-5 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950">Compris</button>
+            <button type="button" onClick={() => setMutationNotice(null)} className="mt-5 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950">{L("Compris", "Got it")}</button>
           </section>
         </div>
       )}
@@ -1579,42 +1635,42 @@ export function StudentsDirectoryPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
         <div>
-          <h1 className="font-display text-3xl font-bold text-white">Annuaire des élèves</h1>
+          <h1 className="font-display text-3xl font-bold text-white">{L("Annuaire des élèves", "Student directory")}</h1>
           <p className="mt-1 text-ink-dim">
-            Liste centralisée des élèves venant du registre partage Orbit via Savanex, comme pour les parents.
+            {L("Liste centralisée des élèves venant du registre partage Orbit via Savanex, comme pour les parents.", "Centralized student list from the shared Orbit registry via Savanex, as with parents.")}
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           <button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 hover:bg-cyan-300">
-            Ajouter un élève
+            {L("Ajouter un élève", "Add student")}
           </button>
           <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Source</p>
-          <p className="mt-1 text-sm font-semibold text-white">{directory?.source ?? "Chargement..."}</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{L("Source", "Source")}</p>
+          <p className="mt-1 text-sm font-semibold text-white">{directory?.source ?? L("Chargement...", "Loading...")}</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 animate-fadeInUp">
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Eleves</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Élèves", "Students")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-cyan-300">{directory?.counts.students ?? 0}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Parents</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Parents", "Parents")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-brand-300">{directory?.counts.parents ?? 0}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Familles</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Familles", "Families")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-emerald-300">{directory?.counts.families ?? 0}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Resultats</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Résultats", "Results")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-white">{filteredStudents.length}</p>
         </div>
       </div>
 
-      <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un élève, une classe, un parent ou un identifiant..." wrapperClassName="animate-fadeInUp" />
+      <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder={L("Rechercher un élève, une classe, un parent ou un identifiant...", "Search for a student, class, parent or ID...")} wrapperClassName="animate-fadeInUp" />
 
       {apiError && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -1628,18 +1684,18 @@ export function StudentsDirectoryPage() {
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-brand-500/30 border-t-brand-500" />
           </div>
         ) : filteredStudents.length === 0 ? (
-          <div className="p-12 text-center text-ink-dim">Aucun élève trouvé.</div>
+          <div className="p-12 text-center text-ink-dim">{L("Aucun élève trouvé.", "No students found.")}</div>
         ) : (
           <div className="edupay-scrollbar overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700/50 bg-slate-900/40">
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">ID élève</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Nom complet</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Classe</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Parent</th>
-                  <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Frais annuels</th>
-                  <th className="px-5 py-4 text-center text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Actions</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("ID élève", "Student ID")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Nom complet", "Full name")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Classe", "Class")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Parent", "Parent")}</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Frais annuels", "Annual tuition")}</th>
+                  <th className="px-5 py-4 text-center text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1655,26 +1711,26 @@ export function StudentsDirectoryPage() {
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-semibold text-white">{student.fullName}</p>
-                        <p className="text-xs text-ink-dim">Inscrit le {student.createdAt ? new Date(student.createdAt).toLocaleString("fr-FR") : "-"}</p>
+                        <p className="text-xs text-ink-dim">{L("Inscrit le", "Registered on")} {student.createdAt ? new Date(student.createdAt).toLocaleString("fr-FR") : "-"}</p>
                         <p className="text-xs text-ink-dim">{student.externalStudentId || student.id}</p>
                       </td>
-                      <td className="px-5 py-4 text-ink-dim">{student.className || student.classId || "Classe non renseignee"}</td>
+                      <td className="px-5 py-4 text-ink-dim">{student.className || student.classId || L("Classe non renseignée", "Class not provided")}</td>
                       <td className="px-5 py-4">
-                        <p className="font-medium text-white">{parent?.fullName || "Parent non retrouvé"}</p>
-                        <p className="text-xs text-ink-dim">{parent?.phone || parent?.email || "Aucun contact"}</p>
+                        <p className="font-medium text-white">{parent?.fullName || L("Parent non retrouvé", "Parent not found")}</p>
+                        <p className="text-xs text-ink-dim">{parent?.phone || parent?.email || L("Aucun contact", "No contact")}</p>
                       </td>
                       <td className="px-5 py-4 text-right font-mono font-bold text-emerald-300">
                         {typeof displayedAnnualFee === "number" ? `$ ${displayedAnnualFee.toFixed(2)}` : "-"}
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-center gap-2">
-                          <button type="button" onClick={() => setViewTarget(student)} className="rounded-lg bg-slate-700/50 p-2 text-ink-dim transition-all hover:bg-slate-600/50 hover:text-white" title="Voir">
+                          <button type="button" onClick={() => setViewTarget(student)} className="rounded-lg bg-slate-700/50 p-2 text-ink-dim transition-all hover:bg-slate-600/50 hover:text-white" title={L("Voir", "View")}>
                             <Eye className="h-4 w-4" />
                           </button>
-                          <button type="button" onClick={() => setEditTarget(student)} className="rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title="Modifier">
+                          <button type="button" onClick={() => setEditTarget(student)} className="rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title={L("Modifier", "Edit")}>
                             <Edit3 className="h-4 w-4" />
                           </button>
-                          <button type="button" onClick={() => setDeleteTarget(student)} className="rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title="Supprimer">
+                          <button type="button" onClick={() => setDeleteTarget(student)} className="rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title={L("Supprimer", "Delete")}>
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>

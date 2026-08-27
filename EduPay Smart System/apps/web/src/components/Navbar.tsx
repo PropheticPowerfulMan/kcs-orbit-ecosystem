@@ -8,10 +8,10 @@ import { useAuthStore } from "../store/auth";
 import { useUiStore } from "../store/ui";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
-function imageFileToAvatar(file: File): Promise<string> {
+function imageFileToAvatar(file: File, lang: "fr" | "en"): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith("image/")) {
-      reject(new Error("Veuillez choisir une image valide."));
+      reject(new Error(lang === "fr" ? "Veuillez choisir une image valide." : "Please choose a valid image."));
       return;
     }
     const reader = new FileReader();
@@ -24,7 +24,7 @@ function imageFileToAvatar(file: File): Promise<string> {
         canvas.height = size;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          reject(new Error("Image non lisible."));
+          reject(new Error(lang === "fr" ? "Image non lisible." : "Unable to read the image."));
           return;
         }
         const minSide = Math.min(image.width, image.height);
@@ -33,16 +33,17 @@ function imageFileToAvatar(file: File): Promise<string> {
         ctx.drawImage(image, sx, sy, minSide, minSide, 0, 0, size, size);
         resolve(canvas.toDataURL("image/jpeg", 0.78));
       };
-      image.onerror = () => reject(new Error("Image non lisible."));
+      image.onerror = () => reject(new Error(lang === "fr" ? "Image non lisible." : "Unable to read the image."));
       image.src = String(reader.result);
     };
-    reader.onerror = () => reject(new Error("Image non lisible."));
+    reader.onerror = () => reject(new Error(lang === "fr" ? "Image non lisible." : "Unable to read the image."));
     reader.readAsDataURL(file);
   });
 }
 
 function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: { onClose: () => void; onChanged?: () => void; temporaryPassword?: boolean }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -86,7 +87,7 @@ function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: 
       <form onSubmit={submit} className="edupay-dialog-panel-sm glass relative w-full rounded-2xl p-8 space-y-5 animate-fadeInUp sm:p-9" onClick={(e) => e.stopPropagation()}>
         <div>
           <h3 className="font-display text-xl font-bold text-white">{t("changePasswordTitle")}</h3>
-          <p className="mt-1 text-sm text-ink-dim">{temporaryPassword ? "Ce compte utilise encore un mot de passe temporaire. Vous pouvez le changer maintenant ou revenir plus tard depuis le menu du profil." : t("changePasswordSubtitle")}</p>
+          <p className="mt-1 text-sm text-ink-dim">{temporaryPassword ? L("Ce compte utilise encore un mot de passe temporaire. Vous pouvez le changer maintenant ou revenir plus tard depuis le menu du profil.", "This account is still using a temporary password. You can change it now or return later from the profile menu.") : t("changePasswordSubtitle")}</p>
         </div>
         <input
           type="password"
@@ -125,7 +126,8 @@ function ChangePasswordModal({ onClose, onChanged, temporaryPassword = false }: 
 }
 
 export function Navbar() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const { fullName, role, photoUrl, mustChangePassword, setPhotoUrl, setMustChangePassword, logout } = useAuthStore();
   const isDesktopSidebarOpen = useUiStore((s) => s.isDesktopSidebarOpen);
   const isMobileNavOpen = useUiStore((s) => s.isMobileNavOpen);
@@ -167,7 +169,7 @@ export function Navbar() {
     if (!file) return;
     setPhotoError("");
     try {
-      const nextPhotoUrl = await imageFileToAvatar(file);
+      const nextPhotoUrl = await imageFileToAvatar(file, lang);
       if (role === "PARENT") {
         await api<{ photoUrl: string }>("/api/parents/me/photo", {
           method: "PUT",
@@ -209,8 +211,8 @@ export function Navbar() {
               type="button"
               onClick={toggleMobileNav}
               className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-300/20 bg-white/[0.07] text-brand-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 md:hidden"
-              aria-label={isMobileNavOpen ? "Masquer la navigation mobile" : "Afficher la navigation mobile"}
-              title={isMobileNavOpen ? "Masquer la navigation" : "Afficher la navigation"}
+              aria-label={isMobileNavOpen ? L("Masquer la navigation mobile", "Hide mobile navigation") : L("Afficher la navigation mobile", "Show mobile navigation")}
+              title={isMobileNavOpen ? L("Masquer la navigation", "Hide navigation") : L("Afficher la navigation", "Show navigation")}
             >
               {isMobileNavOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
             </button>
@@ -218,8 +220,8 @@ export function Navbar() {
               type="button"
               onClick={toggleDesktopSidebar}
               className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-brand-300/20 bg-white/[0.07] text-brand-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] transition-all duration-200 hover:border-brand-300/40 hover:bg-brand-500/10 md:inline-flex"
-              aria-label={isDesktopSidebarOpen ? "Masquer la navigation latérale" : "Afficher la navigation latérale"}
-              title={isDesktopSidebarOpen ? "Masquer la navigation" : "Afficher la navigation"}
+              aria-label={isDesktopSidebarOpen ? L("Masquer la navigation latérale", "Hide sidebar navigation") : L("Afficher la navigation latérale", "Show sidebar navigation")}
+              title={isDesktopSidebarOpen ? L("Masquer la navigation", "Hide navigation") : L("Afficher la navigation", "Show navigation")}
             >
               {isDesktopSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
             </button>
@@ -233,7 +235,7 @@ export function Navbar() {
             </div>
             <div className="hidden sm:block">
               <p className="font-display text-base font-semibold leading-tight text-white">{schoolBranding.appName}</p>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-300/95">{schoolBranding.shortName} - Excellence</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-300/95">{schoolBranding.shortName} - {L("Excellence", "Excellence")}</p>
             </div>
           </div>
 
@@ -294,7 +296,7 @@ export function Navbar() {
                     </div>
                     {hasDeferredPasswordReminder && (
                       <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-100">
-                        Mot de passe temporaire détecté. Vous pouvez le changer maintenant ou plus tard depuis ce menu.
+                        {L("Mot de passe temporaire détecté. Vous pouvez le changer maintenant ou plus tard depuis ce menu.", "Temporary password detected. You can change it now or later from this menu.")}
                       </p>
                     )}
                     {photoError && <p className="mt-2 text-xs text-danger">{photoError}</p>}
@@ -318,7 +320,7 @@ export function Navbar() {
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-ink-dim transition-all duration-200 hover:bg-brand-500/10 hover:text-white"
                   >
-                    {t("changePassword")}{hasDeferredPasswordReminder ? " · recommandé" : ""}
+                    {t("changePassword")}{hasDeferredPasswordReminder ? L(" · recommandé", " · recommended") : ""}
                   </button>
                   <button
                     onClick={() => {

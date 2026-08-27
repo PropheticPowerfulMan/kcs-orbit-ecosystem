@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { schoolBranding } from "../config/branding";
+import { useI18n } from "../i18n";
 import { api, resolveApiUrl } from "../services/api";
 import {
   buildReceiptSecurity,
@@ -97,23 +98,25 @@ function DetailGrid({ rows }: { rows: Array<[string, string]> }) {
 }
 
 function AllocationSummaryBlock({ summary }: { summary: NonNullable<VerificationApiResponse["payment"]["tuitionAllocationSummary"]> }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   return (
     <section className="rounded-3xl border border-emerald-400/20 bg-emerald-500/10 p-5 shadow-xl">
-      <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-200">Répartition des frais scolaires</p>
+      <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-200">{L("Répartition des frais scolaires", "Tuition fee allocation")}</p>
       <h2 className="mt-2 font-display text-xl font-bold text-white">
-        Répartition {summary.mode === "AUTO" ? "automatique exécutée par le système" : "manuelle exécutée par le financier"}
+        {L("Répartition", "Allocation")} {summary.mode === "AUTO" ? L("automatique exécutée par le système", "automatically performed by the system") : L("manuelle exécutée par le financier", "manually performed by finance staff")}
       </h2>
       <p className="mt-3 text-sm leading-6 text-emerald-50/90">{summary.message}</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {summary.perChild.map((child) => (
           <div key={child.studentName} className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <p className="font-semibold text-white">{child.studentName}</p>
-            <p className="mt-2 text-sm text-emerald-100">Appliqué : $ {formatMoney(child.allocated)}</p>
-            <p className="text-sm text-amber-100">Reste : $ {formatMoney(child.remaining)}</p>
+            <p className="mt-2 text-sm text-emerald-100">{L("Appliqué :", "Applied:")} $ {formatMoney(child.allocated)}</p>
+            <p className="text-sm text-amber-100">{L("Reste :", "Remaining:")} $ {formatMoney(child.remaining)}</p>
             <div className="mt-2 space-y-1 text-xs text-ink-dim">
               {child.lines.map((line) => (
                 <p key={`${child.studentName}-${line.label}-${line.allocated}`}>
-                  {line.label} : avant $ {formatMoney(line.outstandingBefore)}, appliqué $ {formatMoney(line.allocated)}, reste $ {formatMoney(line.outstandingAfter)} ({line.dueBucket})
+                  {line.label} : {L("avant", "before")} $ {formatMoney(line.outstandingBefore)}, {L("appliqué", "applied")} $ {formatMoney(line.allocated)}, {L("reste", "remaining")} $ {formatMoney(line.outstandingAfter)} ({line.dueBucket})
                 </p>
               ))}
             </div>
@@ -125,6 +128,17 @@ function AllocationSummaryBlock({ summary }: { summary: NonNullable<Verification
 }
 
 export function ReceiptVerificationPage() {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
+  const methodLabel = (value: string) => ({
+    CASH: L("Espèces", "Cash"), AIRTEL_MONEY: "Airtel Money", MPESA: "M-Pesa", ORANGE_MONEY: "Orange Money", BANK_TRANSFER: L("Virement bancaire", "Bank transfer")
+  } as Record<string, string>)[value] ?? value;
+  const statusLabel = (value: string) => ({
+    COMPLETED: L("Terminé", "Completed"), PENDING: L("En attente", "Pending"), FAILED: L("Échoué", "Failed"), CANCELLED: L("Annulé", "Cancelled")
+  } as Record<string, string>)[value] ?? value;
+  const mismatchLabel = (value: string) => ({
+    Montant: L("Montant", "Amount"), Motif: L("Motif", "Reason"), "Méthode": L("Méthode", "Method"), "Statut": L("Statut", "Status"), "Paiement pour": L("Paiement pour", "Payment for"), "Élèves": L("Élèves", "Students")
+  } as Record<string, string>)[value] ?? value;
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const token = params.get("d");
@@ -195,15 +209,15 @@ export function ReceiptVerificationPage() {
               <div className="flex items-center gap-4">
                 <img src={schoolBranding.logoSrc} alt={schoolBranding.schoolName} className="h-16 w-16 rounded-2xl border border-brand-200/20 bg-white object-contain p-2" />
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.24em] text-brand-300">Vérification EduPay</p>
-                  <h1 className="mt-2 font-display text-3xl font-bold text-white">Reçu de transaction</h1>
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-brand-300">{L("Vérification EduPay", "EduPay verification")}</p>
+                  <h1 className="mt-2 font-display text-3xl font-bold text-white">{L("Reçu de transaction", "Transaction receipt")}</h1>
                   <p className="mt-2 max-w-2xl text-sm text-ink-dim">
-                    Cette page confirme le code QR, vérifie la transaction dans EduPay et signale toute différence avec la base de données.
+                    {L("Cette page confirme le code QR, vérifie la transaction dans EduPay et signale toute différence avec la base de données.", "This page validates the QR code, checks the transaction in EduPay and reports any discrepancy with the database.")}
                   </p>
                 </div>
               </div>
               <a href="#/login" className="btn-primary inline-flex items-center justify-center px-5 py-3 text-sm font-semibold">
-                Ouvrir EduPay
+                {L("Ouvrir EduPay", "Open EduPay")}
               </a>
             </div>
           </div>
@@ -212,33 +226,33 @@ export function ReceiptVerificationPage() {
             {!receipt || !validation ? (
               <div className="space-y-6">
                 <div className={`rounded-3xl border p-6 ${txParam ? "border-sky-400/20 bg-sky-500/10 text-sky-100" : "border-red-400/20 bg-red-500/10 text-red-100"}`}>
-                  <p className="text-xs font-black uppercase tracking-[0.22em]">{txParam ? "Transaction QR" : "QR invalide"}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.22em]">{txParam ? L("Transaction QR", "QR transaction") : L("QR invalide", "Invalid QR code")}</p>
                   <h2 className="mt-3 font-display text-2xl font-bold text-white">
-                    {txParam ? "Vérification directe dans EduPay" : "Aucune donnée de reçu exploitable"}
+                    {txParam ? L("Vérification directe dans EduPay", "Direct verification in EduPay") : L("Aucune donnée de reçu exploitable", "No usable receipt data")}
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-current/90">
                     {txParam
-                      ? `Le code QR a ouvert la vérification de la transaction ${txParam}. EduPay recherche maintenant ce paiement dans la base de données.`
-                      : "Le lien scanné ne contient pas de référence EduPay valide."}
+                      ? L(`Le code QR a ouvert la vérification de la transaction ${txParam}. EduPay recherche maintenant ce paiement dans la base de données.`, `The QR code opened verification for transaction ${txParam}. EduPay is now looking up this payment in the database.`)
+                      : L("Le lien scanné ne contient pas de référence EduPay valide.", "The scanned link does not contain a valid EduPay reference.")}
                   </p>
                 </div>
 
-                {apiState === "loading" && <p className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-ink-dim">Vérification de la transaction dans l'API EduPay en cours...</p>}
-                {apiState === "missing" && <p className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">Aucune transaction correspondant à ce numéro n'a été trouvée dans la base de données.</p>}
-                {apiState === "error" && <p className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-100">La vérification dans la base de données est indisponible pour le moment.</p>}
+                {apiState === "loading" && <p className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-ink-dim">{L("Vérification en cours dans le service EduPay...", "Verifying the transaction against EduPay...")}</p>}
+                {apiState === "missing" && <p className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">{L("Aucune transaction ne correspond à ce numéro dans la base de données.", "No transaction matching this number was found in the database.")}</p>}
+                {apiState === "error" && <p className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-100">{L("La vérification dans la base de données est indisponible pour le moment.", "Database verification is currently unavailable.")}</p>}
                 {apiState === "ready" && apiResult && (
                   <div className="space-y-6">
                     <div className={`rounded-3xl border p-5 ${shortQrCodeMatches ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" : "border-sky-400/30 bg-sky-500/10 text-sky-100"}`}>
-                      <p className="text-xs font-black uppercase tracking-[0.22em]">Transaction retrouvée</p>
+                      <p className="text-xs font-black uppercase tracking-[0.22em]">{L("Transaction retrouvée", "Transaction found")}</p>
                       <h2 className="mt-3 font-display text-2xl font-bold text-white">
-                        {shortQrCodeMatches ? "Le code QR correspond à la transaction EduPay" : "La transaction existe dans EduPay"}
+                        {shortQrCodeMatches ? L("Le code QR correspond à la transaction EduPay", "The QR code matches the EduPay transaction") : L("La transaction existe dans EduPay", "The transaction exists in EduPay")}
                       </h2>
                       <p className="mt-3 text-sm leading-6 text-current/90">
-                        Le scan renvoie vers la fiche publique et confirme la transaction {apiResult.payment.transactionNumber}.
+                        {L("Le scan renvoie vers la fiche publique et confirme la transaction", "The scan opens the public record and confirms transaction")} {apiResult.payment.transactionNumber}.
                       </p>
                     </div>
                     <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 shadow-xl">
-                      <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">Détails de la transaction</p>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">{L("Détails de la transaction", "Transaction details")}</p>
                       <DetailGrid rows={[
                         ["Transaction", apiResult.payment.transactionNumber],
                         ["Date", apiResult.payment.date],
@@ -247,8 +261,8 @@ export function ReceiptVerificationPage() {
                         ["Élèves", apiResult.payment.studentNames.join(" / ") || "N/A"],
                         ["Motif", apiResult.payment.reason],
                         ["Montant", `$ ${formatMoney(apiResult.payment.amount)}`],
-                        ["Méthode", apiResult.payment.method],
-                        ["Statut", apiResult.payment.status],
+                        ["Méthode", methodLabel(apiResult.payment.method)],
+                        ["Statut", statusLabel(apiResult.payment.status)],
                         ["Code QR", codeParam || "N/A"]
                       ]} />
                     </section>
@@ -262,37 +276,37 @@ export function ReceiptVerificationPage() {
               <div className="space-y-6">
                 <div className={`rounded-3xl border p-5 ${validation.valid ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100" : "border-amber-400/30 bg-amber-500/10 text-amber-100"}`}>
                   <p className="text-xs font-black uppercase tracking-[0.22em]">
-                    {validation.valid ? "Reçu cohérent" : "Vérification partielle"}
+                    {validation.valid ? L("Reçu cohérent", "Consistent receipt") : L("Vérification partielle", "Partial verification")}
                   </p>
                   <h2 className="mt-3 font-display text-2xl font-bold text-white">
-                    {validation.valid ? "Les codes du reçu correspondent aux données scannées" : "Les données du reçu ne correspondent pas entièrement aux codes"}
+                    {validation.valid ? L("Les codes du reçu correspondent aux données scannées", "The receipt codes match the scanned data") : L("Les données du reçu ne correspondent pas entièrement aux codes", "The receipt data does not fully match the codes")}
                   </h2>
                   <p className="mt-3 text-sm leading-6 text-current/90">
                     {validation.valid
-                      ? "La transaction, le montant, le statut et les identifiants de sécurité du reçu sont cohérents."
-                      : "Les informations visibles ont été lues, mais au moins un code de sécurité ne correspond plus."}
+                      ? L("La transaction, le montant, le statut et les identifiants de sécurité du reçu sont cohérents.", "The transaction, amount, status and receipt security identifiers are consistent.")
+                      : L("Les informations visibles ont été lues, mais au moins un code de sécurité ne correspond plus.", "The visible information was read, but at least one security code no longer matches.")}
                   </p>
                 </div>
 
                 <div className={`rounded-3xl border p-5 ${apiState === "ready" && apiComparison?.matched ? "border-sky-400/30 bg-sky-500/10 text-sky-100" : "border-white/10 bg-white/5 text-ink"}`}>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">Recoupement avec la base de données</p>
-                  {apiState === "loading" && <p className="mt-3 text-sm text-ink-dim">Vérification de la transaction dans l'API EduPay en cours...</p>}
-                  {apiState === "missing" && <p className="mt-3 text-sm text-amber-100">Aucune transaction correspondant à ce numéro n'a été trouvée dans la base de données.</p>}
-                  {apiState === "error" && <p className="mt-3 text-sm text-red-200">La vérification dans la base de données est indisponible pour le moment.</p>}
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">{L("Recoupement avec la base de données", "Database cross-check")}</p>
+                  {apiState === "loading" && <p className="mt-3 text-sm text-ink-dim">{L("Vérification en cours dans le service EduPay...", "Verifying the transaction against EduPay...")}</p>}
+                  {apiState === "missing" && <p className="mt-3 text-sm text-amber-100">{L("Aucune transaction ne correspond à ce numéro dans la base de données.", "No transaction matching this number was found in the database.")}</p>}
+                  {apiState === "error" && <p className="mt-3 text-sm text-red-200">{L("La vérification dans la base de données est indisponible pour le moment.", "Database verification is currently unavailable.")}</p>}
                   {apiState === "ready" && apiResult && apiComparison && (
                     <div className="mt-3 space-y-3">
                       <p className="text-sm leading-6 text-current/90">
                         {apiComparison.matched
-                          ? "Les données scannées correspondent aux données récupérées dans la base pour cette transaction."
-                          : `Des écarts ont été détectés entre le code QR et la base : ${apiComparison.mismatches.join(", ")}.`}
+                          ? L("Les données scannées correspondent aux données récupérées dans la base pour cette transaction.", "The scanned data matches the database record for this transaction.")
+                          : `${L("Des écarts ont été détectés entre le code QR et la base :", "Discrepancies were detected between the QR code and the database:")} ${apiComparison.mismatches.map(mismatchLabel).join(", ")}.`}
                       </p>
                       {apiResult.payment.downloads ? (
                         <div className="flex flex-wrap gap-3 pt-2">
                           <a href={resolveApiUrl(apiResult.payment.downloads.pdfPath)} target="_blank" rel="noreferrer" className="btn-primary inline-flex items-center justify-center px-5 py-3 text-sm font-semibold">
-                            Télécharger PDF
+                            {L("Télécharger PDF", "Download PDF")}
                           </a>
                           <a href={resolveApiUrl(apiResult.payment.downloads.pngPath)} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center rounded-full border border-brand-300/40 bg-brand-500/10 px-5 py-3 text-sm font-semibold text-brand-100 transition hover:border-brand-200 hover:bg-brand-500/20">
-                            Télécharger PNG
+                            {L("Télécharger PNG", "Download PNG")}
                           </a>
                         </div>
                       ) : null}
@@ -302,7 +316,7 @@ export function ReceiptVerificationPage() {
 
                 <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
                   <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 shadow-xl">
-                    <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">Détails de la transaction</p>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">{L("Détails de la transaction", "Transaction details")}</p>
                     <DetailGrid rows={[
                       ["Transaction", receipt.transaction.transactionNumber],
                       ["Date", receipt.transaction.date],
@@ -312,14 +326,14 @@ export function ReceiptVerificationPage() {
                       ["Motif", receipt.transaction.reason],
                       ["Montant", `$ ${formatMoneyString(receipt.transaction.amount)}`],
                       ["Montant en lettres", receipt.transaction.amountWords],
-                      ["Méthode", receipt.transaction.methodLabel],
-                      ["Statut", receipt.transaction.statusLabel]
+                      ["Méthode", methodLabel(receipt.transaction.methodCode)],
+                      ["Statut", statusLabel(receipt.transaction.statusCode)]
                     ]} />
                   </section>
 
                   <aside className="space-y-6">
                     <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 shadow-xl">
-                      <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">Émetteur</p>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">{L("Émetteur", "Issuer")}</p>
                       <div className="mt-4 space-y-2 text-sm text-ink-dim">
                         <p className="font-semibold text-white">{receipt.issuer.schoolName}</p>
                         <p>{receipt.issuer.appName}</p>
@@ -328,7 +342,7 @@ export function ReceiptVerificationPage() {
                     </section>
 
                     <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-5 shadow-xl">
-                      <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">Codes de sécurité</p>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-brand-300">{L("Codes de sécurité", "Security codes")}</p>
                       <DetailGrid rows={[
                         ["Vérification", receipt.security.verificationCode],
                         ["Sceau", receipt.security.sealCode],

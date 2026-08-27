@@ -1043,7 +1043,7 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
             <strong>${escapeHtml(parent.phone || "-")}</strong>
           </div>
           <div>
-            <p class="muted">Email</p>
+            <p class="muted">{L("E-mail", "Email")}</p>
             <strong>${escapeHtml(parent.email || "-")}</strong>
           </div>
           <div>
@@ -1051,7 +1051,7 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
             <strong>${escapeHtml([parent.nom, parent.postnom, parent.prenom].filter(Boolean).join(" ") || parent.fullName)}</strong>
           </div>
           <div>
-            <p class="muted">Adresse physique</p>
+            <p class="muted">{L("Adresse physique", "Physical address")}</p>
             <strong>${escapeHtml(parent.physicalAddress || "-")}</strong>
           </div>
           <div>
@@ -1075,13 +1075,13 @@ function buildParentReportHtml(parent: Parent, financeSnapshot: ParentFinanceSna
         <table>
           <thead>
             <tr>
-              <th>Élève</th>
+              <th>{L("Élève", "Student")}</th>
               <th>Classe</th>
               <th>Plan</th>
-              <th>Inscrit le</th>
+              <th>{L("Inscrit le", "Enrolled on")}</th>
               <th>Frais saisis</th>
               <th>Total attendu</th>
-              <th>Payé</th>
+              <th>{L("Payé", "Paid")}</th>
               <th>Solde</th>
             </tr>
           </thead>
@@ -1364,7 +1364,8 @@ function getScheduleCaption(row: PlanScheduleItem) {
 }
 
 function CredentialsModal({ credentials, onClose }: { credentials: ParentCredentials; onClose: () => void }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [copied, setCopied] = useState(false);
   const copyText = `Identifiant: ${credentials.email}\nCode d'accès: ${credentials.accessCode || "Non renseigné"}\nMot de passe temporaire: ${credentials.temporaryPassword}`;
 
@@ -1401,17 +1402,17 @@ function CredentialsModal({ credentials, onClose }: { credentials: ParentCredent
             <p className="mt-1 font-mono text-sm font-bold text-white">{credentials.email}</p>
           </div>
           <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-            <p className="text-xs uppercase tracking-wide text-ink-dim">Code d'accès</p>
+            <p className="text-xs uppercase tracking-wide text-ink-dim">{L("Code d'accès", "Access code")}</p>
             <p className="mt-1 font-mono text-sm font-bold text-cyan-300">{credentials.accessCode || "Non renseigné"}</p>
           </div>
           <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-            <p className="text-xs uppercase tracking-wide text-ink-dim">Mot de passe temporaire</p>
+            <p className="text-xs uppercase tracking-wide text-ink-dim">{L("Mot de passe temporaire", "Temporary password")}</p>
             <p className="mt-1 font-mono text-lg font-black text-emerald-300">{credentials.temporaryPassword}</p>
           </div>
           {credentials.notificationStatus && (
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-ink-dim">Email</p>
+                <p className="text-xs uppercase tracking-wide text-ink-dim">{L("E-mail", "Email")}</p>
                 <p className="mt-1 text-sm font-bold text-cyan-300">{credentials.notificationStatus.email || "SKIPPED"}</p>
               </div>
               <div className="rounded-xl border border-slate-700/50 bg-slate-900/40 p-3">
@@ -1427,7 +1428,7 @@ function CredentialsModal({ credentials, onClose }: { credentials: ParentCredent
             {copied ? "Copié" : "Copier les accès"}
           </button>
           <button onClick={onClose} className="rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">
-            Fermer
+            {L("Fermer", "Close")}
           </button>
         </div>
       </div>
@@ -1447,6 +1448,8 @@ function AccessNotificationModal({
   onConfirm: (channels: { notifyEmail: boolean; notifySms: boolean }) => void;
   loading: boolean;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [notifyEmail, setNotifyEmail] = useState(Boolean(parent.email));
   const [notifySms, setNotifySms] = useState(Boolean(parent.phone));
   const disabled = loading || (!notifyEmail && !notifySms);
@@ -1459,10 +1462,10 @@ function AccessNotificationModal({
           <XIcon />
         </button>
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">Notifications d'accès</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">{L("Notifications d'accès", "Access notifications")}</p>
           <h2 className="mt-2 font-display text-2xl font-bold text-white">{parent.fullName}</h2>
           <p className="mt-2 text-sm text-ink-dim">
-            Regénérer un mot de passe temporaire et envoyer les accès au parent par les canaux activés.
+            {L("Regénérer un mot de passe temporaire et envoyer les accès au parent par les canaux activés.", "Regenerate a temporary password and send access details through the enabled channels.")}
           </p>
         </div>
 
@@ -1471,7 +1474,7 @@ function AccessNotificationModal({
             <span className="flex min-w-0 items-center gap-3">
               <span className="rounded-lg border border-white/10 bg-white/[0.05] p-2 text-cyan-300"><MailIcon /></span>
               <span>
-                <span className="block text-sm font-bold text-white">Email</span>
+                <span className="block text-sm font-bold text-white">{L("E-mail", "Email")}</span>
                 <span className="block truncate text-xs text-ink-dim">{parent.email || "Aucun email renseigné"}</span>
               </span>
             </span>
@@ -1492,7 +1495,7 @@ function AccessNotificationModal({
 
         <div className="flex flex-col gap-3 sm:flex-row">
           <button onClick={onClose} className="flex-1 rounded-lg border border-slate-600 py-3 text-sm font-semibold text-ink-dim hover:text-white">
-            Annuler
+            {L("Annuler", "Cancel")}
           </button>
           <button
             onClick={() => onConfirm({ notifyEmail, notifySms })}
@@ -1508,7 +1511,7 @@ function AccessNotificationModal({
 }
 
 class ParentDetailBoundary extends Component<
-  { children: ReactNode; onClose: () => void },
+  { children: ReactNode; onClose: () => void; lang: "fr" | "en" },
   { error: Error | null }
 > {
   state = { error: null as Error | null };
@@ -1522,19 +1525,20 @@ class ParentDetailBoundary extends Component<
   }
 
   render() {
+    const L = (fr: string, en: string) => this.props.lang === "fr" ? fr : en;
     if (!this.state.error) return this.props.children;
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={this.props.onClose} />
         <section className="relative w-full max-w-lg rounded-2xl border border-red-400/30 bg-slate-950 p-6 shadow-2xl">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-red-200">Suivi parent indisponible</p>
-          <h2 className="mt-2 font-display text-2xl font-bold text-white">Le dossier n'a pas pu être affiché.</h2>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-red-200">{L("Suivi parent indisponible", "Parent tracking unavailable")}</p>
+          <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Le dossier n'a pas pu être affiché.", "The record could not be displayed.")}</h2>
           <p className="mt-3 text-sm leading-6 text-ink-dim">
-            Une donnée du parent ou de son profil financier est incohérente. La liste reste disponible, et l'erreur est maintenant isolée au lieu de casser toute la page.
+            {L("Une donnée du parent ou de son profil financier est incohérente. La liste reste disponible, et l'erreur est maintenant isolée au lieu de casser toute la page.", "Some parent or financial-profile data is inconsistent. The list remains available and the error is isolated.")}
           </p>
           <button type="button" onClick={this.props.onClose} className="mt-5 w-full rounded-xl bg-red-400 px-4 py-3 text-sm font-black text-slate-950">
-            Fermer
+            {L("Fermer", "Close")}
           </button>
         </section>
       </div>
@@ -1557,6 +1561,8 @@ function DetailModal({
   onClose: () => void;
   t: (k: string) => string;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [pdfExporting, setPdfExporting] = useState(false);
   const parentStudents = Array.isArray(parent.students) ? parent.students : [];
   const safeFinanceSnapshot = useMemo(() => normalizeParentFinanceSnapshot(financeSnapshot), [financeSnapshot]);
@@ -1601,7 +1607,7 @@ function DetailModal({
               }}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-100 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title="Télécharger le rapport en PDF"
+              title={L("Télécharger le rapport en PDF", "Download the report as PDF")}
             >
               <PrintIcon /> {pdfExporting ? "PDF..." : "PDF"}
             </button>
@@ -1610,16 +1616,16 @@ function DetailModal({
               onClick={() => printParentReport(parent, safeFinanceSnapshot)}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title="Imprimer le rapport"
+              title={L("Imprimer le rapport", "Print the report")}
             >
-              <PrintIcon /> Impression
+              <PrintIcon /> {L("Impression", "Print")}
             </button>
             <button
               type="button"
               onClick={() => exportParentReportExcel(parent, safeFinanceSnapshot)}
               disabled={exportDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title="Exporter le rapport en Excel"
+              title={L("Exporter le rapport en Excel", "Export the report to Excel")}
             >
               <ExcelIcon /> Excel
             </button>
@@ -1657,7 +1663,7 @@ function DetailModal({
                 <p className="text-sm font-semibold text-white mt-1 truncate">{parent.email || "—"}</p>
               </div>
               <div className="rounded-xl bg-slate-900/40 border border-slate-700/50 p-3 sm:col-span-2">
-                <p className="text-xs text-ink-dim">Adresse physique</p>
+                <p className="text-xs text-ink-dim">{L("Adresse physique", "Physical address")}</p>
                 <p className="text-sm font-semibold text-white mt-1">{parent.physicalAddress || "—"}</p>
               </div>
               <div className="rounded-xl bg-slate-900/40 border border-slate-700/50 p-3">
@@ -1688,18 +1694,18 @@ function DetailModal({
                         <div className="min-w-0">
                           <p className="break-words text-sm font-semibold text-white">{st.fullName}</p>
                           <p className="text-xs text-ink-dim">{financeRow?.className || st.className || st.classId || "Classe non renseignée"}</p>
-                          <p className="mt-1 text-xs text-ink-dim">Inscrit le {formatDateTimeLabel(enrolledAt)}</p>
+                          <p className="mt-1 text-xs text-ink-dim">{L("Inscrit le", "Enrolled on")} {formatDateTimeLabel(enrolledAt)}</p>
                           {(st.tuitionPlanName || st.paymentOptionLabel) && (
                             <p className="mt-1 text-xs text-cyan-300">{st.tuitionPlanName || st.paymentOptionLabel}</p>
                           )}
                           {financeRow ? (
                             <p className="mt-1 text-xs text-ink-dim">
-                              Payé {formatMoney(financeRow.paid)} · Reste {formatMoney(financeRow.balance)}
+                              {L("Payé", "Paid")} {formatMoney(financeRow.paid)} · {L("Reste", "Remaining")} {formatMoney(financeRow.balance)}
                             </p>
                           ) : null}
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">Montant attendu</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-dim">{L("Montant attendu", "Expected amount")}</p>
                           <p className="mt-1 text-sm font-bold text-emerald-300">{formatMoney(expectedAmount)}</p>
                         </div>
                       </div>
@@ -1714,20 +1720,20 @@ function DetailModal({
             <div className="rounded-2xl border border-red-500/20 bg-red-500/8 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-200">Historique précis des dettes</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-white">Vision parent pluriannuelle</h3>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-200">{L("Historique précis des dettes", "Detailed debt history")}</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-white">{L("Vision parent pluriannuelle", "Multi-year parent overview")}</h3>
                   <p className="mt-2 text-sm text-red-100/80">
-                    Cette rubrique retrace les soldes ouverts, partiellement payés ou reportés, y compris les années antérieures.
+                    {L("Cette rubrique retrace les soldes ouverts, partiellement payés ou reportés, y compris les années antérieures.", "This section tracks open, partially paid and carried-over balances, including previous years.")}
                   </p>
                 </div>
                 <span className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-red-200">
-                  {safeFinanceSnapshot?.debts.length ?? 0} ligne(s)
+                  {safeFinanceSnapshot?.debts.length ?? 0} {L("ligne(s)", "line(s)")}
                 </span>
               </div>
 
               {financeLoading ? (
                 <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-950/45 px-4 py-5 text-sm text-ink-dim">
-                  Chargement du dossier financier parent...
+                  {L("Chargement du dossier financier parent...", "Loading the parent financial record...")}
                 </div>
               ) : financeError ? (
                 <div className="mt-5 rounded-xl border border-danger/40 bg-danger/10 px-4 py-5 text-sm text-danger">
@@ -1737,19 +1743,19 @@ function DetailModal({
                 <div className="mt-5 space-y-4">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Dette totale</p>
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">{L("Dette totale", "Total debt")}</p>
                       <p className="mt-2 text-xl font-black text-red-200">{formatMoney(safeFinanceSnapshot.profile.totalDebt)}</p>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Dette reportée</p>
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">{L("Dette reportée", "Carried-over debt")}</p>
                       <p className="mt-2 text-xl font-black text-amber-200">{formatMoney(safeFinanceSnapshot.profile.carriedOverDebt)}</p>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Paiements cumulés</p>
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">{L("Paiements cumulés", "Cumulative payments")}</p>
                       <p className="mt-2 text-xl font-black text-emerald-200">{formatMoney(safeFinanceSnapshot.profile.totalPaid)}</p>
                     </div>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">Échéances en retard</p>
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-dim">{L("Échéances en retard", "Overdue installments")}</p>
                       <p className="mt-2 text-xl font-black text-white">{safeFinanceSnapshot.profile.overdueInstallments}</p>
                     </div>
                   </div>
@@ -1757,24 +1763,24 @@ function DetailModal({
                   <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-white">Synthèse par année concernée</p>
-                        <p className="mt-1 text-xs text-ink-dim">Les dettes reportées sont rattachées à leur année d'origine pour éviter toute confusion.</p>
+                        <p className="text-sm font-bold text-white">{L("Synthèse par année concernée", "Summary by relevant year")}</p>
+                        <p className="mt-1 text-xs text-ink-dim">{L("Les dettes reportées sont rattachées à leur année d'origine pour éviter toute confusion.", "Carried-over debts are linked to their original year to avoid confusion.")}</p>
                       </div>
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-300">{safeFinanceSnapshot.academicYear.name}</p>
                     </div>
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
                       {debtHistory.length === 0 ? (
-                        <p className="text-sm text-ink-dim">Aucune dette retracée pour ce parent, y compris sur les années précédentes.</p>
+                        <p className="text-sm text-ink-dim">{L("Aucune dette retracée pour ce parent, y compris sur les années précédentes.", "No debt was found for this parent, including previous years.")}</p>
                       ) : debtHistory.map((row) => (
                         <div key={row.year} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-bold text-white">{row.year}</p>
-                              <p className="mt-1 text-[11px] text-ink-dim">{row.count} dette(s) référencée(s)</p>
+                              <p className="mt-1 text-[11px] text-ink-dim">{row.count} {L("dette(s) référencée(s)", "referenced debt(s)")}</p>
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-black text-red-200">{formatMoney(row.amountRemaining)}</p>
-                              <p className="mt-1 text-[11px] text-ink-dim">Origine {formatMoney(row.originalAmount)}</p>
+                              <p className="mt-1 text-[11px] text-ink-dim">{L("Origine", "Source")} {formatMoney(row.originalAmount)}</p>
                             </div>
                           </div>
                         </div>
@@ -1783,10 +1789,10 @@ function DetailModal({
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
-                    <p className="text-sm font-bold text-white">Détail ligne par ligne</p>
+                    <p className="text-sm font-bold text-white">{L("Détail ligne par ligne", "Line-by-line details")}</p>
                     <div className="mt-4 space-y-3">
                       {safeFinanceSnapshot.debts.length === 0 ? (
-                        <p className="text-sm text-ink-dim">Aucune ligne de dette enregistrée.</p>
+                        <p className="text-sm text-ink-dim">{L("Aucune ligne de dette enregistrée.", "No debt entry recorded.")}</p>
                       ) : safeFinanceSnapshot.debts.map((debt) => (
                         <div key={debt.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1797,28 +1803,28 @@ function DetailModal({
                                   {getDebtStatusLabel(debt.status)}
                                 </span>
                               </div>
-                              <p className="mt-2 text-xs text-ink-dim">Année concernée : {getDebtReferenceYear(debt)}</p>
-                              <p className="mt-1 text-xs text-ink-dim">Imputée sur : {debt.academicYearName || debt.academicYearId}</p>
+                              <p className="mt-2 text-xs text-ink-dim">{L("Année concernée", "Relevant year")}: {getDebtReferenceYear(debt)}</p>
+                              <p className="mt-1 text-xs text-ink-dim">{L("Imputée sur", "Allocated to")}: {debt.academicYearName || debt.academicYearId}</p>
                               {debt.carriedOverFromYearName || debt.carriedOverFromYearId ? (
-                                <p className="mt-1 text-xs text-amber-200">Reportée depuis : {debt.carriedOverFromYearName || debt.carriedOverFromYearId}</p>
+                                <p className="mt-1 text-xs text-amber-200">{L("Reportée depuis", "Carried over from")}: {debt.carriedOverFromYearName || debt.carriedOverFromYearId}</p>
                               ) : null}
                               {debt.reason ? <p className="mt-2 text-sm text-ink-dim">{debt.reason}</p> : null}
                             </div>
                             <div className="grid min-w-[220px] grid-cols-2 gap-3 text-sm">
                               <div className="rounded-lg border border-white/10 bg-slate-950/55 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Montant initial</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Montant initial", "Original amount")}</p>
                                 <p className="mt-1 font-bold text-white">{formatMoney(debt.originalAmount)}</p>
                               </div>
                               <div className="rounded-lg border border-white/10 bg-slate-950/55 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Reste à payer</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Reste à payer", "Outstanding")}</p>
                                 <p className="mt-1 font-bold text-red-200">{formatMoney(debt.amountRemaining)}</p>
                               </div>
                               <div className="rounded-lg border border-white/10 bg-slate-950/55 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Échéance</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Échéance", "Due date")}</p>
                                 <p className="mt-1 font-bold text-white">{formatDateLabel(debt.dueDate)}</p>
                               </div>
                               <div className="rounded-lg border border-white/10 bg-slate-950/55 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Créée le</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Créée le", "Created on")}</p>
                                 <p className="mt-1 font-bold text-white">{formatDateLabel(debt.createdAt)}</p>
                               </div>
                             </div>
@@ -1829,10 +1835,10 @@ function DetailModal({
                   </div>
 
                   <div className="rounded-xl border border-white/10 bg-slate-950/45 p-4">
-                    <p className="text-sm font-bold text-white">État financier par enfant</p>
+                    <p className="text-sm font-bold text-white">{L("État financier par enfant", "Financial status by child")}</p>
                     <div className="mt-4 space-y-3">
                       {safeFinanceSnapshot.students.length === 0 ? (
-                        <p className="text-sm text-ink-dim">Aucun élève lié à ce parent.</p>
+                        <p className="text-sm text-ink-dim">{L("Aucun élève lié à ce parent.", "No student linked to this parent.")}</p>
                       ) : safeFinanceSnapshot.students.map((student) => (
                         <div key={student.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1842,24 +1848,24 @@ function DetailModal({
                             </div>
                             <div className="grid grid-cols-2 gap-3 text-sm md:min-w-[320px]">
                               <div>
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Payé</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Payé", "Paid")}</p>
                                 <p className="mt-1 font-bold text-emerald-200">{formatMoney(student.paid)}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Solde</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Solde", "Balance")}</p>
                                 <p className="mt-1 font-bold text-red-200">{formatMoney(student.balance)}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Attendu</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Attendu", "Expected")}</p>
                                 <p className="mt-1 font-bold text-white">{formatMoney(student.expectedTotal)}</p>
                               </div>
                               <div>
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Complétion</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Complétion", "Completion")}</p>
                                 <p className="mt-1 font-bold text-white">{toSafeNumber(student.completionRate).toFixed(1)}%</p>
                               </div>
                             </div>
                           </div>
-                          <p className="mt-3 text-xs text-ink-dim">{student.overdueInstallments} échéance(s) en retard pour cet élève.</p>
+                          <p className="mt-3 text-xs text-ink-dim">{student.overdueInstallments} {L("échéance(s) en retard pour cet élève.", "overdue installment(s) for this student.")}</p>
                         </div>
                       ))}
                     </div>
@@ -1867,7 +1873,7 @@ function DetailModal({
                 </div>
               ) : (
                 <div className="mt-5 rounded-xl border border-slate-700/60 bg-slate-950/45 px-4 py-5 text-sm text-ink-dim">
-                  Aucun dossier financier détaillé n'a pu être chargé pour ce parent.
+                  {L("Aucun dossier financier détaillé n'a pu être chargé pour ce parent.", "No detailed financial record could be loaded for this parent.")}
                 </div>
               )}
             </div>
@@ -1908,11 +1914,13 @@ function DeleteModal({ parent, onConfirm, onClose, t }: {
 }
 
 function DuplicateParentDialog({ message, onClose }: { message: string; onClose: () => void }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-950/75 backdrop-blur-md" />
       <section className="edupay-dialog-panel-sm relative w-full max-w-5xl rounded-2xl border border-amber-400/30 bg-slate-950 p-7 shadow-2xl animate-fadeInUp sm:p-8" onClick={(event) => event.stopPropagation()}>
-        <button onClick={onClose} className="absolute right-4 top-4 text-ink-dim hover:text-white transition-colors" aria-label="Fermer">
+        <button onClick={onClose} className="absolute right-4 top-4 text-ink-dim hover:text-white transition-colors" aria-label={L("Fermer", "Close")}>
           <XIcon />
         </button>
         <div className="flex items-start gap-4">
@@ -1920,13 +1928,13 @@ function DuplicateParentDialog({ message, onClose }: { message: string; onClose:
             !
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Famille déjà existante</p>
-            <h3 className="mt-2 font-display text-2xl font-bold text-white">Enregistrement refuse</h3>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">{L("Famille déjà existante", "Family already exists")}</p>
+            <h3 className="mt-2 font-display text-2xl font-bold text-white">{L("Enregistrement refusé", "Registration rejected")}</h3>
             <p className="mt-3 text-sm leading-6 text-ink-dim">{message}</p>
           </div>
         </div>
         <button onClick={onClose} className="mt-6 w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-amber-400">
-          Compris
+          {L("Compris", "Got it")}
         </button>
       </section>
     </div>
@@ -1942,6 +1950,8 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
   onClose: () => void;
   t: (k: string) => string;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [form, setForm] = useState<FormState>(() => {
     if (!initial) return EMPTY_FORM;
     return {
@@ -2251,7 +2261,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
         <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-900/30 p-4">
           <div className="h-20 w-20 overflow-hidden rounded-2xl border border-slate-700/70 bg-gradient-to-br from-brand-500 to-accent shrink-0">
             {form.photoUrl ? (
-              <img src={form.photoUrl} alt="Photo du parent" className="h-full w-full object-cover" />
+              <img src={form.photoUrl} alt={L("Photo du parent", "Parent photo")} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-2xl font-black text-white">
                 {(form.prenom || form.nom || "?").charAt(0).toUpperCase()}
@@ -2268,7 +2278,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
           </label>
           {form.photoUrl && (
             <button type="button" onClick={() => set("photoUrl", "")} className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-ink-dim hover:text-white">
-              Retirer
+              {L("Retirer", "Remove")}
             </button>
           )}
           {errors.photoUrl && <p className="w-full text-xs text-danger">{errors.photoUrl}</p>}
@@ -2298,17 +2308,17 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
           </div>
           <div className="space-y-1">
             <label className="text-xs font-semibold text-ink-dim uppercase tracking-[0.1em]">{t("email")}</label>
-            <input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" className="w-full" placeholder="email@exemple.com" />
+            <input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" className="w-full" placeholder={L("email@exemple.com", "email@example.com")} />
           </div>
           <div className="space-y-1 sm:col-span-2">
-            <label className="text-xs font-semibold text-ink-dim uppercase tracking-[0.1em]">Adresse physique</label>
-            <input value={form.physicalAddress} onChange={(e) => set("physicalAddress", e.target.value)} className="w-full" placeholder="Avenue, quartier, commune, ville" />
+            <label className="text-xs font-semibold text-ink-dim uppercase tracking-[0.1em]">{L("Adresse physique", "Physical address")}</label>
+            <input value={form.physicalAddress} onChange={(e) => set("physicalAddress", e.target.value)} className="w-full" placeholder={L("Avenue, quartier, commune, ville", "Street, district, municipality, city")} />
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4">
-          <p className="text-sm font-bold text-white">Langue des messages EduPay</p>
-          <p className="mt-1 text-xs text-ink-dim">Les SMS, emails et messages dans le compte parent suivront cette langue.</p>
+          <p className="text-sm font-bold text-white">{L("Langue des messages EduPay", "EduPay message language")}</p>
+          <p className="mt-1 text-xs text-ink-dim">{L("Les SMS, e-mails et messages du compte parent suivront cette langue.", "SMS, emails and messages in the parent account will use this language.")}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {[
               { value: "fr", label: "Francais", detail: "Messages en francais" },
@@ -2334,12 +2344,12 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
         {!initial && (
           <div className="rounded-xl border border-brand-500/20 bg-brand-500/10 p-4">
             <div className="flex flex-col gap-1">
-              <p className="text-sm font-bold text-white">Notifications de création du compte</p>
-              <p className="text-xs text-ink-dim">Choisissez les canaux utilisés pour envoyer les accès au parent.</p>
+              <p className="text-sm font-bold text-white">{L("Notifications de création du compte", "Account creation notifications")}</p>
+              <p className="text-xs text-ink-dim">{L("Choisissez les canaux utilisés pour envoyer les accès au parent.", "Choose the channels used to send access details to the parent.")}</p>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${form.notifyEmail ? "border-cyan-500/40 bg-cyan-500/10" : "border-slate-700/50 bg-slate-900/30"}`}>
-                <span className="flex items-center gap-2 text-sm font-semibold text-white"><MailIcon /> Email</span>
+                <span className="flex items-center gap-2 text-sm font-semibold text-white"><MailIcon /> {L("E-mail", "Email")}</span>
                 <input type="checkbox" checked={form.notifyEmail} onChange={(e) => setBool("notifyEmail", e.target.checked)} className="h-5 w-5 accent-cyan-400" />
               </label>
               <label className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${form.notifySms ? "border-emerald-500/40 bg-emerald-500/10" : "border-slate-700/50 bg-slate-900/30"}`}>
@@ -2352,9 +2362,9 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
         <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-bold uppercase tracking-[0.08em] text-white">Plan de scolarité du parent</p>
+            <p className="text-sm font-bold uppercase tracking-[0.08em] text-white">{L("Plan de scolarité du parent", "Parent tuition plan")}</p>
             <p className="text-xs text-cyan-100/80">
-              Choisissez l'un des 5 plans. Les 4 plans officiels gardent leur montant automatique selon la classe. Le 5e plan ouvre une fiche dédiée pour saisir l'accord spécial de chaque enfant.
+              {L("Choisissez l'un des 5 plans. Les 4 plans officiels gardent leur montant automatique selon la classe. Le 5e plan ouvre une fiche dédiée pour saisir l'accord spécial de chaque enfant.", "Choose one of the five plans. The four official plans retain their automatic class-based amount. The fifth opens a dedicated agreement record for each child.")}
             </p>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -2408,8 +2418,8 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
             <div key={idx} className="min-w-0 space-y-4 rounded-2xl border border-slate-700/50 bg-slate-900/30 p-3 sm:p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-white">Élève {idx + 1}</p>
-                  <p className="text-xs leading-relaxed text-ink-dim">Choisissez une classe puis un plan adapté. Les plans officiels remplissent le montant automatiquement; l'accord spécial parent-école se configure dans sa propre fiche.</p>
+                  <p className="text-sm font-bold text-white">{L("Élève", "Student")} {idx + 1}</p>
+                  <p className="text-xs leading-relaxed text-ink-dim">{L("Choisissez une classe puis un plan adapté. Les plans officiels remplissent le montant automatiquement ; l'accord spécial parent-école se configure dans sa propre fiche.", "Choose a class and a suitable plan. Official plans fill the amount automatically; the special parent-school agreement is configured separately.")}</p>
                 </div>
                 <button type="button" onClick={() => removeStudent(idx)}
                   className="p-2 rounded-lg bg-danger/20 border border-danger/40 text-danger hover:bg-danger/30 transition-all active:scale-95">
@@ -2418,22 +2428,22 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="space-y-1"><label className="text-xs text-ink-dim">Nom *</label><input value={st.lastName} onChange={(e) => setStudent(idx, "lastName", e.target.value)} className="w-full" placeholder="Nom de l’élève" required /></div>
-                <div className="space-y-1"><label className="text-xs text-ink-dim">Postnom</label><input value={st.middleName} onChange={(e) => setStudent(idx, "middleName", e.target.value)} className="w-full" placeholder="Postnom de l’élève" /></div>
-                <div className="space-y-1"><label className="text-xs text-ink-dim">Prénom *</label><input value={st.firstName} onChange={(e) => setStudent(idx, "firstName", e.target.value)} className="w-full" placeholder="Prénom de l’élève" required /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">{L("Nom *", "Last name *")}</label><input value={st.lastName} onChange={(e) => setStudent(idx, "lastName", e.target.value)} className="w-full" placeholder={t("pmLastName")} required /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">{L("Postnom", "Middle name")}</label><input value={st.middleName} onChange={(e) => setStudent(idx, "middleName", e.target.value)} className="w-full" placeholder={t("pmMiddleName")} /></div>
+                <div className="space-y-1"><label className="text-xs text-ink-dim">{L("Prénom *", "First name *")}</label><input value={st.firstName} onChange={(e) => setStudent(idx, "firstName", e.target.value)} className="w-full" placeholder={t("pmFirstName")} required /></div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
-                  <label className="text-xs text-ink-dim">Date de naissance</label>
+                  <label className="text-xs text-ink-dim">{L("Date de naissance", "Date of birth")}</label>
                   <DateSelect className="w-full" value={st.dateOfBirth || ""} onChange={(event) => setStudent(idx, "dateOfBirth", event.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-ink-dim">Sexe</label>
+                  <label className="text-xs text-ink-dim">{L("Sexe", "Gender")}</label>
                   <select value={st.gender} onChange={(e) => setStudent(idx, "gender", e.target.value)} className="w-full">
-                    <option value="">Choisir</option>
-                    <option value="F">Fille</option>
-                    <option value="M">Garcon</option>
-                    <option value="O">Autre / non precise</option>
+                    <option value="">{L("Choisir", "Select")}</option>
+                    <option value="F">{L("Fille", "Female")}</option>
+                    <option value="M">{L("Garçon", "Male")}</option>
+                    <option value="O">{L("Autre / non précisé", "Other / unspecified")}</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -2452,7 +2462,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-1">
-                  <label className="text-xs text-ink-dim">Plan de scolarité</label>
+                  <label className="text-xs text-ink-dim">{L("Plan de scolarité", "Tuition plan")}</label>
                   <select value={st.paymentOptionType} onChange={(e) => updateStudentPlan(idx, e.target.value)} className="w-full">
                     {getMatchingPlans(st.classId, st).length > 0 ? getMatchingPlans(st.classId, st).map((plan) => (
                       <option key={`${plan.gradeGroup}-${plan.paymentOptionType}`} value={plan.paymentOptionType}>
@@ -2468,16 +2478,16 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                       : "Sélectionnez d'abord la classe de l'enfant pour filtrer les plans compatibles."}
                   </p>
                   {st.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" && (
-                    <p className="text-[11px] leading-relaxed text-amber-100/90">Option 5 sélectionnée : la configuration détaillée s'ouvre dans une fenêtre dédiée afin d'éviter les libellés trop longs dans la liste.</p>
+                    <p className="text-[11px] leading-relaxed text-amber-100/90">{L("Option 5 sélectionnée : la configuration détaillée s'ouvre dans une fenêtre dédiée afin d'éviter les libellés trop longs dans la liste.", "Option 5 selected: detailed configuration opens in a dedicated window to keep the list concise.")}</p>
                   )}
                 </div>
                 {st.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? (
                   <div className="space-y-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold text-white">Fiche d'accord spécial</p>
+                        <p className="text-sm font-bold text-white">{L("Fiche d'accord spécial", "Special agreement record")}</p>
                         <p className="mt-1 text-[11px] leading-relaxed text-amber-100/90">
-                          Définissez ici le montant convenu, le nom du plan spécial, la remise éventuelle et le rythme de paiement pour cet enfant.
+                          {L("Définissez ici le montant convenu, le nom du plan spécial, la remise éventuelle et le rythme de paiement pour cet enfant.", "Define the agreed amount, special plan name, optional discount and payment schedule for this child.")}
                         </p>
                       </div>
                       <button
@@ -2485,22 +2495,22 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                         onClick={() => openSpecialAgreementDialog(idx)}
                         className="shrink-0 self-start whitespace-nowrap rounded-lg border border-amber-300/40 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-100 transition-colors hover:bg-amber-400/20"
                       >
-                        Configurer
+                        {L("Configurer", "Configure")}
                       </button>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Montant convenu</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Montant convenu", "Agreed amount")}</p>
                         <p className="mt-1 text-sm font-black text-white">
                           {parseAmount(normalizeSpecialAgreementDraft(st).customTotal) > 0 ? formatMoney(parseAmount(normalizeSpecialAgreementDraft(st).customTotal)) : "À définir"}
                         </p>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Réduction spéciale</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Réduction spéciale", "Special discount")}</p>
                         <p className="mt-1 text-sm font-black text-emerald-300">{formatMoney(parseAmount(normalizeSpecialAgreementDraft(st).reductionAmount))}</p>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Cadence</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Cadence", "Schedule")}</p>
                         <p className="mt-1 text-sm font-black text-cyan-200">
                           {normalizeSpecialAgreementDraft(st).installmentMode === "ONE_TIME" ? "Versement unique" : normalizeSpecialAgreementDraft(st).installmentMode === "TWO_INSTALLMENTS" ? "2 tranches" : "3 tranches"}
                         </p>
@@ -2511,9 +2521,9 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <label className="text-xs text-ink-dim">{t("pmAnnualFee")} (USD)</label>
+                    <label className="text-xs text-ink-dim">{t("pmAnnualFee")} {L("(USD)", "(USD)")}</label>
                     <input type="number" value={st.annualFee} onChange={(e) => setStudent(idx, "annualFee", e.target.value)} className="w-full" placeholder="500" />
-                    <p className="text-[11px] leading-relaxed text-ink-dim">Montant pré-rempli depuis le plan choisi, modifiable si nécessaire.</p>
+                    <p className="text-[11px] leading-relaxed text-ink-dim">{L("Montant pré-rempli depuis le plan choisi, modifiable si nécessaire.", "Amount prefilled from the selected plan and editable if necessary.")}</p>
                     {errors[`studentAnnualFee-${idx}`] && <p className="text-xs text-danger">{errors[`studentAnnualFee-${idx}`]}</p>}
                   </div>
                 )}
@@ -2527,13 +2537,13 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   <div className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/40 p-3">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                       <div>
-                        <p className="text-sm font-bold text-white">Choix détaillé du mode de paiement</p>
+                        <p className="text-sm font-bold text-white">{L("Choix détaillé du mode de paiement", "Detailed payment method selection")}</p>
                         <p className="text-xs text-ink-dim">
-                          {catalog?.academicYear?.name ? `Barème officiel ${catalog.academicYear.name}` : "Barème officiel EduPay"} pour {GRADE_GROUP_LABELS[resolveGradeGroup(getClassName(st.classId))] || "ce segment"}.
+                          {catalog?.academicYear?.name ? `Barème officiel ${catalog.academicYear.name}` : "Barème officiel EduPay"} {L("pour", "for")} {GRADE_GROUP_LABELS[resolveGradeGroup(getClassName(st.classId))] || "ce segment"}.
                         </p>
                       </div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-300">
-                        {matchingPlans.length} plan(s) disponible(s)
+                        {matchingPlans.length} {L("plan(s) disponible(s)", "available plan(s)")}
                       </p>
                     </div>
 
@@ -2560,26 +2570,26 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
                             <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Montant initial</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Montant initial", "Original amount")}</p>
                                 <p className="mt-1 break-words font-bold text-white">{Number(plan.originalAmount || plan.finalAmount) > 0 ? formatMoney(Number(plan.originalAmount || plan.finalAmount)) : "À saisir"}</p>
                               </div>
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Réduction</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Réduction", "Discount")}</p>
                                 <p className="mt-1 break-words font-bold text-emerald-300">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? "Selon accord" : formatMoney(Number(plan.reductionAmount || 0))}</p>
                               </div>
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Remise</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Remise", "Discount")}</p>
                                 <p className="mt-1 break-words font-bold text-white">{plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? "Manuelle" : `${Number(plan.discountRate || 0).toFixed(0)}%`}</p>
                               </div>
                               <div className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Net à payer</p>
+                                <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Net à payer", "Net payable")}</p>
                                 <p className="mt-1 break-words font-black text-brand-200">{plan.finalAmount > 0 ? formatMoney(plan.finalAmount) : "À saisir"}</p>
                               </div>
                             </div>
 
                             {schedule.length > 0 ? (
                               <div className="mt-4 space-y-2">
-                                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-dim">Échéancier exact</p>
+                                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-ink-dim">{L("Échéancier exact", "Exact payment schedule")}</p>
                                 <div className="space-y-2">
                                   {schedule.map((row, scheduleIdx) => (
                                     <div key={`${plan.paymentOptionType}-${scheduleIdx}`} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
@@ -2594,7 +2604,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                               </div>
                             ) : plan.paymentOptionType === "SPECIAL_OWNER_AGREEMENT" ? (
                               <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-100">
-                                La fiche dédiée de l'accord spécial génère automatiquement l'échéancier détaillé après saisie du montant convenu.
+                                {L("La fiche dédiée de l'accord spécial génère automatiquement l'échéancier détaillé après saisie du montant convenu.", "The special-agreement record automatically generates the detailed schedule once the agreed amount is entered.")}
                               </div>
                             ) : null}
                           </button>
@@ -2614,12 +2624,12 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-bold text-white">{selectedPlan.name}</p>
-                        <p className="text-xs text-cyan-100/80">{getPaymentOptionLabel(selectedPlan.paymentOptionType)} pour {GRADE_GROUP_LABELS[selectedPlan.gradeGroup] || selectedPlan.gradeGroup}</p>
+                        <p className="text-xs text-cyan-100/80">{getPaymentOptionLabel(selectedPlan.paymentOptionType)} {L("pour", "for")} {GRADE_GROUP_LABELS[selectedPlan.gradeGroup] || selectedPlan.gradeGroup}</p>
                       </div>
                       <div className="text-left sm:text-right">
                         <p className="text-lg font-black text-cyan-200">{formatMoney(selectedPlan.finalAmount)}</p>
                         {Number(selectedPlan.reductionAmount || 0) > 0 && (
-                          <p className="text-xs text-emerald-300">Réduction incluse : {formatMoney(Number(selectedPlan.reductionAmount || 0))}</p>
+                          <p className="text-xs text-emerald-300">{L("Réduction incluse", "Discount included")}: {formatMoney(Number(selectedPlan.reductionAmount || 0))}</p>
                         )}
                       </div>
                     </div>
@@ -2658,13 +2668,13 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
         {specialAgreementTarget !== null && form.students[specialAgreementTarget] && typeof document !== "undefined" && createPortal(
           <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setSpecialAgreementTarget(null)} aria-label="Fermer la boîte de dialogue de l'accord spécial" />
+            <button type="button" className="absolute inset-0 cursor-default" onClick={() => setSpecialAgreementTarget(null)} aria-label={L("Fermer la boîte de dialogue de l'accord spécial", "Close the special agreement dialog")} />
             <div className="edupay-scrollbar relative max-h-[98vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-amber-300/20 bg-slate-950/95 p-6 shadow-2xl sm:p-7">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Accord spécial parent-école</p>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">{L("Accord spécial parent-école", "Special parent-school agreement")}</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-white">{form.students[specialAgreementTarget].fullName || `Élève ${specialAgreementTarget + 1}`}</h3>
-                  <p className="mt-2 text-sm text-ink-dim">Saisissez ici les détails spécifiques de l'accord: total convenu, nom du plan, remise éventuelle et structure de paiement.</p>
+                  <p className="mt-2 text-sm text-ink-dim">{L("Saisissez ici les détails spécifiques de l'accord : total convenu, nom du plan, remise éventuelle et structure de paiement.", "Enter the agreement details here: agreed total, plan name, optional discount and payment structure.")}</p>
                 </div>
                 <button type="button" onClick={() => setSpecialAgreementTarget(null)} className="text-ink-dim hover:text-white transition-colors">
                   <XIcon />
@@ -2673,16 +2683,16 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">Nom du plan spécial</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">{L("Nom du plan spécial", "Special plan name")}</label>
                   <input
                     value={normalizeSpecialAgreementDraft(form.students[specialAgreementTarget]).title}
                     onChange={(event) => setStudentSpecialAgreement(specialAgreementTarget, "title", event.target.value)}
                     className="w-full"
-                    placeholder="Accord spécial parent-école"
+                    placeholder={L("Accord spécial parent-école", "Special parent-school agreement")}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">Montant convenu (USD)</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">{L("Montant convenu (USD)", "Agreed amount (USD)")}</label>
                   <input
                     type="number"
                     min="0"
@@ -2693,7 +2703,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">Réduction spéciale (USD)</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">{L("Réduction spéciale (USD)", "Special discount (USD)")}</label>
                   <input
                     type="number"
                     min="0"
@@ -2704,7 +2714,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   />
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">Cadence de paiement</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">{L("Cadence de paiement", "Payment schedule")}</label>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
                       { value: "ONE_TIME", label: "Versement unique", detail: "Un seul règlement avant la rentrée" },
@@ -2727,12 +2737,12 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   </div>
                 </div>
                 <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">Notes internes</label>
+                  <label className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-dim">{L("Notes internes", "Internal notes")}</label>
                   <textarea
                     value={normalizeSpecialAgreementDraft(form.students[specialAgreementTarget]).notes}
                     onChange={(event) => setStudentSpecialAgreement(specialAgreementTarget, "notes", event.target.value)}
                     className="min-h-24 w-full"
-                    placeholder="Ex: accord approuvé par la direction, parent en mission, échéancier dérogatoire..."
+                    placeholder={L("Ex. : accord approuvé par la direction, parent en mission, échéancier dérogatoire...", "E.g. agreement approved by management, parent on assignment, exceptional schedule...")}
                   />
                 </div>
               </div>
@@ -2749,21 +2759,21 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                   <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Montant convenu</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Montant convenu", "Agreed amount")}</p>
                         <p className="mt-1 text-lg font-black text-white">{formatMoney(total)}</p>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Réduction retenue</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Réduction retenue", "Applied discount")}</p>
                         <p className="mt-1 text-lg font-black text-emerald-300">{formatMoney(reduction)}</p>
                       </div>
                       <div className="rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">Net à payer</p>
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-ink-dim">{L("Net à payer", "Net payable")}</p>
                         <p className="mt-1 text-lg font-black text-cyan-200">{formatMoney(balance)}</p>
                       </div>
                     </div>
 
                     <div className="mt-4 space-y-2">
-                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-100/80">Aperçu de l'échéancier</p>
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-100/80">{L("Aperçu de l'échéancier", "Schedule preview")}</p>
                       {previewSchedule.length > 0 ? previewSchedule.map((row, scheduleIdx) => (
                         <div key={`special-preview-${scheduleIdx}`} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -2773,7 +2783,7 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
                           <p className="text-sm font-black text-cyan-200">{formatMoney(row.amount)}</p>
                         </div>
                       )) : (
-                        <p className="text-sm text-ink-dim">Le montant convenu doit être renseigné pour générer l'échéancier.</p>
+                        <p className="text-sm text-ink-dim">{L("Le montant convenu doit être renseigné pour générer l'échéancier.", "The agreed amount is required to generate the schedule.")}</p>
                       )}
                     </div>
                   </div>
@@ -2784,10 +2794,10 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
               <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                 <button type="button" onClick={() => setSpecialAgreementTarget(null)} className="flex-1 rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">
-                  Fermer
+                  {L("Fermer", "Close")}
                 </button>
                 <button type="button" onClick={() => moveToNextSpecialAgreementTarget(specialAgreementTarget)} className="flex-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-400 px-4 py-3 text-sm font-bold text-slate-950">
-                  Valider l'accord spécial
+                  {L("Valider l'accord spécial", "Confirm special agreement")}
                 </button>
               </div>
             </div>
@@ -2801,7 +2811,8 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 
 /* ─── Main Page ──────────────────────────────────────────────────── */
 export function ParentsManagementPage() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const [parents, setParents] = useState<Parent[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
@@ -3056,15 +3067,15 @@ export function ParentsManagementPage() {
         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={() => setMutationNotice(null)}>
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" />
           <section className="relative w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">Modification synchronisée</p>
-            <h2 className="mt-2 font-display text-2xl font-bold text-white">Notification envoyée</h2>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-200">{L("Modification synchronisée", "Change synchronized")}</p>
+            <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Notification envoyée", "Notification sent")}</h2>
             <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-slate-900/70 p-4 text-sm text-emerald-50">{mutationNotice}</pre>
-            <button type="button" onClick={() => setMutationNotice(null)} className="mt-5 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950">Compris</button>
+            <button type="button" onClick={() => setMutationNotice(null)} className="mt-5 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-slate-950">{L("Compris", "Got it")}</button>
           </section>
         </div>
       )}
       {viewTarget && (
-        <ParentDetailBoundary onClose={() => setViewTarget(null)}>
+        <ParentDetailBoundary onClose={() => setViewTarget(null)} lang={lang}>
           <DetailModal
             parent={normalizeParentForUi(viewTarget)}
             financeSnapshot={financeSnapshot}
@@ -3208,7 +3219,7 @@ export function ParentsManagementPage() {
                           <EditIcon />
                         </button>
                         <button onClick={() => setNotificationTarget(parent)}
-                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 transition-all hover:bg-amber-500/30 active:scale-90" title="Envoyer les accès">
+                          className="inline-flex h-9 w-9 min-h-9 min-w-9 flex-none items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 transition-all hover:bg-amber-500/30 active:scale-90" title={L("Envoyer les accès", "Send access details")}>
                           <KeyIcon />
                         </button>
                         <button onClick={() => setDeleteTarget(parent)}

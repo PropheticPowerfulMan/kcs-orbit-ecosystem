@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, FileText, KeyRound, Printer } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
+import { useI18n } from "../i18n";
 import { api } from "../services/api";
 import { useAuthStore } from "../store/auth";
 import { exportWorkbook } from "../utils/financeExcel";
@@ -285,6 +286,8 @@ function XIcon() {
 }
 
 function ModalShell({ title, subtitle, actions, onClose, children }: { title: string; subtitle?: string; actions?: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-3 py-4 sm:px-5 sm:py-6" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -292,7 +295,7 @@ function ModalShell({ title, subtitle, actions, onClose, children }: { title: st
         <div className="sticky top-0 z-[1] border-b border-white/10 bg-slate-950/90 px-4 py-4 backdrop-blur-xl sm:px-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">Employés</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">{L("Employés", "Employees")}</p>
             <h2 className="mt-2 truncate font-display text-2xl font-bold text-white">{title}</h2>
             {subtitle ? <p className="mt-2 text-sm text-ink-dim">{subtitle}</p> : null}
             </div>
@@ -300,7 +303,7 @@ function ModalShell({ title, subtitle, actions, onClose, children }: { title: st
               {actions}
               <button
                 type="button"
-                aria-label="Fermer"
+                aria-label={lang === "fr" ? "Fermer" : "Close"}
                 onClick={onClose}
                 className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-ink-dim transition-colors hover:text-white"
               >
@@ -466,7 +469,8 @@ function buildEmployeeFinanceSnapshot(employee: Employee, profiles: SalaryProfil
   };
 }
 
-function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSnapshot) {
+function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSnapshot, lang: "fr" | "en") {
+  const T = (fr: string, en: string) => lang === "fr" ? fr : en;
   const currency = snapshot.currency;
   const profile = snapshot.primaryProfile;
   const payrollRows = snapshot.payrollRecords.length > 0
@@ -555,10 +559,10 @@ function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSn
 
       <div class="section">
         <div class="cards">
-          <div class="card"><div class="label">Salaire de base</div><div class="value">${escapeHtml(formatCurrency(Number(profile?.baseSalary ?? 0), currency))}</div><div class="subvalue">${escapeHtml(labelizeFrequency(profile?.frequency))}</div></div>
-          <div class="card"><div class="label">Bonus cumulés</div><div class="value">${escapeHtml(formatCurrency(snapshot.totals.totalBonuses, currency))}</div><div class="subvalue">Historique de paie</div></div>
-          <div class="card"><div class="label">Dettes recouvrées</div><div class="value">${escapeHtml(formatCurrency(snapshot.totals.totalDebtRecovered, currency))}</div><div class="subvalue">Taux: ${escapeHtml(`${Number(profile?.debtRecoveryRate ?? 0).toFixed(2)}%`)}</div></div>
-          <div class="card"><div class="label">Avances en cours</div><div class="value">${escapeHtml(formatCurrency(Number(profile?.advanceBalance ?? 0), currency))}</div><div class="subvalue">Avances récupérées: ${escapeHtml(formatCurrency(snapshot.totals.totalAdvancesRecovered, currency))}</div></div>
+          <div class="card"><div class="label">${escapeHtml(T("Salaire de base", "Base salary"))}</div><div class="value">${escapeHtml(formatCurrency(Number(profile?.baseSalary ?? 0), currency))}</div><div class="subvalue">${escapeHtml(labelizeFrequency(profile?.frequency))}</div></div>
+          <div class="card"><div class="label">${escapeHtml(T("Bonus cumulés", "Total bonuses"))}</div><div class="value">${escapeHtml(formatCurrency(snapshot.totals.totalBonuses, currency))}</div><div class="subvalue">Historique de paie</div></div>
+          <div class="card"><div class="label">${escapeHtml(T("Dettes recouvrées", "Debts recovered"))}</div><div class="value">${escapeHtml(formatCurrency(snapshot.totals.totalDebtRecovered, currency))}</div><div class="subvalue">Taux: ${escapeHtml(`${Number(profile?.debtRecoveryRate ?? 0).toFixed(2)}%`)}</div></div>
+          <div class="card"><div class="label">${escapeHtml(T("Avances en cours", "Current advances"))}</div><div class="value">${escapeHtml(formatCurrency(Number(profile?.advanceBalance ?? 0), currency))}</div><div class="subvalue">Avances récupérées: ${escapeHtml(formatCurrency(snapshot.totals.totalAdvancesRecovered, currency))}</div></div>
         </div>
       </div>
 
@@ -567,19 +571,19 @@ function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSn
           <div class="panel">
             <h3>Référentiel salarial</h3>
             <div class="detail-list">
-              <div class="detail-row"><span>Code employé</span><strong>${escapeHtml(profile?.employeeCode || employee.displayId || employee.employeeId || employee.id)}</strong></div>
-              <div class="detail-row"><span>Poste</span><strong>${escapeHtml(infoValue(profile?.position || employee.jobTitle))}</strong></div>
-              <div class="detail-row"><span>Département</span><strong>${escapeHtml(infoValue(profile?.department || employee.department))}</strong></div>
-              <div class="detail-row"><span>Bonus par défaut</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultBonus ?? 0), currency))}</strong></div>
-              <div class="detail-row"><span>Déductions par défaut</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultDeduction ?? 0), currency))}</strong></div>
+              <div class="detail-row"><span>{L("Code employé", "Employee code")}</span><strong>${escapeHtml(profile?.employeeCode || employee.displayId || employee.employeeId || employee.id)}</strong></div>
+              <div class="detail-row"><span>${escapeHtml(T("Poste", "Position"))}</span><strong>${escapeHtml(infoValue(profile?.position || employee.jobTitle))}</strong></div>
+              <div class="detail-row"><span>${escapeHtml(T("Département", "Department"))}</span><strong>${escapeHtml(infoValue(profile?.department || employee.department))}</strong></div>
+              <div class="detail-row"><span>{L("Bonus par défaut", "Default bonus")}</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultBonus ?? 0), currency))}</strong></div>
+              <div class="detail-row"><span>{L("Déductions par défaut", "Default deductions")}</span><strong>${escapeHtml(formatCurrency(Number(profile?.defaultDeduction ?? 0), currency))}</strong></div>
               <div class="detail-row"><span>Net versé cumulé</span><strong>${escapeHtml(formatCurrency(snapshot.totals.totalNetPaid, currency))}</strong></div>
             </div>
           </div>
           <div class="panel">
             <h3>Coordonnées et traçabilité</h3>
             <div class="detail-list">
-              <div class="detail-row"><span>Email</span><strong>${escapeHtml(infoValue(employee.email))}</strong></div>
-              <div class="detail-row"><span>Téléphone</span><strong>${escapeHtml(infoValue(employee.phone))}</strong></div>
+              <div class="detail-row"><span>${escapeHtml(T("E-mail", "Email"))}</span><strong>${escapeHtml(infoValue(employee.email))}</strong></div>
+              <div class="detail-row"><span>${escapeHtml(T("Téléphone", "Phone"))}</span><strong>${escapeHtml(infoValue(employee.phone))}</strong></div>
               <div class="detail-row"><span>Type</span><strong>${escapeHtml(infoValue(employee.employeeType))}</strong></div>
               <div class="detail-row"><span>Spécialité</span><strong>${escapeHtml(infoValue(employee.subject))}</strong></div>
               <div class="detail-row"><span>Dernier run</span><strong>${escapeHtml(formatDateTimeLabel(snapshot.payrollRecords[0]?.run.processedAt))}</strong></div>
@@ -597,16 +601,16 @@ function buildEmployeeReportHtml(employee: Employee, snapshot: EmployeeFinanceSn
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Fiche</th>
-                <th>Run</th>
+                <th>${escapeHtml(T("Date", "Date"))}</th>
+                <th>${escapeHtml(T("Fiche", "Payslip"))}</th>
+                <th>{L("Cycle", "Run")}</th>
                 <th>Période</th>
-                <th>Brut</th>
-                <th>Bonus</th>
-                <th>Déductions</th>
-                <th>Avances</th>
-                <th>Dettes</th>
-                <th>Net payé</th>
+                <th>${escapeHtml(T("Brut", "Gross"))}</th>
+                <th>${escapeHtml(T("Bonus", "Bonus"))}</th>
+                <th>${escapeHtml(T("Déductions", "Deductions"))}</th>
+                <th>${escapeHtml(T("Avances", "Advances"))}</th>
+                <th>${escapeHtml(T("Dettes", "Debts"))}</th>
+                <th>${escapeHtml(T("Net payé", "Net paid"))}</th>
               </tr>
             </thead>
             <tbody>${payrollRows}</tbody>
@@ -625,8 +629,8 @@ function printHtmlDocument(html: string) {
   sharedPrintHtmlDocument(html);
 }
 
-async function exportEmployeeReportPdf(employee: Employee, snapshot: EmployeeFinanceSnapshot) {
-  const html = buildEmployeeReportHtml(employee, snapshot);
+async function exportEmployeeReportPdf(employee: Employee, snapshot: EmployeeFinanceSnapshot, lang: "fr" | "en") {
+  const html = buildEmployeeReportHtml(employee, snapshot, lang);
   const mount = document.createElement("div");
   mount.style.position = "fixed";
   mount.style.left = "-10000px";
@@ -648,8 +652,8 @@ async function exportEmployeeReportPdf(employee: Employee, snapshot: EmployeeFin
   }
 }
 
-function printEmployeeReport(employee: Employee, snapshot: EmployeeFinanceSnapshot) {
-  printHtmlDocument(buildEmployeeReportHtml(employee, snapshot));
+function printEmployeeReport(employee: Employee, snapshot: EmployeeFinanceSnapshot, lang: "fr" | "en") {
+  printHtmlDocument(buildEmployeeReportHtml(employee, snapshot, lang));
 }
 
 function exportEmployeeReportExcel(employee: Employee, snapshot: EmployeeFinanceSnapshot) {
@@ -697,6 +701,8 @@ function exportEmployeeReportExcel(employee: Employee, snapshot: EmployeeFinance
 }
 
 export function EmployeesPage() {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const role = useAuthStore((state) => state.role);
   const canManageEmployees = ["SUPER_ADMIN", "OWNER", "ADMIN", "HR_MANAGER"].includes(role || "");
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -955,8 +961,8 @@ export function EmployeesPage() {
       {mutationNotice ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-5 text-white shadow-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Modification synchronisée</p>
-            <h2 className="mt-2 font-display text-2xl font-bold">Notification envoyée</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">{L("Modification synchronisée", "Synchronized update")}</p>
+            <h2 className="mt-2 font-display text-2xl font-bold">{L("Notification envoyée", "Notification sent")}</h2>
             <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-ink-dim">{mutationNotice}</pre>
             <div className="mt-5 flex justify-end">
               <button
@@ -964,7 +970,7 @@ export function EmployeesPage() {
                 onClick={() => setMutationNotice(null)}
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-400"
               >
-                Compris
+                {L("Compris", "Got it")}
               </button>
             </div>
           </div>
@@ -973,40 +979,40 @@ export function EmployeesPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">
         <div className="min-w-0">
-          <h1 className="font-display text-3xl font-bold text-white">Répertoire des employés</h1>
+          <h1 className="font-display text-3xl font-bold text-white">{L("Répertoire des employés", "Employee directory")}</h1>
           <p className="mt-1 text-ink-dim">
-            Liste centralisée du personnel synchronisé depuis SAVANEX, avec une lecture plus proche des surfaces Élèves et Gestion parents.
+            {L("Liste centralisée du personnel synchronisé depuis SAVANEX, avec une lecture plus proche des surfaces Élèves et Gestion parents.", "Centralized staff list synchronized from SAVANEX, aligned with the Students and Parent Management views.")}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">Source</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{L("Source", "Source")}</p>
             <p className="mt-1 text-sm font-semibold text-white">SAVANEX</p>
           </div>
           <button
             onClick={() => void loadEmployees()}
             className="inline-flex h-[52px] items-center justify-center rounded-xl border border-brand-300/25 bg-white/[0.05] px-4 text-sm font-semibold text-white transition hover:border-brand-300/45 hover:bg-brand-500/12"
           >
-            Actualiser la liste
+            {L("Actualiser la liste", "Refresh list")}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 animate-fadeInUp">
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Employés</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Employés", "Employees")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-cyan-300">{stats.total}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Départements</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Départements", "Departments")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-brand-300">{stats.departments}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Codes d'accès</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Codes d'accès", "Access codes")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-emerald-300">{stats.withAccessCode}</p>
         </div>
         <div className="card">
-          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">Résultats</p>
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Résultats", "Results")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-white">{filteredEmployees.length}</p>
         </div>
       </div>
@@ -1014,7 +1020,7 @@ export function EmployeesPage() {
       <SearchField
         value={search}
         onChange={(event) => setSearch(event.target.value)}
-        placeholder="Rechercher un employe, matricule, departement, bureau, poste, professeur, chauffeur ou contact..."
+        placeholder={L("Rechercher un employé, matricule, département, bureau, poste ou contact...", "Search employee, ID, department, office, position or contact...")}
         wrapperClassName="animate-fadeInUp"
       />
 
@@ -1030,18 +1036,18 @@ export function EmployeesPage() {
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-brand-500/30 border-t-brand-500" />
           </div>
         ) : filteredEmployees.length === 0 ? (
-          <div className="p-12 text-center text-ink-dim">Aucun employé ne correspond à votre recherche.</div>
+          <div className="p-12 text-center text-ink-dim">{L("Aucun employé ne correspond à votre recherche.", "No employee matches your search.")}</div>
         ) : (
           <div className="edupay-scrollbar overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700/50 bg-slate-900/40">
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">ID employé</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Nom complet</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Département</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Profil</th>
-                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Contact</th>
-                  <th className="px-5 py-4 text-center text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">Actions</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("ID employé", "Employee ID")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Nom complet", "Full name")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Département", "Department")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Profil", "Profile")}</th>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Contact", "Contact")}</th>
+                  <th className="px-5 py-4 text-center text-xs font-bold uppercase tracking-[0.1em] text-ink-dim">{L("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1057,7 +1063,7 @@ export function EmployeesPage() {
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-ink-dim">{infoValue(employee.jobTitle)}</span>
                         {employee.accessCode?.trim() ? (
-                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">Code d'accès actif</span>
+                          <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200">{L("Code d'accès actif", "Active access code")}</span>
                         ) : null}
                       </div>
                     </td>
@@ -1075,7 +1081,7 @@ export function EmployeesPage() {
                         <button
                           onClick={() => setSelectedEmployee(employee)}
                           className="rounded-lg bg-slate-700/50 p-2 text-ink-dim transition-all hover:bg-slate-600/50 hover:text-white"
-                          title="Voir"
+                          title={L("Voir", "View")}
                         >
                           <EyeIcon />
                         </button>
@@ -1084,14 +1090,14 @@ export function EmployeesPage() {
                             <button
                               onClick={() => openEditModal(employee)}
                               className="hidden rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30"
-                              title="Modifier"
+                              title={L("Modifier", "Edit")}
                             >
                               <EditIcon />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(employee)}
                               className="hidden rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30"
-                              title="Supprimer"
+                              title={L("Supprimer", "Delete")}
                             >
                               <TrashIcon />
                             </button>
@@ -1110,15 +1116,15 @@ export function EmployeesPage() {
       {selectedEmployee ? (
         <ModalShell
           title={selectedEmployee.fullName}
-          subtitle="Fiche détaillée de l'employé dans le registre partagé."
+          subtitle={L("Fiche détaillée de l'employé dans le registre partagé.", "Detailed employee record in the shared registry.")}
           onClose={() => setSelectedEmployee(null)}
           actions={(
             <>
               <span
                 className="inline-flex h-10 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200"
-                title="Les paiements, factures et fiches affichés concernent cet employé"
+                title={L("Les paiements, factures et fiches affichés concernent cet employé", "The displayed payments, invoices and records concern this employee")}
               >
-                Bénéficiaire : Employé
+                {L("Bénéficiaire : Employé", "Beneficiary: Employee")}
               </span>
               <button
                 type="button"
@@ -1133,29 +1139,29 @@ export function EmployeesPage() {
                 onClick={() => {
                   if (!employeeFinanceSnapshot) return;
                   setEmployeePdfExporting(true);
-                  void exportEmployeeReportPdf(selectedEmployee, employeeFinanceSnapshot).finally(() => setEmployeePdfExporting(false));
+                  void exportEmployeeReportPdf(selectedEmployee, employeeFinanceSnapshot, lang).finally(() => setEmployeePdfExporting(false));
                 }}
                 disabled={employeeFinanceLoading || !employeeFinanceSnapshot || employeePdfExporting}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 text-xs font-semibold text-cyan-100 transition-colors hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Télécharger le rapport en PDF"
+                title={L("Télécharger le rapport en PDF", "Download PDF report")}
               >
                 <FileText className="h-4 w-4" /> {employeePdfExporting ? "PDF..." : "PDF"}
               </button>
               <button
                 type="button"
-                onClick={() => employeeFinanceSnapshot && printEmployeeReport(selectedEmployee, employeeFinanceSnapshot)}
+                onClick={() => employeeFinanceSnapshot && printEmployeeReport(selectedEmployee, employeeFinanceSnapshot, lang)}
                 disabled={employeeFinanceLoading || !employeeFinanceSnapshot || employeePdfExporting}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/10 px-3 text-xs font-semibold text-sky-100 transition-colors hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Imprimer le rapport"
+                title={L("Imprimer le rapport", "Print report")}
               >
-                <Printer className="h-4 w-4" /> Impression
+                <Printer className="h-4 w-4" /> {L("Impression", "Print")}
               </button>
               <button
                 type="button"
                 onClick={() => employeeFinanceSnapshot && exportEmployeeReportExcel(selectedEmployee, employeeFinanceSnapshot)}
                 disabled={employeeFinanceLoading || !employeeFinanceSnapshot || employeePdfExporting}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Exporter le rapport en Excel"
+                title={L("Exporter le rapport en Excel", "Export Excel report")}
               >
                 <FileSpreadsheet className="h-4 w-4" /> Excel
               </button>
@@ -1164,58 +1170,58 @@ export function EmployeesPage() {
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Identifiant affiché</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Identifiant affiché", "Displayed identifier")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{selectedEmployee.displayId || selectedEmployee.employeeId || selectedEmployee.id}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Matricule interne</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Matricule interne", "Internal employee ID")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.employeeId)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Département</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Département", "Department")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.department)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Poste</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Poste", "Position")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.jobTitle)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Email</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("E-mail", "Email")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.email)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Téléphone</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Téléphone", "Phone")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.phone)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Adresse physique</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Adresse physique", "Physical address")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.physicalAddress)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Matière ou spécialité</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Matière ou spécialité", "Subject or specialty")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.subject)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Type d'employé</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Type d'employé", "Employee type")}</p>
               <p className="mt-2 text-sm font-semibold text-white">{infoValue(selectedEmployee.employeeType)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
-              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Codes externes</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Codes externes", "External identifiers")}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {selectedEmployee.externalIds.length > 0 ? selectedEmployee.externalIds.map((item) => (
                   <span key={`${item.appSlug}-${item.externalId}`} className="rounded-full border border-brand-300/25 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-100">
                     {item.appSlug}: {item.externalId}
                   </span>
-                )) : <span className="text-sm text-ink-dim">Aucun identifiant externe.</span>}
+                )) : <span className="text-sm text-ink-dim">{L("Aucun identifiant externe.", "No external identifier.")}</span>}
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Dossier financier</p>
-                  <h3 className="mt-2 text-lg font-semibold text-white">Historique salarial, dettes et avances</h3>
+                  <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Dossier financier", "Financial record")}</p>
+                  <h3 className="mt-2 text-lg font-semibold text-white">{L("Historique salarial, dettes et avances", "Salary history, debts and advances")}</h3>
                 </div>
-                {employeeFinanceLoading ? <span className="text-sm text-ink-dim">Chargement des données financières...</span> : null}
+                {employeeFinanceLoading ? <span className="text-sm text-ink-dim">{L("Chargement des données financières...", "Loading financial data...")}</span> : null}
               </div>
 
               {employeeFinanceError ? (
@@ -1229,11 +1235,11 @@ export function EmployeesPage() {
                   <div className="rounded-2xl border border-brand-300/20 bg-brand-500/10 p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-brand-200">Avances, dettes et echeances</p>
-                        <h3 className="mt-1 text-lg font-semibold text-white">Registre financier employe</h3>
+                        <p className="text-xs uppercase tracking-[0.18em] text-brand-200">{L("Avances, dettes et échéances", "Advances, debts and due dates")}</p>
+                        <h3 className="mt-1 text-lg font-semibold text-white">{L("Registre financier employé", "Employee financial register")}</h3>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-3">
-                        <input className="h-10" value={employeeFinanceQuery} onChange={(event) => setEmployeeFinanceQuery(event.target.value)} placeholder="Recherche: avance, dette, retard..." />
+                        <input className="h-10" value={employeeFinanceQuery} onChange={(event) => setEmployeeFinanceQuery(event.target.value)} placeholder={L("Recherche : avance, dette, retard...", "Search: advance, debt, overdue...")} />
                         <DateSelect className="h-10"  value={employeeFinanceDateFrom} onChange={(event) => setEmployeeFinanceDateFrom(event.target.value)} />
                         <DateSelect className="h-10"  value={employeeFinanceDateTo} onChange={(event) => setEmployeeFinanceDateTo(event.target.value)} />
                       </div>
@@ -1241,19 +1247,19 @@ export function EmployeesPage() {
 
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Solde total</p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Solde total", "Total balance")}</p>
                         <p className="mt-2 text-lg font-semibold text-white">{formatCurrency(employeeObligationTotals.totalBalance, employeeFinanceSnapshot.currency)}</p>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Avances ouvertes</p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Avances ouvertes", "Open advances")}</p>
                         <p className="mt-2 text-lg font-semibold text-cyan-300">{formatCurrency(employeeObligationTotals.salaryAdvances, employeeFinanceSnapshot.currency)}</p>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dettes ecole</p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Dettes école", "School debts")}</p>
                         <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(employeeObligationTotals.schoolDebts, employeeFinanceSnapshot.currency)}</p>
                       </div>
                       <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Echeances en retard</p>
+                        <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Échéances en retard", "Overdue installments")}</p>
                         <p className="mt-2 text-lg font-semibold text-rose-300">{employeeObligationTotals.overdue}</p>
                       </div>
                     </div>
@@ -1262,11 +1268,11 @@ export function EmployeesPage() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-white/10 bg-slate-950/50 text-left text-xs uppercase tracking-[0.14em] text-ink-dim">
-                            <th className="px-4 py-3">Engagement</th>
-                            <th className="px-4 py-3">Mode</th>
-                            <th className="px-4 py-3">Solde</th>
-                            <th className="px-4 py-3">Echeance</th>
-                            <th className="px-4 py-3">Risque</th>
+                            <th className="px-4 py-3">{L("Engagement", "Obligation")}</th>
+                            <th className="px-4 py-3">{L("Mode", "Mode")}</th>
+                            <th className="px-4 py-3">{L("Solde", "Balance")}</th>
+                            <th className="px-4 py-3">{L("Échéance", "Due date")}</th>
+                            <th className="px-4 py-3">{L("Risque", "Risk")}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1283,7 +1289,7 @@ export function EmployeesPage() {
                             </tr>
                           )) : (
                             <tr>
-                              <td colSpan={5} className="px-4 py-6 text-center text-ink-dim">Aucune avance ou dette trouvee pour cette periode.</td>
+                              <td colSpan={5} className="px-4 py-6 text-center text-ink-dim">{L("Aucune avance ni dette trouvée pour cette période.", "No advance or debt found for this period.")}</td>
                             </tr>
                           )}
                         </tbody>
@@ -1293,32 +1299,32 @@ export function EmployeesPage() {
 
                   <div className="grid gap-3 md:grid-cols-4">
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Net mensuel prevu</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Net mensuel prévu", "Projected monthly net")}</p>
                       <p className="mt-2 text-lg font-semibold text-emerald-300">{formatCurrency(Number(employeeFinanceSnapshot.salaryProjection?.netSalary ?? employeeFinanceSnapshot.primaryProfile?.baseSalary ?? 0), employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Mode {employeeFinanceSnapshot.salaryProjection?.mode || employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Mode", "Mode")} {employeeFinanceSnapshot.salaryProjection?.mode || employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}</p>
                       <select
                         className="mt-3 h-10 w-full rounded-xl border border-white/10 bg-slate-950/70 px-3 text-sm text-white"
                         value={employeeFinanceSnapshot.primaryProfile?.deductionMode || "AUTOMATIC"}
                         onChange={(event) => void handleUpdateEmployeeDeductionMode(event.target.value)}
                         disabled={employeeNoticeSending || !employeeFinanceSnapshot.primaryProfile}
                       >
-                        <option value="AUTOMATIC">Automatique</option>
-                        <option value="MANUAL">Manuel</option>
-                        <option value="HYBRID">Hybride</option>
+                        <option value="AUTOMATIC">{L("Automatique", "Automatic")}</option>
+                        <option value="MANUAL">{L("Manuel", "Manual")}</option>
+                        <option value="HYBRID">{L("Hybride", "Hybrid")}</option>
                       </select>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Deductions du mois</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Déductions du mois", "Monthly deductions")}</p>
                       <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(Number(employeeFinanceSnapshot.salaryProjection?.totalDeductions ?? 0), employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Pression {Number(employeeFinanceSnapshot.salaryProjection?.salaryPressure ?? 0).toFixed(1)}%</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Pression", "Pressure")} {Number(employeeFinanceSnapshot.salaryProjection?.salaryPressure ?? 0).toFixed(1)}%</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Avis envoyes</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Avis envoyés", "Notices sent")}</p>
                       <p className="mt-2 text-lg font-semibold text-cyan-300">{employeeFinanceSnapshot.communicationHistory?.length ?? 0}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Dashboard / email / SMS</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Tableau de bord / e-mail / SMS", "Dashboard / email / SMS")}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Action transparence</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Action de transparence", "Transparency action")}</p>
                       <button
                         type="button"
                         onClick={() => void handleSendEmployeeTransparencyNotice()}
@@ -1332,43 +1338,43 @@ export function EmployeesPage() {
 
                   <div className="grid gap-3 md:grid-cols-4">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Salaire de base</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Salaire de base", "Base salary")}</p>
                       <p className="mt-2 text-lg font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.baseSalary ?? 0), employeeFinanceSnapshot.currency)}</p>
                       <p className="mt-1 text-xs text-ink-dim">{labelizeFrequency(employeeFinanceSnapshot.primaryProfile?.frequency)}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Bonus cumulés</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Bonus cumulés", "Total bonuses")}</p>
                       <p className="mt-2 text-lg font-semibold text-emerald-300">{formatCurrency(employeeFinanceSnapshot.totals.totalBonuses, employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Toutes fiches confondues</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Toutes fiches confondues", "Across all payslips")}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dettes recouvrées</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Dettes recouvrées", "Debts recovered")}</p>
                       <p className="mt-2 text-lg font-semibold text-amber-300">{formatCurrency(employeeFinanceSnapshot.totals.totalDebtRecovered, employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Taux {Number(employeeFinanceSnapshot.primaryProfile?.debtRecoveryRate ?? 0).toFixed(2)}%</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Taux", "Rate")} {Number(employeeFinanceSnapshot.primaryProfile?.debtRecoveryRate ?? 0).toFixed(2)}%</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Avances en cours</p>
+                      <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Avances en cours", "Current advances")}</p>
                       <p className="mt-2 text-lg font-semibold text-cyan-300">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.advanceBalance ?? 0), employeeFinanceSnapshot.currency)}</p>
-                      <p className="mt-1 text-xs text-ink-dim">Récupérées: {formatCurrency(employeeFinanceSnapshot.totals.totalAdvancesRecovered, employeeFinanceSnapshot.currency)}</p>
+                      <p className="mt-1 text-xs text-ink-dim">{L("Récupérées", "Recovered")}: {formatCurrency(employeeFinanceSnapshot.totals.totalAdvancesRecovered, employeeFinanceSnapshot.currency)}</p>
                     </div>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Paramètres salariaux</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Paramètres salariaux", "Salary settings")}</p>
                       <div className="mt-3 space-y-3 text-sm text-ink-dim">
-                        <div className="flex items-center justify-between gap-3"><span>Code employé</span><span className="font-semibold text-white">{employeeFinanceSnapshot.primaryProfile?.employeeCode || selectedEmployee.displayId || selectedEmployee.employeeId || selectedEmployee.id}</span></div>
-                        <div className="flex items-center justify-between gap-3"><span>Bonus par défaut</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultBonus ?? 0), employeeFinanceSnapshot.currency)}</span></div>
-                        <div className="flex items-center justify-between gap-3"><span>Déductions par défaut</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultDeduction ?? 0), employeeFinanceSnapshot.currency)}</span></div>
-                        <div className="flex items-center justify-between gap-3"><span>Net payé cumulé</span><span className="font-semibold text-white">{formatCurrency(employeeFinanceSnapshot.totals.totalNetPaid, employeeFinanceSnapshot.currency)}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Code employé", "Employee code")}</span><span className="font-semibold text-white">{employeeFinanceSnapshot.primaryProfile?.employeeCode || selectedEmployee.displayId || selectedEmployee.employeeId || selectedEmployee.id}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Bonus par défaut", "Default bonus")}</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultBonus ?? 0), employeeFinanceSnapshot.currency)}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Déductions par défaut", "Default deductions")}</span><span className="font-semibold text-white">{formatCurrency(Number(employeeFinanceSnapshot.primaryProfile?.defaultDeduction ?? 0), employeeFinanceSnapshot.currency)}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Net payé cumulé", "Total net paid")}</span><span className="font-semibold text-white">{formatCurrency(employeeFinanceSnapshot.totals.totalNetPaid, employeeFinanceSnapshot.currency)}</span></div>
                       </div>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">Notes et couverture</p>
+                      <p className="text-xs uppercase tracking-[0.18em] text-ink-dim">{L("Notes et couverture", "Notes and coverage")}</p>
                       <div className="mt-3 space-y-3 text-sm text-ink-dim">
-                        <div className="flex items-center justify-between gap-3"><span>Fiches salariales</span><span className="font-semibold text-white">{employeeFinanceSnapshot.payrollRecords.length}</span></div>
-                        <div className="flex items-center justify-between gap-3"><span>Dernier traitement</span><span className="font-semibold text-white">{formatDateTimeLabel(employeeFinanceSnapshot.payrollRecords[0]?.run.processedAt)}</span></div>
-                        <div><span className="block text-xs uppercase tracking-[0.16em] text-ink-dim">Observation</span><p className="mt-2 text-sm text-white">{employeeFinanceSnapshot.primaryProfile?.notes?.trim() || "Aucune note RH disponible pour ce profil salarial."}</p></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Fiches salariales", "Payslips")}</span><span className="font-semibold text-white">{employeeFinanceSnapshot.payrollRecords.length}</span></div>
+                        <div className="flex items-center justify-between gap-3"><span>{L("Dernier traitement", "Last processing")}</span><span className="font-semibold text-white">{formatDateTimeLabel(employeeFinanceSnapshot.payrollRecords[0]?.run.processedAt)}</span></div>
+                        <div><span className="block text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Observation", "Notes")}</span><p className="mt-2 text-sm text-white">{employeeFinanceSnapshot.primaryProfile?.notes?.trim() || "Aucune note RH disponible pour ce profil salarial."}</p></div>
                       </div>
                     </div>
                   </div>
@@ -1377,15 +1383,15 @@ export function EmployeesPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-white/10 bg-white/[0.04] text-left text-xs uppercase tracking-[0.14em] text-ink-dim">
-                          <th className="px-4 py-3">Date</th>
-                          <th className="px-4 py-3">Fiche</th>
-                          <th className="px-4 py-3">Run</th>
-                          <th className="px-4 py-3">Brut</th>
-                          <th className="px-4 py-3">Bonus</th>
-                          <th className="px-4 py-3">Déductions</th>
-                          <th className="px-4 py-3">Avances</th>
-                          <th className="px-4 py-3">Dettes</th>
-                          <th className="px-4 py-3">Net payé</th>
+                          <th className="px-4 py-3">{L("Date", "Date")}</th>
+                          <th className="px-4 py-3">{L("Fiche", "Payslip")}</th>
+                          <th className="px-4 py-3">{L("Cycle", "Run")}</th>
+                          <th className="px-4 py-3">{L("Brut", "Gross")}</th>
+                          <th className="px-4 py-3">{L("Bonus", "Bonus")}</th>
+                          <th className="px-4 py-3">{L("Déductions", "Deductions")}</th>
+                          <th className="px-4 py-3">{L("Avances", "Advances")}</th>
+                          <th className="px-4 py-3">{L("Dettes", "Debts")}</th>
+                          <th className="px-4 py-3">{L("Net payé", "Net paid")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1394,7 +1400,7 @@ export function EmployeesPage() {
                             <td className="px-4 py-3 text-ink-dim">{formatDateTimeLabel(run.processedAt)}</td>
                             <td className="px-4 py-3 font-medium text-white">
                               <span className="block">{item.salarySlipNumber}</span>
-                              <span className="mt-1 inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">Employé</span>
+                              <span className="mt-1 inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-200">{L("Employé", "Employee")}</span>
                             </td>
                             <td className="px-4 py-3 text-ink-dim">{run.title}</td>
                             <td className="px-4 py-3 text-white">{formatCurrency(Number(item.baseSalary ?? item.salaryProfile.baseSalary ?? 0), employeeFinanceSnapshot.currency)}</td>
@@ -1406,7 +1412,7 @@ export function EmployeesPage() {
                           </tr>
                         )) : (
                           <tr>
-                            <td colSpan={9} className="px-4 py-6 text-center text-ink-dim">Aucune fiche salariale disponible pour cet employé.</td>
+                            <td colSpan={9} className="px-4 py-6 text-center text-ink-dim">{L("Aucune fiche salariale disponible pour cet employé.", "No payroll record available for this employee.")}</td>
                           </tr>
                         )}
                       </tbody>
@@ -1415,7 +1421,7 @@ export function EmployeesPage() {
                 </div>
               ) : employeeFinanceLoading ? null : (
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-ink-dim">
-                  Aucun profil de paie ou historique salarial n'a encore été trouvé pour cet employé.
+                  {L("Aucun profil de paie ou historique salarial n'a encore été trouvé pour cet employé.", "No payroll profile or salary history has been found for this employee yet.")}
                 </div>
               )}
             </div>
@@ -1424,58 +1430,58 @@ export function EmployeesPage() {
       ) : null}
 
       {editingEmployee ? (
-        <ModalShell title="Modifier un employé" subtitle="Chaque champ est explicite et peut être vidé si l'information n'est plus valable." onClose={closeEditModal}>
+        <ModalShell title={L("Modifier un employé", "Edit employee")} subtitle={L("Chaque champ est explicite et peut être vidé si l'information n'est plus valable.", "Each field is explicit and can be cleared if the information is no longer valid.")} onClose={closeEditModal}>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2 md:col-span-2">
-              <span className="text-sm font-medium text-white">Nom complet</span>
-              <input className="w-full" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder="Ex. Mireille Ilunga" />
+              <span className="text-sm font-medium text-white">{L("Nom complet", "Full name")}</span>
+              <input className="w-full" value={form.fullName} onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))} placeholder={L("Ex. Mireille Ilunga", "E.g. Mireille Ilunga")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Email</span>
-              <input className="w-full" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="nom@ecole.cd" />
+              <span className="text-sm font-medium text-white">{L("E-mail", "Email")}</span>
+              <input className="w-full" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder={L("nom@ecole.cd", "name@school.cd")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Téléphone</span>
+              <span className="text-sm font-medium text-white">{L("Téléphone", "Phone")}</span>
               <InternationalPhoneInput value={form.phone} onChange={(value) => setForm((current) => ({ ...current, phone: value }))} />
             </label>
             <label className="space-y-2 md:col-span-2">
-              <span className="text-sm font-medium text-white">Adresse physique</span>
-              <input className="w-full" value={form.physicalAddress} onChange={(event) => setForm((current) => ({ ...current, physicalAddress: event.target.value }))} placeholder="Avenue, quartier, commune, ville" />
+              <span className="text-sm font-medium text-white">{L("Adresse physique", "Physical address")}</span>
+              <input className="w-full" value={form.physicalAddress} onChange={(event) => setForm((current) => ({ ...current, physicalAddress: event.target.value }))} placeholder={L("Avenue, quartier, commune, ville", "Street, district, municipality, city")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Matricule employé</span>
-              <input className="w-full cursor-not-allowed opacity-70" value={form.employeeId} readOnly disabled placeholder="Généré par le système" />
-              <p className="text-xs text-ink-dim">Ce matricule est généré par le système et ne peut pas être modifié ici.</p>
+              <span className="text-sm font-medium text-white">{L("Matricule employé", "Employee ID")}</span>
+              <input className="w-full cursor-not-allowed opacity-70" value={form.employeeId} readOnly disabled placeholder={L("Généré par le système", "Generated by the system")} />
+              <p className="text-xs text-ink-dim">{L("Ce matricule est généré par le système et ne peut pas être modifié ici.", "This employee number is system-generated and cannot be edited here.")}</p>
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Type d'employé</span>
-              <input className="w-full" value={form.employeeType} onChange={(event) => setForm((current) => ({ ...current, employeeType: event.target.value }))} placeholder="TEACHING ou STAFF" />
+              <span className="text-sm font-medium text-white">{L("Type d'employé", "Employee type")}</span>
+              <input className="w-full" value={form.employeeType} onChange={(event) => setForm((current) => ({ ...current, employeeType: event.target.value }))} placeholder={L("ENSEIGNANT ou PERSONNEL", "TEACHING or STAFF")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Département</span>
-              <input className="w-full" value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} placeholder="Académique" />
+              <span className="text-sm font-medium text-white">{L("Département", "Department")}</span>
+              <input className="w-full" value={form.department} onChange={(event) => setForm((current) => ({ ...current, department: event.target.value }))} placeholder={L("Académique", "Academic")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Poste</span>
-              <input className="w-full" value={form.jobTitle} onChange={(event) => setForm((current) => ({ ...current, jobTitle: event.target.value }))} placeholder="Teacher" />
+              <span className="text-sm font-medium text-white">{L("Poste", "Position")}</span>
+              <input className="w-full" value={form.jobTitle} onChange={(event) => setForm((current) => ({ ...current, jobTitle: event.target.value }))} placeholder={L("Enseignant", "Teacher")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Matière ou spécialité</span>
-              <input className="w-full" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} placeholder="Mathématiques" />
+              <span className="text-sm font-medium text-white">{L("Matière ou spécialité", "Subject or specialty")}</span>
+              <input className="w-full" value={form.subject} onChange={(event) => setForm((current) => ({ ...current, subject: event.target.value }))} placeholder={L("Mathématiques", "Mathematics")} />
             </label>
             <label className="space-y-2">
-              <span className="text-sm font-medium text-white">Code d'accès</span>
-              <input className="w-full" value={form.accessCode} onChange={(event) => setForm((current) => ({ ...current, accessCode: event.target.value }))} placeholder="ACC-TCH-..." />
+              <span className="text-sm font-medium text-white">{L("Code d'accès", "Access code")}</span>
+              <input className="w-full" value={form.accessCode} onChange={(event) => setForm((current) => ({ ...current, accessCode: event.target.value }))} placeholder={L("ACC-TCH-...", "ACC-TCH-...")} />
             </label>
             <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 md:col-span-2">
               <input type="checkbox" checked={form.mustChangePassword} onChange={(event) => setForm((current) => ({ ...current, mustChangePassword: event.target.checked }))} />
-              <span className="text-sm text-white">Exiger un changement de mot de passe à la prochaine connexion</span>
+              <span className="text-sm text-white">{L("Exiger un changement de mot de passe à la prochaine connexion", "Require a password change at the next sign-in")}</span>
             </label>
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button onClick={closeEditModal} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-ink-dim transition hover:text-white">
-              Annuler
+              {L("Annuler", "Cancel")}
             </button>
             <button
               onClick={() => void handleSaveEmployee()}
@@ -1489,13 +1495,13 @@ export function EmployeesPage() {
       ) : null}
 
       {deleteTarget ? (
-        <ModalShell title="Supprimer cet employé" subtitle="Cette action retire l'employé du registre partagé pour l'application." onClose={() => setDeleteTarget(null)}>
+        <ModalShell title={L("Supprimer cet employé", "Delete this employee")} subtitle={L("Cette action retire l'employé du registre partagé pour l'application.", "This action removes the employee from the application's shared registry.")} onClose={() => setDeleteTarget(null)}>
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
-            Vous êtes sur le point de supprimer <span className="font-semibold text-white">{deleteTarget.fullName}</span>. Cette opération est irréversible.
+            {L("Vous êtes sur le point de supprimer", "You are about to delete")} <span className="font-semibold text-white">{deleteTarget.fullName}</span>. {L("Cette opération est irréversible.", "This operation cannot be undone.")}
           </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button onClick={() => setDeleteTarget(null)} className="rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-ink-dim transition hover:text-white">
-              Annuler
+              {L("Annuler", "Cancel")}
             </button>
             <button
               onClick={() => void handleDeleteEmployee()}

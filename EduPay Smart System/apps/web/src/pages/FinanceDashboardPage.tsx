@@ -327,12 +327,14 @@ function FinanceErpDialog({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { lang } = useI18n();
+  const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   return (
     <div className="edupay-finance-erp-dialog fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/82 px-3 py-4 backdrop-blur-md sm:px-6 sm:py-8">
       <div className="edupay-finance-erp-modal w-full max-w-[min(98vw,112rem)] rounded-2xl border border-brand-300/15 bg-slate-950/96 p-6 shadow-2xl sm:min-h-[82vh] sm:p-8">
         <div className="flex flex-col gap-4 border-b border-white/10 pb-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">Tableau financier EduPay</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">{L("Tableau financier EduPay", "EduPay finance dashboard")}</p>
             <h2 className="mt-2 font-display text-2xl font-bold text-white sm:text-3xl">{title}</h2>
             <p className="mt-2 text-sm text-ink-dim">{subtitle}</p>
           </div>
@@ -340,7 +342,7 @@ function FinanceErpDialog({
             type="button"
             onClick={onClose}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-ink-dim transition hover:border-brand-300/30 hover:text-white"
-            aria-label="Fermer"
+            aria-label={L("Fermer", "Close")}
           >
             <X className="h-5 w-5" />
           </button>
@@ -1393,14 +1395,14 @@ export function FinanceDashboardPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 backdrop-blur-sm">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Période active</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Période active", "Active period")}</p>
               <p className="mt-1 font-display text-2xl font-bold text-white">{revenueOverview.academicYear.name}</p>
-              <p className="mt-1 text-xs text-cyan-100">Mise à jour {new Date().toLocaleDateString(locale)}</p>
+              <p className="mt-1 text-xs text-cyan-100">{L("Mise à jour", "Updated")} {new Date().toLocaleDateString(locale)}</p>
             </div>
             <div className="rounded-2xl border border-brand-500/25 bg-brand-500/10 px-4 py-3 backdrop-blur-sm">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Santé opérationnelle</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Santé opérationnelle", "Operational health")}</p>
               <p className="mt-1 font-display text-2xl font-bold text-white">{money.format(expenseOverview.cashflow.operationalBalance)}</p>
-              <p className="mt-1 text-xs text-brand-100">Cash disponible après dépenses et paie</p>
+              <p className="mt-1 text-xs text-brand-100">{L("Cash disponible après dépenses et paie", "Cash available after expenses and payroll")}</p>
             </div>
           </div>
         </div>
@@ -1455,10 +1457,10 @@ export function FinanceDashboardPage() {
         <div className="glass min-w-0 border border-white/10 p-4 shadow-lg sm:p-5">
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">Indice scientifique</p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-white">Santé financière de l'école</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">{L("Indice scientifique", "Scientific index")}</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Santé financière de l'école", "School financial health")}</h2>
               <p className="mt-2 text-sm text-ink-dim">
-                Score composite sur revenus, dettes, cash, passifs, alertes et comportement parent.
+                {L("Score composite sur revenus, dettes, cash, passifs, alertes et comportement parent.", "Composite score based on revenue, debt, cash, liabilities, alerts and parent payment behavior.")}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap justify-end gap-2">
@@ -1474,7 +1476,7 @@ export function FinanceDashboardPage() {
           <div className="mt-5 grid gap-4 sm:grid-cols-[150px_1fr]">
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-center">
               <p className={`font-display text-4xl font-bold ${healthTone}`}>{healthScore.toFixed(1)}</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-ink-dim">sur 100</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-ink-dim">{L("sur 100", "out of 100")}</p>
               <p className="mt-3 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">{healthLabel}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1489,11 +1491,11 @@ export function FinanceDashboardPage() {
         <div className="glass min-w-0 border border-white/10 p-4 shadow-lg sm:p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">Modules de pilotage</p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-white">Ouvrir une analyse ciblee</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-200">{L("Modules de pilotage", "Management modules")}</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-white">{L("Ouvrir une analyse ciblée", "Open a targeted analysis")}</h2>
             </div>
             <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100">
-              Dashboard principal
+              {L("Dashboard principal", "Main dashboard")}
             </span>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1533,9 +1535,9 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-brand-500/10 shadow-lg">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Command center financier</h2>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Centre de commandement financier", "Finance command center")}</h2>
               <p className="mt-1 text-sm text-ink-dim">
-                Vue instantanee des revenus, sorties de cash, dettes institutionnelles et alertes budgetaires.
+                {L("Vue instantanee des revenus, sorties de cash, dettes institutionnelles et alertes budgetaires.", "Instant overview of revenue, cash outflows, institutional debt and budget alerts.")}
               </p>
             </div>
             <BarChart3 className="h-6 w-6 text-brand-200" />
@@ -1557,19 +1559,19 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-5 grid gap-3 lg:grid-cols-3">
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Recettes</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Recettes", "Revenue")}</p>
               <p className="mt-2 text-2xl font-bold text-white">{money.format(revenueOverview.expectedRevenue)}</p>
-              <p className="mt-1 text-sm text-emerald-100">Attendu annuel net avec réductions et accords.</p>
+              <p className="mt-1 text-sm text-emerald-100">{L("Attendu annuel net avec réductions et accords.", "Net annual forecast including discounts and agreements.")}</p>
             </div>
             <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dépenses</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Dépenses", "Expenses")}</p>
               <p className="mt-2 text-2xl font-bold text-white">{money.format(expenseOverview.expenses.totalExpenses)}</p>
-              <p className="mt-1 text-sm text-red-100">Opérations, achats, maintenance et paie inclus.</p>
+              <p className="mt-1 text-sm text-red-100">{L("Opérations, achats, maintenance et paie inclus.", "Includes operations, purchases, maintenance and payroll.")}</p>
             </div>
             <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Cash disponible</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Cash disponible", "Available cash")}</p>
               <p className="mt-2 text-2xl font-bold text-white">{money.format(expenseOverview.cashflow.availableCash)}</p>
-              <p className="mt-1 text-sm text-brand-100">Solde opérationnel mobilisable en temps réel.</p>
+              <p className="mt-1 text-sm text-brand-100">{L("Solde opérationnel mobilisable en temps réel.", "Operational balance available in real time.")}</p>
             </div>
           </div>
         </div>
@@ -1577,8 +1579,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Workflow d'approbation</h2>
-              <p className="mt-1 text-sm text-ink-dim">Validation, approbation administrative et arbitrage propriétaire si nécessaire.</p>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Circuit d'approbation", "Approval workflow")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Validation, approbation administrative et arbitrage propriétaire si nécessaire.", "Validation, administrative approval and owner arbitration when required.")}</p>
             </div>
             <CheckCircle2 className="h-6 w-6 text-emerald-300" />
           </div>
@@ -1601,11 +1603,11 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Dépenses en attente</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Dépenses en attente", "Pending expenses")}</p>
               <p className="mt-2 text-2xl font-bold text-white">{expenseOverview.expenses.pendingExpenses}</p>
             </div>
             <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Étapes à traiter</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Étapes à traiter", "Steps to process")}</p>
               <p className="mt-2 text-2xl font-bold text-white">{expenseOverview.expenses.pendingApprovalSteps}</p>
             </div>
           </div>
@@ -1616,8 +1618,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Cashflow et performance mensuelle</h2>
-              <p className="mt-1 text-sm text-ink-dim">Comparaison recettes vs dépenses pour lire la marge opérationnelle de l'institution.</p>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Trésorerie et performance mensuelle", "Cash flow and monthly performance")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Comparaison recettes et dépenses pour lire la marge opérationnelle de l'institution.", "Revenue versus expense comparison showing the institution's operating margin.")}</p>
             </div>
             <CalendarClock className="h-6 w-6 text-brand-200" />
           </div>
@@ -1638,15 +1640,15 @@ export function FinanceDashboardPage() {
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Revenus comptabilisés</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Revenus comptabilisés", "Recorded revenue")}</p>
               <p className="mt-2 text-xl font-bold text-emerald-300">{money.format(expenseOverview.revenue.totalRevenue)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Charges engagées</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Charges engagées", "Committed expenses")}</p>
               <p className="mt-2 text-xl font-bold text-red-300">{money.format(expenseOverview.expenses.totalExpenses)}</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Profit / perte</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Bénéfice / perte", "Profit / loss")}</p>
               <p className={`mt-2 text-xl font-bold ${expenseOverview.cashflow.profitLoss >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                 {money.format(expenseOverview.cashflow.profitLoss)}
               </p>
@@ -1657,8 +1659,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Analyse des dépenses</h2>
-              <p className="mt-1 text-sm text-ink-dim">Postes dominants et ventilation par catégorie pour détecter les poches de consommation.</p>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Analyse des dépenses", "Expense analysis")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Postes dominants et ventilation par catégorie pour détecter les pôles de consommation.", "Leading items and category breakdown to identify spending concentrations.")}</p>
             </div>
             <AlertTriangle className="h-6 w-6 text-amber-300" />
           </div>
@@ -1696,8 +1698,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Budgets et alertes de consommation</h2>
-              <p className="mt-1 text-sm text-ink-dim">Suivi planned vs actual, seuils critiques et depassements par departement.</p>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Budgets et alertes de consommation", "Budgets and spending alerts")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Suivi prévu/réel, seuils critiques et dépassements par département.", "Planned versus actual tracking, critical thresholds and departmental overruns.")}</p>
             </div>
             <CirclePercent className="h-6 w-6 text-cyan-300" />
           </div>
@@ -1715,22 +1717,22 @@ export function FinanceDashboardPage() {
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3 text-sm">
                   <div>
-                    <p className="text-ink-dim">Prevu</p>
+                    <p className="text-ink-dim">{L("Prévu", "Planned")}</p>
                     <p className="font-semibold text-white">{money.format(budget.plannedAmount)}</p>
                   </div>
                   <div>
-                    <p className="text-ink-dim">Consomme</p>
+                    <p className="text-ink-dim">{L("Consommé", "Spent")}</p>
                     <p className="font-semibold text-amber-200">{money.format(budget.consumedAmount)}</p>
                   </div>
                   <div>
-                    <p className="text-ink-dim">Reste</p>
+                    <p className="text-ink-dim">{L("Reste", "Remaining")}</p>
                     <p className="font-semibold text-emerald-300">{money.format(budget.remainingAmount)}</p>
                   </div>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
                   <div className={`h-full rounded-full ${budget.utilization >= 100 ? "bg-gradient-to-r from-red-500 to-orange-400" : "bg-gradient-to-r from-brand-500 to-cyan-400"}`} style={{ width: barWidth(budget.utilization) }} />
                 </div>
-                <p className="mt-2 text-xs text-ink-dim">Utilisation: {formatPercent(budget.utilization)}</p>
+                <p className="mt-2 text-xs text-ink-dim">{L("Utilisation", "Utilization")}: {formatPercent(budget.utilization)}</p>
               </div>
             ))}
           </div>
@@ -1740,22 +1742,22 @@ export function FinanceDashboardPage() {
           <div className="card glass border border-white/10 shadow-lg">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-2xl font-bold text-white">Paie et obligations RH</h2>
-                <p className="mt-1 text-sm text-ink-dim">Profils salariaux, historiques de run et engagements restant a payer.</p>
+                <h2 className="font-display text-2xl font-bold text-white">{L("Paie et obligations RH", "Payroll and HR obligations")}</h2>
+                <p className="mt-1 text-sm text-ink-dim">{L("Profils salariaux, historiques de paie et engagements restant à payer.", "Salary profiles, payroll run history and outstanding commitments.")}</p>
               </div>
               <TrendingUp className="h-6 w-6 text-brand-100" />
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Profils</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Profils", "Profiles")}</p>
                 <p className="mt-2 text-xl font-bold text-white">{expenseOverview.payroll.activeProfiles}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Runs</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Cycles", "Runs")}</p>
                 <p className="mt-2 text-xl font-bold text-white">{expenseOverview.payroll.runCount}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Passif salarial</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Passif salarial", "Payroll liabilities")}</p>
                 <p className="mt-2 text-xl font-bold text-cyan-300">{money.format(expenseOverview.payroll.salaryLiability)}</p>
               </div>
             </div>
@@ -1772,7 +1774,7 @@ export function FinanceDashboardPage() {
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="text-ink-dim">Net a payer</span>
+                    <span className="text-ink-dim">{L("Net à payer", "Net payable")}</span>
                     <span className="font-mono font-bold text-white">{money.format(run.totalNet)}</span>
                   </div>
                 </div>
@@ -1783,8 +1785,8 @@ export function FinanceDashboardPage() {
           <div className="card glass border border-white/10 shadow-lg">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-display text-2xl font-bold text-white">Dépenses recentes</h2>
-                <p className="mt-1 text-sm text-ink-dim">Pieces a valider, achats traces et statut d'execution comptable.</p>
+                <h2 className="font-display text-2xl font-bold text-white">{L("Dépenses récentes", "Recent expenses")}</h2>
+                <p className="mt-1 text-sm text-ink-dim">{L("Pièces à valider, achats tracés et statut d'exécution comptable.", "Documents to validate, tracked purchases and accounting execution status.")}</p>
               </div>
               <AlertTriangle className="h-6 w-6 text-amber-300" />
             </div>
@@ -1801,7 +1803,7 @@ export function FinanceDashboardPage() {
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="text-ink-dim">Montant</span>
+                    <span className="text-ink-dim">{L("Montant", "Amount")}</span>
                     <span className="font-mono font-bold text-white">{money.format(expense.amount)}</span>
                   </div>
                 </div>
@@ -1815,8 +1817,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-brand-500/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Intelligence revenus et dettes parents</h2>
-              <p className="mt-1 text-sm text-ink-dim">Le moteur tuition existant reste intact et s'etend maintenant a la lecture globale de sante financiere.</p>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Analyse des revenus et dettes des parents", "Parent revenue and debt intelligence")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Le moteur de scolarité reste intact et s'étend à la lecture globale de la santé financière.", "The existing tuition engine remains intact and now extends to an overall financial-health view.")}</p>
             </div>
             <ShieldAlert className="h-6 w-6 text-red-300" />
           </div>
@@ -1826,7 +1828,7 @@ export function FinanceDashboardPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{row.parentName}</p>
-                    <p className="mt-1 text-xs text-ink-dim">{row.overdueInstallments} échéances en retard</p>
+                    <p className="mt-1 text-xs text-ink-dim">{row.overdueInstallments} {L("échéances en retard", "overdue installments")}</p>
                   </div>
                   <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-200">
                     {money.format(row.totalDebt)}
@@ -1834,15 +1836,15 @@ export function FinanceDashboardPage() {
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
                   <div>
-                    <p className="text-ink-dim">Paye</p>
+                    <p className="text-ink-dim">{L("Payé", "Paid")}</p>
                     <p className="font-semibold text-emerald-300">{money.format(row.totalPaid)}</p>
                   </div>
                   <div>
-                    <p className="text-ink-dim">Report historique</p>
+                    <p className="text-ink-dim">{L("Report historique", "Historical carry-over")}</p>
                     <p className="font-semibold text-amber-300">{money.format(row.carriedOverDebt)}</p>
                   </div>
                   <div>
-                    <p className="text-ink-dim">Score comportemental</p>
+                    <p className="text-ink-dim">{L("Score comportemental", "Behavior score")}</p>
                     <p className="font-semibold text-cyan-300">{formatPercent(row.paymentBehaviorScore)}</p>
                   </div>
                 </div>
@@ -1854,8 +1856,8 @@ export function FinanceDashboardPage() {
         <div className="card glass border border-white/10 shadow-lg">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Analytique scolaire et réductions</h2>
-              <p className="mt-1 text-sm text-ink-dim">Encaissement par classe, charge de reduction et pression dette par segment academique.</p>
+              <h2 className="font-display text-2xl font-bold text-white">{L("Analyse scolaire et réductions", "School analytics and discounts")}</h2>
+              <p className="mt-1 text-sm text-ink-dim">{L("Encaissement par classe, charge des réductions et pression de la dette par segment académique.", "Collections by class, discount burden and debt pressure by academic segment.")}</p>
             </div>
             <HandCoins className="h-6 w-6 text-cyan-300" />
           </div>
@@ -1865,7 +1867,7 @@ export function FinanceDashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{row.className}</p>
-                    <p className="text-xs text-ink-dim">{row.students} élèves suivis</p>
+                    <p className="text-xs text-ink-dim">{row.students} {L("élèves suivis", "students tracked")}</p>
                   </div>
                   <p className="font-mono font-bold text-emerald-300">{money.format(row.collected)}</p>
                 </div>
@@ -1874,15 +1876,15 @@ export function FinanceDashboardPage() {
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
                   <div>
-                    <p className="text-ink-dim">Couverture</p>
+                    <p className="text-ink-dim">{L("Couverture", "Coverage")}</p>
                     <p className="font-semibold text-white">{formatPercent(row.collectionRate)}</p>
                   </div>
                   <div>
-                    <p className="text-ink-dim">Dette</p>
+                    <p className="text-ink-dim">{L("Dette", "Debt")}</p>
                     <p className="font-semibold text-red-300">{money.format(row.debt)}</p>
                   </div>
                   <div>
-                    <p className="text-ink-dim">Reductions</p>
+                    <p className="text-ink-dim">{L("Réductions", "Discounts")}</p>
                     <p className="font-semibold text-cyan-300">{money.format(row.réductions)}</p>
                   </div>
                 </div>
@@ -1890,9 +1892,9 @@ export function FinanceDashboardPage() {
             ))}
           </div>
           <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">Période d'analyse réductions</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-ink-dim">{L("Période d'analyse des réductions", "Discount analysis period")}</p>
             <p className="mt-2 font-display text-2xl font-bold text-white">{revenueOverview.reductionStatistics.periodLabel}</p>
-            <p className="mt-1 text-sm text-cyan-100">{revenueOverview.reductionStatistics.reductionCount} reduction(s) tracee(s) pour {money.format(revenueOverview.reductionStatistics.totalReductions)}.</p>
+            <p className="mt-1 text-sm text-cyan-100">{revenueOverview.reductionStatistics.reductionCount} {L("réduction(s) tracée(s) pour", "discount(s) tracked for")} {money.format(revenueOverview.reductionStatistics.totalReductions)}.</p>
           </div>
         </div>
       </section>
@@ -1900,32 +1902,32 @@ export function FinanceDashboardPage() {
       <section className="hidden card glass border border-brand-500/10 shadow-lg">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="font-display text-2xl font-bold text-white">Cadre officiel de facturation parentale</h2>
+            <h2 className="font-display text-2xl font-bold text-white">{L("Cadre officiel de facturation parentale", "Official parent billing framework")}</h2>
             <p className="mt-1 text-sm text-ink-dim">
-              Le referentiel KCS reste une logique metier interne qui structure automatiquement la facturation des parents lors des inscriptions, reinscriptions et suivis multi-enfants.
+              {L("Le referentiel KCS reste une logique metier interne qui structure automatiquement la facturation des parents lors des inscriptions, reinscriptions et suivis multi-enfants.", "The KCS framework remains an internal business rule that automatically structures parent billing for enrollment, re-enrollment and multi-child tracking.")}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-ink-dim">
-            Le dashboard ERP n'expose pas les cas d'inscription en detail; il consolide seulement leurs effets sur les encaissements, ajustements, réductions et échéances.
+            {L("Le dashboard ERP n'expose pas les cas d'inscription en detail; il consolide seulement leurs effets sur les encaissements, ajustements, réductions et échéances.", "The ERP dashboard does not expose individual enrollment cases; it only consolidates their effects on collections, adjustments, discounts and installments.")}
           </div>
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-brand-300">Role du referentiel</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-brand-300">{L("Rôle du référentiel", "Role of the framework")}</p>
             <p className="mt-3 text-sm text-ink-dim">
-              Il alimente les calculs de tuition, réductions, échéances et reports sans surcharger l'interface opérationnelle.
+              {L("Il alimente les calculs de tuition, réductions, échéances et reports sans surcharger l'interface opérationnelle.", "It powers tuition, discount, installment and carry-over calculations without overloading the operational interface.")}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-brand-300">Portee parentale</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-brand-300">{L("Portée parentale", "Parent scope")}</p>
             <p className="mt-3 text-sm text-ink-dim">
-              La logique couvre les foyers avec un ou plusieurs enfants, puis consolide automatiquement les obligations de paiement au niveau parent.
+              {L("La logique couvre les foyers avec un ou plusieurs enfants, puis consolide automatiquement les obligations de paiement au niveau parent.", "The logic covers households with one or more children and automatically consolidates payment obligations at parent level.")}
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-brand-300">Vision ERP</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-brand-300">{L("Vision ERP", "ERP vision")}</p>
             <p className="mt-3 text-sm text-ink-dim">
-              Le cockpit conserve une vue de pilotage: dettes, encaissements, réductions et impacts sur la trésorerie, sans exposer la mécanique d'inscription.
+              {L("Le cockpit conserve une vue de pilotage: dettes, encaissements, réductions et impacts sur la trésorerie, sans exposer la mécanique d'inscription.", "The cockpit retains a management view of debts, collections, discounts and cash-flow impacts without exposing enrollment mechanics.")}
             </p>
           </div>
         </div>
@@ -1937,36 +1939,34 @@ export function FinanceDashboardPage() {
             <div className="mb-4 rounded-2xl border border-cyan-300/20 bg-slate-950/45 p-4">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                 <label className="min-w-0 flex-1 space-y-1.5">
-                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Recherche du module</span>
+                  <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">{L("Recherche du module", "Module search")}</span>
                   <input
                     value={financeModuleSearch}
                     onChange={(event) => setFinanceModuleSearch(event.target.value)}
-                    placeholder="Rechercher par parent, classe, budget, departement, statut, montant ou indicateur"
+                    placeholder={L("Rechercher par parent, classe, budget, département, statut, montant ou indicateur", "Search by parent, class, budget, department, status, amount or indicator")}
                     className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40"
                   />
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => printFinanceModuleReport(activeModule)} className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
-                    <Printer className="h-4 w-4" /> PDF / Imprimer
+                    <Printer className="h-4 w-4" /> {L("PDF / Imprimer", "PDF / Print")}
                   </button>
                   <button type="button" onClick={() => exportFinanceModuleExcel(activeModule)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/25 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/15">
                     <FileSpreadsheet className="h-4 w-4" /> Excel
                   </button>
                 </div>
               </div>
-              <p className="mt-3 text-xs text-ink-dim">{activeFinanceModuleRows.length} ligne(s) retenue(s) pour le rapport.</p>
+              <p className="mt-3 text-xs text-ink-dim">{activeFinanceModuleRows.length} {L("ligne(s) retenue(s) pour le rapport.", "line(s) selected for the report.")}</p>
             </div>
           )}
           {activeModule === "health" && (
             <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-5">
-                <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">Diagnostic global</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-ink-dim">{L("Diagnostic global", "Overall assessment")}</p>
                 <p className={`mt-3 font-display text-5xl font-bold ${healthTone}`}>{healthScore.toFixed(1)}</p>
                 <p className="mt-2 text-lg font-semibold text-white">{healthLabel}</p>
                 <p className="mt-3 text-sm leading-relaxed text-ink-dim">
-                  L'indice combine la performance de recouvrement, l'exposition aux dettes, la pression budgetaire, les alertes,
-                  la liquidite et le comportement de paiement des parents. Il donne une lecture rapide de la capacite de l'ecole
-                  a financer ses opérations sans tension excessive.
+                  {L("L'indice combine la performance de recouvrement, l'exposition aux dettes, la pression budgétaire, les alertes, la liquidité et le comportement de paiement des parents. Il donne une lecture rapide de la capacité de l'école à financer ses opérations sans tension excessive.", "The index combines collection performance, debt exposure, budget pressure, alerts, liquidity and parent payment behavior. It provides a quick view of the school's ability to fund operations without excessive strain.")}
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -2012,14 +2012,14 @@ export function FinanceDashboardPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{row.parentName}</p>
-                        <p className="text-xs text-ink-dim">{row.overdueInstallments} échéance(s) en retard · score {formatPercent(row.paymentBehaviorScore)}</p>
+                        <p className="text-xs text-ink-dim">{row.overdueInstallments} {L("échéance(s) en retard · score", "overdue installment(s) · score")} {formatPercent(row.paymentBehaviorScore)}</p>
                       </div>
                       <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-200">{money.format(row.totalDebt)}</span>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
-                      <span className="text-emerald-300">Paye: {money.format(row.totalPaid)}</span>
-                      <span className="text-amber-300">Historique: {money.format(row.carriedOverDebt)}</span>
-                      <span className="text-cyan-300">Dette: {money.format(row.totalDebt)}</span>
+                      <span className="text-emerald-300">{L("Payé", "Paid")}: {money.format(row.totalPaid)}</span>
+                      <span className="text-amber-300">{L("Historique", "Historical")}: {money.format(row.carriedOverDebt)}</span>
+                      <span className="text-cyan-300">{L("Dette", "Debt")}: {money.format(row.totalDebt)}</span>
                     </div>
                   </div>
                 ))}
@@ -2030,7 +2030,7 @@ export function FinanceDashboardPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold text-white">{row.className}</p>
-                        <p className="text-xs text-ink-dim">{row.students} élèves · attendu {money.format(row.expected)}</p>
+                        <p className="text-xs text-ink-dim">{row.students} {L("élèves · attendu", "students · expected")} {money.format(row.expected)}</p>
                       </div>
                       <p className="font-mono text-sm font-bold text-emerald-300">{formatPercent(row.collectionRate)}</p>
                     </div>
@@ -2049,34 +2049,34 @@ export function FinanceDashboardPage() {
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                   <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                     <label className="space-y-1.5">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Recherche ciblée</span>
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">{L("Recherche ciblée", "Targeted search")}</span>
                       <input
                         value={scholarshipSearch}
                         onChange={(event) => setScholarshipSearch(event.target.value)}
-                        placeholder="Famille, élève, bourse, source..."
+                        placeholder={L("Famille, élève, bourse, source...", "Family, student, scholarship, source...")}
                         className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40"
                       />
                     </label>
                     <label className="space-y-1.5">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Scope</span>
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">{L("Portée", "Scope")}</span>
                       <select value={scholarshipScopeFilter} onChange={(event) => setScholarshipScopeFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40">
-                        <option value="ALL">Tous les scopes</option>
+                        <option value="ALL">{L("Toutes les portées", "All scopes")}</option>
                         {scholarshipScopeOptions.map((scope) => <option key={scope} value={scope}>{formatCodeLabel(scope)}</option>)}
                       </select>
                     </label>
                     <label className="space-y-1.5">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Origine</span>
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">{L("Origine", "Source")}</span>
                       <select value={scholarshipOriginFilter} onChange={(event) => setScholarshipOriginFilter(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40">
-                        <option value="ALL">Toutes les origines</option>
+                        <option value="ALL">{L("Toutes les origines", "All sources")}</option>
                         {scholarshipOriginOptions.map((origin) => <option key={origin} value={origin}>{origin}</option>)}
                       </select>
                     </label>
                     <label className="space-y-1.5">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Date min</span>
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">{L("Date minimale", "Minimum date")}</span>
                       <DateSelect value={scholarshipDateFrom} onChange={(event) => setScholarshipDateFrom(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40" />
                     </label>
                     <label className="space-y-1.5">
-                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">Date max</span>
+                      <span className="text-xs font-bold uppercase tracking-[0.14em] text-cyan-100">{L("Date maximale", "Maximum date")}</span>
                       <DateSelect value={scholarshipDateTo} onChange={(event) => setScholarshipDateTo(event.target.value)} className="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/40" />
                     </label>
                   </div>
@@ -2091,7 +2091,7 @@ export function FinanceDashboardPage() {
                       }))}
                       className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
                     >
-                      <Printer className="h-4 w-4" /> PDF / Imprimer
+                      <Printer className="h-4 w-4" /> {L("PDF / Imprimer", "PDF / Print")}
                     </button>
                     <button
                       type="button"
@@ -2103,8 +2103,8 @@ export function FinanceDashboardPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-dim">
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{filteredScholarshipRows.length} ligne(s) visibles</span>
-                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">Montant visible: {money.format(filteredScholarshipTotal)}</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{filteredScholarshipRows.length} {L("ligne(s) visibles", "visible line(s)")}</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1">{L("Montant visible", "Visible amount")}: {money.format(filteredScholarshipTotal)}</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -2116,7 +2116,7 @@ export function FinanceDashboardPage() {
                     }}
                     className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-semibold text-white transition hover:bg-white/[0.08]"
                   >
-                    Réinitialiser les filtres
+                    {L("Réinitialiser les filtres", "Reset filters")}
                   </button>
                 </div>
               </div>
@@ -2130,7 +2130,7 @@ export function FinanceDashboardPage() {
 
               <div className="grid gap-3 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-100">Provenance par type</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-100">{L("Provenance par type", "Source by type")}</p>
                   <div className="mt-4 space-y-3">
                     {filteredReductionsByOrigin.map((entry) => (
                       <div key={entry.origin}>
@@ -2143,12 +2143,12 @@ export function FinanceDashboardPage() {
                         </div>
                       </div>
                     ))}
-                    {filteredReductionsByOrigin.length === 0 ? <p className="text-sm text-ink-dim">Aucune provenance disponible pour ce filtre.</p> : null}
+                    {filteredReductionsByOrigin.length === 0 ? <p className="text-sm text-ink-dim">{L("Aucune provenance disponible pour ce filtre.", "No source available for this filter.")}</p> : null}
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-100">Ventilation comptable</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-100">{L("Ventilation comptable", "Accounting breakdown")}</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {filteredScholarshipsByScope.map((entry) => (
                       <div key={entry.scope} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
@@ -2156,7 +2156,7 @@ export function FinanceDashboardPage() {
                         <p className="mt-2 font-mono text-sm font-bold text-white">{money.format(entry.amount)}</p>
                       </div>
                     ))}
-                    {filteredScholarshipsByScope.length === 0 ? <p className="text-sm text-ink-dim sm:col-span-2">Aucune ventilation disponible pour ce filtre.</p> : null}
+                    {filteredScholarshipsByScope.length === 0 ? <p className="text-sm text-ink-dim sm:col-span-2">{L("Aucune ventilation disponible pour ce filtre.", "No breakdown available for this filter.")}</p> : null}
                   </div>
                 </div>
               </div>
@@ -2177,11 +2177,11 @@ export function FinanceDashboardPage() {
                           {row.parentName || L("Parent non precise", "Parent not specified")} · {row.studentName || L("Compte parent", "Parent account")}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-ink-dim">
-                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">Scope: {formatCodeLabel(row.scope)}</span>
-                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">Plan: {formatCodeLabel(row.paymentOptionType)}</span>
-                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">Niveau: {formatCodeLabel(row.gradeGroup)}</span>
-                          {row.percentage ? <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">Taux: {formatPercent(row.percentage)}</span> : null}
-                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">Poids: {formatPercent((Number(row.amount || 0) / Math.max(filteredScholarshipTotal, 1)) * 100)}</span>
+                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">{L("Portée", "Scope")}: {formatCodeLabel(row.scope)}</span>
+                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">{L("Plan", "Plan")}: {formatCodeLabel(row.paymentOptionType)}</span>
+                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">{L("Niveau", "Grade")}: {formatCodeLabel(row.gradeGroup)}</span>
+                          {row.percentage ? <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">{L("Taux", "Rate")}: {formatPercent(row.percentage)}</span> : null}
+                          <span className="rounded-full border border-white/10 bg-slate-950/45 px-2.5 py-1">{L("Poids", "Weight")}: {formatPercent((Number(row.amount || 0) / Math.max(filteredScholarshipTotal, 1)) * 100)}</span>
                         </div>
                         {row.effectiveDate ? <p className="mt-1 text-xs text-cyan-100">{new Date(row.effectiveDate).toLocaleDateString(locale)}</p> : null}
                       </div>
@@ -2235,10 +2235,10 @@ export function FinanceDashboardPage() {
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${budgetStatusTone[budget.status] ?? budgetStatusTone.ACTIVE}`}>{budget.status}</span>
                   </div>
                   <div className="mt-3 grid gap-3 sm:grid-cols-4 text-sm">
-                    <span className="text-ink-dim">Prevu: <b className="text-white">{money.format(budget.plannedAmount)}</b></span>
-                    <span className="text-ink-dim">Consomme: <b className="text-amber-200">{money.format(budget.consumedAmount)}</b></span>
-                    <span className="text-ink-dim">Reste: <b className="text-emerald-300">{money.format(budget.remainingAmount)}</b></span>
-                    <span className="text-ink-dim">Utilisation: <b className="text-cyan-200">{formatPercent(budget.utilization)}</b></span>
+                    <span className="text-ink-dim">{L("Prévu", "Planned")}: <b className="text-white">{money.format(budget.plannedAmount)}</b></span>
+                    <span className="text-ink-dim">{L("Consommé", "Spent")}: <b className="text-amber-200">{money.format(budget.consumedAmount)}</b></span>
+                    <span className="text-ink-dim">{L("Reste", "Remaining")}: <b className="text-emerald-300">{money.format(budget.remainingAmount)}</b></span>
+                    <span className="text-ink-dim">{L("Utilisation", "Utilization")}: <b className="text-cyan-200">{formatPercent(budget.utilization)}</b></span>
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
                     <div className={`h-full rounded-full ${budget.utilization >= 100 ? "bg-gradient-to-r from-red-500 to-orange-400" : "bg-gradient-to-r from-brand-500 to-cyan-400"}`} style={{ width: barWidth(budget.utilization) }} />
