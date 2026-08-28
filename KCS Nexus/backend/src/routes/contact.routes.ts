@@ -4,6 +4,8 @@ import { prisma } from '../config/prisma.js'
 import { asyncHandler, success } from '../utils/api.js'
 import { sendSchoolMail } from '../utils/mail.js'
 
+const OFFICIAL_SCHOOL_EMAIL = 'kinshasachristianschool@gmail.com'
+
 const contactSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
@@ -28,7 +30,18 @@ contactRouter.post('/', asyncHandler(async (req, res) => {
     '',
     payload.message,
   ]
+  await prisma.notification.createMany({
+    data: (await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } })).map((admin) => ({
+      userId: admin.id,
+      title: 'Nouveau message de contact : ' + payload.subject,
+      message: [payload.name, payload.email, payload.phone || 'Telephone non renseigne'].join(' · '),
+      type: 'MESSAGE' as const,
+      link: '/admin/messages',
+    })),
+  }).catch((error) => console.error('[contact] Message saved, but SuperAdmin notification failed:', error))
+
   const mailResult = await sendSchoolMail({
+    to: OFFICIAL_SCHOOL_EMAIL,
     replyTo: payload.email,
     subject: `KCS contact message - ${payload.subject}`,
     text: safeLines.join('\n'),

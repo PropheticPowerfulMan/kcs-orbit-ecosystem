@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertCircle, Edit3, Eye, FileSpreadsheet, FileText, KeyRound, Printer, Trash2, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
-import { api } from "../services/api";
+import { api, getCachedApiResponse } from "../services/api";
 import { exportWorkbook } from "../utils/financeExcel";
 import { exportElementToPdf } from "../utils/pdfDocument";
 import { printHtmlDocument } from "../utils/printDocument";
@@ -1357,11 +1357,12 @@ function StudentDeleteModal({ student, deleting, onConfirm, onClose }: { student
 export function StudentsDirectoryPage() {
   const { lang } = useI18n();
   const L = (fr: string, en: string) => localize(lang, fr, en);
-  const [directory, setDirectory] = useState<SharedDirectoryResponse | null>(null);
+  const cachedDirectory = getCachedApiResponse<SharedDirectoryResponse>("/api/shared-directory");
+  const [directory, setDirectory] = useState<SharedDirectoryResponse | null>(() => cachedDirectory ? normalizeDirectoryForUi(cachedDirectory) : null);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedDirectory);
   const [apiError, setApiError] = useState<string | null>(null);
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
   const [creationNotice, setCreationNotice] = useState<string | null>(null);
@@ -1403,7 +1404,7 @@ export function StudentsDirectoryPage() {
   useEffect(() => {
     void load();
     const refresh = () => void load(true);
-    const timer = window.setInterval(refresh, 15000);
+    const timer = window.setInterval(refresh, 30000);
     window.addEventListener('focus', refresh);
     return () => {
       window.clearInterval(timer);

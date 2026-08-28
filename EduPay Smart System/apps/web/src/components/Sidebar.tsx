@@ -47,7 +47,7 @@ export function Sidebar() {
         { to: "/operations", label: t("navOperations"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> },
         { to: "/reports", label: t("navReports"), icon: <ChartColumnBig className="h-4 w-4" aria-hidden="true" /> },
         { to: "/payments", label: t("navPayments"), icon: <CreditCard className="h-4 w-4" aria-hidden="true" /> },
-        { to: "/bank-transfers", label: L("Verification virements", "Bank transfer review"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> },
+        { to: "/bank-transfers", label: L("Virements bancaires à vérifier", "Bank transfers to review"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> },
         { to: "/messages", label: t("navMessages"), icon: <MessageSquareText className="h-4 w-4" aria-hidden="true" /> },
         { to: "/parent-payments", label: t("navParentPayments"), icon: <UserRoundSearch className="h-4 w-4" aria-hidden="true" /> },
         { to: "/students", label: t("navStudents"), icon: <GraduationCap className="h-4 w-4" aria-hidden="true" /> },

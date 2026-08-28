@@ -5,7 +5,7 @@ import { useI18n } from "../i18n";
 import { SearchField } from "../components/SearchField";
 import DateSelect from "../components/DateSelect";
 import { schoolBranding } from "../config/branding";
-import { api } from "../services/api";
+import { api, getCachedApiResponse } from "../services/api";
 import { exportWorkbook } from "../utils/financeExcel";
 import { exportElementToPdf } from "../utils/pdfDocument";
 import { printHtmlDocument } from "../utils/printDocument";
@@ -2813,11 +2813,15 @@ function FormModal({ initial, classes, catalog, onSave, onClose, t }: {
 export function ParentsManagementPage() {
   const { t, lang } = useI18n();
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
-  const [parents, setParents] = useState<Parent[]>([]);
+  const cachedDirectory = getCachedApiResponse<SharedDirectoryResponse>("/api/shared-directory");
+  const cachedParents = cachedDirectory
+    ? normalizeSharedDirectoryForParents(cachedDirectory)
+    : (getCachedApiResponse<Parent[]>("/api/parents") ?? []).map(normalizeParentForUi);
+  const [parents, setParents] = useState<Parent[]>(() => sortParentsForUi(cachedParents));
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cachedParents.length === 0);
   const [apiError, setApiError] = useState<string | null>(null);
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
 
@@ -2883,7 +2887,7 @@ export function ParentsManagementPage() {
   useEffect(() => {
     void load();
     const refresh = () => void load(true);
-    const timer = window.setInterval(refresh, 3000);
+    const timer = window.setInterval(refresh, 30000);
     window.addEventListener('focus', refresh);
     return () => {
       window.clearInterval(timer);

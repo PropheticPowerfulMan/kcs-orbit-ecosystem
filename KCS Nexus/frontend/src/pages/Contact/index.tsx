@@ -127,12 +127,14 @@ const ContactPage = () => {
 
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-kcs dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 sm:rounded-3xl">
               <iframe
-                title="KCS Campus Map"
-                src="https://www.google.com/maps?q=Kinshasa%2C%20DR%20Congo&z=12&output=embed"
-                className="h-[240px] w-full sm:h-[340px]"
+                title="Localisation de Kinshasa Christian School"
+                src="https://www.google.com/maps?q=Avenue%20de%20la%20Republique%20Macampagne%20Ngaliema%20Kinshasa&z=16&output=embed"
+                className="h-[240px] w-full border-0 sm:h-[340px]"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
               />
+              <a href="https://www.google.com/maps/search/?api=1&query=Avenue%20de%20la%20Republique%20Macampagne%20Ngaliema%20Kinshasa" target="_blank" rel="noreferrer" className="block bg-kcs-blue-900 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-kcs-blue-800">Ouvrir l’itinéraire dans Google Maps</a>
             </div>
           </AnimSection>
 

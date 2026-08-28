@@ -31,7 +31,7 @@ const transporter = hasSmtpConfig
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character))
 
 const brandedEmailHtml = (subject: string, text: string, suppliedHtml?: string) => {
-  const content = suppliedHtml?.trim() || text.split(/\r?\n/).map((line) => line.trim() ? `<p style="margin:0 0 12px;line-height:1.65;color:#334155">${escapeHtml(line)}</p>` : '<div style="height:8px"></div>').join('')
+  const content = suppliedHtml?.trim() || text.split(/\r?\n/).map((line) => line.trim() ? `<p style="margin:0 0 16px;line-height:1.72;color:#334155">${escapeHtml(line)}</p>` : '<div style="height:12px;line-height:12px">&nbsp;</div>').join('')
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;background:#eef4fb;font-family:Arial,Helvetica,sans-serif;color:#0f172a"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef4fb;padding:28px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:26px;box-shadow:0 20px 55px rgba(8,38,76,.16)">

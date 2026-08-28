@@ -17,7 +17,7 @@ import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
-import { financeAPI, registryAPI, studentsAPI } from '@/services/api'
+import { admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -482,6 +482,29 @@ const readStoredRoster = () => {
 const saveAdmissions = (items: AdminAdmissionRequest[]) => {
   if (typeof window !== 'undefined') window.localStorage.setItem(ADMIN_ADMISSIONS_STORAGE_KEY, JSON.stringify(items))
 }
+
+const apiAdmissionToAdminRequest = (item: any): AdminAdmissionRequest => ({
+  id: String(item.id),
+  applicationNumber: String(item.applicationNumber),
+  studentName: [item.firstName, item.middleName, item.lastName].filter(Boolean).join(' '),
+  firstName: String(item.firstName || ''),
+  lastName: String(item.lastName || ''),
+  dateOfBirth: String(item.dateOfBirth || ''),
+  nationality: String(item.nationality || ''),
+  gradeApplying: String(item.gradeApplying || ''),
+  previousSchool: String(item.previousSchool || ''),
+  languages: '',
+  parentName: String(item.parentName || ''),
+  parentEmail: String(item.parentEmail || ''),
+  parentPhone: String(item.parentPhone || ''),
+  relationship: String(item.relationship || ''),
+  address: String(item.address || ''),
+  occupation: '',
+  notes: String(item.notes || ''),
+  documents: Array.isArray(item.documents) ? item.documents.map((document: any) => String(document.name || '')).filter(Boolean) : [],
+  status: item.status as AdminAdmissionRequest['status'],
+  submittedAt: String(item.submittedAt || ''),
+})
 
 const saveRoster = (items: AdminStudentRecord[]) => {
   if (typeof window !== 'undefined') window.localStorage.setItem(ADMIN_ROSTER_STORAGE_KEY, JSON.stringify(items))
@@ -1651,7 +1674,13 @@ const AdminSectionView = ({
     setShowCreateStudent((value) => !value)
   }
 
-  const updateAdmissionStatus = (application: AdminAdmissionRequest, status: AdminAdmissionRequest['status']) => {
+  const updateAdmissionStatus = async (application: AdminAdmissionRequest, status: AdminAdmissionRequest['status']) => {
+    try {
+      await admissionsAPI.updateStatus(application.id, status)
+    } catch (error: any) {
+      console.error(error?.response?.data?.message ?? 'Unable to update this admission in the central registry.')
+      return
+    }
     setAdmissionRequests((items) => {
       const next = items.map((item) => item.applicationNumber === application.applicationNumber ? { ...item, status } : item)
       saveAdmissions(next)
@@ -3109,6 +3138,17 @@ const AdminDashboard = () => {
     window.localStorage.removeItem(ADMIN_ROSTER_STORAGE_KEY)
     window.localStorage.removeItem(ADMIN_ADMISSIONS_STORAGE_KEY)
     setAdmissionRequests([])
+    void admissionsAPI.getAll()
+      .then((response) => {
+        const records = Array.isArray(response.data?.data) ? response.data.data : []
+        const applications = records.map(apiAdmissionToAdminRequest)
+        setAdmissionRequests(applications)
+        saveAdmissions(applications)
+      })
+      .catch((error: any) => {
+        setAdmissionRequests([])
+        setDashboardAction(error?.response?.data?.message ?? 'Unable to load online admissions from the central registry.')
+      })
     void getAdminRoster()
       .then((response) => {
         const records = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : []
