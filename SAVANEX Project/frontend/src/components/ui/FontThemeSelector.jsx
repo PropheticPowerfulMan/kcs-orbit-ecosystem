@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Type } from 'lucide-react';
 import {
   applyFontTheme,
@@ -10,6 +11,9 @@ import {
 const selectClass = 'rounded-xl border border-github-border bg-slate-900/50 px-3 py-2 text-xs font-semibold text-slate-200 outline-none transition hover:border-kcs-blue/50 focus:border-kcs-blue';
 
 const FontThemeSelector = () => {
+  const { i18n } = useTranslation();
+  const isFrench = (i18n.resolvedLanguage || i18n.language).startsWith('fr');
+  const L = (fr, en) => isFrench ? fr : en;
   const [fontTheme, setFontTheme] = useState(() => getStoredFontTheme());
 
   const activeTheme = useMemo(
@@ -40,7 +44,7 @@ const FontThemeSelector = () => {
     <label className="flex items-center gap-2 rounded-xl border border-github-border bg-slate-900/40 px-2.5 py-2 text-slate-200 backdrop-blur sm:px-3">
       <Type size={15} className="text-kcs-blue" />
       <div className="hidden min-w-0 flex-col md:flex">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Police</span>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{L('Police', 'Font')}</span>
         <span className="truncate text-[11px] text-slate-400" style={previewStyle}>{activeTheme.preview}</span>
       </div>
       <select
@@ -48,8 +52,8 @@ const FontThemeSelector = () => {
         onChange={handleChange}
         className={selectClass}
         style={previewStyle}
-        aria-label="Choisir la police de l'application"
-        title={`Police active: ${activeTheme.label}`}
+        aria-label={L("Choisir la police de l'application", "Choose application font")}
+        title={`${L("Police active", "Active font")}: ${activeTheme.label}`}
       >
         {FONT_THEMES.map((theme) => (
           <option key={theme.id} value={theme.id}>

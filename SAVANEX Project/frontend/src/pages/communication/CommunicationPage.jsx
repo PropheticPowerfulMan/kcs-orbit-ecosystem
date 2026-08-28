@@ -54,7 +54,8 @@ const formatDelivery = (delivery = []) => {
 };
 
 const CommunicationPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const L = (fr, en) => (i18n.resolvedLanguage || i18n.language).startsWith('fr') ? fr : en;
   const [messageList, setMessageList] = useState([]);
   const [students, setStudents] = useState([]);
   const [selectedParentIds, setSelectedParentIds] = useState([]);
@@ -217,7 +218,7 @@ const CommunicationPage = () => {
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Communication hub</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('nav.communication')}</h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-400">
-            Envoi groupé ou ciblé aux parents par email et SMS, même quand le parent est seulement un contact relié à l'élève.
+            {L("Envoi groupé ou ciblé aux parents par email et SMS, même quand le parent est seulement un contact relié à l'élève.", 'Send targeted or bulk email and SMS messages to parents, including contacts linked through a student.')}
           </p>
         </div>
       </section>
@@ -226,18 +227,18 @@ const CommunicationPage = () => {
       {error ? <p className="mb-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">{error}</p> : null}
 
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard title="Parents joignables" value={loading ? '...' : parentOptions.length} accent="text-cyan-300" />
-        <StatCard title="Messages envoyés" value={messageList.length} accent="text-sky-300" />
-        <StatCard title="Canaux réels" value={deliveryStats.sent} subtitle="Email/SMS livrés" accent="text-emerald-300" />
-        <StatCard title="Échecs" value={deliveryStats.failed} subtitle={`${deliveryStats.simulated} simulation(s)`} accent="text-rose-300" />
+        <StatCard title={L('Parents joignables', 'Reachable parents')} value={loading ? '...' : parentOptions.length} accent="text-cyan-300" />
+        <StatCard title={L('Messages envoyés', 'Messages sent')} value={messageList.length} accent="text-sky-300" />
+        <StatCard title={L('Canaux réels', 'Live channels')} value={deliveryStats.sent} subtitle="Email/SMS livrés" accent="text-emerald-300" />
+        <StatCard title={L('Échecs', 'Failures')} value={deliveryStats.failed} subtitle={`${deliveryStats.simulated} simulation(s)`} accent="text-rose-300" />
       </section>
 
       <section className="mb-6 grid gap-4 xl:grid-cols-[0.95fr_1.35fr]">
         <article className="card p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Destinataires</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Parents liés aux élèves</h3>
+              <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">{L('Destinataires', 'Recipients')}</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">{L('Parents liés aux élèves', 'Parents linked to students')}</h3>
             </div>
             <Users className="h-6 w-6 text-cyan-300" />
           </div>
@@ -245,7 +246,7 @@ const CommunicationPage = () => {
             <input
               value={parentSearch}
               onChange={(event) => setParentSearch(event.target.value)}
-              placeholder="Recherche precise: parent + enfant + email + telephone..."
+              placeholder={L('Recherche précise : parent + enfant + email + téléphone...', 'Precise search: parent + child + email + phone...')}
               className={inputClass}
             />
             <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -294,8 +295,8 @@ const CommunicationPage = () => {
         <article className="card p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Composer</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Message email + SMS</h3>
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">{L('Composer', 'Compose')}</p>
+              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">{L('Message email + SMS', 'Email + SMS message')}</h3>
               <p className="mt-1 text-sm text-slate-400">{selectedParents.length} parent(s) sélectionné(s)</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -309,7 +310,7 @@ const CommunicationPage = () => {
           </div>
 
           <form onSubmit={sendMessage} className="mt-5 space-y-4">
-            <input value={draft.subject} onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))} placeholder="Sujet" className={inputClass} required />
+            <input value={draft.subject} onChange={(event) => setDraft((current) => ({ ...current, subject: event.target.value }))} placeholder={L('Sujet', 'Subject')} className={inputClass} required />
             <textarea
               value={draft.body}
               onChange={(event) => setDraft((current) => ({ ...current, body: event.target.value }))}
@@ -330,11 +331,11 @@ const CommunicationPage = () => {
       <section className="card p-5">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">Historique</p>
-            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Messages sortants</h3>
+            <p className="text-xs uppercase tracking-[0.2em] text-amber-300">{L('Historique', 'History')}</p>
+            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">{L('Messages sortants', 'Outgoing messages')}</h3>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder="Rechercher dans l'historique..." className={inputClass} />
+            <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={L("Rechercher dans l'historique...", 'Search message history...')} className={inputClass} />
             <select value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)} className={inputClass}>
               <option value="all">Tous les statuts</option>
               <option value="email">Email</option>
@@ -376,7 +377,7 @@ const CommunicationPage = () => {
                   <td className="px-4 py-3 text-slate-300">{message.sent_at ? new Date(message.sent_at).toLocaleString() : '-'}</td>
                   <td className="px-4 py-3">
                     <button type="button" onClick={() => setSelectedMessage(message)} className="savanex-entity-action savanex-entity-action-view">
-                      <Eye className="h-4 w-4" /> Voir
+                      <Eye className="h-4 w-4" /> {L('Voir', 'View')}
                     </button>
                   </td>
                 </tr>
@@ -396,7 +397,7 @@ const CommunicationPage = () => {
                 <p className="mt-1 text-sm text-slate-400">{selectedMessage.receiver_name || 'Parent'} · {selectedMessage.sent_at ? new Date(selectedMessage.sent_at).toLocaleString() : '-'}</p>
               </div>
               <button type="button" onClick={() => setSelectedMessage(null)} className="inline-flex items-center gap-2 rounded-xl border border-github-border px-3 py-2 text-sm text-slate-200 hover:bg-slate-800/60">
-                <X className="h-4 w-4" /> Fermer
+                <X className="h-4 w-4" /> {L('Fermer', 'Close')}
               </button>
             </div>
             <div className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-sm leading-7 text-slate-200">

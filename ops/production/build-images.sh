@@ -13,6 +13,14 @@ RELEASE="${1:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
 : "${SAVANEX_API_URL:?Set SAVANEX_API_URL}"
 : "${EDUSYNC_API_URL:?Set EDUSYNC_API_URL}"
 
+ensure_api_path() {
+  local value="${1%/}"
+  if [[ "$value" == */api ]]; then printf "%s" "$value"; else printf "%s/api" "$value"; fi
+}
+NEXUS_API_URL="$(ensure_api_path "$NEXUS_API_URL")"
+SAVANEX_API_URL="$(ensure_api_path "$SAVANEX_API_URL")"
+EDUSYNC_API_URL="$(ensure_api_path "$EDUSYNC_API_URL")"
+
 docker build -f "$ROOT_DIR/kcs-orbit-api/Dockerfile" -t "kcs/orbit-api:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/ops/staging/docker/nexus-api.Dockerfile" -t "kcs/nexus-api:$RELEASE" "$ROOT_DIR"
 docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" -t "kcs/nexus-web:$RELEASE" "$ROOT_DIR/KCS Nexus/frontend"

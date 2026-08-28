@@ -175,7 +175,8 @@ const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) =
 };
 
 const DashboardPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const L = (fr, en) => (i18n.resolvedLanguage || i18n.language).startsWith('fr') ? fr : en;
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -465,7 +466,7 @@ const DashboardPage = () => {
     return (
       <DashboardLayout>
         <div className="card p-6 text-slate-300" role="status" aria-live="polite">
-          Chargement des données réelles du tableau de bord...
+          {L('Chargement des données réelles du tableau de bord...', 'Loading live dashboard data...')}
         </div>
       </DashboardLayout>
     );
@@ -477,7 +478,7 @@ const DashboardPage = () => {
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">SAVANEX scientific command center</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-100">{t('dashboard.overview')}</h2>
-          <p className="mt-1 text-sm text-slate-400">{t('dashboard.subtitle')} Analyse académique, statistique, opérationnelle et financière pour piloter KCS.</p>
+          <p className="mt-1 text-sm text-slate-400">{t('dashboard.subtitle')} {L('Analyse académique, statistique, opérationnelle et financière pour piloter KCS.', 'Academic, statistical, operational and financial analysis for managing KCS.')}</p>
         </div>
         <div className="github-glass flex items-center gap-3 rounded-2xl px-4 py-3">
           <SchoolLogo size="sm" />
@@ -493,21 +494,21 @@ const DashboardPage = () => {
         <StatCard title={t('dashboard.teachers')} value={stats?.total_teachers ?? '-'} accent="text-teal-300" />
         <StatCard title={t('dashboard.classes')} value={stats?.total_classes ?? '-'} accent="text-emerald-300" />
         <StatCard title={t('dashboard.attendanceRate')} value={formatNullable(stats?.attendance_rate_30d, '%')} accent="text-amber-300" />
-        <StatCard title="Moyenne excellence" value={formatNullable(stats?.average_grade, '%')} subtitle={stats?.average_classical_equivalent_percentage === null || stats?.average_classical_equivalent_percentage === undefined ? `${dataQuality?.grade_records || 0} note(s) vérifiée(s)` : `Équiv. classique ${stats.average_classical_equivalent_percentage}%`} accent="text-rose-300" />
+        <StatCard title={L('Moyenne excellence', 'Excellence average')} value={formatNullable(stats?.average_grade, '%')} subtitle={stats?.average_classical_equivalent_percentage === null || stats?.average_classical_equivalent_percentage === undefined ? `${dataQuality?.grade_records || 0} note(s) vérifiée(s)` : `Équiv. classique ${stats.average_classical_equivalent_percentage}%`} accent="text-rose-300" />
       </section>
 
       {dataQuality ? (
         <>
           <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard title="Données de présence" value={dataQuality.attendance_records_30d} subtitle="Enregistrements des 30 derniers jours" accent="text-cyan-300" />
-            <StatCard title="Données de notes" value={dataQuality.grade_records} subtitle="Notes réelles sur 100% d'excellence" accent="text-orange-300" />
-            <StatCard title="Présence calculable" value={dataQuality.attendance_rate_is_available ? 'Oui' : 'Non'} subtitle="Aucune valeur artificielle si vide" accent="text-emerald-300" />
-            <StatCard title="Moyenne calculable" value={dataQuality.average_grade_is_available ? 'Oui' : 'Non'} subtitle="Basée uniquement sur les vraies notes" accent="text-teal-300" />
+            <StatCard title={L('Données de présence', 'Attendance data')} value={dataQuality.attendance_records_30d} subtitle={L('Enregistrements des 30 derniers jours', 'Records from the last 30 days')} accent="text-cyan-300" />
+            <StatCard title={L('Données de notes', 'Grade data')} value={dataQuality.grade_records} subtitle="Notes réelles sur 100% d'excellence" accent="text-orange-300" />
+            <StatCard title={L('Présence calculable', 'Attendance available')} value={dataQuality.attendance_rate_is_available ? 'Oui' : 'Non'} subtitle="Aucune valeur artificielle si vide" accent="text-emerald-300" />
+            <StatCard title={L('Moyenne calculable', 'Average available')} value={dataQuality.average_grade_is_available ? 'Oui' : 'Non'} subtitle="Basée uniquement sur les vraies notes" accent="text-teal-300" />
           </section>
 
           <section className="card p-5">
-            <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Cohérence scientifique</p>
-            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Statistiques basées sur les données réelles de l'écosystème</h3>
+            <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">{L('Cohérence scientifique', 'Scientific consistency')}</p>
+            <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">{L("Statistiques basées sur les données réelles de l'écosystème", 'Statistics based on live ecosystem data')}</h3>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {(dataQuality.notes || []).map((note) => (
                 <p key={note} className="rounded-xl border border-github-border bg-slate-950/45 p-3 text-sm text-slate-300">{note}</p>
@@ -521,7 +522,7 @@ const DashboardPage = () => {
       ) : (
         <>
       <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Moyenne excellence" value={`${science.avgGrade.toFixed(1)}%`} subtitle={`Écart-type ${science.gradeStd.toFixed(2)}`} accent="text-orange-300" />
+        <StatCard title={L('Moyenne excellence', 'Excellence average')} value={`${science.avgGrade.toFixed(1)}%`} subtitle={`Écart-type ${science.gradeStd.toFixed(2)}`} accent="text-orange-300" />
         <StatCard title="Engagement parents" value={`${science.parentEngagement.toFixed(1)}%`} subtitle={`${science.averageMeetings.toFixed(1)} réunions en moyenne`} accent="text-emerald-300" />
         <StatCard title="Couverture pédagogique" value={`${science.coverageIndex.toFixed(1)}%`} subtitle="Présence + programme + parents" accent="text-cyan-300" />
         <StatCard title="Risque financier" value={`${science.financeRisk}%`} subtitle="Paiements en retard" accent="text-amber-300" />
