@@ -16,6 +16,8 @@ done
 previous="$(sed -n 's/^KCS_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_edupay_api="$(sed -n 's/^EDUPAY_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_edupay_web="$(sed -n 's/^EDUPAY_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
+previous_savanex_api="$(sed -n 's/^SAVANEX_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
+previous_savanex_web="$(sed -n 's/^SAVANEX_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 printf '%s\n' "$previous" > "$ROOT_DIR/.previous-production-release"
 
 env_snapshot="$(mktemp "${ENV_FILE}.pre-deploy.XXXXXX")"
@@ -39,6 +41,8 @@ rollback_on_error() {
   export KCS_RELEASE="$previous"
   export EDUPAY_API_RELEASE="${previous_edupay_api:-$previous}"
   export EDUPAY_WEB_RELEASE="${previous_edupay_web:-$previous}"
+  export SAVANEX_API_RELEASE="${previous_savanex_api:-$previous}"
+  export SAVANEX_WEB_RELEASE="${previous_savanex_web:-$previous}"
   if [[ "$previous" =~ ^[0-9a-f]{7,40}$ ]]; then
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --wait --wait-timeout 300 || true
   fi
@@ -50,6 +54,8 @@ trap rollback_on_error ERR
 export KCS_RELEASE="$RELEASE"
 export EDUPAY_API_RELEASE="$RELEASE"
 export EDUPAY_WEB_RELEASE="$RELEASE"
+export SAVANEX_API_RELEASE="$RELEASE"
+export SAVANEX_WEB_RELEASE="$RELEASE"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --quiet
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --remove-orphans --wait --wait-timeout 300
 PRODUCTION_ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" "$ROOT_DIR/ops/production/verify.sh"
@@ -57,6 +63,8 @@ PRODUCTION_ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" "$ROOT_DIR/ops/prod
 set_release_key KCS_RELEASE "$RELEASE"
 set_release_key EDUPAY_API_RELEASE "$RELEASE"
 set_release_key EDUPAY_WEB_RELEASE "$RELEASE"
+set_release_key SAVANEX_API_RELEASE "$RELEASE"
+set_release_key SAVANEX_WEB_RELEASE "$RELEASE"
 chmod 600 "$ENV_FILE"
 rm -f -- "$env_snapshot"
 trap - ERR
