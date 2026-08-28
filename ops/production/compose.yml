@@ -129,7 +129,7 @@ services:
 
   savanex_api:
     <<: *service-defaults
-    image: kcs/savanex-api:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/savanex-api:${SAVANEX_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/savanex-api.env
     command: ["sh", "-c", "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"]
@@ -139,7 +139,7 @@ services:
 
   savanex_web:
     <<: *service-defaults
-    image: kcs/savanex-web:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/savanex-web:${SAVANEX_WEB_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
 
