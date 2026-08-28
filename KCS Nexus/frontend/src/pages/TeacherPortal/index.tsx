@@ -200,6 +200,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     grades: { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
     'report-card': { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
     reports: { title: 'Reports', subtitle: 'Report cards, AI comments, exports, and principal approval status.', icon: GraduationCap },
+    diagnostics: { title: 'AI Diagnostics', subtitle: 'Actionable academic and attendance signals based on your assigned learners.', icon: Brain },
     timetable: { title: 'Timetable', subtitle: 'Your synchronized teaching schedule, rooms, and class details.', icon: Calendar },
     resources: { title: 'Learning Resources', subtitle: 'Search, review, and manage resources shared with your classes.', icon: LibraryBig },
     discipline: { title: 'Detailed Student Discipline Report', subtitle: 'Incident context, action taken, parent contact, and follow-up plan.', icon: AlertTriangle },
@@ -365,8 +366,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       const workspace = response.data?.data
       const state = workspace?.state as Record<string, any> | undefined
       if (state) {
-        if (Array.isArray(state.courses)) setCourses(state.courses)
-        if (Array.isArray(state.teacherStudents)) setTeacherStudents(state.teacherStudents)
+        if (Array.isArray(state.courses) && state.courses.length) setCourses(state.courses)
+        if (Array.isArray(state.teacherStudents) && state.teacherStudents.length) setTeacherStudents(state.teacherStudents)
         if (Array.isArray(state.attendanceEntries)) setAttendanceEntries(state.attendanceEntries)
         if (Array.isArray(state.assignmentList)) setAssignmentList(state.assignmentList)
         if (Array.isArray(state.gradeEntries)) setGradeEntries(state.gradeEntries)
@@ -1590,6 +1591,26 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           </div>
           </div>
           {selectedAiStudent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI learner report</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedAiStudent.name}</h3></div><button onClick={() => setSelectedAiStudent(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Average', `${selectedAiStudent.average ?? 'N/A'}%`], ['Attendance', `${selectedAiStudent.attendance ?? 'N/A'}%`], ['Risk', selectedAiStudent.risk ?? 'Not classified']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="mt-4 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">AI analysis</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{selectedAiStudent.aiInsight || `${selectedAiStudent.name} requires continued monitoring based on academic performance and attendance trends.`}</p><p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">Recommendation: reinforce {selectedAiStudent.weaknesses?.join(', ') || 'the lowest-performing competencies'}, maintain family follow-up, and review progress within two weeks.</p></div><button type="button" onClick={printTeacherReport} className={`${compactButton} mt-5`}><Download size={16}/> Print / Download PDF</button></div></div>}
+        </div>
+      )}
+
+      {segment === 'diagnostics' && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className={panelClass}>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Learner signals</h3>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {registryStatus === 'loading' ? 'Loading the official student registry...' : `${teacherStudents.length} learner(s) available for diagnostic review.`}
+            </p>
+            <div className="mt-4 space-y-3">
+              {teacherStudents.slice(0, 8).map((student) => (
+                <button key={student.id} type="button" onClick={() => setSelectedAiStudent(student)} className="flex w-full items-center justify-between rounded-xl bg-gray-50 p-3 text-left dark:bg-kcs-blue-800/30">
+                  <span><strong className="text-kcs-blue-900 dark:text-white">{student.name}</strong><span className="block text-xs text-gray-500">{student.grade}{student.section} - {student.attendance ?? 'N/A'}% attendance</span></span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">Diagnostic summary</h3><p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{selectedAiStudent?.aiInsight ?? 'Select a learner to review the available academic, attendance, and support indicators.'}</p></div>
         </div>
       )}
 

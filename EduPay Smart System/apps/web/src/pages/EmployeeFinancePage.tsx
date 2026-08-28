@@ -1,4 +1,3 @@
-import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, CircleDollarSign, MailCheck, MessageSquareText, ShieldAlert, WalletCards } from "lucide-react";
 import { api } from "../services/api";
@@ -187,8 +186,14 @@ export function EmployeeFinancePage() {
             <p className="mt-2 text-sm text-ink-dim">{snapshot.profile.employeeCode} - {snapshot.profile.position} - {snapshot.profile.department}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <DateSelect value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-11" />
-            <DateSelect value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-11" />
+            <label className="grid gap-1 text-xs text-ink-dim">
+              {L("Du", "From")}
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="h-11" />
+            </label>
+            <label className="grid gap-1 text-xs text-ink-dim">
+              {L("Au", "To")}
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="h-11" />
+            </label>
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={L("Recherche précise...", "Search...")} className="h-11" />
           </div>
         </div>

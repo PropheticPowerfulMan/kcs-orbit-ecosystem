@@ -39,7 +39,7 @@ export function Sidebar() {
 
   const links: SidebarLink[] = role === "PARENT"
     ? [{ to: "/parent", label: t("navParent"), icon: <BadgeDollarSign className="h-4 w-4" aria-hidden="true" /> },
-       { to: "/parent/bank-transfers", label: L("Virements", "Bank transfers"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> }]
+       { to: "/parent/bank-transfers", label: L("Envoyer une preuve bancaire", "Submit bank proof"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> }]
     : role === "EMPLOYEE"
       ? [{ to: "/employee", label: L("Ma situation", "My account"), icon: <HandCoins className="h-4 w-4" aria-hidden="true" /> }]
     : [
