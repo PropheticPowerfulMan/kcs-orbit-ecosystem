@@ -69,7 +69,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             Q(username__iexact=identifier)
             | Q(email__iexact=identifier)
             | Q(access_code__iexact=identifier)
-        ).first()
+            | Q(kcs_card_id__iexact=identifier)
+            | Q(teacher_profile__employee_id__iexact=identifier)
+            | Q(teacher_profile__teacher_id__iexact=identifier)
+            | Q(teacher_profile__work_email__iexact=identifier)
+        ).distinct().first()
 
         if self.user is None or not self.user.check_password(password) or not self.user.is_active:
             raise AuthenticationFailed(self.error_messages['no_active_account'], 'no_active_account')

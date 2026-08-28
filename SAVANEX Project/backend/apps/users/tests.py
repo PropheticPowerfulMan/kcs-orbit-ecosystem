@@ -57,10 +57,11 @@ class UserAccessCodeTests(TestCase):
             last_name='Lokala',
             role=User.ROLE_TEACHER,
             access_code='ACC-TCH-LOGIN1',
+            kcs_card_id='KCS-TCH-LOGIN1',
         )
         client = APIClient()
 
-        for identifier in (user.username, user.email, user.access_code):
+        for identifier in (user.username, user.email, user.access_code, user.kcs_card_id):
             with self.subTest(identifier=identifier):
                 response = client.post('/api/auth/login/', {
                     'username': identifier,
