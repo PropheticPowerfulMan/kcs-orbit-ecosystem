@@ -98,7 +98,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/admin/student-forum-insights', label: t('portalNav.studentAiReport'), icon: Shield },
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/admin/analytics', label: t('portalNav.aiAnalytics'), icon: Brain },
-        { to: '/admin/data-migration', label: 'Data Migration', icon: FileSpreadsheet },
+        { to: '/admin/data-migration', label: 'Imports Excel / CSV', icon: FileSpreadsheet },
         { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     default:

@@ -22,11 +22,13 @@ import {
   CheckCircle2,
   Gauge,
   Lightbulb,
+  Landmark,
   ShieldCheck,
   Target,
   TrendingUp,
   WalletCards
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { api } from "../services/api";
 import { useAuthStore } from "../store/auth";
@@ -420,7 +422,11 @@ export function ParentTrackingPage() {
             <h1 className="mt-2 font-display text-3xl font-bold text-white">{t("parentTracking")}</h1>
             <p className="mt-2 max-w-3xl text-sm text-ink-dim">{t("parentFinancialDeepSubtitle")}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
+          <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
+            <Link to="/parent/bank-transfers" className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 text-sm font-black text-slate-950 transition hover:bg-cyan-300">
+              <Landmark className="h-4 w-4" aria-hidden="true" />
+              {L("Envoyer une preuve bancaire", "Send bank transfer proof")}
+            </Link>
             <div className="flex items-center gap-3">
               <BrainCircuit className="h-6 w-6 text-cyan-300" />
               <div>

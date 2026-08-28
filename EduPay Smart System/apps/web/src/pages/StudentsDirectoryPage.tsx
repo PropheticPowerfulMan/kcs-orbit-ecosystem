@@ -1,4 +1,5 @@
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
+import { BulkImportLink } from "../components/BulkImportLink";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -1641,6 +1642,7 @@ export function StudentsDirectoryPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
+          <BulkImportLink entity="STUDENT" label={L("Importer élèves Excel / CSV", "Import students Excel / CSV")} />
           <button type="button" onClick={() => setCreateOpen(true)} className="rounded-xl bg-cyan-400 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 hover:bg-cyan-300">
             {L("Ajouter un élève", "Add student")}
           </button>
