@@ -10,7 +10,12 @@ export default function InstallAppButton() {
 
   useEffect(() => {
     const displayMode = window.matchMedia("(display-mode: standalone)");
-    const capture = (event) => { event.preventDefault(); setPromptEvent(event); };
+    const capture = (event) => {
+      event.preventDefault();
+      localStorage.removeItem(INSTALL_STATE_KEY);
+      setInstalled(false);
+      setPromptEvent(event);
+    };
     const syncInstalledState = () => setInstalled(isStandalone());
     const done = () => { localStorage.setItem(INSTALL_STATE_KEY, "1"); setInstalled(true); };
     window.addEventListener("beforeinstallprompt", capture);
