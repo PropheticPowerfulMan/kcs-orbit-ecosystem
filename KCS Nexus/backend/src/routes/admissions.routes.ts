@@ -4,9 +4,10 @@ import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
-import { env } from '../config/env.js'
 import { sendSchoolMail } from '../utils/mail.js'
 import { getRouteParam } from '../utils/request.js'
+
+const OFFICIAL_SCHOOL_EMAIL = 'kinshasachristianschool@gmail.com'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -214,12 +215,22 @@ admissionsRouter.post('/', upload.array('documents', 6), asyncHandler(async (req
     include: { documents: true },
   })
 
+  await prisma.notification.createMany({
+    data: (await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } })).map((admin) => ({
+      userId: admin.id,
+      title: 'Nouvelle inscription en ligne',
+      message: [payload.firstName, payload.lastName, payload.gradeApplying, applicationNumber].filter(Boolean).join(' · '),
+      type: 'INFO' as const,
+      link: '/admin/admissions',
+    })),
+  }).catch((error) => console.error('[admissions] Application saved, but SuperAdmin notification failed:', error))
+
   const email = buildAdmissionEmail(applicationNumber, payload, documents)
   let mailResult: Awaited<ReturnType<typeof sendSchoolMail>>
 
   try {
     mailResult = await sendSchoolMail({
-      to: env.SCHOOL_EMAIL,
+      to: OFFICIAL_SCHOOL_EMAIL,
       replyTo: payload.parentEmail,
       subject: `New KCS admission application - ${applicationNumber} - ${payload.firstName} ${payload.lastName}`,
       text: email.text,
@@ -240,7 +251,7 @@ admissionsRouter.post('/', upload.array('documents', 6), asyncHandler(async (req
     {
       ...application,
       emailDelivery: mailResult,
-      schoolEmail: env.SCHOOL_EMAIL,
+      schoolEmail: OFFICIAL_SCHOOL_EMAIL,
     },
     mailResult.sent ? 'Application submitted and emailed' : 'Application submitted; email delivery needs attention',
     201,

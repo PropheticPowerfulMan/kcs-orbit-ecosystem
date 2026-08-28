@@ -343,7 +343,7 @@ export async function sendSms(input: SmsInput): Promise<DeliveryStatus> {
   if (!input.to) return "SKIPPED";
   const to = normalizePhoneNumber(input.to);
   // NFC preserves accents while producing stable UTF-8 form data for SMS providers.
-  const normalizedText = input.text.normalize("NFC");
+  const normalizedText = input.text.normalize("NFC").replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
   const message = /^\s*(?:\[?EduPay\]?\s*[:—-])/iu.test(normalizedText)
     ? normalizedText
     : `EduPay: ${normalizedText}`;

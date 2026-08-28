@@ -6,7 +6,8 @@ export type SmsResult =
 
 export async function sendSchoolSms(to: string | null | undefined, message: string): Promise<SmsResult> {
   const phone = (to || '').replace(/[\s()-]/g, '')
-  const brandedMessage = /^\s*(?:\[?KCS Nexus\]?\s*[:—-])/i.test(message) ? message : `KCS Nexus: ${message}`
+  const cleanMessage = message.normalize('NFC').replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+  const brandedMessage = /^\s*(?:\[?KCS Nexus\]?\s*[:—-])/i.test(cleanMessage) ? cleanMessage : `KCS Nexus : ${cleanMessage}`
   const apiUrl = env.AFRICASTALKING_API_URL || env.SMS_API_URL
   const apiKey = env.AFRICASTALKING_API_KEY || env.SMS_API_KEY
   const username = env.AFRICASTALKING_USERNAME || env.SMS_USERNAME

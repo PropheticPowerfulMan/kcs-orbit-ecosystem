@@ -46,7 +46,7 @@ SCHOOL_URL = 'https://kinshasachristianschool.org/'
 
 def build_branded_email_html(subject, body, action_url='', action_label='Ouvrir SAVANEX'):
     safe_subject = escape(subject)
-    safe_body = linebreaks(escape(body))
+    safe_body = linebreaks(escape(body), autoescape=False).replace('<p>', '<p style="margin:0 0 16px;line-height:1.72;color:#334155">')
     action = f'<a href="{escape(action_url)}" style="display:inline-block;background:#ffcb05;color:#071d3a;text-decoration:none;font-weight:800;border-radius:999px;padding:13px 22px;font-size:14px">{escape(action_label)}</a>' if action_url else ''
     return f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{safe_subject}</title></head>
 <body style="margin:0;background:#eef4fb;font-family:Arial,Helvetica,sans-serif;color:#0f172a"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef4fb;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:26px;box-shadow:0 20px 55px rgba(8,38,76,.16)">
@@ -185,7 +185,8 @@ def _send_sms_with_africas_talking(phone, body):
 
 def _send_user_sms(user, body, label='User'):
     phone = _normalize_phone(user.phone)
-    body = body if body.lstrip().upper().startswith('SAVANEX:') else f'SAVANEX: {body}'
+    body = ' '.join((body or '').replace('\r\n', '\n').split()).strip()
+    body = body if body.upper().startswith('SAVANEX :') else f'SAVANEX : {body}'
     if not phone:
         return DeliveryResult('sms', 'skipped', f'{label} phone is missing.')
 
@@ -209,7 +210,8 @@ def _send_parent_sms(parent, body):
 
 
 def _short_sms(subject, body):
-    text = f'{_school_sender_name()}: {subject}. {body}'.replace('\n', ' ')
+    clean_body = ' '.join((body or '').split())
+    text = f'{_school_sender_name()}\n{subject.strip()}\n\n{clean_body}'
     return text[:300]
 
 
