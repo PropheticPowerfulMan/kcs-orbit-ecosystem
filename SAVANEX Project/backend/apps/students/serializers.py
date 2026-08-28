@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from apps.integration.orbit import fetch_shared_directory, orbit_sync_is_enabled, sync_class, sync_parent, sync_student
 from apps.communication.services import deliver_parent_communication, deliver_user_communication
-from apps.classes.utils import get_or_create_standard_class, normalize_class_level, normalize_class_suffix
+from apps.classes.utils import get_or_create_standard_class, normalize_class_display, normalize_class_level, normalize_class_suffix
 from apps.users.models import User
 from .models import Student
 from apps.users.serializers import generate_temporary_password, UserCreateSerializer, UserListSerializer, UserMeSerializer
@@ -209,7 +209,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_class_name(self, obj):
         if obj.current_class:
-            return str(obj.current_class)
+            return normalize_class_display(str(obj.current_class))
         return None
 
     def get_has_photo(self, obj):
@@ -583,7 +583,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
 
     def get_class_name(self, obj):
         if obj.current_class:
-            return str(obj.current_class)
+            return normalize_class_display(str(obj.current_class))
         return None
 
     class Meta:

@@ -1362,6 +1362,8 @@ export function StudentsDirectoryPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
   const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState("ALL");
+  const [parentFilter, setParentFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
@@ -1422,13 +1424,18 @@ export function StudentsDirectoryPage() {
     return lookup;
   }, [directory]);
 
+  const classOptions = useMemo(() => Array.from(new Set((directory?.students ?? []).map((student) => student.className || student.classId).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b)), [directory]);
+  const parentOptions = useMemo(() => (directory?.parents ?? []).slice().sort((a, b) => a.fullName.localeCompare(b.fullName)), [directory]);
+
   const filteredStudents = useMemo(() => {
     const query = search.trim().toLowerCase();
     const students = directory?.students ?? [];
-    if (!query) return students;
 
     return students.filter((student) => {
       const parent = parentByStudentId.get(student.id);
+      if (classFilter !== "ALL" && (student.className || student.classId) !== classFilter) return false;
+      if (parentFilter !== "ALL" && parent?.id !== parentFilter) return false;
+      if (!query) return true;
       const haystack = [
         student.fullName,
         student.displayId,
@@ -1446,7 +1453,7 @@ export function StudentsDirectoryPage() {
 
       return haystack.includes(query);
     });
-  }, [directory, parentByStudentId, search]);
+  }, [classFilter, directory, parentByStudentId, parentFilter, search]);
 
   const handleUpdateStudent = async (state: StudentFormState) => {
     if (!editTarget) return;
@@ -1672,7 +1679,17 @@ export function StudentsDirectoryPage() {
         </div>
       </div>
 
-      <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder={L("Rechercher un élève, une classe, un parent ou un identifiant...", "Search for a student, class, parent or ID...")} wrapperClassName="animate-fadeInUp" />
+      <div className="grid gap-3 animate-fadeInUp lg:grid-cols-[minmax(0,1.4fr)_220px_260px]">
+        <SearchField value={search} onChange={(event) => setSearch(event.target.value)} placeholder={L("Rechercher nom, ID, e-mail, téléphone, classe ou parent...", "Search name, ID, email, phone, class or parent...")} />
+        <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} aria-label={L("Filtrer par classe", "Filter by class")} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white">
+          <option value="ALL">{L("Toutes les classes", "All classes")}</option>
+          {classOptions.map((className) => <option key={className} value={className}>{className}</option>)}
+        </select>
+        <select value={parentFilter} onChange={(event) => setParentFilter(event.target.value)} aria-label={L("Filtrer par parent", "Filter by parent")} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white">
+          <option value="ALL">{L("Tous les parents", "All parents")}</option>
+          {parentOptions.map((parent) => <option key={parent.id} value={parent.id}>{parent.fullName} · {parent.id}</option>)}
+        </select>
+      </div>
 
       {apiError && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">
@@ -1727,13 +1744,13 @@ export function StudentsDirectoryPage() {
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <button type="button" onClick={() => setViewTarget(student)} className="rounded-lg bg-slate-700/50 p-2 text-ink-dim transition-all hover:bg-slate-600/50 hover:text-white" title={L("Voir", "View")}>
-                            <Eye className="h-4 w-4" />
+                            <Eye aria-hidden="true" strokeWidth={2.5} className="block h-5 w-5 shrink-0 text-white" />
                           </button>
                           <button type="button" onClick={() => setEditTarget(student)} className="rounded-lg bg-brand-500/20 p-2 text-brand-300 transition-all hover:bg-brand-500/30" title={L("Modifier", "Edit")}>
-                            <Edit3 className="h-4 w-4" />
+                            <Edit3 aria-hidden="true" strokeWidth={2.5} className="block h-5 w-5 shrink-0 text-brand-200" />
                           </button>
                           <button type="button" onClick={() => setDeleteTarget(student)} className="rounded-lg bg-danger/20 p-2 text-danger transition-all hover:bg-danger/30" title={L("Supprimer", "Delete")}>
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 aria-hidden="true" strokeWidth={2.5} className="block h-5 w-5 shrink-0 text-red-300" />
                           </button>
                         </div>
                       </td>

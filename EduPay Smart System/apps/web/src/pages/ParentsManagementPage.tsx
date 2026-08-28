@@ -2818,6 +2818,8 @@ export function ParentsManagementPage() {
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [catalog, setCatalog] = useState<FinanceCatalog | null>(null);
   const [search, setSearch] = useState("");
+  const [classFilter, setClassFilter] = useState("ALL");
+  const [studentFilter, setStudentFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [mutationNotice, setMutationNotice] = useState<string | null>(null);
@@ -2923,12 +2925,17 @@ export function ParentsManagementPage() {
     };
   }, [viewTarget]);
 
+  const parentClassOptions = useMemo(() => Array.from(new Set(parents.flatMap((parent) => (parent.students ?? []).map((student) => student.className || student.classId).filter((value): value is string => Boolean(value))))).sort((a, b) => a.localeCompare(b)), [parents]);
+  const linkedStudentOptions = useMemo(() => parents.flatMap((parent) => (parent.students ?? []).map((student) => ({ ...student, parentName: parent.fullName }))).sort((a, b) => a.fullName.localeCompare(b.fullName)), [parents]);
+
   const filtered = useMemo(() => {
     const q = search.trim();
-    if (!q) return parents;
 
     return parents.filter((parent) => {
       const parentStudents = Array.isArray(parent.students) ? parent.students : [];
+      if (classFilter !== "ALL" && !parentStudents.some((student) => (student.className || student.classId) === classFilter)) return false;
+      if (studentFilter !== "ALL" && !parentStudents.some((student) => student.id === studentFilter || student.displayId === studentFilter)) return false;
+      if (!q) return true;
       const searchIndex = buildSearchIndex([
         parent.fullName,
         parent.id,
@@ -2953,7 +2960,7 @@ export function ParentsManagementPage() {
 
       return searchIndexMatches(searchIndex, q);
     });
-  }, [parents, search]);
+  }, [classFilter, parents, search, studentFilter]);
 
   const handleSave = async (form: FormState, id?: string) => {
     const fullName = [form.nom, form.postnom, form.prenom].filter(Boolean).join(" ");
@@ -3143,7 +3150,17 @@ export function ParentsManagementPage() {
       </div>
 
       {/* Search bar */}
-      <SearchField value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("pmSearchPlaceholder")} wrapperClassName="animate-fadeInUp" />
+      <div className="grid gap-3 animate-fadeInUp lg:grid-cols-[minmax(0,1.4fr)_220px_280px]">
+        <SearchField value={search} onChange={(e) => setSearch(e.target.value)} placeholder={L("Rechercher parent, ID, téléphone, e-mail, adresse, enfant, classe ou plan...", "Search parent, ID, phone, email, address, child, class or plan...")} />
+        <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} aria-label={L("Filtrer les parents par classe", "Filter parents by class")} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white">
+          <option value="ALL">{L("Toutes les classes", "All classes")}</option>
+          {parentClassOptions.map((className) => <option key={className} value={className}>{className}</option>)}
+        </select>
+        <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} aria-label={L("Filtrer par enfant lié", "Filter by linked child")} className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white">
+          <option value="ALL">{L("Tous les enfants liés", "All linked children")}</option>
+          {linkedStudentOptions.map((student) => <option key={`-`} value={student.id}>{student.fullName} · {student.displayId || student.id}</option>)}
+        </select>
+      </div>
 
       {apiError && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger animate-fadeInUp">

@@ -183,6 +183,15 @@ function pickSharedTeacherId(teacher: OrbitSharedDirectory["teachers"][number]) 
   return teacher.employeeId?.trim() || teacher.id;
 }
 
+export function normalizeSharedClassName(value: string) {
+  const raw = String(value || "").trim().replace(/\s+/g, " ");
+  const kindergarten = raw.match(/^kindergarten(?:\s+grade)?\s*k?\s*([3-5])(?:\s+([a-z]))?$/i);
+  if (kindergarten) return `K${kindergarten[1]}${kindergarten[2] ? ` ${kindergarten[2].toUpperCase()}` : ""}`;
+  const repeatedGrade = raw.match(/^(grade\s+(\d{1,2}))(?:\s+\1)+(?:\s+([a-z]))?$/i);
+  if (repeatedGrade) return `Grade ${Number(repeatedGrade[2])}${repeatedGrade[3] ? ` ${repeatedGrade[3].toUpperCase()}` : ""}`;
+  return raw;
+}
+
 export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory) {
   const classNames = new Set<string>();
   const studentsById = new Map(directory.students.map((student) => [student.id, student]));
@@ -196,7 +205,7 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
       .map((studentId) => studentsById.get(studentId))
       .filter((student): student is OrbitSharedDirectory["students"][number] => Boolean(student))
       .map((student) => {
-        const className = student.className || student.classId || "Classe non renseignee";
+        const className = normalizeSharedClassName(student.className || student.classId || "Classe non renseignee");
         classNames.add(className);
         const displayId = pickSharedStudentId(student);
         return {
@@ -244,7 +253,7 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
   });
 
   const students = directory.students.map((student) => {
-    const className = student.className || student.classId || "Classe non renseignee";
+    const className = normalizeSharedClassName(student.className || student.classId || "Classe non renseignee");
     classNames.add(className);
     const displayId = pickSharedStudentId(student);
     return {
@@ -829,7 +838,7 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
             id: orbitStudent.orbitId,
             localId: localStudent?.id,
             classId: localStudent?.classId || orbitStudent.classId,
-            className: localStudent?.class.name || orbitStudent.className,
+            className: normalizeSharedClassName(localStudent?.class.name || orbitStudent.className),
             annualFee: localStudent?.annualFee || orbitStudent.annualFee,
           };
         }),
@@ -844,7 +853,7 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
         id: orbitStudent.orbitId,
         localId: localStudent?.id,
         classId: localStudent?.classId || orbitStudent.classId,
-        className: localStudent?.class.name || orbitStudent.className,
+        className: normalizeSharedClassName(localStudent?.class.name || orbitStudent.className),
         annualFee: localStudent?.annualFee || orbitStudent.annualFee,
       };
     }),    classes,

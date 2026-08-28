@@ -25,6 +25,19 @@ def normalize_class_level(value: str) -> str:
     raise ValueError("La classe doit etre comprise entre K3-K5 ou Grade 1-Grade 12.")
 
 
+def normalize_class_display(value: str | None) -> str:
+    raw = re.sub(r"\s+", " ", (value or "").strip())
+    kindergarten = re.fullmatch(r"kindergarten(?:\s+grade)?\s*k?\s*([3-5])(?:\s+([A-Z]))?", raw, re.IGNORECASE)
+    if kindergarten:
+        suffix = f" {kindergarten.group(2).upper()}" if kindergarten.group(2) else ""
+        return f"K{kindergarten.group(1)}{suffix}"
+    repeated_grade = re.fullmatch(r"(grade\s+([1-9]|1[0-2]))(?:\s+\1)+(?:\s+([A-Z]))?", raw, re.IGNORECASE)
+    if repeated_grade:
+        suffix = f" {repeated_grade.group(3).upper()}" if repeated_grade.group(3) else ""
+        return f"Grade {int(repeated_grade.group(2))}{suffix}"
+    return raw
+
+
 def normalize_class_suffix(value: str | None) -> str:
     suffix = (value or "").strip().upper()
     if not suffix:

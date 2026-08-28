@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import AcademicYear, Level, Class, Subject, ClassSubject
-from .utils import build_class_name, normalize_class_level, normalize_class_suffix
+from .utils import build_class_name, normalize_class_display, normalize_class_level, normalize_class_suffix
 
 
 class AcademicYearSerializer(serializers.ModelSerializer):
@@ -49,6 +49,12 @@ class ClassSerializer(serializers.ModelSerializer):
             'class_teacher', 'class_teacher_name',
             'class_level', 'suffix', 'capacity', 'room', 'student_count',
         ]
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation["name"] = normalize_class_display(representation.get("name"))
+        representation["level_name"] = normalize_class_display(representation.get("level_name"))
+        return representation
 
     def get_class_teacher_name(self, obj):
         if obj.class_teacher:
