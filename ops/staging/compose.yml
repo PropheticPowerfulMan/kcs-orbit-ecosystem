@@ -74,6 +74,7 @@ services:
       args:
         VITE_API_BASE_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}
         VITE_RECEIPT_VERIFICATION_BASE_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}
+        VITE_NEXUS_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}/nexus
         VITE_BASE_PATH: /
     image: kcs/edupay-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
     read_only: true
@@ -187,6 +188,7 @@ services:
       args:
         VITE_API_URL: https://${STAGING_DOMAIN}/savanex/api
         VITE_BASE_PATH: /savanex/
+        VITE_NEXUS_URL: https://${STAGING_DOMAIN}/nexus
     image: kcs/savanex-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
     container_name: kcs-savanex-web-staging
     read_only: true

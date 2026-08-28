@@ -1,4 +1,5 @@
 import InternationalPhoneInput from "../components/InternationalPhoneInput";
+import { BulkImportLink } from "../components/BulkImportLink";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, FileText, KeyRound, Printer } from "lucide-react";
@@ -985,6 +986,7 @@ export function EmployeesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <BulkImportLink entity="TEACHER" label={L("Importer employés Excel / CSV", "Import employees Excel / CSV")} />
           <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-right">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-200">{L("Source", "Source")}</p>
             <p className="mt-1 text-sm font-semibold text-white">SAVANEX</p>
