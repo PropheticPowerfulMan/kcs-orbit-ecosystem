@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
 from django.core import signing
+from django.core.cache import cache
 from django.utils import timezone
 from django.db.models import Q
 
@@ -19,7 +20,12 @@ from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_
 @permission_classes([IsAuthenticated])
 def shared_directory_view(_request):
     if orbit_sync_is_enabled():
-        return Response(fetch_shared_directory())
+        cache_key = 'savanex:shared-directory:v1'
+        directory = cache.get(cache_key)
+        if directory is None:
+            directory = fetch_shared_directory()
+            cache.set(cache_key, directory, timeout=30)
+        return Response(directory)
 
     students = Student.objects.select_related('user', 'parent', 'current_class').filter(is_active=True)
     teachers = Teacher.objects.select_related('user').filter(is_active=True)

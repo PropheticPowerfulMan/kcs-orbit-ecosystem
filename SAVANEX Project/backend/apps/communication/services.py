@@ -185,7 +185,8 @@ def _send_sms_with_africas_talking(phone, body):
 
 def _send_user_sms(user, body, label='User'):
     phone = _normalize_phone(user.phone)
-    body = ' '.join((body or '').replace('\r\n', '\n').split()).strip()
+    lines = [' '.join(line.split()) for line in (body or '').replace('\r\n', '\n').split('\n')]
+    body = '\n'.join(lines).strip()
     body = body if body.upper().startswith('SAVANEX :') else f'SAVANEX : {body}'
     if not phone:
         return DeliveryResult('sms', 'skipped', f'{label} phone is missing.')
@@ -210,9 +211,9 @@ def _send_parent_sms(parent, body):
 
 
 def _short_sms(subject, body):
-    clean_body = ' '.join((body or '').split())
-    text = f'{_school_sender_name()}\n{subject.strip()}\n\n{clean_body}'
-    return text[:300]
+    clean_lines = [' '.join(line.split()) for line in (body or '').replace('\r\n', '\n').split('\n')]
+    clean_body = '\n'.join(clean_lines).strip()
+    return f'SAVANEX : {_school_sender_name()}\n{subject.strip()}\n\n{clean_body}'
 
 
 def deliver_parent_communication(parent, subject, body, notif_type=Notification.TYPE_MESSAGE, link=''):

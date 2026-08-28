@@ -11,6 +11,9 @@ const DEMO_ACCESS_TOKEN = 'demo-access-token';
 const IS_GITHUB_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
 const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
+const DIRECTORY_CACHE_TTL_MS = 30000;
+let sharedDirectoryCache = null;
+let sharedDirectoryRequest = null;
 const DIRECTORY_REQUEST_TIMEOUT_MS = 10000;
 
 const demoUser = {
@@ -190,10 +193,41 @@ api.interceptors.response.use(
   }
 );
 
+export const normalizeClassDisplay = (value) => {
+  const raw = String(value || '').trim().replace(/\s+/g, ' ');
+  if (!raw) return '';
+
+  const kindergarten = raw.match(
+    /^(?:kindergarten\s+)*(?:grade\s+)?k?\s*([3-5])(?:\s+(?:kindergarten\s+)*(?:grade\s+)?k?\s*\1)*(?:\s+([a-z]))?$/i
+  );
+  if (kindergarten) {
+    return `K${kindergarten[1]}${kindergarten[2] ? ` ${kindergarten[2].toUpperCase()}` : ''}`;
+  }
+
+  const grade = raw.match(/^grade\s+([1-9]|1[0-2])(?:\s+grade\s+\1)*(?:\s+([a-z]))?$/i);
+  if (grade) {
+    return `Grade ${Number(grade[1])}${grade[2] ? ` ${grade[2].toUpperCase()}` : ''}`;
+  }
+
+  return raw;
+};
+
+const fetchAllPages = async (path) => {
+  const rows = [];
+  let next = path;
+  while (next) {
+    const response = await api.get(next);
+    if (Array.isArray(response.data)) return response.data;
+    rows.push(...(response.data?.results || []));
+    next = response.data?.next || null;
+  }
+  return rows;
+};
 const normalizeDirectoryExternalIds = (externalIds) => {
   if (!Array.isArray(externalIds)) {
     return [];
   }
+
 
   return externalIds
     .map((entry) => {
@@ -254,7 +288,7 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     date_of_birth: student?.dateOfBirth || null,
     gender: student?.gender || '',
     current_class: student?.classId || null,
-    class_name: student?.className || null,
+    class_name: normalizeClassDisplay(student?.className) || null,
     parent: parent?.id || null,
     parent_name: parent?.fullName || '',
     parent_email: parent?.email || '',
@@ -373,6 +407,7 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
           photo_source: sharedStudent.photo_source || student.photo_source || '',
         } : {}),
         source: student?.source || 'local',
+        class_name: normalizeClassDisplay(student.class_name || sharedStudent?.class_name),
         source_label: student?.source_label || 'SAVANEX',
         is_read_only: Boolean(student?.is_read_only),
       };
@@ -499,13 +534,10 @@ export const studentsService = {
       }));
     }
 
-    const [localResponse, sharedDirectory] = await Promise.all([
-      api.get('/students/'),
+    const [localStudents, sharedDirectory] = await Promise.all([
+      fetchAllPages('/students/'),
       sharedDirectoryService.get(),
     ]);
-    const localStudents = Array.isArray(localResponse.data)
-      ? localResponse.data
-      : (localResponse.data?.results || []);
     return mergeLocalAndSharedStudents(localStudents, sharedDirectory);
   },
 
@@ -563,9 +595,26 @@ export const studentsService = {
 };
 
 export const sharedDirectoryService = {
-  async get() {
-    const res = await api.get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS });
-    return res.data;
+  async get({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && sharedDirectoryCache && now - sharedDirectoryCache.loadedAt < DIRECTORY_CACHE_TTL_MS) {
+      return sharedDirectoryCache.data;
+    }
+    if (sharedDirectoryRequest) return sharedDirectoryRequest;
+
+    sharedDirectoryRequest = api
+      .get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS })
+      .then((res) => {
+        sharedDirectoryCache = { data: res.data, loadedAt: Date.now() };
+        return res.data;
+      })
+      .finally(() => {
+        sharedDirectoryRequest = null;
+      });
+    return sharedDirectoryRequest;
+  },
+  clear() {
+    sharedDirectoryCache = null;
   },
 };
 

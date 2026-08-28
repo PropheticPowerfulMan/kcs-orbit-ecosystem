@@ -32,15 +32,16 @@ class TeacherListCreateView(generics.ListCreateAPIView):
         application_names = ['EduPay']
         if teacher.is_teaching_employee:
             application_names.append('KCS Nexus')
-        subject = 'Vos acces institutionnels KCS sont actifs'
+        subject = 'Vos accès institutionnels KCS sont actifs'
         body = (
-            f"Bonjour {teacher.full_name or teacher.user.username}, votre profil employe KCS est actif.\n\n"
-            f"Applications: {', '.join(application_names)}.\n"
-            f"Matricule: {teacher.employee_id}.\n"
-            f"Identifiant: {teacher.user.email}.\n"
-            f"Code d'acces: {teacher.user.access_code}.\n"
-            + (f"Mot de passe temporaire: {temporary_password}.\n" if temporary_password else '')
-            + "Ce mot de passe doit etre change a la premiere connexion."
+            f"Bonjour {teacher.full_name or teacher.user.username},\n"
+            f"Votre profil employé KCS est actif.\n\n"
+            f"Applications : {', '.join(application_names)}.\n"
+            f"Matricule : {teacher.employee_id}.\n"
+            f"Identifiant : {teacher.user.email}.\n"
+            f"Code d’accès : {teacher.user.access_code}.\n"
+            + (f"Mot de passe temporaire : {temporary_password}.\n\n" if temporary_password else '\n')
+            + "Ce mot de passe doit être changé à la première connexion."
         )
         deliver_employee_communication(
             teacher,

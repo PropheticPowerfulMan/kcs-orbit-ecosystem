@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, override_settings
 
-from .services import _normalize_phone, _send_sms_with_africas_talking
+from .services import _normalize_phone, _send_sms_with_africas_talking, _short_sms
 
 
 class SmsDeliveryTests(SimpleTestCase):
@@ -40,6 +40,16 @@ class SmsDeliveryTests(SimpleTestCase):
         second_payload = urlopen.call_args_list[1].args[0].data.decode()
         self.assertIn('from=KCS', first_payload)
         self.assertNotIn('from=', second_payload)
+    def test_sms_keeps_structure_accents_and_complete_credentials(self):
+        body = (
+            'Bonjour Jonathan,\n\n'
+            'Identifiant : jonathan.lokala@ourkcs.org.\n'
+            'Code d’accès : ACC-TCH-776971.\n'
+            'Mot de passe temporaire : KCS-684032.\n\n'
+            'Ce mot de passe doit être changé à la première connexion.'
+        )
+        message = _short_sms('Vos accès institutionnels KCS sont actifs', body)
+        self.assertIn('\n\nIdentifiant :', message)
 
 class NotificationOrderingTests(SimpleTestCase):
     @patch('apps.communication.services._send_user_email')

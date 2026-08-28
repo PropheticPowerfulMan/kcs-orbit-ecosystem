@@ -11,7 +11,7 @@ import EntityPdfButton from '../../components/ui/EntityPdfButton';
 import StatCard from '../../components/ui/StatCard';
 import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard } from '../../components/ui/KcsIdentityTools';
 import SearchField from '../../components/ui/SearchField';
-import { studentsService } from '../../services/api';
+import { normalizeClassDisplay, studentsService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
 const normalizeLabel = (value, fallback) => {
@@ -177,7 +177,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
         refreshInFlight = false;
       }
     };
-    const timer = window.setInterval(() => void refresh(), 1500);
+    const timer = window.setInterval(() => void refresh(), 30000);
     window.addEventListener('focus', refresh);
     window.addEventListener('savanex:directory-changed', refresh);
     return () => {
@@ -225,7 +225,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
     const groups = new Map();
 
     for (const student of filtered) {
-      const className = normalizeLabel(student.class_name, 'Non assignée');
+      const className = normalizeClassDisplay(student.class_name) || 'Non assignée';
       const current = groups.get(className) || { className, total: 0, families: new Set(), students: [] };
       current.total += 1;
       current.students.push(student);
@@ -250,7 +250,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       const current = groups.get(familyName) || { familyName, total: 0, classes: new Set(), students: [] };
       current.total += 1;
       current.students.push(student);
-      current.classes.add(normalizeLabel(student.class_name, 'Non assignée'));
+      current.classes.add(normalizeClassDisplay(student.class_name) || 'Non assignée');
       groups.set(familyName, current);
     }
 

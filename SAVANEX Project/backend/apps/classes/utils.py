@@ -27,14 +27,25 @@ def normalize_class_level(value: str) -> str:
 
 def normalize_class_display(value: str | None) -> str:
     raw = re.sub(r"\s+", " ", (value or "").strip())
-    kindergarten = re.fullmatch(r"kindergarten(?:\s+grade)?\s*k?\s*([3-5])(?:\s+([A-Z]))?", raw, re.IGNORECASE)
+    kindergarten = re.fullmatch(
+        r"(?:kindergarten\s+)*(?:grade\s+)?k?\s*([3-5])"
+        r"(?:\s+(?:kindergarten\s+)*(?:grade\s+)?k?\s*\1)*"
+        r"(?:\s+([A-Z]))?",
+        raw,
+        re.IGNORECASE,
+    )
     if kindergarten:
         suffix = f" {kindergarten.group(2).upper()}" if kindergarten.group(2) else ""
         return f"K{kindergarten.group(1)}{suffix}"
-    repeated_grade = re.fullmatch(r"(grade\s+([1-9]|1[0-2]))(?:\s+\1)+(?:\s+([A-Z]))?", raw, re.IGNORECASE)
-    if repeated_grade:
-        suffix = f" {repeated_grade.group(3).upper()}" if repeated_grade.group(3) else ""
-        return f"Grade {int(repeated_grade.group(2))}{suffix}"
+    grade = re.fullmatch(
+        r"(?:grade\s+)([1-9]|1[0-2])"
+        r"(?:\s+grade\s+\1)*(?:\s+([A-Z]))?",
+        raw,
+        re.IGNORECASE,
+    )
+    if grade:
+        suffix = f" {grade.group(2).upper()}" if grade.group(2) else ""
+        return f"Grade {int(grade.group(1))}{suffix}"
     return raw
 
 
