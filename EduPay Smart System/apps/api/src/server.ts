@@ -8,6 +8,7 @@ import { authRouter } from "./modules/auth/router";
 import { parentRouter } from "./modules/parents/router";
 import { studentRouter } from "./modules/students/router";
 import { paymentRouter } from "./modules/payments/router";
+import { bankTransferRouter } from "./modules/bank-transfers/router";
 import { notificationRouter } from "./modules/notifications/router";
 import { analyticsRouter } from "./modules/analytics/router";
 import { aiRouter } from "./modules/ai/router";
@@ -42,7 +43,7 @@ function protectAsyncHandlers(router: { stack?: ExpressLayer[] }) {
   router.stack?.forEach(protect);
 }
 
-[authRouter, parentRouter, studentRouter, paymentRouter, notificationRouter, analyticsRouter, aiRouter, classRouter, exportRouter, financeRouter, expenseRouter, sharedDirectoryRouter]
+[authRouter, parentRouter, studentRouter, paymentRouter, bankTransferRouter, notificationRouter, analyticsRouter, aiRouter, classRouter, exportRouter, financeRouter, expenseRouter, sharedDirectoryRouter]
   .forEach(protectAsyncHandlers);
 
 if (env.NODE_ENV === "production") {
@@ -87,6 +88,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/parents", parentRouter);
 app.use("/api/students", studentRouter);
 app.use("/api/payments", paymentRouter);
+app.use("/api/bank-transfer-requests", bankTransferRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/ai", aiRouter);
