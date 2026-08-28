@@ -1150,6 +1150,9 @@ const AdminSectionView = ({
   const [sentNotice, setSentNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
   const [parentQuery, setParentQuery] = useState('')
+  const [parentGradeFilter, setParentGradeFilter] = useState('All')
+  const [parentClassSuffixFilter, setParentClassSuffixFilter] = useState<typeof SEARCH_CLASS_SUFFIXES[number]>('All')
+  const [parentStudentFilter, setParentStudentFilter] = useState('All')
   const [divisionFilter, setDivisionFilter] = useState('All')
   const [gradeFilter, setGradeFilter] = useState('All')
   const [classSuffixFilter, setClassSuffixFilter] = useState<typeof SEARCH_CLASS_SUFFIXES[number]>('All')
@@ -1728,21 +1731,24 @@ const AdminSectionView = ({
 
   const parentRecords = useMemo(() => buildAdminParentRecordsFromDirectory(sharedDirectory, officialRoster), [officialRoster, sharedDirectory])
 
+  const parentStudentDirectory = useMemo(() => {
+    const studentsById = new Map<string, AdminStudentRecord>()
+    parentRecords.forEach((parent) => parent.students.forEach((student) => studentsById.set(student.id, student)))
+    return Array.from(studentsById.values()).sort((left, right) => left.name.localeCompare(right.name))
+  }, [parentRecords])
+
   const filteredParents = useMemo(() => {
     const query = parentQuery.trim().toLowerCase()
-    if (!query) return parentRecords
-    return parentRecords.filter((parent) => [
-      parent.displayId,
-      parent.name,
-      parent.email,
-      parent.phone,
-      parent.physicalAddress,
-      parent.status,
-      parent.syncSource,
-      parent.classes.join(' '),
-      parent.students.map((student) => `${student.name} ${student.studentNumber ?? ''}`).join(' '),
-    ].join(' ').toLowerCase().includes(query))
-  }, [parentQuery, parentRecords])
+    return parentRecords
+      .filter((parent) => parentGradeFilter === 'All' || parent.students.some((student) => student.grade === parentGradeFilter))
+      .filter((parent) => parentClassSuffixFilter === 'All' || parent.students.some((student) => student.section === parentClassSuffixFilter))
+      .filter((parent) => parentStudentFilter === 'All' || parent.students.some((student) => student.id === parentStudentFilter))
+      .filter((parent) => !query || [
+        parent.displayId, parent.name, parent.email, parent.phone, parent.physicalAddress, parent.status, parent.syncSource,
+        parent.classes.join(' '),
+        parent.students.map((student) => `${student.name} ${student.studentNumber ?? ''} ${student.email ?? ''} ${student.grade} ${student.section}`).join(' '),
+      ].filter(Boolean).join(' ').toLowerCase().includes(query))
+  }, [parentClassSuffixFilter, parentGradeFilter, parentQuery, parentRecords, parentStudentFilter])
 
   const divisionSummary = useMemo(() => {
     return SCHOOL_DIVISIONS.map((division) => {
@@ -1818,10 +1824,24 @@ const AdminSectionView = ({
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
-            <Search size={16} className="text-gray-400" />
-            <input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher parent, email, telephone, enfant ou classe..." />
-          </label>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_180px_180px_220px] lg:items-center">
+            <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+              <Search size={16} className="text-gray-400" />
+              <input value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher parent, ID, contact, enfant ou classe..." />
+            </label>
+            <select value={parentGradeFilter} onChange={(event) => { setParentGradeFilter(event.target.value); setParentClassSuffixFilter('All') }} aria-label="Filtrer les parents par niveau de l'enfant" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="All">Tous les niveaux</option>
+              {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
+            </select>
+            <select value={parentClassSuffixFilter} onChange={(event) => setParentClassSuffixFilter(event.target.value as typeof SEARCH_CLASS_SUFFIXES[number])} aria-label="Filtrer les parents par suffixe de classe" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="All">Tous les suffixes</option><option value="">Sans suffixe</option>
+              {CLASS_SECTIONS.filter(Boolean).map((section) => <option key={section} value={section}>Suffixe {section}</option>)}
+            </select>
+            <select value={parentStudentFilter} onChange={(event) => setParentStudentFilter(event.target.value)} aria-label="Filtrer par enfant lié" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="All">Tous les enfants liés</option>
+              {parentStudentDirectory.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.studentNumber || 'Sans ID'}</option>)}
+            </select>
+          </div>
           {parentNotice ? <p className="mt-3 rounded-xl bg-kcs-blue-50 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{parentNotice}</p> : null}
         </div>
 
