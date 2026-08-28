@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import multer from "multer";
 import PDFDocument from "pdfkit";
 import { PNG } from "pngjs";
@@ -6,6 +6,7 @@ import { z } from "zod";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 import { amountToWords } from "../../utils/amount-words";
+import { sendEmail } from "../../utils/messaging";
 import { enqueuePaymentOrbitEvent } from "../../integrations/orbit";
 import { assertReviewable, MAX_PROOF_BYTES, validateAllocations, validateProofMetadata, validateProofSignature } from "./core";
 import { proofStorage } from "./storage";
@@ -41,6 +42,13 @@ async function notifyParent(requestId:string,type:string,content:string){
   if(!request)return;
   await prisma.notificationLog.create({data:{schoolId:request.schoolId,parentId:request.parentId,type:"CONFIRMATION",language:request.parent.preferredLanguage,channel:"DASHBOARD",content,status:"OPEN"}});
 }
+async function notifyFinance(requestId:string){
+  const request=await prisma.bankTransferRequest.findUnique({where:{id:requestId},include:{parent:true,allocations:true}});
+  if(!request)return;
+  const users=await prisma.user.findMany({where:{schoolId:request.schoolId,role:{in:[...financeRoles]}},select:{id:true,email:true}});
+  const content=["New Bank Transfer Awaiting Review",`Parent: ${request.parent.fullName}`,`Amount: USD ${request.amount.toFixed(2)}`,`Students: ${new Set(request.allocations.map(x=>x.studentId)).size}`,`Bank: ${request.bankName}`,`Submitted: ${request.submittedAt?.toISOString()??""}`,`Request ID: ${request.id}`].join("\n");
+  await Promise.allSettled(users.map(async user=>{const status=await sendEmail({to:user.email,subject:"New Bank Transfer Awaiting Review",text:content});await prisma.auditLog.create({data:{schoolId:request.schoolId,userId:user.id,action:"BANK_TRANSFER_REVIEW_NOTIFICATION",metadata:{requestId:request.id,status}}});}));
+}
 function pdfReceipt(number:string,amount:number){return new Promise<Buffer>(resolve=>{const d=new PDFDocument();const chunks:Buffer[]=[];d.on("data",(c:Buffer)=>chunks.push(c));d.on("end",()=>resolve(Buffer.concat(chunks)));d.fontSize(18).text("EduPay official receipt").moveDown().fontSize(12).text(`Receipt: ${number}`).text(`Amount: USD ${amount.toFixed(2)}`);d.end();});}
 function pngReceipt(){const p=new PNG({width:1,height:1});p.data.fill(255);return PNG.sync.write(p);}
 
@@ -55,6 +63,8 @@ bankTransferRouter.post("/",authorize("PARENT"),upload.single("proof"),async(req
   const studentIds=[...new Set(payload.allocations.map(x=>x.studentId))];
   const owned=await prisma.student.count({where:{id:{in:studentIds},parentId:parent.id,schoolId:req.user!.schoolId}});
   if(owned!==studentIds.length)return res.status(403).json({message:"Every selected student must belong to this parent."});
+  const validInstallments=await prisma.paymentInstallment.count({where:{id:{in:payload.allocations.map(x=>x.installmentId)},parentId:parent.id,schoolId:req.user!.schoolId,studentId:{in:studentIds}}});
+  if(validInstallments!==payload.allocations.length)return res.status(403).json({message:"Every selected fee installment must belong to this parent and child."});
   const duplicate=await prisma.bankTransferRequest.findFirst({where:{schoolId:req.user!.schoolId,parentId:parent.id,bankName:{equals:payload.bankName,mode:"insensitive"},referenceNumber:{equals:payload.referenceNumber,mode:"insensitive"},amount:payload.amount,paymentDate:payload.paymentDate}});
   const request=await prisma.bankTransferRequest.create({data:{schoolId:req.user!.schoolId,parentId:parent.id,amount:payload.amount,bankName:payload.bankName,referenceNumber:payload.referenceNumber,paymentDate:payload.paymentDate,payerName:payload.payerName,comment:payload.comment,possibleDuplicate:Boolean(duplicate),allocations:{create:payload.allocations}},include});
   try{
@@ -66,6 +76,7 @@ bankTransferRouter.post("/",authorize("PARENT"),upload.single("proof"),async(req
       return {...updated,proofs:[proof]};
     });
     void notifyParent(request.id,"SUBMISSION","Payment proof submitted and awaiting verification").catch(console.error);
+    void notifyFinance(request.id).catch(console.error);
     return res.status(201).json(submitted);
   }catch(error){await prisma.bankTransferRequest.delete({where:{id:request.id}}).catch(()=>undefined);throw error;}
 });
@@ -86,9 +97,19 @@ bankTransferRouter.get("/export.csv",authorize(...financeRoles),async(req:Authen
   for(const row of rows)lines.push([row.paymentDate.toISOString(),row.parent.fullName,row.allocations.map(x=>x.student.fullName).join(" | "),row.allocations.map(x=>x.feeLabel).join(" | "),row.amount,row.bankName,row.referenceNumber,row.status,row.reviewedBy?.fullName,row.reviewedAt?.toISOString(),row.payment?.receipt?.receiptNumber].map(quote).join(","));
   res.setHeader("Content-Type","text/csv; charset=utf-8");res.setHeader("Content-Disposition","attachment; filename=bank-transfer-verification.csv");res.send("\ufeff"+lines.join("\n"));
 });
-bankTransferRouter.get("/:id",authorize("PARENT",...financeRoles),async(req:AuthenticatedRequest,res)=>{const row=await visibleRequest(req,req.params.id);return row?res.json(row):res.status(404).json({message:"Request not found."});});
+bankTransferRouter.get("/options",authorize("PARENT"),async(req:AuthenticatedRequest,res)=>{
+  const parent=await parentFor(req);if(!parent)return res.status(403).json({message:"Parent profile required."});
+  const students=await prisma.student.findMany({where:{schoolId:req.user!.schoolId,parentId:parent.id},select:{id:true,fullName:true,class:{select:{name:true}},installments:{where:{status:{in:["SCHEDULED","OVERDUE","PARTIALLY_PAID"]}},orderBy:{dueDate:"asc"},select:{id:true,label:true,dueDate:true,amountDue:true,amountPaid:true,status:true}}},orderBy:{fullName:"asc"}});
+  res.json(students.map(student=>({...student,installments:student.installments.map(i=>({...i,outstanding:Math.max(0,i.amountDue-i.amountPaid)}))})));
+});
+bankTransferRouter.get("/:id",authorize("PARENT",...financeRoles),async(req:AuthenticatedRequest,res)=>{
+  const row=await prisma.bankTransferRequest.findFirst({where:{id:req.params.id,schoolId:req.user!.schoolId},include});
+  if(!row)return res.status(404).json({message:"Request not found."});const parent=await parentFor(req);
+  if(parent&&row.parentId!==parent.id)return res.status(403).json({message:"Access denied."});return res.json(row);
+});
 bankTransferRouter.get("/:id/proofs/:proofId",authorize("PARENT",...financeRoles),async(req:AuthenticatedRequest,res)=>{
-  const row=await visibleRequest(req,req.params.id);if(!row)return res.status(404).json({message:"Request not found."});
+  const row=await prisma.bankTransferRequest.findFirst({where:{id:req.params.id,schoolId:req.user!.schoolId},include});if(!row)return res.status(404).json({message:"Request not found."});
+  const parent=await parentFor(req);if(parent&&row.parentId!==parent.id)return res.status(403).json({message:"Access denied."});
   const proof=row.proofs.find(x=>x.id===req.params.proofId);if(!proof)return res.status(404).json({message:"Proof not found."});
   const bytes=await proofStorage.get(proof.storageKey);res.setHeader("Content-Type",proof.mimeType);res.setHeader("Content-Disposition",`inline; filename="${proof.originalFileName.replace(/["\\\r\n]/g,"_")}"`);res.setHeader("X-Content-Type-Options","nosniff");res.send(bytes);
 });
@@ -114,6 +135,7 @@ bankTransferRouter.post("/:id/request-more-info",authorize(...financeRoles),asyn
   const updated=await prisma.$transaction(async tx=>{const u=await tx.bankTransferRequest.update({where:{id:row.id},data:{status:"NEEDS_MORE_INFO",reviewReason:reason,reviewedById:req.user!.sub,reviewedAt:new Date()},include});await audit(tx,req,"MORE_INFO_REQUESTED",u);return u;});void notifyParent(row.id,"MORE_INFO",`More information requested: ${reason}`).catch(console.error);res.json(updated);
 });
 bankTransferRouter.post("/:id/approve",authorize(...financeRoles),async(req:AuthenticatedRequest,res)=>{
+ try{
   const result=await prisma.$transaction(async tx=>{
     await tx.$queryRawUnsafe('SELECT "id" FROM "BankTransferRequest" WHERE "id" = $1 FOR UPDATE',req.params.id);
     const row=await tx.bankTransferRequest.findFirst({where:{id:req.params.id,schoolId:req.user!.schoolId},include});
@@ -137,5 +159,9 @@ bankTransferRouter.post("/:id/approve",authorize(...financeRoles),async(req:Auth
     return {alreadyProcessed:false,paymentId:payment.id,request:updated};
   },{isolationLevel:"Serializable"});
   void notifyParent(req.params.id,"APPROVED","Bank transfer approved. Your EduPay receipt is available.").catch(console.error);
-  res.json(result);
+  return res.json(result);
+ }catch(error){
+  if((error as {code?:string;meta?:{code?:string}}).code==="P2034"||(error as {meta?:{code?:string}}).meta?.code==="40001")return res.status(409).json({message:"Concurrent approval conflict. Please retry."});
+  throw error;
+ }
 });

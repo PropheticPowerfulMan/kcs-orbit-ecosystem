@@ -40,6 +40,7 @@ services:
     environment:
       NODE_ENV: staging
       DATABASE_URL: postgresql://${STAGING_POSTGRES_USER}:${STAGING_POSTGRES_PASSWORD}@edupay_db:5432/${STAGING_POSTGRES_DB}?schema=public
+      EDUPAY_PROOF_STORAGE_ROOT: /app/storage/payment-proofs
       API_PORT: "4000"
       FRONTEND_URL: https://${STAGING_DOMAIN:?set STAGING_DOMAIN}
       ENABLE_DEMO_AUTH_FALLBACK: "true"
@@ -56,6 +57,7 @@ services:
       AFRIKTALK_API_KEY: CHANGE_ME
       AFRICASTALKING_USERNAME: ""
       AFRICASTALKING_API_KEY: ""
+    volumes: [staging_edupay_proof_storage:/app/storage/payment-proofs]
     networks: [staging_internal]
     depends_on: { edupay_db: { condition: service_healthy } }
     healthcheck:
@@ -198,6 +200,7 @@ networks:
     name: kcs-orbit-production_kcs_staging
 volumes:
   staging_edupay_db_data:
+  staging_edupay_proof_storage:
   staging_nexus_db_data:
   staging_nexus_uploads:
   staging_savanex_db_data:

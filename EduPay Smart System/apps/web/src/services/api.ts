@@ -3291,6 +3291,16 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(error?.message || `Erreur API (${response.status})`);
+  }
+  return response.blob();
+}
+
 export function invalidateApiMemoryCache() {
   memoryResponseCache.clear();
   inFlightGetRequests.clear();
