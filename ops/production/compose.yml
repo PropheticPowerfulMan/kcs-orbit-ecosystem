@@ -93,6 +93,8 @@ services:
     image: kcs/nexus-api:${NEXUS_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/nexus-api.env
+    environment:
+      SAVANEX_API_URL: http://savanex-api:8000
     volumes: [nexus_uploads:/app/uploads]
     depends_on: { nexus_db: { condition: service_healthy }, orbit_api: { condition: service_started } }
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
@@ -117,6 +119,8 @@ services:
     image: kcs/edupay-api:${EDUPAY_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge, kcs_private]
     env_file: /etc/kcs-orbit/edupay-api.env
+    environment:
+      SAVANEX_API_URL: http://savanex-api:8000
     volumes: [edupay_receipts:/app/storage]
     depends_on: { edupay_db: { condition: service_healthy }, redis: { condition: service_healthy }, orbit_api: { condition: service_started } }
     healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
@@ -134,6 +138,8 @@ services:
       kcs_edge:
       kcs_private: { aliases: [savanex-api] }
     env_file: /etc/kcs-orbit/savanex-api.env
+    environment:
+      ALLOWED_HOSTS: ${SAVANEX_API_DOMAIN:?set SAVANEX_API_DOMAIN},savanex-api,localhost,127.0.0.1
     command: ["sh", "-c", "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"]
     volumes: [savanex_media:/app/media, savanex_static:/app/staticfiles]
     depends_on: { savanex_db: { condition: service_healthy }, orbit_api: { condition: service_started } }

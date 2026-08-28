@@ -157,7 +157,7 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
       SECRET_KEY: ${SAVANEX_STAGING_SECRET_KEY:?set SAVANEX_STAGING_SECRET_KEY}
-      ALLOWED_HOSTS: ${STAGING_DOMAIN},savanex_api,localhost,127.0.0.1
+      ALLOWED_HOSTS: ${STAGING_DOMAIN},savanex-api,localhost,127.0.0.1
       CORS_ALLOWED_ORIGINS: https://${STAGING_DOMAIN}
       CSRF_TRUSTED_ORIGINS: https://${STAGING_DOMAIN}
       DB_ENGINE: django.db.backends.postgresql
