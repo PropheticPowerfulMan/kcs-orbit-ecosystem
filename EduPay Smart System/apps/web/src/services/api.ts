@@ -3217,7 +3217,7 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
     response = await fetch(url, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init?.headers || {})
       }
