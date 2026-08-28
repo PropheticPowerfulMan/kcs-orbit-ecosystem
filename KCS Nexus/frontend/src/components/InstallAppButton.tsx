@@ -7,9 +7,11 @@ type InstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+const INSTALL_STATE_KEY = "kcs-nexus-pwa-installed-v1";
 const isStandalone = () =>
   window.matchMedia?.("(display-mode: standalone)").matches
-  || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  || (navigator as Navigator & { standalone?: boolean }).standalone === true
+  || localStorage.getItem(INSTALL_STATE_KEY) === "1";
 
 export default function InstallAppButton() {
   const location = useLocation();
@@ -23,7 +25,7 @@ export default function InstallAppButton() {
       setPromptEvent(event as InstallPromptEvent);
     };
     const syncInstalledState = () => setInstalled(isStandalone());
-    const done = () => setInstalled(true);
+    const done = () => { localStorage.setItem(INSTALL_STATE_KEY, "1"); setInstalled(true); };
 
     window.addEventListener("beforeinstallprompt", capture);
     window.addEventListener("appinstalled", done);
@@ -42,7 +44,7 @@ export default function InstallAppButton() {
     if (promptEvent) {
       await promptEvent.prompt();
       const choice = await promptEvent.userChoice;
-      if (choice.outcome === "accepted") setInstalled(true);
+      if (choice.outcome === "accepted") { localStorage.setItem(INSTALL_STATE_KEY, "1"); setInstalled(true); }
       setPromptEvent(null);
       return;
     }

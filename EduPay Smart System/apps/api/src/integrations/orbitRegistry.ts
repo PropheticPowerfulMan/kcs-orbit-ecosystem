@@ -857,3 +857,25 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
     },
   };
 }
+
+type OrbitRegistryMirror = Awaited<ReturnType<typeof syncOrbitRegistryMirror>>;
+const ORBIT_MIRROR_READ_TTL_MS = 5_000;
+const orbitMirrorReadCache = new Map<string, { value: OrbitRegistryMirror; expiresAt: number }>();
+const orbitMirrorReadRequests = new Map<string, Promise<OrbitRegistryMirror>>();
+
+export async function readOrbitRegistryMirror(schoolId: string): Promise<OrbitRegistryMirror> {
+  const cached = orbitMirrorReadCache.get(schoolId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const refresh = orbitMirrorReadRequests.get(schoolId) ?? syncOrbitRegistryMirror(schoolId)
+    .then((value) => {
+      orbitMirrorReadCache.set(schoolId, { value, expiresAt: Date.now() + ORBIT_MIRROR_READ_TTL_MS });
+      return value;
+    })
+    .finally(() => orbitMirrorReadRequests.delete(schoolId));
+  orbitMirrorReadRequests.set(schoolId, refresh);
+  if (cached) {
+    void refresh.catch((error) => console.error("[ORBIT_MIRROR_REFRESH] Background refresh failed", error));
+    return cached.value;
+  }
+  return refresh;
+}

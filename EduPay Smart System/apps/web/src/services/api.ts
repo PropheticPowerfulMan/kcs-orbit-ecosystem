@@ -495,11 +495,18 @@ function writeCachedResponse(path: string, value: unknown) {
 }
 
 const API_MEMORY_CACHE_TTL_MS = 15_000;
+const DIRECTORY_MEMORY_CACHE_TTL_MS = 2_000;
 const API_OFFLINE_FLUSH_THROTTLE_MS = 15_000;
 const memoryResponseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightGetRequests = new Map<string, Promise<unknown>>();
 let offlineFlushPromise: Promise<unknown> | null = null;
 let lastOfflineFlushAt = 0;
+
+function getMemoryCacheTtl(path: string) {
+  return path === "/api/parents" || path === "/api/shared-directory"
+    ? DIRECTORY_MEMORY_CACHE_TTL_MS
+    : API_MEMORY_CACHE_TTL_MS;
+}
 
 function isOfflineQueueableRequest(path: string, init?: RequestInit) {
   const method = (init?.method ?? "GET").toUpperCase();
@@ -3330,7 +3337,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const request = requestApi<T>(path, init)
     .then((value) => {
       memoryResponseCache.set(cacheKey, {
-        expiresAt: Date.now() + API_MEMORY_CACHE_TTL_MS,
+        expiresAt: Date.now() + getMemoryCacheTtl(path),
         value,
       });
       return value;

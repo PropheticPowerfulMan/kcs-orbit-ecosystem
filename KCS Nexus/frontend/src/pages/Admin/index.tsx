@@ -317,7 +317,17 @@ const ADMIN_ROSTER_STORAGE_KEY = 'kcs-admin-official-roster'
 const CLASS_SECTIONS = ['', 'A', 'B', 'C', 'D'] as const
 const SEARCH_CLASS_SUFFIXES = ['All', '', 'A', 'B', 'C', 'D'] as const
 
-const formatClassName = (grade: string, section?: string) => [grade, section].filter(Boolean).join(' ')
+const formatClassName = (grade: string, section?: string) => {
+  const rawGrade = String(grade || "").trim().replace(/\s+/g, " ")
+  const rawSection = String(section || "").trim().replace(/\s+/g, " ")
+  const combined = [rawGrade, rawSection].filter(Boolean).join(" ")
+  const kindergarten = combined.match(/^kindergarten(?:\s+grade)?\s*([345])$/i)
+  if (kindergarten) return `K${kindergarten[1]}`
+  const repeatedSingle = rawGrade.match(/^(Grade\s+\d{1,2})\s+\1$/i)
+  if (repeatedSingle) return `Grade ${Number(repeatedSingle[1].match(/\d+/)?.[0])}`
+  if (rawGrade && rawSection && rawGrade.localeCompare(rawSection, undefined, { sensitivity: "base" }) === 0) return rawGrade
+  return combined
+}
 
 const sectionLabel = (section?: string) => section || 'No section'
 const searchSuffixLabel = (section: typeof SEARCH_CLASS_SUFFIXES[number]) => {

@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
 import { authGuard, AuthenticatedRequest } from "../../middlewares/auth";
-import { deleteOrbitTeacher, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitTeacher } from "../../integrations/orbitRegistry";
+import { deleteOrbitTeacher, orbitRegistryIsEnabled, readOrbitRegistryMirror, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitTeacher } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { notifyStandaloneEntityChange } from "../notifications/entityChange";
 import { env } from "../../config/env";
@@ -254,7 +254,7 @@ sharedDirectoryRouter.post("/reset-access/:entityType/:id", async (req: Authenti
 
 sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
-    const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId, { pruneMissing: false });
+    const mirrored = await readOrbitRegistryMirror(req.user!.schoolId);
     const mirroredStudentExternalIds = mirrored.students.map((student) => student.externalStudentId).filter((id): id is string => Boolean(id));
     const mirroredStudentOrbitIds = mirrored.students.map((student) => student.orbitId).filter((id): id is string => Boolean(id));
     const localStudents = (mirroredStudentExternalIds.length || mirroredStudentOrbitIds.length)

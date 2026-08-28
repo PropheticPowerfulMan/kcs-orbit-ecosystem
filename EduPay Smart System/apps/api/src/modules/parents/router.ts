@@ -3,7 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { randomInt } from "crypto";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
-import { createOrbitParent, createOrbitStudent, deleteOrbitParent, deleteOrbitStudent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, syncOrbitRegistryMirror, updateOrbitParent, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { createOrbitParent, createOrbitStudent, deleteOrbitParent, deleteOrbitStudent, matchesSharedParentIdentifier, orbitRegistryIsEnabled, readOrbitRegistryMirror, syncOrbitRegistryMirror, updateOrbitParent, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { enqueueOrbitEvent } from "../../integrations/orbit";
 import { prisma } from "../../prisma";
 import { env } from "../../config/env";
@@ -641,7 +641,7 @@ parentRouter.use(authGuard);
 parentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   try {
     if (orbitRegistryIsEnabled()) {
-      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+      const mirrored = await readOrbitRegistryMirror(req.user!.schoolId);
       const mirroredParentIds = mirrored.parents.map((parent) => parent.localId).filter((id): id is string => Boolean(id));
       const localParents = mirroredParentIds.length
         ? await prisma.parent.findMany({
