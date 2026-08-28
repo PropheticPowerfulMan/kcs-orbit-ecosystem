@@ -432,12 +432,12 @@ const ParentsPage = () => {
   const handleResetAccess = async (row) => {
     const identifier = row.management_source === 'local'
       ? row.management_id
-      : (row.parent_external_id || row.management_id);
+      : (row.email || row.parent_external_id || row.management_id);
     if (!identifier) return setError('Compte utilisateur introuvable pour ce parent.');
     setSubmitting(true);
     setError('');
     try {
-      setTemporaryCredentials(await parentsService.resetAccess(identifier, row.management_source === 'local' ? {} : { entityType: 'parent' }));
+      setTemporaryCredentials(await parentsService.resetAccess(identifier, row.management_source === 'local' ? {} : { entityType: 'parent', entityData: { fullName: row.full_name, firstName: row.first_name, middleName: row.middle_name, lastName: row.last_name, email: row.email, phone: row.phone } }));
     } catch (resetError) {
       setError(resetError?.response?.data?.detail || 'Impossible de réinitialiser cet accès.');
     } finally {

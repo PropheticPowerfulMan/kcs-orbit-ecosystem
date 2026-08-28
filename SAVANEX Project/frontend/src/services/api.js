@@ -623,7 +623,7 @@ export const parentsService = {
     const path = options.entityType
       ? `/users/reset-access/${options.entityType}/${encodeURIComponent(identifier)}/`
       : `/users/${identifier}/reset-access/`;
-    const res = await api.post(path);
+    const res = await api.post(path, options.entityData || {});
     return res.data;
   },
   async update(id, data, options = {}) {
