@@ -13,7 +13,7 @@ RELEASE="${1:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
 : "${EDUSYNC_API_URL:?Set EDUSYNC_API_URL}"
 
 docker build -f "$ROOT_DIR/kcs-orbit-api/Dockerfile" -t "kcs/orbit-api:$RELEASE" "$ROOT_DIR"
-docker build -t "kcs/nexus-api:$RELEASE" "$ROOT_DIR/KCS Nexus/backend"
+docker build -f "$ROOT_DIR/ops/staging/docker/nexus-api.Dockerfile" -t "kcs/nexus-api:$RELEASE" "$ROOT_DIR"
 docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" -t "kcs/nexus-web:$RELEASE" "$ROOT_DIR/KCS Nexus/frontend"
 docker build -f "$ROOT_DIR/ops/production/docker/edupay-api.Dockerfile" -t "kcs/edupay-api:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/ops/production/docker/edupay-web.Dockerfile" --build-arg "VITE_API_BASE_URL=$EDUPAY_API_URL" --build-arg "VITE_RECEIPT_VERIFICATION_BASE_URL=$EDUPAY_PUBLIC_URL" --build-arg "VITE_BASE_PATH=/" -t "kcs/edupay-web:$RELEASE" "$ROOT_DIR"
