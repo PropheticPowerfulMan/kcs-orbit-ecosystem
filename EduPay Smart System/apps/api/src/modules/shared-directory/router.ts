@@ -339,7 +339,6 @@ sharedDirectoryRouter.get("/", async (req: AuthenticatedRequest, res) => {
     });
   }
 
-  return res.status(503).json({ message: 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.' });
 
   const [parents, students] = await Promise.all([
     prisma.parent.findMany({
