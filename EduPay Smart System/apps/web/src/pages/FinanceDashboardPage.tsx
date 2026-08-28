@@ -1417,9 +1417,9 @@ export function FinanceDashboardPage() {
           tone="border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
         />
         <MetricCard
-          label="Bourses"
+          label={L("Réductions et bourses", "Reductions and scholarships")}
           value={money.format(scholarshipTotal)}
-          detail={`${scholarshipCount} réduction(s), dont ${manualScholarshipCount} accord(s) manuel(s)`}
+          detail={L(`${scholarshipCount} réduction(s), dont ${manualScholarshipCount} accord(s) manuel(s)`, `${scholarshipCount} reduction(s), including ${manualScholarshipCount} manual agreement(s)`)}
           icon={HandCoins}
           tone="border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
         />

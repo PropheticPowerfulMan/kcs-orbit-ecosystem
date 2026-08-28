@@ -461,6 +461,16 @@ const DashboardPage = () => {
   ];
   const dataQuality = stats?.data_quality;
 
+  if (stats === null) {
+    return (
+      <DashboardLayout>
+        <div className="card p-6 text-slate-300" role="status" aria-live="polite">
+          Chargement des données réelles du tableau de bord...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <section className="mb-6 flex flex-col gap-4 page-enter sm:flex-row sm:items-center sm:justify-between">

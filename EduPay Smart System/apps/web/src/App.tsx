@@ -24,6 +24,7 @@ const FinanceParentPage = lazy(() => import("./pages/FinanceParentPage").then((m
 const MessagesPage = lazy(() => import("./pages/MessagesPage").then((module) => ({ default: module.MessagesPage })));
 const ParentsManagementPage = lazy(() => import("./pages/ParentsManagementPage").then((module) => ({ default: module.ParentsManagementPage })));
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage").then((module) => ({ default: module.PaymentsPage })));
+const BankTransferVerificationPage = lazy(() => import("./pages/BankTransferVerificationPage").then((module) => ({ default: module.BankTransferVerificationPage })));
 const ReportsPage = lazy(() => import("./pages/ReportsPage").then((module) => ({ default: module.ReportsPage })));
 const StudentsDirectoryPage = lazy(() => import("./pages/StudentsDirectoryPage").then((module) => ({ default: module.StudentsDirectoryPage })));
 
@@ -141,6 +142,7 @@ export function App() {
             <Route path="operations" element={withPageLoader(<FinancialOperationsPage />)} />
             <Route path="reports" element={withPageLoader(<ReportsPage />)} />
             <Route path="payments" element={withPageLoader(<PaymentsPage />)} />
+            <Route path="bank-transfers" element={withPageLoader(<BankTransferVerificationPage />)} />
             <Route path="messages" element={withPageLoader(<MessagesPage />)} />
             <Route path="parent-payments" element={withPageLoader(<FinanceParentAdminPage />)} />
             <Route path="students" element={withPageLoader(<StudentsDirectoryPage />)} />
@@ -150,6 +152,7 @@ export function App() {
           </Route>
           <Route element={<RoleRoute allowedRoles={["PARENT"]} />}>
             <Route path="parent" element={withPageLoader(<FinanceParentPage />)} />
+            <Route path="parent/bank-transfers" element={withPageLoader(<BankTransferVerificationPage />)} />
           </Route>
           <Route element={<RoleRoute allowedRoles={["EMPLOYEE"]} />}>
             <Route path="employee" element={withPageLoader(<EmployeeFinancePage />)} />

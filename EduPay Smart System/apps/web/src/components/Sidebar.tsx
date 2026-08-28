@@ -38,7 +38,8 @@ export function Sidebar() {
   const setMobileNavOpen = useUiStore((state) => state.setMobileNavOpen);
 
   const links: SidebarLink[] = role === "PARENT"
-    ? [{ to: "/parent", label: t("navParent"), icon: <BadgeDollarSign className="h-4 w-4" aria-hidden="true" /> }]
+    ? [{ to: "/parent", label: t("navParent"), icon: <BadgeDollarSign className="h-4 w-4" aria-hidden="true" /> },
+       { to: "/parent/bank-transfers", label: L("Virements", "Bank transfers"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> }]
     : role === "EMPLOYEE"
       ? [{ to: "/employee", label: L("Ma situation", "My account"), icon: <HandCoins className="h-4 w-4" aria-hidden="true" /> }]
     : [
@@ -46,6 +47,7 @@ export function Sidebar() {
         { to: "/operations", label: t("navOperations"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> },
         { to: "/reports", label: t("navReports"), icon: <ChartColumnBig className="h-4 w-4" aria-hidden="true" /> },
         { to: "/payments", label: t("navPayments"), icon: <CreditCard className="h-4 w-4" aria-hidden="true" /> },
+        { to: "/bank-transfers", label: L("Verification virements", "Bank transfer review"), icon: <Landmark className="h-4 w-4" aria-hidden="true" /> },
         { to: "/messages", label: t("navMessages"), icon: <MessageSquareText className="h-4 w-4" aria-hidden="true" /> },
         { to: "/parent-payments", label: t("navParentPayments"), icon: <UserRoundSearch className="h-4 w-4" aria-hidden="true" /> },
         { to: "/students", label: t("navStudents"), icon: <GraduationCap className="h-4 w-4" aria-hidden="true" /> },

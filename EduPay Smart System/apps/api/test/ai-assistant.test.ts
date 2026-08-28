@@ -21,6 +21,12 @@ describe("EduPay AI local assistant", () => {
             { id: "student-a", fullName: "Student A", className: "Grade 6", expectedTotal: 1000, paid: 0, balance: 1000 },
             { id: "student-b", fullName: "Student B", className: "Grade 7", expectedTotal: 1200, paid: 800, balance: 400 }
           ]
+        },
+        {
+          parent: { id: "parent-1", fullName: "Parent A" },
+          students: [
+            { id: "student-a", fullName: "Student A", className: "Grade 6", expectedTotal: 1000, paid: 0, balance: 1000 }
+          ]
         }
       ],
       payments: [

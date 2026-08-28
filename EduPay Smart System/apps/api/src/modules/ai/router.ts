@@ -56,6 +56,7 @@ export function buildLocalAssistantFallback(query: string, context: any) {
           const expected = Number(student?.expectedTotal ?? parentStudent?.expectedTotal ?? parentStudent?.annualFee ?? student?.annualFee ?? 0);
           const balance = Math.max(Number(student?.balance ?? expected - paid), 0);
           return {
+            studentId: student?.id ?? parentStudent?.id ?? null,
             name: student?.fullName ?? parentStudent?.fullName ?? "Eleve sans nom",
             className: student?.className ?? parentStudent?.className ?? "Classe non renseignee",
             parentName: parent?.fullName ?? "Parent",
@@ -67,8 +68,16 @@ export function buildLocalAssistantFallback(query: string, context: any) {
         });
       });
 
+    const uniqueRows = Array.from(rows.reduce((acc: Map<string, any>, row: any) => {
+      const key = row.studentId
+        ? `student:${row.studentId}`
+        : `student:${normalize(row.name)}|parent:${normalize(row.parentName)}`;
+      const current = acc.get(key);
+      if (!current || row.balance > current.balance) acc.set(key, row);
+      return acc;
+    }, new Map<string, any>()).values());
     const noPaymentOnly = /(pas encore pay|jamais pay|sans paiement|not paid yet|no payment)/.test(q);
-    const targets = rows
+    const targets = uniqueRows
       .filter((row: any) => noPaymentOnly ? !row.hasPayment : row.balance > 0)
       .sort((left: any, right: any) => right.balance - left.balance || String(left.name).localeCompare(String(right.name)));
     const tableRows: AssistantTableRow[] = targets.slice(0, 50).map((row: any) => ({

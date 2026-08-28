@@ -3217,7 +3217,7 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
     response = await fetch(url, {
       ...init,
       headers: {
-        "Content-Type": "application/json",
+        ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init?.headers || {})
       }
@@ -3289,6 +3289,16 @@ async function requestApi<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     return undefined as T;
   }
+}
+
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(error?.message || `Erreur API (${response.status})`);
+  }
+  return response.blob();
 }
 
 export function invalidateApiMemoryCache() {
