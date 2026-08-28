@@ -47,6 +47,29 @@ class UserAccessCodeTests(TestCase):
         self.assertEqual(response.data['user']['id'], user.id)
         self.assertEqual(response.data['user']['access_code'], user.access_code)
 
+    def test_teacher_login_accepts_all_institutional_identifiers(self):
+        password = 'TeacherPass123!'
+        user = User.objects.create_user(
+            username='teacher-institutional-login',
+            email='teacher.login@ourkcs.org',
+            password=password,
+            first_name='Jonathan',
+            last_name='Lokala',
+            role=User.ROLE_TEACHER,
+            access_code='ACC-TCH-LOGIN1',
+        )
+        client = APIClient()
+
+        for identifier in (user.username, user.email, user.access_code):
+            with self.subTest(identifier=identifier):
+                response = client.post('/api/auth/login/', {
+                    'username': identifier,
+                    'password': password,
+                }, format='json')
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data['user']['id'], user.id)
+
     @patch('apps.users.views.deliver_direct_parent_contact', return_value=[])
     @patch('apps.users.views.sync_parent')
     def test_reset_access_invalidates_old_password_and_preserves_access_code(self, _sync_parent, _deliver):

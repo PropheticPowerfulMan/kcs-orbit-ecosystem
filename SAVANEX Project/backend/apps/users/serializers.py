@@ -74,9 +74,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if self.user is None or not self.user.check_password(password) or not self.user.is_active:
             raise AuthenticationFailed(self.error_messages['no_active_account'], 'no_active_account')
 
-        if self.user.role != User.ROLE_ADMIN:
-            raise AuthenticationFailed('SAVANEX est reserve aux administrateurs.', 'admin_only')
-
         refresh = self.get_token(self.user)
         data = {
             'refresh': str(refresh),
