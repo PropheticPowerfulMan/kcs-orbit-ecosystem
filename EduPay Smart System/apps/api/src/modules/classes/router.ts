@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { orbitRegistryIsEnabled, syncOrbitRegistryMirror } from "../../integrations/orbitRegistry";
+import { orbitRegistryIsEnabled, readOrbitRegistryMirror } from "../../integrations/orbitRegistry";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
 
@@ -48,7 +48,7 @@ classRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticate
 classRouter.get("/", authorize("ADMIN", "ACCOUNTANT", "PARENT"), async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
     try {
-      const mirrored = await syncOrbitRegistryMirror(req.user!.schoolId);
+      const mirrored = await readOrbitRegistryMirror(req.user!.schoolId);
       return res.json(mirrored.classes);
     } catch (error) {
       console.error("Orbit unavailable on class list", error);

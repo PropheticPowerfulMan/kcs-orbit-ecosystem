@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { AgreementStatus, PaymentOptionType } from "@prisma/client";
-import { createOrbitStudent, deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
+import { createOrbitStudent, deleteOrbitStudent, orbitRegistryIsEnabled, readOrbitRegistryMirror, readOrbitSharedOptions, syncOrbitRegistryMirror, updateOrbitStudent } from "../../integrations/orbitRegistry";
 import { enqueueOrbitEvent } from "../../integrations/orbit";
 import { prisma } from "../../prisma";
 import { authGuard, authorize, AuthenticatedRequest } from "../../middlewares/auth";
@@ -291,7 +291,7 @@ studentRouter.post("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authentica
 
 studentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   if (orbitRegistryIsEnabled()) {
-    await syncOrbitRegistryMirror(req.user!.schoolId);
+    await readOrbitRegistryMirror(req.user!.schoolId);
   }
 
   const students = await prisma.student.findMany({

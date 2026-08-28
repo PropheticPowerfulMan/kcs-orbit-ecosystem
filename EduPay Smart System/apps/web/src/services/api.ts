@@ -495,7 +495,7 @@ function writeCachedResponse(path: string, value: unknown) {
 }
 
 const API_MEMORY_CACHE_TTL_MS = 15_000;
-const DIRECTORY_MEMORY_CACHE_TTL_MS = 2_000;
+const DIRECTORY_MEMORY_CACHE_TTL_MS = 30_000;
 const API_OFFLINE_FLUSH_THROTTLE_MS = 15_000;
 const memoryResponseCache = new Map<string, { expiresAt: number; value: unknown }>();
 const inFlightGetRequests = new Map<string, Promise<unknown>>();

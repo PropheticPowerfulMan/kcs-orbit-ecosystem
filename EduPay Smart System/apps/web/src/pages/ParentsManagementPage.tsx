@@ -2884,7 +2884,7 @@ export function ParentsManagementPage() {
   useEffect(() => {
     void load();
     const refresh = () => void load(true);
-    const timer = window.setInterval(refresh, 3000);
+    const timer = window.setInterval(refresh, 30000);
     window.addEventListener('focus', refresh);
     return () => {
       window.clearInterval(timer);

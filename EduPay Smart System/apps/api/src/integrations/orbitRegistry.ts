@@ -859,7 +859,7 @@ export async function syncOrbitRegistryMirror(schoolId: string, options: { prune
 }
 
 type OrbitRegistryMirror = Awaited<ReturnType<typeof syncOrbitRegistryMirror>>;
-const ORBIT_MIRROR_READ_TTL_MS = 5_000;
+const ORBIT_MIRROR_READ_TTL_MS = 30_000;
 const orbitMirrorReadCache = new Map<string, { value: OrbitRegistryMirror; expiresAt: number }>();
 const orbitMirrorReadRequests = new Map<string, Promise<OrbitRegistryMirror>>();
 
