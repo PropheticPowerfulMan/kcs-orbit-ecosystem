@@ -535,7 +535,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
   const linkedSavanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
   const savanexExternalId = entityType === 'student'
     ? (entity.studentNumber || identifier)
-    : (linkedSavanexExternalId || identifier)
+    : (linkedSavanexExternalId || entity.email || entity.displayId || identifier)
   if (env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
     const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
     const resetResponse = await fetch(resetUrl, {

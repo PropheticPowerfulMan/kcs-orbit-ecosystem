@@ -1464,7 +1464,7 @@ const AdminSectionView = ({
 
   const resetEntityAccess = async (entityType: 'parent' | 'student', entity: AdminParentRecord | AdminStudentRecord) => {
     const identifier = entityType === 'parent'
-      ? ((entity as AdminParentRecord).displayId || entity.id)
+      ? entity.id
       : ((entity as AdminStudentRecord).studentNumber || entity.id)
     try {
       const response = await registryAPI.resetAccess(entityType, identifier)
