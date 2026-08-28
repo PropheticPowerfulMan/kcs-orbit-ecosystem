@@ -283,15 +283,17 @@ async function createSyncEvent(db: Prisma.TransactionClient, params: {
 
 async function findDuplicateParent(organizationId: string, input: z.infer<typeof createParentSchema>) {
   const fullName = buildCanonicalFullName(input);
+  const strongIdentifiers: Prisma.ParentWhereInput[] = [
+    ...(input.email ? [{ email: { equals: input.email, mode: "insensitive" as const } }] : []),
+    ...(input.phone ? [{ phone: input.phone }] : []),
+  ];
 
   return prisma.parent.findFirst({
     where: {
       organizationId,
-      OR: [
-        ...(input.email ? [{ email: { equals: input.email, mode: "insensitive" as const } }] : []),
-        ...(input.phone ? [{ phone: input.phone }] : []),
-        { fullName: { equals: fullName, mode: "insensitive" as const } },
-      ],
+      OR: strongIdentifiers.length
+        ? strongIdentifiers
+        : [{ fullName: { equals: fullName, mode: "insensitive" as const } }],
     },
   });
 }
@@ -312,15 +314,7 @@ async function findDuplicateTeacher(organizationId: string, input: z.infer<typeo
 }
 
 async function findDuplicateStudent(organizationId: string, input: z.infer<typeof createStudentSchema>) {
-  const duplicateFilters: Prisma.StudentWhereInput[] = [
-    {
-      firstName: { equals: normalizeText(input.firstName), mode: "insensitive" },
-      lastName: { equals: normalizeText(input.lastName), mode: "insensitive" },
-      gender: { equals: input.gender, mode: "insensitive" },
-      ...(input.parentOrbitId ? { parentId: input.parentOrbitId } : {}),
-      ...(input.classOrbitId ? { classId: input.classOrbitId } : {}),
-    },
-  ];
+  const duplicateFilters: Prisma.StudentWhereInput[] = [];
 
   if (input.studentNumber) {
     duplicateFilters.push({ studentNumber: { equals: input.studentNumber, mode: "insensitive" } });
@@ -328,6 +322,16 @@ async function findDuplicateStudent(organizationId: string, input: z.infer<typeo
 
   if (input.email) {
     duplicateFilters.push({ email: { equals: input.email, mode: "insensitive" } });
+  }
+
+  if (!duplicateFilters.length) {
+    duplicateFilters.push({
+      firstName: { equals: normalizeText(input.firstName), mode: "insensitive" },
+      lastName: { equals: normalizeText(input.lastName), mode: "insensitive" },
+      gender: { equals: input.gender, mode: "insensitive" },
+      ...(input.parentOrbitId ? { parentId: input.parentOrbitId } : {}),
+      ...(input.classOrbitId ? { classId: input.classOrbitId } : {}),
+    });
   }
 
   return prisma.student.findFirst({
