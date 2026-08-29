@@ -513,6 +513,33 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       || item.externalIds?.some((link: any) => link.externalId === identifier)
   ) as any
 
+  if (!entity && entityType === 'parent') {
+    const localParent = await prisma.user.findFirst({
+      where: {
+        role: 'PARENT',
+        OR: [
+          { id: identifier },
+          { email: { equals: identifier, mode: 'insensitive' } },
+          { accessCode: identifier },
+          { orbitUserId: identifier },
+        ],
+      },
+    })
+    if (localParent) {
+      entity = {
+        id: localParent.orbitUserId || localParent.id,
+        fullName: composeAdministrativeName(localParent),
+        firstName: localParent.firstName,
+        middleName: localParent.middleName,
+        lastName: localParent.lastName,
+        email: localParent.email,
+        phone: localParent.phone,
+        displayId: localParent.accessCode,
+        externalIds: [],
+      }
+    }
+  }
+
   if (!entity && entityType === 'student') {
     const localProfile = await prisma.studentProfile.findFirst({
       where: { OR: [{ id: identifier }, { studentNumber: identifier }] },
