@@ -588,7 +588,19 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     }
   }
 
-  let user = await prisma.user.findFirst({ where: { OR: [{ id: identifier }, ...(entity?.email ? [{ email: entity.email }] : [])] } })
+  const accountKeys = [identifier, entity.id, entity.displayId, entity.email, entity.accessCode, ...(entity.externalIds?.map((link: any) => link.externalId) ?? [])]
+    .filter((value): value is string => Boolean(value))
+  let user = await prisma.user.findFirst({
+    where: {
+      role: entityType === 'parent' ? 'PARENT' : 'STUDENT',
+      OR: accountKeys.flatMap((key) => [
+        { id: key },
+        { email: { equals: key, mode: 'insensitive' as const } },
+        { accessCode: key },
+        { orbitUserId: key },
+      ]),
+    },
+  })
   if (!user && entityType === 'student') {
     const profile = await prisma.studentProfile.findFirst({
       where: { OR: [{ id: identifier }, { studentNumber: identifier }, ...(entity?.studentNumber ? [{ studentNumber: entity.studentNumber }] : [])] },
@@ -596,7 +608,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     })
     user = profile?.user ?? null
   }
-  if (!user?.passwordHash) throw new ApiError(404, 'Compte de connexion introuvable dans KCS Nexus.')
+  if (!user) throw new ApiError(404, 'Compte de connexion introuvable dans KCS Nexus.')
 
   const temporaryPassword = generateTemporaryPassword()
   await prisma.$transaction([

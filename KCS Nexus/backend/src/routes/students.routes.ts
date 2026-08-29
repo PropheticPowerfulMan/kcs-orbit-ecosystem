@@ -434,15 +434,15 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent')
 studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const currentUser = await prisma.user.findUnique({
     where: { id: req.user!.sub },
-    select: { id: true, email: true, accessCode: true },
+    select: { id: true, email: true, accessCode: true, orbitUserId: true },
   })
   if (!currentUser) throw new ApiError(404, 'Parent account not found')
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
     const identityKeys = new Set(
-      [currentUser.id, currentUser.email, currentUser.accessCode]
-        .filter(Boolean)
+      [currentUser.id, currentUser.email, currentUser.accessCode, currentUser.orbitUserId]
+        .filter((value): value is string => Boolean(value))
         .map((value) => value.trim().toLowerCase()),
     )
     const parent = directory.parents.find((candidate) =>
