@@ -11,8 +11,32 @@ const DEMO_ACCESS_TOKEN = 'demo-access-token';
 const IS_GITHUB_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
 const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
-const DIRECTORY_CACHE_TTL_MS = 30000;
-let sharedDirectoryCache = null;
+const DIRECTORY_CACHE_TTL_MS = 5 * 60 * 1000;
+const DIRECTORY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v2';
+
+const readStoredDirectory = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const value = JSON.parse(window.localStorage.getItem(DIRECTORY_STORAGE_KEY) || 'null');
+    return value?.loadedAt && Date.now() - value.loadedAt < DIRECTORY_CACHE_MAX_AGE_MS
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const storeDirectory = (value) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(DIRECTORY_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Le cache memoire reste actif si le stockage du navigateur est indisponible.
+  }
+};
+
+let sharedDirectoryCache = readStoredDirectory();
 let sharedDirectoryRequest = null;
 const DIRECTORY_REQUEST_TIMEOUT_MS = 10000;
 
@@ -213,15 +237,26 @@ export const normalizeClassDisplay = (value) => {
 };
 
 const fetchAllPages = async (path) => {
-  const rows = [];
-  let next = path;
-  while (next) {
-    const response = await api.get(next);
-    if (Array.isArray(response.data)) return response.data;
-    rows.push(...(response.data?.results || []));
-    next = response.data?.next || null;
-  }
-  return rows;
+  const firstResponse = await api.get(path);
+  if (Array.isArray(firstResponse.data)) return firstResponse.data;
+
+  const firstRows = firstResponse.data?.results || [];
+  const total = Number(firstResponse.data?.count || firstRows.length);
+  const pageSize = firstRows.length;
+  if (!firstResponse.data?.next || !pageSize || total <= pageSize) return firstRows;
+
+  const pageCount = Math.ceil(total / pageSize);
+  const separator = path.includes('?') ? '&' : '?';
+  const remainingResponses = await Promise.all(
+    Array.from(
+      { length: pageCount - 1 },
+      (_, index) => api.get(`${path}${separator}page=${index + 2}`)
+    )
+  );
+  return [
+    ...firstRows,
+    ...remainingResponses.flatMap((response) => response.data?.results || []),
+  ];
 };
 const normalizeDirectoryExternalIds = (externalIds) => {
   if (!Array.isArray(externalIds)) {
@@ -606,6 +641,7 @@ export const sharedDirectoryService = {
       .get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS })
       .then((res) => {
         sharedDirectoryCache = { data: res.data, loadedAt: Date.now() };
+        storeDirectory(sharedDirectoryCache);
         return res.data;
       })
       .finally(() => {
