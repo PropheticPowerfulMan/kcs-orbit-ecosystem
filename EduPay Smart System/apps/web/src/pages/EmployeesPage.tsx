@@ -711,6 +711,12 @@ export function EmployeesPage() {
   const [loading, setLoading] = useState(cachedEmployees.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
+  const [employeeTypeFilter, setEmployeeTypeFilter] = useState("ALL");
+  const [jobTitleFilter, setJobTitleFilter] = useState("ALL");
+  const [subjectFilter, setSubjectFilter] = useState("ALL");
+  const [accessFilter, setAccessFilter] = useState("ALL");
+  const [applicationFilter, setApplicationFilter] = useState("ALL");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
@@ -796,12 +802,71 @@ export function EmployeesPage() {
     };
   }, [selectedEmployee, employeeFinanceQuery, employeeFinanceDateFrom, employeeFinanceDateTo]);
 
+  const employeeFilterOptions = useMemo(() => {
+    const unique = (values: Array<string | null | undefined>) => Array.from(new Set(
+      values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))
+    )).sort((left, right) => left.localeCompare(right, lang === "fr" ? "fr" : "en", { sensitivity: "base" }));
+
+    return {
+      departments: unique(employees.map((employee) => employee.department)),
+      employeeTypes: unique(employees.map((employee) => employee.employeeType)),
+      jobTitles: unique(employees.map((employee) => employee.jobTitle)),
+      subjects: unique(employees.map((employee) => employee.subject)),
+      applications: unique(employees.flatMap((employee) => employee.externalIds?.map((item) => item.appSlug) ?? [])),
+    };
+  }, [employees, lang]);
+
   const filteredEmployees = useMemo(() => {
     const term = search.trim();
-    if (!term) return employees;
+    return employees.filter((employee) => {
+      const matchesSearch = !term || searchIndexMatches(buildEmployeeSearchIndex(employee), term);
+      const matchesDepartment = departmentFilter === "ALL" || employee.department === departmentFilter;
+      const matchesEmployeeType = employeeTypeFilter === "ALL" || employee.employeeType === employeeTypeFilter;
+      const matchesJobTitle = jobTitleFilter === "ALL" || employee.jobTitle === jobTitleFilter;
+      const matchesSubject = subjectFilter === "ALL" || employee.subject === subjectFilter;
+      const hasAccess = Boolean(employee.accessCode?.trim());
+      const matchesAccess = accessFilter === "ALL"
+        || (accessFilter === "ACTIVE" ? hasAccess : !hasAccess);
+      const matchesApplication = applicationFilter === "ALL"
+        || employee.externalIds?.some((item) => item.appSlug === applicationFilter);
 
-    return employees.filter((employee) => searchIndexMatches(buildEmployeeSearchIndex(employee), term));
-  }, [employees, search]);
+      return matchesSearch
+        && matchesDepartment
+        && matchesEmployeeType
+        && matchesJobTitle
+        && matchesSubject
+        && matchesAccess
+        && matchesApplication;
+    });
+  }, [
+    accessFilter,
+    applicationFilter,
+    departmentFilter,
+    employeeTypeFilter,
+    employees,
+    jobTitleFilter,
+    search,
+    subjectFilter,
+  ]);
+
+  const activeEmployeeFilterCount = [
+    departmentFilter,
+    employeeTypeFilter,
+    jobTitleFilter,
+    subjectFilter,
+    accessFilter,
+    applicationFilter,
+  ].filter((value) => value !== "ALL").length + (search.trim() ? 1 : 0);
+
+  const resetEmployeeFilters = () => {
+    setSearch("");
+    setDepartmentFilter("ALL");
+    setEmployeeTypeFilter("ALL");
+    setJobTitleFilter("ALL");
+    setSubjectFilter("ALL");
+    setAccessFilter("ALL");
+    setApplicationFilter("ALL");
+  };
 
   const stats = useMemo(() => {
     const departments = new Set(employees.map((employee) => employee.department?.trim()).filter((value): value is string => Boolean(value)));
@@ -1020,12 +1085,77 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      <SearchField
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder={L("Rechercher un employé, matricule, département, bureau, poste ou contact...", "Search employee, ID, department, office, position or contact...")}
-        wrapperClassName="animate-fadeInUp"
-      />
+      <div className="animate-fadeInUp rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+        <SearchField
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={L(
+            "Recherche précise : nom, prénom, matricule, téléphone, e-mail, adresse, fonction, matière ou identifiant applicatif...",
+            "Detailed search: name, employee ID, phone, email, address, position, subject or application ID..."
+          )}
+        />
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.1em] text-ink-dim">
+            {L("Département", "Department")}
+            <select value={departmentFilter} onChange={(event) => setDepartmentFilter(event.target.value)} className="w-full">
+              <option value="ALL">{L("Tous les départements", "All departments")}</option>
+              {employeeFilterOptions.departments.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.1em] text-ink-dim">
+            {L("Type d'employé", "Employee type")}
+            <select value={employeeTypeFilter} onChange={(event) => setEmployeeTypeFilter(event.target.value)} className="w-full">
+              <option value="ALL">{L("Tous les types", "All types")}</option>
+              {employeeFilterOptions.employeeTypes.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.1em] text-ink-dim">
+            {L("Fonction / poste", "Job title")}
+            <select value={jobTitleFilter} onChange={(event) => setJobTitleFilter(event.target.value)} className="w-full">
+              <option value="ALL">{L("Toutes les fonctions", "All job titles")}</option>
+              {employeeFilterOptions.jobTitles.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.1em] text-ink-dim">
+            {L("Matière / spécialité", "Subject / specialty")}
+            <select value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)} className="w-full">
+              <option value="ALL">{L("Toutes les spécialités", "All specialties")}</option>
+              {employeeFilterOptions.subjects.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.1em] text-ink-dim">
+            {L("Accès institutionnel", "Institutional access")}
+            <select value={accessFilter} onChange={(event) => setAccessFilter(event.target.value)} className="w-full">
+              <option value="ALL">{L("Tous les accès", "All access states")}</option>
+              <option value="ACTIVE">{L("Code d'accès actif", "Active access code")}</option>
+              <option value="MISSING">{L("Code d'accès manquant", "Missing access code")}</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.1em] text-ink-dim">
+            {L("Application autorisée", "Authorized application")}
+            <select value={applicationFilter} onChange={(event) => setApplicationFilter(event.target.value)} className="w-full">
+              <option value="ALL">{L("Toutes les applications", "All applications")}</option>
+              {employeeFilterOptions.applications.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+          <p className="text-sm text-ink-dim">
+            {filteredEmployees.length} {L("résultat(s) sur", "result(s) out of")} {employees.length}
+            {" · "}{activeEmployeeFilterCount} {L("critère(s) actif(s)", "active criterion/criteria")}
+          </p>
+          <button
+            type="button"
+            onClick={resetEmployeeFilters}
+            disabled={activeEmployeeFilterCount === 0}
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-ink-dim transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {L("Réinitialiser la recherche", "Reset search")}
+          </button>
+        </div>
+      </div>
 
       {error ? (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger animate-fadeInUp">
