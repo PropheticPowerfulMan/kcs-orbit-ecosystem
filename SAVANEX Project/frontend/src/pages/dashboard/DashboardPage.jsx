@@ -153,6 +153,8 @@ const normalizeLabel = (value, fallback) => {
   return fallback;
 };
 
+const SCHOOL_CLASS_LEVEL_COUNT = 15;
+
 const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) => {
   const visibleStudents = Array.isArray(studentRows) ? studentRows : [];
   const visibleTeachers = Array.isArray(teacherRows) ? teacherRows : [];
@@ -167,7 +169,7 @@ const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) =
   return {
     total_students: sources.students ? activeStudents.length : (overview?.total_students || 0),
     total_teachers: sources.teachers ? activeTeachers.length : (overview?.total_teachers || 0),
-    total_classes: sources.students ? classes.size : (overview?.total_classes || 0),
+    total_classes: Math.max(overview?.total_classes || 0, classes.size, SCHOOL_CLASS_LEVEL_COUNT),
     attendance_rate_30d: overview?.attendance_rate_30d ?? 0,
     average_grade: overview?.average_grade ?? null,
     data_quality: overview?.data_quality || null,
