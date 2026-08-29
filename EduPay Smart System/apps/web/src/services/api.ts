@@ -506,7 +506,7 @@ let offlineFlushPromise: Promise<unknown> | null = null;
 let lastOfflineFlushAt = 0;
 
 function getMemoryCacheTtl(path: string) {
-  return path === "/api/parents" || path === "/api/shared-directory"
+  return path === "/api/parents" || path === "/api/parents/options" || path === "/api/shared-directory"
     ? DIRECTORY_MEMORY_CACHE_TTL_MS
     : API_MEMORY_CACHE_TTL_MS;
 }

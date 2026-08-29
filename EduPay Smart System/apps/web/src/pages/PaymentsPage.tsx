@@ -1865,7 +1865,7 @@ export function PaymentsPage() {
   }, []);
 
   useEffect(() => {
-    api<ParentOption[]>("/api/parents")
+    api<ParentOption[]>("/api/parents/options")
       .then((items) => {
         const normalizedParents = Array.isArray(items)
           ? items.map(normalizeParentOption).sort((left, right) => left.fullName.localeCompare(right.fullName, "fr", { sensitivity: "base" }))

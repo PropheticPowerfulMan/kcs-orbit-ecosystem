@@ -668,6 +668,51 @@ parentRouter.get("/", authorize("ADMIN", "ACCOUNTANT"), async (req: Authenticate
   }
 });
 
+// Lightweight parent directory for payment recipient selectors.
+// This deliberately avoids the shared-registry round trip and financial plan joins.
+parentRouter.get("/options", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const parents = await prisma.parent.findMany({
+      where: { schoolId: req.user!.schoolId },
+      orderBy: { fullName: "asc" },
+      select: {
+        id: true,
+        fullName: true,
+        phone: true,
+        email: true,
+        students: {
+          select: {
+            id: true,
+            externalStudentId: true,
+            fullName: true,
+            classId: true,
+            annualFee: true,
+            class: { select: { name: true } }
+          }
+        }
+      }
+    });
+    res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
+    return res.json(parents.map((parent) => ({
+      id: parent.id,
+      fullName: parent.fullName,
+      phone: parent.phone,
+      email: parent.email,
+      students: parent.students.map((student) => ({
+        id: student.id,
+        externalStudentId: student.externalStudentId,
+        fullName: student.fullName,
+        classId: student.classId,
+        className: student.class?.name ?? student.classId,
+        annualFee: Number(student.annualFee || 0)
+      }))
+    })));
+  } catch (error) {
+    console.error("Unable to load lightweight parent options", error);
+    return res.status(503).json({ message: "Service de selection des parents temporairement indisponible." });
+  }
+});
+
 // GET /me (for PARENT role)
 parentRouter.get("/me", authorize("PARENT"), async (req: AuthenticatedRequest, res) => {
   if (demoDataFallbackEnabled() && req.user!.sub.startsWith("demo-")) {
