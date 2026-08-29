@@ -21,13 +21,13 @@ const quickPrompts = [
 ];
 
 const tabItems = [
-  ["chat", "Chat", "AI"],
-  ["directory", "Entités", "CRUD"],
-  ["actions", "Actions", "+"],
-  ["activity", "Activity", "Log"],
-  ["inbox", "Inbox", "New"],
+  ["chat", "Assistant", "✦"],
+  ["directory", "Directory", "♟"],
+  ["actions", "Actions", "⚡"],
+  ["activity", "Activity", "▥"],
+  ["inbox", "Inbox", "✉"],
   ["guide", "Guide", "?"],
-  ["settings", "Réglages", "Key"],
+  ["settings", "Settings", "⚙"],
 ];
 
 const featureGuide = [
@@ -821,7 +821,7 @@ export default function DashboardPanel() {
               onClick={() => navigateTo(key)}
               aria-current={activeTab === key ? "page" : undefined}
             >
-              <span className="tab-icon">{key === "inbox" && unreadCount > 0 ? unreadCount : icon}</span>
+              <span className="tab-icon" aria-hidden="true"><i>{icon}</i>{key === "inbox" && unreadCount > 0 && <b>{unreadCount > 99 ? "99+" : unreadCount}</b>}</span>
               <span>{label}</span>
             </button>
           ))}
