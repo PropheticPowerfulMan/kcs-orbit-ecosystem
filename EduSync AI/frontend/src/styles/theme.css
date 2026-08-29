@@ -2076,3 +2076,60 @@ textarea,
 [data-theme="dark"] .edusync-login-alert.success{background:#102b1b;border-color:#24583a;color:#9ce6b3}
 @media(max-width:860px){.edusync-login{grid-template-columns:1fr}.edusync-login-brand{display:none}.edusync-login-access{min-height:100vh;min-height:100dvh;padding:5.5rem 1rem 2rem}.edusync-login-card{border-radius:18px;padding:1.4rem}.edusync-login-mobile-brand{display:flex;align-items:center;gap:.7rem;margin-bottom:.25rem;color:#102a3a;font-family:"Space Grotesk",Arial,sans-serif;font-size:1.35rem;font-weight:800}.edusync-login-mobile-brand img{width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid #087ba4}[data-theme="dark"] .edusync-login-mobile-brand{color:#f2f9fc}}
 @media(max-width:420px){.edusync-login-theme{top:.75rem;right:.75rem}.edusync-login-access{padding-inline:.7rem}.edusync-login-card{padding:1.15rem}}
+
+/* KCS Nexus Academy visual system */
+.edusync-login{background:radial-gradient(circle at 15% 15%,#0b3756 0,#071c30 28%,#04111d 68%);color:#eef8ff}
+.edusync-login::before{background-image:linear-gradient(#ffffff05 1px,transparent 0),linear-gradient(90deg,#ffffff05 1px,transparent 0);background-size:55px 55px;mask-image:linear-gradient(180deg,#000,transparent 78%)}
+.edusync-login-brand{background:transparent;padding:clamp(2rem,5vw,4.5rem) clamp(2rem,6vw,5.5rem)}
+.edusync-login-access{background:transparent}
+.edusync-login-card{border-radius:19px;border-color:#dcecf4;background:#fbfdff;box-shadow:0 35px 90px #0007}
+.edusync-login-theme{border-color:#315067;background:#ffffff08;color:#b9d2e2;box-shadow:none}
+[data-theme="dark"] .edusync-login{background:radial-gradient(circle at 15% 15%,#0b3756 0,#071c30 28%,#04111d 68%)}
+[data-theme="dark"] .edusync-login-card{background:linear-gradient(145deg,#0a263c,#071d30);border-color:#21445c;box-shadow:0 35px 90px #0008,inset 0 1px #ffffff08}
+
+.mobile-app-shell{display:block;padding:0;background:#edf5fa}
+.phone-frame{width:100%;max-width:none;height:100vh;height:100dvh;min-height:680px;border:0;border-radius:0;box-shadow:none;display:grid;grid-template-columns:244px minmax(0,1fr);grid-template-rows:78px auto minmax(0,1fr);grid-template-areas:"nav header" "nav status" "nav screen";background:#edf5fa}
+.mobile-header{grid-area:header;padding:0 32px;background:#fbfdff;border:0;border-bottom:1px solid #d9e7ef;box-shadow:0 4px 18px rgba(8,30,50,.04)}
+.mobile-header .school-logo{width:43px;height:43px;border:2px solid #d9e7ef}
+.brand-lockup.compact h1{font-size:1.1rem;color:#142238}.brand-lockup .eyebrow{font-size:.62rem;color:#718096}.presence-line{font-size:.68rem;color:#21a767}
+.icon-button{width:38px;height:38px;min-height:38px;border-radius:9px;border-color:#d9e7ef;background:#f5fafc;color:#29475c}
+.mobile-status{grid-area:status;padding:24px 32px 4px;gap:14px;background:#edf5fa}
+.mobile-status article{padding:16px 18px;border:1px solid #d9e7ef;border-radius:13px;background:#fbfdff;box-shadow:0 7px 22px rgba(7,26,46,.045)}
+.mobile-status span{font-size:1.65rem;color:#071a2e}.mobile-status p{font-size:.72rem;color:#718096;text-transform:uppercase;letter-spacing:.06em}
+.mobile-screen{grid-area:screen;padding:24px 32px 32px;background:#edf5fa}
+.mobile-screen>section{width:min(1180px,100%);margin:0 auto}
+.bottom-tabs{grid-area:nav;display:flex;flex-direction:column;gap:5px;padding:24px 15px;background:#071a2e;border:0;overflow-y:auto}
+.edusync-side-brand{display:flex;align-items:center;gap:10px;height:48px;padding:0 8px;margin-bottom:18px}
+.edusync-side-brand img{width:42px;height:42px;border-radius:12px;background:#fff;object-fit:contain}
+.edusync-side-brand div{display:grid;gap:1px}.edusync-side-brand strong{color:#fff;font-size:16px}.edusync-side-brand strong span{color:#009fe0}.edusync-side-brand small{font-size:8px;letter-spacing:2.7px;color:#8195a8}
+.edusync-side-label{margin:8px 10px 5px;color:#607b90;font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.bottom-tabs button{width:100%;min-height:43px;padding:0 11px;display:grid;grid-template-columns:31px 1fr;align-items:center;justify-items:start;gap:7px;flex-direction:row;border:1px solid transparent;border-radius:9px;color:#93a5b6;font-size:.76rem}
+.bottom-tabs button:hover{transform:none;background:#ffffff08;color:#eaf2f7}
+.bottom-tabs button.active{background:#009fe018;color:#43ccfb;border-color:#009fe03d}
+.tab-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:#ffffff08;color:inherit;font-size:.64rem}
+.section-title{padding:18px 20px;border:1px solid #d9e7ef;border-radius:13px;background:#fbfdff;box-shadow:0 7px 22px rgba(7,26,46,.04)}
+.section-title h2{font-size:1.45rem;color:#142238}.section-title .eyebrow{color:#008fc7}
+.prompt-chip,.ghost-button{border-radius:9px;border-color:#d9e7ef;background:#fbfdff;color:#078fbd}
+.mobile-form,.activity-row,.analytics-card,.guide-list article,.notification-row,.message-bubble.assistant,.mobile-empty{border-color:#d9e7ef;border-radius:13px;background:#fbfdff;box-shadow:0 7px 22px rgba(7,26,46,.045)}
+.mobile-form{padding:20px}.mobile-form input,.mobile-form select,.mobile-form textarea,.workflow-form input{border-color:#d8e5ec;border-radius:9px;background:#f6fafc}
+.message-list{padding:4px}.message-bubble{border-radius:13px}.message-bubble.user{background:#009fe0;border-color:#009fe0}
+.composer{padding:12px;border:1px solid #d9e7ef;border-radius:14px;background:#fbfdff;box-shadow:0 10px 28px rgba(7,26,46,.08)}.composer input{background:#f6fafc;border-color:#d8e5ec}
+.action-tags button,.action-tags span,.message-meta span{border-radius:7px}
+[data-theme="dark"] .mobile-app-shell,[data-theme="dark"] .phone-frame,[data-theme="dark"] .mobile-status,[data-theme="dark"] .mobile-screen{background:#07111e}
+[data-theme="dark"] .mobile-header,[data-theme="dark"] .mobile-status article,[data-theme="dark"] .section-title,[data-theme="dark"] .prompt-chip,[data-theme="dark"] .ghost-button,[data-theme="dark"] .mobile-form,[data-theme="dark"] .activity-row,[data-theme="dark"] .analytics-card,[data-theme="dark"] .guide-list article,[data-theme="dark"] .notification-row,[data-theme="dark"] .mobile-empty,[data-theme="dark"] .composer{background:#0e1d2e;border-color:#203449}
+[data-theme="dark"] .brand-lockup.compact h1,[data-theme="dark"] .section-title h2,[data-theme="dark"] .mobile-status span{color:#eaf2f7}
+[data-theme="dark"] .mobile-form input,[data-theme="dark"] .mobile-form select,[data-theme="dark"] .mobile-form textarea,[data-theme="dark"] .workflow-form input,[data-theme="dark"] .composer input{background:#15283b;border-color:#29475c}
+@media(max-width:800px){
+ .phone-frame{grid-template-columns:1fr;grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"header" "status" "screen" "nav";min-height:0}
+ .mobile-header{padding:12px 14px}.mobile-status{padding:12px 12px 4px;gap:7px}.mobile-status article{padding:10px}
+ .mobile-screen{padding:12px}
+ .bottom-tabs{display:grid;grid-template-columns:repeat(7,minmax(54px,1fr));grid-area:nav;overflow-x:auto;padding:7px;background:#071a2e;border-top:1px solid #203449}
+ .edusync-side-brand,.edusync-side-label{display:none}
+ .bottom-tabs button{min-width:54px;min-height:49px;padding:4px;display:flex;gap:2px;align-items:center;justify-content:center;font-size:.62rem}
+ .tab-icon{width:24px;height:24px}
+}
+@media(max-width:520px){
+ .mobile-status p{font-size:.61rem}.mobile-status span{font-size:1.25rem}
+ .section-title{padding:14px}.section-title h2{font-size:1.18rem}
+ .quick-prompt-row{grid-template-columns:1fr}
+}

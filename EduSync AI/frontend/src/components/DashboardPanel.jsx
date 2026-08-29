@@ -788,6 +788,11 @@ export default function DashboardPanel() {
         </div>
 
         <nav className="bottom-tabs" aria-label="Navigation principale">
+          <div className="edusync-side-brand">
+            <img src={schoolLogo} alt="" />
+            <div><strong>EduSync <span>AI</span></strong><small>KCS ECOSYSTEM</small></div>
+          </div>
+          <p className="edusync-side-label">Workspace</p>
           {tabItems.map(([key, label, icon]) => (
             <button
               type="button"
