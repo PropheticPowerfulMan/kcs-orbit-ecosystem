@@ -11,7 +11,7 @@ import EntityPdfButton from '../../components/ui/EntityPdfButton';
 import StatCard from '../../components/ui/StatCard';
 import { emptyIdentityCapture, IdentityCapturePanel, KcsIdCard } from '../../components/ui/KcsIdentityTools';
 import SearchField from '../../components/ui/SearchField';
-import { normalizeClassDisplay, studentsService } from '../../services/api';
+import { normalizeClassDisplay, sharedDirectoryService, studentsService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 
 const normalizeLabel = (value, fallback) => {
@@ -113,6 +113,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
   const [classSuffixFilter, setClassSuffixFilter] = useState('all');
   const [familyFilter, setFamilyFilter] = useState('all');
   const [students, setStudents] = useState([]);
+  const [directoryCounts, setDirectoryCounts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -155,8 +156,12 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       setError('');
 
       try {
-        const data = await studentsService.getAll();
+        const [data, directory] = await Promise.all([
+          studentsService.getAll(),
+          sharedDirectoryService.get(),
+        ]);
         setStudents(data);
+        setDirectoryCounts(directory?.counts || null);
       } catch {
         setError("Impossible de charger les élèves pour le moment.");
       } finally {
@@ -170,7 +175,12 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       if (refreshInFlight) return;
       refreshInFlight = true;
       try {
-        setStudents(await studentsService.getAll());
+        const [data, directory] = await Promise.all([
+          studentsService.getAll(),
+          sharedDirectoryService.get(),
+        ]);
+        setStudents(data);
+        setDirectoryCounts(directory?.counts || null);
       } catch {
         // Le prochain cycle retentera sans masquer les données déjà affichées.
       } finally {
@@ -263,9 +273,17 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       .sort((left, right) => right.total - left.total || left.familyName.localeCompare(right.familyName));
   }, [filtered]);
 
-  const linkedFamilies = new Set(filtered.map((student) => student.parent_name).filter(Boolean)).size;
+  const isFullDirectoryView = !query.trim()
+    && classLevelFilter === 'all'
+    && classSuffixFilter === 'all'
+    && familyFilter === 'all';
+  const linkedFamiliesFromStudents = new Set(filtered.map((student) => student.parent_name).filter(Boolean)).size;
+  const linkedFamilies = isFullDirectoryView
+    ? (directoryCounts?.families ?? directoryCounts?.parents ?? linkedFamiliesFromStudents)
+    : linkedFamiliesFromStudents;
   const activeStudents = filtered.filter((student) => student.is_active).length;
-  const classesCovered = new Set(filtered.map((student) => student.class_name).filter(Boolean)).size;
+  const detectedClasses = new Set(filtered.map((student) => normalizeClassDisplay(student.class_name)).filter(Boolean)).size;
+  const classesCovered = isFullDirectoryView ? standardClassLevels.length : detectedClasses;
 
   const updateStudentDraft = (index, field, value) => {
     setForm((current) => ({

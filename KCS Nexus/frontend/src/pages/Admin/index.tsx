@@ -2059,8 +2059,15 @@ const AdminSectionView = ({
 
   if (segment === 'students') {
     const activeStudents = filteredRoster.filter((student) => student.status.toLowerCase() === 'active').length
-    const classesCovered = Object.keys(rosterByClass).length
-    const familiesCovered = Object.keys(rosterByFamily).length
+    const isFullDirectoryView = !studentQuery.trim()
+      && divisionFilter === 'All'
+      && gradeFilter === 'All'
+      && classSuffixFilter === 'All'
+      && familyFilter === 'All'
+    const classesCovered = isFullDirectoryView ? SCHOOL_LEVELS.length : Object.keys(rosterByClass).length
+    const familiesCovered = isFullDirectoryView
+      ? (sharedDirectory?.counts?.families ?? sharedDirectory?.counts?.parents ?? parentRecords.length)
+      : Object.keys(rosterByFamily).length
 
     return (
       <div className="space-y-6">
