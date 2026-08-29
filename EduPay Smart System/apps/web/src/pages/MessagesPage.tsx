@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Eye, Mail, MessageSquare, Send, Trash2, Users, X } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { useI18n } from "../i18n";
-import { api } from "../services/api";
+import { api, getCachedApiResponse } from "../services/api";
 
 type ParentOption = {
   id: string;
@@ -12,6 +12,12 @@ type ParentOption = {
   email?: string;
   students?: Array<{ id: string; fullName: string; className?: string }>;
 };
+
+function sortParentOptions(items: ParentOption[]) {
+  return items.slice().sort((left, right) =>
+    left.fullName.localeCompare(right.fullName, "fr", { sensitivity: "base" })
+  );
+}
 
 type ManualMessageLog = {
   id: string;
@@ -78,7 +84,10 @@ export function MessagesPage() {
     const stateLabel = ({ OPEN: L("actif", "active"), SENT: L("envoyé", "sent"), SIMULATED: L("simulé", "simulated"), SKIPPED: L("ignoré", "skipped"), PENDING: L("en attente", "pending"), FAILED: L("échoué", "failed") } as Record<string, string>)[state] ?? state;
     return state ? `${channelLabel}: ${stateLabel}` : channelLabel;
   }).join(" · ");
-  const [parents, setParents] = useState<ParentOption[]>([]);
+  const [parents, setParents] = useState<ParentOption[]>(() => {
+    const cached = getCachedApiResponse<ParentOption[]>("/api/parents/options");
+    return sortParentOptions(Array.isArray(cached) ? cached : []);
+  });
   const [logs, setLogs] = useState<ManualMessageLog[]>([]);
   const [search, setSearch] = useState("");
   const [selectedParentIds, setSelectedParentIds] = useState<string[]>([]);
@@ -101,16 +110,13 @@ export function MessagesPage() {
   const [deletingMany, setDeletingMany] = useState(false);
 
   async function loadData() {
-    const [parentsResult, logsResult] = await Promise.all([
-      api<ParentOption[]>("/api/parents").catch(() => []),
-      api<ManualMessageLog[]>("/api/notifications/messages").catch(() => []),
-    ]);
-    setParents(
-      (Array.isArray(parentsResult) ? parentsResult : [])
-        .slice()
-        .sort((left, right) => left.fullName.localeCompare(right.fullName, "fr", { sensitivity: "base" }))
-    );
-    setLogs(Array.isArray(logsResult) ? logsResult : []);
+    const parentsRequest = api<ParentOption[]>("/api/parents/options")
+      .then((items) => setParents(sortParentOptions(Array.isArray(items) ? items : [])))
+      .catch(() => undefined);
+    const logsRequest = api<ManualMessageLog[]>("/api/notifications/messages")
+      .then((items) => setLogs(Array.isArray(items) ? items : []))
+      .catch(() => undefined);
+    await Promise.all([parentsRequest, logsRequest]);
   }
 
   useEffect(() => {
