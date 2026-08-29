@@ -6,6 +6,7 @@ import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { splitClassName } from '../utils/className.js'
 import { sendSchoolMail } from '../utils/mail.js'
 import { sendSchoolSms } from '../utils/sms.js'
 
@@ -123,19 +124,6 @@ function splitName(person: { fullName?: string | null; firstName?: string | null
   return {
     firstName: person.firstName || parts[0] || '',
     lastName: person.lastName || parts.slice(1).join(' ') || '',
-  }
-}
-
-function splitClassName(className?: string | null) {
-  const cleanClassName = (className ?? '').trim()
-  if (!cleanClassName) {
-    return { grade: 'Grade 1', section: '' }
-  }
-
-  const match = cleanClassName.match(/^(.*?)(?:\s+([A-Z]))?$/)
-  return {
-    grade: match?.[1]?.trim() || cleanClassName,
-    section: match?.[2] || '',
   }
 }
 
