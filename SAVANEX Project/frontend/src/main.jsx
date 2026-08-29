@@ -7,12 +7,14 @@ import './styles/global.css';
 import './i18n';
 import { registerPwa } from './registerPwa';
 import MutationFeedback from './components/common/MutationFeedback';
+import GlobalLanguageBridge from './localization/GlobalLanguageBridge';
 
 registerPwa();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HashRouter>
+      <GlobalLanguageBridge />
       <App />
       <MutationFeedback />
       <InstallAppButton />
