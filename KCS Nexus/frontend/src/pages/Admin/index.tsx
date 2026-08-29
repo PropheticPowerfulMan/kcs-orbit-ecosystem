@@ -3142,6 +3142,7 @@ const AdminDashboard = () => {
   const [officialRoster, setOfficialRoster] = useState<AdminStudentRecord[]>(readStoredRoster)
   const [admissionRequests, setAdmissionRequests] = useState<AdminAdmissionRequest[]>(readStoredAdmissions)
   const [dashboardFinance, setDashboardFinance] = useState<EduPayFinanceSummary | null>(null)
+  const [dashboardDirectory, setDashboardDirectory] = useState<SharedDirectoryPayload | null>(null)
   const [dashboardFinanceError, setDashboardFinanceError] = useState('')
   const [dashboardAction, setDashboardAction] = useState('')
   const [reportCardControl, setReportCardControl] = useState<any>(null)
@@ -3179,6 +3180,9 @@ const AdminDashboard = () => {
         setAdmissionRequests([])
         setDashboardAction(error?.response?.data?.message ?? 'Unable to load online admissions from the central registry.')
       })
+    void registryAPI.getDirectory()
+      .then((response) => setDashboardDirectory(response.data?.data ?? null))
+      .catch(() => setDashboardDirectory(null))
     void getAdminRoster()
       .then((response) => {
         const records = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : []
@@ -3244,10 +3248,12 @@ const AdminDashboard = () => {
             {dashboardAction && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{dashboardAction}</p>}
           </section>
 
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             {[
-              { label: 'Official Registry', value: String(officialRoster.length), icon: GraduationCap, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300', sub: 'students controlled by Super Admin' },
-              { label: 'Faculty Members', value: '0', icon: Users, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', sub: 'no employee registered' },
+              { label: 'Official Registry', value: String(dashboardDirectory?.counts?.students ?? officialRoster.length), icon: GraduationCap, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300', sub: 'students controlled by Super Admin' },
+              { label: 'School Classes', value: String(SCHOOL_LEVELS.length), icon: BookOpen, tone: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', sub: 'K3 to Grade 12' },
+              { label: 'Parents / Families', value: String(dashboardDirectory?.counts?.families ?? 0), icon: Users, tone: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', sub: 'official responsible families' },
+              { label: 'Faculty Members', value: String(dashboardDirectory?.counts?.teachers ?? 0), icon: Users, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', sub: 'employees in the shared registry' },
               { label: 'Open Applications', value: String(pendingAdmissions.length), icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', sub: 'approval or refusal required' },
               { label: 'AI Risk Alerts', value: '0', icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no active alert' },
               { label: 'Live Events', value: '0', icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no scheduled event' },

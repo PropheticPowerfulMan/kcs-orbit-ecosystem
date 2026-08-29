@@ -1661,7 +1661,7 @@ export function StudentsDirectoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 animate-fadeInUp">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5 animate-fadeInUp">
         <div className="card">
           <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Élèves", "Students")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-cyan-300">{directory?.counts.students ?? 0}</p>
@@ -1673,6 +1673,10 @@ export function StudentsDirectoryPage() {
         <div className="card">
           <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Familles", "Families")}</p>
           <p className="mt-1 font-display text-3xl font-bold text-emerald-300">{directory?.counts.families ?? 0}</p>
+        </div>
+        <div className="card">
+          <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Classes", "Classes")}</p>
+          <p className="mt-1 font-display text-3xl font-bold text-amber-300">{classOptions.length}</p>
         </div>
         <div className="card">
           <p className="text-xs uppercase tracking-[0.1em] text-ink-dim">{L("Résultats", "Results")}</p>
