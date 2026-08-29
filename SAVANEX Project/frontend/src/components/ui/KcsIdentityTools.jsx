@@ -247,8 +247,8 @@ export const KcsIdCard = ({ entity }) => {
     return [...fields, { label, value: normalized }];
   };
 
-  const fullName = entity.full_name || entity.fullName || entity.name || 'Identite KCS';
-  const role = entity.role || entity.entityType || 'KCS';
+  const fullName = entity.full_name || entity.fullName || entity.family_name || entity.name || 'Identité KCS';
+  const role = entity.role || entity.entityType || (entity.parent_external_id ? 'Parent' : 'KCS');
   const primaryId = entity.kcs_card_id || entity.student_id || entity.employee_id || entity.teacher_id || entity.id || 'KCS-ID';
   const functionalId = entity.student_id || entity.employee_id || entity.teacher_id || entity.id || primaryId;
   const roleKey = String(role).toLowerCase();
@@ -280,14 +280,12 @@ export const KcsIdCard = ({ entity }) => {
     }
 
     if (isParent) {
-      fields = addField(fields, 'ID', entity.parent_external_id || functionalId);
-      fields = addField(fields, 'Nom', entity.family_name || fullName);
+      fields = addField(fields, 'ID parent', entity.parent_external_id || functionalId);
       fields = addField(fields, 'Enfants', entity.students_label);
       fields = addField(fields, 'Classes', entity.classes_label);
-      fields = addField(fields, 'Tel', entity.phone);
+      fields = addField(fields, 'Téléphone', entity.phone);
       fields = addField(fields, 'Email', entity.email);
-      fields = addField(fields, 'Carte', entity.kcs_card_id || primaryId);
-      return fields.slice(0, 7);
+      return fields.slice(0, 5);
     }
 
     if (isEmployee) {
