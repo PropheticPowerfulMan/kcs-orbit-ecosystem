@@ -162,6 +162,16 @@ const TimetablePage = () => {
         ))}
       </section>
 
+      <section className="mb-6">
+        <div className="mb-3"><p className="text-xs font-bold uppercase tracking-[0.2em] text-kcs-blue">Laboratoire d’analyse scientifique</p><h3 className="mt-1 font-display text-xl font-semibold text-white">Diagnostic mathématique du planning</h3></div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <article className="card p-5"><p className="text-xs uppercase tracking-[0.18em] text-cyan-300">Indice d’équilibre</p><p className="mt-2 font-display text-3xl font-bold text-white">{scientificMetrics.balanceScore}%</p><p className="mt-1 text-xs text-slate-400">Répartition statistique des charges</p></article>
+          <article className="card p-5"><p className="text-xs uppercase tracking-[0.18em] text-violet-300">Écart-type</p><p className="mt-2 font-display text-3xl font-bold text-white">{scientificMetrics.deviation} h</p><p className="mt-1 text-xs text-slate-400">Moyenne : {scientificMetrics.average} h / enseignant</p></article>
+          <article className="card p-5"><p className="text-xs uppercase tracking-[0.18em] text-emerald-300">Cours STEM</p><p className="mt-2 font-display text-3xl font-bold text-white">{scientificMetrics.stemRate}%</p><p className="mt-1 text-xs text-slate-400">{scientificMetrics.stem} créneau(x) mathématiques et sciences</p></article>
+          <article className="card p-5"><p className="text-xs uppercase tracking-[0.18em] text-amber-300">Avant midi</p><p className="mt-2 font-display text-3xl font-bold text-white">{scientificMetrics.morningRate}%</p><p className="mt-1 text-xs text-slate-400">Concentration des cours matinaux</p></article>
+        </div>
+      </section>
+
       <DataTable columns={columns} data={slots} />
     </DashboardLayout>
   );
