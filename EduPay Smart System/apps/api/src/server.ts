@@ -22,6 +22,7 @@ import { prisma } from "./prisma";
 import { createCorsOptions } from "./cors";
 
 const app = express();
+app.set("trust proxy", 1);
 
 type ExpressLayer = { handle?: (...args: any[]) => any; route?: { stack?: ExpressLayer[] }; name?: string };
 
