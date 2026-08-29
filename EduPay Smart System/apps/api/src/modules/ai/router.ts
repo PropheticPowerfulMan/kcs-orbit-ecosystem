@@ -8,7 +8,8 @@ aiRouter.use(authGuard);
 
 const querySchema = z.object({
   query: z.string().min(3),
-  context: z.any().optional()
+  context: z.any().optional(),
+  language: z.enum(["fr", "en"]).default("fr")
 });
 
 function normalize(value: string | undefined) {
@@ -157,7 +158,7 @@ function compactAssistantContext(context: any) {
   };
 }
 
-async function queryOpenAiAssistant(query: string, context: any) {
+async function queryOpenAiAssistant(query: string, context: any, language: "fr" | "en") {
   if (!env.OPENAI_API_KEY) return null;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -174,7 +175,9 @@ async function queryOpenAiAssistant(query: string, context: any) {
       messages: [
         {
           role: "system",
-          content: "Tu es l'assistant financier EduPay, avec une conversation naturelle comme ChatGPT. Réponds en français clair sauf demande contraire. Donne une reponse JSON avec answer, suggestions, facts, actions et confidence. Utilise uniquement les données fournies; si une information manque, dis-le franchement et propose la meilleure prochaine action."
+          content: language === "fr"
+            ? "Tu es l’assistant financier EduPay. Réponds exclusivement en français soigné, avec accents, grammaire correcte et vocabulaire financier clair. Retourne un JSON avec answer, suggestions, facts, actions et confidence. Utilise uniquement les données fournies."
+            : "You are the EduPay financial assistant. Respond exclusively in clear, professional English. Return JSON with answer, suggestions, facts, actions and confidence. Use only the supplied data."
         },
         {
           role: "user",
@@ -195,7 +198,7 @@ aiRouter.post("/assistant", authorize("ADMIN", "ACCOUNTANT"), async (req, res) =
   const payload = querySchema.parse(req.body);
 
   try {
-    const openAiResponse = await queryOpenAiAssistant(payload.query, payload.context);
+    const openAiResponse = await queryOpenAiAssistant(payload.query, payload.context, payload.language);
     if (openAiResponse) return res.json(openAiResponse);
   } catch (error) {
     console.error("OpenAI assistant unavailable, trying configured AI service", error);

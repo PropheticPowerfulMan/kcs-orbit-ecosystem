@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Bot, Eye, EyeOff, Lightbulb, MessageSquareText, Send, Sparkles, Trash2, Zap } from "lucide-react";
+import { Bot, Eye, EyeOff, Lightbulb, MessageSquareText, Send, Sparkles, Trash2, Zap, Printer } from "lucide-react";
 import { useI18n } from "../i18n";
 import { api } from "../services/api";
+import { printAssistantReport } from "../utils/aiAssistantReport";
 
 type AssistantResponse = {
   answer: string;
@@ -301,7 +302,7 @@ function buildStudentPaymentRows(context: AssistantContext) {
         const balance = Math.max(asNumber(student.balance) || expected - paid, 0);
         return {
           id: student.id,
-          name: student.fullName ?? "Eleve sans nom",
+          name: student.fullName ?? "Élève sans nom",
           parentName: parent.fullName,
           parentPhone: parent.phone,
           parentEmail: parent.email,
@@ -326,7 +327,7 @@ function extractMentionedClass(query: string, rows: ReturnType<typeof buildStude
 }
 
 function formatStudentPaymentLine(row: ReturnType<typeof buildStudentPaymentRows>[number]) {
-  const contact = row.parentPhone || row.parentEmail || "contact non renseigne";
+  const contact = row.parentPhone || row.parentEmail || "contact non renseigné";
   return `${row.name} - ${row.className} - parent ${row.parentName} (${contact}) - attendu ${USD.format(row.expected)}, paye ${USD.format(row.paid)}, reste ${USD.format(row.balance)}.`;
 }
 
@@ -389,12 +390,12 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
           : `No student ${wantsNoPaymentYet ? "with no recorded payment" : "with remaining balance"} appears in the currently loaded data${mentionedClass ? ` for ${mentionedClass}` : ""}.`,
       facts: lang === "fr"
         ? [
-            `${targetRows.length} élève(s) concerne(s)${mentionedClass ? ` dans ${mentionedClass}` : ""}.`,
+            `${targetRows.length} élève(s) concerné(s)${mentionedClass ? ` dans ${mentionedClass}` : ""}.`,
             `Total attendu sur cette sélection : ${USD.format(totalExpected)}.`,
             `Total déjà encaissé : ${USD.format(totalPaid)}.`,
             `Solde restant : ${USD.format(totalBalance)}.`,
             ...(shownRows.length > 0 ? shownRows : ["Aucune ligne élève à afficher."]),
-            ...(hiddenCount > 0 ? [`${hiddenCount} autre(s) élève(s) non affiché(s) dans cette synthese.`] : [])
+            ...(hiddenCount > 0 ? [`${hiddenCount} autre(s) élève(s) non affiché(s) dans cette synthèse.`] : [])
           ]
         : [
             `${targetRows.length} student(s) concerned${mentionedClass ? ` in ${mentionedClass}` : ""}.`,
@@ -426,16 +427,16 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
     const debt = parentDebt?.debt ?? asNumber(parentProfile?.profile.totalDebt);
     return {
       answer: lang === "fr"
-        ? `Le dossier de ${mentionedParent.fullName} est identifiable et peut être traité directement. Le point important est le solde restant, car il déterminé la priorité de relance.`
+        ? `Le dossier de ${mentionedParent.fullName} est identifiable et peut être traité directement. Le point important est le solde restant, car il détermine la priorité de relance.`
         : `${mentionedParent.fullName}'s file is clearly identifiable and can be handled directly. The important point is the remaining balance, because it drives follow-up priority.`,
       facts: lang === "fr"
         ? [
-          `${mentionedParentRecord?.students?.length ?? 0} enfant(s) rattache(s).`,
+          `${mentionedParentRecord?.students?.length ?? 0} enfant(s) rattaché(s).`,
             `Total attendu : ${USD.format(expected)}.`,
-            `Total encaisse : ${USD.format(paid)}.`,
-            `Solde restant estime : ${USD.format(debt)}.`,
+            `Total encaissé : ${USD.format(paid)}.`,
+            `Solde restant estimé : ${USD.format(debt)}.`,
             `Échéances en retard : ${parentProfile?.profile.overdueInstallments ?? 0}.`,
-            `Contact disponible : ${mentionedParent.phone || mentionedParent.email || "non renseigne"}.`
+            `Contact disponible : ${mentionedParent.phone || mentionedParent.email || "non renseigné"}.`
           ]
         : [
           `${mentionedParentRecord?.students?.length ?? 0} linked child(ren).`,
@@ -459,7 +460,7 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
     return {
       answer: lang === "fr"
         ? topParent
-          ? `La situation demande une action de relance ciblee. Le parent le plus prioritaire ressort nettement, donc il vaut mieux commencer par lui avant d'envoyer des messages generaux.`
+          ? `La situation demande une action de relance ciblée. Le parent le plus prioritaire ressort nettement, donc il vaut mieux commencer par lui avant d'envoyer des messages généraux.`
           : `Aucun retard net dominant n'apparaît dans les données actuelles. Le point a surveiller reste le volume des paiements en attente.`
         : topParent
           ? `The situation calls for targeted follow-up. One priority parent stands out, so start there before sending broad reminders.`
@@ -467,8 +468,8 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
       facts: lang === "fr"
         ? [
             `${insights.parentsWithDebt.length} parent(s) avec solde restant.`,
-            topParent ? `Priorite actuelle : ${topParent.name} (${USD.format(topParent.debt)}).` : "Aucun parent prioritaire net.",
-            `Dette globale estimee : ${USD.format(insights.outstandingDebt)}.`,
+            topParent ? `Priorité actuelle : ${topParent.name} (${USD.format(topParent.debt)}).` : "Aucun parent prioritaire net.",
+            `Dette globale estimée : ${USD.format(insights.outstandingDebt)}.`,
             `Paiements en attente : ${USD.format(insights.pendingAmount)}.`,
             `Échéances en retard : ${insights.overdueInstallments}.`
           ]
@@ -480,7 +481,7 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
             `Overdue installments: ${insights.overdueInstallments}.`
           ],
       actions: lang === "fr"
-        ? ["Contacter d'abord le parent prioritaire.", "Vérifier si un paiement récent n'est pas encore valide.", "Préparer un échéancier court et clair."]
+        ? ["Contacter d'abord le parent prioritaire.", "Vérifier si un paiement récent n’est pas encore validé.", "Préparer un échéancier court et clair."]
         : ["Contact the priority parent first.", "Check whether a recent payment is still pending.", "Prepare a short and clear payment plan."],
       confidence: lang === "fr" ? FR_CONFIDENCE : EN_CONFIDENCE,
       suggestions: lang === "fr"
@@ -496,7 +497,7 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
         : `Financial performance is readable: collections are healthy if the success rate stays near or above 80%. Pending payments should be reviewed quickly so tracking stays accurate.`,
       facts: lang === "fr"
         ? [
-            `Revenu encaisse : ${USD.format(insights.revenue)}.`,
+            `Revenu encaissé : ${USD.format(insights.revenue)}.`,
             `Taux de succès : ${insights.successRate.toFixed(1)} %.`,
             `Paiements en attente : ${USD.format(insights.pendingAmount)}.`,
             insights.bestMonth ? `Meilleur mois observé : ${insights.bestMonth[0]} (${USD.format(insights.bestMonth[1])}).` : "Pas assez d'historique mensuel pour identifier un meilleur mois."
@@ -505,7 +506,7 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
             `Collected revenue: ${USD.format(insights.revenue)}.`,
             `Success rate: ${insights.successRate.toFixed(1)}%.`,
             `Pending payments: ${USD.format(insights.pendingAmount)}.`,
-            insights.bestMonth ? `Best observéd month: ${insights.bestMonth[0]} (${USD.format(insights.bestMonth[1])}).` : "Not enough monthly history to identify a best month."
+            insights.bestMonth ? `Best observed month: ${insights.bestMonth[0]} (${USD.format(insights.bestMonth[1])}).` : "Not enough monthly history to identify a best month."
           ],
       actions: lang === "fr"
         ? ["Valider les paiements en attente.", "Comparer les revenus aux frais attendus.", "Surveiller les parents à forte dette."]
@@ -532,7 +533,7 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
             `Paiements récents : ${latest || "aucun paiement disponible"}.`
           ]
         : [
-            insights.bestMonth ? `Best observéd month: ${insights.bestMonth[0]} with ${USD.format(insights.bestMonth[1])}.` : "Best month not déterminéd.",
+            insights.bestMonth ? `Best observed month: ${insights.bestMonth[0]} with ${USD.format(insights.bestMonth[1])}.` : "Best month not determined.",
             `Average collected payment: ${USD.format(insights.averagePayment)}.`,
             `Recent payments: ${latest || "no payment available"}.`
           ],
@@ -551,13 +552,13 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
     return {
       answer: lang === "fr"
         ? names
-          ? `Les cas critiques doivent être traités individuellement. Une relance générale risque d'etre moins efficace qu'un message personnalisé avec montant, délai et option d'échéancier.`
+          ? `Les cas critiques doivent être traités individuellement. Une relance générale risque d’être moins efficace qu'un message personnalisé avec montant, délai et option d'échéancier.`
           : "Aucun profil critique net n'apparaît avec les données actuelles."
         : names
           ? `Critical cases should be handled individually. A general reminder is less effective than a personalized message with amount, deadline and payment-plan option.`
           : "No clear critical profile appears in current data.",
       facts: lang === "fr"
-        ? [names ? `Parents prioritaires : ${names}.` : "Aucun parent prioritaire net.", `Dette globale estimee : ${USD.format(insights.outstandingDebt)}.`]
+        ? [names ? `Parents prioritaires : ${names}.` : "Aucun parent prioritaire net.", `Dette globale estimée : ${USD.format(insights.outstandingDebt)}.`]
         : [names ? `Priority parents: ${names}.` : "No clear priority parent.", `Estimated total debt: ${USD.format(insights.outstandingDebt)}.`],
       actions: lang === "fr"
         ? ["Traiter les 3 premiers dossiers en priorité.", "Appeler si le montant est élevé.", "Documenter chaque relance."]
@@ -574,9 +575,9 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
     return {
       answer: lang === "fr"
         ? list ? `Les contributions les plus fortes montrent les familles déjà régulières. Elles peuvent servir de référence pour suivre la stabilité des encaissements.` : "Aucune contribution parent claire n'est disponible dans les paiements actuels."
-        : list ? `The strongest contributions show the already regular families. They can be used as a référence for collection stability.` : "No clear parent contribution is available from current payments.",
+        : list ? `The strongest contributions show the already regular families. They can be used as a reference for collection stability.` : "No clear parent contribution is available from current payments.",
       facts: lang === "fr"
-        ? [list ? `Top contributions : ${list}.` : "Pas de top contribution disponible.", `Revenu encaisse total : ${USD.format(insights.revenue)}.`]
+        ? [list ? `Top contributions : ${list}.` : "Pas de top contribution disponible.", `Revenu encaissé total : ${USD.format(insights.revenue)}.`]
         : [list ? `Top contributions: ${list}.` : "No top contribution available.", `Total collected revenue: ${USD.format(insights.revenue)}.`],
       actions: lang === "fr"
         ? ["Comparer ces familles aux dossiers en retard.", "Identifier les classes les plus stables.", "Préparer un rapport financier."]
@@ -599,7 +600,7 @@ function localAssistantReply(query: string, lang: "fr" | "en", context: Assistan
           `Encaisse : ${USD.format(insights.revenue)}.`,
           `Dette estimee : ${USD.format(insights.outstandingDebt)}.`,
           `Taux de succès : ${insights.successRate.toFixed(1)} %.`,
-          `Priorites : ${topDebts || "aucune dette prioritaire detectee"}.`
+          `Priorites : ${topDebts || "aucune dette prioritaire détectée"}.`
         ]
       : [
           `${insights.parentCount} parent(s), ${insights.studentCount} student(s), ${context.payments.length} payment(s).`,
@@ -734,8 +735,9 @@ function ResponseSections({ response }: { response: { answer?: string; text?: st
 
 export function AIAssistantPage() {
   const { t, lang } = useI18n();
-  const [query, setQuery] = useState(lang === "fr" ? "Qui n'a pas paye ce mois-ci ?" : "Who has not paid this month?");
+  const [query, setQuery] = useState(lang === "fr" ? "Qui n’a pas payé ce mois-ci ?" : "Who has not paid this month?");
   const [result, setResult] = useState<AssistantResponse | null>(null);
+  const [lastQuestion, setLastQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [historyVisible, setHistoryVisible] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -743,11 +745,11 @@ export function AIAssistantPage() {
 
   const examples = useMemo(() => lang === "fr"
     ? [
-        "Qui n'a pas paye ce mois-ci ?",
+        "Qui n’a pas payé ce mois-ci ?",
         "Quel est le revenu total ?",
         "Affiche les retards critiques",
         "Quels sont les paiements récents ?",
-        "Genere un rapport résumé"
+        "Génère un rapport résumé"
       ]
     : [
         "Who has not paid this month?",
@@ -763,6 +765,7 @@ export function AIAssistantPage() {
 
     setLoading(true);
     setError(null);
+    setLastQuestion(askedQuestion);
     const now = Date.now();
     const assistantMessageId = `assistant-${now}`;
     setMessages((current) => [...current, { id: `user-${now}`, role: "user", text: askedQuestion }]);
@@ -784,13 +787,16 @@ export function AIAssistantPage() {
     try {
       const data = await api<AssistantResponse>("/api/ai/assistant", {
         method: "POST",
-        body: JSON.stringify({ query: askedQuestion, context })
+        body: JSON.stringify({ query: askedQuestion, language: lang, context: { ...context, preferredLanguage: lang } })
       });
-      const finalResult = isGenericAssistantResponse(data) ? localResult : {
+      const languageMismatch = lang === "fr"
+        ? /\b(the|this|with|should|payment|student|remaining)\b/i.test(data?.answer ?? "")
+        : /\b(les|des|avec|doit|paiement|élève|solde|données)\b/i.test(data?.answer ?? "");
+      const finalResult = isGenericAssistantResponse(data) || languageMismatch ? localResult : {
         ...data,
         tableRows: data.tableRows ?? (isPrecisionFinanceQuestion(askedQuestion) ? localResult.tableRows : undefined)
       };
-      if (!isGenericAssistantResponse(data)) {
+      if (!isGenericAssistantResponse(data) && !languageMismatch) {
         setResult(finalResult);
         setMessages((current) => current.map((message) => message.id === assistantMessageId ? {
           ...message,
@@ -803,7 +809,7 @@ export function AIAssistantPage() {
           tableRows: finalResult.tableRows
         } : message));
       }
-      if (isGenericAssistantResponse(data)) setError(null);
+      if (isGenericAssistantResponse(data) || languageMismatch) setError(null);
     } catch {
       setError(null);
     } finally {
@@ -939,7 +945,12 @@ export function AIAssistantPage() {
             <div className="flex items-start gap-4">
               <Lightbulb className="mt-1 h-8 w-8 shrink-0 text-brand-300" />
               <div className="flex-1">
-                <h3 className="mb-2 font-display text-lg font-bold text-white">{t("aiResponse")}</h3>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="font-display text-lg font-bold text-white">{t("aiResponse")}</h3>
+                  <button type="button" onClick={() => printAssistantReport({ question: lastQuestion || query, response: result, lang })} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/40 bg-brand-500/10 px-3 py-2 text-xs font-bold text-brand-100 transition hover:bg-brand-500/20">
+                    <Printer className="h-4 w-4" />{lang === "fr" ? "Imprimer / Exporter en PDF" : "Print / Export as PDF"}
+                  </button>
+                </div>
                 <ResponseSections response={result} />
               </div>
             </div>
