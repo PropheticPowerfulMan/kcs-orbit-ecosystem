@@ -20,6 +20,8 @@ const inputSchema=z.object({
     studentId:z.string().min(1),installmentId:z.string().min(1),feeLabel:z.string().trim().min(1),amount:z.coerce.number().positive()
   })).min(1))
 });
+const bulkDeleteSchema=z.object({ids:z.array(z.string().min(1)).min(1).max(100)});
+const deletableStatuses=["DRAFT","SUBMITTED","UNDER_REVIEW","REJECTED","NEEDS_MORE_INFO"] as const;
 const include={parent:true,allocations:{include:{student:true,installment:true}},proofs:{orderBy:{version:"desc" as const}},payment:{include:{receipt:true}},reviewedBy:{select:{id:true,fullName:true}}};
 
 async function parentFor(req:AuthenticatedRequest){
@@ -82,13 +84,49 @@ bankTransferRouter.post("/",authorize("PARENT"),upload.single("proof"),async(req
 });
 
 bankTransferRouter.get("/",authorize("PARENT",...financeRoles),async(req:AuthenticatedRequest,res)=>{
-  const parent=await parentFor(req);const status=typeof req.query.status==="string"?req.query.status:undefined;const search=typeof req.query.search==="string"?req.query.search.trim():undefined;
+  const parent=await parentFor(req);
+  const status=typeof req.query.status==="string"?req.query.status:undefined;
+  const search=typeof req.query.search==="string"?req.query.search.trim():undefined;
+  const dateFrom=typeof req.query.dateFrom==="string"&&req.query.dateFrom?new Date(`${req.query.dateFrom}T00:00:00.000Z`):undefined;
+  const dateTo=typeof req.query.dateTo==="string"&&req.query.dateTo?new Date(`${req.query.dateTo}T23:59:59.999Z`):undefined;
+  const minAmount=typeof req.query.minAmount==="string"&&req.query.minAmount!==""?Number(req.query.minAmount):undefined;
+  const maxAmount=typeof req.query.maxAmount==="string"&&req.query.maxAmount!==""?Number(req.query.maxAmount):undefined;
   const rows=await prisma.bankTransferRequest.findMany({
     where:{schoolId:req.user!.schoolId,...(parent?{parentId:parent.id}:{}),...(status?{status:status as any}:{}),
-      ...(search?{OR:[{bankName:{contains:search,mode:"insensitive"}},{referenceNumber:{contains:search,mode:"insensitive"}},{parent:{fullName:{contains:search,mode:"insensitive"}}},{allocations:{some:{student:{fullName:{contains:search,mode:"insensitive"}}}}}]}:{})},
+      ...((dateFrom||dateTo)?{paymentDate:{...(dateFrom?{gte:dateFrom}:{}),...(dateTo?{lte:dateTo}:{})}}:{}),
+      ...((Number.isFinite(minAmount)||Number.isFinite(maxAmount))?{amount:{...(Number.isFinite(minAmount)?{gte:minAmount}:{}),...(Number.isFinite(maxAmount)?{lte:maxAmount}:{})}}:{}),
+      ...(search?{OR:[
+        {bankName:{contains:search,mode:"insensitive"}},{referenceNumber:{contains:search,mode:"insensitive"}},
+        {payerName:{contains:search,mode:"insensitive"}},{comment:{contains:search,mode:"insensitive"}},
+        {parent:{fullName:{contains:search,mode:"insensitive"}}},{parent:{email:{contains:search,mode:"insensitive"}}},
+        {parent:{phone:{contains:search,mode:"insensitive"}}},{allocations:{some:{feeLabel:{contains:search,mode:"insensitive"}}}},
+        {allocations:{some:{student:{fullName:{contains:search,mode:"insensitive"}}}}},
+        {allocations:{some:{student:{class:{name:{contains:search,mode:"insensitive"}}}}}},
+        {proofs:{some:{originalFileName:{contains:search,mode:"insensitive"}}}},
+        {payment:{receipt:{receiptNumber:{contains:search,mode:"insensitive"}}}}
+      ]}:{})},
     include,orderBy:{createdAt:"desc"}
   });
   res.json(rows);
+});
+
+bankTransferRouter.delete("/",authorize(...financeRoles),async(req:AuthenticatedRequest,res)=>{
+  const {ids}=bulkDeleteSchema.parse(req.body);
+  const uniqueIds=[...new Set(ids)];
+  const rows=await prisma.bankTransferRequest.findMany({where:{id:{in:uniqueIds},schoolId:req.user!.schoolId},include});
+  if(rows.length!==uniqueIds.length)return res.status(404).json({message:"Une ou plusieurs demandes sont introuvables."});
+  const protectedRows=rows.filter(row=>row.paymentId||row.status==="APPROVED");
+  if(protectedRows.length)return res.status(409).json({message:"Un virement déjà approuvé ne peut pas être supprimé. Son paiement, son reçu et son audit doivent être conservés."});
+  const invalidRows=rows.filter(row=>!(deletableStatuses as readonly string[]).includes(row.status));
+  if(invalidRows.length)return res.status(409).json({message:"Une ou plusieurs demandes ne peuvent pas être supprimées dans leur état actuel."});
+  await prisma.$transaction(async tx=>{
+    for(const row of rows)await audit(tx,req,"BANK_TRANSFER_DELETED",row);
+    await tx.bankTransferRequest.deleteMany({where:{id:{in:uniqueIds},schoolId:req.user!.schoolId}});
+  });
+  const storageResults=await Promise.allSettled(rows.flatMap(row=>row.proofs.map(proof=>proofStorage.delete(proof.storageKey))));
+  const storageFailures=storageResults.filter(result=>result.status==="rejected").length;
+  if(storageFailures)console.error(`Bank transfer deletion left ${storageFailures} orphan proof file(s).`);
+  res.json({message:uniqueIds.length===1?"La preuve et sa demande ont été supprimées.":`${uniqueIds.length} preuves et demandes ont été supprimées.`,deleted:uniqueIds.length});
 });
 bankTransferRouter.get("/export.csv",authorize(...financeRoles),async(req:AuthenticatedRequest,res)=>{
   const rows=await prisma.bankTransferRequest.findMany({where:{schoolId:req.user!.schoolId},include,orderBy:{createdAt:"desc"}});

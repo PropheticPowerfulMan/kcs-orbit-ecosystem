@@ -1,11 +1,12 @@
 ﻿import { createHash, randomUUID } from "crypto";
-import { mkdir, readFile, rename, writeFile } from "fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { safeOriginalName } from "./core";
 
 export interface ProofStorage {
   put(input: { schoolId: string; requestId: string; originalName: string; bytes: Buffer }): Promise<{ storageKey: string; sha256: string }>;
   get(storageKey: string): Promise<Buffer>;
+  delete(storageKey: string): Promise<void>;
 }
 export class LocalPersistentProofStorage implements ProofStorage {
   constructor(private readonly root = process.env.EDUPAY_PROOF_STORAGE_ROOT || path.resolve("var/edupay/payment-proofs")) {}
@@ -21,6 +22,13 @@ export class LocalPersistentProofStorage implements ProofStorage {
     return {storageKey,sha256:createHash("sha256").update(input.bytes).digest("hex")};
   }
   async get(storageKey:string){return readFile(this.resolve(storageKey));}
+  async delete(storageKey:string){
+    try {
+      await unlink(this.resolve(storageKey));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
   private resolve(storageKey:string){
     const normalized=storageKey.replace(/\\/g,"/");
     if(normalized.startsWith("/")||normalized.includes("../"))throw new Error("Invalid proof storage key.");
