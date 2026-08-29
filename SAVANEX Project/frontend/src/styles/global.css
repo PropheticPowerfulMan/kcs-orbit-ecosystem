@@ -1444,3 +1444,21 @@ textarea {
     max-height: 92dvh !important;
   }
 }
+
+/* Tablet-safe student directory: expose every field without horizontal clipping. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .savanex-responsive-table { overflow: visible; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+  .savanex-responsive-table table, .savanex-responsive-table tbody { display: block; width: 100%; }
+  .savanex-responsive-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .savanex-responsive-table tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  .savanex-responsive-table tr { display: block; min-width: 0; overflow: hidden; border: 1px solid rgba(125, 211, 252, .18); border-radius: 18px; background: rgba(15, 23, 42, .76); box-shadow: 0 14px 30px rgba(1, 4, 9, .2); }
+  .savanex-responsive-table td { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(7.5rem, 38%) minmax(0, 1fr); align-items: center; gap: .75rem; min-height: 48px; padding: .72rem .9rem; border-top: 1px solid rgba(148, 163, 184, .1); overflow-wrap: anywhere; white-space: normal; text-align: right; }
+  .savanex-responsive-table td:first-child { border-top: 0; }
+  .savanex-responsive-table td::before { content: attr(data-label); color: #94a3b8; font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
+  .savanex-responsive-table td > * { min-width: 0; max-width: 100%; justify-self: end; overflow-wrap: anywhere; }
+  .savanex-responsive-table td:last-child > div { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-self: stretch; }
+  .savanex-responsive-table .savanex-entity-action { width: 100%; min-width: 0; justify-content: center; white-space: normal; }
+}
+@media (min-width: 768px) and (max-width: 860px) {
+  .savanex-responsive-table tbody { grid-template-columns: minmax(0, 1fr); }
+}
