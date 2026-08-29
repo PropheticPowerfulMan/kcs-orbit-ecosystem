@@ -497,32 +497,6 @@ const ParentsPage = () => {
         <StatCard title="Résultats filtrés" value={filtered.length} subtitle="Familles correspondant à la recherche" accent="text-rose-300" />
       </section>
 
-      <section className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <article className="card p-5 xl:col-span-2">
-          <p className="font-display text-lg font-semibold text-slate-100">Classement par famille</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            {filtered.slice(0, 4).map((family, index) => (
-              <div key={family.id} className="rounded-2xl border border-github-border bg-slate-950/40 p-4">
-                <p className="text-xs text-slate-500">Famille {index + 1}</p>
-                <p className="mt-1 font-semibold text-slate-100">{family.family_name}</p>
-                <p className="mt-2 text-xs text-slate-400">{family.student_count} élève(s) - {family.classes_label || 'Non assignée'}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-        <article className="card p-5">
-          <p className="font-display text-lg font-semibold text-slate-100">Classement par classe</p>
-          <div className="mt-4 space-y-3">
-            {classGroups.slice(0, 4).map((group) => (
-              <div key={group.className} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
-                <p className="font-semibold text-slate-100">{group.className}</p>
-                <p className="mt-1 text-xs text-slate-400">{group.students} élève(s) - {group.families.length} famille(s)</p>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
       <div className="mb-4 card p-4">
         <div className="grid gap-3 lg:grid-cols-4">
           <SearchField
@@ -553,6 +527,40 @@ const ParentsPage = () => {
         </div>
       </div>
 
+      <section className="mb-5 grid gap-4 xl:grid-cols-2">
+        <article className="card p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Recherche parents</p>
+          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement détaillé par famille</h3>
+          <div className="savanex-scrollbar mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
+            {filtered.length ? filtered.map((family) => (
+              <button key={family.id} type="button" onClick={() => setSelectedParent(family)} className="w-full rounded-2xl border border-github-border bg-slate-950/35 p-4 text-left transition hover:border-emerald-300/50">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-100">{family.family_name}</p>
+                  <span className="text-xs text-slate-400">{family.student_count} élève(s)</span>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">Classes : {family.classes_label || 'Non assignée'}</p>
+                <p className="mt-3 text-sm text-slate-300">{family.students_label}</p>
+              </button>
+            )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
+          </div>
+        </article>
+
+        <article className="card p-5">
+          <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Classement</p>
+          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Classes et familles associées</h3>
+          <div className="savanex-scrollbar mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
+            {classGroups.length ? classGroups.map((group) => (
+              <button key={slugify(group.className)} type="button" onClick={() => setSelectedClassGroup(group)} className="w-full rounded-2xl border border-github-border bg-slate-950/35 p-4 text-left transition hover:border-cyan-300/50">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-100">{group.className}</p>
+                  <span className="text-xs text-slate-400">{group.students} élève(s)</span>
+                </div>
+                <p className="mt-3 text-sm text-slate-300">{group.families.join(', ')}</p>
+              </button>
+            )) : <p className="text-sm text-slate-400">Aucune classe ne correspond aux filtres en cours.</p>}
+          </div>
+        </article>
+      </section>
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des familles...</p> : null}
       {error ? <p className="mb-4 text-sm text-rose-300">{error}</p> : null}
       <DataTable columns={columns} data={filtered} />
@@ -640,40 +648,6 @@ const ParentsPage = () => {
         </div>
       ) : null}
 
-      <section className="mt-6 grid gap-4 xl:grid-cols-2">
-        <article className="card p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Recherche parents</p>
-          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement détaillé par famille</h3>
-          <div className="mt-4 space-y-3">
-            {filtered.length ? filtered.map((family) => (
-              <button key={family.id} type="button" onClick={() => setSelectedParent(family)} className="w-full rounded-2xl border border-github-border bg-slate-950/35 p-4 text-left transition hover:border-emerald-300/50">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-slate-100">{family.family_name}</p>
-                  <span className="text-xs text-slate-400">{family.student_count} élève(s)</span>
-                </div>
-                <p className="mt-2 text-xs text-slate-400">Classes : {family.classes_label || 'Non assignée'}</p>
-                <p className="mt-3 text-sm text-slate-300">{family.students_label}</p>
-              </button>
-            )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
-          </div>
-        </article>
-
-        <article className="card p-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Classement</p>
-          <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Classes et familles associées</h3>
-          <div className="mt-4 space-y-3">
-            {classGroups.length ? classGroups.map((group) => (
-              <button key={slugify(group.className)} type="button" onClick={() => setSelectedClassGroup(group)} className="w-full rounded-2xl border border-github-border bg-slate-950/35 p-4 text-left transition hover:border-cyan-300/50">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-slate-100">{group.className}</p>
-                  <span className="text-xs text-slate-400">{group.students} élève(s)</span>
-                </div>
-                <p className="mt-3 text-sm text-slate-300">{group.families.join(', ')}</p>
-              </button>
-            )) : <p className="text-sm text-slate-400">Aucune classe ne correspond aux filtres en cours.</p>}
-          </div>
-        </article>
-      </section>
       {selectedClassGroup ? createPortal(
         <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8" onClick={() => setSelectedClassGroup(null)}>
           <section role="dialog" aria-modal="true" className="savanex-modal-panel savanex-entity-edit-panel w-full max-w-5xl overflow-y-auto p-5 sm:p-6" onClick={(event) => event.stopPropagation()}>
