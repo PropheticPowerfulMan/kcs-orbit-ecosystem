@@ -1779,7 +1779,7 @@ const AdminSectionView = ({
   const filteredParents = useMemo(() => {
     const query = parentQuery.trim().toLowerCase()
     return parentRecords
-      .filter((parent) => parentGradeFilter === 'All' || parent.students.some((student) => student.grade === parentGradeFilter))
+      .filter((parent) => parentGradeFilter === 'All' || parent.students.some((student) => formatClassName(student.grade) === parentGradeFilter))
       .filter((parent) => parentClassSuffixFilter === 'All' || parent.students.some((student) => student.section === parentClassSuffixFilter))
       .filter((parent) => parentStudentFilter === 'All' || parent.students.some((student) => student.id === parentStudentFilter))
       .filter((parent) => !query || [

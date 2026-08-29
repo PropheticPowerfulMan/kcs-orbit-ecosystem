@@ -28,19 +28,26 @@ const standardClassLevels = [
 const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];
 
 const splitClassName = (value) => {
-  const className = normalizeLabel(value, 'Non assignée');
-  const match = className.match(/^(K[1-5]|Grade\s+(?:[1-9]|1[0-2]))(?:\s+([A-Z]))?$/i);
-
-  if (!match) {
-    return { level: className, suffix: '' };
+  const className = normalizeLabel(value, 'Non assignée').replace(/\s+/g, ' ');
+  const sectionMatch = className.match(/^(.*?)(?:\s+([A-Z]))?$/);
+  const rawLevel = sectionMatch?.[1]?.trim() || className;
+  const suffix = (sectionMatch?.[2] || '').toUpperCase();
+  const kindergarten = rawLevel.match(/^(?:kindergarten(?:\s+grade)?\s*)?k?([3-5])$/i);
+  if (kindergarten) {
+    return { level: `K${kindergarten[1]}`, suffix };
   }
 
-  const rawLevel = match[1].replace(/\s+/g, ' ');
-  const level = rawLevel.toLowerCase().startsWith('grade')
-    ? `Grade ${rawLevel.match(/\d+/)?.[0] || ''}`.trim()
-    : rawLevel.toUpperCase();
+  const grade = rawLevel.match(/^grade\s*(\d{1,2})(?:\s+grade\s*\1)?$/i);
+  if (grade) {
+    return { level: `Grade ${Number(grade[1])}`, suffix };
+  }
 
-  return { level, suffix: (match[2] || '').toUpperCase() };
+  return { level: rawLevel, suffix };
+};
+
+const normalizeClassName = (value) => {
+  const { level, suffix } = splitClassName(value);
+  return [level, suffix].filter(Boolean).join(' ');
 };
 
 const splitFullName = (value) => {
@@ -155,7 +162,7 @@ const ParentsPage = () => {
             status: student.is_active ? 'ACTIVE' : 'INACTIVE',
           }));
           const localParentId = localFamilyStudents[0]?.parent || null;
-          const classes = new Set(linkedStudents.map((student) => normalizeLabel(student.className, 'Non assignée')));
+          const classes = new Set(linkedStudents.map((student) => normalizeClassName(student.className)));
           const classParts = linkedStudents.map((student) => splitClassName(student.className || ''));
           return {
             id: parent.id,
@@ -253,7 +260,7 @@ const ParentsPage = () => {
       current.students.push(student.full_name);
       current.student_ids.push(student.student_id);
       current.linked_students.push(student);
-      const className = normalizeLabel(student.class_name, 'Non assignée');
+      const className = normalizeClassName(student.class_name);
       current.classes.add(className);
       current.classParts.push(splitClassName(className));
       if (student.is_active) {
