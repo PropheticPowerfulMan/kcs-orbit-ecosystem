@@ -200,6 +200,21 @@ async function authenticateWithNexus(identifier: string, password: string) {
     phone: typeof user.phone === "string" ? user.phone : ""
   };
 }
+async function authenticateWithSharedIdentity(identifier: string, password: string) {
+  const attempts = await Promise.allSettled([
+    authenticateWithSavanex(identifier, password),
+    authenticateWithNexus(identifier, password)
+  ]);
+  const authenticated = attempts.find(
+    (result): result is PromiseFulfilledResult<NonNullable<Awaited<ReturnType<typeof authenticateWithSavanex>>>> =>
+      result.status === "fulfilled" && Boolean(result.value)
+  );
+  if (authenticated) return authenticated.value;
+  const failure = attempts.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (failure) throw failure.reason;
+  return null;
+}
+
 async function resolveEduPaySchoolId() {
   const school = await prisma.school.findFirst({
     orderBy: { createdAt: "asc" },
@@ -221,22 +236,44 @@ async function ensureExternalParentUser(options: {
     throw new Error("EduPay school bootstrap is missing.");
   }
 
-  const mirrored = await syncOrbitRegistryMirror(schoolId);
-  const sharedParent = mirrored.parents.find((entry) => matchesSharedParent(
-    entry,
-    options.identifier,
-    options.email,
-    options.accessCode
-  ));
-
-  if (!sharedParent) {
-    throw new Error("Parent shared profile not found in Orbit mirror.");
-  }
-
-  const parent = await prisma.parent.findFirst({
-    where: { id: sharedParent.localId || sharedParent.id, schoolId },
+  let parent = await prisma.parent.findFirst({
+    where: {
+      schoolId,
+      OR: [
+        ...(options.email ? [{ email: { equals: options.email, mode: "insensitive" as const } }] : []),
+        {
+          user: {
+            is: {
+              OR: [
+                ...(options.email ? [{ email: options.email }] : []),
+                ...(options.accessCode ? [{ accessCode: options.accessCode }] : [])
+              ]
+            }
+          }
+        }
+      ]
+    },
     include: { user: true }
   });
+
+  // Parent rows are already mirrored during creation/import. Avoid refreshing
+  // the complete Orbit directory on every first institutional sign-in.
+  if (!parent) {
+    const mirrored = await syncOrbitRegistryMirror(schoolId);
+    const sharedParent = mirrored.parents.find((entry) => matchesSharedParent(
+      entry,
+      options.identifier,
+      options.email,
+      options.accessCode
+    ));
+    if (!sharedParent) {
+      throw new Error("Parent shared profile not found in Orbit mirror.");
+    }
+    parent = await prisma.parent.findFirst({
+      where: { id: sharedParent.localId || sharedParent.id, schoolId },
+      include: { user: true }
+    });
+  }
 
   if (!parent) {
     throw new Error("Parent mirror not found after Orbit synchronization.");
@@ -311,6 +348,43 @@ async function ensureExternalEmployeeUser(options: {
   const schoolId = await resolveEduPaySchoolId();
   if (!schoolId) {
     throw new Error("EduPay school bootstrap is missing.");
+  }
+
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      schoolId,
+      OR: [
+        ...(options.email ? [{ email: options.email }] : []),
+        ...(options.accessCode ? [{ accessCode: options.accessCode }] : [])
+      ]
+    }
+  });
+  if (existingUser) {
+    const existingProfile = await prisma.employeeSalaryProfile.findFirst({
+      where: {
+        schoolId,
+        OR: [
+          { notes: { contains: `UserId: ${existingUser.id}` } },
+          ...(options.employeeId ? [{ employeeCode: options.employeeId }] : [])
+        ]
+      }
+    });
+    if (existingProfile) {
+      const passwordHash = await bcrypt.hash(options.password, 10);
+      const user = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          fullName: options.fullName || existingUser.fullName,
+          email: options.email || existingUser.email,
+          accessCode: options.accessCode || existingUser.accessCode,
+          passwordHash,
+          mustChangePassword: options.mustChangePassword,
+          role: "EMPLOYEE",
+          schoolId
+        }
+      });
+      return { user, salaryProfile: existingProfile };
+    }
   }
 
   const mirrored = await syncOrbitRegistryMirror(schoolId);
@@ -489,7 +563,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
     }
 
     const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true';
-    const externalUser = localAuthOnly ? null : (await authenticateWithSavanex(identifier, payload.password) || await authenticateWithNexus(identifier, payload.password));
+    const externalUser = localAuthOnly ? null : await authenticateWithSharedIdentity(identifier, payload.password);
     if (externalUser?.role === "parent") {
       const resolved = await ensureExternalParentUser({
         identifier,
