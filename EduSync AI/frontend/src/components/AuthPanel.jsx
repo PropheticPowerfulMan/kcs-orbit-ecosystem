@@ -4,10 +4,6 @@ import { useTheme } from "../context/ThemeContext";
 import { schoolLogo } from "../assets";
 
 const roles = ["admin", "teacher", "staff"];
-const demoCredentials = {
-  email: "admin@school.edu",
-  password: "Admin@123",
-};
 
 export default function AuthPanel() {
   const { login, register, forgotPassword } = useAuth();
@@ -26,15 +22,6 @@ export default function AuthPanel() {
   });
 
   const updateField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-
-  const fillDemoCredentials = () => {
-    setMode("login");
-    setForm((prev) => ({
-      ...prev,
-      email: demoCredentials.email,
-      password: demoCredentials.password,
-    }));
-  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -82,11 +69,6 @@ export default function AuthPanel() {
         </div>
         <p className="subtle">{mode === "recovery" ? "Choose email or SMS, then enter the email attached to your school account." : "Use your school email or shared access code to open the dashboard."}</p>
 
-        {mode === "login" && (
-          <button type="button" className="credential-chip" onClick={fillDemoCredentials}>
-            Fill admin@school.edu / Admin@123
-          </button>
-        )}
 
         {mode === "register" && (
           <input
