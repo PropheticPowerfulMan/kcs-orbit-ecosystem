@@ -447,6 +447,10 @@ export default function DashboardPanel() {
             <span>{sharedDirectory.students?.length ?? 0}</span>
             <p>Students</p>
           </article>
+          <article className="status-story">
+            <span>{sharedDirectory.teachers?.length ?? 0}</span>
+            <p>Employees</p>
+          </article>
         </section>
 
         <div className="mobile-screen" ref={screenRef}>
@@ -454,7 +458,7 @@ export default function DashboardPanel() {
             <section className="chat-view">
               <div className="section-title">
                 <div>
-                  <p className="eyebrow">Mobile assistant</p>
+                  <p className="eyebrow">EduSync workspace</p>
                   <h2>What would you like to do?</h2>
                 </div>
                 <span>{analytics?.events_last_24h ?? 0} actions today</span>
@@ -549,7 +553,7 @@ export default function DashboardPanel() {
           )}
 
           {activeTab === "actions" && (
-            <section className="action-view">
+            <section className="action-view action-grid">
               <div className="section-title">
                 <div>
                   <p className="eyebrow">Actions</p>

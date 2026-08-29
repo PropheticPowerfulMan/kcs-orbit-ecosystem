@@ -1,4 +1,4 @@
-const CACHE_NAME = "edusync-ai-hub-v1";
+const CACHE_NAME = "edusync-ai-hub-nexus-v4";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./kcs.jpg"];
 
 self.addEventListener("install", (event) => {
