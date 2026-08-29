@@ -6,7 +6,7 @@ import { FileSpreadsheet, FileText, KeyRound, Printer } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
 import { useI18n } from "../i18n";
-import { api } from "../services/api";
+import { api, getCachedApiResponse } from "../services/api";
 import { useAuthStore } from "../store/auth";
 import { exportWorkbook } from "../utils/financeExcel";
 import { exportElementToPdf } from "../utils/pdfDocument";
@@ -706,8 +706,9 @@ export function EmployeesPage() {
   const L = (fr: string, en: string) => lang === "fr" ? fr : en;
   const role = useAuthStore((state) => state.role);
   const canManageEmployees = ["SUPER_ADMIN", "OWNER", "ADMIN", "HR_MANAGER"].includes(role || "");
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedEmployees = getCachedApiResponse<Employee[]>("/api/shared-directory/teachers") ?? [];
+  const [employees, setEmployees] = useState<Employee[]>(() => sortEmployeesByName(cachedEmployees));
+  const [loading, setLoading] = useState(cachedEmployees.length === 0);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -726,8 +727,8 @@ export function EmployeesPage() {
   const [employeePdfExporting, setEmployeePdfExporting] = useState(false);
   const [employeeNoticeSending, setEmployeeNoticeSending] = useState(false);
 
-  async function loadEmployees() {
-    setLoading(true);
+  async function loadEmployees(silent = false) {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const data = await api<Employee[]>("/api/shared-directory/teachers");
@@ -740,7 +741,7 @@ export function EmployeesPage() {
   }
 
   useEffect(() => {
-    void loadEmployees();
+    void loadEmployees(cachedEmployees.length > 0);
   }, []);
 
   useEffect(() => {

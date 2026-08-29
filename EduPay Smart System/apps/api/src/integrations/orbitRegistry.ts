@@ -339,10 +339,33 @@ export async function fetchOrbitSharedDirectory(): Promise<OrbitSharedDirectory>
 }
 
 
-export async function readOrbitSharedOptions(): Promise<ReturnType<typeof mapOrbitDirectoryToSharedOptions>> {
-  let directory: OrbitSharedDirectory;
+type OrbitSharedOptions = ReturnType<typeof mapOrbitDirectoryToSharedOptions>;
+const ORBIT_SHARED_OPTIONS_TTL_MS = 60_000;
+let orbitSharedOptionsCache: { value: OrbitSharedOptions; expiresAt: number } | null = null;
+let orbitSharedOptionsRequest: Promise<OrbitSharedOptions> | null = null;
+
+export async function readOrbitSharedOptions(): Promise<OrbitSharedOptions> {
+  const cached = orbitSharedOptionsCache;
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const refresh = orbitSharedOptionsRequest ?? fetchOrbitSharedDirectory()
+    .then(mapOrbitDirectoryToSharedOptions)
+    .then((value) => {
+      orbitSharedOptionsCache = { value, expiresAt: Date.now() + ORBIT_SHARED_OPTIONS_TTL_MS };
+      return value;
+    })
+    .finally(() => {
+      orbitSharedOptionsRequest = null;
+    });
+  orbitSharedOptionsRequest = refresh;
+
+  if (cached) {
+    void refresh.catch((error) => console.error('[ORBIT_SHARED_OPTIONS_REFRESH] Background refresh failed', error));
+    return cached.value;
+  }
+
   try {
-    directory = await fetchOrbitSharedDirectory();
+    return await refresh;
   } catch (error) {
     console.error('Orbit registry temporarily unavailable; continuing with an empty mirror.', error);
     return {
@@ -351,10 +374,11 @@ export async function readOrbitSharedOptions(): Promise<ReturnType<typeof mapOrb
       classes: [],
       teachers: [],
       counts: { families: 0, parents: 0, students: 0, teachers: 0 },
-    } as ReturnType<typeof mapOrbitDirectoryToSharedOptions>;
+    } as OrbitSharedOptions;
   }
-  return mapOrbitDirectoryToSharedOptions(directory);
-}async function orbitRegistryRequest<T>(path: string, init: RequestInit): Promise<T> {
+}
+
+async function orbitRegistryRequest<T>(path: string, init: RequestInit): Promise<T> {
   const baseUrl = (process.env.KCS_ORBIT_API_URL || "").replace(/\/$/, "");
   const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID || "";
   const apiKey = process.env.KCS_ORBIT_API_KEY || "";

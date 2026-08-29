@@ -468,14 +468,6 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
       }
     });
 
-    let isFederatedUser = false;
-    if (user && ["PARENT", "EMPLOYEE"].includes(user.role)) {
-      const mirror = await syncOrbitRegistryMirror(user.schoolId);
-      isFederatedUser = user.role === "PARENT"
-        ? mirror.parents.some((entry) => matchesSharedParent(entry, identifier, user.email, user.accessCode || ""))
-        : mirror.teachers.some((entry) => matchesSharedEmployee(entry, identifier, user.email, user.accessCode || ""));
-    }
-
     // EduPay owns the password of accounts it creates. A parent or employee
     // present in Orbit must therefore be allowed to use that local password.
     // The previous condition was inverted and skipped valid mirrored users.

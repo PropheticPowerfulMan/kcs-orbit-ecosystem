@@ -2847,24 +2847,25 @@ export function ParentsManagementPage() {
       setApiError(null);
     }
     let nextApiError: string | null = null;
-    const [directoryResult, parentsResult, classesResult, catalogResult] = await Promise.allSettled([
+    const [directoryResult, classesResult, catalogResult] = await Promise.allSettled([
       withTimeout(api<SharedDirectoryResponse>("/api/shared-directory"), 15000, "shared-directory"),
-      api<Parent[]>("/api/parents"),
       api<SchoolClass[]>("/api/classes"),
       api<FinanceCatalog>("/api/finance/catalog")
     ]);
 
     if (directoryResult.status === "fulfilled") {
       setParents(normalizeSharedDirectoryForParents(directoryResult.value));
-    } else if (parentsResult.status === "fulfilled") {
-      setParents(sortParentsForUi(parentsResult.value.map(normalizeParentForUi)));
     } else {
-      const message = directoryResult.reason instanceof Error
-        ? directoryResult.reason.message
-        : parentsResult.reason instanceof Error
-          ? parentsResult.reason.message
-          : "Erreur API";
-      nextApiError = message;
+      try {
+        const fallbackParents = await api<Parent[]>("/api/parents");
+        setParents(sortParentsForUi(fallbackParents.map(normalizeParentForUi)));
+      } catch (fallbackError) {
+        nextApiError = directoryResult.reason instanceof Error
+          ? directoryResult.reason.message
+          : fallbackError instanceof Error
+            ? fallbackError.message
+            : "Erreur API";
+      }
     }
 
     if (classesResult.status === "fulfilled") {
