@@ -63,12 +63,13 @@ export default function AuthPanel() {
       </section>
 
       <section className="edusync-login-access">
-        <form className="edusync-login-card" onSubmit={handleSubmit}>
+        <form className="edusync-login-card" onSubmit={handleSubmit} autoComplete="off">
           <div className="edusync-login-mobile-brand">
             <img src={schoolLogo} alt="" />
             <span>EduSync</span>
           </div>
           <header>
+            <div className="edusync-login-secure"><span aria-hidden="true">✓</span> KCS verified workspace</div>
             <p>{mode === "login" ? "Welcome back" : "Account recovery"}</p>
             <h2>{mode === "login" ? "Sign in to EduSync" : "Recover your access"}</h2>
             <span>{mode === "login" ? "Enter the credentials issued by Kinshasa Christian School." : "Choose a recovery channel and enter your institutional email."}</span>
@@ -76,14 +77,14 @@ export default function AuthPanel() {
 
           <label className="edusync-login-field">
             <span>{mode === "login" ? "Institutional identifier" : "Institutional email"}</span>
-            <input type={mode === "recovery" ? "email" : "text"} value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder={mode === "login" ? "Email or access code" : "name@ourkcs.org"} autoComplete={mode === "login" ? "username" : "email"} autoCapitalize="none" spellCheck="false" required autoFocus />
+            <input name="edusync-institutional-identifier" type={mode === "recovery" ? "email" : "text"} value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder={mode === "login" ? "Email or access code" : "name@ourkcs.org"} autoComplete="off" data-lpignore="true" data-1p-ignore="true" autoCapitalize="none" spellCheck="false" required autoFocus />
           </label>
 
           {mode === "login" ? (
             <label className="edusync-login-field">
               <span>Password</span>
               <div className="edusync-login-password">
-                <input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required />
+                <input name="edusync-secure-access-key" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" required />
                 <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button>
               </div>
             </label>

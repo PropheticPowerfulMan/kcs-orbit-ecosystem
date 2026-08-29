@@ -1,7 +1,9 @@
-const hasConfiguredApi = Boolean(import.meta.env.VITE_API_URL);
+const configuredApiUrl = String(import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const configuredApiBase = configuredApiUrl.endsWith("/api") ? `${configuredApiUrl}/v1` : configuredApiUrl;
+const hasConfiguredApi = Boolean(configuredApiBase);
 const IS_DEMO = import.meta.env.DEV && import.meta.env.VITE_DEMO_MODE === "true";
 const API_BASES = hasConfiguredApi
-  ? [import.meta.env.VITE_API_URL]
+  ? [configuredApiBase]
   : ["http://localhost:8010/api/v1", "http://localhost:8000/api/v1"];
 
 const demoState = {
