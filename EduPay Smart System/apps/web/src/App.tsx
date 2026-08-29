@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { DashboardGreeting } from "./components/DashboardGreeting";
 import { Navbar } from "./components/Navbar";
 import { Sidebar } from "./components/Sidebar";
 import { LoginPage } from "./pages/LoginPage";
@@ -70,6 +71,7 @@ function ProtectedLayout() {
       <main className="flex w-full gap-6 px-3 pb-32 pt-4 sm:px-5 sm:py-6 md:pb-6 lg:px-6 xl:px-8">
         <Sidebar />
         <section className="min-w-0 flex-1">
+          <DashboardGreeting />
           <Outlet />
         </section>
       </main>
