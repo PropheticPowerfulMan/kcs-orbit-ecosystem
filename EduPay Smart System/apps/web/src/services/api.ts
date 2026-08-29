@@ -6,7 +6,10 @@ import {
   setDemoFinanceOverrides
 } from "./demoFinance";
 
-const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/$/, "");
+const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "")
+  .trim()
+  .replace(/\/+$/, "")
+  .replace(/\/api$/i, "");
 const API_BASE_URL = RAW_API_BASE_URL || (import.meta.env.DEV ? "http://localhost:4000" : "");
 const TOKEN_STORAGE_KEY = "edupay_token";
 const ROLE_STORAGE_KEY = "edupay_role";
