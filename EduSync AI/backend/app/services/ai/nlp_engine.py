@@ -175,7 +175,7 @@ class NLPEngine:
 
         if language == "fr":
             response = self._compose_french_response(intent, message, details)
-            if intent in {"ecosystem_status_query", "directory_query", "finance_query", "report_request"}:
+            if intent in {"ecosystem_status_query", "report_request"}:
                 response = self._apply_spokesperson_frame(response, context, "fr")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_fr)
             if intent == "finance_query" and details.get("payment_status") == "impayes":
@@ -478,7 +478,7 @@ class NLPEngine:
         )
 
     def _is_directory_list_question(self, text: str) -> bool:
-        list_terms = ("liste", "lister", "affiche", "afficher", "donne", "voir", "show", "list", "display", "all")
+        list_terms = ("liste", "lister", "affiche", "afficher", "donne", "voir", "combien", "nombre", "effectif", "show", "list", "display", "all", "count", "how many")
         directory_terms = (
             "parent", "parents", "eleve", "eleves", "student", "students",
             "elve", "elves", "enseignant", "enseignants", "teacher", "teachers",
@@ -551,6 +551,9 @@ class NLPEngine:
             if class_match:
                 details["class_filter"] = re.sub(r"\s+", " ", class_match.group(1)).upper().replace("KG ", "K")
 
+            if any(self._contains_term(text, term) for term in ("combien", "nombre", "effectif", "count", "how many")):
+                details["count_only"] = "true"
+
         date_match = re.search(
             r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
             r"demain|aujourd hui|lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|"
@@ -594,6 +597,15 @@ class NLPEngine:
                 f"Repertoire Orbit disponible, mais aucun enregistrement {label}{class_suffix} n'est visible."
                 if language == "fr"
                 else f"Orbit directory is available, but no {label}{class_suffix} record is visible."
+            )
+
+        if details.get("count_only") == "true":
+            label = self._localized_audience(entity, language)
+            scope = f" en {class_filter}" if language == "fr" and class_filter else f" in {class_filter}" if class_filter else ""
+            return (
+                f"Le repertoire KCS Orbit compte {len(rows)} {label}{scope}."
+                if language == "fr"
+                else f"The KCS Orbit directory contains {len(rows)} {label}{scope}."
             )
 
         if language == "fr":

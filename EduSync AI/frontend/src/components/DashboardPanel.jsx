@@ -80,6 +80,7 @@ export default function DashboardPanel() {
   const { token, logout, user, profileLoading } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("chat");
+  const [menuHidden, setMenuHidden] = useState(() => localStorage.getItem("edusync_menu_hidden") === "true");
   const [chatText, setChatText] = useState("");
   const chatInputRef = useRef(null);
   const messageEndRef = useRef(null);
@@ -118,6 +119,8 @@ export default function DashboardPanel() {
     type: "leave_request",
     payload: "Leave request for recovery after exam supervision.",
   });
+
+  useEffect(() => { localStorage.setItem("edusync_menu_hidden", String(menuHidden)); }, [menuHidden]);
 
   const unreadCount = useMemo(
     () => notifications.filter((item) => !(item.is_read ?? item.read)).length,
@@ -422,7 +425,7 @@ export default function DashboardPanel() {
 
   return (
     <main className="mobile-app-shell">
-      <section className="phone-frame" aria-label="EduSync AI mobile chatbot">
+      <section className={"phone-frame" + (menuHidden ? " nav-hidden" : "")} aria-label="EduSync AI workspace">
         <header className="mobile-header">
           <div className="brand-lockup compact social-brand">
             <img src={schoolLogo} alt="Kinshasa Christian School" className="school-logo" />
@@ -433,6 +436,9 @@ export default function DashboardPanel() {
             </div>
           </div>
           <div className="icon-actions">
+            <button type="button" className="icon-button menu-toggle" onClick={() => setMenuHidden((current) => !current)} aria-label={menuHidden ? "Show navigation" : "Hide navigation"} title={menuHidden ? "Show navigation" : "Hide navigation"}>
+              {menuHidden ? "☰" : "‹"}
+            </button>
             <button type="button" className="icon-button" onClick={toggleTheme} aria-label="Toggle theme">
               {isDark ? "L" : "D"}
             </button>

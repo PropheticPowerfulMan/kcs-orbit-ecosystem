@@ -130,9 +130,9 @@ class EcosystemContextService:
             "parents_count": len(parents),
             "students_count": len(students),
             "teachers_count": len(teachers),
-            "parents": parents[:100],
-            "students": students[:100],
-            "teachers": teachers[:100],
+            "parents": parents[:500],
+            "students": students[:500],
+            "teachers": teachers[:500],
         }
 
 

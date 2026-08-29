@@ -203,5 +203,14 @@ class EduSyncSpokespersonTests(unittest.TestCase):
         self.assertNotIn("demande est trop ouverte", result.response)
 
 
+    def test_count_question_returns_direct_verified_count(self):
+        intent, confidence = self.engine.detect_intent("combien d eleves avons nous ?")
+        self.assertEqual(intent, "directory_query")
+        self.assertGreaterEqual(confidence, 0.8)
+        response, _actions = self.engine.generate_context_response(intent, self.context, "combien d eleves avons nous ?")
+        self.assertIn("compte 3", response)
+        self.assertNotIn("Nom | Identifiant", response)
+        self.assertNotIn("Voix officielle", response)
+
 if __name__ == "__main__":
     unittest.main()
