@@ -96,7 +96,9 @@ export function MessagesPage() {
   const [historyDateFrom, setHistoryDateFrom] = useState("");
   const [historyDateTo, setHistoryDateTo] = useState("");
   const [selectedLog, setSelectedLog] = useState<ManualMessageLog | null>(null);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingMany, setDeletingMany] = useState(false);
 
   async function loadData() {
     const [parentsResult, logsResult] = await Promise.all([
@@ -165,6 +167,9 @@ export function MessagesPage() {
   }, [historyDateFrom, historyDateTo, historyDelivery, historyLanguage, historyParentId, historySearch, logs]);
 
   const visibleParentIds = useMemo(() => filteredParents.map((parent) => parent.id), [filteredParents]);
+  const visibleMessageIds = useMemo(() => filteredLogs.map((log) => log.id), [filteredLogs]);
+  const allVisibleMessagesSelected = visibleMessageIds.length > 0
+    && visibleMessageIds.every((id) => selectedMessageIds.includes(id));
 
   const toggleParent = (parentId: string) => {
     setSelectedParentIds((current) => current.includes(parentId)
@@ -190,12 +195,58 @@ export function MessagesPage() {
     try {
       await api(`/api/notifications/messages/${log.id}`, { method: "DELETE" });
       setLogs((current) => current.filter((entry) => entry.id !== log.id));
+      setSelectedMessageIds((current) => current.filter((id) => id !== log.id));
       if (selectedLog?.id === log.id) setSelectedLog(null);
       setStatus("Le message a été supprimé de l'historique.");
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : "Impossible de supprimer ce message.");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const toggleMessageSelection = (messageId: string) => {
+    setSelectedMessageIds((current) => current.includes(messageId)
+      ? current.filter((id) => id !== messageId)
+      : [...current, messageId]);
+  };
+
+  const toggleAllVisibleMessages = () => {
+    setSelectedMessageIds((current) => allVisibleMessagesSelected
+      ? current.filter((id) => !visibleMessageIds.includes(id))
+      : Array.from(new Set([...current, ...visibleMessageIds])));
+  };
+
+  const deleteSelectedMessages = async () => {
+    if (selectedMessageIds.length === 0) return;
+    const confirmed = window.confirm(L(
+      `Supprimer définitivement ${selectedMessageIds.length} ancien(s) message(s) ?`,
+      `Permanently delete ${selectedMessageIds.length} old message(s)?`
+    ));
+    if (!confirmed) return;
+
+    setDeletingMany(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const response = await api<{ deletedCount: number }>("/api/notifications/messages", {
+        method: "DELETE",
+        body: JSON.stringify({ ids: selectedMessageIds }),
+      });
+      const deletedIds = new Set(selectedMessageIds);
+      setLogs((current) => current.filter((entry) => !deletedIds.has(entry.id)));
+      if (selectedLog && deletedIds.has(selectedLog.id)) setSelectedLog(null);
+      setSelectedMessageIds([]);
+      setStatus(L(
+        `${response.deletedCount} ancien(s) message(s) supprimé(s).`,
+        `${response.deletedCount} old message(s) deleted.`
+      ));
+    } catch (submissionError) {
+      setError(submissionError instanceof Error
+        ? submissionError.message
+        : L("Impossible de supprimer les messages sélectionnés.", "Unable to delete the selected messages."));
+    } finally {
+      setDeletingMany(false);
     }
   };
 
@@ -456,7 +507,34 @@ export function MessagesPage() {
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-ink-dim">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink">
+                <input
+                  type="checkbox"
+                  checked={allVisibleMessagesSelected}
+                  onChange={toggleAllVisibleMessages}
+                  disabled={visibleMessageIds.length === 0 || deletingMany}
+                  className="h-4 w-4 rounded border-white/20"
+                />
+                {L("Sélectionner les messages affichés", "Select displayed messages")}
+              </label>
+              <span className="text-sm text-ink-dim">
+                {selectedMessageIds.length} {L("sélectionné(s)", "selected")}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => void deleteSelectedMessages()}
+              disabled={selectedMessageIds.length === 0 || deletingMany}
+              className="inline-flex items-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Trash2 className="h-4 w-4" />
+              {deletingMany ? L("Suppression...", "Deleting...") : L("Supprimer la sélection", "Delete selection")}
+            </button>
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-ink-dim">
             {filteredLogs.length} {L("message(s) affiché(s) sur", "message(s) shown out of")} {logs.length}.
           </div>
 
@@ -465,6 +543,17 @@ export function MessagesPage() {
               const parsed = parseManualMessageContent(log.content);
               return (
               <article key={log.id} className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="mb-3 flex items-center gap-2 border-b border-white/10 pb-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedMessageIds.includes(log.id)}
+                    onChange={() => toggleMessageSelection(log.id)}
+                    disabled={deletingMany || deletingId === log.id}
+                    aria-label={L(`Sélectionner le message de ${log.parentName}`, `Select message from ${log.parentName}`)}
+                    className="h-4 w-4 rounded border-white/20"
+                  />
+                  <span className="text-xs font-semibold text-ink-dim">{L("Sélectionner pour suppression", "Select for deletion")}</span>
+                </div>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-white">{log.parentName}</p>

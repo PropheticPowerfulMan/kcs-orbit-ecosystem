@@ -28,6 +28,10 @@ const manualMessageQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(300).optional().default(120)
 });
 
+const deleteManualMessagesSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(300)
+});
+
 function buildDashboardMessageBody(subject: string | undefined, body: string) {
   const cleanBody = body.trim();
   const cleanSubject = subject?.trim();
@@ -85,6 +89,20 @@ notificationRouter.get("/messages", authorize("ADMIN", "ACCOUNTANT"), async (req
     status: log.status,
     createdAt: log.createdAt,
   })));
+});
+
+notificationRouter.delete("/messages", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
+  const payload = deleteManualMessagesSchema.parse(req.body);
+  const uniqueIds = Array.from(new Set(payload.ids));
+  const result = await prisma.notificationLog.deleteMany({
+    where: {
+      id: { in: uniqueIds },
+      schoolId: req.user!.schoolId,
+      type: "MANUAL_MESSAGE",
+    },
+  });
+
+  return res.status(200).json({ deletedCount: result.count });
 });
 
 notificationRouter.delete("/messages/:id", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
