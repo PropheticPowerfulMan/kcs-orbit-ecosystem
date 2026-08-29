@@ -18,6 +18,18 @@ function localize(lang: UiLanguage, fr: string, en: string) {
   return lang === "fr" ? fr : en;
 }
 
+function compareSchoolClasses(left: string, right: string) {
+  const rank = (value: string) => {
+    const normalized = value.trim();
+    const kindergarten = normalized.match(/^K([3-5])(?:\s+.*)?$/i);
+    if (kindergarten) return Number(kindergarten[1]) - 3;
+    const grade = normalized.match(/^Grade\s+(\d{1,2})(?:\s+.*)?$/i);
+    if (grade) return 3 + Number(grade[1]);
+    return Number.MAX_SAFE_INTEGER;
+  };
+  return rank(left) - rank(right) || left.localeCompare(right, undefined, { numeric: true });
+}
+
 type SharedDirectoryStudent = {
   id: string;
   orbitId?: string;
@@ -1425,7 +1437,7 @@ export function StudentsDirectoryPage() {
     return lookup;
   }, [directory]);
 
-  const classOptions = useMemo(() => Array.from(new Set((directory?.students ?? []).map((student) => student.className || student.classId).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b)), [directory]);
+  const classOptions = useMemo(() => Array.from(new Set((directory?.students ?? []).map((student) => student.className || student.classId).filter((value): value is string => Boolean(value)))).sort(compareSchoolClasses), [directory]);
   const parentOptions = useMemo(() => (directory?.parents ?? []).slice().sort((a, b) => a.fullName.localeCompare(b.fullName)), [directory]);
 
   const filteredStudents = useMemo(() => {

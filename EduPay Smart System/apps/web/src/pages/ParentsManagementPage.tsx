@@ -11,6 +11,18 @@ import { exportWorkbook } from "../utils/financeExcel";
 import { exportElementToPdf } from "../utils/pdfDocument";
 import { printHtmlDocument } from "../utils/printDocument";
 
+function compareSchoolClasses(left: string, right: string) {
+  const rank = (value: string) => {
+    const normalized = value.trim();
+    const kindergarten = normalized.match(/^K([3-5])(?:\s+.*)?$/i);
+    if (kindergarten) return Number(kindergarten[1]) - 3;
+    const grade = normalized.match(/^Grade\s+(\d{1,2})(?:\s+.*)?$/i);
+    if (grade) return 3 + Number(grade[1]);
+    return Number.MAX_SAFE_INTEGER;
+  };
+  return rank(left) - rank(right) || left.localeCompare(right, undefined, { numeric: true });
+}
+
 /* ─── Types ─────────────────────────────────────────────────────── */
 type Student = {
   id: string;
@@ -2930,7 +2942,7 @@ export function ParentsManagementPage() {
     };
   }, [viewTarget]);
 
-  const parentClassOptions = useMemo(() => Array.from(new Set(parents.flatMap((parent) => (parent.students ?? []).map((student) => student.className || student.classId).filter((value): value is string => Boolean(value))))).sort((a, b) => a.localeCompare(b)), [parents]);
+  const parentClassOptions = useMemo(() => Array.from(new Set(parents.flatMap((parent) => (parent.students ?? []).map((student) => student.className || student.classId).filter((value): value is string => Boolean(value))))).sort(compareSchoolClasses), [parents]);
   const linkedStudentOptions = useMemo(() => parents.flatMap((parent) => (parent.students ?? []).map((student) => ({ ...student, parentName: parent.fullName }))).sort((a, b) => a.fullName.localeCompare(b.fullName)), [parents]);
 
   const filtered = useMemo(() => {
