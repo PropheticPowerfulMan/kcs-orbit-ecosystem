@@ -70,6 +70,7 @@ const ParentsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedParent, setSelectedParent] = useState(null);
+  const [selectedClassGroup, setSelectedClassGroup] = useState(null);
   const [editingParent, setEditingParent] = useState(null);
   const [editForm, setEditForm] = useState({ last_name: '', middle_name: '', first_name: '', email: '', phone: '', address: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -346,8 +347,9 @@ const ParentsPage = () => {
     for (const family of filtered) {
       const classLabels = family.classes_label.split(', ').filter(Boolean);
       for (const className of classLabels.length ? classLabels : ['Non assignée']) {
-        const current = groups.get(className) || { className, families: [], students: 0 };
+        const current = groups.get(className) || { className, families: [], parents: [], students: 0 };
         current.families.push(family.family_name);
+        current.parents.push(family);
         current.students += family.student_count;
         groups.set(className, current);
       }
@@ -644,14 +646,14 @@ const ParentsPage = () => {
           <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement détaillé par famille</h3>
           <div className="mt-4 space-y-3">
             {filtered.length ? filtered.map((family) => (
-              <div key={family.id} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+              <button key={family.id} type="button" onClick={() => setSelectedParent(family)} className="w-full rounded-2xl border border-github-border bg-slate-950/35 p-4 text-left transition hover:border-emerald-300/50">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-100">{family.family_name}</p>
                   <span className="text-xs text-slate-400">{family.student_count} élève(s)</span>
                 </div>
                 <p className="mt-2 text-xs text-slate-400">Classes : {family.classes_label || 'Non assignée'}</p>
                 <p className="mt-3 text-sm text-slate-300">{family.students_label}</p>
-              </div>
+              </button>
             )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
           </div>
         </article>
@@ -661,17 +663,35 @@ const ParentsPage = () => {
           <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Classes et familles associées</h3>
           <div className="mt-4 space-y-3">
             {classGroups.length ? classGroups.map((group) => (
-              <div key={slugify(group.className)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
+              <button key={slugify(group.className)} type="button" onClick={() => setSelectedClassGroup(group)} className="w-full rounded-2xl border border-github-border bg-slate-950/35 p-4 text-left transition hover:border-cyan-300/50">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-100">{group.className}</p>
                   <span className="text-xs text-slate-400">{group.students} élève(s)</span>
                 </div>
                 <p className="mt-3 text-sm text-slate-300">{group.families.join(', ')}</p>
-              </div>
+              </button>
             )) : <p className="text-sm text-slate-400">Aucune classe ne correspond aux filtres en cours.</p>}
           </div>
         </article>
       </section>
+      {selectedClassGroup ? createPortal(
+        <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8" onClick={() => setSelectedClassGroup(null)}>
+          <section role="dialog" aria-modal="true" className="savanex-modal-panel savanex-entity-edit-panel w-full max-w-5xl overflow-y-auto p-5 sm:p-6" onClick={(event) => event.stopPropagation()}>
+            <header className="flex items-start justify-between gap-4 border-b border-github-border pb-5">
+              <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Dossier détaillé de la classe</p><h3 className="mt-2 font-display text-3xl font-bold text-white">{selectedClassGroup.className}</h3><p className="mt-2 text-sm text-slate-400">{selectedClassGroup.students} élève(s) · {selectedClassGroup.families.length} famille(s)</p></div>
+              <button type="button" onClick={() => setSelectedClassGroup(null)} className="rounded-xl border border-github-border px-4 py-2 text-sm text-slate-200">Fermer</button>
+            </header>
+            <div className="savanex-scrollbar mt-5 grid max-h-[55vh] gap-3 overflow-y-auto md:grid-cols-2">
+              {selectedClassGroup.parents.map((parent) => (
+                <button key={parent.id} type="button" onClick={() => { setSelectedClassGroup(null); setSelectedParent(parent); }} className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-left transition hover:border-kcs-blue">
+                  <div className="flex items-start justify-between gap-3"><p className="font-semibold text-white">{parent.family_name}</p><span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-xs text-emerald-200">{parent.student_count} enfant(s)</span></div>
+                  <div className="mt-3 grid gap-1 text-xs text-slate-400"><span>Enfants : {parent.students_label || 'Aucun élève lié'}</span><span>Téléphone : {parent.phone || 'Non renseigné'}</span><span>E-mail : {parent.email || 'Non renseigné'}</span></div>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>, document.body
+      ) : null}
     </DashboardLayout>
   );
 };
