@@ -116,18 +116,11 @@ button:disabled {
   transform: none;
 }
 
-button.secondary,
-button.credential-chip {
+button.secondary {
   background: var(--field);
   border: 1px solid var(--border);
   color: var(--ink);
   box-shadow: none;
-}
-
-button.credential-chip {
-  color: var(--primary-strong);
-  font-weight: 700;
-  text-align: left;
 }
 
 input,
@@ -1914,7 +1907,6 @@ button {
 }
 
 button.secondary,
-button.credential-chip,
 .theme-toggle,
 .icon-button,
 .prompt-chip,
@@ -1931,8 +1923,7 @@ button.credential-chip,
 }
 
 [data-theme="dark"] button.secondary,
-[data-theme="dark"] button.credential-chip,
-[data-theme="dark"] .theme-toggle,
+[data-theme="dark"] [data-theme="dark"] .theme-toggle,
 [data-theme="dark"] .icon-button,
 [data-theme="dark"] .prompt-chip,
 [data-theme="dark"] .ghost-button,
@@ -2030,3 +2021,58 @@ textarea,
     border: none;
   }
 }
+
+/* EduSync institutional sign-in */
+.edusync-login{min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(420px,.92fr);background:#f4f8fb;color:#102a3a;position:relative;overflow:hidden}
+.edusync-login::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 18% 18%,rgba(35,175,222,.18),transparent 28rem)}
+.edusync-login-brand{min-height:100%;padding:clamp(2rem,6vw,5.5rem);display:flex;flex-direction:column;justify-content:space-between;gap:3rem;color:#fff;position:relative;overflow:hidden;background:linear-gradient(145deg,#071c2c 0%,#0b4666 55%,#087ba4 100%)}
+.edusync-login-brand::before,.edusync-login-brand::after{content:"";position:absolute;border-radius:999px;pointer-events:none}
+.edusync-login-brand::before{width:34rem;height:34rem;right:-16rem;top:-13rem;border:1px solid rgba(255,255,255,.18);box-shadow:0 0 0 5rem rgba(255,255,255,.025),0 0 0 10rem rgba(255,255,255,.018)}
+.edusync-login-brand::after{width:24rem;height:24rem;left:-12rem;bottom:-14rem;background:rgba(230,177,44,.13)}
+.edusync-login-brand>*{position:relative;z-index:1}
+.edusync-login-brandmark{display:flex;align-items:center;gap:1rem}
+.edusync-login-brandmark img{width:66px;height:66px;object-fit:cover;border-radius:50%;background:#fff;border:3px solid rgba(255,255,255,.9);box-shadow:0 12px 30px rgba(0,0,0,.2)}
+.edusync-login-brandmark div{display:grid;gap:.15rem}
+.edusync-login-brandmark span{font-size:.76rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.72)}
+.edusync-login-brandmark strong{font-family:"Space Grotesk",Arial,sans-serif;font-size:1.7rem;letter-spacing:-.03em}
+.edusync-login-copy{max-width:660px}
+.edusync-login-kicker{margin:0 0 1.25rem;color:#9fe5fa;font-size:.78rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+.edusync-login-copy h1{max-width:620px;color:#fff;font-size:clamp(2.7rem,5.5vw,5.4rem);line-height:.98;letter-spacing:-.055em}
+.edusync-login-copy>p:last-child{max-width:590px;margin:1.5rem 0 0;color:rgba(255,255,255,.76);font-size:clamp(1rem,1.6vw,1.15rem);line-height:1.75}
+.edusync-login-trust{display:flex;flex-wrap:wrap;gap:.65rem}
+.edusync-login-trust span{padding:.55rem .75rem;border:1px solid rgba(255,255,255,.18);border-radius:999px;background:rgba(255,255,255,.08);font-size:.76rem;font-weight:700;color:rgba(255,255,255,.82)}
+.edusync-login-access{display:grid;place-items:center;padding:clamp(5rem,8vw,7rem) clamp(1.5rem,6vw,5rem);position:relative;z-index:1}
+.edusync-login-card{width:min(100%,480px);display:grid;gap:1.25rem;padding:clamp(1.5rem,4vw,2.6rem);border:1px solid #d7e3e9;border-radius:24px;background:rgba(255,255,255,.96);box-shadow:0 28px 70px rgba(9,42,61,.13)}
+.edusync-login-card header{display:grid;gap:.45rem;margin-bottom:.25rem}
+.edusync-login-card header p{margin:0;color:#087ba4;font-size:.76rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+.edusync-login-card header h2{font-size:clamp(1.75rem,3vw,2.2rem);color:#102a3a;letter-spacing:-.035em}
+.edusync-login-card header span,.edusync-login-card footer{color:#637985;font-size:.9rem;line-height:1.6}
+.edusync-login-field{display:grid;gap:.55rem}.edusync-login-field>span{color:#294b5d;font-size:.82rem;font-weight:750}
+.edusync-login-field input{min-height:52px;border:1px solid #cbdce4;border-radius:12px;background:#fff;color:#102a3a;padding:.85rem 1rem;box-shadow:none}
+.edusync-login-field input:focus{outline:3px solid rgba(8,123,164,.14);border-color:#087ba4}
+.edusync-login-password{position:relative}.edusync-login-password input{padding-right:4.5rem}
+.edusync-login-password button{position:absolute;top:50%;right:.65rem;transform:translateY(-50%);min-height:36px;padding:.4rem .65rem;border-radius:8px;background:transparent;color:#087ba4;box-shadow:none;font-size:.78rem;font-weight:800}
+.edusync-login-password button:hover{transform:translateY(-50%);background:#edf8fb}
+.edusync-login-submit{width:100%;min-height:52px;border-radius:12px;background:linear-gradient(120deg,#087ba4,#07577a);box-shadow:0 12px 24px rgba(8,123,164,.2);font-weight:800}
+.edusync-login-link{justify-self:center;min-height:auto;padding:.25rem;background:transparent;color:#087ba4;box-shadow:none;font-size:.86rem;font-weight:750}
+.edusync-login-link:hover{transform:none;text-decoration:underline}
+.edusync-login-card footer{margin-top:.25rem;padding-top:1.1rem;border-top:1px solid #e2ebef;text-align:center;font-size:.78rem}
+.edusync-login-alert{margin:0;padding:.8rem .9rem;border-radius:10px;font-size:.84rem;font-weight:700;line-height:1.45}
+.edusync-login-alert.error{color:#9f2626;background:#fff0f0;border:1px solid #f3cccc}.edusync-login-alert.success{color:#166534;background:#eefbf2;border:1px solid #c7ebd1}
+.edusync-login-channels{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;padding:.3rem;border-radius:12px;background:#edf3f6}
+.edusync-login-channels button{min-height:42px;background:transparent;color:#536b77;box-shadow:none;font-weight:750}.edusync-login-channels button.active{background:#fff;color:#087ba4;box-shadow:0 5px 15px rgba(16,42,58,.1)}
+.edusync-login-theme{position:absolute;z-index:5;top:1.25rem;right:1.25rem;min-height:40px;padding:.55rem .75rem;border:1px solid #d7e3e9;border-radius:10px;background:rgba(255,255,255,.88);color:#294b5d;box-shadow:0 8px 22px rgba(16,42,58,.08);font-size:.78rem;font-weight:750}
+.edusync-login-mobile-brand{display:none}
+[data-theme="dark"] .edusync-login{background:#07131d;color:#eaf6fb}
+[data-theme="dark"] .edusync-login-card{background:rgba(11,27,39,.96);border-color:#294858;box-shadow:0 28px 70px rgba(0,0,0,.35)}
+[data-theme="dark"] .edusync-login-card header h2{color:#f2f9fc}
+[data-theme="dark"] .edusync-login-card header span,[data-theme="dark"] .edusync-login-card footer{color:#a8bbc5}
+[data-theme="dark"] .edusync-login-field>span{color:#c7d7df}
+[data-theme="dark"] .edusync-login-field input{background:#0a1822;color:#eef8fb;border-color:#315061}
+[data-theme="dark"] .edusync-login-password button:hover,[data-theme="dark"] .edusync-login-channels{background:#102735}
+[data-theme="dark"] .edusync-login-channels button.active{background:#17384a}
+[data-theme="dark"] .edusync-login-theme{background:rgba(11,27,39,.9);border-color:#315061;color:#dcecf3}
+[data-theme="dark"] .edusync-login-alert.error{background:#321719;border-color:#643035;color:#ffb5b5}
+[data-theme="dark"] .edusync-login-alert.success{background:#102b1b;border-color:#24583a;color:#9ce6b3}
+@media(max-width:860px){.edusync-login{grid-template-columns:1fr}.edusync-login-brand{display:none}.edusync-login-access{min-height:100vh;min-height:100dvh;padding:5.5rem 1rem 2rem}.edusync-login-card{border-radius:18px;padding:1.4rem}.edusync-login-mobile-brand{display:flex;align-items:center;gap:.7rem;margin-bottom:.25rem;color:#102a3a;font-family:"Space Grotesk",Arial,sans-serif;font-size:1.35rem;font-weight:800}.edusync-login-mobile-brand img{width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid #087ba4}[data-theme="dark"] .edusync-login-mobile-brand{color:#f2f9fc}}
+@media(max-width:420px){.edusync-login-theme{top:.75rem;right:.75rem}.edusync-login-access{padding-inline:.7rem}.edusync-login-card{padding:1.15rem}}

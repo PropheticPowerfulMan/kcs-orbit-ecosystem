@@ -3,25 +3,23 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { schoolLogo } from "../assets";
 
-const roles = ["admin", "teacher", "staff"];
-
 export default function AuthPanel() {
-  const { login, register, forgotPassword } = useAuth();
+  const { login, forgotPassword } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [mode, setMode] = useState("login");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [recoveryChannel, setRecoveryChannel] = useState("email");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [recoveryChannel, setRecoveryChannel] = useState("email");
-  const [form, setForm] = useState({
-    full_name: "",
-    email: "",
-    password: "",
-    role: "teacher",
-    department: "Academics",
-  });
 
-  const updateField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const changeMode = (nextMode) => {
+    setMode(nextMode);
+    setError("");
+    setMessage("");
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -30,115 +28,79 @@ export default function AuthPanel() {
     setBusy(true);
     try {
       if (mode === "recovery") {
-        const result = await forgotPassword(form.email, recoveryChannel);
+        const result = await forgotPassword(identifier.trim(), recoveryChannel);
         setMessage(result.message);
-        return;
+      } else {
+        await login(identifier.trim(), password);
       }
-      if (mode === "register") {
-        await register(form);
-      }
-      await login(form.email, form.password);
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : "Unable to complete this request.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <section className="auth-shell">
-      <button type="button" className="theme-toggle auth-theme-toggle" onClick={toggleTheme}>
-        {isDark ? "Light mode" : "Dark mode"}
+    <main className="edusync-login">
+      <button type="button" className="edusync-login-theme" onClick={toggleTheme} aria-label={isDark ? "Use light theme" : "Use dark theme"}>
+        <span aria-hidden="true">{isDark ? "Light" : "Dark"}</span>
       </button>
-      <div className="auth-hero">
-        <img src={schoolLogo} alt="Kinshasa Christian School" className="school-logo large" />
-        <p className="eyebrow">Kinshasa Christian School</p>
-        <h1>EduSync AI</h1>
-        <p>
-          School communication platform for announcements, workflows,
-          notifications, and administration reports.
-        </p>
-      </div>
-      <form className="auth-card" onSubmit={handleSubmit}>
-        <div className="auth-card-head">
-          <img src={schoolLogo} alt="" className="school-logo" />
-          <div>
-            <p className="eyebrow">{mode === "recovery" ? "Password recovery" : mode === "login" ? "Sign in" : "Create account"}</p>
-            <h2>{mode === "recovery" ? "Recover access" : mode === "login" ? "Open the portal" : "Create access"}</h2>
-          </div>
+
+      <section className="edusync-login-brand" aria-label="EduSync introduction">
+        <div className="edusync-login-brandmark">
+          <img src={schoolLogo} alt="Kinshasa Christian School" />
+          <div><span>Kinshasa Christian School</span><strong>EduSync</strong></div>
         </div>
-        <p className="subtle">{mode === "recovery" ? "Choose email or SMS, then enter the email attached to your school account." : "Use your school email or shared access code to open the dashboard."}</p>
+        <div className="edusync-login-copy">
+          <p className="edusync-login-kicker">Connected school operations</p>
+          <h1>One secure space for your school day.</h1>
+          <p>Access communications, workflows, notifications and institutional reports with your official KCS account.</p>
+        </div>
+        <div className="edusync-login-trust">
+          <span>Secure institutional access</span>
+          <span>Authorized users only</span>
+        </div>
+      </section>
 
-
-        {mode === "register" && (
-          <input
-            placeholder="Full name"
-            value={form.full_name}
-            onChange={(e) => updateField("full_name", e.target.value)}
-            required
-          />
-        )}
-
-        <input
-          type="text"
-          placeholder={mode === "recovery" ? "School email" : "School email or access code"}
-          value={form.email}
-          onChange={(e) => updateField("email", e.target.value)}
-          required
-        />
-        {mode === "recovery" && (
-          <div className="recovery-channel" role="group" aria-label="Password recovery channel">
-            <button type="button" className={recoveryChannel === "email" ? "active" : "secondary"} onClick={() => setRecoveryChannel("email")}>Email</button>
-            <button type="button" className={recoveryChannel === "sms" ? "active" : "secondary"} onClick={() => setRecoveryChannel("sms")}>SMS</button>
+      <section className="edusync-login-access">
+        <form className="edusync-login-card" onSubmit={handleSubmit}>
+          <div className="edusync-login-mobile-brand">
+            <img src={schoolLogo} alt="" />
+            <span>EduSync</span>
           </div>
-        )}
-        {mode !== "recovery" && (
-          <input
-            type="password"
-            placeholder="Password"
-            value={form.password}
-            onChange={(e) => updateField("password", e.target.value)}
-            required
-          />
-        )}
+          <header>
+            <p>{mode === "login" ? "Welcome back" : "Account recovery"}</p>
+            <h2>{mode === "login" ? "Sign in to EduSync" : "Recover your access"}</h2>
+            <span>{mode === "login" ? "Enter the credentials issued by Kinshasa Christian School." : "Choose a recovery channel and enter your institutional email."}</span>
+          </header>
 
-        {mode === "register" && (
-          <>
-            <select value={form.role} onChange={(e) => updateField("role", e.target.value)}>
-              {roles.map((role) => (
-                <option value={role} key={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-            <input
-              placeholder="Department"
-              value={form.department}
-              onChange={(e) => updateField("department", e.target.value)}
-              required
-            />
-          </>
-        )}
+          <label className="edusync-login-field">
+            <span>{mode === "login" ? "Institutional identifier" : "Institutional email"}</span>
+            <input type={mode === "recovery" ? "email" : "text"} value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder={mode === "login" ? "Email or access code" : "name@ourkcs.org"} autoComplete={mode === "login" ? "username" : "email"} autoCapitalize="none" spellCheck="false" required autoFocus />
+          </label>
 
-        {error && <p className="error-text">{error}</p>}
-        {message && <p className="success-text">{message}</p>}
+          {mode === "login" ? (
+            <label className="edusync-login-field">
+              <span>Password</span>
+              <div className="edusync-login-password">
+                <input type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required />
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button>
+              </div>
+            </label>
+          ) : (
+            <div className="edusync-login-channels" role="group" aria-label="Recovery channel">
+              <button type="button" className={recoveryChannel === "email" ? "active" : ""} onClick={() => setRecoveryChannel("email")}>Email</button>
+              <button type="button" className={recoveryChannel === "sms" ? "active" : ""} onClick={() => setRecoveryChannel("sms")}>SMS</button>
+            </div>
+          )}
 
-        <button disabled={busy} type="submit">
-          {busy ? "Processing..." : mode === "recovery" ? "Send reset link" : mode === "login" ? "Sign in" : "Create account"}
-        </button>
-        {mode === "login" && (
-          <button type="button" className="secondary" onClick={() => { setMode("recovery"); setError(""); setMessage(""); }}>
-            Forgot password?
-          </button>
-        )}
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => { setMode((prev) => (prev === "login" ? "register" : "login")); setError(""); setMessage(""); }}
-        >
-          {mode === "login" ? "Need an account? Register" : "Back to sign in"}
-        </button>
-      </form>
-    </section>
+          {error && <p className="edusync-login-alert error" role="alert">{error}</p>}
+          {message && <p className="edusync-login-alert success" role="status">{message}</p>}
+          <button className="edusync-login-submit" disabled={busy} type="submit">{busy ? "Please wait..." : mode === "login" ? "Sign in securely" : "Send recovery instructions"}</button>
+          <button type="button" className="edusync-login-link" onClick={() => changeMode(mode === "login" ? "recovery" : "login")}>{mode === "login" ? "Forgot your password?" : "Back to sign in"}</button>
+          <footer>Need help? Contact the KCS administration. Accounts are created and managed by authorized school personnel.</footer>
+        </form>
+      </section>
+    </main>
   );
 }
