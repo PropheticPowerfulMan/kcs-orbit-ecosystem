@@ -119,6 +119,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(null);
   const [familyDialogOpen, setFamilyDialogOpen] = useState(familyWorkspace);
   const [editingStudent, setEditingStudent] = useState(null);
   const [editForm, setEditForm] = useState(createEditForm(null));
@@ -892,6 +893,36 @@ const StudentsPage = ({ familyWorkspace = false }) => {
           </select>
         </div>
       </div>
+      <section className="mb-5 grid gap-4 xl:grid-cols-2">
+        <article className="card overflow-hidden p-0">
+          <header className="flex items-center justify-between gap-3 border-b border-github-border bg-gradient-to-r from-cyan-400/10 to-transparent px-5 py-4">
+            <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Navigation par classe</p><h3 className="mt-1 font-display text-xl font-semibold text-slate-100">Classes détectées</h3><p className="mt-1 text-xs text-slate-400">Cliquez sur une classe pour consulter son effectif et ses familles.</p></div>
+            <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">{groupedByClass.length}</span>
+          </header>
+          <div className="savanex-scrollbar grid max-h-80 gap-2 overflow-y-auto p-4 sm:grid-cols-2">
+            {groupedByClass.length ? groupedByClass.map((group) => (
+              <button key={slugify(group.className)} type="button" onClick={() => setSelectedGroup({ type: 'class', group })} className="group flex items-center justify-between gap-3 rounded-2xl border border-github-border bg-slate-950/45 p-4 text-left transition hover:-translate-y-0.5 hover:border-cyan-300/50 hover:bg-cyan-400/10">
+                <span className="min-w-0"><span className="block truncate font-semibold text-slate-100">{group.className}</span><span className="mt-1 block text-xs text-slate-400">{group.total} élève(s) · {group.families.length} famille(s)</span></span>
+                <span className="text-xl text-cyan-300 transition group-hover:translate-x-1">→</span>
+              </button>
+            )) : <p className="text-sm text-slate-400">Aucune classe ne correspond aux filtres en cours.</p>}
+          </div>
+        </article>
+        <article className="card overflow-hidden p-0">
+          <header className="flex items-center justify-between gap-3 border-b border-github-border bg-gradient-to-r from-emerald-400/10 to-transparent px-5 py-4">
+            <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-300">Navigation par famille</p><h3 className="mt-1 font-display text-xl font-semibold text-slate-100">Familles liées</h3><p className="mt-1 text-xs text-slate-400">Cliquez sur une famille pour voir le parent, les enfants et leurs classes.</p></div>
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">{groupedByFamily.length}</span>
+          </header>
+          <div className="savanex-scrollbar grid max-h-80 gap-2 overflow-y-auto p-4 sm:grid-cols-2">
+            {groupedByFamily.length ? groupedByFamily.map((group) => (
+              <button key={slugify(group.familyName)} type="button" onClick={() => setSelectedGroup({ type: 'family', group })} className="group flex items-center justify-between gap-3 rounded-2xl border border-github-border bg-slate-950/45 p-4 text-left transition hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-400/10">
+                <span className="min-w-0"><span className="block truncate font-semibold text-slate-100">{group.familyName}</span><span className="mt-1 block text-xs text-slate-400">{group.total} enfant(s) · {group.classes.length} classe(s)</span></span>
+                <span className="text-xl text-emerald-300 transition group-hover:translate-x-1">→</span>
+              </button>
+            )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
+          </div>
+        </article>
+      </section>
       {loading ? <p className="mb-4 text-sm text-slate-400">Chargement des élèves...</p> : null}
       <DataTable columns={columns} data={filtered} />
 
@@ -904,52 +935,55 @@ const StudentsPage = ({ familyWorkspace = false }) => {
           openEditDialog(student);
         }}
       />
-
-      <section className="mt-6 grid gap-4 xl:grid-cols-2">
-        <article className="card p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Classement</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement par classe</h3>
-            </div>
-            <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200">{groupedByClass.length} classes</span>
-          </div>
-          <div className="mt-4 space-y-3">
-            {groupedByClass.length ? groupedByClass.map((group) => (
-              <div key={slugify(group.className)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-slate-100">{group.className}</p>
-                  <span className="text-xs text-slate-400">{group.total} élève(s)</span>
+      {selectedGroup ? createPortal((() => {
+        const { type, group } = selectedGroup;
+        const isClassGroup = type === 'class';
+        const title = isClassGroup ? group.className : group.familyName;
+        const activeCount = group.students.filter((student) => student.is_active).length;
+        const girls = group.students.filter((student) => String(student.gender).toUpperCase() === 'F').length;
+        const boys = group.students.filter((student) => String(student.gender).toUpperCase() === 'M').length;
+        const familyContact = group.students[0] || {};
+        return (
+          <div className={modalBackdropClass} onClick={() => setSelectedGroup(null)}>
+            <section role="dialog" aria-modal="true" aria-label={isClassGroup ? `Détails de la classe ${title}` : `Détails de la famille ${title}`} className={`${modalPanelClass} max-w-5xl`} onClick={(event) => event.stopPropagation()}>
+              <header className="flex flex-wrap items-start justify-between gap-4 border-b border-github-border pb-5">
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-[0.2em] ${isClassGroup ? 'text-cyan-300' : 'text-emerald-300'}`}>{isClassGroup ? 'Dossier détaillé de la classe' : 'Dossier détaillé de la famille'}</p>
+                  <h3 className="mt-2 font-display text-3xl font-bold text-white">{title}</h3>
+                  <p className="mt-2 text-sm text-slate-400">{isClassGroup ? `${group.total} élève(s) réparti(s) dans ${group.families.length} famille(s)` : `${group.total} enfant(s) inscrit(s) dans ${group.classes.length} classe(s)`}</p>
                 </div>
-                <p className="mt-2 text-xs text-slate-400">Familles: {group.families.join(', ')}</p>
-                <p className="mt-3 text-sm text-slate-300">{group.students.map((student) => student.full_name).join(', ')}</p>
+                <button type="button" onClick={() => setSelectedGroup(null)} className="rounded-xl border border-github-border bg-slate-950/60 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800">Fermer</button>
+              </header>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[['Effectif total', group.total, 'text-white'], ['Actifs', activeCount, 'text-emerald-200'], ['Filles', girls, 'text-pink-200'], ['Garçons', boys, 'text-cyan-200']].map(([label, value, color]) => (
+                  <div key={label} className="rounded-2xl border border-white/10 bg-slate-950/45 p-4"><p className="text-xs uppercase tracking-[0.16em] text-slate-500">{label}</p><p className={`mt-2 text-3xl font-bold ${color}`}>{value}</p></div>
+                ))}
               </div>
-            )) : <p className="text-sm text-slate-400">Aucune classe ne correspond aux filtres en cours.</p>}
-          </div>
-        </article>
-
-        <article className="card p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-kcs-blue">Familles</p>
-              <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">Groupement par famille</h3>
-            </div>
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">{groupedByFamily.length} groupes</span>
-          </div>
-          <div className="mt-4 space-y-3">
-            {groupedByFamily.length ? groupedByFamily.map((group) => (
-              <div key={slugify(group.familyName)} className="rounded-2xl border border-github-border bg-slate-950/35 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-slate-100">{group.familyName}</p>
-                  <span className="text-xs text-slate-400">{group.total} élève(s)</span>
+              {isClassGroup ? (
+                <section className="mt-5 rounded-2xl border border-github-border bg-slate-950/35 p-4"><p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Familles représentées</p><div className="mt-3 flex flex-wrap gap-2">{group.families.map((family) => <span key={family} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200">{family}</span>)}</div></section>
+              ) : (
+                <section className="mt-5 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-github-border bg-slate-950/35 p-4"><p className="text-xs uppercase tracking-[0.16em] text-slate-500">Parent responsable</p><p className="mt-2 font-semibold text-white">{group.familyName}</p></div>
+                  <div className="rounded-2xl border border-github-border bg-slate-950/35 p-4"><p className="text-xs uppercase tracking-[0.16em] text-slate-500">Téléphone</p><p className="mt-2 font-semibold text-white">{familyContact.parent_phone || 'Non renseigné'}</p></div>
+                  <div className="rounded-2xl border border-github-border bg-slate-950/35 p-4"><p className="text-xs uppercase tracking-[0.16em] text-slate-500">E-mail</p><p className="mt-2 break-words font-semibold text-white">{familyContact.parent_email || 'Non renseigné'}</p></div>
+                </section>
+              )}
+              <section className="mt-5">
+                <div className="mb-3 flex items-center justify-between gap-3"><h4 className="font-display text-xl font-semibold text-white">{isClassGroup ? 'Élèves de la classe' : 'Enfants de la famille'}</h4><span className="text-xs text-slate-400">Cliquez sur un élève pour ouvrir sa fiche complète.</span></div>
+                <div className="savanex-scrollbar grid max-h-[46vh] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+                  {group.students.map((student) => (
+                    <button key={student.id || student.student_id} type="button" onClick={() => { setSelectedGroup(null); setSelectedStudent(student); }} className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-left transition hover:border-kcs-blue hover:bg-slate-900/80">
+                      <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-semibold text-white">{student.full_name}</p><p className="mt-1 font-metric text-xs text-cyan-200">{student.student_id || 'ID non renseigné'}</p></div><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${student.is_active ? 'bg-emerald-400/15 text-emerald-200' : 'bg-slate-700 text-slate-300'}`}>{student.is_active ? 'Actif' : 'Inactif'}</span></div>
+                      <div className="mt-3 grid gap-1 text-xs text-slate-400"><span>Classe : {normalizeClassDisplay(student.class_name) || 'Non assignée'}</span><span>Famille : {normalizeLabel(student.parent_name, 'Aucun parent lié')}</span><span>E-mail : {student.email || 'Non renseigné'}</span></div>
+                    </button>
+                  ))}
                 </div>
-                <p className="mt-2 text-xs text-slate-400">Classes: {group.classes.join(', ')}</p>
-                <p className="mt-3 text-sm text-slate-300">{group.students.map((student) => `${student.full_name} (${normalizeLabel(student.class_name, 'Non assignée')})`).join(', ')}</p>
-              </div>
-            )) : <p className="text-sm text-slate-400">Aucune famille ne correspond aux filtres en cours.</p>}
+              </section>
+            </section>
           </div>
-        </article>
-      </section>
+        );
+      })(), document.body) : null}
+
     </DashboardLayout>
   );
 };
