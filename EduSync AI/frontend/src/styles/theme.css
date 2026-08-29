@@ -1105,3 +1105,17 @@ body{background:var(--nx-bg);color:var(--nx-ink);font-family:Inter,"Segoe UI",Ar
 [data-theme="dark"] .mobile-app-shell::-webkit-scrollbar-track,[data-theme="dark"] .mobile-app-shell *::-webkit-scrollbar-track,[data-theme="dark"] .edusync-login::-webkit-scrollbar-track,[data-theme="dark"] .edusync-login *::-webkit-scrollbar-track{background:#10283b}
 [data-theme="dark"] .mobile-app-shell::-webkit-scrollbar-thumb,[data-theme="dark"] .mobile-app-shell *::-webkit-scrollbar-thumb,[data-theme="dark"] .edusync-login::-webkit-scrollbar-thumb,[data-theme="dark"] .edusync-login *::-webkit-scrollbar-thumb{border-color:#10283b}
 @media(max-width:800px){.bottom-tabs{scrollbar-width:thin}.bottom-tabs::-webkit-scrollbar{display:block;height:5px}.chat-view .composer{bottom:auto;padding-bottom:max(11px,env(safe-area-inset-bottom))}}
+
+
+/* Always-visible EduSync chat composer without message overlap */
+.chat-view{height:calc(100dvh - 285px);min-height:440px;grid-template-rows:auto auto minmax(0,1fr) auto;overflow:hidden}
+.chat-view .message-list{min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden;padding-bottom:16px;overscroll-behavior:contain}
+.chat-view .composer{position:relative;inset:auto;z-index:2;margin:0;padding:11px;border-color:#203f55;background:#071a2e;box-shadow:0 -10px 30px #071a2e24}
+.chat-view .composer input{border-color:#294f66;background:#10283b;color:#eef8ff}
+.chat-view .composer input::placeholder{color:#8ba6b8}
+.chat-view .composer-tool{border-color:#31566d;background:#153349;color:#3bc3ef}
+.chat-view .send-button{background:#009fe0;color:#fff}
+[data-theme="dark"] .chat-view .composer{border-color:#294f66;background:#071a2e}
+@media(max-width:800px){.chat-view{height:calc(100dvh - 300px);min-height:360px}.chat-view .composer{padding-bottom:max(11px,env(safe-area-inset-bottom))}}
+@media(max-width:620px){.chat-view{height:calc(100dvh - 270px);min-height:340px}.chat-view .message-list{min-height:0;padding-bottom:12px}}
+@media(max-height:720px){.chat-view{height:calc(100dvh - 235px);min-height:300px}.quick-prompt-row{display:none}}
