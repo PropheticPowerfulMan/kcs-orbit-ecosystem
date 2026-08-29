@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -50,3 +52,31 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
                 HTTP_X_API_KEY=api_key,
             )
             self.assertEqual(response.status_code, 200)
+
+    @patch('apps.integration.views.reset_user_access_credentials')
+    def test_parent_reset_provisions_missing_parent_identity(self, reset_credentials):
+        reset_credentials.return_value = {
+            'username': 'parent-imported',
+            'accessCode': 'ACC-PAR-000001',
+            'temporaryPassword': 'KCS-123456',
+            'mustChangePassword': True,
+        }
+
+        response = self.client.post(
+            '/api/integration/entities/parent/parent-imported/reset-access/',
+            {
+                'fullName': 'Mbuyi Rachel',
+                'firstName': 'Rachel',
+                'lastName': 'Mbuyi',
+                'email': 'rachel.parent@example.com',
+                'phone': '+243810000000',
+            },
+            format='json',
+            HTTP_X_API_KEY='edupay-test-key',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        parent = User.objects.get(email='rachel.parent@example.com')
+        self.assertEqual(parent.role, User.ROLE_PARENT)
+        self.assertEqual(parent.username, 'parent-imported')
+        reset_credentials.assert_called_once_with(parent)

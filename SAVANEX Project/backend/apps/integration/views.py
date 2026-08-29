@@ -11,7 +11,7 @@ from apps.students.models import Student
 from apps.teachers.models import Teacher
 from apps.users.models import User
 from apps.users.serializers import UserMeSerializer
-from apps.users.views import provision_student_access_identity, reset_user_access_credentials
+from apps.users.views import provision_parent_access_identity, provision_student_access_identity, reset_user_access_credentials
 from apps.users.permissions import IsAdminUser
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
 
@@ -193,6 +193,18 @@ def reset_ecosystem_identity_access_view(request, entity_type, identifier):
             Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier)
             | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
         ).first()
+        if not user:
+            email = str(request.data.get('email') or '').strip()
+            phone = str(request.data.get('phone') or '').strip()
+            contact_filter = Q()
+            if email:
+                contact_filter |= Q(email__iexact=email)
+            if phone:
+                contact_filter |= Q(phone=phone)
+            if contact_filter:
+                user = User.objects.filter(role=User.ROLE_PARENT, is_active=True).filter(contact_filter).first()
+        if not user:
+            user = provision_parent_access_identity(identifier, request.data)
     elif entity_type == 'student':
         student = Student.objects.select_related('user').filter(is_active=True).filter(
             Q(student_id__iexact=identifier) | Q(user__username__iexact=identifier)
