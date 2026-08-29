@@ -1090,3 +1090,18 @@ body{background:var(--nx-bg);color:var(--nx-ink);font-family:Inter,"Segoe UI",Ar
 /* Collapsible EduSync navigation */
 @media (min-width:801px){.phone-frame.nav-hidden{grid-template-columns:0 minmax(0,1fr)}.phone-frame.nav-hidden .bottom-tabs{display:none}.menu-toggle{font-size:1.35rem}}
 @media (max-width:800px){.phone-frame.nav-hidden{grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"header" "status" "screen"}.phone-frame.nav-hidden .bottom-tabs{display:none}.menu-toggle{font-size:1.2rem}}
+
+
+/* EduSync composer flow and branded scrollbars */
+.chat-view .composer{position:relative;inset:auto;z-index:1;margin-top:0;background:var(--nx-surface)}
+.chat-view .message-list{position:relative;z-index:0;padding-bottom:14px}
+.mobile-app-shell,.edusync-login{scrollbar-width:thin;scrollbar-color:#009fe0 #dcecf4}
+.mobile-app-shell *,.edusync-login *{scrollbar-width:thin;scrollbar-color:#009fe0 #dcecf4}
+.mobile-app-shell::-webkit-scrollbar,.mobile-app-shell *::-webkit-scrollbar,.edusync-login::-webkit-scrollbar,.edusync-login *::-webkit-scrollbar{width:10px;height:10px}
+.mobile-app-shell::-webkit-scrollbar-track,.mobile-app-shell *::-webkit-scrollbar-track,.edusync-login::-webkit-scrollbar-track,.edusync-login *::-webkit-scrollbar-track{background:#dcecf4;border-radius:999px}
+.mobile-app-shell::-webkit-scrollbar-thumb,.mobile-app-shell *::-webkit-scrollbar-thumb,.edusync-login::-webkit-scrollbar-thumb,.edusync-login *::-webkit-scrollbar-thumb{border:2px solid #dcecf4;border-radius:999px;background:linear-gradient(180deg,#19b7eb,#009fe0)}
+.mobile-app-shell::-webkit-scrollbar-thumb:hover,.mobile-app-shell *::-webkit-scrollbar-thumb:hover,.edusync-login::-webkit-scrollbar-thumb:hover,.edusync-login *::-webkit-scrollbar-thumb:hover{background:#007fb8}
+[data-theme="dark"] .mobile-app-shell,[data-theme="dark"] .mobile-app-shell *,[data-theme="dark"] .edusync-login,[data-theme="dark"] .edusync-login *{scrollbar-color:#009fe0 #10283b}
+[data-theme="dark"] .mobile-app-shell::-webkit-scrollbar-track,[data-theme="dark"] .mobile-app-shell *::-webkit-scrollbar-track,[data-theme="dark"] .edusync-login::-webkit-scrollbar-track,[data-theme="dark"] .edusync-login *::-webkit-scrollbar-track{background:#10283b}
+[data-theme="dark"] .mobile-app-shell::-webkit-scrollbar-thumb,[data-theme="dark"] .mobile-app-shell *::-webkit-scrollbar-thumb,[data-theme="dark"] .edusync-login::-webkit-scrollbar-thumb,[data-theme="dark"] .edusync-login *::-webkit-scrollbar-thumb{border-color:#10283b}
+@media(max-width:800px){.bottom-tabs{scrollbar-width:thin}.bottom-tabs::-webkit-scrollbar{display:block;height:5px}.chat-view .composer{bottom:auto;padding-bottom:max(11px,env(safe-area-inset-bottom))}}
