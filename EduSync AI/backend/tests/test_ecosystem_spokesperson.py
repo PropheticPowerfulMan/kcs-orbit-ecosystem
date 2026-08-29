@@ -1,6 +1,7 @@
 import unittest
 
 from app.services.ai.nlp_engine import NLPEngine
+from app.services.chatbot_service import ChatbotService
 
 
 class EduSyncSpokespersonTests(unittest.TestCase):
@@ -146,8 +147,8 @@ class EduSyncSpokespersonTests(unittest.TestCase):
             "parle moi en francais",
         )
 
-        self.assertIn("Voix officielle EduSync AI", response)
         self.assertIn("Je continue en francais", response)
+        self.assertNotIn("Etat verifie", response)
         self.assertNotIn("demande est trop ouverte", response)
 
     def test_greeting_is_not_misclassified_as_capabilities(self):
@@ -182,6 +183,24 @@ class EduSyncSpokespersonTests(unittest.TestCase):
         self.assertIn("impayes", response)
         self.assertNotIn("paid students", response)
         self.assertIn("ouvrir_module_finance", actions)
+
+
+    def test_follow_up_uses_recent_conversation_context(self):
+        service = ChatbotService()
+        result = service.process_message(
+            "et les parents ?",
+            {
+                **self.context,
+                "conversation": [
+                    {"role": "user", "text": "donne moi la liste des eleves"},
+                    {"role": "assistant", "text": "liste chargee"},
+                ],
+            },
+        )
+
+        self.assertEqual(result.intent, "directory_query")
+        self.assertIn("Parent Alpha", result.response)
+        self.assertNotIn("demande est trop ouverte", result.response)
 
 
 if __name__ == "__main__":

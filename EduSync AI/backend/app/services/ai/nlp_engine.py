@@ -175,13 +175,15 @@ class NLPEngine:
 
         if language == "fr":
             response = self._compose_french_response(intent, message, details)
-            response = self._apply_spokesperson_frame(response, context, "fr")
+            if intent in {"ecosystem_status_query", "directory_query", "finance_query", "report_request"}:
+                response = self._apply_spokesperson_frame(response, context, "fr")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_fr)
             if intent == "finance_query" and details.get("payment_status") == "impayes":
                 actions = ["ouvrir_module_finance", "filtrer_eleves_impayes", "exporter_liste_impayes", "verifier_soldes"]
         else:
             response = self._compose_english_response(intent, message, details)
-            response = self._apply_spokesperson_frame(response, context, "en")
+            if intent in {"ecosystem_status_query", "directory_query", "finance_query", "report_request"}:
+                response = self._apply_spokesperson_frame(response, context, "en")
             actions = list(self.intent_definitions.get(intent, self.intent_definitions["capability_query"]).actions_en)
 
         return response, actions
@@ -289,9 +291,12 @@ class NLPEngine:
             )
 
         return "\n".join([
-            "J'ai compris que tu veux une aide operationnelle, mais la demande est trop ouverte.",
-            f"Voici ce que je peux deja cadrer: {self._clean_sentence(original_message)}.",
-            "Dis-moi si tu veux en faire une annonce, un workflow, un rapport, une reunion, un planning ou une notification.",
+            "Analyse de la demande",
+            f"Objectif compris: {self._clean_sentence(original_message)}.",
+            "",
+            "Je peux avancer sans inventer: identifier les donnees utiles, proposer une action concrete et signaler ce qui doit etre confirme.",
+            "Pour une reponse precise, ajoute si possible les personnes concernees, la periode ou echeance et le resultat attendu.",
+            "Reponds avec ces precisions; je conserverai le contexte de notre echange.",
         ])
 
     def _compose_english_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
@@ -397,10 +402,14 @@ class NLPEngine:
                 "I also flag missing data instead of inventing figures."
             )
 
-        return (
-            f"I understand the request: {self._clean_sentence(original_message)}. "
-            "Tell me whether this should become an announcement, workflow, report, meeting, schedule task, or notification."
-        )
+        return "\n".join([
+            "Request analysis",
+            f"Understood objective: {self._clean_sentence(original_message)}.",
+            "",
+            "I can move forward without inventing facts: identify the relevant data, propose a concrete action, and clearly flag what needs confirmation.",
+            "For a precise answer, add the people concerned, the period or deadline, and the expected result when available.",
+            "Reply with those details; I will retain the context of this exchange.",
+        ])
 
     def _normalize(self, message: str) -> str:
         decomposed = unicodedata.normalize("NFKD", (message or "").lower().strip())

@@ -246,7 +246,7 @@ export default function DashboardPanel() {
       const data = await apiRequest(
         "/chat/query",
         "POST",
-        { message: cleanMessage, context: { source: "mobile_chat" } },
+        { message: cleanMessage, context: { source: "workspace_chat", conversation: chatMessages.slice(-8).map(({ role, text }) => ({ role, text })) } },
         token
       );
       setChatMessages((current) => [
@@ -454,6 +454,10 @@ export default function DashboardPanel() {
         </section>
 
         <div className="mobile-screen" ref={screenRef}>
+          <div className="workspace-commandbar">
+            <div><p className="eyebrow">KCS operational workspace</p><strong>{tabItems.find(([key]) => key === activeTab)?.[1] || "Workspace"}</strong></div>
+            <div className="workspace-health"><span>Orbit synced</span><span>Secure session</span></div>
+          </div>
           {activeTab === "chat" && (
             <section className="chat-view">
               <div className="section-title">

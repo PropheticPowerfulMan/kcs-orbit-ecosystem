@@ -9,6 +9,20 @@ class ChatbotService:
 
     def process_message(self, message: str, context: dict | None = None) -> ChatResponse:
         intent, confidence = self.nlp.detect_intent(message)
+        history = (context or {}).get("conversation") or []
+        if intent == "general_query" and history:
+            previous_user_messages = [
+                str(item.get("text") or "")
+                for item in history[-6:]
+                if item.get("role") == "user" and item.get("text")
+            ]
+            if previous_user_messages:
+                inferred_intent, inferred_confidence = self.nlp.detect_intent(
+                    " ".join(previous_user_messages[-2:] + [message])
+                )
+                if inferred_intent != "general_query":
+                    intent = inferred_intent
+                    confidence = max(confidence, min(inferred_confidence, 0.92))
         response_text, actions = self.nlp.generate_context_response(intent, context, message)
         language = self.nlp._detect_language(self.nlp._normalize(message))
         polished = external_ai_partner.polish_response(message, response_text, language)
