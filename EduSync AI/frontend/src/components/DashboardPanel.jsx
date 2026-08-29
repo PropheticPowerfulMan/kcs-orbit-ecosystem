@@ -61,12 +61,23 @@ function formatTime(date = new Date()) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function greetingForNow(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function displayRole(role) {
+  return ({ admin: "Administrator", teacher: "Teacher", staff: "Staff", parent: "Parent", student: "Student" })[role] || "KCS member";
+}
+
 function EmptyState({ children }) {
   return <p className="mobile-empty">{children}</p>;
 }
 
 export default function DashboardPanel() {
-  const { token, logout } = useAuth();
+  const { token, logout, user, profileLoading } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("chat");
   const [chatText, setChatText] = useState("");
@@ -418,7 +429,7 @@ export default function DashboardPanel() {
             <div>
               <p className="eyebrow">Kinshasa Christian School</p>
               <h1>EduSync AI</h1>
-              <span className="presence-line">Online now</span>
+              <span className="presence-line">{profileLoading ? "Loading your workspace..." : greetingForNow() + ", " + (user?.full_name || "KCS member") + " · " + displayRole(user?.role)}</span>
             </div>
           </div>
           <div className="icon-actions">
@@ -486,11 +497,12 @@ export default function DashboardPanel() {
               <div className="message-list">
                 {chatMessages.map((message) => (
                   <article className={`message-bubble ${message.role}`} key={message.id}>
-                    <p>{message.text}</p>
+                    <div className="message-content">{String(message.text || "").split("\n").filter(Boolean).map((line, index) => <p key={message.id + "-" + index}>{line}</p>)}</div>
                     {message.role === "assistant" && (
                       <div className="message-meta">
                         <span>{formatIntent(message.intent || "assistant")}</span>
                         <span>{Math.round((message.confidence || 0) * 100)}%</span>
+                        <button type="button" className="message-copy" onClick={() => navigator.clipboard?.writeText(message.text)} aria-label="Copy answer">Copy</button>
                       </div>
                     )}
                     {message.actions?.length > 0 && (

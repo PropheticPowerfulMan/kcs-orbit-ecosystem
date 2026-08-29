@@ -235,6 +235,11 @@ def upsert_external_user(db: Session, external_user: dict, password: str) -> Use
     return user
 
 
+@router.get("/me", response_model=UserResponse)
+def current_profile(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
 @router.post("/register", response_model=UserResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     del payload, db
