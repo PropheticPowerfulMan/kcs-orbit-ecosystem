@@ -5,8 +5,13 @@ import StatCard from '../../components/ui/StatCard';
 import { timetable } from '../../data/demoSchoolData';
 import { useTranslation } from 'react-i18next';
 
+const normalize = (value = '') => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const isConflictFree = (value) => ['none', 'aucun', 'optimise'].includes(normalize(value));
+const isStemSubject = (subject) => /math|science|physique|chimie|biologie|informatique|technologie/i.test(normalize(subject));
+const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+
 const conflictClass = (value) =>
-  value === 'None'
+  isConflictFree(value)
     ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
     : 'border-amber-400/30 bg-amber-400/10 text-amber-200';
 
@@ -16,7 +21,7 @@ const TimetablePage = () => {
   const [optimizing, setOptimizing] = useState(false);
   const [optimizationReport, setOptimizationReport] = useState(null);
 
-  const conflicts = slots.filter((slot) => slot.conflict !== 'None').length;
+  const conflicts = slots.filter((slot) => !isConflictFree(slot.conflict)).length;
   const teacherLoads = useMemo(() => {
     const loads = slots.reduce((acc, slot) => {
       acc[slot.teacher] = (acc[slot.teacher] || 0) + 2;
@@ -27,6 +32,14 @@ const TimetablePage = () => {
       .sort((a, b) => b.hours - a.hours);
   }, [slots]);
   const roomOccupation = Math.round((new Set(slots.map((slot) => `${slot.day}-${slot.time}-${slot.room}`)).size / Math.max(slots.length, 1)) * 100);
+  const scientificMetrics = useMemo(() => {
+    const loads = teacherLoads.map(({ hours }) => hours);
+    const average = loads.reduce((sum, hours) => sum + hours, 0) / Math.max(loads.length, 1);
+    const deviation = Math.sqrt(loads.reduce((sum, hours) => sum + ((hours - average) ** 2), 0) / Math.max(loads.length, 1));
+    const stem = slots.filter((slot) => isStemSubject(slot.subject)).length;
+    const morning = slots.filter((slot) => Number.parseInt(slot.time, 10) < 12).length;
+    return { average: average.toFixed(1), deviation: deviation.toFixed(1), balanceScore: Math.max(0, Math.round(100 - (deviation / Math.max(average, 1)) * 100)), stem, stemRate: Math.round(stem / Math.max(slots.length, 1) * 100), morningRate: Math.round(morning / Math.max(slots.length, 1) * 100) };
+  }, [slots, teacherLoads]);
 
   const generateOptimizedSchedule = () => {
     setOptimizing(true);
@@ -34,25 +47,25 @@ const TimetablePage = () => {
 
     window.setTimeout(() => {
       const roomFixes = {
-        'Capacity warning': 'Lab 1',
-        'Teacher load': 'Lab 2',
+        'Capacité à vérifier': 'Lab 1',
+        'Charge enseignant': 'Lab 2',
       };
       const timeFixes = {
-        'Capacity warning': '11:00',
-        'Teacher load': '14:00',
+        'Capacité à vérifier': '11:00',
+        'Charge enseignant': '14:00',
       };
       const optimized = slots.map((slot) => {
-        if (slot.conflict === 'None') return slot;
+        if (isConflictFree(slot.conflict)) return slot;
         return {
           ...slot,
           time: timeFixes[slot.conflict] || slot.time,
           room: roomFixes[slot.conflict] || slot.room,
-          conflict: 'None',
+          conflict: 'Aucun',
           optimized: true,
         };
       });
 
-      const resolved = slots.filter((slot) => slot.conflict !== 'None').length;
+      const resolved = slots.filter((slot) => !isConflictFree(slot.conflict)).length;
       setSlots(optimized);
       setOptimizationReport({
         resolved,
@@ -140,7 +153,7 @@ const TimetablePage = () => {
       ) : null}
 
       <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-5">
-        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day) => (
+        {DAYS.map((day) => (
           <article key={day} className="card p-4">
             <p className="font-semibold text-slate-100">{day}</p>
             <p className="mt-2 text-3xl font-display font-bold text-kcs-blue">{slots.filter((slot) => slot.day === day).length}</p>
