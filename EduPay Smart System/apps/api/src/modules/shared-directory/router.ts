@@ -204,6 +204,7 @@ sharedDirectoryRouter.post("/reset-access/:entityType/:id", async (req: Authenti
         "x-api-key": env.KCS_ORBIT_API_KEY,
       },
       body: JSON.stringify(sharedEntity),
+      signal: AbortSignal.timeout(10_000),
     }
   );
   const result = await response.json().catch(() => ({}));
@@ -248,7 +249,9 @@ sharedDirectoryRouter.post("/reset-access/:entityType/:id", async (req: Authenti
     });
   }
 
-  await syncOrbitRegistryMirror(req.user!.schoolId);
+  void syncOrbitRegistryMirror(req.user!.schoolId).catch((error) => {
+    console.error("[ACCESS_RESET_MIRROR_REFRESH]", error);
+  });
   return res.json({ ...result, entityType, orbitId: sharedEntity.orbitId || sharedEntity.id });
 });
 

@@ -92,6 +92,28 @@ class UserAccessCodeTests(TestCase):
         self.assertTrue(user.check_password(credentials['temporaryPassword']))
         self.assertEqual(credentials['accessCode'], 'ACC-PAR-RESET1')
         self.assertTrue(user.must_change_password)
+
+    @patch('apps.users.views._reset_side_effect_executor.submit')
+    @patch('apps.users.views.deliver_direct_parent_contact')
+    @patch('apps.users.views.sync_parent')
+    def test_deferred_reset_returns_credentials_before_sync_and_delivery(self, sync_parent_mock, delivery_mock, submit_mock):
+        user = User.objects.create_user(
+            username='parent-fast-reset',
+            email='parent.fast.reset@example.com',
+            password='ParentPass123!',
+            role=User.ROLE_PARENT,
+            access_code='ACC-PAR-FAST1',
+        )
+
+        credentials = reset_user_access_credentials(user, defer_side_effects=True)
+
+        self.assertTrue(credentials['temporaryPassword'])
+        self.assertEqual(credentials['accessCode'], 'ACC-PAR-FAST1')
+        self.assertEqual(credentials['delivery'][0]['status'], 'queued')
+        submit_mock.assert_called_once()
+        sync_parent_mock.assert_not_called()
+        delivery_mock.assert_not_called()
+
     def test_current_user_can_update_access_code(self):
         factory = APIRequestFactory()
         user = User.objects.create_user(

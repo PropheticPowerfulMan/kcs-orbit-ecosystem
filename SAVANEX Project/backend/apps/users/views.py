@@ -1,4 +1,7 @@
-from django.db import transaction
+from concurrent.futures import ThreadPoolExecutor
+import logging
+
+from django.db import close_old_connections, transaction
 from django.db.models import Q
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
@@ -27,6 +30,9 @@ from .permissions import IsAdminUser
 
 
 PASSWORD_RESET_RESPONSE = {'detail': 'If an account exists, a secure reset link will be sent through the selected channel.'}
+
+logger = logging.getLogger(__name__)
+_reset_side_effect_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='access-reset')
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -271,19 +277,37 @@ def provision_student_access_identity(identifier, data=None):
     return user
 
 
-def reset_user_access_credentials(user):
+def _deliver_reset_side_effects(user_id, subject, body, channels):
+    close_old_connections()
+    try:
+        user = User.objects.get(pk=user_id)
+        if user.role == User.ROLE_PARENT:
+            sync_parent(user)
+        elif user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
+            sync_student(user.student_profile)
+        elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
+            sync_teacher(user.teacher_profile)
+
+        deliver_direct_parent_contact(
+            name=user.get_full_name() or user.username,
+            email=user.email,
+            phone=user.phone,
+            subject=subject,
+            body=body,
+            channels=channels,
+        )
+    except Exception:
+        logger.exception('Deferred access reset delivery failed for user %s', user_id)
+    finally:
+        close_old_connections()
+
+
+def reset_user_access_credentials(user, defer_side_effects=False):
     temporary_password = generate_temporary_password(user.role)
     user.set_password(temporary_password)
     user.must_change_password = True
     user.password_generated_by_system = True
     user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
-
-    if user.role == User.ROLE_PARENT:
-        sync_parent(user)
-    elif user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
-        sync_student(user.student_profile)
-    elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
-        sync_teacher(user.teacher_profile)
 
     subject = 'Nouveaux identifiants temporaires KCS'
     body = (
@@ -294,14 +318,30 @@ def reset_user_access_credentials(user):
         f'Mot de passe temporaire: {temporary_password}\n\n'
         'Changez ce mot de passe lors de votre prochaine connexion.'
     )
-    delivery = deliver_direct_parent_contact(
-        name=user.get_full_name() or user.username,
-        email=user.email,
-        phone=user.phone,
-        subject=subject,
-        body=body,
-        channels=['email'] if user.role == User.ROLE_STUDENT else ['email', 'sms'],
-    )
+    channels = ['email'] if user.role == User.ROLE_STUDENT else ['email', 'sms']
+
+    if defer_side_effects:
+        _reset_side_effect_executor.submit(_deliver_reset_side_effects, user.pk, subject, body, channels)
+        delivery = [
+            {'channel': channel, 'status': 'queued', 'detail': 'Delivery scheduled.'}
+            for channel in channels
+        ]
+    else:
+        if user.role == User.ROLE_PARENT:
+            sync_parent(user)
+        elif user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
+            sync_student(user.student_profile)
+        elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
+            sync_teacher(user.teacher_profile)
+
+        delivery = [result.__dict__ for result in deliver_direct_parent_contact(
+            name=user.get_full_name() or user.username,
+            email=user.email,
+            phone=user.phone,
+            subject=subject,
+            body=body,
+            channels=channels,
+        )]
 
     return {
         'userId': user.pk,
@@ -309,7 +349,7 @@ def reset_user_access_credentials(user):
         'accessCode': user.access_code,
         'temporaryPassword': temporary_password,
         'mustChangePassword': True,
-        'delivery': [result.__dict__ for result in delivery],
+        'delivery': delivery,
     }
 
 

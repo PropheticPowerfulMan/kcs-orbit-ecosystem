@@ -226,7 +226,7 @@ def reset_ecosystem_identity_access_view(request, entity_type, identifier):
 
     if not user:
         return Response({'detail': 'Compte SAVANEX introuvable pour cette entite.'}, status=404)
-    return Response(reset_user_access_credentials(user))
+    return Response(reset_user_access_credentials(user, defer_side_effects=True))
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
