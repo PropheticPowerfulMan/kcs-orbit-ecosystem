@@ -228,8 +228,8 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
       grade: classParts.grade,
       section: classParts.section,
       status: (student.status ?? 'active').toLowerCase(),
-      gpa: 0,
-      attendanceRate: 100,
+      gpa: null,
+      attendanceRate: null,
       enrollmentDate: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -452,12 +452,12 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     const orbitProfiles = orbitStudentsToProfiles(familyDirectory)
     const localProfiles = await prisma.studentProfile.findMany({
       where: { studentNumber: { in: orbitProfiles.map((student) => student.studentNumber) } },
-      select: { id: true, studentNumber: true, gpa: true, attendanceRate: true },
+      select: { id: true, studentNumber: true, gpa: true, attendanceRate: true, _count: { select: { grades: true, attendanceRecords: true } } },
     })
     const localByNumber = new Map(localProfiles.map((profile) => [profile.studentNumber.toLowerCase(), profile]))
     const children = orbitProfiles.map((profile) => {
       const local = localByNumber.get(profile.studentNumber.toLowerCase())
-      return { ...profile, localProfileId: local?.id ?? null, gpa: local?.gpa ?? profile.gpa, attendanceRate: local?.attendanceRate ?? profile.attendanceRate }
+      return { ...profile, localProfileId: local?.id ?? null, gpa: local?._count.grades ? local.gpa : null, attendanceRate: local?._count.attendanceRecords ? local.attendanceRate : null }
     })
     return success(res, children, 'Parent children loaded from Orbit')
   }
@@ -491,7 +491,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     teacher: [course.teacher.user.firstName, course.teacher.user.lastName].filter(Boolean).join(' '),
   })))
   return success(res, {
-    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.gpa, attendanceRate: student.attendanceRate, status: student.status, user: student.user },
+    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.grades.length ? student.gpa : null, attendanceRate: student.attendanceRecords.length ? student.attendanceRate : null, status: student.status, user: student.user },
     grades: student.grades,
     assignments: student.submissions,
     timetable,
@@ -703,8 +703,8 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
             section: student.section || '',
             dateOfBirth: student.dateOfBirth,
             status: 'active',
-              gpa: 0,
-              attendanceRate: 100,
+              gpa: null,
+              attendanceRate: null,
               parentLinks: {
                 create: {
                   parent: { connect: { id: parentUser.id } },

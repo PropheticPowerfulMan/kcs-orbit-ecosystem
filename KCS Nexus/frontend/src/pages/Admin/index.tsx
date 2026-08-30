@@ -132,8 +132,8 @@ type AdminStudentRecord = {
   parentEmail: string
   parentPhone: string
   status: string
-  gpa: number
-  attendance: number
+  gpa: number | null
+  attendance: number | null
   discipline: string
   advisor?: string
   syncSource?: 'local' | 'orbit'
@@ -346,7 +346,8 @@ const getDivisionForGrade = (grade: string) => {
   }) ?? SCHOOL_DIVISIONS[0]
 }
 
-const scoreTone = (value: number, type: 'gpa' | 'attendance') => {
+const scoreTone = (value: number | null, type: 'gpa' | 'attendance') => {
+  if (value == null) return 'text-gray-400'
   const threshold = type === 'gpa' ? [2.5, 3.3] : [88, 94]
   if (value < threshold[0]) return 'text-red-700 dark:text-red-300'
   if (value < threshold[1]) return 'text-yellow-700 dark:text-yellow-300'
@@ -354,8 +355,9 @@ const scoreTone = (value: number, type: 'gpa' | 'attendance') => {
 }
 
 const getStudentRisk = (student: AdminStudentRecord) => {
-  if (student.attendance < 88 || student.gpa < 2.5 || ['Open', 'Monitored'].includes(student.discipline)) return 'Needs action'
-  if (student.attendance < 94 || student.gpa < 3.2) return 'Watch'
+  if (student.attendance == null && student.gpa == null) return 'No academic data'
+  if ((student.attendance != null && student.attendance < 88) || (student.gpa != null && student.gpa < 2.5) || ['Open', 'Monitored'].includes(student.discipline)) return 'Needs action'
+  if ((student.attendance != null && student.attendance < 94) || (student.gpa != null && student.gpa < 3.2)) return 'Watch'
   return 'On track'
 }
 
@@ -393,8 +395,8 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     parentEmail: parent?.email ?? `${fullName.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`,
     parentPhone: parent?.phone ?? '+243 810 000 000',
     status: profile.status === 'active' ? 'Active' : profile.status,
-    gpa: Number(profile.gpa ?? 0),
-    attendance: Number(profile.attendanceRate ?? 100),
+    gpa: profile.gpa == null ? null : Number(profile.gpa),
+    attendance: profile.attendanceRate == null ? null : Number(profile.attendanceRate),
     discipline: 'Clear',
     syncSource: profile.syncSource === 'orbit' ? 'orbit' : 'local',
     managingApp,
@@ -424,9 +426,9 @@ const buildOfficialTranscript = (student: AdminStudentRecord) => {
   const gradeOrder = ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
   const currentIndex = Math.max(0, gradeOrder.indexOf(student.grade))
   const baseline = Math.round((student.gpa || 3.0) * 25)
-  const rows = gradeOrder.map((grade, gradeIndex) => {
+  const rows = student.gpa == null ? [] : gradeOrder.map((grade, gradeIndex) => {
     const publishedReport = reportCards.find((item) => item.student === student.name && gradeIndex === currentIndex)
-    const yearlyAverage = Math.max(58, Math.min(99, Math.round(publishedReport?.average ?? baseline - (currentIndex - gradeIndex) * 2 + (student.attendance >= 94 ? 1 : -1))))
+    const yearlyAverage = Math.max(58, Math.min(99, Math.round(publishedReport?.average ?? baseline - (currentIndex - gradeIndex) * 2 + ((student.attendance != null && student.attendance >= 94 ? 1 : -1)))))
     const credits = gradeIndex <= currentIndex ? 6 : 0
     const courses = transcriptCoursePlan[grade as keyof typeof transcriptCoursePlan].map((course, courseIndex) => {
       const courseAverage = Math.max(55, Math.min(100, yearlyAverage + ((courseIndex % 3) - 1) * 3))
@@ -462,7 +464,7 @@ const buildOfficialTranscript = (student: AdminStudentRecord) => {
     totalCredits,
     cumulativeGpa,
     cumulativeAverage,
-    classRank: student.gpa >= 3.7 ? 'Top 10%' : student.gpa >= 3.2 ? 'Upper half' : 'In progress',
+    classRank: student.gpa == null ? 'Aucune donnée' : student.gpa >= 3.7 ? 'Top 10%' : student.gpa >= 3.2 ? 'Upper half' : 'In progress',
     generatedAt: new Date().toLocaleDateString(),
     graduationStatus: totalCredits >= 24 ? 'Graduation requirement met' : `${24 - totalCredits} credits remaining`,
   }
@@ -535,7 +537,7 @@ const createStudentFromAdmission = (application: AdminAdmissionRequest): AdminSt
   parentPhone: application.parentPhone,
   status: 'Active',
   gpa: 0,
-  attendance: 100,
+  attendance: null,
   discipline: 'Clear',
 })
 
@@ -631,8 +633,10 @@ const buildReportRows = (
   officialRoster: AdminStudentRecord[],
   admissionRequests: AdminAdmissionRequest[],
 ) => {
-  const averageAttendance = Math.round(officialRoster.reduce((sum, student) => sum + student.attendance, 0) / Math.max(officialRoster.length, 1))
-  const averageGpa = (officialRoster.reduce((sum, student) => sum + student.gpa, 0) / Math.max(officialRoster.length, 1)).toFixed(2)
+  const attendanceValues = officialRoster.map((student) => student.attendance).filter((value): value is number => value != null)
+  const gpaValues = officialRoster.map((student) => student.gpa).filter((value): value is number => value != null)
+  const averageAttendance = attendanceValues.length ? Math.round(attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length) : null
+  const averageGpa = gpaValues.length ? (gpaValues.reduce((sum, value) => sum + value, 0) / gpaValues.length).toFixed(2) : null
   const needsAction = officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length
   const pendingAdmissions = admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW').length
   const acceptedAdmissions = admissionRequests.filter((item) => item.status === 'ACCEPTED').length
@@ -651,8 +655,8 @@ const buildReportRows = (
 
   if (category === 'academic' || category === 'executive') {
     rows.push(
-      { section: 'Academique', metric: 'GPA moyen', value: averageGpa, detail: `Moyenne academique globale calculee sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matieres sous la moyenne.' },
-      { section: 'Academique', metric: 'Assiduite moyenne', value: `${averageAttendance}%`, detail: `Presence moyenne pour le rapport ${cadenceNote}.`, action: 'Declencher un suivi parent pour les presences inferieures a 88%.' },
+      { section: 'Academique', metric: 'GPA moyen', value: averageGpa ?? 'Aucune donnée', detail: `Moyenne academique globale calculee sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matieres sous la moyenne.' },
+      { section: 'Academique', metric: 'Assiduite moyenne', value: averageAttendance == null ? 'Aucune donnée' : `${averageAttendance}%`, detail: averageAttendance == null ? 'Aucune présence réelle n’a encore été saisie.' : `Presence moyenne pour le rapport ${cadenceNote}.`, action: 'Declencher un suivi parent pour les presences inferieures a 88%.' },
       { section: 'Academique', metric: 'Eleves a risque', value: needsAction, detail: `${needsAction} eleves combinent risque academique, presence ou discipline.`, action: 'Assigner un plan de soutien et une date de suivi.' },
     )
   }
@@ -1406,7 +1410,7 @@ const AdminSectionView = ({
         parentPhone,
         status: 'Active',
         gpa: 0,
-        attendance: 100,
+        attendance: null,
         discipline: 'Clear',
         advisor: newFamily.advisor.trim() || 'Advisor pending',
       }
@@ -1818,23 +1822,15 @@ const AdminSectionView = ({
   const divisionSummary = useMemo(() => {
     return SCHOOL_DIVISIONS.map((division) => {
       const divisionStudents = officialRoster.filter((student) => getDivisionForGrade(student.grade).id === division.id)
-      const averageAttendance = divisionStudents.length
-        ? Math.round(divisionStudents.reduce((sum, student) => sum + student.attendance, 0) / divisionStudents.length)
-        : 0
+      const attendanceValues = divisionStudents.map((student) => student.attendance).filter((value): value is number => value != null)
+      const averageAttendance = attendanceValues.length
+        ? Math.round(attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length)
+        : null
       return { ...division, students: divisionStudents.length, averageAttendance }
     })
   }, [officialRoster])
 
-  const selectedTrend = useMemo(() => {
-    const knownTrend = performanceTrend.map((item) => {
-      const exact = item[selectedStudent.name.split(' ')[0] as keyof typeof item]
-      if (typeof exact === 'number') return { month: item.month, score: exact }
-      const baseline = Math.round((selectedStudent.gpa || 2.8) * 25)
-      const monthIndex = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'].indexOf(item.month)
-      return { month: item.month, score: Math.max(55, Math.min(99, baseline - 5 + monthIndex + (selectedStudent.attendance >= 94 ? 2 : -2))) }
-    })
-    return knownTrend
-  }, [selectedStudent])
+  const selectedTrend = useMemo<Array<{ month: string; score: number }>>(() => [], [selectedStudent.id])
 
   const selectedGrades = grades.filter((grade) => grade.studentId === selectedStudent.id || selectedStudent.name.includes('Elise') && grade.studentId === 'stu-elise' || selectedStudent.name.includes('David') && grade.studentId === 'stu-david')
   const selectedAttendanceEvents = attendance.filter((item) => item.studentId === selectedStudent.id || selectedStudent.name.includes('Elise') && item.studentId === 'stu-elise' || selectedStudent.name.includes('David') && item.studentId === 'stu-david')
@@ -2556,9 +2552,9 @@ const AdminSectionView = ({
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(transcript?.status ?? generated.graduationStatus)}`}>{transcript?.status ?? generated.graduationStatus}</span>
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.cumulativeGpa}</p><p className="text-xs text-gray-400">Cum. GPA</p></div>
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.student.gpa == null ? 'Aucune donnée' : generated.cumulativeGpa}</p><p className="text-xs text-gray-400">Cum. GPA</p></div>
                     <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.totalCredits}</p><p className="text-xs text-gray-400">Credits</p></div>
-                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.cumulativeAverage}%</p><p className="text-xs text-gray-400">Average</p></div>
+                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.student.gpa == null ? 'Aucune donnée' : `${generated.cumulativeAverage}%`}</p><p className="text-xs text-gray-400">Average</p></div>
                   </div>
                   <span className="mt-4 inline-flex w-full justify-center rounded-xl bg-kcs-gold-500 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Generate transcript</span>
                 </button>
@@ -2591,7 +2587,7 @@ const AdminSectionView = ({
 
             <div className="mt-5 grid gap-3 md:grid-cols-4">
               {[
-                ['Cumulative GPA', officialTranscript.cumulativeGpa],
+                ['Cumulative GPA', officialTranscript.student.gpa == null ? 'Aucune donnée' : officialTranscript.cumulativeGpa],
                 ['Cumulative Average', `${officialTranscript.cumulativeAverage}%`],
                 ['Credits Earned', `${officialTranscript.totalCredits}/24`],
                 ['Class Standing', officialTranscript.classRank],
