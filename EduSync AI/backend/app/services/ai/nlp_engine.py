@@ -20,6 +20,11 @@ class NLPEngine:
 
     def __init__(self):
         self.intent_definitions: dict[str, IntentDefinition] = {
+            "identity_query": IntentDefinition(
+                keywords=("what is your name", "what s your name", "who are you", "your name", "quel est ton nom", "comment tu t appelles", "qui es tu"),
+                actions_en=("introduce_edusync", "explain_role", "invite_request"),
+                actions_fr=("presenter_edusync", "expliquer_role", "inviter_demande"),
+            ),
             "greeting_query": IntentDefinition(
                 keywords=("hi", "hello", "hey", "bonjour", "salut", "bonsoir", "how are you", "comment ca va"),
                 actions_en=("greet_user", "offer_direct_help", "listen_for_request"),
@@ -138,6 +143,8 @@ class NLPEngine:
             return "capability_query", 0.65
         if self._is_language_preference(text):
             return "language_preference", 0.96
+        if self._is_identity_question(text):
+            return "identity_query", 0.98
         if self._is_greeting(text):
             return "greeting_query", 0.94
 
@@ -191,6 +198,11 @@ class NLPEngine:
     def _compose_french_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
         if intent == "ecosystem_status_query":
             return self._compose_ecosystem_status("fr", details)
+
+        if intent == "identity_query":
+            return (
+                "Je m appelle EduSync AI, l assistant operationnel intelligent de Kinshasa Christian School. Je peux comprendre tes demandes, consulter les donnees scolaires autorisees, preparer des rapports et accompagner les workflows de l ecosysteme KCS."
+            )
 
         if intent == "greeting_query":
             return (
@@ -302,6 +314,11 @@ class NLPEngine:
     def _compose_english_response(self, intent: str, original_message: str, details: dict[str, str]) -> str:
         if intent == "ecosystem_status_query":
             return self._compose_ecosystem_status("en", details)
+
+        if intent == "identity_query":
+            return (
+                "My name is EduSync AI, the intelligent operations assistant for Kinshasa Christian School. I can understand your requests, use the school data you are authorized to access, prepare reports, and support KCS ecosystem workflows."
+            )
 
         if intent == "greeting_query":
             return (
@@ -431,6 +448,14 @@ class NLPEngine:
             "faire", "ecrire", "aider", "help",
         )
         return any(self._contains_term(text, verb) for verb in verbs)
+
+    def _is_identity_question(self, text: str) -> bool:
+        normalized = re.sub(r"[,!?\.]+", " ", text).strip()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return any(phrase in normalized for phrase in (
+            "what is your name", "what s your name", "who are you", "your name",
+            "quel est ton nom", "comment tu t appelles", "qui es tu",
+        ))
 
     def _is_greeting(self, text: str) -> bool:
         normalized = re.sub(r"[,!?\.]+", " ", text).strip()

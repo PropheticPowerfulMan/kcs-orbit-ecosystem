@@ -251,6 +251,7 @@ function demoResponse(path, method, body) {
       : `Official EduSync AI voice: I speak for the ecosystem and use only available data.\nVerified state: ${ecosystemFacts.announcements} announcements, ${ecosystemFacts.workflows} pending workflows, ${ecosystemFacts.unread} unread notifications. Source: EduSync demo data; Orbit/SAVANEX/EduPay/Nexus not confirmed in this mode.\n\n`;
     const compactGreeting = normalized.replace(/[,!?\.]/g, "").trim();
     const isGreeting = ["hi", "hello", "hey", "bonjour", "salut", "bonsoir", "how are you", "hi how are you", "hello how are you", "comment ca va"].includes(compactGreeting);
+    const isIdentityQuestion = /\b(what is your name|what s your name|who are you|your name|quel est ton nom|comment tu t appelles|qui es tu)\b/.test(normalized);
     const isLanguagePreference = /parle( moi)?( en)? francais|reponds en francais|speak( in)? french/.test(normalized);
     const isUnpaidFinance = /\b(impaye|impayes|unpaid)\b|pas paye|non paye/.test(normalized);
     const details = {
@@ -320,6 +321,16 @@ function demoResponse(path, method, body) {
         : `${title} (${rows.length} visible in demo context):\n\nName | ID | Email | Phone | Class/Relation\n${table}\n\nSource: EduSync demo data. I did not invent names.`;
     };
     const intents = [
+      {
+        intent: "identity_query",
+        terms: [],
+        response: isFrench
+          ? "Je m appelle EduSync AI, l assistant operationnel intelligent de Kinshasa Christian School. Je peux comprendre tes demandes, consulter les donnees scolaires autorisees, preparer des rapports et accompagner les workflows de l ecosysteme KCS."
+          : "My name is EduSync AI, the intelligent operations assistant for Kinshasa Christian School. I can understand your requests, use the school data you are authorized to access, prepare reports, and support KCS ecosystem workflows.",
+        actions: isFrench
+          ? ["presenter_edusync", "expliquer_role", "inviter_demande"]
+          : ["introduce_edusync", "explain_role", "invite_request"],
+      },
       {
         intent: "language_preference",
         terms: [],
@@ -408,6 +419,7 @@ function demoResponse(path, method, body) {
       },
     ];
     const match =
+      (isIdentityQuestion ? intents.find((item) => item.intent === "identity_query") : null) ||
       (isLanguagePreference ? intents.find((item) => item.intent === "language_preference") : null) ||
       (isGreeting ? intents.find((item) => item.intent === "greeting_query") : null) ||
       (isDirectoryList ? intents.find((item) => item.intent === "directory_query") : null) ||

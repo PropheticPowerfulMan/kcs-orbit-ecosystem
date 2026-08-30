@@ -167,6 +167,23 @@ class EduSyncSpokespersonTests(unittest.TestCase):
         self.assertNotIn("capabilities", response.lower())
         self.assertIn("greet_user", actions)
 
+    def test_identity_question_returns_edusync_name_and_role(self):
+        intent, confidence = self.engine.detect_intent("what s your name?")
+
+        self.assertEqual(intent, "identity_query")
+        self.assertGreaterEqual(confidence, 0.95)
+
+        response, actions = self.engine.generate_context_response(
+            intent,
+            self.context,
+            "what s your name?",
+        )
+
+        self.assertIn("My name is EduSync AI", response)
+        self.assertIn("Kinshasa Christian School", response)
+        self.assertIn("introduce_edusync", actions)
+        self.assertNotIn("I am doing well", response)
+
     def test_unpaid_finance_question_stays_french_and_unpaid(self):
         intent, confidence = self.engine.detect_intent("qui n'a pas paye?")
 

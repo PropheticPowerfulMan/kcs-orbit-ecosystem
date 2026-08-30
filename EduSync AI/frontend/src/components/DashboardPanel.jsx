@@ -495,7 +495,6 @@ export default function DashboardPanel() {
                     onClick={() => askAssistant(prompt.text)}
                     disabled={busyChat}
                   >
-                    <span className="story-ring">{prompt.label.slice(0, 1)}</span>
                     {prompt.label}
                   </button>
                 ))}
