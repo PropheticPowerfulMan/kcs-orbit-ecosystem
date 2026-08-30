@@ -209,7 +209,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     def get_class_name(self, obj):
         if obj.current_class:
-            return normalize_class_display(str(obj.current_class))
+            return normalize_class_display(obj.current_class.name)
         return None
 
     def get_has_photo(self, obj):
@@ -583,7 +583,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
 
     def get_class_name(self, obj):
         if obj.current_class:
-            return normalize_class_display(str(obj.current_class))
+            return normalize_class_display(obj.current_class.name)
         return None
 
     class Meta:

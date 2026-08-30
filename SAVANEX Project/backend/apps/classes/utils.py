@@ -27,6 +27,7 @@ def normalize_class_level(value: str) -> str:
 
 def normalize_class_display(value: str | None) -> str:
     raw = re.sub(r"\s+", " ", (value or "").strip())
+    raw = re.sub(r"\s*\(\s*20\d{2}\s*[-/]\s*20\d{2}\s*\)\s*$", "", raw).strip()
     kindergarten = re.fullmatch(
         r"(?:kindergarten\s+)*(?:grade\s+)?k?\s*([3-5])"
         r"(?:\s+(?:kindergarten\s+)*(?:grade\s+)?k?\s*\1)*"

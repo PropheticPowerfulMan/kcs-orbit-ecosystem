@@ -218,7 +218,7 @@ api.interceptors.response.use(
 );
 
 export const normalizeClassDisplay = (value) => {
-  const raw = String(value || '').trim().replace(/\s+/g, ' ');
+  const raw = String(value || '').trim().replace(/\s+/g, ' ').replace(/\s*\(\s*20\d{2}\s*[-/]\s*20\d{2}\s*\)\s*$/i, '');
   if (!raw) return '';
 
   const kindergarten = raw.match(
