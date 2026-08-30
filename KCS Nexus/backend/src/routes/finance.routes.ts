@@ -25,7 +25,7 @@ const getEduPayServiceToken = async () => {
 
 financeRouter.use(authenticate)
 
-financeRouter.get('/edupay-summary', requireRoles('admin'), asyncHandler(async (_req, res) => {
+financeRouter.get('/edupay-summary', requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
   if (!env.EDUPAY_API_URL) {
     throw new ApiError(503, 'EduPay finance synchronization is not configured. Set EDUPAY_API_URL and EDUPAY_SERVICE_TOKEN on KCS Nexus.')
   }

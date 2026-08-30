@@ -1,10 +1,40 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles } from '../middleware/auth.js'
+import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { asyncHandler, success } from '../utils/api.js'
 
 export const adminRouter = Router()
 
+adminRouter.get('/staff-overview', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const [students, applications, unreadMessages, reportCards, recentActivity, announcements, incidents] = await Promise.all([
+    prisma.studentProfile.findMany({ select: { id: true, grade: true, section: true, attendanceRate: true, status: true } }),
+    prisma.admissionApplication.findMany({ orderBy: { submittedAt: 'desc' }, take: 25, select: { id: true, applicationNumber: true, firstName: true, middleName: true, lastName: true, gradeApplying: true, parentName: true, status: true, submittedAt: true } }),
+    prisma.internalMessage.count({ where: { readAt: null, OR: [{ recipientId: req.user!.sub }, { targetRole: 'STAFF' }] } }),
+    prisma.reportCard.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { id: true, term: true, average: true, principalStatus: true, publicationStatus: true, updatedAt: true, student: { select: { studentNumber: true, user: { select: { firstName: true, lastName: true } } } } } }),
+    prisma.auditLog.findMany({ where: { actorId: req.user!.sub }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, action: true, targetType: true, targetId: true, createdAt: true } }),
+    prisma.newsPost.findMany({ orderBy: { publishedAt: 'desc' }, take: 12, select: { id: true, title: true, excerpt: true, category: true, publishedAt: true } }),
+    prisma.incidentReport.count({ where: { status: { not: 'CLOSED' } } }),
+  ])
+  const attendanceByClass = [...new Set(students.map((student) => student.grade))].map((grade) => {
+    const values = students.filter((student) => student.grade === grade && student.attendanceRate != null).map((student) => student.attendanceRate as number)
+    return { label: grade, attendance: values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0 }
+  })
+  return success(res, {
+    stats: {
+      localStudents: students.length,
+      pendingMessages: unreadMessages,
+      admissionTasks: applications.filter((item) => ['SUBMITTED', 'UNDER_REVIEW', 'INTERVIEW_SCHEDULED'].includes(item.status)).length,
+      pendingReports: reportCards.filter((item) => item.principalStatus !== 'APPROVED').length,
+      openIncidents: incidents,
+    },
+    attendanceByClass,
+    applications,
+    reportCards,
+    announcements,
+    recentActivity,
+    generatedAt: new Date().toISOString(),
+  }, 'Administrator overview loaded')
+}))
 adminRouter.use(authenticate, requireRoles('admin'))
 
 adminRouter.get('/overview', asyncHandler(async (_req, res) => {

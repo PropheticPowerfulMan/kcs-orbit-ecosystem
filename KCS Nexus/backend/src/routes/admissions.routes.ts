@@ -48,7 +48,7 @@ const publicApplication = (application: any) => ({ ...application, parentPhotoDa
 
 export const admissionsRouter = Router()
 
-admissionsRouter.get('/', authenticate, requireRoles('admin'), asyncHandler(async (_req, res) => {
+admissionsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
   const applications = await prisma.admissionApplication.findMany({ include: { documents: true }, orderBy: { submittedAt: 'desc' } })
   return success(res, applications.map(publicApplication))
 }))
@@ -112,8 +112,9 @@ admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHa
   return success(res, { application: publicApplication(updated), family, temporaryCredentials: family.temporaryCredentials, credentialDelivery: family.credentialDelivery }, 'Application approved and family provisioned')
 }))
 
-admissionsRouter.patch('/:id/status', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+admissionsRouter.patch('/:id/status', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (req: import('../middleware/auth.js').AuthenticatedRequest, res) => {
   const payload = z.object({ status: z.enum(['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'INTERVIEW_SCHEDULED', 'WAITLISTED', 'REJECTED']), notes: z.string().optional() }).parse({ status: String(req.body.status || '').toUpperCase(), notes: req.body.notes })
+  if (req.user!.role === 'staff' && !['UNDER_REVIEW', 'INTERVIEW_SCHEDULED'].includes(payload.status)) throw new ApiError(403, 'Final admission decisions require Super Admin approval')
   const application = await prisma.admissionApplication.update({ where: { id: getRouteParam(req.params.id) }, data: { status: payload.status, notes: payload.notes } })
   return success(res, application, 'Application status updated')
 }))

@@ -1,573 +1,127 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import {
-  AlertTriangle, Bell, Brain, ClipboardList, FileText, Megaphone,
-  MessageSquare, ShieldCheck, TrendingUp, Users
-} from 'lucide-react'
-import {
-  Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis
-} from 'recharts'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bell, ClipboardList, FileText, Megaphone, MessageSquare, Search, ShieldCheck, Users, WalletCards } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
-import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
+import SuggestionBox from '@/components/shared/SuggestionBox'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
-import SuggestionBox from '@/components/shared/SuggestionBox'
+import { adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI } from '@/services/api'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
-import {
-  academicContext, aiSignals, announcements, auditLogs,
-  attendance, communicationFlows, disciplineReports, feeAccounts, financeReadiness, messages,
-  reportCards, rolePermissions, scheduleConflicts, staffOperations, students
-} from '@/data/schoolEcosystem'
 
-const attendanceSummary = [
-  { label: 'Elementary', attendance: 96 },
-  { label: 'Middle', attendance: 91 },
-  { label: 'High', attendance: 94 },
-  { label: 'Staff', attendance: 98 },
-]
-
-attendanceSummary.splice(0, attendanceSummary.length)
-
-const getStaffSegment = (pathname: string) => {
-  const segment = pathname.split('/').filter(Boolean).at(-1)
-  return !segment || segment === 'staff' || segment === 'dashboard' ? 'dashboard' : segment
+const segmentOf = (pathname: string) => {
+  const value = pathname.split('/').filter(Boolean).at(-1)
+  return !value || value === 'staff' || value === 'dashboard' ? 'dashboard' : value
 }
-
-const staffButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
-
-const statusTone = (value: string) => {
-  if (['Open', 'pending', 'Action needed', 'high'].includes(value)) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-  if (['Monitored', 'partially paid', 'medium', 'Needs review'].includes(value)) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
-  return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-}
-
-const StaffSectionView = ({ segment }: { segment: string }) => {
-  const [selectedRecord, setSelectedRecord] = useState(students[0])
-  const [announcementSent, setAnnouncementSent] = useState(false)
-  const [messageSent, setMessageSent] = useState(false)
-
-  if (segment === 'settings') {
-    return <AccountSettingsPanel roleLabel="Staff account" />
-  }
-
-  if (segment === 'records') {
-    if (!selectedRecord) {
-      return <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 dark:text-gray-400">Aucun dossier. Les dossiers apparaîtront après leur création par le Super Admin.</div>
-    }
-    return (
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">Student & Parent Records</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Search, review, and update official family records.</p>
-            </div>
-            <button className={staffButton}>Register student</button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[720px] w-full text-sm">
-              <thead className="text-left text-xs text-gray-400">
-                <tr className="border-b border-gray-100 dark:border-kcs-blue-800">
-                  <th className="pb-3 font-medium">Student</th>
-                  <th className="pb-3 font-medium">Grade</th>
-                  <th className="pb-3 font-medium">Advisor</th>
-                  <th className="pb-3 text-right font-medium">Attendance</th>
-                  <th className="pb-3 text-right font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-kcs-blue-800/50">
-                {students.map((student) => (
-                  <tr key={student.id}>
-                    <td className="py-3 font-semibold text-kcs-blue-900 dark:text-white">{student.name}</td>
-                    <td className="py-3 text-gray-500 dark:text-gray-400">{student.grade} {student.section}</td>
-                    <td className="py-3 text-gray-500 dark:text-gray-400">{student.advisor}</td>
-                    <td className="py-3 text-right font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{student.attendance}%</td>
-                    <td className="py-3 text-right">
-                      <button className="rounded-lg bg-kcs-blue-50 px-3 py-1.5 text-xs font-semibold text-kcs-blue-700 hover:bg-kcs-blue-100 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200" onClick={() => setSelectedRecord(student)}>Open</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="font-bold text-kcs-blue-900 dark:text-white">Selected Record</h2>
-          <div className="mt-4 rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-            <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{selectedRecord.name}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{selectedRecord.grade} {selectedRecord.section} - {selectedRecord.advisor}</p>
-            <p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{selectedRecord.aiInsight}</p>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {['Parent contacts', 'Medical form', 'Academic flags', 'Documents'].map((item) => (
-              <button key={item} className="rounded-xl border border-gray-100 px-4 py-3 text-left text-sm font-semibold text-kcs-blue-900 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:text-white dark:hover:bg-kcs-blue-800">{item}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (segment === 'admissions') {
-    const admissionQueue = [
-      { family: 'Mbuyi Family', student: 'Amani Mbuyi', grade: 'Grade 9', stage: 'Interview scheduled', owner: 'Registrar Office' },
-      { family: 'Nsimba Family', student: 'Joelle Nsimba', grade: 'Grade 6', stage: 'Documents pending', owner: 'Admissions Office' },
-      { family: 'Kanku Family', student: 'Samuel Kanku', grade: 'Grade 10', stage: 'Placement review', owner: 'Academic Coordinator' },
-    ].filter(() => false)
-    return (
-      <div className="grid gap-4 lg:grid-cols-3">
-        {admissionQueue.map((item) => (
-          <div key={item.student} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{item.family}</p>
-            <p className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{item.student}</p>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.grade} - {item.owner}</p>
-            <span className="mt-4 inline-flex rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{item.stage}</span>
-            <div className="mt-4 flex flex-col gap-2">
-              <button className={staffButton}>Update stage</button>
-              <button className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800">Schedule interview</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  if (segment === 'announcements') {
-    return (
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Recent Announcements</h2>
-          <div className="space-y-3">
-            {announcements.map((item) => (
-              <div key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{item.date} - {item.audience.join(', ')}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Compose Announcement</h2>
-          <div className="grid gap-3">
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Announcement title" />
-            <select className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>Parents, students, teachers, staff</option>
-              <option>Parents only</option>
-              <option>Staff only</option>
-              <option>High School</option>
-            </select>
-            <textarea className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Write announcement..." />
-            <button className={staffButton} onClick={() => setAnnouncementSent(true)}>Publish announcement</button>
-            {announcementSent && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">Announcement queued for portal, email, and SMS communication.</p>}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (segment === 'reports') {
-    return (
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 xl:col-span-2">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Report Card Workflow</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {reportCards.map((card) => (
-              <div key={card.student} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{card.student}</p>
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusTone(card.principalStatus)}`}>{card.principalStatus}</span>
-                </div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{card.term} - {card.average}% - {card.download}</p>
-                <button className="mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white">Export report</button>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">AI Reports</h2>
-          <div className="space-y-3">
-            {['Attendance risk digest', 'Discipline summary', 'Finance follow-up CSV', 'Academic intervention list'].map((report) => (
-              <button key={report} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-kcs-blue-900 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:text-white dark:hover:bg-kcs-blue-800">{report}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (segment === 'finance') {
-    return (
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {feeAccounts.map((fee) => (
-          <div key={fee.invoice} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-semibold text-kcs-blue-900 dark:text-white">{fee.family}</p>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone(fee.status)}`}>{fee.status}</span>
-            </div>
-            <p className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">${fee.balance}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{fee.student} - {fee.invoice}</p>
-            <button className="mt-4 w-full rounded-xl bg-kcs-gold-500 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Send finance notice</button>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  if (segment === 'messages') {
-    return (
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Staff Inbox</h2>
-          <div className="space-y-3">
-            {messages.map((message) => (
-              <div key={message.subject} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <p className="font-semibold text-kcs-blue-900 dark:text-white">{message.subject}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{message.from} - {message.toRole}</p>
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{message.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Send Communication</h2>
-          <div className="grid gap-3">
-            <select className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>All parents</option>
-              <option>Selected student family</option>
-              <option>All teachers</option>
-              <option>Staff team</option>
-            </select>
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Subject" />
-            <textarea className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email, SMS, and portal message..." />
-            <button className={staffButton} onClick={() => setMessageSent(true)}>Send communication</button>
-            {messageSent && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">Communication prepared for portal, email, and SMS channels.</p>}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (segment === 'permissions') {
-    return (
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Staff Permissions</h2>
-          <div className="flex flex-wrap gap-2">
-            {rolePermissions.staff.map((permission) => (
-              <span key={permission} className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{permission}</span>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Audit Log</h2>
-          <div className="space-y-3">
-            {auditLogs.map((log) => (
-              <div key={`${log.actor}-${log.time}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <p className="font-semibold text-kcs-blue-900 dark:text-white">{log.action}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{log.actor} - {log.target} - {log.time}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {disciplineReports.map((report) => (
-        <div key={report.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-semibold text-kcs-blue-900 dark:text-white">{report.student}</p>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone(report.status)}`}>{report.status}</span>
-          </div>
-          <p className="mt-2 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{report.category} - {report.date}</p>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{report.incident}</p>
-          <p className="mt-3 rounded-xl bg-gray-50 p-3 text-xs text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-400">{report.actionTaken}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
+const card = 'rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+const button = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:opacity-50'
+const empty = (text: string) => <p className="rounded-xl bg-gray-50 p-5 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-300">{text}</p>
+const personName = (value: any) => value?.fullName || [value?.firstName, value?.middleName, value?.lastName].filter(Boolean).join(' ') || 'Unidentified record'
 
 const StaffPortal = () => {
   const { user } = useAuthStore()
   const { language } = useUIStore()
   const location = useLocation()
-  const activeSegment = getStaffSegment(location.pathname)
-  const staffMessages = messages.filter((message) => message.toRole === 'staff')
-  const staffSignals = aiSignals.filter((signal) => signal.roles.includes('staff'))
+  const segment = segmentOf(location.pathname)
+  const [overview, setOverview] = useState<any>({ stats: {}, attendanceByClass: [], applications: [], reportCards: [], announcements: [], recentActivity: [] })
+  const [directory, setDirectory] = useState<any>({ students: [], parents: [], teachers: [], counts: {} })
+  const [messages, setMessages] = useState<any[]>([])
+  const [contacts, setContacts] = useState<any[]>([])
+  const [finance, setFinance] = useState<any>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [notice, setNotice] = useState('')
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<any>(null)
+  const [messageDraft, setMessageDraft] = useState({ recipientId: '', subject: '', body: '' })
+  const [busy, setBusy] = useState(false)
 
-  return (
-    <div className="portal-shell flex">
-      <PortalSidebar />
+  const load = async () => {
+    setStatus('loading')
+    const results = await Promise.allSettled([
+      adminAPI.getStaffOverview(),
+      registryAPI.getDirectory(),
+      messagesAPI.getAll({ box: 'all' }),
+      messagesAPI.getContacts(),
+      financeAPI.getEduPaySummary(),
+    ])
+    if (results[0].status === 'fulfilled') setOverview(results[0].value.data?.data ?? {})
+    if (results[1].status === 'fulfilled') setDirectory(results[1].value.data?.data ?? {})
+    if (results[2].status === 'fulfilled') setMessages(results[2].value.data?.data ?? [])
+    if (results[3].status === 'fulfilled') {
+      const next = results[3].value.data?.data ?? []
+      setContacts(next)
+      setMessageDraft((draft) => ({ ...draft, recipientId: draft.recipientId || next[0]?.id || '' }))
+    }
+    if (results[4].status === 'fulfilled') setFinance(results[4].value.data?.data ?? null)
+    setStatus(results.slice(0, 4).some((result) => result.status === 'rejected') ? 'error' : 'ready')
+  }
 
-      <main>
-        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                {getLocalizedGreeting(language)}, {user?.firstName}
-              </h1>
-              <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {getLocalizedPortalDate(language)} - {academicContext.year} - {academicContext.term} - records, communication, admissions, discipline, and reports.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link to="/portal/staff/announcements" className="btn-primary flex items-center gap-2 py-2 text-sm">
-                <Megaphone size={16} /> Send Announcement
-              </Link>
-              <Link to="/portal/staff/reports" className="btn-gold flex items-center gap-2 py-2 text-sm">
-                <Brain size={16} /> AI Report
-              </Link>
-            </div>
-          </div>
-        </div>
+  useEffect(() => { void load() }, [])
 
-        <div className="space-y-6 p-4 sm:p-6">
-          {activeSegment !== 'dashboard' ? (
-            <StaffSectionView segment={activeSegment} />
-          ) : (
-            <>
-          <PortalSectionPanel />
-          <SuggestionBox />
+  const students = directory.students ?? []
+  const filteredStudents = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return students
+    return students.filter((student: any) => [personName(student), student.studentNumber, student.className, student.email].some((value) => String(value ?? '').toLowerCase().includes(needle)))
+  }, [students, query])
 
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-            {[
-              { label: 'Student Records', value: '511', sub: '18 changed today', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
-              { label: 'Pending Messages', value: '12', sub: 'Parents and staff', icon: MessageSquare, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-              { label: 'Admissions Tasks', value: '9', sub: '3 interviews pending', icon: ClipboardList, tone: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
-              { label: 'Audit Items', value: '3', sub: 'Sensitive changes', icon: ShieldCheck, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
-            ].map((item) => {
-              const Icon = item.icon
-              return (
-                <motion.div
-                  key={item.label}
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
-                >
-                  <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}>
-                    <Icon size={18} />
-                  </div>
-                  <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{item.label}</p>
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{item.sub}</p>
-                </motion.div>
-              )
-            })}
-          </div>
+  const updateAdmission = async (id: string, nextStatus: 'UNDER_REVIEW' | 'INTERVIEW_SCHEDULED') => {
+    setBusy(true); setNotice('')
+    try {
+      await admissionsAPI.updateStatus(id, nextStatus)
+      setOverview((current: any) => ({ ...current, applications: (current.applications ?? []).map((item: any) => item.id === id ? { ...item, status: nextStatus } : item) }))
+      setNotice('The admission stage was saved. Final approval remains reserved for the Super Administrator.')
+    } catch (error: any) { setNotice(error?.response?.data?.message ?? 'The admission stage could not be updated.') }
+    finally { setBusy(false) }
+  }
 
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">School-wide Attendance</h2>
-                <span className="badge-blue text-xs">Today</span>
-              </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={attendanceSummary}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: '#0f2352', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }} />
-                  <Bar dataKey="attendance" fill="#1d4ed8" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+  const sendMessage = async () => {
+    if (!messageDraft.recipientId || !messageDraft.subject.trim() || !messageDraft.body.trim()) return setNotice('Select a recipient and complete the subject and message.')
+    setBusy(true); setNotice('')
+    try {
+      const response = await messagesAPI.send(messageDraft)
+      setMessages((items) => [response.data?.data, ...items].filter(Boolean))
+      setMessageDraft((draft) => ({ ...draft, subject: '', body: '' }))
+      setNotice('The internal message was sent and recorded.')
+    } catch (error: any) { setNotice(error?.response?.data?.message ?? 'The message could not be sent.') }
+    finally { setBusy(false) }
+  }
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-                <Brain size={18} className="text-kcs-gold-500" /> Staff AI Tools
-              </h2>
-              <div className="space-y-3">
-                {['Generate official letter', 'Draft targeted announcement', 'Summarize discipline report', 'Export attendance risk CSV'].map((tool) => (
-                  <button key={tool} className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-kcs-blue-900 transition-colors hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:text-white dark:hover:bg-kcs-blue-800">
-                    {tool}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+  const recordsView = <div className="grid gap-6 xl:grid-cols-[1.25fr_.75fr]">
+    <section className={card}>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold dark:text-white">Official student records</h2><p className="text-sm text-gray-500">Read-only shared Orbit registry. Sensitive changes remain controlled.</p></div><div className="relative"><Search className="absolute left-3 top-3 text-gray-400" size={16}/><input value={query} onChange={(event)=>setQuery(event.target.value)} className="rounded-xl border py-2.5 pl-9 pr-3 text-sm dark:bg-kcs-blue-950" placeholder="Name, ID, class, email"/></div></div>
+      <div className="overflow-x-auto"><table className="min-w-[720px] w-full text-sm"><thead><tr className="border-b text-left text-xs text-gray-400"><th className="py-3">Student</th><th>Identifier</th><th>Class</th><th>Status</th><th></th></tr></thead><tbody>{filteredStudents.map((student:any)=><tr key={student.id} className="border-b dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white">{personName(student)}</td><td>{student.studentNumber ?? '—'}</td><td>{student.className ?? '—'}</td><td>{student.status ?? '—'}</td><td className="text-right"><button onClick={()=>setSelected(student)} className="rounded-lg bg-kcs-blue-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-700">Open</button></td></tr>)}</tbody></table></div>
+      {filteredStudents.length===0&&empty('No record matches this search.')}
+    </section>
+    <section className={card}><h2 className="font-bold dark:text-white">Selected record</h2>{!selected?empty('Select a student to view the synchronized administrative details.'):<div className="mt-4 space-y-3 text-sm"><p className="text-2xl font-bold dark:text-white">{personName(selected)}</p><p><b>Student ID:</b> {selected.studentNumber ?? '—'}</p><p><b>Class:</b> {selected.className ?? '—'}</p><p><b>Email:</b> {selected.email ?? '—'}</p><p><b>Status:</b> {selected.status ?? '—'}</p><p className="rounded-xl bg-kcs-blue-50 p-3 text-xs text-kcs-blue-800">Parent and medical details are not exposed here unless required by the authorized workflow.</p></div>}</section>
+  </div>
 
-          <div className="grid gap-6 xl:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-                <FileText size={18} className="text-kcs-blue-500" /> Operational Workload
-              </h2>
-              <div className="space-y-3">
-                {staffOperations.map((item) => (
-                  <div key={item.function} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.function}</p>
-                      <span className="font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{item.value}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.metric}</p>
-                    <p className="mt-2 text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-300">{item.status}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+  const admissionsView = <section className={card}><div className="mb-4"><h2 className="font-bold dark:text-white">Admissions processing queue</h2><p className="text-sm text-gray-500">Administrators may review and schedule. Only the Super Administrator can approve, reject, and provision accounts.</p></div>{(overview.applications??[]).length===0?empty('No application is waiting for administrative processing.'):<div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">{overview.applications.map((item:any)=><article key={item.id} className="rounded-xl border p-4 dark:border-kcs-blue-800"><p className="text-xs font-bold text-kcs-gold-600">{item.applicationNumber}</p><h3 className="mt-1 font-bold dark:text-white">{[item.firstName,item.middleName,item.lastName].filter(Boolean).join(' ')}</h3><p className="text-sm text-gray-500">{item.gradeApplying} · {item.parentName}</p><span className="mt-3 inline-block rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700">{String(item.status).replace(/_/g,' ')}</span><div className="mt-4 grid gap-2"><button disabled={busy} onClick={()=>void updateAdmission(item.id,'UNDER_REVIEW')} className={button}>Mark under review</button><button disabled={busy} onClick={()=>void updateAdmission(item.id,'INTERVIEW_SCHEDULED')} className="rounded-xl border px-4 py-2.5 text-sm font-semibold dark:border-kcs-blue-700">Schedule interview</button></div></article>)}</div>}</section>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-                <Bell size={18} className="text-orange-500" /> Targeted Announcements
-              </h2>
-              <div className="space-y-3">
-                {announcements.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.date} • {item.audience.join(', ')}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+  const announcementsView = <section className={card}><h2 className="font-bold dark:text-white">Published school announcements</h2><p className="mb-4 text-sm text-gray-500">Publication is controlled by the Super Administrator. Use Messages for operational communication.</p>{(overview.announcements??[]).length===0?empty('No published announcement.'):<div className="grid gap-3 md:grid-cols-2">{overview.announcements.map((item:any)=><article key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><h3 className="font-semibold dark:text-white">{item.title}</h3><p className="mt-1 text-sm text-gray-500">{item.excerpt}</p><p className="mt-2 text-xs text-gray-400">{new Date(item.publishedAt).toLocaleString()}</p></article>)}</div>}</section>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-                <AlertTriangle size={18} className="text-red-500" /> AI Risk Signals
-              </h2>
-              <div className="space-y-3">
-                {staffSignals.map((signal) => (
-                  <div key={signal.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{signal.title}</p>
-                      <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300">{signal.severity}</span>
-                    </div>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{signal.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+  const reportsView = <section className={card}><h2 className="font-bold dark:text-white">Report-card workflow</h2><p className="mb-4 text-sm text-gray-500">Operational visibility without SuperAdmin approval rights.</p>{(overview.reportCards??[]).length===0?empty('No report card has been submitted to the workflow.'):<div className="grid gap-3 md:grid-cols-2">{overview.reportCards.map((item:any)=><article key={item.id} className="rounded-xl border p-4 dark:border-kcs-blue-800"><h3 className="font-semibold dark:text-white">{personName(item.student?.user)}</h3><p className="text-sm text-gray-500">{item.term} · {item.average}%</p><p className="mt-2 text-xs font-bold text-kcs-blue-600">{item.principalStatus} · {item.publicationStatus}</p></article>)}</div>}</section>
 
-          <div className="grid gap-6 xl:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Fee Tracking</h2>
-              <div className="space-y-3">
-                {feeAccounts.map((fee) => (
-                  <div key={fee.invoice} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{fee.family}</p>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fee.status === 'paid' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'}`}>
-                        {fee.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{fee.student} • balance ${fee.balance} • {fee.invoice}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+  const financeView = <section className={card}><h2 className="font-bold dark:text-white">EduPay fee tracking</h2><p className="mb-4 text-sm text-gray-500">Synchronized read-only finance overview.</p>{!finance?empty('EduPay finance synchronization is unavailable.'):<><div className="mb-5 grid gap-3 sm:grid-cols-3">{[['Collected',finance.totals?.collectedRevenue],['Outstanding',finance.totals?.outstandingDebt],['Completion',String(finance.totals?.paymentCompletionRate??0)+'%']].map(([label,value])=><div key={String(label)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 text-xl font-bold dark:text-white">{typeof value==='number'?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value):value}</p></div>)}</div><div className="grid gap-3 md:grid-cols-2">{(finance.parentAccounts??[]).map((account:any,index:number)=><div key={index} className="rounded-xl border p-4 dark:border-kcs-blue-800"><p className="font-semibold dark:text-white">{account.parentName??'Family account'}</p><p className="text-sm text-gray-500">Paid {account.totalPaid??0} · Outstanding {account.totalDebt??0} · {account.studentCount??0} student(s)</p></div>)}</div></>}</section>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Report Card Workflow</h2>
-              <div className="space-y-3">
-                {reportCards.map((card) => (
-                  <div key={card.student} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{card.student}</p>
-                      <span className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{card.principalStatus}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{card.term} • {card.download}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+  const messagesView = <div className="grid gap-6 xl:grid-cols-[1fr_1fr]"><section className={card}><h2 className="font-bold dark:text-white">Internal messages</h2>{messages.length===0?empty('No internal message.'):<div className="mt-4 space-y-3">{messages.slice(0,30).map((item:any)=><article key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><h3 className="font-semibold dark:text-white">{item.subject}</h3><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{item.body}</p><p className="mt-2 text-xs text-gray-400">{new Date(item.createdAt).toLocaleString()}</p></article>)}</div>}</section><section className={card}><h2 className="font-bold dark:text-white">Send an operational message</h2><div className="mt-4 grid gap-3"><select value={messageDraft.recipientId} onChange={(event)=>setMessageDraft({...messageDraft,recipientId:event.target.value})} className="rounded-xl border bg-white p-3 dark:bg-kcs-blue-950">{contacts.map((contact:any)=><option key={contact.id} value={contact.id}>{personName(contact)} · {contact.role}</option>)}</select><input value={messageDraft.subject} onChange={(event)=>setMessageDraft({...messageDraft,subject:event.target.value})} className="rounded-xl border p-3 dark:bg-kcs-blue-950" placeholder="Subject"/><textarea value={messageDraft.body} onChange={(event)=>setMessageDraft({...messageDraft,body:event.target.value})} className="min-h-36 rounded-xl border p-3 dark:bg-kcs-blue-950" placeholder="Message"/><button disabled={busy} onClick={()=>void sendMessage()} className={button}>Send and record</button></div></section></div>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Schedule Conflicts</h2>
-              <div className="space-y-3">
-                {scheduleConflicts.map((conflict) => (
-                  <div key={conflict.title} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{conflict.title}</p>
-                      <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">{conflict.severity}</span>
-                    </div>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{conflict.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+  const permissionsView = <div className="grid gap-6 xl:grid-cols-2"><section className={card}><h2 className="font-bold dark:text-white">Administrator permissions</h2><div className="mt-4 flex flex-wrap gap-2">{['Read shared records','Process admission stages','Read EduPay summary','Send internal messages','Read report workflow','No final approval','No account provisioning'].map((item)=><span key={item} className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700">{item}</span>)}</div></section><section className={card}><h2 className="font-bold dark:text-white">My audit activity</h2>{(overview.recentActivity??[]).length===0?empty('No recent administrative action recorded for this account.'):<div className="mt-4 space-y-3">{overview.recentActivity.map((item:any)=><div key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><b>{item.action}</b><p className="text-xs text-gray-500">{item.targetType} · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div>}</section></div>
 
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Cross-module Notifications</h2>
-              <div className="grid gap-3 md:grid-cols-2">
-                {communicationFlows.map((flow) => (
-                  <div key={flow.trigger} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{flow.trigger}</p>
-                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{flow.update}</p>
-                    <p className="mt-2 text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-300">{flow.notification}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+  const dashboard = <><SuggestionBox/><div className="grid grid-cols-2 gap-4 xl:grid-cols-5">{[
+    ['Student records',directory.counts?.students??students.length,Users,'Shared Orbit registry'],
+    ['Families',directory.counts?.families??0,Users,'Responsible families'],
+    ['Pending messages',overview.stats?.pendingMessages??0,MessageSquare,'Unread internal messages'],
+    ['Admission tasks',overview.stats?.admissionTasks??0,ClipboardList,'Review or interview'],
+    ['Pending reports',overview.stats?.pendingReports??0,ShieldCheck,'Operational follow-up'],
+  ].map(([label,value,Icon,sub]:any)=><motion.div key={label} initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} className={card}><Icon className="text-kcs-blue-600" size={20}/><p className="mt-3 text-3xl font-bold dark:text-white">{value}</p><p className="text-sm font-semibold dark:text-gray-200">{label}</p><p className="text-xs text-gray-400">{sub}</p></motion.div>)}</div>
+  <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><section className={card}><h2 className="font-bold dark:text-white">Recorded attendance by class</h2>{(overview.attendanceByClass??[]).length===0?empty('Attendance indicators will appear after records are entered.'):<ResponsiveContainer width="100%" height={280}><BarChart data={overview.attendanceByClass}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="label"/><YAxis domain={[0,100]}/><Tooltip/><Bar dataKey="attendance" fill="#1d4ed8" radius={[7,7,0,0]}/></BarChart></ResponsiveContainer>}</section><section className={card}><h2 className="font-bold dark:text-white">Administrative workload</h2><div className="mt-4 space-y-3">{[[ClipboardList,'Admissions',overview.stats?.admissionTasks??0],[MessageSquare,'Messages',overview.stats?.pendingMessages??0],[FileText,'Reports',overview.stats?.pendingReports??0],[ShieldCheck,'Open incidents',overview.stats?.openIncidents??0]].map(([Icon,label,value]:any)=><Link key={label} to={label==='Admissions'?'/portal/staff/admissions':label==='Messages'?'/portal/staff/messages':label==='Reports'?'/portal/staff/reports':'/portal/staff/permissions'} className="flex items-center justify-between rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><span className="flex items-center gap-3 font-semibold dark:text-white"><Icon size={18}/>{label}</span><b>{value}</b></Link>)}</div></section></div>
+  <div className="grid gap-6 xl:grid-cols-3"><section className={card}><h2 className="flex items-center gap-2 font-bold dark:text-white"><ClipboardList size={18}/>Recent admissions</h2><div className="mt-4 space-y-3">{(overview.applications??[]).slice(0,5).map((item:any)=><div key={item.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><b className="dark:text-white">{[item.firstName,item.lastName].join(' ')}</b><p className="text-xs text-gray-500">{item.gradeApplying} · {String(item.status).replace(/_/g,' ')}</p></div>)}</div></section><section className={card}><h2 className="flex items-center gap-2 font-bold dark:text-white"><Bell size={18}/>Announcements</h2><div className="mt-4 space-y-3">{(overview.announcements??[]).slice(0,5).map((item:any)=><div key={item.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><b className="dark:text-white">{item.title}</b><p className="text-xs text-gray-500">{new Date(item.publishedAt).toLocaleDateString()}</p></div>)}</div></section><section className={card}><h2 className="flex items-center gap-2 font-bold dark:text-white"><WalletCards size={18}/>EduPay status</h2>{finance?<div className="mt-4 space-y-2"><p className="text-3xl font-bold dark:text-white">{finance.totals?.paymentCompletionRate??0}%</p><p className="text-sm text-gray-500">Payment completion</p><Link to="/portal/staff/finance" className={button+' mt-4 inline-block'}>Open finance tracking</Link></div>:empty('EduPay synchronization unavailable.')}</section></div></>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Payment Integration Readiness</h2>
-              <div className="space-y-3">
-                {financeReadiness.map((item) => (
-                  <div key={item.feature} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.feature}</p>
-                      <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300">{item.status}</span>
-                    </div>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{item.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+  const content = segment==='records'?recordsView:segment==='admissions'?admissionsView:segment==='announcements'?announcementsView:segment==='reports'?reportsView:segment==='finance'?financeView:segment==='messages'?messagesView:segment==='permissions'?permissionsView:segment==='settings'?<AccountSettingsPanel roleLabel="Administrator account"/>:dashboard
 
-          <div className="grid gap-6 xl:grid-cols-2">
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-                <MessageSquare size={18} className="text-purple-500" /> Messages Requiring Action
-              </h2>
-              <div className="space-y-3">
-                {staffMessages.map((message) => (
-                  <div key={message.subject} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{message.subject}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{message.from}</p>
-                    <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{message.body}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 flex items-center gap-2 font-bold text-kcs-blue-900 dark:text-white">
-                <ShieldCheck size={18} className="text-green-500" /> Permissions & Audit
-              </h2>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {rolePermissions.staff.map((permission) => (
-                  <span key={permission} className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">
-                    {permission}
-                  </span>
-                ))}
-              </div>
-              <div className="space-y-3">
-                {auditLogs.map((log) => (
-                  <div key={`${log.actor}-${log.time}`} className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30">
-                    <TrendingUp size={15} className="mt-0.5 text-kcs-gold-500" />
-                    <div>
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{log.action}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{log.actor} • {log.target} • {log.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-            </>
-          )}
-        </div>
-      </main>
-    </div>
-  )
+  return <div className="portal-shell flex"><PortalSidebar/><main><header className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h1 className="portal-dashboard-title font-display text-xl font-bold sm:text-2xl">{getLocalizedGreeting(language)}, {user?.firstName}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} · Administrator workspace · {status}</p></div><div className="flex gap-2"><Link to="/portal/staff/announcements" className="btn-primary flex items-center gap-2 py-2 text-sm"><Megaphone size={16}/>Announcements</Link><Link to="/portal/staff/messages" className="btn-gold flex items-center gap-2 py-2 text-sm"><MessageSquare size={16}/>Messages</Link></div></div></header><div className="space-y-6 p-4 sm:p-6">{notice&&<p className="rounded-xl bg-kcs-blue-50 p-3 text-sm font-semibold text-kcs-blue-800">{notice}</p>}{status==='error'&&<button onClick={()=>void load()} className={button}>Retry synchronization</button>}{content}</div></main></div>
 }
-
 export default StaffPortal
