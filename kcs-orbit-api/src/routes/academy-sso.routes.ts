@@ -5,7 +5,7 @@ import { prisma } from "../db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { isAcademyRole } from "../services/academy-access";
 const router = Router();
-const allowedRoles = new Set(["TEACHER", "ADMIN", "SUPER_ADMIN"]);
+const allowedRoles = new Set(["STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"]);
 const tokenSchema = z.object({ token: z.string().min(32).max(256) });
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 function validServiceKey(provided: string | undefined) {
@@ -19,7 +19,7 @@ function requireAcademyService(req: Request, res: Response) {
   if (!validServiceKey(req.header("x-api-key"))) { res.status(401).json({ message: "Unauthorized Academy service" }); return false; }
   return true;
 }
-router.post("/tickets", requireAuth, requireRole("TEACHER", "ADMIN", "SUPER_ADMIN"), async (req, res, next) => {
+router.post("/tickets", requireAuth, requireRole("STUDENT", "TEACHER", "ADMIN", "SUPER_ADMIN"), async (req, res, next) => {
   try {
     const identity = req.user!;
     if (!identity.organizationId) return res.status(403).json({ message: "Academy access requires an organization" });
@@ -37,7 +37,7 @@ router.post("/service-tickets", async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ message: "Invalid Orbit user" });
     const user = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
     if (!user || !user.organizationId) return res.status(404).json({ message: "Orbit user not found" });
-    const role = user.role === "TEACHER" ? "TEACHER" : user.role === "ADMIN" ? "ADMIN" : user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : null;
+    const role = user.role === "STUDENT" ? "STUDENT" : user.role === "TEACHER" ? "TEACHER" : user.role === "ADMIN" ? "ADMIN" : user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : null;
     if (!role || !isAcademyRole(role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && user.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
