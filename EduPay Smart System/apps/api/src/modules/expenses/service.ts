@@ -237,7 +237,7 @@ function calculateEmployeeMonthlySalary(input: {
     plannedRepayments,
     deferredRepayments,
     recommendation: mode === EmployeeDeductionMode.MANUAL
-      ? "Mode manuel actif: aucune dette n'est prelevee sans action du financier."
+      ? "Mode manuel actif: aucune dette n'est prélevée sans action du financier."
       : salaryPressure > maxDeductionRate
         ? "Revoir le plan: la pression salariale depasse le plafond configure."
         : deferredRepayments.length
@@ -1762,10 +1762,10 @@ export async function sendEmployeeFinancialTransparencyNotice(input: {
   const body = input.body?.trim() || [
     `Bonjour ${profile.fullName},`,
     "",
-    "Votre situation financiere employee a ete mise a jour dans EduPay.",
+    "Votre situation financière employé a été mise à jour dans EduPay.",
     `Salaire mensuel brut: ${snapshot.salaryProjection.grossSalary.toFixed(2)} ${profile.currency}`,
-    `Deductions prevues: ${snapshot.salaryProjection.totalDeductions.toFixed(2)} ${profile.currency}`,
-    `Salaire net previsionnel: ${snapshot.salaryProjection.netSalary.toFixed(2)} ${profile.currency}`,
+    `Déductions prévues: ${snapshot.salaryProjection.totalDeductions.toFixed(2)} ${profile.currency}`,
+    `Salaire net prévisionnel: ${snapshot.salaryProjection.netSalary.toFixed(2)} ${profile.currency}`,
     `Solde avances/dettes: ${snapshot.totals.totalBalance.toFixed(2)} ${profile.currency}`,
     `Mode de deduction: ${snapshot.salaryProjection.mode}`,
     `Recommandation: ${snapshot.intelligence.recommendation}`,

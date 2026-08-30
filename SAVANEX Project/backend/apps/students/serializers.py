@@ -62,13 +62,13 @@ def _deliver_family_credentials(parent, students):
     lines = []
     parent_password = getattr(parent, '_generated_password', None)
     if parent_password:
-        lines.append(f"Parent - identifiant: {parent.username}; code: {parent.access_code or 'non defini'}; mot de passe temporaire: {parent_password}")
+        lines.append(f"Parent - identifiant: {parent.username}; code: {parent.access_code or 'non défini'}; mot de passe temporaire: {parent_password}")
     for student in students:
         password = getattr(student.user, '_generated_password', None)
-        lines.append(f"{student.full_name} - ID: {student.student_id}; identifiant: {student.user.username}; code: {student.user.access_code or 'non defini'}; mot de passe temporaire: {password or 'deja defini'}")
+        lines.append(f"{student.full_name} - ID: {student.student_id}; identifiant: {student.user.username}; code: {student.user.access_code or 'non défini'}; mot de passe temporaire: {password or 'déjà défini'}")
         if password:
-            deliver_user_communication(student.user, 'Vos identifiants SAVANEX', f"Identifiant: {student.user.username}\nCode: {student.user.access_code or 'non defini'}\nMot de passe temporaire: {password}\nChangez ce mot de passe a la premiere connexion.", link='/messages')
-    deliver_parent_communication(parent, 'Identifiants de votre famille SAVANEX', 'Voici les acces de votre famille :\n' + '\n'.join(lines) + '\n\nChangez les mots de passe temporaires a la premiere connexion.', link='/messages')
+            deliver_user_communication(student.user, 'Vos identifiants SAVANEX', f"Identifiant: {student.user.username}\nCode: {student.user.access_code or 'non défini'}\nMot de passe temporaire: {password}\nChangez ce mot de passe à la première connexion.", link='/messages')
+    deliver_parent_communication(parent, 'Identifiants de votre famille SAVANEX', 'Voici les accès de votre famille :\n' + '\n'.join(lines) + '\n\nChangez les mots de passe temporaires à la première connexion.', link='/messages')
 
 
 class StudentSerializer(serializers.ModelSerializer):

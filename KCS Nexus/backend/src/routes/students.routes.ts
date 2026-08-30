@@ -373,8 +373,8 @@ async function deliverStudentUpdate(input: {
   parentEmails: string[]
   parentPhones: string[]
 }) {
-  const title = 'Dossier eleve modifie'
-  const message = `Le dossier de ${input.studentName} a ete modifie par le superadministrateur KCS Nexus.`
+  const title = 'Dossier élève modifié'
+  const message = `Le dossier de ${input.studentName} a été modifié par le superadministrateur KCS Nexus.`
   const userIds = Array.from(new Set([...(input.studentUserId ? [input.studentUserId] : []), ...input.parentUserIds]))
   if (userIds.length) {
     await prisma.notification.createMany({ data: userIds.map((userId) => ({ userId, title, message, type: 'MESSAGE' as const, link: '/messages' })) })

@@ -103,9 +103,9 @@ def _prediction_from_metrics(metrics):
 def _student_recommendations(metrics):
     recommendations = []
     if metrics.get('average_normalized') is not None and metrics['average_normalized'] < 70:
-        recommendations.append('Ouvrir un plan de soutien academique hebdomadaire avec objectifs mesurables.')
+        recommendations.append('Ouvrir un plan de soutien académique hebdomadaire avec objectifs mesurables.')
     if metrics.get('attendance_rate') is not None and metrics['attendance_rate'] < 90:
-        recommendations.append('Declencher un suivi presence avec le parent et controle quotidien.')
+        recommendations.append('Déclencher un suivi présence avec le parent et contrôle quotidien.')
     if metrics.get('discipline_level') in ['warning', 'critical']:
         recommendations.append('Planifier une rencontre restorative discipline avec trace ecrite et date de suivi.')
     preference = metrics.get('learning_preference')
@@ -283,7 +283,7 @@ def _build_summary(student, trigger_label, metrics):
     if metrics.get('grade_delta') is not None:
         lines.append(f"Evolution des notes: {metrics['grade_delta']:+.2f} point(s).")
     if metrics.get('attendance_rate') is not None:
-        lines.append(f"Presence 30 jours: {metrics['attendance_rate']}%.")
+        lines.append(f"Présence 30 jours: {metrics['attendance_rate']}%.")
     if metrics.get('absences') or metrics.get('lates'):
         lines.append(f"Absences: {metrics.get('absences', 0)}; retards: {metrics.get('lates', 0)}.")
     if metrics.get('learning_preference') and metrics.get('learning_preference') != 'unknown':
@@ -293,7 +293,7 @@ def _build_summary(student, trigger_label, metrics):
     if metrics.get('risk_score') is not None:
         lines.append(f"Prediction risque: {metrics['risk_score']}% ({metrics.get('prediction_level')}).")
     if metrics.get('flags'):
-        lines.append('Attention recommandee par l ecosysteme.')
+        lines.append("Attention recommandée par l'écosystème.")
     if metrics.get('recommendations'):
         lines.append('Recommandation: ' + metrics['recommendations'][0])
     return '\n'.join(lines)
@@ -408,7 +408,7 @@ def observe_grade(grade, actor=None):
     return observe_evolution(
         grade,
         EvolutionEvent.EVENT_GRADE,
-        f'Note publiee en {subject_name}: {grade.excellence_percentage}%',
+        f'Note publiée en {subject_name}: {grade.excellence_percentage}%',
         actor=actor or grade.entered_by,
         force_alert=float(grade.excellence_percentage) < 70,
         snapshot={
@@ -425,7 +425,7 @@ def observe_attendance(attendance, actor=None):
     return observe_evolution(
         attendance,
         EvolutionEvent.EVENT_ATTENDANCE,
-        f'Presence du {attendance.date}: {attendance.get_status_display()}',
+        f'Présence du {attendance.date}: {attendance.get_status_display()}',
         actor=actor or attendance.recorded_by,
         force_alert=attendance.status in [Attendance.STATUS_ABSENT, Attendance.STATUS_LATE],
         snapshot={'date': str(attendance.date), 'status': attendance.status, 'notes': attendance.notes},
@@ -510,7 +510,7 @@ def ingest_nexus_academic_event(envelope):
     kind = _payload_value(payload, 'eventType', 'type', 'kind', default=envelope.get('eventType') or 'academic')
     subject = _payload_value(payload, 'subject', 'courseName', 'course', default='Academique')
     title = _payload_value(payload, 'title', 'assignmentTitle', 'competency', default=None)
-    student_label = _student_label(student) if student else _payload_value(payload, 'studentName', 'studentFullName', default='Entite academique Nexus')
+    student_label = _student_label(student) if student else _payload_value(payload, 'studentName', 'studentFullName', default='Entité académique Nexus')
 
     event_type = _nexus_event_type(kind)
     severity = _nexus_severity(payload)
@@ -654,12 +654,12 @@ def _report_summary_rows(report):
         ['Eleves actifs', report['population']['active_students'], ''],
         ['Employes actifs', report['population']['active_employees'], ''],
         ['Classes', report['population']['classes'], ''],
-        ['Taux de presence', f"{report['attendance']['rate']}%" if report['attendance']['rate'] is not None else 'N/A', ''],
+        ['Taux de présence', f"{report['attendance']['rate']}%" if report['attendance']['rate'] is not None else 'N/A', ''],
         ['Absences', report['attendance']['absences'], ''],
         ['Retards', report['attendance']['lates'], ''],
         ['Moyenne generale excellence', f"{report['performance']['average_normalized']}%" if report['performance']['average_normalized'] is not None else 'N/A', '70% = 50% classique'],
         ['Equivalent classique', f"{report['performance']['average_classical_equivalent']}%" if report['performance']['average_classical_equivalent'] is not None else 'N/A', ''],
-        ['Signaux academiques Nexus', report['performance']['nexus_academic_events'], ''],
+        ['Signaux académiques Nexus', report['performance']['nexus_academic_events'], ''],
         ['Moyenne Nexus %', f"{report['performance']['nexus_average_percentage']}%" if report['performance']['nexus_average_percentage'] is not None else 'N/A', ''],
         ['Evenements traces', report['intelligence']['events'], ''],
         ['Alertes envoyees', report['intelligence']['alerts_sent'], ''],
@@ -671,7 +671,7 @@ def export_events_csv(queryset, start=None, end=None):
     report = build_period_state_report(queryset, start=start, end=end)
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Rapport de vie de l ecosysteme'])
+    writer.writerow(["Rapport de vie de l'écosystème"])
     writer.writerows(_report_summary_rows(report))
     writer.writerow([])
     writer.writerow(['Date', 'Entite', 'Type', 'Severite', 'Titre', 'Resume', 'Alertes'])
@@ -693,7 +693,7 @@ def export_events_csv(queryset, start=None, end=None):
 def export_events_excel(queryset, start=None, end=None):
     report = build_period_state_report(queryset, start=start, end=end)
     rows = []
-    rows.append('<h1>Rapport de vie de l ecosysteme</h1>')
+    rows.append("<h1>Rapport de vie de l'écosystème</h1>")
     rows.append('<h2>Synthese de periode</h2><table border="1">')
     for label, value, extra in _report_summary_rows(report):
         rows.append(f'<tr><th>{label}</th><td>{value}</td><td>{extra}</td></tr>')
@@ -714,7 +714,7 @@ def export_events_excel(queryset, start=None, end=None):
     return response
 
 
-def export_events_pdf(queryset, start=None, end=None, title='Rapport de vie de l ecosysteme'):
+def export_events_pdf(queryset, start=None, end=None, title="Rapport de vie de l'écosystème"):
     report = build_period_state_report(queryset, start=start, end=end)
     buffer = BytesIO()
     document = SimpleDocTemplate(buffer, pagesize=landscape(A4), leftMargin=24, rightMargin=24, topMargin=24, bottomMargin=24)

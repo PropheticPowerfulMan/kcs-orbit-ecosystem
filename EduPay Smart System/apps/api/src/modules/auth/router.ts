@@ -654,7 +654,7 @@ authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
         if (user.parent?.phone) {
           await sendSms({
             to: user.parent.phone,
-            text: `EduPay: reinitialisez votre mot de passe (lien valable 30 min): ${buildPasswordResetLink(token)}`
+            text: `EduPay: réinitialisez votre mot de passe (lien valable 30 min): ${buildPasswordResetLink(token)}`
           });
         }
       } else {
@@ -718,7 +718,7 @@ authRouter.post("/reset-password", recoveryLimiter, async (req, res) => {
       `Bonjour ${resetToken.user.fullName},`,
       "",
       "Votre mot de passe EduPay vient d'être réinitialisé.",
-      "Si vous n'avez pas effectue cette action, contactez immediatement l'administration."
+      "Si vous n'avez pas effectué cette action, contactez immédiatement l'administration."
     ].join("\n")
   }).catch((error) => console.error("Reset confirmation email failed", error));
 

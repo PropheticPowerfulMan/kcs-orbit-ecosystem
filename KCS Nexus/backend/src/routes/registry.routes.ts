@@ -584,7 +584,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       return success(res, resetData, entityType === 'student' ? 'Acces temporaire regenere dans SAVANEX et transmis par email' : 'Acces temporaire regenere dans SAVANEX et transmis par email/SMS')
     }
     if (resetResponse.status !== 404) {
-      throw new ApiError(resetResponse.status, String(resetData.detail || 'La reinitialisation SAVANEX a echoue.'))
+      throw new ApiError(resetResponse.status, String(resetData.detail || 'La réinitialisation SAVANEX a échoué.'))
     }
   }
 
@@ -620,12 +620,12 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     await updateRegistryEntityInOrbit(entityType, entity.id, env.KCS_ORBIT_ORGANIZATION_ID!, { mustChangePassword: true }, 'orbitId')
   }
   const subject = 'Nouveaux identifiants temporaires KCS Nexus'
-  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a ete reinitialise par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'acces: ${user.accessCode || 'non defini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
+  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a été réinitialisé par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accès: ${user.accessCode || 'non défini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
   const [emailDelivery, smsDelivery] = await Promise.all([
     sendSchoolMail({ to: entity.email || user.email, subject, text: message, html: `<p>${message.replace(/\n/g, '<br>')}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
     entityType === 'student'
       ? Promise.resolve({ sent: false as const, reason: 'STUDENT_EMAIL_ONLY' as const })
-      : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non defini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+      : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non défini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
   ])
   await prisma.notification.create({
     data: { userId: user.id, title: subject, message, type: 'MESSAGE', link: entityType === 'parent' ? '/parent/messages' : '/student/messages' },

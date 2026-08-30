@@ -716,7 +716,7 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
     const resetUrl = buildPasswordResetUrl(rawToken)
     const emailContent = buildPasswordResetEmail(user.firstName, resetUrl)
     const result = channel === 'sms'
-      ? await sendSchoolSms(user.phone, `KCS Nexus: reinitialisez votre mot de passe (lien valable ${RESET_TOKEN_TTL_MINUTES} min): ${resetUrl}`)
+      ? await sendSchoolSms(user.phone, `KCS Nexus: réinitialisez votre mot de passe (lien valable ${RESET_TOKEN_TTL_MINUTES} min): ${resetUrl}`)
       : await sendSchoolMail({
           to: user.email,
           subject: 'KCS Nexus password reset',

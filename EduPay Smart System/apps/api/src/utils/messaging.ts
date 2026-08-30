@@ -316,7 +316,8 @@ async function parseSmsProviderResponse(response: Response) {
 
 export async function sendEmail(input: EmailInput): Promise<DeliveryStatus> {
   if (!input.to) return "SKIPPED";
-  const html = buildBrandedEmailHtml(input);
+  const normalizedInput = { ...input, subject: input.subject.normalize("NFC"), text: input.text.normalize("NFC"), html: input.html?.normalize("NFC") };
+  const html = buildBrandedEmailHtml(normalizedInput);
 
   if (!hasSmtpConfig()) {
     console.log(`[email:dry-run] To: ${input.to}\nSubject: ${input.subject}\n${input.text}\n\n[html]\n${html}`);
@@ -328,9 +329,11 @@ export async function sendEmail(input: EmailInput): Promise<DeliveryStatus> {
       from: env.SMTP_FROM || env.SMTP_USER,
       to: input.to,
       replyTo: env.SMTP_FROM || env.SMTP_USER,
-      subject: input.subject,
-      text: input.text,
-      html
+      subject: normalizedInput.subject,
+      text: normalizedInput.text,
+      html,
+      textEncoding: "base64",
+      headers: { "Content-Language": "fr" }
     });
     return "SENT";
   } catch (error) {

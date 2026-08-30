@@ -312,9 +312,9 @@ def reset_user_access_credentials(user, defer_side_effects=False):
     subject = 'Nouveaux identifiants temporaires KCS'
     body = (
         f'Bonjour {user.get_full_name() or user.username},\n\n'
-        'Votre mot de passe a ete reinitialise par un administrateur.\n'
+        'Votre mot de passe a été réinitialisé par un administrateur.\n'
         f'Identifiant: {user.username}\n'
-        f"Code d'acces: {user.access_code or 'non defini'}\n"
+        f"Code d'accès: {user.access_code or 'non défini'}\n"
         f'Mot de passe temporaire: {temporary_password}\n\n'
         'Changez ce mot de passe lors de votre prochaine connexion.'
     )
@@ -373,15 +373,15 @@ def forgot_password(request):
         reset_url = f'{frontend_url}/login?uid={uid}&resetToken={token}'
         message = (
             f'Bonjour {user.get_full_name() or user.username},\n\n'
-            'Une demande de reinitialisation de mot de passe a ete faite pour votre compte SAVANEX.\n'
-            f'Lien de reinitialisation: {reset_url}\n\n'
-            "Ignorez ce message si vous n'etes pas a l'origine de la demande."
+            'Une demande de réinitialisation de mot de passe a été faite pour votre compte SAVANEX.\n'
+            f'Lien de réinitialisation: {reset_url}\n\n'
+            "Ignorez ce message si vous n'êtes pas à l'origine de la demande."
         )
         try:
             if channel == 'sms':
-                _send_user_sms(user, f'Reinitialisez votre mot de passe (lien securise): {reset_url}', 'Password recovery')
+                _send_user_sms(user, f'Réinitialisez votre mot de passe (lien sécurisé): {reset_url}', 'Password recovery')
             else:
-                send_branded_email(user.email, 'SAVANEX password reset', message, reset_url, 'Reinitialiser mon mot de passe')
+                send_branded_email(user.email, 'SAVANEX password reset', message, reset_url, 'Réinitialiser mon mot de passe')
         except Exception:
             print(f'[auth] SAVANEX password reset delivery failed via {channel}.')
 

@@ -3,6 +3,7 @@ import json
 import logging
 import urllib.parse
 import urllib.request
+import unicodedata
 from urllib.error import HTTPError
 from dataclasses import dataclass
 from datetime import timedelta
@@ -18,6 +19,9 @@ from django.utils.html import escape, linebreaks
 from .models import Notification
 
 logger = logging.getLogger(__name__)
+
+def _normalize_unicode_text(value):
+    return unicodedata.normalize('NFC', str(value or ''))
 
 
 @dataclass
@@ -45,18 +49,24 @@ SCHOOL_URL = 'https://kinshasachristianschool.org/'
 
 
 def build_branded_email_html(subject, body, action_url='', action_label='Ouvrir SAVANEX'):
+    subject = _normalize_unicode_text(subject)
+    body = _normalize_unicode_text(body)
+    action_label = _normalize_unicode_text(action_label)
     safe_subject = escape(subject)
     safe_body = linebreaks(escape(body), autoescape=False).replace('<p>', '<p style="margin:0 0 16px;line-height:1.72;color:#334155">')
     action = f'<a href="{escape(action_url)}" style="display:inline-block;background:#ffcb05;color:#071d3a;text-decoration:none;font-weight:800;border-radius:999px;padding:13px 22px;font-size:14px">{escape(action_label)}</a>' if action_url else ''
     return f'''<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{safe_subject}</title></head>
 <body style="margin:0;background:#eef4fb;font-family:Arial,Helvetica,sans-serif;color:#0f172a"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef4fb;padding:28px 12px"><tr><td align="center"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:26px;box-shadow:0 20px 55px rgba(8,38,76,.16)">
 <tr><td style="height:7px;background:#ffcb05"></td></tr><tr><td style="background:#08264c;padding:26px 30px"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="width:64px;height:64px;background:#fff;border-radius:50%;padding:2px"><img src="{LOGO_URL}" width="60" height="60" alt="Kinshasa Christian School" style="display:block;width:60px;height:60px;border-radius:50%;object-fit:cover"></td><td style="padding-left:18px"><p style="margin:0 0 5px;color:#ffcb05;font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase">SAVANEX · MESSAGE OFFICIEL</p><h1 style="margin:0;color:#fff;font-size:24px;line-height:1.25">{safe_subject}</h1><p style="margin:7px 0 0;color:#bdd7f5;font-size:13px">Letting Our Light Shine</p></td></tr></table></td></tr>
-<tr><td style="background:#fff;padding:30px"><div style="border-left:5px solid #ffcb05;background:#f8fbff;border-radius:16px;padding:18px 20px;margin-bottom:22px"><strong style="color:#004080;font-size:13px">Kinshasa Christian School</strong><p style="margin:6px 0 0;color:#64748b;font-size:13px;line-height:1.55">Une communication academique securisee de SAVANEX.</p></div><div style="font-size:15px;line-height:1.65;color:#334155">{safe_body}</div><div style="margin-top:26px">{action}</div></td></tr>
-<tr><td style="background:#004080;padding:20px 28px;text-align:center"><img src="{LOGO_URL}" width="34" height="34" alt="KCS" style="display:inline-block;vertical-align:middle;background:#fff;border-radius:50%;padding:2px"><p style="margin:9px 0 0;color:#fff;font-size:13px;font-weight:700">Kinshasa Christian School</p><p style="margin:5px 0 0;color:#b9d7f7;font-size:11px">Macampagne, Ngaliema · Notification automatisee SAVANEX</p></td></tr></table></td></tr></table></body></html>'''
+<tr><td style="background:#fff;padding:30px"><div style="border-left:5px solid #ffcb05;background:#f8fbff;border-radius:16px;padding:18px 20px;margin-bottom:22px"><strong style="color:#004080;font-size:13px">Kinshasa Christian School</strong><p style="margin:6px 0 0;color:#64748b;font-size:13px;line-height:1.55">Une communication académique sécurisée de SAVANEX.</p></div><div style="font-size:15px;line-height:1.65;color:#334155">{safe_body}</div><div style="margin-top:26px">{action}</div></td></tr>
+<tr><td style="background:#004080;padding:20px 28px;text-align:center"><img src="{LOGO_URL}" width="34" height="34" alt="KCS" style="display:inline-block;vertical-align:middle;background:#fff;border-radius:50%;padding:2px"><p style="margin:9px 0 0;color:#fff;font-size:13px;font-weight:700">Kinshasa Christian School</p><p style="margin:5px 0 0;color:#b9d7f7;font-size:11px">Macampagne, Ngaliema · Notification automatisée SAVANEX</p></td></tr></table></td></tr></table></body></html>'''
 
 
 def send_branded_email(to, subject, body, action_url='', action_label='Ouvrir SAVANEX'):
+    subject = _normalize_unicode_text(subject)
+    body = _normalize_unicode_text(body)
     message = EmailMultiAlternatives(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [to])
+    message.encoding = 'utf-8'
     message.attach_alternative(build_branded_email_html(subject, body, action_url, action_label), 'text/html')
     return message.send(fail_silently=False)
 
@@ -81,8 +91,8 @@ def _send_parent_email(parent, subject, body):
 def _post_json(url, payload, headers=None, timeout=10):
     request = urllib.request.Request(
         url,
-        data=json.dumps(payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json', **(headers or {})},
+        data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+        headers={'Content-Type': 'application/json; charset=UTF-8', **(headers or {})},
         method='POST',
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -120,7 +130,7 @@ def _send_sms_with_twilio(phone, body):
         data=encoded,
         headers={
             'Authorization': f'Basic {credentials}',
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         },
         method='POST',
     )
@@ -146,7 +156,7 @@ def _send_sms_with_africas_talking(phone, body):
         request = urllib.request.Request(
             api_url,
             data=urllib.parse.urlencode(payload).encode('utf-8'),
-            headers={'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'apiKey': api_key},
+            headers={'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'apiKey': api_key},
             method='POST',
         )
         try:
@@ -185,6 +195,7 @@ def _send_sms_with_africas_talking(phone, body):
 
 def _send_user_sms(user, body, label='User'):
     phone = _normalize_phone(user.phone)
+    body = _normalize_unicode_text(body)
     lines = [' '.join(line.split()) for line in (body or '').replace('\r\n', '\n').split('\n')]
     body = '\n'.join(lines).strip()
     body = body if body.upper().startswith('SAVANEX :') else f'SAVANEX : {body}'
@@ -211,6 +222,8 @@ def _send_parent_sms(parent, body):
 
 
 def _short_sms(subject, body):
+    subject = _normalize_unicode_text(subject)
+    body = _normalize_unicode_text(body)
     clean_lines = [' '.join(line.split()) for line in (body or '').replace('\r\n', '\n').split('\n')]
     clean_body = '\n'.join(clean_lines).strip()
     return f'SAVANEX : {_school_sender_name()}\n{subject.strip()}\n\n{clean_body}'
@@ -346,23 +359,23 @@ def summarize_student_evolution(student):
 def build_evolution_message(student, trigger_label):
     summary = summarize_student_evolution(student)
     name = student.full_name or str(student)
-    lines = [f'Bonjour, SAVANEX vous informe de l evolution de {name}.', f'Dernier signal: {trigger_label}.']
+    lines = [f"Bonjour, SAVANEX vous informe de l'évolution de {name}.", f'Dernier signal: {trigger_label}.']
 
     if summary['recent_average'] is not None:
-        lines.append(f'Moyenne excellence recente: {summary["recent_average"]}%.')
+        lines.append(f'Moyenne excellence récente: {summary["recent_average"]}%.')
     if summary['trend'] is not None:
         if summary['trend'] <= -1:
-            lines.append(f'Tendance: baisse de {abs(summary["trend"])} point(s). Un suivi est recommande.')
+            lines.append(f'Tendance: baisse de {abs(summary["trend"])} point(s). Un suivi est recommandé.')
         elif summary['trend'] >= 1:
             lines.append(f'Tendance: progression de {summary["trend"]} point(s). Encouragez ces efforts.')
         else:
             lines.append('Tendance: stable.')
     if summary['attendance_rate'] is not None:
-        lines.append(f'Presence sur 30 jours: {summary["attendance_rate"]}%.')
+        lines.append(f'Présence sur 30 jours: {summary["attendance_rate"]}%.')
     if summary['absences_30d'] or summary['lates_30d']:
-        lines.append(f'Absences recentes: {summary["absences_30d"]}; retards: {summary["lates_30d"]}.')
+        lines.append(f'Absences récentes: {summary["absences_30d"]}; retards: {summary["lates_30d"]}.')
 
-    lines.append('Merci de contacter l administration ou le titulaire si vous souhaitez un accompagnement.')
+    lines.append("Merci de contacter l'administration ou le titulaire si vous souhaitez un accompagnement.")
     return '\n'.join(lines), summary
 
 
@@ -389,7 +402,7 @@ def notify_parent_about_student_evolution(student, trigger_label, notif_type=Not
 
 def notify_parent_about_grade(grade):
     percentage = float(grade.percentage)
-    trigger = f'note publiee en {grade.class_subject.subject.name}: {percentage:.0f}% excellence'
+    trigger = f'note publiée en {grade.class_subject.subject.name}: {percentage:.0f}% excellence'
     return notify_parent_about_student_evolution(
         grade.student,
         trigger,
@@ -400,7 +413,7 @@ def notify_parent_about_grade(grade):
 
 def notify_parent_about_attendance(attendance):
     status_label = attendance.get_status_display()
-    trigger = f'presence du {attendance.date}: {status_label}'
+    trigger = f'présence du {attendance.date}: {status_label}'
     return notify_parent_about_student_evolution(
         attendance.student,
         trigger,
