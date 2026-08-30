@@ -403,7 +403,7 @@ function normalizeCreateStudentPayload(payload: unknown) {
   }
 }
 
-studentsRouter.get('/', authenticate, requireRoles('admin', 'teacher', 'parent'), asyncHandler(async (_req, res) => {
+studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
     return success(res, orbitStudentsToProfiles(directory), 'Students loaded from Orbit')

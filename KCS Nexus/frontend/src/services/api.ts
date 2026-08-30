@@ -206,6 +206,7 @@ export const teachersAPI = {
 }
 
 export const teacherWorkspaceAPI = {
+  overview: () => api.get('/teachers/me/overview'),
   get: () => api.get('/teachers/me/workspace'),
   save: (state: Record<string, unknown>, revision?: number) => api.put('/teachers/me/workspace', { state, revision }),
 }

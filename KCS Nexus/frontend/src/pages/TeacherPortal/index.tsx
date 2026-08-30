@@ -11,7 +11,7 @@ import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
-import { aiAPI, authAPI, messagesAPI, studentsAPI, teacherWorkspaceAPI } from '@/services/api'
+import { aiAPI, authAPI, messagesAPI, teacherWorkspaceAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
@@ -247,21 +247,21 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         studentIds: [] as string[],
         status: 'active',
       }
-    }),
+    }).slice(0, 0),
   )
   const [courseTab, setCourseTab] = useState<'setup' | 'enrollment'>('setup')
   const [courseSearch, setCourseSearch] = useState('')
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
-  const [selectedEnrollmentCourseId, setSelectedEnrollmentCourseId] = useState(subjects[0]?.id ?? '')
-  const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState(subjects[1]?.id ?? subjects[0]?.id ?? '')
+  const [selectedEnrollmentCourseId, setSelectedEnrollmentCourseId] = useState('')
+  const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState('')
   const [gradebookColumnsByCourse, setGradebookColumnsByCourse] = useState<Record<string, GradebookColumn[]>>({})
   const [gradebookScores, setGradebookScores] = useState<Record<string, string>>({})
-  const [teacherStudents, setTeacherStudents] = useState<RegistryStudent[]>(() => ecosystemStudents)
-  const [attendanceEntries, setAttendanceEntries] = useState(() => ecosystemAttendance)
-  const [assignmentList, setAssignmentList] = useState(() => ecosystemAssignments)
-  const [gradeEntries, setGradeEntries] = useState(() => ecosystemGrades)
-  const [reportList, setReportList] = useState(() => reportCards)
-  const [disciplineList, setDisciplineList] = useState(() => disciplineReports)
+  const [teacherStudents, setTeacherStudents] = useState<RegistryStudent[]>([])
+  const [attendanceEntries, setAttendanceEntries] = useState(() => ecosystemAttendance.slice(0, 0))
+  const [assignmentList, setAssignmentList] = useState(() => ecosystemAssignments.slice(0, 0))
+  const [gradeEntries, setGradeEntries] = useState(() => ecosystemGrades.slice(0, 0))
+  const [reportList, setReportList] = useState(() => reportCards.slice(0, 0))
+  const [disciplineList, setDisciplineList] = useState(() => disciplineReports.slice(0, 0))
   const [reportCardStudentId, setReportCardStudentId] = useState('')
   const [reportCardTerm, setReportCardTerm] = useState('Term 3')
   const [reportCardRows, setReportCardRows] = useState(() =>
@@ -273,7 +273,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       points: index === 0 ? 89 : index === 1 ? 95 : index === 2 ? 91 : 76,
       maxPoints: 100,
       comment: index === 1 ? 'Excellent lab reasoning' : index === 3 ? 'Needs steady homework rhythm' : 'Good progress',
-    })),
+    })).slice(0, 0),
   )
   const [generatedReportCards, setGeneratedReportCards] = useState<Array<{
     id: string
@@ -284,17 +284,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     rows: typeof reportCardRows
     summary: string
   }>>([])
-  const [inbox, setInbox] = useState(() => [
-    ...messages.map((message) => ({ ...message, body: message.subject, requiresResponse: message.id === 3 })),
-    ...ecosystemMessages.filter((message) => message.toRole === 'teacher').map((message, index) => ({
-      id: index + 10,
-      from: message.from,
-      subject: message.subject,
-      body: message.body,
-      time: message.requiresResponse ? 'Response needed' : 'FYI',
-      requiresResponse: message.requiresResponse,
-    })),
-  ])
+  const [inbox, setInbox] = useState<any[]>([])
   const [messageContacts, setMessageContacts] = useState<Array<{ id: string; firstName: string; lastName: string; role: string }>>([])
   const [submittedTeacherReports, setSubmittedTeacherReports] = useState<Array<Record<string, unknown>>>([])
 
@@ -418,15 +408,31 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const loadStudents = async () => {
       setRegistryStatus('loading')
       try {
-        const response = await studentsAPI.getAll()
-        const registryStudents = (response.data?.data ?? []).map(mapRegistryStudent)
+        const response = await teacherWorkspaceAPI.overview()
+        const overview = response.data?.data ?? {}
+        const registryStudents = (overview.students ?? []).map(mapRegistryStudent)
+        const officialCourses = (overview.courses ?? []).map((course: any) => ({
+          id: course.id,
+          name: course.name,
+          className: course.grade,
+          room: course.schedules?.[0]?.room ?? '—',
+          teacher: 'Assigned teacher',
+          abbreviation: course.code,
+          creditHours: course.credits ?? 1,
+          gradeLevels: [course.grade],
+          studentIds: (course.enrollments ?? []).map((enrollment: any) => enrollment.studentId),
+          status: 'active',
+        }))
         if (!active) return
         setSuperAdminStudentPool(registryStudents)
+        setTeacherStudents(registryStudents)
+        setCourses((current) => current.length ? current : officialCourses)
+        setSelectedEnrollmentCourseId((current) => current || officialCourses[0]?.id || '')
+        setSelectedGradebookCourseId((current) => current || officialCourses[0]?.id || '')
         setRegistryStatus('ready')
       } catch {
         if (!active) return
-        // Keep the teacher portal usable offline while clearly recording that the live registry was unavailable.
-        setSuperAdminStudentPool(ecosystemStudents)
+        setSuperAdminStudentPool([])
         setRegistryStatus('error')
       }
     }
@@ -1732,11 +1738,44 @@ const TeacherDashboardHome = () => {
   const [aiInstruction, setAiInstruction] = useState('')
   const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [overview, setOverview] = useState<any>(null)
+  const [dashboardMessages, setDashboardMessages] = useState<any[]>([])
+  const [dashboardStatus, setDashboardStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  useEffect(() => {
+    let active = true
+    Promise.all([teacherWorkspaceAPI.overview(), messagesAPI.getAll({ box: 'all' })])
+      .then(([overviewResponse, messagesResponse]) => {
+        if (!active) return
+        setOverview(overviewResponse.data?.data ?? {})
+        setDashboardMessages((messagesResponse.data?.data ?? []).slice(0, 4))
+        setDashboardStatus('ready')
+      })
+      .catch(() => active && setDashboardStatus('error'))
+    return () => { active = false }
+  }, [])
+
+  const assignedStudents = overview?.students ?? []
+  const assignedCourses = overview?.courses ?? []
+  const assignedAssignments = overview?.assignments ?? []
+  const assignedGrades = overview?.grades ?? []
+  const classAverage = assignedGrades.length ? Math.round(assignedGrades.reduce((sum: number, grade: any) => sum + Number(grade.percentage || 0), 0) / assignedGrades.length) : 0
+  const pendingActions = assignedAssignments.reduce((sum: number, assignment: any) => sum + (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length, 0)
+  const atRiskStudents = assignedStudents.filter((student: any) => (student.attendanceRate != null && student.attendanceRate < 80) || (student.gpa != null && student.gpa < 2))
+  const todayClasses = (overview?.timetable ?? []).slice(0, 6).map((item: any) => ({ time: item.startTime + '–' + item.endTime, course: item.courseName, room: item.room, students: item.studentCount }))
+  const gradingQueue = assignedAssignments.filter((assignment: any) => (assignment.submissions ?? []).some((submission: any) => submission.status === 'PENDING')).slice(0, 5).map((assignment: any) => ({ id: assignment.id, title: assignment.title, className: assignment.courseName, due: new Date(assignment.dueDate).toLocaleDateString(), pending: (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length }))
+  const studentAlerts = atRiskStudents.slice(0, 5).map((student: any) => ({ student: ((student.user?.firstName ?? '') + ' ' + (student.user?.lastName ?? '')).trim(), severity: student.attendanceRate < 70 || student.gpa < 1.5 ? 'high' : 'medium', note: 'Attendance: ' + (student.attendanceRate ?? '—') + '% · GPA: ' + (student.gpa ?? '—') }))
+  const gradebookCategories = assignedCourses.slice(0, 4).map((course: any) => {
+    const courseGrades = assignedGrades.filter((grade: any) => grade.courseId === course.id)
+    const average = courseGrades.length ? Math.round(courseGrades.reduce((sum: number, grade: any) => sum + Number(grade.percentage || 0), 0) / courseGrades.length) : 0
+    return { name: course.name, weight: course.credits ?? 1, average, visibility: courseGrades.length ? courseGrades.length + ' grades' : 'No grades' }
+  })
+  const messages = dashboardMessages.map((message: any) => ({ id: message.id, from: ((message.sender?.firstName ?? '') + ' ' + (message.sender?.lastName ?? '')).trim() || 'KCS Nexus', subject: message.subject, time: new Date(message.createdAt).toLocaleString() }))
   const metricCards = [
-    { label: 'Assigned Students', value: '0', sub: 'Super Admin registry', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
-    { label: 'Pending Actions', value: '0', sub: 'No pending action', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-    { label: 'Risk Alerts', value: '0', sub: 'No active alert', icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
-    { label: 'Class Average', value: '0%', sub: 'No registered grade', icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+    { label: 'Assigned Students', value: String(assignedStudents.length), sub: assignedCourses.length + ' assigned course(s)', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
+    { label: 'Pending Actions', value: String(pendingActions), sub: pendingActions ? 'Submissions to review' : 'No pending action', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
+    { label: 'Risk Alerts', value: String(atRiskStudents.length), sub: atRiskStudents.length ? 'Attendance or GPA signal' : 'No active alert', icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+    { label: 'Class Average', value: classAverage + '%', sub: assignedGrades.length ? assignedGrades.length + ' registered grades' : 'No registered grade', icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
   ]
 
   const quickActions = [
@@ -1811,15 +1850,15 @@ const TeacherDashboardHome = () => {
             </div>
             <div className="mt-5">
               <div className="mb-2 flex items-center justify-between text-xs font-semibold text-kcs-blue-900 dark:text-kcs-blue-100">
-                <span>Automation coverage</span>
-                <span>91%</span>
+                <span>Official data synchronization</span>
+                <span>{dashboardStatus === 'ready' ? 'Live' : dashboardStatus}</span>
               </div>
               <div className="h-3 overflow-hidden rounded-full bg-white dark:bg-kcs-blue-950">
                 <div className="h-full rounded-full bg-kcs-gold-400" style={{ width: '91%' }} />
               </div>
             </div>
             <div className="mt-5 grid gap-2 text-xs text-gray-600 dark:text-gray-300">
-              {['3 students need intervention', '18 grades can be batch-entered', '4 parent updates are ready', '2 schedule conflicts prevented'].map((item) => (
+              {[assignedCourses.length + ' assigned course(s)', assignedStudents.length + ' assigned student(s)', assignedAssignments.length + ' assignment(s)', assignedGrades.length + ' recorded grade(s)'].map((item) => (
                 <div key={item} className="flex items-center gap-2 rounded-lg bg-white/80 px-3 py-2 dark:bg-kcs-blue-950/50">
                   <CheckCircle2 size={14} className="text-green-500" />
                   {item}
@@ -1864,7 +1903,7 @@ const TeacherDashboardHome = () => {
             </Link>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            {gradebookCategories.map((category) => (
+            {gradebookCategories.map((category: any) => (
               <div key={category.name} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                 <div className="flex items-center justify-between">
                   <p className="font-semibold text-kcs-blue-900 dark:text-white">{category.name}</p>
@@ -1908,7 +1947,7 @@ const TeacherDashboardHome = () => {
             <Calendar size={18} className="text-kcs-blue-500" /> Daily And Weekly Schedule
           </h2>
           <div className="space-y-3">
-            {todayClasses.map((item, index) => (
+            {todayClasses.map((item: any, index: number) => (
               <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold text-gray-400 dark:text-gray-500">{item.time}</p>
@@ -1929,7 +1968,7 @@ const TeacherDashboardHome = () => {
             <Link to="/portal/teacher/assignments" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Open tasks</Link>
           </div>
           <div className="space-y-3">
-            {gradingQueue.map((task) => (
+            {gradingQueue.map((task: any) => (
               <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -1938,12 +1977,6 @@ const TeacherDashboardHome = () => {
                   </div>
                   <span className="badge-gold text-xs">{task.pending}</span>
                 </div>
-              </div>
-            ))}
-            {ecosystemAssignments.filter((item) => item.status === 'missing').map((item) => (
-              <div key={item.id} className="rounded-xl border border-red-100 bg-red-50 p-4 dark:border-red-900/30 dark:bg-red-900/20">
-                <p className="font-semibold text-red-700 dark:text-red-300">{item.title}</p>
-                <p className="text-xs text-red-600/80 dark:text-red-200/80">Missing assignment detection - {item.subject}</p>
               </div>
             ))}
           </div>
@@ -1957,7 +1990,7 @@ const TeacherDashboardHome = () => {
             <Link to="/portal/teacher/students" className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-400">Student profiles</Link>
           </div>
           <div className="space-y-3">
-            {studentAlerts.map((alert) => (
+            {studentAlerts.map((alert: any) => (
               <div key={alert.student} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.student}</p>
@@ -2005,7 +2038,7 @@ const TeacherDashboardHome = () => {
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-3">
-              {messages.map((message) => (
+              {messages.map((message: any) => (
                 <div key={message.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/40">
                   <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{message.from}</p>
                   <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{message.subject}</p>
@@ -2199,7 +2232,7 @@ const TeacherPortal = () => {
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Gradebook Categories</h2>
               <div className="space-y-3">
-                {gradebookCategories.map((category) => (
+                {gradebookCategories.map((category: any) => (
                   <div key={category.name} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{category.name}</p>
@@ -2276,7 +2309,7 @@ const TeacherPortal = () => {
                 <span className="badge-blue text-xs">Biology Department</span>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
-                {todayClasses.map((item, index) => (
+                {todayClasses.map((item: any, index: number) => (
                   <div key={item.time} className={`rounded-xl border p-4 ${index === 0 ? 'border-kcs-blue-300 bg-kcs-blue-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/40' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20'}`}>
                     <p className="text-xs text-gray-400 dark:text-gray-500">{item.time}</p>
                     <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{item.course}</p>
@@ -2292,7 +2325,7 @@ const TeacherPortal = () => {
                 <MessageSquare size={18} className="text-kcs-gold-500" /> Messages
               </h2>
               <div className="space-y-3">
-                {messages.map((message) => (
+                {messages.map((message: any) => (
                   <div key={message.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/40">
                     <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{message.from}</p>
                     <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{message.subject}</p>
@@ -2314,7 +2347,7 @@ const TeacherPortal = () => {
                 </Link>
               </div>
               <div className="space-y-3">
-                {gradingQueue.map((task) => (
+                {gradingQueue.map((task: any) => (
                   <div key={task.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -2341,7 +2374,7 @@ const TeacherPortal = () => {
                 </Link>
               </div>
               <div className="space-y-3">
-                {studentAlerts.map((alert) => (
+                {studentAlerts.map((alert: any) => (
                   <div key={alert.student} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.student}</p>
