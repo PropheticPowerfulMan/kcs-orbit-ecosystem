@@ -143,6 +143,7 @@ export const eventsAPI = {
 export const studentsAPI = {
   getAll: (params?: object, config?: object) => api.get('/students', { params, ...config }),
   getMyChildren: () => api.get('/students/me/children'),
+  getMyOverview: () => api.get('/students/me/overview'),
   getById: (id: string) => api.get(`/students/${id}`),
   create: (data: object) => api.post('/students', data),
   getGrades: (id: string) => api.get(`/students/${id}/grades`),

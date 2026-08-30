@@ -26,7 +26,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 }))
 
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const allowedRoles = req.user!.role === 'parent' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
+  const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const contacts = await prisma.user.findMany({ where: { id: { not: req.user!.sub }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, lastName: true, role: true }, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
   return success(res, contacts)
 }))
@@ -35,8 +35,8 @@ messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => 
   const data = messageSchema.parse(req.body)
   const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true } })
   if (!recipient) throw new ApiError(404, 'Recipient not found')
-  if (req.user!.role === 'parent' && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)) {
-    throw new ApiError(403, 'Parents may only contact authorized school staff.')
+  if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)) {
+    throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
   const message = await prisma.internalMessage.create({ data: { ...data, senderId: req.user!.sub }, include: { sender: true, recipient: true } })
   return success(res, message, 'Message sent', 201)

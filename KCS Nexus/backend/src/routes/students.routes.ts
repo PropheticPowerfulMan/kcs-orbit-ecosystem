@@ -469,6 +469,37 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
   return success(res, links.map((link) => link.student), 'Parent children loaded')
 }))
 
+studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const student = await prisma.studentProfile.findUnique({
+    where: { userId: req.user!.sub },
+    include: {
+      user: true,
+      grades: { include: { course: true }, orderBy: { createdAt: 'desc' } },
+      submissions: { include: { assignment: { include: { course: true } } }, orderBy: { assignment: { dueDate: 'asc' } } },
+      enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } },
+      attendanceRecords: { orderBy: { date: 'desc' }, take: 120 },
+      reportCards: { orderBy: { createdAt: 'desc' } },
+      transcripts: { orderBy: { createdAt: 'desc' } },
+    },
+  })
+  if (!student) {
+    return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
+  }
+  const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({
+    ...slot,
+    course: { id: course.id, name: course.name, code: course.code, description: course.description },
+    teacher: [course.teacher.user.firstName, course.teacher.user.lastName].filter(Boolean).join(' '),
+  })))
+  return success(res, {
+    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.gpa, attendanceRate: student.attendanceRate, status: student.status, user: student.user },
+    grades: student.grades,
+    assignments: student.submissions,
+    timetable,
+    attendance: student.attendanceRecords,
+    reportCards: student.reportCards,
+    transcripts: student.transcripts,
+  }, 'Student dashboard loaded')
+}))
 studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const { parent, students: submittedStudents } = normalizeCreateStudentPayload(req.body)
   const generatedAt = Date.now().toString(36).toUpperCase()
