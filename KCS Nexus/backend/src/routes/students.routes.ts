@@ -275,6 +275,7 @@ const createStudentSchema = z.object({
     phone: z.string().optional(),
     relationship: z.string().default('Parent'),
     physicalAddress: z.string().trim().min(1).optional(),
+    photoData: z.string().max(8_000_000).optional(),
   }),
   student: z.object({
     firstName: z.string().min(1),
@@ -285,6 +286,7 @@ const createStudentSchema = z.object({
     grade: z.enum(schoolLevels),
     section: z.string().default(''),
     dateOfBirth: z.coerce.date(),
+    photoData: z.string().max(8_000_000).optional(),
   }),
 })
 
@@ -497,6 +499,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       email: parent.email,
       phone: parent.phone || undefined,
       physicalAddress: parent.physicalAddress || undefined,
+      photoData: parent.photoData || undefined,
       mustChangePassword: true,
     })
     const parentOrbitId = parentResult.orbitId
@@ -508,8 +511,8 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
     const parentPasswordHash = await bcrypt.hash(parentTemporaryPassword, 10)
     const localParentUser = await prisma.user.upsert({
       where: { email: parent.email },
-      update: { accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, role: 'PARENT' },
-      create: { email: parent.email, accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, role: 'PARENT' },
+      update: { accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, avatar: parent.photoData || null, role: 'PARENT' },
+      create: { email: parent.email, accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, avatar: parent.photoData || null, role: 'PARENT' },
     })
 
     const temporaryCredentials: {
@@ -535,14 +538,15 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
         dateOfBirth: student.dateOfBirth,
         mustChangePassword: true,
         className: `${student.grade} ${student.section || ''}`.trim(),
+        photoData: student.photoData || undefined,
         parentOrbitId,
       })
       const studentAccessCode = String((studentResult.entity as { accessCode?: string } | undefined)?.accessCode || await generateUniqueAccessCode(prisma, 'student'))
       const studentPasswordHash = await bcrypt.hash(studentTemporaryPassword, 10)
       const localStudentUser = await prisma.user.upsert({
         where: { email: studentEmail },
-        update: { accessCode: studentAccessCode, passwordHash: studentPasswordHash, firstName: student.firstName, middleName: student.middleName || null, lastName: student.lastName, role: 'STUDENT' },
-        create: { email: studentEmail, accessCode: studentAccessCode, passwordHash: studentPasswordHash, firstName: student.firstName, middleName: student.middleName || null, lastName: student.lastName, role: 'STUDENT' },
+        update: { accessCode: studentAccessCode, passwordHash: studentPasswordHash, firstName: student.firstName, middleName: student.middleName || null, lastName: student.lastName, avatar: student.photoData || null, role: 'STUDENT' },
+        create: { email: studentEmail, accessCode: studentAccessCode, passwordHash: studentPasswordHash, firstName: student.firstName, middleName: student.middleName || null, lastName: student.lastName, avatar: student.photoData || null, role: 'STUDENT' },
       })
       const localStudentProfile = await prisma.studentProfile.upsert({
         where: { studentNumber: student.studentNumber },

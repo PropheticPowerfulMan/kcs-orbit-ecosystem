@@ -648,6 +648,11 @@ model FeeInvoice {
   status    FeeStatus      @default(PENDING)
   dueDate   DateTime
   notes     String?
+  children              Json?
+  parentDetails         Json?
+  parentPhotoData       String?
+  provisionedAt         DateTime?
+  provisionedParentId   String?
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -683,6 +688,11 @@ model AdmissionApplication {
   relationship          String
   address               String
   notes                 String?
+  children              Json?
+  parentDetails         Json?
+  parentPhotoData       String?
+  provisionedAt         DateTime?
+  provisionedParentId   String?
   status                ApplicationStatus             @default(SUBMITTED)
   submittedAt           DateTime                      @default(now())
   updatedAt             DateTime                      @updatedAt
