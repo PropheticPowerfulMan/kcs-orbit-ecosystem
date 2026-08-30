@@ -101,7 +101,7 @@ const upcomingEvents = [
     liveStreamEnabled: true,
     liveStreamStatus: 'live',
     liveStreamPlatform: 'YouTube Live',
-    liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool',
+    liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789',
     coverImage: kcsPublicImages.springConcert,
   },
   { date: 'May 2', title: 'AP Exams Begin', time: '8:00 AM', location: 'Testing Center', type: 'academic', liveStreamEnabled: false },
@@ -114,12 +114,12 @@ const upcomingEvents = [
     liveStreamEnabled: true,
     liveStreamStatus: 'scheduled',
     liveStreamPlatform: 'KCS Live',
-    liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool',
+    liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789',
     coverImage: kcsPublicImages.brazzavilleTrip,
   },
   { date: 'May 20', title: 'Parent-Teacher Conference', time: '1:00 PM', location: 'Classrooms', type: 'academic', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'Zoom Webinar', liveStreamUrl: 'https://zoom.us/' },
-  { date: 'Jun 5', title: 'Baccalaureate Service', time: '10:00 AM', location: 'School Chapel', type: 'spiritual', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool' },
-  { date: 'Jun 8', title: 'Graduation Ceremony 2026', time: '4:00 PM', location: 'KCS Auditorium', type: 'academic', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool' },
+  { date: 'Jun 5', title: 'Baccalaureate Service', time: '10:00 AM', location: 'School Chapel', type: 'spiritual', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789' },
+  { date: 'Jun 8', title: 'Graduation Ceremony 2026', time: '4:00 PM', location: 'KCS Auditorium', type: 'academic', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789' },
 ]
 
 const liveBroadcasts = upcomingEvents.filter((event) => event.liveStreamEnabled)

@@ -107,7 +107,7 @@ const ContactPage = () => {
                   { icon: MapPin, title: 'Campus Address', body: 'Avenue de la Republique n° 1, Macampagne, Ngaliema, Kinshasa, DRC, Ref. 80 jours' },
                   { icon: Phone, title: 'Phone', body: '+243 895 326 011 / +243 994 645 735' },
                   { icon: Mail, title: 'Email', body: 'kinshasachristianschool@gmail.com' },
-                  { icon: Clock, title: 'Office Hours', body: 'Monday to Friday, 7:30 AM to 4:30 PM' },
+                  { icon: Clock, title: 'Office Hours', body: 'Monday to Friday, 7:30 AM to 3:30 PM' },
                 ].map((item) => {
                   const Icon = item.icon
                   return (

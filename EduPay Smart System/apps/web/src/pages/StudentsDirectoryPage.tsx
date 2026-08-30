@@ -334,6 +334,14 @@ const SCHOOL_SECTIONS: SchoolClass[] = [
   ...Array.from({ length: 12 }, (_v, index) => ({ id: `section-grade-${index + 1}`, name: `Grade ${index + 1}` }))
 ];
 
+function normalizeSchoolClassName(value?: string | null): string | null {
+  const raw = String(value || "").trim().replace(/\s+/g, " ");
+  if (!raw) return null;
+  const kindergarten = raw.match(/^(?:kindergarten(?:\s+grade)?\s*|k\s*)([3-5])(?:\s+(?:kindergarten(?:\s+grade)?\s*|k\s*)?\1)*$/i);
+  if (kindergarten) return `K${kindergarten[1]}`;
+  const grade = raw.match(/^grade\s+([1-9]|1[0-2])(?:\s+grade\s+\1)*$/i);
+  return grade ? `Grade ${Number(grade[1])}` : null;
+}
 function getCanonicalSchoolClass(entry: SchoolClass): SchoolClass | null {
   const normalized = entry.name.trim().toLowerCase();
   const kindergarten = normalized.match(/\bk\s*([3-5])\b/) || entry.id.toLowerCase().match(/\bk\s*([3-5])\b/);
@@ -389,7 +397,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 }
 
 function normalizeDirectoryForUi(directory: SharedDirectoryResponse): SharedDirectoryResponse {
-  const students = sortByFullName(directory.students ?? []);
+  const students = sortByFullName(directory.students ?? []).map((student) => ({ ...student, className: normalizeSchoolClassName(student.className) ?? student.className }));
   const parents = sortByFullName(directory.parents ?? []).map((parent) => ({
     ...parent,
     students: sortByFullName(parent.students ?? [])

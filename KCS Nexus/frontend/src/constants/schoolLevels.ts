@@ -17,6 +17,19 @@ export const GRADE_LEVELS = [
 
 export const SCHOOL_LEVELS = [...KINDERGARTEN_LEVELS, ...GRADE_LEVELS] as const
 
+export const normalizeSchoolLevel = (value: unknown): typeof SCHOOL_LEVELS[number] | null => {
+  const raw = String(value ?? '').trim().replace(/\s+/g, ' ')
+  if (!raw) return null
+
+  const kindergarten = raw.match(/^(?:kindergarten(?:\s+grade)?\s*|k\s*)([3-5])(?:\s+(?:kindergarten(?:\s+grade)?\s*|k\s*)?\1)*$/i)
+  if (kindergarten) return `K${kindergarten[1]}` as typeof SCHOOL_LEVELS[number]
+
+  const grade = raw.match(/^grade\s+([1-9]|1[0-2])(?:\s+grade\s+\1)*$/i)
+  if (grade) return `Grade ${Number(grade[1])}` as typeof SCHOOL_LEVELS[number]
+
+  return null
+}
+
 export const SCHOOL_DIVISIONS = [
   {
     id: 'kindergarten',

@@ -21,7 +21,7 @@ const schoolFacts = {
   email: env.SCHOOL_EMAIL,
   phone: '+243 895 326 011',
   instagram: 'https://www.instagram.com/kinshasachristianschoolknights',
-  youtube: 'https://www.youtube.com/@kinshasachristianschool',
+  youtube: 'https://www.youtube.com/@kinshasachristianschool4789',
   divisions: [
     'Kindergarten: K3-K5',
     'Elementary School: Grade 1-Grade 5',

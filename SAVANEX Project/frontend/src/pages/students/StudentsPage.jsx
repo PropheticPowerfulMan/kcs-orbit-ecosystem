@@ -55,7 +55,7 @@ const standardClassLevels = [
 const classSuffixes = ['', ...Array.from({ length: 26 }, (_item, index) => String.fromCharCode(65 + index))];
 
 const splitClassName = (value) => {
-  const className = normalizeLabel(value, 'Non assignée');
+  const className = normalizeClassDisplay(value) || 'Non assignée';
   const match = className.match(/^(K[1-5]|Grade\s+(?:[1-9]|1[0-2]))(?:\s+([A-Z]))?$/i);
 
   if (!match) {

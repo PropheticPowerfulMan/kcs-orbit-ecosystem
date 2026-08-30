@@ -39,7 +39,7 @@ const Footer = () => {
   const socials = [
     { icon: Facebook, href: 'https://www.facebook.com/KinshasaChristianSchool', label: 'Facebook' },
     { icon: Instagram, href: 'https://www.instagram.com/kinshasachristianschoolknights', label: 'Instagram' },
-    { icon: Youtube, href: 'https://wa.me/243895326011', label: 'WhatsApp' },
+    { icon: Youtube, href: 'https://www.youtube.com/@kinshasachristianschool4789', label: 'YouTube' },
     { icon: Linkedin, href: '#', label: 'LinkedIn' },
   ]
 
@@ -232,7 +232,7 @@ const Footer = () => {
                   <Clock size={16} className="text-kcs-gold-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="text-white font-medium">Office Hours</p>
-                    <p className="text-kcs-blue-200">Mon–Fri: 7:30 AM – 4:30 PM</p>
+                    <p className="text-kcs-blue-200">Mon–Fri: 7:30 AM – 3:30 PM</p>
                   </div>
                 </div>
               </div>

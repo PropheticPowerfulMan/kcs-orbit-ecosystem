@@ -18,7 +18,7 @@ import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { adminAPI, admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
-import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
+import { normalizeSchoolLevel, SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
   aiRecommendations,
@@ -387,7 +387,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
     dateOfBirth: profile.dateOfBirth ?? null,
-    grade: profile.grade,
+    grade: normalizeSchoolLevel(profile.grade) ?? profile.grade,
     section: profile.section ?? '',
     parent: parent ? [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') : 'Parent record pending',
     parentEmail: parent?.email ?? `${fullName.toLowerCase().replace(/\W+/g, '.')}@family.kcs.test`,

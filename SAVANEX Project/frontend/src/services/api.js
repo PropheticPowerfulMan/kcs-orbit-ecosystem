@@ -222,7 +222,7 @@ export const normalizeClassDisplay = (value) => {
   if (!raw) return '';
 
   const kindergarten = raw.match(
-    /^(?:kindergarten\s+)*(?:grade\s+)?k?\s*([3-5])(?:\s+(?:kindergarten\s+)*(?:grade\s+)?k?\s*\1)*(?:\s+([a-z]))?$/i
+    /^(?:kindergarten(?:\s+grade)?\s*|k\s*)([3-5])(?:\s+(?:kindergarten(?:\s+grade)?\s*|k\s*)?\1)*(?:\s+([a-z]))?$/i
   );
   if (kindergarten) {
     return `K${kindergarten[1]}${kindergarten[2] ? ` ${kindergarten[2].toUpperCase()}` : ''}`;
