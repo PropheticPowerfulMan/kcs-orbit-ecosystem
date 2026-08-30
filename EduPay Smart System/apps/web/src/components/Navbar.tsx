@@ -133,7 +133,6 @@ export function Navbar() {
   const isMobileNavOpen = useUiStore((s) => s.isMobileNavOpen);
   const toggleDesktopSidebar = useUiStore((s) => s.toggleDesktopSidebar);
   const toggleMobileNav = useUiStore((s) => s.toggleMobileNav);
-  const shouldSuggestPasswordChange = mustChangePassword && role !== "PARENT";
   const hasDeferredPasswordReminder = mustChangePassword && role === "PARENT";
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -160,10 +159,6 @@ export function Navbar() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [isUserMenuOpen]);
-
-  useEffect(() => {
-    if (shouldSuggestPasswordChange) setShowPasswordModal(true);
-  }, [shouldSuggestPasswordChange]);
 
   const updatePhoto = async (file?: File) => {
     if (!file) return;
