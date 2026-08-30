@@ -437,15 +437,16 @@ export default function DashboardPanel() {
           </div>
           <div className="icon-actions">
             <button type="button" className="icon-button menu-toggle" onClick={() => setMenuHidden((current) => !current)} aria-label={menuHidden ? "Show navigation" : "Hide navigation"} title={menuHidden ? "Show navigation" : "Hide navigation"}>
-              {menuHidden ? "☰" : "‹"}
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>{menuHidden ? <path d="m13 9 3 3-3 3"/> : <path d="m16 9-3 3 3 3"/>}</svg>
             </button>
-            <button type="button" className="icon-button" onClick={toggleTheme} aria-label="Toggle theme">
-              {isDark ? "L" : "D"}
+            <button type="button" className="icon-button theme-toggle" onClick={toggleTheme} aria-label={isDark ? "Use light theme" : "Use dark theme"} title={isDark ? "Light theme" : "Dark theme"}>
+              {isDark ? <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>}
             </button>
-            <button type="button" className="icon-button" onClick={logout} aria-label="Sign out">
-              X
+            <button type="button" className="icon-button logout-button" onClick={logout} aria-label="Sign out" title="Sign out">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3"/><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
             </button>
           </div>
+
         </header>
 
         {error && <p className="error-text app-error">{error}</p>}
