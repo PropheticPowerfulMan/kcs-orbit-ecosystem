@@ -1,891 +1,161 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import {
-  Bell, TrendingUp, Award, CheckCircle2, AlertCircle,
-  FileText, Calendar, MessageSquare, ChevronRight,
-  Clock, BookOpen, BarChart3, User, Phone, Mail
-} from 'lucide-react'
+import { Bell, BookOpen, Calendar, CheckCircle2, Clock, FileText, Mail, Phone, TrendingUp, UserRound } from 'lucide-react'
+import PortalSidebar from '@/components/layout/PortalSidebar'
+import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
+import SuggestionBox from '@/components/shared/SuggestionBox'
+import { eventsAPI, messagesAPI, notificationsAPI, studentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
-import { studentsAPI } from '@/services/api'
-import PortalSidebar from '@/components/layout/PortalSidebar'
-import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
-import SuggestionBox from '@/components/shared/SuggestionBox'
-import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis
-} from 'recharts'
-import {
-  announcements as ecosystemAnnouncements,
-  assignments as ecosystemAssignments,
-  attendance as ecosystemAttendance,
-  aiSignals,
-  aiRecommendations,
-  events as ecosystemEvents,
-  feeAccounts,
-  grades as ecosystemGrades,
-  internalThreads,
-  reportCards,
-  students as ecosystemStudents,
-} from '@/data/schoolEcosystem'
-
-/* ────────────────── Mock data ────────────────── */
-const children = [
-  { id: '1', name: 'Elise Kabongo', grade: 'Grade 11', avatar: null, gpa: 3.9, attendance: 97, rank: 5 },
-  { id: '2', name: 'David Kabongo', grade: 'Grade 8',  avatar: null, gpa: 3.5, attendance: 94, rank: 12 },
-]
-
-const performanceHistory = [
-  { month: 'Sep', elise: 3.2, david: 3.0 },
-  { month: 'Oct', elise: 3.4, david: 3.2 },
-  { month: 'Nov', elise: 3.3, david: 3.1 },
-  { month: 'Dec', elise: 3.6, david: 3.4 },
-  { month: 'Jan', elise: 3.5, david: 3.3 },
-  { month: 'Feb', elise: 3.7, david: 3.6 },
-  { month: 'Mar', elise: 3.8, david: 3.5 },
-  { month: 'Apr', elise: 3.9, david: 3.5 },
-]
-
-const radarData = [
-  { subject: 'Math',    elise: 92, david: 78 },
-  { subject: 'Science', elise: 95, david: 82 },
-  { subject: 'English', elise: 88, david: 75 },
-  { subject: 'History', elise: 85, david: 90 },
-  { subject: 'French',  elise: 90, david: 72 },
-  { subject: 'Bible',   elise: 97, david: 95 },
-]
-
-const recentGrades = [
-  { child: 'Elise', course: 'AP Biology', assessment: 'Lab Report', grade: 95, max: 100, date: 'Apr 18' },
-  { child: 'Elise', course: 'AP Calculus', assessment: 'Quiz #7', grade: 89, max: 100, date: 'Apr 17' },
-  { child: 'David', course: 'Pre-Algebra', assessment: 'Chapter Test', grade: 83, max: 100, date: 'Apr 16' },
-  { child: 'Elise', course: 'English Literature', assessment: 'Essay Draft', grade: 91, max: 100, date: 'Apr 15' },
-  { child: 'David', course: 'World Geography', assessment: 'Map Quiz', grade: 88, max: 100, date: 'Apr 14' },
-]
-
-const upcomingEvents = [
-  { date: 'Apr 25', title: 'Parent-Teacher Conferences', type: 'meeting', desc: 'Sign up for your slot online' },
-  { date: 'May 3',  title: 'AP Exams Begin (Elise)', type: 'exam',    desc: 'AP Calculus, AP Biology' },
-  { date: 'May 12', title: 'Spring Music Concert', type: 'event',   desc: 'Gymnasium, 6 PM' },
-  { date: 'May 20', title: 'End-of-Year Awards Ceremony', type: 'event', desc: 'All families invited' },
-]
-
-const teacherMessages = [
-  {
-    id: 1,
-    teacher: 'Mrs. Diallo',
-    subject: 'English Literature',
-    message: "Elise's essay on The Great Gatsby was outstanding. She demonstrates strong critical thinking.",
-    time: '2h ago',
-    child: 'Elise',
-    read: false,
-  },
-  {
-    id: 2,
-    teacher: 'Mr. Belanger',
-    subject: 'AP Calculus',
-    message: "David needs extra practice on fractions. I recommend 30 minutes daily with the AI Tutor.",
-    time: '1d ago',
-    child: 'David',
-    read: true,
-  },
-  {
-    id: 3,
-    teacher: 'Dr. Mukendi',
-    subject: 'AP Biology',
-    message: "Elise is performing exceptionally well this semester. Consider entering her into the Science Fair.",
-    time: '3d ago',
-    child: 'Elise',
-    read: true,
-  },
-]
-
-const notifications = [
-  { id: 1, type: 'success', message: 'Elise ranked #5 in her class — up from #7 last month!', time: '1h ago' },
-  { id: 2, type: 'info',    message: 'Parent-Teacher conferences registration opens tomorrow.', time: '4h ago' },
-  { id: 3, type: 'warning', message: "David's Math grade dropped below 80% — check with teacher.", time: '2d ago' },
-]
-
-const eventTypeColor = {
-  meeting: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  exam:    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  event:   'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-}
-
-;[children, performanceHistory, radarData, recentGrades, upcomingEvents, teacherMessages, notifications]
-  .forEach((collection) => collection.splice(0, collection.length))
-
-const getParentSegment = (pathname: string) => {
-  const segment = pathname.split('/').filter(Boolean).at(-1)
-  return !segment || segment === 'parent' || segment === 'dashboard' ? 'dashboard' : segment
-}
-
-const parentButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
 
 type ParentChild = {
   id: string
+  localProfileId?: string | null
+  studentNumber: string
   name: string
   grade: string
   avatar: string | null
   gpa: number
   attendance: number
-  rank: number
+}
+type Grade = { id: string; score: number; maxScore: number; percentage: number; letterGrade: string; period: string; createdAt: string; course?: { name?: string; code?: string } }
+type Assignment = { id: string; status: string; score?: number | null; assignment?: { title?: string; dueDate?: string; course?: { name?: string } } }
+type EventItem = { id: string; title: string; description?: string; startDate: string; endDate: string; location: string; type: string }
+type Notice = { id: string; title: string; message: string; type: string; isRead: boolean; createdAt: string; link?: string }
+type Contact = { id: string; firstName: string; lastName: string; role: string }
+type InternalMessage = { id: string; subject: string; body: string; createdAt: string; readAt?: string | null; senderId: string; recipientId?: string; sender?: Contact; recipient?: Contact }
+
+const card = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+const button = 'rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
+const field = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
+const empty = (text: string) => <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-300">{text}</p>
+const segmentFrom = (pathname: string) => {
+  const value = pathname.split('/').filter(Boolean).at(-1)
+  return !value || value === 'parent' || value === 'dashboard' ? 'dashboard' : value
+}
+const displayDate = (value?: string) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'
+const personName = (person?: Contact) => person ? `${person.firstName} ${person.lastName}`.trim() : 'KCS'
+
+function downloadCalendarEvent(event: EventItem) {
+  const stamp = (value: string) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+  const clean = (value: string) => value.replace(/[\\,;]/g, (char) => `\\${char}`).replace(/\n/g, '\\n')
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//KCS Nexus//Parent Portal//EN', 'BEGIN:VEVENT', `UID:${event.id}@kinshasachristianschool.org`, `DTSTAMP:${stamp(new Date().toISOString())}`, `DTSTART:${stamp(event.startDate)}`, `DTEND:${stamp(event.endDate)}`, `SUMMARY:${clean(event.title)}`, `DESCRIPTION:${clean(event.description ?? '')}`, `LOCATION:${clean(event.location)}`, 'END:VEVENT', 'END:VCALENDAR'].join('\r\n')
+  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${event.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'kcs-event'}.ics`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
-const ParentSectionView = ({ segment, selectedChild }: { segment: string; selectedChild: ParentChild }) => {
-  const { user } = useAuthStore()
-  const [bookedEvent, setBookedEvent] = useState<string | null>(null)
-  const [messageSent, setMessageSent] = useState(false)
-  const [actionMessage, setActionMessage] = useState('')
-  const [paidInvoices, setPaidInvoices] = useState<string[]>([])
-  const childKey = selectedChild.name.split(' ')[0].toLowerCase() as 'elise' | 'david'
-  const childFirstName = selectedChild.name.split(' ')[0]
-
-  if (segment === 'performance' || segment === 'grades') {
-    const childReport = reportCards.find((card) => card.student.includes(childFirstName))
-    const childGrades = recentGrades.filter((grade) => grade.child === childFirstName)
-    const childFeeAccount = feeAccounts.find((fee) => fee.student.includes(childFirstName))
-    const canViewOfficialReportCard = !childFeeAccount || childFeeAccount.balance === 0
-
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          {[
-            ['GPA', selectedChild.gpa.toFixed(1), 'Semester average'],
-            ['Attendance', `${selectedChild.attendance}%`, 'Family visible'],
-            ['Class Rank', `#${selectedChild.rank}`, selectedChild.grade],
-          ].map(([label, value, sub]) => (
-            <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-              <p className="mt-2 font-display text-4xl font-bold text-kcs-blue-900 dark:text-white">{value}</p>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{sub}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">{selectedChild.name} Grades</h2>
-              <button className={`${parentButton} w-full sm:w-auto`} onClick={() => setActionMessage(`${selectedChild.name}'s parent copy is ready to download.`)}>Download parent copy</button>
-            </div>
-            {actionMessage && <p className="mb-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}
-            <div className="overflow-x-auto">
-              <table className="min-w-[620px] w-full text-sm">
-                <thead className="text-left text-xs text-gray-400">
-                  <tr className="border-b border-gray-100 dark:border-kcs-blue-800">
-                    <th className="pb-3 font-medium">Course</th>
-                    <th className="pb-3 font-medium">Assessment</th>
-                    <th className="pb-3 text-right font-medium">Grade</th>
-                    <th className="pb-3 text-right font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-kcs-blue-800/50">
-                  {(childGrades.length ? childGrades : recentGrades.filter((grade) => grade.child === 'Elise')).map((grade) => (
-                    <tr key={`${grade.course}-${grade.assessment}`}>
-                      <td className="py-3 font-semibold text-kcs-blue-900 dark:text-white">{grade.course}</td>
-                      <td className="py-3 text-gray-500 dark:text-gray-400">{grade.assessment}</td>
-                      <td className="py-3 text-right font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{grade.grade}/{grade.max}</td>
-                      <td className="py-3 text-right text-gray-500 dark:text-gray-400">{grade.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {childReport && <p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">{childReport.teacherComment}</p>}
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Subject Balance</h2>
-            <ResponsiveContainer width="100%" height={260}>
-              <RadarChart data={radarData}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748b' }} />
-                <Radar dataKey={childKey} stroke="#1d4ed8" fill="#1d4ed8" fillOpacity={0.22} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">Official Report Card</h2>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Parent access follows the finance and school-obligation clearance rule.</p>
-            </div>
-            <span className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${canViewOfficialReportCard ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'}`}>
-              {canViewOfficialReportCard ? 'Unlocked' : `Locked: $${childFeeAccount?.balance ?? 0} due`}
-            </span>
-          </div>
-          {canViewOfficialReportCard && childReport ? (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
-                <thead className="text-left text-xs uppercase text-gray-400">
-                  <tr className="border-b border-gray-100 dark:border-kcs-blue-800">
-                    <th className="pb-3 font-medium">Student</th>
-                    <th className="pb-3 font-medium">Term</th>
-                    <th className="pb-3 text-right font-medium">Average</th>
-                    <th className="pb-3 font-medium">Conduct</th>
-                    <th className="pb-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="py-3 font-semibold text-kcs-blue-900 dark:text-white">{childReport.student}</td>
-                    <td className="py-3 text-gray-500 dark:text-gray-400">{childReport.term}</td>
-                    <td className="py-3 text-right font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{childReport.average}%</td>
-                    <td className="py-3 text-gray-500 dark:text-gray-400">{childReport.conduct}</td>
-                    <td className="py-3 text-gray-500 dark:text-gray-400">{childReport.principalStatus} - {childReport.download}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="mt-3 rounded-xl bg-green-50 p-4 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-200">{childReport.teacherComment}</p>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-800 dark:border-orange-900/40 dark:bg-orange-900/20 dark:text-orange-200">
-              The official bulletin remains hidden for the parent portal until finance confirms a zero balance and all school obligations are cleared.
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (segment === 'messages') {
-    const childMessages = teacherMessages.filter((message) => message.child === childFirstName)
-    return (
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Teacher Threads</h2>
-          <div className="space-y-3">
-            {(childMessages.length ? childMessages : teacherMessages).map((message) => (
-              <div key={message.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{message.teacher}</p>
-                  <span className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{message.subject}</span>
-                </div>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{message.message}</p>
-                <p className="mt-2 text-xs text-gray-400">{message.time}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Write to School</h2>
-          <div className="grid gap-3">
-            <select className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>Homeroom Teacher</option>
-              <option>Academic Office</option>
-              <option>Finance Office</option>
-              <option>Discipline Office</option>
-            </select>
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" value={`Regarding ${selectedChild.name}`} readOnly />
-            <textarea className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Type parent message..." />
-            <button className={parentButton} onClick={() => setMessageSent(true)}>Send message</button>
-            {messageSent && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">Message saved for school communication and parent history.</p>}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (segment === 'calendar') {
-    return (
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {upcomingEvents.map((event) => (
-          <div key={event.title} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{event.date}</span>
-              <span className={`rounded-full px-2 py-1 text-xs font-semibold capitalize ${eventTypeColor[event.type as keyof typeof eventTypeColor]}`}>{event.type}</span>
-            </div>
-            <p className="mt-3 font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{event.desc}</p>
-            <button className="mt-4 w-full rounded-xl border border-kcs-blue-200 px-4 py-2.5 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setBookedEvent(event.title)}>
-              {bookedEvent === event.title ? 'Added to family plan' : 'Add / book'}
-            </button>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  if (segment === 'finance') {
-    return (
-      <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          {feeAccounts.filter((fee) => fee.family === 'Kabongo Family').map((fee) => (
-            <div key={fee.invoice} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{fee.invoice}</p>
-              <p className="mt-2 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">${paidInvoices.includes(fee.invoice) ? 0 : fee.balance}</p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{fee.student} - due {fee.dueDate}</p>
-              <button
-                className="mt-4 w-full rounded-xl bg-kcs-gold-500 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400"
-                onClick={() => {
-                  setPaidInvoices((items) => items.includes(fee.invoice) ? items : [...items, fee.invoice])
-                  setActionMessage(`${fee.invoice} receipt prepared for ${fee.student}.`)
-                }}
-              >
-                {paidInvoices.includes(fee.invoice) ? 'Receipt ready' : 'Pay / receipt'}
-              </button>
-            </div>
-          ))}
-        </div>
-        {actionMessage && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}
-      </div>
-    )
-  }
-
-  if (segment === 'settings') {
-    return <AccountSettingsPanel roleLabel="Parent account" />
-  }
-
-  if (segment === 'profile') {
-    return (
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex items-center gap-4">{user?.avatar ? <img src={user.avatar} alt="Photo parent" className="h-20 w-20 rounded-2xl object-cover"/> : <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-kcs-blue-100 text-xl font-bold text-kcs-blue-700">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>}<h2 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{`${user?.lastName ?? ""} ${user?.firstName ?? ""}`.trim() || "Famille KCS"}</h2></div>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Parent portal for Rachel Kabongo, guardian contacts, children, school documents, and communication preferences.</p>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <a className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-center text-sm font-semibold text-white" href="mailto:rachel.kabongo@family.kcs.test">Email</a>
-            <a className="rounded-xl border border-gray-200 px-4 py-2.5 text-center text-sm font-semibold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200" href="tel:+243810000001">Call</a>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Children & Documents</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {children.map((child) => (
-              <div key={child.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <p className="font-semibold text-kcs-blue-900 dark:text-white">{child.name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{child.grade} - GPA {child.gpa}</p>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Documents: report card, transcript request, medical form</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return <PortalSectionPanel />
-}
-
-const ParentPortal = () => {
+export default function ParentPortal() {
   const { user } = useAuthStore()
   const { language } = useUIStore()
   const location = useLocation()
-  const activeSegment = getParentSegment(location.pathname)
-  const [familyChildren, setFamilyChildren] = useState<ParentChild[]>([])
-  const [selectedChild, setSelectedChild] = useState<ParentChild | null>(null)
-  const [childrenLoading, setChildrenLoading] = useState(true)
+  const segment = segmentFrom(location.pathname)
+  const [children, setChildren] = useState<ParentChild[]>([])
+  const [selectedId, setSelectedId] = useState('')
+  const [grades, setGrades] = useState<Grade[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [events, setEvents] = useState<EventItem[]>([])
+  const [notices, setNotices] = useState<Notice[]>([])
+  const [messages, setMessages] = useState<InternalMessage[]>([])
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [recipientId, setRecipientId] = useState('')
+  const [subject, setSubject] = useState('')
+  const [messageBody, setMessageBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [feedback, setFeedback] = useState('')
+
+  const selectedChild = useMemo(() => children.find((child) => child.id === selectedId) ?? children[0] ?? null, [children, selectedId])
+  const upcoming = useMemo(() => events.filter((event) => new Date(event.endDate).getTime() >= Date.now()).slice(0, 12), [events])
+  const unread = notices.filter((notice) => !notice.isRead).length
 
   useEffect(() => {
     let active = true
-    studentsAPI.getMyChildren()
-      .then(({ data }) => {
+    Promise.allSettled([studentsAPI.getMyChildren(), eventsAPI.getAll(), notificationsAPI.getAll(), messagesAPI.getAll(), messagesAPI.getContacts()])
+      .then((results) => {
         if (!active) return
-        const profiles = Array.isArray(data?.data) ? data.data : []
-        const loadedChildren: ParentChild[] = profiles.map((profile: any) => ({
-          id: String(profile.id),
-          name: [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || profile.studentNumber,
-          grade: [profile.grade, profile.section].filter(Boolean).join(' '),
-          avatar: null,
-          gpa: Number(profile.gpa ?? 0),
-          attendance: Number(profile.attendanceRate ?? 0),
-          rank: Number(profile.rank ?? 0),
+        const childPayload = results[0].status === 'fulfilled' ? results[0].value.data?.data : []
+        const loaded = (Array.isArray(childPayload) ? childPayload : []).map((profile: any): ParentChild => ({
+          id: String(profile.id), localProfileId: profile.localProfileId ? String(profile.localProfileId) : null,
+          studentNumber: String(profile.studentNumber ?? ''),
+          name: [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || String(profile.studentNumber ?? 'Student'),
+          grade: [profile.grade, profile.section].filter(Boolean).join(' '), avatar: profile.user?.avatar ?? null,
+          gpa: Number(profile.gpa ?? 0), attendance: Number(profile.attendanceRate ?? 0),
         }))
-        setFamilyChildren(loadedChildren)
-        setSelectedChild((current) => loadedChildren.find((child) => child.id === current?.id) ?? loadedChildren[0] ?? null)
-      })
-      .catch(() => {
-        if (active) {
-          setFamilyChildren([])
-          setSelectedChild(null)
+        setChildren(loaded)
+        setSelectedId((current) => current || loaded[0]?.id || '')
+        if (results[1].status === 'fulfilled') setEvents(Array.isArray(results[1].value.data?.data) ? results[1].value.data.data : [])
+        if (results[2].status === 'fulfilled') setNotices(Array.isArray(results[2].value.data?.data) ? results[2].value.data.data : [])
+        if (results[3].status === 'fulfilled') setMessages(Array.isArray(results[3].value.data?.data) ? results[3].value.data.data : [])
+        if (results[4].status === 'fulfilled') {
+          const values = Array.isArray(results[4].value.data?.data) ? results[4].value.data.data : []
+          setContacts(values)
+          setRecipientId(values[0]?.id ?? '')
         }
+        if (results[0].status === 'rejected') setError(results[0].reason?.response?.data?.message ?? 'Unable to load the children linked to this family.')
       })
-      .finally(() => {
-        if (active) setChildrenLoading(false)
-      })
+      .finally(() => active && setLoading(false))
     return () => { active = false }
   }, [])
 
-  if (!selectedChild) {
-    return (
-      <div className="portal-shell flex">
-        <PortalSidebar />
-        <main className="min-w-0 flex-1 p-6">
-          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <h1 className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Aucun enfant enregistré</h1>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Ce dashboard sera alimenté après l’enregistrement de la famille par le Super Admin.</p>
-          </div>
-        </main>
-      </div>
-    )
+  useEffect(() => {
+    const profileId = selectedChild?.localProfileId
+    if (!profileId) { setGrades([]); setAssignments([]); return }
+    let active = true
+    setDetailLoading(true)
+    Promise.allSettled([studentsAPI.getGrades(profileId), studentsAPI.getAssignments(profileId)])
+      .then(([gradeResult, assignmentResult]) => {
+        if (!active) return
+        setGrades(gradeResult.status === 'fulfilled' && Array.isArray(gradeResult.value.data?.data) ? gradeResult.value.data.data : [])
+        setAssignments(assignmentResult.status === 'fulfilled' && Array.isArray(assignmentResult.value.data?.data) ? assignmentResult.value.data.data : [])
+      })
+      .finally(() => active && setDetailLoading(false))
+    return () => { active = false }
+  }, [selectedChild?.localProfileId])
+
+  const sendMessage = async () => {
+    if (!recipientId || subject.trim().length < 2 || !messageBody.trim()) return
+    setSending(true); setFeedback('')
+    try {
+      const response = await messagesAPI.send({ recipientId, subject: `${subject.trim()} — ${selectedChild?.name ?? 'Family'}`, body: messageBody.trim() })
+      setMessages((items) => [response.data.data, ...items]); setSubject(''); setMessageBody(''); setFeedback('Message sent and saved in your family history.')
+    } catch (reason: any) { setFeedback(reason?.response?.data?.message ?? 'The message could not be sent.') }
+    finally { setSending(false) }
   }
 
-  return (
-    <div className="portal-shell flex">
-      <PortalSidebar />
+  const markNotice = async (notice: Notice) => {
+    if (notice.isRead) return
+    await notificationsAPI.markRead(notice.id)
+    setNotices((items) => items.map((item) => item.id === notice.id ? { ...item, isRead: true } : item))
+  }
 
-      <main className="min-w-0 flex-1">
-        {/* Top Bar */}
-        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                {getLocalizedGreeting(language)}, {user?.firstName}!
-              </h1>
-              <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {getLocalizedPortalDate(language)}
-              </p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:gap-3">
-              <Link to="/portal/parent/settings" className="flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white"><User size={16}/> Photo et mot de passe</Link>
-              {/* Child selector */}
-              <div className="flex w-full overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700 sm:w-auto">
-                {familyChildren.map((child) => (
-                  <button
-                    key={child.id}
-                    onClick={() => setSelectedChild(child)}
-                    className={`flex-1 px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${
-                      selectedChild.id === child.id
-                        ? 'kcs-gradient text-white'
-                        : 'bg-white dark:bg-kcs-blue-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-kcs-blue-800'
-                    }`}
-                  >
-                    {child.name.split(' ')[0]}
-                  </button>
-                ))}
-              </div>
-              <div className="relative">
-                <button className="rounded-xl bg-gray-100 p-2 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-kcs-blue-800 dark:text-gray-300 dark:hover:bg-kcs-blue-700">
-                  <Bell size={18} />
-                  <span className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+  const title = segment === 'dashboard' ? 'Family Dashboard' : ({ performance: 'Academic Performance', grades: 'Grades & Reports', messages: 'School Messages', calendar: 'School Calendar', finance: 'Finance & EduPay', profile: 'Family Profile', settings: 'Account Settings' } as Record<string, string>)[segment] ?? 'Parent Portal'
 
-        <div className="p-4 sm:p-6 space-y-6">
-          {activeSegment !== 'dashboard' ? (
-            <ParentSectionView segment={activeSegment} selectedChild={selectedChild} />
-          ) : (
-            <>
-          <PortalSectionPanel />
-          <SuggestionBox />
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-3 font-bold text-kcs-blue-900 dark:text-white">School Information</h2>
-              <div className="space-y-3">
-                {ecosystemAnnouncements.filter((item) => item.audience.includes('parent')).map((item) => (
-                  <div key={item.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                    <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.date} • {item.priority} priority</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-3 font-bold text-kcs-blue-900 dark:text-white">Parent Responsibilities</h2>
-              <div className="space-y-3 text-sm">
-                {['Confirm David math intervention message', 'Review updated parent rights and duties', 'Upload medical form before May 1', 'Book parent-teacher conference slot'].map((item) => (
-                  <div key={item} className="flex items-start gap-2 rounded-xl bg-gray-50 p-3 text-gray-700 dark:bg-kcs-blue-800/30 dark:text-gray-300">
-                    <CheckCircle2 size={15} className="mt-0.5 text-kcs-gold-500" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-3 font-bold text-kcs-blue-900 dark:text-white">Parent AI Assistant</h2>
-              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
-                Ask about policies, schedules, grades, attendance, and how to support each child at home. Current AI focus: {aiSignals.find((signal) => signal.roles.includes('parent'))?.detail}
-              </p>
-              <button className="mt-4 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800">
-                Ask Parent AI
-              </button>
-            </div>
-          </div>
-
-          {/* Child Overview Card */}
-          <motion.div
-            key={selectedChild.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 rounded-2xl p-6 text-white"
-          >
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center text-2xl font-bold">
-                  {selectedChild.name.split(' ').map(n => n[0]).join('')}
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold font-display">{selectedChild.name}</h2>
-                  <p className="text-kcs-blue-200">{selectedChild.grade} · KCS Kinshasa</p>
-                </div>
-              </div>
-              <div className="flex gap-6">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-kcs-gold-400">{selectedChild.gpa.toFixed(1)}</p>
-                  <p className="text-xs text-kcs-blue-200">GPA</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-green-400">{selectedChild.attendance}%</p>
-                  <p className="text-xs text-kcs-blue-200">Attendance</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-white">#{selectedChild.rank}</p>
-                  <p className="text-xs text-kcs-blue-200">Class Rank</p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Stat Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Current GPA',      value: selectedChild.gpa.toFixed(1), icon: Award,       color: 'text-kcs-gold-600',  bg: 'bg-kcs-gold-50 dark:bg-kcs-gold-900/20',  sub: 'Semester Average' },
-              { label: 'Attendance Rate',  value: `${selectedChild.attendance}%`, icon: CheckCircle2, color: 'text-green-600',   bg: 'bg-green-50 dark:bg-green-900/20',       sub: '2 absences this year' },
-              { label: 'Unread Messages',  value: '1',  icon: MessageSquare, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20', sub: 'From teachers' },
-              { label: 'Upcoming Events',  value: '4',  icon: Calendar,      color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-900/20', sub: 'Next 30 days' },
-            ].map(({ label, value, icon: Icon, color, bg, sub }) => (
-              <motion.div
-                key={label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white dark:bg-kcs-blue-900/50 rounded-2xl p-5 border border-gray-100 dark:border-kcs-blue-800 hover:shadow-kcs transition-all duration-300"
-              >
-                <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center mb-3`}>
-                  <Icon size={20} className={color} />
-                </div>
-                <p className="text-2xl font-bold font-display text-kcs-blue-900 dark:text-white">{value}</p>
-                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{label}</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{sub}</p>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Live Child Records</h2>
-              <div className="space-y-3">
-                {ecosystemStudents.filter((student) => student.parentId === 'parent-kabongo').map((student) => (
-                  <div key={student.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{student.grade} {student.section}</span>
-                    </div>
-                    <p className="mt-2 text-xs text-gray-600 dark:text-gray-300">{student.aiInsight}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Attendance Updates</h2>
-              <div className="space-y-3">
-                {ecosystemAttendance.map((record) => {
-                  const student = ecosystemStudents.find((item) => item.id === record.studentId)
-                  return (
-                    <div key={`${record.studentId}-${record.date}`} className="flex items-center justify-between rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                      <div>
-                        <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{student?.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{record.date} • {record.className}</p>
-                      </div>
-                      <span className="rounded-full bg-kcs-blue-50 px-2.5 py-1 text-xs font-semibold capitalize text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{record.status}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Upcoming Work & Events</h2>
-              <div className="space-y-3">
-                {[...ecosystemAssignments.filter((item) => item.status !== 'submitted').slice(0, 3), ...ecosystemEvents.filter((item) => item.target.includes('parent')).slice(0, 2)].map((item: any) => (
-                  <div key={item.id ?? item.title} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                    <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.due ?? item.date} • {item.subject ?? item.type}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Fee Obligations</h2>
-              <div className="space-y-3">
-                {feeAccounts.filter((fee) => fee.family === 'Kabongo Family').map((fee) => (
-                  <div key={fee.invoice} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-kcs-blue-900 dark:text-white">{fee.student}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{fee.invoice} • due {fee.dueDate}</p>
-                      </div>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${fee.balance === 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'}`}>
-                        ${fee.balance}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Report Cards</h2>
-              <div className="space-y-3">
-                {reportCards.map((card) => (
-                  <div key={card.student} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{card.student}</p>
-                      <span className="text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{card.average}%</span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{card.term} • {card.principalStatus} • {card.download}</p>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{card.teacherComment}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Private Communication</h2>
-              <div className="space-y-3">
-                {internalThreads.filter((thread) => thread.participants.includes('Rachel Kabongo')).map((thread) => (
-                  <div key={thread.subject} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{thread.subject}</p>
-                      <span className="rounded-full bg-kcs-blue-100 px-2 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{thread.unread} unread</span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{thread.channel}</p>
-                  </div>
-                ))}
-                {aiRecommendations.filter((item) => item.owner === 'Parent').map((item) => (
-                  <div key={item.title} className="rounded-xl border border-kcs-gold-200 bg-kcs-gold-50 p-4 dark:border-kcs-gold-900/40 dark:bg-kcs-gold-900/10">
-                    <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{item.action}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-3 gap-6">
-            {/* Performance Chart */}
-            <div className="lg:col-span-2 bg-white dark:bg-kcs-blue-900/50 rounded-2xl p-6 border border-gray-100 dark:border-kcs-blue-800">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">GPA Comparison — Both Children</h2>
-                <span className="badge-blue text-xs">2025/26 School Year</span>
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={performanceHistory}>
-                  <defs>
-                    <linearGradient id="eliseGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1d4ed8" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#1d4ed8" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="davidGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,58,138,0.1)" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[2.5, 4.0]} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: '#0f2352', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }} />
-                  <Area type="monotone" dataKey="elise" name="Elise" stroke="#1d4ed8" strokeWidth={2.5} fill="url(#eliseGrad)" dot={{ r: 3, fill: '#1d4ed8' }} />
-                  <Area type="monotone" dataKey="david" name="David" stroke="#f59e0b" strokeWidth={2.5} fill="url(#davidGrad)" dot={{ r: 3, fill: '#f59e0b' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-              <div className="flex gap-4 mt-3 justify-end">
-                <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                  <span className="w-3 h-1.5 bg-kcs-blue-600 rounded-full inline-block" /> Elise
-                </span>
-                <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                  <span className="w-3 h-1.5 bg-kcs-gold-500 rounded-full inline-block" /> David
-                </span>
-              </div>
-            </div>
-
-            {/* Notifications */}
-            <div className="bg-white dark:bg-kcs-blue-900/50 rounded-2xl p-5 border border-gray-100 dark:border-kcs-blue-800">
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white mb-4 flex items-center gap-2">
-                <Bell size={18} className="text-kcs-gold-500" /> Notifications
-              </h2>
-              <div className="space-y-3">
-                {notifications.map((n) => (
-                  <div key={n.id} className="flex gap-3 p-3 rounded-xl bg-gray-50 dark:bg-kcs-blue-800/50">
-                    {n.type === 'success' && <CheckCircle2 size={18} className="text-green-500 flex-shrink-0 mt-0.5" />}
-                    {n.type === 'info'    && <Bell          size={18} className="text-kcs-blue-500 flex-shrink-0 mt-0.5" />}
-                    {n.type === 'warning' && <AlertCircle   size={18} className="text-yellow-500 flex-shrink-0 mt-0.5" />}
-                    <div>
-                      <p className="text-xs text-gray-700 dark:text-gray-300">{n.message}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{n.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            {/* Recent Grades */}
-            <div className="bg-white dark:bg-kcs-blue-900/50 rounded-2xl p-6 border border-gray-100 dark:border-kcs-blue-800">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white flex items-center gap-2">
-                  <BarChart3 size={18} className="text-kcs-blue-600 dark:text-kcs-blue-400" /> Recent Grades
-                </h2>
-                <Link to="/portal/parent/grades" className="text-xs text-kcs-blue-600 dark:text-kcs-blue-400 font-semibold flex items-center gap-1 hover:gap-1.5">
-                  View All <ChevronRight size={14} />
-                </Link>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-kcs-blue-800">
-                      <th className="pb-3 text-left font-medium">Student</th>
-                      <th className="pb-3 text-left font-medium">Course</th>
-                      <th className="pb-3 text-left font-medium">Assessment</th>
-                      <th className="pb-3 text-right font-medium">Grade</th>
-                      <th className="pb-3 text-right font-medium">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-kcs-blue-800/50">
-                    {recentGrades.map((g, i) => (
-                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-kcs-blue-800/30 transition-colors">
-                        <td className="py-3">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            g.child === 'Elise'
-                              ? 'bg-kcs-blue-100 text-kcs-blue-700 dark:bg-kcs-blue-900/30'
-                              : 'bg-kcs-gold-100 text-kcs-gold-700 dark:bg-kcs-gold-900/30'
-                          }`}>
-                            {g.child}
-                          </span>
-                        </td>
-                        <td className="py-3 text-gray-600 dark:text-gray-400">{g.course}</td>
-                        <td className="py-3 text-gray-500 dark:text-gray-500 text-xs">{g.assessment}</td>
-                        <td className="py-3 text-right">
-                          <span className={`font-bold ${
-                            g.grade >= 90 ? 'text-green-600 dark:text-green-400' :
-                            g.grade >= 80 ? 'text-kcs-blue-600 dark:text-kcs-blue-400' :
-                            'text-yellow-600 dark:text-yellow-400'
-                          }`}>
-                            {g.grade}%
-                          </span>
-                        </td>
-                        <td className="py-3 text-right text-xs text-gray-400">{g.date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Teacher Messages */}
-            <div className="bg-white dark:bg-kcs-blue-900/50 rounded-2xl p-6 border border-gray-100 dark:border-kcs-blue-800">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white flex items-center gap-2">
-                  <MessageSquare size={18} className="text-purple-500" /> Teacher Messages
-                </h2>
-                <Link to="/portal/parent/messages" className="text-xs text-kcs-blue-600 dark:text-kcs-blue-400 font-semibold flex items-center gap-1 hover:gap-1.5">
-                  All Messages <ChevronRight size={14} />
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {teacherMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`p-4 rounded-xl border transition-all ${
-                      !msg.read
-                        ? 'border-kcs-blue-200 dark:border-kcs-blue-600 bg-kcs-blue-50 dark:bg-kcs-blue-800/30'
-                        : 'border-gray-100 dark:border-kcs-blue-800 bg-gray-50 dark:bg-kcs-blue-800/10'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div>
-                        <span className="font-semibold text-sm text-kcs-blue-900 dark:text-white">{msg.teacher}</span>
-                        <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{msg.subject}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          msg.child === 'Elise'
-                            ? 'bg-kcs-blue-100 text-kcs-blue-700 dark:bg-kcs-blue-900/30'
-                            : 'bg-kcs-gold-100 text-kcs-gold-700 dark:bg-kcs-gold-900/30'
-                        }`}>
-                          {msg.child}
-                        </span>
-                        {!msg.read && <span className="w-2 h-2 bg-kcs-blue-600 rounded-full" />}
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{msg.message}</p>
-                    <p className="text-xs text-gray-400 mt-1.5">{msg.time}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Upcoming Events */}
-          <div className="bg-white dark:bg-kcs-blue-900/50 rounded-2xl p-6 border border-gray-100 dark:border-kcs-blue-800">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white flex items-center gap-2">
-                <Calendar size={18} className="text-orange-500" /> Upcoming Events
-              </h2>
-              <Link to="/portal/parent/calendar" className="text-xs text-kcs-blue-600 dark:text-kcs-blue-400 font-semibold flex items-center gap-1 hover:gap-1.5">
-                Full Calendar <ChevronRight size={14} />
-              </Link>
-            </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {upcomingEvents.map((event, i) => (
-                <div
-                  key={i}
-                  className="p-4 rounded-xl border border-gray-100 dark:border-kcs-blue-800 bg-gray-50 dark:bg-kcs-blue-800/20 hover:shadow-md transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-kcs-blue-600 dark:text-kcs-blue-400">{event.date}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${eventTypeColor[event.type as keyof typeof eventTypeColor]}`}>
-                      {event.type}
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white mb-1">{event.title}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{event.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Contact */}
-          <div className="bg-gradient-to-r from-kcs-blue-50 to-kcs-gold-50 dark:from-kcs-blue-900/30 dark:to-kcs-blue-900/20 rounded-2xl p-6 border border-kcs-blue-100 dark:border-kcs-blue-800">
-            <h2 className="font-bold text-kcs-blue-900 dark:text-white mb-4">Quick Contact</h2>
-            <div className="grid sm:grid-cols-3 gap-4">
-              {[
-                { label: 'School Office', phone: '+243 81 000 0000', email: 'office@kcskinshasa.com', icon: '🏫' },
-                { label: "Elise's Counselor", phone: '+243 81 000 0001', email: 'counselor@kcskinshasa.com', icon: '👩‍🏫' },
-                { label: 'IT Support', phone: '+243 81 000 0002', email: 'support@kcskinshasa.com', icon: '💻' },
-              ].map(({ label, phone, email, icon }) => (
-                <div key={label} className="bg-white dark:bg-kcs-blue-900/50 p-4 rounded-xl border border-gray-100 dark:border-kcs-blue-800 flex gap-3">
-                  <span className="text-2xl">{icon}</span>
-                  <div>
-                    <p className="font-semibold text-sm text-kcs-blue-900 dark:text-white">{label}</p>
-                    <a href={`tel:${phone}`} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-kcs-blue-600 mt-1">
-                      <Phone size={11} /> {phone}
-                    </a>
-                    <a href={`mailto:${email}`} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-kcs-blue-600">
-                      <Mail size={11} /> {email}
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-            </>
-          )}
-        </div>
-      </main>
+  const academics = (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[['GPA', selectedChild?.gpa ? selectedChild.gpa.toFixed(2) : '—'], ['Attendance', selectedChild ? `${selectedChild.attendance}%` : '—'], ['Recorded grades', String(grades.length)]].map(([label, value]) => <div key={label} className={card}><p className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</p><p className="mt-2 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}
+      </div>
+      <div className={card}>
+        <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Grades for {selectedChild?.name}</h2>
+        {detailLoading ? empty('Loading academic records…') : grades.length === 0 ? empty('No grade has been published for this student yet.') : <div className="overflow-x-auto"><table className="min-w-[620px] w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-gray-400"><th className="pb-3">Course</th><th className="pb-3">Period</th><th className="pb-3 text-right">Score</th><th className="pb-3 text-right">Published</th></tr></thead><tbody>{grades.map((grade) => <tr key={grade.id} className="border-b border-gray-50 dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white">{grade.course?.name ?? grade.course?.code ?? 'Course'}</td><td>{grade.period}</td><td className="text-right font-bold">{grade.score}/{grade.maxScore} ({grade.percentage.toFixed(1)}%)</td><td className="text-right">{displayDate(grade.createdAt)}</td></tr>)}</tbody></table></div>}
+      </div>
+      <div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Assignments</h2>{assignments.length === 0 ? empty('No assignment is currently linked to this student.') : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <div key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold dark:text-white">{item.assignment?.title ?? 'Assignment'}</p><p className="mt-1 text-sm text-gray-500">{item.assignment?.course?.name ?? 'Course'} · due {displayDate(item.assignment?.dueDate)}</p><span className="mt-2 inline-block rounded-full bg-kcs-blue-100 px-2 py-1 text-xs font-bold text-kcs-blue-700">{item.status}</span></div>)}</div>}</div>
     </div>
   )
-}
 
-export default ParentPortal
+  const content = segment === 'settings' ? <AccountSettingsPanel roleLabel="Parent account" /> : segment === 'performance' || segment === 'grades' ? academics : segment === 'messages' ? (
+    <div className="grid gap-6 xl:grid-cols-2"><div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Conversation history</h2>{messages.length === 0 ? empty('No school message yet.') : <div className="space-y-3">{messages.map((item) => <div key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><div className="flex justify-between gap-3"><p className="font-semibold dark:text-white">{item.subject}</p><span className="text-xs text-gray-400">{displayDate(item.createdAt)}</span></div><p className="mt-1 text-xs font-semibold text-kcs-blue-600">{item.senderId === user?.id ? `To ${personName(item.recipient)}` : `From ${personName(item.sender)}`}</p><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{item.body}</p></div>)}</div>}</div><div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Write to the school</h2><div className="space-y-3"><select className={field} value={recipientId} onChange={(event) => setRecipientId(event.target.value)}><option value="">Select an authorized contact</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{personName(contact)} — {contact.role}</option>)}</select><input className={field} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" maxLength={160}/><textarea className={`${field} min-h-36`} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder={`Message regarding ${selectedChild?.name ?? 'your family'}`} maxLength={10000}/><button className={`${button} w-full`} disabled={sending || !recipientId || subject.trim().length < 2 || !messageBody.trim()} onClick={() => void sendMessage()}>{sending ? 'Sending…' : 'Send securely'}</button>{feedback && <p className="rounded-xl bg-kcs-blue-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{feedback}</p>}</div></div></div>
+  ) : segment === 'calendar' ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{upcoming.length === 0 ? empty('No upcoming school event has been published.') : upcoming.map((event) => <div key={event.id} className={card}><p className="text-xs font-bold uppercase text-kcs-blue-600">{event.type}</p><h2 className="mt-2 font-bold dark:text-white">{event.title}</h2><p className="mt-2 text-sm text-gray-500">{displayDate(event.startDate)} · {event.location}</p><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{event.description}</p><button className={`${button} mt-4 w-full`} onClick={() => downloadCalendarEvent(event)}>Add to my calendar</button></div>)}</div>
+  : segment === 'finance' ? <div className={card}><div className="flex items-start gap-4"><div className="rounded-xl bg-kcs-gold-100 p-3 text-kcs-gold-700"><FileText/></div><div><h2 className="text-xl font-bold text-kcs-blue-900 dark:text-white">EduPay is the official financial source</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">Payments, balances, receipts and bank-transfer proofs are managed only in the parent EduPay portal. KCS Nexus never marks an invoice as paid and never generates an unverified receipt.</p><a className={`${button} mt-5 inline-block`} href="https://edupay.kinshasachristianschool.org/" target="_blank" rel="noreferrer">Open EduPay securely</a></div></div></div>
+  : segment === 'profile' ? <div className="grid gap-6 xl:grid-cols-2"><div className={card}><div className="flex items-center gap-4"><div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-kcs-blue-100 text-xl font-bold text-kcs-blue-700">{user?.firstName?.[0]}{user?.lastName?.[0]}</div><div><h2 className="text-2xl font-bold dark:text-white">{`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || 'KCS Parent'}</h2><p className="text-sm text-gray-500">Authorized family account</p></div></div><div className="mt-5 space-y-2 text-sm"><a className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300" href={`mailto:${user?.email}`}><Mail size={16}/>{user?.email}</a>{user?.phone && <a className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300" href={`tel:${user.phone}`}><Phone size={16}/>{user.phone}</a>}</div></div><div className={card}><h2 className="mb-4 font-bold dark:text-white">Children linked to this account</h2><div className="space-y-3">{children.map((child) => <button key={child.id} onClick={() => setSelectedId(child.id)} className="flex w-full items-center justify-between rounded-xl bg-gray-50 p-4 text-left dark:bg-kcs-blue-800/30"><span><strong className="block dark:text-white">{child.name}</strong><span className="text-sm text-gray-500">{child.grade} · {child.studentNumber}</span></span><CheckCircle2 className="text-green-500" size={20}/></button>)}</div></div></div>
+  : <div className="space-y-6"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[[BookOpen,'Children',String(children.length)],[TrendingUp,'Selected GPA',selectedChild?.gpa ? selectedChild.gpa.toFixed(2) : '—'],[CheckCircle2,'Attendance',selectedChild ? `${selectedChild.attendance}%` : '—'],[Bell,'Unread notices',String(unread)]].map(([Icon,label,value]: any) => <div key={label} className={card}><Icon className="text-kcs-blue-600" size={22}/><p className="mt-3 text-xs font-bold uppercase text-gray-400">{label}</p><p className="mt-1 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="grid gap-6 xl:grid-cols-2"><div className={card}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold dark:text-white">Latest grades</h2><Link to="/portal/parent/grades" className="text-sm font-semibold text-kcs-blue-600">View all</Link></div>{grades.slice(0,5).length === 0 ? empty('No grade has been published yet.') : grades.slice(0,5).map((grade) => <div key={grade.id} className="flex justify-between border-b py-3 text-sm dark:border-kcs-blue-800"><span className="dark:text-white">{grade.course?.name ?? 'Course'}</span><strong className="text-kcs-blue-700 dark:text-kcs-blue-300">{grade.percentage.toFixed(1)}%</strong></div>)}</div><div className={card}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold dark:text-white">Notifications</h2><Link to="/portal/parent/messages" className="text-sm font-semibold text-kcs-blue-600">Messages</Link></div>{notices.slice(0,6).length === 0 ? empty('No notification at this time.') : notices.slice(0,6).map((notice) => <button key={notice.id} onClick={() => void markNotice(notice)} className={`mb-2 w-full rounded-xl p-3 text-left ${notice.isRead ? 'bg-gray-50 dark:bg-kcs-blue-800/20' : 'bg-kcs-blue-50 dark:bg-kcs-blue-800/50'}`}><span className="block text-sm font-semibold dark:text-white">{notice.title}</span><span className="mt-1 block text-xs text-gray-500 dark:text-gray-300">{notice.message}</span></button>)}</div></div><div className={card}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold dark:text-white">Upcoming school events</h2><Link to="/portal/parent/calendar" className="text-sm font-semibold text-kcs-blue-600">Full calendar</Link></div><div className="grid gap-3 md:grid-cols-3">{upcoming.slice(0,3).length === 0 ? empty('No upcoming event.') : upcoming.slice(0,3).map((event) => <div key={event.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><Calendar size={18} className="text-kcs-gold-600"/><p className="mt-2 font-semibold dark:text-white">{event.title}</p><p className="mt-1 text-xs text-gray-500">{displayDate(event.startDate)}</p></div>)}</div></div></div>
+
+  return <div className="flex min-h-screen bg-gray-50 dark:bg-kcs-blue-950"><PortalSidebar/><main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-7xl"><div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-semibold text-kcs-gold-600">{getLocalizedGreeting(language, user?.firstName)}</p><h1 className="mt-1 font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{title}</h1><p className="mt-1 text-sm text-gray-500">{getLocalizedPortalDate(language)}</p></div>{children.length > 0 && <label className="min-w-64 text-xs font-bold uppercase text-gray-400">Active child<select className={`${field} mt-1 normal-case`} value={selectedChild?.id ?? ''} onChange={(event) => setSelectedId(event.target.value)}>{children.map((child) => <option key={child.id} value={child.id}>{child.name} — {child.grade}</option>)}</select></label>}</div>{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>Loading the secure family workspace…</div></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">No child is linked to this parent account</h2><p className="mt-2 text-sm text-gray-500">Please contact the school registry. The portal does not infer or expose unverified family links.</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
+}

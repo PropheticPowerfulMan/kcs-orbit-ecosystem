@@ -449,7 +449,17 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
         student.parentId === parent.id || linkedStudentIds.has(student.id) || orbitStudentKeys(student).some((key) => linkedStudentIds.has(key)),
       ),
     }
-    return success(res, orbitStudentsToProfiles(familyDirectory), 'Parent children loaded from Orbit')
+    const orbitProfiles = orbitStudentsToProfiles(familyDirectory)
+    const localProfiles = await prisma.studentProfile.findMany({
+      where: { studentNumber: { in: orbitProfiles.map((student) => student.studentNumber) } },
+      select: { id: true, studentNumber: true, gpa: true, attendanceRate: true },
+    })
+    const localByNumber = new Map(localProfiles.map((profile) => [profile.studentNumber.toLowerCase(), profile]))
+    const children = orbitProfiles.map((profile) => {
+      const local = localByNumber.get(profile.studentNumber.toLowerCase())
+      return { ...profile, localProfileId: local?.id ?? null, gpa: local?.gpa ?? profile.gpa, attendanceRate: local?.attendanceRate ?? profile.attendanceRate }
+    })
+    return success(res, children, 'Parent children loaded from Orbit')
   }
 
   const links = await prisma.parentStudentLink.findMany({
@@ -757,8 +767,23 @@ studentsRouter.patch('/me/assignments/:submissionId/submit', authenticate, requi
   return success(res, updated, 'Assignment submitted')
 }))
 
-studentsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
+async function assertStudentAccess(req: AuthenticatedRequest, studentId: string) {
+  const role = req.user!.role
+  if (role === 'admin' || role === 'staff' || role === 'teacher') return
+
+  const student = await prisma.studentProfile.findUnique({
+    where: { id: studentId },
+    select: { userId: true, parentLinks: { select: { parentId: true } } },
+  })
+  if (!student) throw new ApiError(404, 'Student not found')
+  if (role === 'student' && student.userId === req.user!.sub) return
+  if (role === 'parent' && student.parentLinks.some((link) => link.parentId === req.user!.sub)) return
+  throw new ApiError(403, 'You are not authorized to access this student.')
+}
+
+studentsRouter.get('/:id', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
+  await assertStudentAccess(req, studentId)
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
     include: {
@@ -771,8 +796,9 @@ studentsRouter.get('/:id', authenticate, asyncHandler(async (req, res) => {
   return success(res, student)
 }))
 
-studentsRouter.get('/:id/grades', authenticate, asyncHandler(async (req, res) => {
+studentsRouter.get('/:id/grades', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
+  await assertStudentAccess(req, studentId)
   const grades = await prisma.grade.findMany({
     where: { studentId },
     include: { course: true },
@@ -781,8 +807,9 @@ studentsRouter.get('/:id/grades', authenticate, asyncHandler(async (req, res) =>
   return success(res, grades)
 }))
 
-studentsRouter.get('/:id/assignments', authenticate, asyncHandler(async (req, res) => {
+studentsRouter.get('/:id/assignments', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
+  await assertStudentAccess(req, studentId)
   const submissions = await prisma.assignmentSubmission.findMany({
     where: { studentId },
     include: { assignment: { include: { course: true } } },
@@ -791,8 +818,9 @@ studentsRouter.get('/:id/assignments', authenticate, asyncHandler(async (req, re
   return success(res, submissions)
 }))
 
-studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req, res) => {
+studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
+  await assertStudentAccess(req, studentId)
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
     include: {
@@ -810,8 +838,9 @@ studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req, res)
   return success(res, timetable)
 }))
 
-studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req, res) => {
+studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
+  await assertStudentAccess(req, studentId)
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
     include: { aiRecommendations: true, grades: true },
