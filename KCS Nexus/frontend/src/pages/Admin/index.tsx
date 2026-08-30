@@ -293,6 +293,7 @@ type AdminAdmissionRequest = {
   id: string
   applicationNumber: string
   studentName: string
+  children: Array<{ firstName: string; middleName?: string; lastName: string; dateOfBirth: string; gender: string; nationality: string; gradeApplying: string; previousSchool?: string; languages?: string; photoData?: string }>
   firstName: string
   lastName: string
   dateOfBirth: string
@@ -310,6 +311,7 @@ type AdminAdmissionRequest = {
   documents: string[]
   status: 'SUBMITTED' | 'UNDER_REVIEW' | 'INTERVIEW_SCHEDULED' | 'ACCEPTED' | 'REJECTED'
   submittedAt: string
+  provisionedAt?: string | null
 }
 
 const ADMIN_ADMISSIONS_STORAGE_KEY = 'kcs-admin-admission-submissions'
@@ -497,6 +499,7 @@ const apiAdmissionToAdminRequest = (item: any): AdminAdmissionRequest => ({
   id: String(item.id),
   applicationNumber: String(item.applicationNumber),
   studentName: [item.firstName, item.middleName, item.lastName].filter(Boolean).join(' '),
+  children: Array.isArray(item.children) && item.children.length ? item.children : [{ firstName: item.firstName, middleName: item.middleName, lastName: item.lastName, dateOfBirth: item.dateOfBirth, gender: item.gender, nationality: item.nationality, gradeApplying: item.gradeApplying, previousSchool: item.previousSchool }],
   firstName: String(item.firstName || ''),
   lastName: String(item.lastName || ''),
   dateOfBirth: String(item.dateOfBirth || ''),
@@ -514,6 +517,7 @@ const apiAdmissionToAdminRequest = (item: any): AdminAdmissionRequest => ({
   documents: Array.isArray(item.documents) ? item.documents.map((document: any) => String(document.name || '')).filter(Boolean) : [],
   status: item.status as AdminAdmissionRequest['status'],
   submittedAt: String(item.submittedAt || ''),
+  provisionedAt: item.provisionedAt ? String(item.provisionedAt) : null,
 })
 
 const saveRoster = (items: AdminStudentRecord[]) => {
@@ -1192,6 +1196,9 @@ const AdminSectionView = ({
   const [familyFilter, setFamilyFilter] = useState('All')
   const [studentNotice, setStudentNotice] = useState('')
   const [familyCredentials, setFamilyCredentials] = useState<any>(null)
+  const [admissionCredentials, setAdmissionCredentials] = useState<any>(null)
+  const [admissionApproving, setAdmissionApproving] = useState('')
+  const [admissionNotice, setAdmissionNotice] = useState('')
   const [parentNotice, setParentNotice] = useState('')
   const [apiSynced, setApiSynced] = useState(false)
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
@@ -1710,6 +1717,25 @@ const AdminSectionView = ({
     }
   }
 
+  const approveAdmission = async (application: AdminAdmissionRequest) => {
+    setAdmissionApproving(application.id)
+    setAdmissionNotice('')
+    try {
+      const response = await admissionsAPI.approve(application.id)
+      const payload = response.data?.data ?? response.data
+      setAdmissionRequests((items) => {
+        const next = items.map((item) => item.id === application.id ? { ...item, status: 'ACCEPTED' as const, provisionedAt: new Date().toISOString() } : item)
+        saveAdmissions(next)
+        return next
+      })
+      setAdmissionCredentials(payload)
+      await refreshOfficialRoster()
+    } catch (error) {
+      setAdmissionNotice(extractStudentApiMessage(error, 'Unable to approve and provision this family.'))
+    } finally {
+      setAdmissionApproving('')
+    }
+  }
   const grade9to12 = useMemo(
     () => officialRoster.filter((student) => ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].includes(student.grade)),
     [officialRoster]
@@ -2890,26 +2916,40 @@ const AdminSectionView = ({
             <div key={item.applicationNumber} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.studentName}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{item.gradeApplying} - {item.applicationNumber}</p>
+                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.children.length} child{item.children.length > 1 ? 'ren' : ''}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{item.children.map((child) => child.gradeApplying).join(', ')} - {item.applicationNumber}</p>
                 </div>
                 <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(item.status)}`}>{item.status.replace('_', ' ')}</span>
               </div>
               <div className="mt-4 space-y-2 rounded-xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-800/30">
                 <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.parentName}</p>
                 <p className="text-gray-500 dark:text-gray-400">{item.parentEmail} - {item.parentPhone}</p>
-                <p className="text-gray-500 dark:text-gray-400">Previous school: {item.previousSchool}</p>
+                {item.children.map((child, index) => <p key={index} className="text-gray-500 dark:text-gray-400">{child.lastName} {child.middleName || ''} {child.firstName} · {child.gradeApplying}</p>)}
                 <p className="text-gray-500 dark:text-gray-400">Docs: {item.documents?.length ? item.documents.join(', ') : 'Pending document review'}</p>
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <button className={adminOutlineButton} onClick={() => updateAdmissionStatus(item, 'UNDER_REVIEW')}>Review</button>
                 <button className={adminOutlineButton} onClick={() => updateAdmissionStatus(item, 'INTERVIEW_SCHEDULED')}>Interview</button>
-                <button className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700" onClick={() => updateAdmissionStatus(item, 'ACCEPTED')}>Approve + create student</button>
+                <button className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700" disabled={admissionApproving === item.id || Boolean(item.provisionedAt)} onClick={() => void approveAdmission(item)}>{item.provisionedAt ? 'Family created' : admissionApproving === item.id ? 'Creating family...' : 'Approve + create ' + item.children.length + ' child account(s)'}</button>
                 <button className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700" onClick={() => updateAdmissionStatus(item, 'REJECTED')}>Refuse</button>
               </div>
             </div>
           ))}
         </div>
+        {admissionNotice ? <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{admissionNotice}</p> : null}
+        {admissionCredentials ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4" role="dialog" aria-modal="true" aria-label="Family credentials">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950">
+              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-green-600">Family created successfully</p><h2 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Institutional login credentials</h2><p className="mt-1 text-sm text-gray-500">Copy or print these one-time credentials before closing.</p></div><button type="button" onClick={() => setAdmissionCredentials(null)} className="rounded-xl border px-3 py-2 text-sm font-semibold">Close</button></div>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {admissionCredentials.temporaryCredentials?.parent ? <div className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40"><p className="font-bold text-kcs-blue-900 dark:text-white">Parent / family</p><p className="mt-3 text-sm">Username: <strong>{admissionCredentials.temporaryCredentials.parent.username}</strong></p><p className="text-sm">Access code: <strong>{admissionCredentials.temporaryCredentials.parent.accessCode || '—'}</strong></p><p className="text-sm">Temporary password: <strong>{admissionCredentials.temporaryCredentials.parent.temporaryPassword}</strong></p></div> : null}
+                {admissionCredentials.temporaryCredentials?.students?.map((student: any, index: number) => <div key={student.studentId || index} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-800"><p className="font-bold text-kcs-blue-900 dark:text-white">{student.displayName || `Child ${index + 1}`}</p><p className="mt-3 text-sm">Student ID: <strong>{student.studentId}</strong></p><p className="text-sm">Username: <strong>{student.username}</strong></p><p className="text-sm">Access code: <strong>{student.accessCode || '—'}</strong></p><p className="text-sm">Temporary password: <strong>{student.temporaryPassword}</strong></p></div>)}
+              </div>
+              <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-900/40"><p className="font-semibold text-kcs-blue-900 dark:text-white">Delivery</p><p className="mt-1 text-gray-600 dark:text-gray-300">Email: {admissionCredentials.credentialDelivery?.email?.sent ? 'sent' : 'not sent'} · SMS: {admissionCredentials.credentialDelivery?.sms?.sent ? 'sent' : 'not sent'} · Dashboard notifications: created</p></div>
+              <button type="button" onClick={() => window.print()} className="mt-5 rounded-xl bg-kcs-blue-700 px-5 py-3 text-sm font-bold text-white">Print credentials</button>
+            </div>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -3373,18 +3413,7 @@ const AdminDashboard = () => {
                     </div>
                     {(item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW') && (
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <button className="rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white" onClick={() => {
-                          const approvedStudent = createStudentFromAdmission({ ...item, status: 'ACCEPTED' })
-                          setAdmissionRequests((items) => {
-                            const next = items.map((application) => application.applicationNumber === item.applicationNumber ? { ...application, status: 'ACCEPTED' as const } : application)
-                            saveAdmissions(next)
-                            return next
-                          })
-                          setOfficialRoster((records) => {
-                            if (records.some((record) => record.id === approvedStudent.id || record.name === approvedStudent.name)) return records
-                            return [approvedStudent, ...records]
-                          })
-                        }}>Approve</button>
+                        <a href="/admin/admissions" className="rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-bold text-white">Review & approve</a>
                         <button className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white" onClick={() => setAdmissionRequests((items) => {
                           const next = items.map((application) => application.applicationNumber === item.applicationNumber ? { ...application, status: 'REJECTED' as const } : application)
                           saveAdmissions(next)

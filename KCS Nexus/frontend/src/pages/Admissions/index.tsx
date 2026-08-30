@@ -237,7 +237,11 @@ const sendAdmissionFallbackEmail = async (
 const AdmissionsPage = () => {
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState<Step>('Student')
-  const [studentData, setStudentData] = useState<StudentData | null>(null)
+  const [studentsData, setStudentsData] = useState<StudentData[]>([])
+  const [studentPhotos, setStudentPhotos] = useState<Array<File | null>>([])
+  const [pendingStudentPhoto, setPendingStudentPhoto] = useState<File | null>(null)
+  const [parentPhoto, setParentPhoto] = useState<File | null>(null)
+  const studentData = studentsData[0] ?? null
   const [parentData,  setParentData]  = useState<ParentData  | null>(null)
   const [documents, setDocuments] = useState<Record<string, File | null>>({})
   const [notes, setNotes] = useState('')
@@ -254,8 +258,11 @@ const AdmissionsPage = () => {
   const parentForm  = useForm<ParentData>({  resolver: zodResolver(parentSchema) })
 
   const handleStudentSubmit = (data: StudentData) => {
-    setStudentData(data)
-    setActiveStep('Parent')
+    setStudentsData((current) => [...current, data])
+    setStudentPhotos((current) => [...current, pendingStudentPhoto])
+    setPendingStudentPhoto(null)
+    studentForm.reset()
+    setActiveStep(parentData ? 'Documents' : 'Parent')
   }
   const handleParentSubmit = (data: ParentData) => {
     setParentData(data)
@@ -287,6 +294,7 @@ const AdmissionsPage = () => {
       }
 
       const formData = new FormData()
+      formData.append('children', JSON.stringify(studentsData.map((student) => ({ ...student, gradeApplying: student.applyingGrade, previousSchool: student.currentSchool }))))
       formData.append('firstName', studentData.firstName)
       formData.append('middleName', studentData.middleName ?? '')
       formData.append('lastName', studentData.lastName)
@@ -297,12 +305,18 @@ const AdmissionsPage = () => {
       formData.append('previousSchool', studentData.currentSchool)
       formData.append('languages', studentData.languages ?? '')
       formData.append('parentName', composeIdentity(parentData))
+      formData.append('parentFirstName', parentData.firstName)
+      formData.append('parentMiddleName', parentData.middleName ?? '')
+      formData.append('parentLastName', parentData.lastName)
       formData.append('relationship', parentData.relationship)
       formData.append('parentEmail', parentData.email)
       formData.append('parentPhone', parentData.phone)
       formData.append('address', parentData.address)
       formData.append('occupation', parentData.occupation ?? '')
       formData.append('notes', notes)
+
+      if (parentPhoto) formData.append('parentPhoto', parentPhoto)
+      studentPhotos.forEach((photo, index) => { if (photo) formData.append('studentPhoto_' + index, photo) })
 
       Object.values(documents).forEach((file) => {
         if (file) formData.append('documents', file)
@@ -574,6 +588,11 @@ const AdmissionsPage = () => {
                             <input {...studentForm.register('currentSchool')} className="input-kcs" placeholder="School name" />
                           </div>
                           <div className="sm:col-span-2">
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Student photo</label>
+                            <input type="file" accept="image/jpeg,image/png,image/webp" className="input-kcs" onChange={(event) => setPendingStudentPhoto(event.target.files?.[0] ?? null)} />
+                            <p className="mt-1 text-xs text-gray-400">JPG, PNG or WEBP. Used as profile photo after approval.</p>
+                          </div>
+                          <div className="sm:col-span-2">
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Languages Spoken</label>
                             <input {...studentForm.register('languages')} className="input-kcs" placeholder="e.g. English, French, Lingala" />
                           </div>
@@ -629,6 +648,11 @@ const AdmissionsPage = () => {
                           <div className="sm:col-span-2">
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Home Address *</label>
                             <input {...parentForm.register('address')} className="input-kcs" placeholder="Full address in Kinshasa" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Parent / guardian photo</label>
+                            <input type="file" accept="image/jpeg,image/png,image/webp" className="input-kcs" onChange={(event) => setParentPhoto(event.target.files?.[0] ?? null)} />
+                            <p className="mt-1 text-xs text-gray-400">Used as parent profile photo after approval.</p>
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">Occupation</label>
@@ -698,23 +722,18 @@ const AdmissionsPage = () => {
                     )}
 
                     {/* Step 4: Review */}
-                    {activeStep === 'Review' && studentData && parentData && (
+                    {activeStep === 'Review' && studentsData.length > 0 && parentData && (
                       <motion.div key="review" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                         <h3 className="font-bold text-kcs-blue-900 dark:text-white mb-5">Review & Submit</h3>
                         <div className="grid sm:grid-cols-2 gap-6 mb-6">
-                          <div className="p-4 rounded-xl bg-gray-50 dark:bg-kcs-blue-800/30 border border-gray-100 dark:border-kcs-blue-800">
-                            <h4 className="font-semibold text-sm text-kcs-blue-900 dark:text-white mb-3 flex items-center gap-2"><User size={14} /> Student</h4>
-                            {[
-                              ['Name', composeIdentity(studentData)],
-                              ['Gender', studentData.gender],
-                              ['DOB', studentData.dateOfBirth],
-                              ['Nationality', studentData.nationality],
-                              ['Applying For', studentData.applyingGrade],
-                              ['Current School', studentData.currentSchool],
-                            ].map(([k, v]) => (
-                              <div key={k} className="flex justify-between text-xs py-1 border-b border-gray-100 dark:border-kcs-blue-700 last:border-0">
-                                <span className="text-gray-500 dark:text-gray-400">{k}</span>
-                                <span className="font-medium text-gray-700 dark:text-gray-300">{v}</span>
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <h4 className="font-semibold text-sm text-kcs-blue-900 dark:text-white flex items-center gap-2"><User size={14} /> Children ({studentsData.length})</h4>
+                              <button type="button" onClick={() => setActiveStep('Student')} className="text-xs font-bold text-kcs-blue-600 hover:underline">+ Add another child</button>
+                            </div>
+                            {studentsData.map((student, index) => (
+                              <div key={`${student.firstName}-${index}`} className="p-4 rounded-xl bg-gray-50 dark:bg-kcs-blue-800/30 border border-gray-100 dark:border-kcs-blue-800">
+                                <div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-sm text-kcs-blue-900 dark:text-white">{composeIdentity(student)}</p><p className="mt-1 text-xs text-gray-500">{student.applyingGrade} · {student.dateOfBirth}</p></div>{studentsData.length > 1 ? <button type="button" onClick={() => { setStudentsData((items) => items.filter((_, childIndex) => childIndex !== index)); setStudentPhotos((items) => items.filter((_, childIndex) => childIndex !== index)) }} className="text-xs font-semibold text-red-600">Remove</button> : null}</div>
                               </div>
                             ))}
                           </div>

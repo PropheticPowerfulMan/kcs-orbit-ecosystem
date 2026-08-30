@@ -233,6 +233,7 @@ export const admissionsAPI = {
     api.post('/admissions', data),
   updateStatus: (id: string, status: string, notes?: string) =>
     api.patch(`/admissions/${id}/status`, { status, notes }),
+  approve: (id: string) => api.post('/admissions/' + id + '/approve'),
   uploadDocument: (id: string, formData: FormData) =>
     api.post(`/admissions/${id}/documents`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
