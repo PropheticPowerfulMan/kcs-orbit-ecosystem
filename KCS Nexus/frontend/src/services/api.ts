@@ -285,6 +285,7 @@ export const aiAPI = {
 
 // --- Admin API ---
 export const adminAPI = {
+  getOverview: () => api.get('/admin/overview'),
   getDashboardStats: () => api.get('/admin/stats'),
   getAnalytics: (period?: string) => api.get('/admin/analytics', { params: { period } }),
   exportData: (type: string) => api.get(`/admin/export/${type}`, { responseType: 'blob' }),

@@ -7,6 +7,57 @@ export const adminRouter = Router()
 
 adminRouter.use(authenticate, requireRoles('admin'))
 
+adminRouter.get('/overview', asyncHandler(async (_req, res) => {
+  const now = new Date()
+  const eightMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 7, 1)
+  const [students, teachers, courses, applications, events, incidents, audits] = await Promise.all([
+    prisma.studentProfile.findMany({ select: { id: true, grade: true, section: true, gpa: true, attendanceRate: true, enrollmentDate: true } }),
+    prisma.teacherProfile.findMany({ select: { id: true, department: true, user: { select: { firstName: true, lastName: true } }, courses: { select: { id: true } } } }),
+    prisma.course.findMany({ select: { id: true, name: true, grade: true, grades: { select: { percentage: true } } } }),
+    prisma.admissionApplication.findMany({ where: { submittedAt: { gte: eightMonthsAgo } }, select: { status: true, submittedAt: true } }),
+    prisma.event.findMany({ where: { endDate: { gte: now } }, orderBy: { startDate: 'asc' }, take: 8 }),
+    prisma.incidentReport.findMany({ where: { status: { not: 'CLOSED' } }, select: { id: true, status: true } }),
+    prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, action: true, targetType: true, createdAt: true, actor: { select: { firstName: true, lastName: true } } } }),
+  ])
+  const monthKeys = Array.from({ length: 8 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 7 + index, 1)
+    return { key: String(date.getFullYear()) + '-' + String(date.getMonth()), month: date.toLocaleString('en-US', { month: 'short' }) }
+  })
+  const enrollmentTrend = monthKeys.map(({ key, month }) => ({
+    month,
+    students: students.filter((student) => String(student.enrollmentDate.getFullYear()) + '-' + String(student.enrollmentDate.getMonth()) === key).length,
+    applications: applications.filter((application) => String(application.submittedAt.getFullYear()) + '-' + String(application.submittedAt.getMonth()) === key).length,
+  }))
+  const atRisk = students.filter((student) => (student.attendanceRate != null && student.attendanceRate < 85) || (student.gpa != null && student.gpa < 2))
+  const departmentMap = new Map<string, number[]>()
+  courses.forEach((course) => {
+    const values = departmentMap.get(course.grade) ?? []
+    values.push(...course.grades.map((grade) => grade.percentage))
+    departmentMap.set(course.grade, values)
+  })
+  return success(res, {
+    stats: {
+      localStudents: students.length,
+      teachers: teachers.length,
+      courses: courses.length,
+      classes: new Set(students.map((student) => (student.grade + ' ' + student.section).trim())).size,
+      openApplications: applications.filter((application) => ['SUBMITTED', 'UNDER_REVIEW'].includes(application.status)).length,
+      riskAlerts: atRisk.length,
+      liveEvents: events.filter((event) => event.liveStreamEnabled && event.liveStreamStatus === 'live').length,
+      openIncidents: incidents.length,
+    },
+    enrollmentTrend,
+    departmentPerformance: [...departmentMap.entries()].map(([name, values]) => ({ name, score: values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0 })),
+    events: events.map((event) => ({ id: event.id, title: event.title, status: event.liveStreamStatus, platform: event.liveStreamPlatform, startsAt: event.liveStreamStartsAt ?? event.startDate, location: event.location })),
+    risks: [
+      ...(atRisk.length ? [{ title: 'Academic follow-up', description: String(atRisk.length) + ' student(s) are below the GPA or attendance threshold.', level: 'high' }] : []),
+      ...(incidents.length ? [{ title: 'Open incident reports', description: String(incidents.length) + ' incident report(s) require administrative follow-up.', level: 'medium' }] : []),
+    ],
+    teacherLoad: teachers.map((teacher) => ({ id: teacher.id, teacher: (teacher.user.firstName + ' ' + teacher.user.lastName).trim(), department: teacher.department, courses: teacher.courses.length })),
+    recentActivity: audits.map((audit) => ({ id: audit.id, action: audit.action, targetType: audit.targetType, actor: audit.actor ? (audit.actor.firstName + ' ' + audit.actor.lastName).trim() : 'System', createdAt: audit.createdAt })),
+    generatedAt: now.toISOString(),
+  }, 'Super Admin overview loaded')
+}))
 adminRouter.get('/stats', asyncHandler(async (_req, res) => {
   const [students, teachers, applications, media, news, events, liveEvents] = await Promise.all([
     prisma.studentProfile.count(),

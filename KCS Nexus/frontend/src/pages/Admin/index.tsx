@@ -17,7 +17,7 @@ import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
-import { admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
+import { adminAPI, admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
 import { SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -3190,19 +3190,38 @@ const AdminDashboard = () => {
   const [admissionRequests, setAdmissionRequests] = useState<AdminAdmissionRequest[]>(readStoredAdmissions)
   const [dashboardFinance, setDashboardFinance] = useState<EduPayFinanceSummary | null>(null)
   const [dashboardDirectory, setDashboardDirectory] = useState<SharedDirectoryPayload | null>(null)
+  const [dashboardOverview, setDashboardOverview] = useState<any>(null)
+  const [dashboardStatus, setDashboardStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [dashboardFinanceError, setDashboardFinanceError] = useState('')
   const [dashboardAction, setDashboardAction] = useState('')
   const [reportCardControl, setReportCardControl] = useState<any>(null)
   const pendingAdmissions = admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW')
-  const hasOperationalData = officialRoster.length > 0 || admissionRequests.length > 0
-  const dashboardEnrollmentTrend = hasOperationalData
-    ? enrollmentTrend
-    : enrollmentTrend.map((item) => ({ ...item, students: 0, applications: 0 }))
-  const dashboardDepartmentPerformance = hasOperationalData ? departmentPerformance : []
-  const dashboardLiveEvents = hasOperationalData ? liveEventControls : []
-  const dashboardRiskAlerts = hasOperationalData ? riskAlerts : []
-  const dashboardStaffLoad = hasOperationalData ? staffLoad : []
-  const dashboardRecentActivity = hasOperationalData ? recentActivity : []
+  const hasOperationalData = officialRoster.length > 0 || admissionRequests.length > 0 || Boolean(dashboardOverview)
+  const dashboardEnrollmentTrend = dashboardOverview?.enrollmentTrend ?? []
+  const dashboardDepartmentPerformance = dashboardOverview?.departmentPerformance ?? []
+  const dashboardLiveEvents = (dashboardOverview?.events ?? []).map((event: any) => ({
+    ...event,
+    status: event.status === 'live' ? 'Live now' : 'Scheduled',
+    audience: new Date(event.startsAt).toLocaleString(),
+    nextStep: event.location || 'School event',
+  }))
+  const dashboardRiskAlerts = dashboardOverview?.risks ?? []
+  const dashboardStaffLoad = (dashboardOverview?.teacherLoad ?? []).map((staff: any) => ({
+    ...staff,
+    load: String(staff.courses) + ' assigned course(s)',
+    aiSupport: staff.department || 'Unassigned department',
+  }))
+  const dashboardRecentActivity = (dashboardOverview?.recentActivity ?? []).map((item: any) =>
+    item.actor + ' · ' + item.action + ' · ' + new Date(item.createdAt).toLocaleString(),
+  )
+  const dashboardSystemSignals = [
+    { title: 'Shared registry', severity: dashboardDirectory ? 'healthy' : 'unavailable', detail: dashboardDirectory ? 'Orbit directory synchronized.' : 'Orbit directory could not be loaded.', roles: ['admin'] },
+    { title: 'EduPay finance', severity: dashboardFinanceError ? 'attention' : 'healthy', detail: dashboardFinanceError || 'Finance summary synchronized.', roles: ['admin'] },
+  ]
+  const dashboardSensitiveActions = [
+    ...(pendingAdmissions.length ? [{ action: 'Review admission applications', requester: String(pendingAdmissions.length) + ' family file(s)', status: 'Awaiting decision', risk: 'high' }] : []),
+    ...((dashboardOverview?.stats?.openIncidents ?? 0) ? [{ action: 'Review incident reports', requester: String(dashboardOverview.stats.openIncidents) + ' open report(s)', status: 'Administrative follow-up', risk: 'high' }] : []),
+  ]
 
   const refreshDashboardFinance = async () => {
     setDashboardFinanceError('')
@@ -3211,6 +3230,12 @@ const AdminDashboard = () => {
   }
 
   useEffect(() => { if (activeSegment === 'dashboard') void refreshDashboardFinance() }, [activeSegment])
+
+  useEffect(() => {
+    if (activeSegment !== 'dashboard') return
+    setDashboardStatus('loading')
+    void adminAPI.getOverview().then((response) => { setDashboardOverview(response.data?.data ?? null); setDashboardStatus('ready') }).catch((error: any) => { setDashboardOverview(null); setDashboardStatus('error'); setDashboardAction(error?.response?.data?.message ?? 'Unable to load the Super Admin operational overview.') })
+  }, [activeSegment])
 
   useEffect(() => {
     window.localStorage.removeItem(ADMIN_ROSTER_STORAGE_KEY)
@@ -3243,6 +3268,15 @@ const AdminDashboard = () => {
       })
   }, [])
 
+  const rejectAdmission = async (application: AdminAdmissionRequest) => {
+    try {
+      await admissionsAPI.updateStatus(application.id, 'REJECTED', 'Rejected by Super Administrator from the dashboard.')
+      setAdmissionRequests((items) => items.map((item) => item.id === application.id ? { ...item, status: 'REJECTED' } : item))
+      setDashboardAction('Application ' + application.applicationNumber + ' was rejected and saved in the central registry.')
+    } catch (error: any) {
+      setDashboardAction(error?.response?.data?.message ?? 'The application could not be rejected.')
+    }
+  }
   const openEmailAction = () => {
     const recipients = Array.from(new Set(officialRoster.map((student) => student.parentEmail).filter(Boolean))).slice(0, 40).join(',')
     window.location.href = `mailto:${recipients}?subject=${encodeURIComponent('KCS Super Admin communication')}`
@@ -3298,12 +3332,12 @@ const AdminDashboard = () => {
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             {[
               { label: 'Official Registry', value: String(dashboardDirectory?.counts?.students ?? officialRoster.length), icon: GraduationCap, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300', sub: 'students controlled by Super Admin' },
-              { label: 'School Classes', value: String(SCHOOL_LEVELS.length), icon: BookOpen, tone: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', sub: 'K3 to Grade 12' },
+              { label: 'School Classes', value: String(new Set(officialRoster.map((student) => formatClassName(student.grade, student.section)).filter(Boolean)).size || dashboardOverview?.stats?.classes || 0), icon: BookOpen, tone: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300', sub: 'K3 to Grade 12' },
               { label: 'Parents / Families', value: String(dashboardDirectory?.counts?.families ?? 0), icon: Users, tone: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300', sub: 'official responsible families' },
               { label: 'Faculty Members', value: String(dashboardDirectory?.counts?.teachers ?? 0), icon: Users, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', sub: 'employees in the shared registry' },
               { label: 'Open Applications', value: String(pendingAdmissions.length), icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', sub: 'approval or refusal required' },
-              { label: 'AI Risk Alerts', value: '0', icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no active alert' },
-              { label: 'Live Events', value: '0', icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no scheduled event' },
+              { label: 'AI Risk Alerts', value: String(dashboardOverview?.stats?.riskAlerts ?? 0), icon: Brain, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no active alert' },
+              { label: 'Live Events', value: String(dashboardOverview?.stats?.liveEvents ?? 0), icon: Radio, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', sub: 'no scheduled event' },
             ].map((item) => {
               const Icon = item.icon
               return (
@@ -3376,7 +3410,7 @@ const AdminDashboard = () => {
                 <Video size={18} className="text-red-500" />
               </div>
               <div className="space-y-3">
-                {dashboardLiveEvents.map((event) => (
+                {dashboardLiveEvents.map((event: any) => (
                   <div key={event.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
@@ -3414,11 +3448,7 @@ const AdminDashboard = () => {
                     {(item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW') && (
                       <div className="mt-3 grid grid-cols-2 gap-2">
                         <a href="/admin/admissions" className="rounded-lg bg-green-600 px-3 py-2 text-center text-xs font-bold text-white">Review & approve</a>
-                        <button className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white" onClick={() => setAdmissionRequests((items) => {
-                          const next = items.map((application) => application.applicationNumber === item.applicationNumber ? { ...application, status: 'REJECTED' as const } : application)
-                          saveAdmissions(next)
-                          return next
-                        })}>Refuse</button>
+                        <button className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white" onClick={() => void rejectAdmission(item)}>Refuse</button>
                       </div>
                     )}
                   </div>
@@ -3432,7 +3462,7 @@ const AdminDashboard = () => {
                 <Brain size={18} className="text-kcs-gold-500" />
               </div>
               <div className="space-y-3">
-                {dashboardRiskAlerts.map((alert) => (
+                {dashboardRiskAlerts.map((alert: any) => (
                   <div key={alert.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{alert.title}</p>
@@ -3452,7 +3482,7 @@ const AdminDashboard = () => {
                 <BookOpen size={18} className="text-purple-500" />
               </div>
               <div className="space-y-3">
-                {dashboardStaffLoad.map((staff) => (
+                {dashboardStaffLoad.map((staff: any) => (
                   <div key={staff.teacher} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/20">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{staff.teacher}</p>
@@ -3479,7 +3509,7 @@ const AdminDashboard = () => {
                 </h2>
               </div>
               <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
-                {dashboardRecentActivity.map((item) => (
+                {dashboardRecentActivity.map((item: string) => (
                   <div key={item} className="flex items-start gap-3 text-sm text-kcs-blue-100">
                     <ArrowUpRight size={16} className="mt-0.5 flex-shrink-0 text-kcs-gold-300" />
                     <span>{item}</span>
@@ -3520,7 +3550,7 @@ const AdminDashboard = () => {
                 <span className="badge-gold text-xs">Data driven</span>
               </div>
               <div className="space-y-3">
-                {aiSignals.map((signal) => (
+                {dashboardSystemSignals.map((signal) => (
                   <div key={signal.title} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{signal.title}</p>
@@ -3541,7 +3571,7 @@ const AdminDashboard = () => {
                 <span className="badge-gold text-xs">Super Admin only</span>
               </div>
               <div className="space-y-3">
-                {sensitiveActions.map((item) => (
+                {dashboardSensitiveActions.map((item) => (
                   <div key={item.action} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
                     <div className="flex items-center justify-between gap-3">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.action}</p>
@@ -3579,7 +3609,7 @@ const AdminDashboard = () => {
                 <span className="badge-gold text-xs">Principal workflow</span>
               </div>
               <div className="space-y-3">
-                {(hasOperationalData ? [...reportCards, ...transcripts] : []).slice(0, 6).map((item: any) => (
+                {([] as any[]).slice(0, 6).map((item: any) => (
                   <button type="button" onClick={() => setReportCardControl(item)} key={`${item.student}-${item.term ?? item.years}`} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-gold-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.student}</p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
