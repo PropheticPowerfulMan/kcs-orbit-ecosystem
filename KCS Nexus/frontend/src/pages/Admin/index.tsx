@@ -2134,7 +2134,7 @@ const AdminSectionView = ({
               setGradeFilter(event.target.value)
               setClassSuffixFilter('All')
             }} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="All">Toutes les classes</option>
+              <option value="All">All</option>
               {SCHOOL_LEVELS.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
             </select>
             <select value={classSuffixFilter} onChange={(event) => {
