@@ -97,7 +97,7 @@ export default function AuthPanel() {
 
           {error && <p className="edusync-login-alert error" role="alert">{error}</p>}
           {message && <p className="edusync-login-alert success" role="status">{message}</p>}
-          <button className="edusync-login-submit" disabled={busy} type="submit">{busy ? "Please wait..." : mode === "login" ? "Sign in securely" : "Send recovery instructions"}</button>
+          <button className="edusync-login-submit" disabled={busy} type="submit">{busy ? "Please wait..." : mode === "login" ? "Sign in securely" : "Send temporary password"}</button>
           <button type="button" className="edusync-login-link" onClick={() => changeMode(mode === "login" ? "recovery" : "login")}>{mode === "login" ? "Forgot your password?" : "Back to sign in"}</button>
           <footer>Need help? Contact the KCS administration. Accounts are created and managed by authorized school personnel.</footer>
         </form>

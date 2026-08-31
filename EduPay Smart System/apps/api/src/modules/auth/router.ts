@@ -623,7 +623,7 @@ authRouter.post("/login", loginLimiter, async (req, res) => {
 
 authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
   const payload = forgotPasswordSchema.safeParse(req.body);
-  const genericMessage = "Si ce compte existe, un lien sécurisé sera envoyé via le canal sélectionné.";
+  const genericMessage = "Si ce compte existe, un nouveau mot de passe temporaire sera envoyé via le canal sélectionné.";
   if (!payload.success) return res.json({ message: genericMessage });
 
   try {
@@ -638,42 +638,42 @@ authRouter.post("/forgot-password", recoveryLimiter, async (req, res) => {
       include: { parent: true }
     });
     if (user) {
-      await prisma.passwordResetToken.updateMany({
-        where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
-        data: { usedAt: new Date() }
-      });
-      const token = crypto.randomBytes(24).toString("base64url");
-      await prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash: hashResetToken(token),
-          expiresAt: new Date(Date.now() + 30 * 60 * 1000)
-        }
-      });
-      if (payload.data.channel === "sms") {
-        if (user.parent?.phone) {
-          await sendSms({
-            to: user.parent.phone,
-            text: `EduPay: réinitialisez votre mot de passe (lien valable 30 min): ${buildPasswordResetLink(token)}`
+      const temporaryPassword = `KCS-${crypto.randomBytes(6).toString("base64url")}!`;
+      const recoveryMessage = [
+        `Bonjour ${user.fullName},`,
+        "",
+        "Une demande de récupération a été reçue pour votre compte EduPay.",
+        `Identifiant: ${user.accessCode || user.email}`,
+        `Nouveau mot de passe temporaire: ${temporaryPassword}`,
+        "",
+        "Pour votre sécurité, changez ce mot de passe après votre prochaine connexion.",
+        "Si vous n'êtes pas à l'origine de cette demande, contactez l'administration."
+      ].join("\n");
+
+      const delivery = payload.data.channel === "sms"
+        ? (user.parent?.phone
+            ? await sendSms({ to: user.parent.phone, text: recoveryMessage })
+            : "SKIPPED")
+        : await sendEmail({
+            to: user.email,
+            subject: "Nouveau mot de passe temporaire EduPay",
+            text: recoveryMessage
           });
-        }
+
+      if (delivery === "SENT") {
+        const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+        await prisma.$transaction([
+          prisma.user.update({
+            where: { id: user.id },
+            data: { passwordHash, mustChangePassword: true }
+          }),
+          prisma.passwordResetToken.updateMany({
+            where: { userId: user.id, usedAt: null },
+            data: { usedAt: new Date() }
+          })
+        ]);
       } else {
-        await sendEmail({
-        to: user.email,
-        subject: "Réinitialisation de mot de passe EduPay",
-        text: [
-          `Bonjour ${user.fullName},`,
-          "",
-          "Une demande de réinitialisation de mot de passe a été reçue pour votre compte EduPay.",
-          "",
-          `Identifiant du compte: ${user.accessCode || user.email}`,
-          `Code de réinitialisation: ${token}`,
-          `Lien direct: ${buildPasswordResetLink(token)}`,
-          "Ce code expire dans 30 minutes, ne peut être utilisé qu'une seule fois et doit être confirmé avec votre e-mail ou code d'accès.",
-          "",
-          "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message."
-        ].join("\n")
-        });
+        console.warn(`EduPay password recovery was not applied because delivery failed via ${payload.data.channel}.`);
       }
     }
     return res.json({ message: genericMessage });

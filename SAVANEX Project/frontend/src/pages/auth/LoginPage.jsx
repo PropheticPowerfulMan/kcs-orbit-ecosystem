@@ -60,7 +60,7 @@ const LoginPage = () => {
         window.history.replaceState({}, document.title, window.location.pathname);
       } else {
         await authService.forgotPassword(resetForm.email || form.username, resetChannel);
-        setResetMessage(`Si ce compte existe, un lien securise a ete envoye par ${resetChannel === 'sms' ? 'SMS' : 'e-mail'}.`);
+        setResetMessage(`Si ce compte existe, un nouveau mot de passe temporaire a été envoyé par ${resetChannel === 'sms' ? 'SMS' : 'e-mail'}.`);
       }
     } catch (err) {
       setResetError(err?.response?.data?.detail || 'Recuperation temporairement indisponible.');

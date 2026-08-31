@@ -281,7 +281,7 @@ def forgot_password(payload: ForgotPasswordRequest):
     if channel not in {"email", "sms"}:
         channel = "email"
     forward_password_recovery(str(payload.email).strip().lower(), channel)
-    return {"message": "If this account exists, a secure reset link has been sent through the selected channel."}
+    return {"message": "If this account exists, a new temporary password has been sent through the selected channel."}
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):

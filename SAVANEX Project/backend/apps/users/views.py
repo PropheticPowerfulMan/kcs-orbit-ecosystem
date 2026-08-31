@@ -29,7 +29,7 @@ from .serializers import (
 from .permissions import IsAdminUser
 
 
-PASSWORD_RESET_RESPONSE = {'detail': 'If an account exists, a secure reset link will be sent through the selected channel.'}
+PASSWORD_RESET_RESPONSE = {'detail': 'If an account exists, a new temporary password will be sent through the selected channel.'}
 
 logger = logging.getLogger(__name__)
 _reset_side_effect_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='access-reset')
@@ -367,23 +367,30 @@ def forgot_password(request):
 
     user = User.objects.filter(email__iexact=email, is_active=True).first()
     if user:
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        token = default_token_generator.make_token(user)
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
-        reset_url = f'{frontend_url}/login?uid={uid}&resetToken={token}'
+        temporary_password = generate_temporary_password()
         message = (
             f'Bonjour {user.get_full_name() or user.username},\n\n'
             'Une demande de réinitialisation de mot de passe a été faite pour votre compte SAVANEX.\n'
-            f'Lien de réinitialisation: {reset_url}\n\n'
+            f'Identifiant: {user.email}\n'
+            f'Nouveau mot de passe temporaire: {temporary_password}\n\n'
+            'Pour votre sécurité, changez ce mot de passe après votre prochaine connexion.\n\n'
             "Ignorez ce message si vous n'êtes pas à l'origine de la demande."
         )
         try:
             if channel == 'sms':
-                _send_user_sms(user, f'Réinitialisez votre mot de passe (lien sécurisé): {reset_url}', 'Password recovery')
+                delivery = _send_user_sms(user, f'Nouveau mot de passe temporaire: {temporary_password}\nChangez-le après votre connexion.', 'Password recovery')
+                delivered = delivery.status == 'sent'
             else:
-                send_branded_email(user.email, 'SAVANEX password reset', message, reset_url, 'Réinitialiser mon mot de passe')
+                delivered = bool(send_branded_email(user.email, 'Nouveau mot de passe temporaire SAVANEX', message))
+            if delivered:
+                user.set_password(temporary_password)
+                user.must_change_password = True
+                user.password_generated_by_system = True
+                user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
+            else:
+                logger.warning('[auth] SAVANEX password recovery was not applied because delivery failed via %s.', channel)
         except Exception:
-            print(f'[auth] SAVANEX password reset delivery failed via {channel}.')
+            logger.exception('[auth] SAVANEX password recovery delivery failed via %s.', channel)
 
     return Response(PASSWORD_RESET_RESPONSE)
 

@@ -252,6 +252,7 @@ function ForgotPasswordModal({ onClose, t, lang, initialResetToken = "" }: { onC
               <h3 className="font-display text-xl font-bold text-white">{t("forgotSentTitle")}</h3>
               <p className="text-sm text-ink-dim">{successMessage || "Si ce compte existe, un code vient d'être envoyé. Collez ce code ci-dessous pour choisir un nouveau mot de passe."}</p>
             </div>
+            {resetToken ? (
             <form onSubmit={handleResetPassword} className="space-y-4">
               <input
                 type="text"
@@ -275,6 +276,9 @@ function ForgotPasswordModal({ onClose, t, lang, initialResetToken = "" }: { onC
               </button>
               <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">{t("forgotClose")}</button>
             </form>
+            ) : (
+              <button type="button" onClick={onClose} className="w-full rounded-lg border border-slate-600 px-4 py-3 text-sm font-semibold text-ink-dim hover:text-white">{t("forgotClose")}</button>
+            )}
           </div>
         )}
       </div>

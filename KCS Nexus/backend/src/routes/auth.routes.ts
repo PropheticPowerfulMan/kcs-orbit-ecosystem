@@ -16,7 +16,7 @@ import { generateTotpSecret, verifyTotp } from '../utils/totp.js'
 
 const RESET_TOKEN_TTL_MINUTES = 30
 const RESET_TOKEN_BYTES = 32
-const PASSWORD_RESET_RESPONSE = 'If an account exists, a secure reset link will be sent through the selected channel.'
+const PASSWORD_RESET_RESPONSE = 'If an account exists, a new temporary password will be sent through the selected channel.'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -690,42 +690,47 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
   await forwardPasswordRecovery(normalizedEmail, channel, recoverySources)
 
   if (user?.passwordHash && recoverySources.length === 0 && !isConfiguredSuperAdminUser(user.id)) {
-    const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('base64url')
-    const tokenHash = hashResetToken(rawToken)
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000)
+    const temporaryPassword = `KCS-${crypto.randomBytes(8).toString('base64url')}!`
+    const message = [
+      `Bonjour ${user.firstName},`,
+      '',
+      'Une demande de récupération a été reçue pour votre compte KCS Nexus.',
+      `Identifiant: ${user.email}`,
+      `Nouveau mot de passe temporaire: ${temporaryPassword}`,
+      '',
+      'Pour votre sécurité, changez ce mot de passe après votre prochaine connexion.',
+      "Si vous n'êtes pas à l'origine de cette demande, contactez l'administration.",
+    ].join('\n')
 
-    await prisma.$transaction([
-      prisma.passwordResetToken.updateMany({
-        where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
-        data: { usedAt: new Date() },
-      }),
-      prisma.passwordResetToken.create({
-        data: { tokenHash, userId: user.id, expiresAt },
-      }),
-      prisma.auditLog.create({
-        data: {
-          actorId: user.id,
-          action: 'auth.password_reset_requested',
-          targetType: 'User',
-          targetId: user.id,
-          metadata: { email: normalizedEmail, expiresAt: expiresAt.toISOString() },
-        },
-      }),
-    ])
-
-    const resetUrl = buildPasswordResetUrl(rawToken)
-    const emailContent = buildPasswordResetEmail(user.firstName, resetUrl)
     const result = channel === 'sms'
-      ? await sendSchoolSms(user.phone, `KCS Nexus: réinitialisez votre mot de passe (lien valable ${RESET_TOKEN_TTL_MINUTES} min): ${resetUrl}`)
+      ? await sendSchoolSms(user.phone, `KCS Nexus : ${message}`)
       : await sendSchoolMail({
           to: user.email,
-          subject: 'KCS Nexus password reset',
-          text: emailContent.text,
-          html: emailContent.html,
+          subject: 'Nouveau mot de passe temporaire KCS Nexus',
+          text: message,
         })
 
-    if (!result.sent) {
-      console.warn(`[auth] Password reset delivery failed via ${channel}.`)
+    if (result.sent) {
+      const passwordHash = await bcrypt.hash(temporaryPassword, 10)
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
+        prisma.passwordResetToken.updateMany({
+          where: { userId: user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        }),
+        prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
+        prisma.auditLog.create({
+          data: {
+            actorId: user.id,
+            action: 'auth.temporary_password_issued',
+            targetType: 'User',
+            targetId: user.id,
+            metadata: { email: normalizedEmail, channel },
+          },
+        }),
+      ])
+    } else {
+      console.warn(`[auth] Password recovery was not applied because delivery failed via ${channel}.`)
     }
   }
 
