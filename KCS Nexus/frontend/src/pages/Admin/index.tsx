@@ -15,6 +15,7 @@ import {
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
+import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { adminAPI, admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
@@ -3145,6 +3146,7 @@ const AdminSectionView = ({
   if (segment === 'settings') {
     return (
       <div className="space-y-6">
+        <AcademicCalendarSettings />
         <AccountSettingsPanel roleLabel="Compte super administrateur" />
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">

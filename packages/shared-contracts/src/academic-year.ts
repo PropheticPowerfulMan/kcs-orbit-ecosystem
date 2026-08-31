@@ -2,6 +2,51 @@ import { z } from "zod";
 
 const TrimmedStringSchema = z.string().trim().min(1);
 
+export const AcademicPeriodTypeSchema = z.enum(["SEMESTER", "TRIMESTER"]);
+export const AcademicYearStatusSchema = z.enum(["PLANNED", "ACTIVE", "CLOSED", "ARCHIVED"]);
+
+export const AcademicPeriodSchema = z.object({
+  type: AcademicPeriodTypeSchema,
+  sequence: z.number().int().positive(),
+  code: TrimmedStringSchema,
+  name: TrimmedStringSchema,
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date()
+});
+
+export const AcademicCalendarInputSchema = z.object({
+  organizationId: TrimmedStringSchema,
+  name: z.string().trim().regex(/^\d{4}-\d{4}$/, "Academic year must use YYYY-YYYY"),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  status: AcademicYearStatusSchema.optional(),
+  isCurrent: z.boolean().optional(),
+  periods: z.array(AcademicPeriodSchema).length(5)
+});
+
+export type AcademicPeriodInput = z.infer<typeof AcademicPeriodSchema>;
+export type AcademicCalendarInput = z.infer<typeof AcademicCalendarInputSchema>;
+
+export function buildDefaultAcademicCalendar(startYear: number, organizationId: string): AcademicCalendarInput {
+  const utc = (year: number, month: number, day: number, end = false) =>
+    new Date(Date.UTC(year, month, day, end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0));
+  return {
+    organizationId,
+    name: `${startYear}-${startYear + 1}`,
+    startDate: utc(startYear, 8, 1),
+    endDate: utc(startYear + 1, 5, 30, true),
+    status: "ACTIVE",
+    isCurrent: true,
+    periods: [
+      { type: "SEMESTER", sequence: 1, code: "S1", name: "Semester 1", startDate: utc(startYear, 8, 1), endDate: utc(startYear + 1, 0, 31, true) },
+      { type: "SEMESTER", sequence: 2, code: "S2", name: "Semester 2", startDate: utc(startYear + 1, 1, 1), endDate: utc(startYear + 1, 5, 30, true) },
+      { type: "TRIMESTER", sequence: 1, code: "T1", name: "Trimester 1", startDate: utc(startYear, 8, 1), endDate: utc(startYear, 11, 31, true) },
+      { type: "TRIMESTER", sequence: 2, code: "T2", name: "Trimester 2", startDate: utc(startYear + 1, 0, 1), endDate: utc(startYear + 1, 2, 31, true) },
+      { type: "TRIMESTER", sequence: 3, code: "T3", name: "Trimester 3", startDate: utc(startYear + 1, 3, 1), endDate: utc(startYear + 1, 5, 30, true) }
+    ]
+  };
+}
+
 export const AcademicProgressionDecisionSchema = z.enum([
   "AUTO",
   "PROMOTE",

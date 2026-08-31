@@ -1,0 +1,11 @@
+CREATE TYPE "AcademicYearStatus" AS ENUM ('PLANNED', 'ACTIVE', 'CLOSED', 'ARCHIVED');
+CREATE TYPE "AcademicPeriodType" AS ENUM ('SEMESTER', 'TRIMESTER');
+CREATE TABLE "AcademicYear" ("id" TEXT NOT NULL, "organizationId" TEXT NOT NULL, "name" TEXT NOT NULL, "startDate" TIMESTAMP(3) NOT NULL, "endDate" TIMESTAMP(3) NOT NULL, "status" "AcademicYearStatus" NOT NULL DEFAULT 'PLANNED', "isCurrent" BOOLEAN NOT NULL DEFAULT false, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "AcademicYear_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "AcademicPeriod" ("id" TEXT NOT NULL, "academicYearId" TEXT NOT NULL, "type" "AcademicPeriodType" NOT NULL, "sequence" INTEGER NOT NULL, "code" TEXT NOT NULL, "name" TEXT NOT NULL, "startDate" TIMESTAMP(3) NOT NULL, "endDate" TIMESTAMP(3) NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "AcademicPeriod_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "AcademicYear_organizationId_name_key" ON "AcademicYear"("organizationId", "name");
+CREATE INDEX "AcademicYear_organizationId_isCurrent_idx" ON "AcademicYear"("organizationId", "isCurrent");
+CREATE UNIQUE INDEX "AcademicPeriod_academicYearId_type_sequence_key" ON "AcademicPeriod"("academicYearId", "type", "sequence");
+CREATE UNIQUE INDEX "AcademicPeriod_academicYearId_code_key" ON "AcademicPeriod"("academicYearId", "code");
+CREATE INDEX "AcademicPeriod_academicYearId_type_idx" ON "AcademicPeriod"("academicYearId", "type");
+ALTER TABLE "AcademicYear" ADD CONSTRAINT "AcademicYear_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AcademicPeriod" ADD CONSTRAINT "AcademicPeriod_academicYearId_fkey" FOREIGN KEY ("academicYearId") REFERENCES "AcademicYear"("id") ON DELETE CASCADE ON UPDATE CASCADE;

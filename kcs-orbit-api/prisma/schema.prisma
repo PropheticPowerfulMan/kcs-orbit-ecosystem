@@ -51,6 +51,18 @@ enum SyncStatus {
   FAILED
 }
 
+enum AcademicYearStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum AcademicPeriodType {
+  SEMESTER
+  TRIMESTER
+}
+
 model Organization {
   id             String          @id @default(cuid())
   name           String
@@ -71,8 +83,42 @@ model Organization {
   appConnections AppConnection[]
   syncEvents     SyncEvent[]
   auditLogs      AuditLog[]
+  academicYears  AcademicYear[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+model AcademicYear {
+  id String @id @default(cuid())
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name String
+  startDate DateTime
+  endDate DateTime
+  status AcademicYearStatus @default(PLANNED)
+  isCurrent Boolean @default(false)
+  periods AcademicPeriod[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId, name])
+  @@index([organizationId, isCurrent])
+}
+
+model AcademicPeriod {
+  id String @id @default(cuid())
+  academicYearId String
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  type AcademicPeriodType
+  sequence Int
+  code String
+  name String
+  startDate DateTime
+  endDate DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([academicYearId, type, sequence])
+  @@unique([academicYearId, code])
+  @@index([academicYearId, type])
 }
 
 model User {

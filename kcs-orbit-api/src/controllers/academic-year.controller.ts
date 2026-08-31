@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { AcademicProgressionOverrideSchema } from "@ecosystem/shared-contracts";
+import { AcademicCalendarInputSchema, AcademicProgressionOverrideSchema } from "@ecosystem/shared-contracts";
+import { AppSlug } from "@prisma/client";
+import { getOrCreateCurrentAcademicCalendar, listAcademicCalendars, saveAcademicCalendar } from "../services/academic-calendar.service";
 import {
   executeAcademicYearRollover,
   previewAcademicYearRollover
@@ -24,6 +26,22 @@ function parseRolloverRequest(req: Request) {
     passThreshold: body.passThreshold,
     overrides: body.overrides || body.decisions || []
   };
+}
+
+const organizationQuerySchema = z.object({ organizationId: z.string().min(1) });
+
+export async function getCurrentAcademicCalendarController(req: Request, res: Response) {
+  const { organizationId } = organizationQuerySchema.parse(req.query);
+  return res.json({ calendar: await getOrCreateCurrentAcademicCalendar(organizationId) });
+}
+export async function listAcademicCalendarsController(req: Request, res: Response) {
+  const { organizationId } = organizationQuerySchema.parse(req.query);
+  return res.json({ calendars: await listAcademicCalendars(organizationId) });
+}
+export async function saveAcademicCalendarController(req: Request, res: Response) {
+  const input = AcademicCalendarInputSchema.parse(req.body);
+  const calendar = await saveAcademicCalendar(input, req.integration?.appSlug || AppSlug.KCS_NEXUS);
+  return res.json({ calendar });
 }
 
 export async function previewAcademicYearRolloverController(req: Request, res: Response) {

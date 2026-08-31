@@ -21,6 +21,34 @@ services:
       savanex_web: { condition: service_healthy }
       savanex_api: { condition: service_healthy }
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"], interval: 15s, timeout: 5s, retries: 10 }
+  orbit_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${ORBIT_STAGING_POSTGRES_DB:?set ORBIT_STAGING_POSTGRES_DB}
+      POSTGRES_USER: ${ORBIT_STAGING_POSTGRES_USER:?set ORBIT_STAGING_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${ORBIT_STAGING_POSTGRES_PASSWORD:?set ORBIT_STAGING_POSTGRES_PASSWORD}
+    volumes: [staging_orbit_db_data:/var/lib/postgresql/data]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 15 }
+  orbit_api:
+    <<: *service-defaults
+    build: { context: ../.., dockerfile: kcs-orbit-api/Dockerfile }
+    image: kcs/orbit-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    environment:
+      NODE_ENV: production
+      PORT: "4500"
+      DATABASE_URL: postgresql://${ORBIT_STAGING_POSTGRES_USER}:${ORBIT_STAGING_POSTGRES_PASSWORD}@orbit_db:5432/${ORBIT_STAGING_POSTGRES_DB}?schema=public
+      CORS_ORIGIN: https://${STAGING_DOMAIN}
+      JWT_SECRET: ${ORBIT_STAGING_JWT_SECRET:?set ORBIT_STAGING_JWT_SECRET}
+      KCS_NEXUS_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      EDUPAY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      EDUSYNCAI_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      SAVANEX_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      ACADEMIC_ROLLOVER_AUTO_ENABLED: "false"
+    networks: [staging_internal]
+    depends_on: { orbit_db: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4500/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 10, start_period: 30s }
   edupay_db:
     <<: *service-defaults
     image: postgres:16-alpine
@@ -48,6 +76,9 @@ services:
       KCS_ORBIT_API_URL: ""
       KCS_ORBIT_API_KEY: ""
       KCS_ORBIT_ORGANIZATION_ID: ""
+      ACADEMIC_CALENDAR_ORBIT_API_URL: http://orbit_api:4500
+      ACADEMIC_CALENDAR_ORBIT_API_KEY: ${STAGING_INTEGRATION_KEY}
+      ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID: ${KCS_ORBIT_ORGANIZATION_ID}
       SAVANEX_API_URL: ""
       KCS_NEXUS_API_URL: ""
       SMTP_HOST: ""
@@ -107,6 +138,9 @@ services:
       KCS_ORBIT_API_URL: ""
       KCS_ORBIT_API_KEY: ""
       KCS_ORBIT_ORGANIZATION_ID: ""
+      ACADEMIC_CALENDAR_ORBIT_API_URL: http://orbit_api:4500
+      ACADEMIC_CALENDAR_ORBIT_API_KEY: ${STAGING_INTEGRATION_KEY}
+      ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID: ${KCS_ORBIT_ORGANIZATION_ID}
       EDUPAY_API_URL: http://edupay_api:4000
       SAVANEX_API_URL: http://savanex-api:8000
       SAVANEX_INTELLIGENCE_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
@@ -118,6 +152,7 @@ services:
     depends_on:
       nexus_db: { condition: service_healthy }
       savanex_api: { condition: service_healthy }
+      orbit_api: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
@@ -202,6 +237,7 @@ networks:
     external: true
     name: kcs-orbit-production_kcs_staging
 volumes:
+  staging_orbit_db_data:
   staging_edupay_db_data:
   staging_edupay_proof_storage:
   staging_nexus_db_data:

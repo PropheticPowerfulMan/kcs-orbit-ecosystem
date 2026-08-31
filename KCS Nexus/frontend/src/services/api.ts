@@ -331,3 +331,9 @@ export const incidentReportsAPI = {
 export const academyAPI = {
   launch: () => api.post<{ data: { url: string } }>("/academy/launch"),
 }
+
+export const academicCalendarAPI = {
+  current: () => api.get('/academic-calendar/current'),
+  list: () => api.get('/academic-calendar'),
+  save: (data: object) => api.put('/academic-calendar', data),
+}
