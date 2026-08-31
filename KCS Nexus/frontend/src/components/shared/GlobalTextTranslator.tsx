@@ -4,7 +4,8 @@ import { globalFrenchText } from '@/i18n/globalText'
 import { useUIStore } from '@/store/uiStore'
 
 const textAttributes = ['aria-label', 'placeholder', 'title']
-const ignoredTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE', 'TEXTAREA'])
+const ignoredTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE'])
+const ignoredTextTags = new Set(['TEXTAREA'])
 const englishByFrench = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [french, english]))
 const normalize = (value: string) => value.replace(/\s+/g, ' ').trim()
 const frenchByNormalizedEnglish = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [normalize(english), french]))
@@ -55,7 +56,7 @@ const translateText = (value: string, language: string) => {
 const translateNode = (node: Node, language: string) => {
   if (node instanceof Text) {
     const parent = node.parentElement
-    if (!parent || ignoredTags.has(parent.tagName) || parent.isContentEditable) return
+    if (!parent || ignoredTags.has(parent.tagName) || ignoredTextTags.has(parent.tagName) || parent.isContentEditable) return
 
     const next = translateText(node.nodeValue ?? '', language)
     if (next !== node.nodeValue) {
