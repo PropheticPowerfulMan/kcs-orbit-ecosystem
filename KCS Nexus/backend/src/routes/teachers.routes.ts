@@ -102,12 +102,47 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     },
   })
   if (!teacher) return success(res, { profile: null, courses: [], students: [], assignments: [], grades: [], timetable: [] }, 'Teacher profile synchronization pending')
-  const students = new Map<string, unknown>()
+  const students = new Map<string, any>()
   teacher.courses.forEach((course) => course.enrollments.forEach(({ student }) => students.set(student.id, student)))
+  const studentIds = [...students.keys()]
+  const attendance = studentIds.length ? await prisma.attendanceRecord.findMany({
+    where: { studentId: { in: studentIds }, recordedById: req.user!.sub },
+    select: { studentId: true, status: true },
+  }) : []
+  const now = new Date()
+  const analyticsStudents = [...students.values()].map((student) => {
+    const grades = teacher.courses.flatMap((course) => course.grades.filter((grade) => grade.studentId === student.id).map((grade) => ({ ...grade, courseName: course.name })))
+    const attendanceRows = attendance.filter((record) => record.studentId === student.id)
+    const submissions = teacher.courses.flatMap((course) => course.assignments.flatMap((assignment) => assignment.submissions.filter((submission) => submission.studentId === student.id).map((submission) => ({ ...submission, dueDate: assignment.dueDate }))))
+    const average = grades.length ? Number((grades.reduce((sum, grade) => sum + grade.percentage, 0) / grades.length).toFixed(1)) : null
+    const present = attendanceRows.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
+    const attendanceRate = attendanceRows.length ? Number(((present / attendanceRows.length) * 100).toFixed(1)) : null
+    const missingAssignments = submissions.filter((submission) => submission.status === 'PENDING' && submission.dueDate < now).length
+    const courseAverages = teacher.courses.map((course) => {
+      const values = course.grades.filter((grade) => grade.studentId === student.id)
+      return { name: course.name, average: values.length ? values.reduce((sum, grade) => sum + grade.percentage, 0) / values.length : null }
+    }).filter((item) => item.average !== null)
+    const risk = average === null && attendanceRate === null && !missingAssignments ? 'unassessed' : average !== null && average < 60 || attendanceRate !== null && attendanceRate < 80 || missingAssignments >= 2 ? 'high' : average !== null && average < 70 || attendanceRate !== null && attendanceRate < 90 || missingAssignments ? 'medium' : 'low'
+    return {
+      ...student,
+      analytics: {
+        average,
+        attendanceRate,
+        gradedItems: grades.length,
+        attendanceRecords: attendanceRows.length,
+        missingAssignments,
+        risk,
+        strengths: courseAverages.filter((item) => item.average! >= 80).map((item) => item.name),
+        weaknesses: courseAverages.filter((item) => item.average! < 60).map((item) => item.name),
+        rank: null as number | null,
+      },
+    }
+  })
+  analyticsStudents.filter((student) => student.analytics.average !== null).sort((a, b) => b.analytics.average! - a.analytics.average!).forEach((student, index) => { student.analytics.rank = index + 1 })
   return success(res, {
     profile: { id: teacher.id, employeeNumber: teacher.employeeNumber, department: teacher.department, qualification: teacher.qualification, homeroomGrade: teacher.homeroomGrade, homeroomSection: teacher.homeroomSection, user: teacher.user },
     courses: teacher.courses,
-    students: [...students.values()],
+    students: analyticsStudents,
     assignments: teacher.courses.flatMap((course) => course.assignments.map((assignment) => ({ ...assignment, courseId: course.id, courseName: course.name }))),
     grades: teacher.courses.flatMap((course) => course.grades.map((grade) => ({ ...grade, courseId: course.id, courseName: course.name }))),
     timetable: teacher.courses.flatMap((course) => course.schedules.map((schedule) => ({ ...schedule, courseId: course.id, courseName: course.name, studentCount: course.enrollments.length }))),

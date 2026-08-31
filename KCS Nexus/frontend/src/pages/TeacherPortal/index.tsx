@@ -143,6 +143,9 @@ type RegistryStudent = {
   strengths?: string[]
   weaknesses?: string[]
   aiInsight?: string
+  gradedItems?: number
+  attendanceRecords?: number
+  missingAssignments?: number
 }
 
 type StudentProfileResponse = {
@@ -153,6 +156,17 @@ type StudentProfileResponse = {
   gpa?: number | null
   attendanceRate?: number | null
   status?: string
+  analytics?: {
+    average?: number | null
+    attendanceRate?: number | null
+    rank?: number | null
+    risk?: string
+    strengths?: string[]
+    weaknesses?: string[]
+    gradedItems?: number
+    attendanceRecords?: number
+    missingAssignments?: number
+  }
   user?: {
     firstName?: string
     lastName?: string
@@ -179,15 +193,20 @@ const mapRegistryStudent = (student: StudentProfileResponse, index: number): Reg
     grade: student.grade,
     section: student.section ?? '',
     parentId: student.parentLinks?.[0]?.parentId ?? student.parentLinks?.[0]?.parent?.id,
-    advisor: 'School registry',
-    average: Math.round((student.gpa ?? 0) * 20) || undefined,
-    gpa: student.gpa ?? undefined,
-    rank: index + 1,
-    attendance: student.attendanceRate ?? undefined,
-    risk: student.status === 'active' ? 'low' : 'medium',
-    strengths: [],
-    weaknesses: [],
-    aiInsight: `${name} is loaded from the Super Admin student registry for ${student.grade}${student.section ?? ''}.`,
+    advisor: 'Official assigned-course roster',
+    average: student.analytics?.average ?? undefined,
+    rank: student.analytics?.rank ?? undefined,
+    attendance: student.analytics?.attendanceRate ?? undefined,
+    risk: student.analytics?.risk ?? 'unassessed',
+    strengths: student.analytics?.strengths ?? [],
+    weaknesses: student.analytics?.weaknesses ?? [],
+    gradedItems: student.analytics?.gradedItems ?? 0,
+    attendanceRecords: student.analytics?.attendanceRecords ?? 0,
+    missingAssignments: student.analytics?.missingAssignments ?? 0,
+    aiInsight: student.analytics?.average == null && student.analytics?.attendanceRate == null
+      ? 'No verified academic or attendance evidence has been recorded yet for ' + name + '.'
+      : 'Verified indicators: ' + (student.analytics?.gradedItems ?? 0) + ' graded item(s), ' + (student.analytics?.attendanceRecords ?? 0) + ' attendance record(s), and ' + (student.analytics?.missingAssignments ?? 0) + ' overdue assignment(s).',
+
   }
 }
 
@@ -1162,9 +1181,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.average}%</p><p className="text-xs text-gray-500">Average</p></div>
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.attendance}%</p><p className="text-xs text-gray-500">Attendance</p></div>
-                <div><p className="font-bold text-kcs-blue-900 dark:text-white">#{student.rank}</p><p className="text-xs text-gray-500">Rank</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.average == null ? 'N/A' : student.average + '%'}</p><p className="text-xs text-gray-500">Verified average</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.attendance == null ? 'N/A' : student.attendance + '%'}</p><p className="text-xs text-gray-500">Teacher attendance</p></div>
+                <div><p className="font-bold text-kcs-blue-900 dark:text-white">{student.rank == null ? 'N/A' : '#' + student.rank}</p><p className="text-xs text-gray-500">Measured rank</p></div>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{student.aiInsight}</p>
             </button>
