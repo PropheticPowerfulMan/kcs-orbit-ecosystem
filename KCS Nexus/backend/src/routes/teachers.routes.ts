@@ -13,6 +13,46 @@ const workspaceSchema = z.object({
   revision: z.number().int().nonnegative().optional(),
 })
 
+const attendanceBulkSchema = z.object({
+  courseId: z.string().min(1),
+  date: z.coerce.date(),
+  period: z.string().max(80).optional(),
+  entries: z.array(z.object({
+    studentId: z.string().min(1),
+    status: z.enum(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'SICK', 'SUSPENDED']),
+    note: z.string().max(500).optional(),
+  })).min(1).max(500),
+})
+
+const assignmentCreateSchema = z.object({
+  courseId: z.string().min(1),
+  title: z.string().min(2).max(180),
+  description: z.string().min(2).max(5000),
+  dueDate: z.coerce.date(),
+  maxScore: z.coerce.number().positive().max(10000),
+  type: z.enum(['HOMEWORK', 'QUIZ', 'EXAM', 'PROJECT', 'LAB']),
+})
+
+const submissionGradeSchema = z.object({
+  score: z.coerce.number().min(0),
+  feedback: z.string().max(5000).optional(),
+})
+
+const ownedCourse = async (userId: string, courseId: string) => {
+  const course = await prisma.course.findFirst({
+    where: { id: courseId, teacher: { userId } },
+    include: {
+      enrollments: { include: { student: { include: { user: true } } } },
+      assignments: {
+        include: { submissions: { include: { student: { include: { user: true } } } } },
+        orderBy: { dueDate: 'desc' },
+      },
+    },
+  })
+  if (!course) throw new ApiError(403, 'This course is not assigned to the authenticated teacher')
+  return course
+}
+
 teachersRouter.get('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub } })
   return success(res, workspace)
@@ -73,6 +113,86 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     timetable: teacher.courses.flatMap((course) => course.schedules.map((schedule) => ({ ...schedule, courseId: course.id, courseName: course.name, studentCount: course.enrollments.length }))),
   }, 'Teacher dashboard loaded')
 }))
+
+teachersRouter.get('/me/attendance', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const courseId = String(req.query.courseId ?? '')
+  if (!courseId) throw new ApiError(400, 'courseId is required')
+  const course = await ownedCourse(req.user!.sub, courseId)
+  const date = req.query.date ? new Date(String(req.query.date)) : undefined
+  const records = await prisma.attendanceRecord.findMany({
+    where: {
+      studentId: { in: course.enrollments.map((item) => item.studentId) },
+      className: course.grade,
+      ...(date && !Number.isNaN(date.getTime()) ? { date } : {}),
+    },
+    include: { student: { include: { user: true } } },
+    orderBy: [{ date: 'desc' }, { student: { user: { lastName: 'asc' } } }],
+  })
+  return success(res, { course: { id: course.id, name: course.name, grade: course.grade }, records })
+}))
+
+teachersRouter.post('/me/attendance/bulk', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = attendanceBulkSchema.parse(req.body)
+  const course = await ownedCourse(req.user!.sub, payload.courseId)
+  const enrolled = new Set(course.enrollments.map((item) => item.studentId))
+  if (payload.entries.some((entry) => !enrolled.has(entry.studentId))) throw new ApiError(403, 'Attendance contains a student who is not enrolled in this course')
+  const date = new Date(payload.date)
+  date.setUTCHours(0, 0, 0, 0)
+  const records = await prisma.$transaction(async (tx) => {
+    const saved = []
+    for (const entry of payload.entries) {
+      await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className: course.grade, period: payload.period ?? null } })
+      saved.push(await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: req.user!.sub, date, className: course.grade, period: payload.period, subject: course.name, status: entry.status, note: entry.note } }))
+    }
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ATTENDANCE_RECORDED', targetType: 'Course', targetId: course.id, metadata: { date: date.toISOString(), period: payload.period, count: saved.length } } })
+    return saved
+  })
+  return success(res, records, 'Official attendance saved')
+}))
+
+teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = assignmentCreateSchema.parse(req.body)
+  const course = await ownedCourse(req.user!.sub, payload.courseId)
+  const assignment = await prisma.$transaction(async (tx) => {
+    const created = await tx.assignment.create({ data: { courseId: course.id, title: payload.title, description: payload.description, dueDate: payload.dueDate, maxScore: payload.maxScore, type: payload.type } })
+    if (course.enrollments.length) await tx.assignmentSubmission.createMany({ data: course.enrollments.map(({ studentId }) => ({ assignmentId: created.id, studentId })), skipDuplicates: true })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_CREATED', targetType: 'Assignment', targetId: created.id, metadata: { courseId: course.id, recipients: course.enrollments.length } } })
+    return tx.assignment.findUnique({ where: { id: created.id }, include: { submissions: { include: { student: { include: { user: true } } } } } })
+  })
+  return success(res, assignment, 'Assignment published to enrolled students', 201)
+}))
+
+teachersRouter.patch('/me/assignments/:assignmentId/submissions/:studentId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const assignmentId = getRouteParam(req.params.assignmentId)
+  const studentId = getRouteParam(req.params.studentId)
+  const payload = submissionGradeSchema.parse(req.body)
+  const assignment = await prisma.assignment.findFirst({ where: { id: assignmentId, course: { teacher: { userId: req.user!.sub } } }, include: { course: true } })
+  if (!assignment) throw new ApiError(403, 'This assignment is not assigned to the authenticated teacher')
+  if (payload.score > assignment.maxScore) throw new ApiError(400, 'Score cannot exceed the assignment maximum')
+  const percentage = Number(((payload.score / assignment.maxScore) * 100).toFixed(2))
+  const letterGrade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F'
+  const result = await prisma.$transaction(async (tx) => {
+    const submission = await tx.assignmentSubmission.update({ where: { assignmentId_studentId: { assignmentId, studentId } }, data: { score: payload.score, feedback: payload.feedback, status: 'GRADED' } })
+    await tx.grade.deleteMany({ where: { assignmentId, studentId, courseId: assignment.courseId } })
+    const grade = await tx.grade.create({ data: { assignmentId, studentId, courseId: assignment.courseId, score: payload.score, maxScore: assignment.maxScore, percentage, letterGrade, period: 'CURRENT' } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_SUBMISSION_GRADED', targetType: 'AssignmentSubmission', targetId: submission.id, metadata: { assignmentId, studentId, percentage } } })
+    return { submission, grade }
+  })
+  return success(res, result, 'Submission graded and synchronized with the gradebook')
+}))
+
+teachersRouter.delete('/me/assignments/:assignmentId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const assignmentId = getRouteParam(req.params.assignmentId)
+  const assignment = await prisma.assignment.findFirst({ where: { id: assignmentId, course: { teacher: { userId: req.user!.sub } } } })
+  if (!assignment) throw new ApiError(403, 'This assignment is not assigned to the authenticated teacher')
+  await prisma.$transaction(async (tx) => {
+    await tx.grade.deleteMany({ where: { assignmentId } })
+    await tx.assignment.delete({ where: { id: assignmentId } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_DELETED', targetType: 'Assignment', targetId: assignmentId, metadata: { courseId: assignment.courseId, title: assignment.title } } })
+  })
+  return success(res, null, 'Assignment deleted')
+}))
+
 teachersRouter.get('/workspaces', authenticate, requireRoles('staff'), asyncHandler(async (_req, res) => {
   const workspaces = await prisma.teacherWorkspace.findMany({
     include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },

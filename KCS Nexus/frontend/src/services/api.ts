@@ -209,6 +209,11 @@ export const teacherWorkspaceAPI = {
   overview: () => api.get('/teachers/me/overview'),
   get: () => api.get('/teachers/me/workspace'),
   save: (state: Record<string, unknown>, revision?: number) => api.put('/teachers/me/workspace', { state, revision }),
+  attendance: (courseId: string, date?: string) => api.get('/teachers/me/attendance', { params: { courseId, date } }),
+  saveAttendance: (data: object) => api.post('/teachers/me/attendance/bulk', data),
+  createAssignment: (data: object) => api.post('/teachers/me/assignments', data),
+  gradeSubmission: (assignmentId: string, studentId: string, data: object) => api.patch(`/teachers/me/assignments/${assignmentId}/submissions/${studentId}`, data),
+  deleteAssignment: (assignmentId: string) => api.delete(`/teachers/me/assignments/${assignmentId}`),
 }
 
 export const suggestionsAPI = {
