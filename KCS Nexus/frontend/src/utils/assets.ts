@@ -27,6 +27,19 @@ export const getBasePath = () => {
   return ''
 }
 
+export const resolveRouteBasePath = (assetBasePath: string, pathname: string) => {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+  if (!assetBasePath) return ''
+  return normalizedPath === assetBasePath || normalizedPath.startsWith(`${assetBasePath}/`)
+    ? assetBasePath
+    : ''
+}
+
+export const getRouteBasePath = () => {
+  if (typeof window === 'undefined') return ''
+  return resolveRouteBasePath(getBasePath(), window.location.pathname)
+}
+
 export const getAssetUrl = (path: string) => {
   const cleanPath = trimSlashes(path)
   const basePath = getBasePath()
@@ -36,7 +49,7 @@ export const getAssetUrl = (path: string) => {
 
 export const getRouteUrl = (path: string) => {
   const cleanPath = trimSlashes(path)
-  const basePath = getBasePath()
+  const basePath = getRouteBasePath()
 
   return basePath ? `${basePath}/${cleanPath}` : `/${cleanPath}`
 }

@@ -6,12 +6,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from '@/App'
 import '@/index.css'
 import '@/i18n'
-import { getBasePath } from '@/utils/assets'
+import { getRouteBasePath } from '@/utils/assets'
 import { registerPwa } from '@/registerPwa'
 import MutationFeedback from '@/components/shared/MutationFeedback'
 
 const queryClient = new QueryClient()
-const routerBasePath = getBasePath()
+const routerBasePath = getRouteBasePath()
 
 if (import.meta.env.DEV && 'serviceWorker' in navigator && window.location.hostname === 'localhost') {
   navigator.serviceWorker.getRegistrations()
