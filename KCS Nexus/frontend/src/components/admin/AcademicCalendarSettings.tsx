@@ -65,9 +65,9 @@ export default function AcademicCalendarSettings() {
       </div>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Année de rentrée
-          <input type="number" min="2020" max="2100" value={startYear} onChange={(event) => setStartYear(Number(event.target.value))} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900"/>
+          <input type="number" min="2020" max="2100" value={startYear} onChange={(event) => setStartYear(Number(event.target.value))} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none focus:border-kcs-gold-500 focus:ring-4 focus:ring-kcs-gold-100/60 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/>
         </label>
-        <div className="rounded-xl bg-kcs-blue-50 px-4 py-2 text-sm font-bold text-kcs-blue-800">{proposed.name} · 1 sept. – 30 juin</div>
+        <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/70 dark:text-kcs-blue-100">{proposed.name} · 1 sept. – 30 juin</div>
         <button type="button" onClick={save} className="btn-primary flex items-center gap-2 py-2"><Save size={16}/> Enregistrer et activer</button>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">

@@ -321,7 +321,7 @@ export const messagesAPI = {
 
 
 export const incidentReportsAPI = {
-  list: () => api.get('/incident-reports'),
+  list: (params?: Record<string, string | number>) => api.get('/incident-reports', { params }),
   create: (data: FormData) => api.post('/incident-reports', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   attachment: (id: string) => api.get(`/incident-reports/${id}/attachment`, { responseType: 'blob' }),
   updateStatus: (id: string, data: { status: 'SUBMITTED' | 'UNDER_REVIEW' | 'CLOSED'; adminNotes?: string }) => api.patch(`/incident-reports/${id}/status`, data),
