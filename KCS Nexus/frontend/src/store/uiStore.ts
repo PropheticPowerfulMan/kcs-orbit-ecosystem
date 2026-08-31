@@ -27,10 +27,13 @@ interface UIStore {
   toggleSearch: () => void
 }
 
+const initialTheme = getStoredTheme()
+applyTheme(initialTheme)
+
 export const useUIStore = create<UIStore>()(
   persist(
     (set, get) => ({
-      theme: 'light',
+      theme: initialTheme,
       language: 'en',
       sidebarOpen: false,
       sidebarCollapsed: false,
@@ -40,15 +43,15 @@ export const useUIStore = create<UIStore>()(
       searchOpen: false,
 
       setTheme: (theme) => {
-        set({ theme })
         applyTheme(theme)
+        set({ theme })
       },
 
       toggleTheme: () => {
         const current = get().theme
         const next = current === 'light' ? 'dark' : 'light'
-        set({ theme: next })
         applyTheme(next)
+        set({ theme: next })
       },
 
       setLanguage: (language) => {
@@ -101,7 +104,19 @@ export const useUIStore = create<UIStore>()(
   )
 )
 
+function getStoredTheme(): Theme {
+  if (typeof window === 'undefined') return 'light'
+  try {
+    const persisted = JSON.parse(window.localStorage.getItem('kcs-ui') ?? '{}')
+    const stored = persisted?.state?.theme
+    return stored === 'dark' || stored === 'system' || stored === 'light' ? stored : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
 function applyTheme(theme: Theme) {
+  if (typeof document === 'undefined') return
   const root = document.documentElement
   if (theme === 'dark') {
     root.classList.add('dark')

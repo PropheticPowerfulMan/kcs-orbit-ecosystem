@@ -3,22 +3,9 @@ import { useEffect } from 'react'
 import Header from './Header'
 import Footer from './Footer'
 import AIChat from '@/components/shared/AIChat'
-import { useUIStore } from '@/store/uiStore'
 
 const Layout = () => {
   const location = useLocation()
-  const { theme } = useUIStore()
-
-  // Apply theme on mount and theme changes
-  useEffect(() => {
-    const root = document.documentElement
-    if (theme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-  }, [theme])
-
   // Scroll to top on route change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
