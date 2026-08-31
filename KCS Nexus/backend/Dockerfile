@@ -1,7 +1,7 @@
 FROM node:20-alpine AS build
 RUN apk add --no-cache openssl
 WORKDIR /app
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 COPY prisma ./prisma
 COPY tsconfig.json ./tsconfig.json

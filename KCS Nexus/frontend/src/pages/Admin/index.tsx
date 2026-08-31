@@ -16,6 +16,7 @@ import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
+import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenter'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { adminAPI, admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
@@ -424,50 +425,16 @@ const letterFromAverage = (average: number) => {
 const gpaFromAverage = (average: number) => Number(Math.min(4, Math.max(0, average / 25)).toFixed(2))
 
 const buildOfficialTranscript = (student: AdminStudentRecord) => {
-  const gradeOrder = ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
-  const currentIndex = Math.max(0, gradeOrder.indexOf(student.grade))
-  const baseline = Math.round((student.gpa || 3.0) * 25)
-  const rows = student.gpa == null ? [] : gradeOrder.map((grade, gradeIndex) => {
-    const publishedReport = reportCards.find((item) => item.student === student.name && gradeIndex === currentIndex)
-    const yearlyAverage = Math.max(58, Math.min(99, Math.round(publishedReport?.average ?? baseline - (currentIndex - gradeIndex) * 2 + ((student.attendance != null && student.attendance >= 94 ? 1 : -1)))))
-    const credits = gradeIndex <= currentIndex ? 6 : 0
-    const courses = transcriptCoursePlan[grade as keyof typeof transcriptCoursePlan].map((course, courseIndex) => {
-      const courseAverage = Math.max(55, Math.min(100, yearlyAverage + ((courseIndex % 3) - 1) * 3))
-      return {
-        course,
-        credit: gradeIndex <= currentIndex ? 1 : 0,
-        average: courseAverage,
-        letter: letterFromAverage(courseAverage),
-        gpa: gpaFromAverage(courseAverage),
-      }
-    })
-    return {
-      grade,
-      year: `${2022 + gradeIndex}-${2023 + gradeIndex}`,
-      courses,
-      credits,
-      average: yearlyAverage,
-      annualGpa: gpaFromAverage(yearlyAverage),
-      status: gradeIndex <= currentIndex ? 'Completed' : 'Projected',
-    }
-  })
-  const earnedRows = rows.filter((row) => row.credits > 0)
-  const totalCredits = earnedRows.reduce((sum, row) => sum + row.credits, 0)
-  const cumulativeGpa = totalCredits
-    ? Number((earnedRows.reduce((sum, row) => sum + row.annualGpa * row.credits, 0) / totalCredits).toFixed(2))
-    : 0
-  const cumulativeAverage = earnedRows.length
-    ? Math.round(earnedRows.reduce((sum, row) => sum + row.average, 0) / earnedRows.length)
-    : 0
+  const rows: Array<{grade:string;year:string;courses:Array<{course:string;credit:number;average:number;letter:string;gpa:number}>;credits:number;average:number;annualGpa:number;status:string}> = []
   return {
     student,
     rows,
-    totalCredits,
-    cumulativeGpa,
-    cumulativeAverage,
-    classRank: student.gpa == null ? 'Aucune donnée' : student.gpa >= 3.7 ? 'Top 10%' : student.gpa >= 3.2 ? 'Upper half' : 'In progress',
+    totalCredits: 0,
+    cumulativeGpa: 0,
+    cumulativeAverage: 0,
+    classRank: 'Aucune donnée officielle',
     generatedAt: new Date().toLocaleDateString(),
-    graduationStatus: totalCredits >= 24 ? 'Graduation requirement met' : `${24 - totalCredits} credits remaining`,
+    graduationStatus: 'Aucune note approuvée : le transcript officiel ne peut pas encore être généré.',
   }
 }
 
@@ -2513,6 +2480,7 @@ const AdminSectionView = ({
   if (segment === 'transcripts') {
     return (
       <div className="space-y-6">
+        <AcademicRecordsControlCenter />
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">

@@ -22,6 +22,7 @@ import { suggestionsRouter } from './suggestions.routes.js'
 import { incidentReportsRouter } from './incident-reports.routes.js'
 import { dataMigrationRouter } from './data-migration.routes.js'
 import { academicCalendarRouter } from './academic-calendar.routes.js'
+import { academicRecordsRouter } from './academic-records.routes.js'
 
 export const router = Router()
 
@@ -49,3 +50,4 @@ router.use('/incident-reports', incidentReportsRouter)
 router.use('/data-migration', dataMigrationRouter)
 
 router.use('/academic-calendar', academicCalendarRouter)
+router.use('/academic-records', academicRecordsRouter)

@@ -337,3 +337,13 @@ export const academicCalendarAPI = {
   list: () => api.get('/academic-calendar'),
   save: (data: object) => api.put('/academic-calendar', data),
 }
+
+export const academicRecordsAPI = {
+  submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
+  review: (params?: object) => api.get('/academic-records/review', { params }),
+  generateReportCards: (data: object) => api.post('/academic-records/report-cards/generate', data),
+  reportCards: (params?: object) => api.get('/academic-records/report-cards', { params }),
+  approveReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/approve`),
+  publishReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/publish`),
+  transcript: (studentId: string) => api.get(`/academic-records/transcripts/${studentId}`),
+}

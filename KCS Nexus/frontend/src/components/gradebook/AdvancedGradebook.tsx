@@ -32,6 +32,7 @@ import {
   YAxis,
 } from 'recharts'
 import { printOfficialPdf } from '@/utils/officialPdf'
+import { academicRecordsAPI } from '@/services/api'
 
 type Course = {
   id: string
@@ -115,15 +116,7 @@ const defaultAssignments: GradebookColumn[] = [
 
 const buildInitialScores = (students: GradebookStudent[]) => {
   const scores: Record<string, string> = {}
-  students.forEach((student, index) => {
-    defaultAssignments.forEach((assignment, assignmentIndex) => {
-      const baseline = student.average ?? 82
-      const drift = ((index % 5) - 2) * 3 + assignmentIndex * 2
-      const missing = index % 9 === 0 && assignmentIndex === 2
-      const score = Math.round((Math.max(48, Math.min(100, baseline + drift)) / 100) * assignment.maxPoints)
-      scores[`${assignment.id}:${student.id}`] = missing ? '' : String(score)
-    })
-  })
+  students.forEach((student) => defaultAssignments.forEach((assignment) => { scores[`${assignment.id}:${student.id}`] = '' }))
   return scores
 }
 
@@ -214,6 +207,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [bulkValue, setBulkValue] = useState('')
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(defaultAssignments[0].id)
   const [saveNotice, setSaveNotice] = useState('')
+  const [academicYear, setAcademicYear] = useState('2026-2027')
+  const [submittingFinals, setSubmittingFinals] = useState(false)
   const [draft, setDraft] = useState({
     title: 'Concept Check',
     type: 'quiz' as AssignmentType,
@@ -409,6 +404,25 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     onAction(`AI feedback generated for ${student.name}.`)
   }
 
+  const submitFinalGrades = async () => {
+    if (!selectedCourse) return onAction('Select a course before submitting final grades.')
+    if (!courseStudents.length) return onAction('This course has no enrolled students.')
+    const incomplete = studentAnalytics.filter((item) => item.average === null || item.missing > 0)
+    if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`)
+    setSubmittingFinals(true)
+    try {
+      await academicRecordsAPI.submitFinalGrades({
+        courseId: selectedCourse.id,
+        academicYear,
+        term,
+        results: studentAnalytics.map((item) => ({ studentId: item.student.id, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
+      })
+      onAction(`${studentAnalytics.length} final grade(s) submitted for administrative review. The official record is now auditable.`)
+    } catch (error: any) {
+      onAction(error?.response?.data?.message || 'Final-grade submission failed.')
+    } finally { setSubmittingFinals(false) }
+  }
+
   const exportGradebook = (format: 'PDF' | 'Excel' | 'CSV') => {
     const rows = studentAnalytics.map(({ student, average, projected, missing, risk }) => [student.name, `${student.grade}${student.section}`, formatPercent(average), internationalGrade(average), formatPercent(projected), String(missing), risk])
     const heading = ['Student', 'Class', 'Average', 'International grade', 'Prediction', 'Missing work', 'Risk']
@@ -439,6 +453,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <input aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" pattern="\\d{4}-\\d{4}" />
+              <button disabled={submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
               <button onClick={() => exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
               <button onClick={() => exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
               <button onClick={() => exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
