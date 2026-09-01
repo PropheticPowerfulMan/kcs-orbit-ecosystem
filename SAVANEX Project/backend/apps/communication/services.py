@@ -246,17 +246,18 @@ def deliver_parent_communication(parent, subject, body, notif_type=Notification.
     return [email_result, sms_result]
 
 
-def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE_MESSAGE, link=''):
+def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE_MESSAGE, link='', create_notification=True):
     if not user:
         return []
 
-    Notification.objects.create(
-        user=user,
-        title=subject[:200],
-        body=body,
-        notif_type=notif_type,
-        link=link,
-    )
+    if create_notification:
+        Notification.objects.create(
+            user=user,
+            title=subject[:200],
+            body=body,
+            notif_type=notif_type,
+            link=link,
+        )
 
     sms_result = _send_user_sms(user, _short_sms(subject, body))
     email_result = _send_user_email(user, subject, body)

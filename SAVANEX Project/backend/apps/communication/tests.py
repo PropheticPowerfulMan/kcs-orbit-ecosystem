@@ -79,3 +79,72 @@ class NotificationOrderingTests(SimpleTestCase):
 
         self.assertEqual(calls, ['sms', 'email'])
         self.assertEqual([result.channel for result in results], ['email', 'sms'])
+
+
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.users.models import User
+from .models import Message, Notification
+
+
+class InternalMessagingApiTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username='admin-msg', password='test', role=User.ROLE_ADMIN)
+        self.teacher = User.objects.create_user(username='teacher-msg', password='test', role=User.ROLE_TEACHER)
+        self.parent = User.objects.create_user(username='parent-msg', password='test', role=User.ROLE_PARENT)
+        self.student = User.objects.create_user(username='student-msg', password='test', role=User.ROLE_STUDENT)
+        self.other_parent = User.objects.create_user(username='other-parent-msg', password='test', role=User.ROLE_PARENT)
+
+    @patch('apps.communication.views.deliver_user_communication')
+    def test_parent_can_message_staff_and_notification_is_persisted(self, deliver):
+        deliver.return_value = []
+        self.client.force_authenticate(self.parent)
+        response = self.client.post('/api/communication/messages/', {
+            'receiver': self.teacher.pk, 'subject': 'Question', 'body': 'Bonjour',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        message = Message.objects.get()
+        self.assertEqual(message.sender, self.parent)
+        self.assertEqual(message.receiver, self.teacher)
+        self.assertTrue(Notification.objects.filter(user=self.teacher, notif_type=Notification.TYPE_MESSAGE, title='Question').exists())
+
+    def test_parent_cannot_message_another_parent_or_student(self):
+        self.client.force_authenticate(self.parent)
+        for receiver in (self.other_parent, self.student):
+            response = self.client.post('/api/communication/messages/', {
+                'receiver': receiver.pk, 'subject': 'Interdit', 'body': 'Test',
+            }, format='json')
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Message.objects.count(), 0)
+
+    def test_message_inbox_and_read_state_are_private(self):
+        message = Message.objects.create(sender=self.admin, receiver=self.parent, subject='Prive', body='Contenu prive')
+        self.client.force_authenticate(self.other_parent)
+        self.assertEqual(self.client.post(f'/api/communication/messages/{message.pk}/read/').status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.client.get('/api/communication/messages/?box=all').json(), [])
+        self.client.force_authenticate(self.parent)
+        response = self.client.post(f'/api/communication/messages/{message.pk}/read/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        message.refresh_from_db()
+        self.assertTrue(message.is_read)
+
+    @patch('apps.communication.views.deliver_user_communication', side_effect=RuntimeError('provider unavailable'))
+    def test_external_delivery_failure_does_not_rollback_internal_message(self, _deliver):
+        self.client.force_authenticate(self.teacher)
+        response = self.client.post('/api/communication/messages/', {
+            'receiver': self.parent.pk, 'subject': 'Message durable', 'body': 'Le message interne doit rester disponible.',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()['delivery'][0]['status'], 'failed')
+        self.assertEqual(Message.objects.count(), 1)
+        self.assertEqual(Notification.objects.filter(user=self.parent).count(), 1)
+
+    def test_contact_directory_respects_role_policy(self):
+        self.client.force_authenticate(self.parent)
+        response = self.client.get('/api/communication/messages/contacts/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        roles = {row['role'] for row in response.json()}
+        self.assertTrue(roles <= {User.ROLE_ADMIN, User.ROLE_EMPLOYEE, User.ROLE_TEACHER})
+        self.assertNotIn(User.ROLE_PARENT, roles)
+        self.assertNotIn(User.ROLE_STUDENT, roles)

@@ -4,6 +4,8 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import StatCard from '../../components/ui/StatCard';
 import { useTranslation } from 'react-i18next';
 import { communicationService, studentsService } from '../../services/api';
+import { useAuthStore } from '../../store/authStore';
+import InternalMessagingPanel from './InternalMessagingPanel';
 
 const deliveryClass = {
   sent: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
@@ -55,6 +57,7 @@ const formatDelivery = (delivery = []) => {
 
 const CommunicationPage = () => {
   const { t, i18n } = useTranslation();
+  const user = useAuthStore((state) => state.user);
   const L = (fr, en) => (i18n.resolvedLanguage || i18n.language).startsWith('fr') ? fr : en;
   const [messageList, setMessageList] = useState([]);
   const [students, setStudents] = useState([]);
@@ -211,8 +214,13 @@ const CommunicationPage = () => {
     }
   };
 
+  if (user?.role !== 'admin') {
+    return <DashboardLayout><InternalMessagingPanel /></DashboardLayout>;
+  }
+
   return (
     <DashboardLayout>
+      <InternalMessagingPanel />
       <section className="mb-6 flex flex-col gap-4 page-enter lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.24em] text-kcs-blue">Communication hub</p>

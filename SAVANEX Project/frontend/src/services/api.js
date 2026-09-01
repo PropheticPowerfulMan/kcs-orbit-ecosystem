@@ -706,6 +706,25 @@ export const parentsService = {
 };
 
 export const communicationService = {
+  async getInternalMessages(box = 'all') {
+    if (isDemoSession()) return [];
+    const res = await api.get('/communication/messages/', { params: { box } });
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+  async getMessageContacts() {
+    if (isDemoSession()) return [];
+    const res = await api.get('/communication/messages/contacts/');
+    return Array.isArray(res.data) ? res.data : (res.data.results || []);
+  },
+  async sendInternalMessage(data) {
+    if (isDemoSession()) throw new Error('Reconnectez-vous au vrai SAVANEX pour envoyer un message.');
+    const res = await api.post('/communication/messages/', data);
+    return res.data;
+  },
+  async markMessageRead(id) {
+    if (isDemoSession()) return;
+    await api.post(`/communication/messages/${id}/read/`);
+  },
   async getMessages(box = 'sent') {
     if (isDemoSession()) {
       const { messages } = await import('../data/demoSchoolData');

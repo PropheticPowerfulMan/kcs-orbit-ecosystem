@@ -2,9 +2,11 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db import transaction
+from django.db.models import Q
 from .models import DirectParentMessage, Message, Notification
 from .serializers import MessageSerializer, MessageCreateSerializer, NotificationSerializer
-from .services import deliver_direct_parent_contact, deliver_parent_communication
+from .services import deliver_direct_parent_contact, deliver_parent_communication, deliver_user_communication
 
 
 class MessageListCreateView(generics.ListCreateAPIView):
@@ -13,9 +15,12 @@ class MessageListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         box = self.request.query_params.get('box', 'inbox')
+        queryset = Message.objects.select_related('sender', 'receiver')
         if box == 'sent':
-            return Message.objects.filter(sender=user).select_related('sender', 'receiver').order_by('-sent_at')
-        return Message.objects.filter(receiver=user).select_related('sender', 'receiver').order_by('-sent_at')
+            return queryset.filter(sender=user).order_by('-sent_at')
+        if box == 'all':
+            return queryset.filter(Q(sender=user) | Q(receiver=user)).order_by('-sent_at')
+        return queryset.filter(receiver=user).order_by('-sent_at')
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -105,19 +110,28 @@ class MessageListCreateView(generics.ListCreateAPIView):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        message = serializer.save()
-        delivery = deliver_parent_communication(
-            message.receiver,
-            message.subject,
-            message.body,
-            notif_type=Notification.TYPE_MESSAGE,
-            link='/communication',
-        )
+        with transaction.atomic():
+            message = serializer.save()
+            Notification.objects.create(user=message.receiver, title=message.subject[:200], body=message.body, notif_type=Notification.TYPE_MESSAGE, link='/communication')
+        try:
+            delivery = deliver_user_communication(message.receiver, message.subject, message.body, notif_type=Notification.TYPE_MESSAGE, link='/communication', create_notification=False)
+            delivery_rows = [result.__dict__ for result in delivery]
+        except Exception as exc:
+            delivery_rows = [{'channel': 'external', 'status': 'failed', 'detail': str(exc)}]
         output = MessageSerializer(message, context=self.get_serializer_context()).data
-        output['delivery'] = [result.__dict__ for result in delivery]
+        output['delivery'] = delivery_rows
         headers = self.get_success_headers(serializer.data)
         return Response(output, status=status.HTTP_201_CREATED, headers=headers)
 
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def message_contacts(request):
+    user = request.user
+    allowed = [user.ROLE_ADMIN, user.ROLE_EMPLOYEE, user.ROLE_TEACHER] if user.role in {user.ROLE_PARENT, user.ROLE_STUDENT} else [user.ROLE_ADMIN, user.ROLE_EMPLOYEE, user.ROLE_TEACHER, user.ROLE_STUDENT, user.ROLE_PARENT]
+    contacts = user.__class__.objects.filter(is_active=True, role__in=allowed).exclude(pk=user.pk).order_by('role','first_name','last_name')
+    return Response([{'id': item.pk, 'name': item.get_full_name() or item.username, 'role': item.role, 'email': item.email} for item in contacts])
 
 class MessageDetailView(generics.RetrieveAPIView):
     serializer_class = MessageSerializer

@@ -27,10 +27,13 @@ class MessageCreateSerializer(serializers.ModelSerializer):
         fields = ['receiver', 'subject', 'body', 'parent_message']
 
     def validate_receiver(self, receiver):
-        if receiver.role != User.ROLE_PARENT:
-            raise serializers.ValidationError('External communications must be addressed to a parent account.')
-        if not receiver.email and not receiver.phone:
-            raise serializers.ValidationError('This parent has no email or phone number.')
+        sender = self.context['request'].user
+        if receiver.pk == sender.pk:
+            raise serializers.ValidationError('You cannot send a message to yourself.')
+        if sender.role in {User.ROLE_PARENT, User.ROLE_STUDENT} and receiver.role not in {User.ROLE_ADMIN, User.ROLE_EMPLOYEE, User.ROLE_TEACHER}:
+            raise serializers.ValidationError('Parents and students may only contact authorized school staff.')
+        if not receiver.is_active:
+            raise serializers.ValidationError('This recipient account is inactive.')
         return receiver
 
     def create(self, validated_data):
