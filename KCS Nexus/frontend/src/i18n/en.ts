@@ -192,6 +192,7 @@ const en = {
   },
 
   portalNav: {
+    employees: 'Employees',
     dashboard: 'Dashboard',
     myGrades: 'My Grades',
     assignments: 'Assignments',

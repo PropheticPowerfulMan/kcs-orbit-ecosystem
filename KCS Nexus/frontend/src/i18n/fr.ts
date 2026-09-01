@@ -274,6 +274,7 @@ const fr = {
   },
 
   portalNav: {
+    employees: 'Employés',
     dashboard: 'Tableau de bord', myGrades: 'Mes notes', assignments: 'Devoirs', timetable: 'Emploi du temps', aiTutor: 'Tuteur IA', studentForum: 'Forum des élèves', messages: 'Messages', myProfile: 'Mon profil',
     performance: 'Résultats scolaires', parentForum: 'Forum des parents', calendar: 'Calendrier', fees: 'Frais et paiements', profile: 'Profil', myCourses: 'Mes cours', students: 'Élèves', attendance: 'Présences', gradebook: 'Carnet de notes', reportCards: 'Bulletins scolaires', resources: 'Ressources', reports: 'Rapports', disciplineReport: 'Rapport disciplinaire',
     records: 'Registres scolaires', admissions: 'Admissions', announcements: 'Annonces', feeTracking: 'Suivi des frais', permissions: 'Autorisations', parents: 'Parents', transcripts: 'Relevés de notes', diagnosticControl: 'Contrôle des tests diagnostiques', communications: 'Communications', staffAttendance: 'Présence du personnel', discipline: 'Discipline', teachers: 'Enseignants', courses: 'Cours', finance: 'Finances', newsEvents: 'Actualités et événements', media: 'Médiathèque', parentAiReport: 'Rapport IA du forum parents', studentAiReport: 'Rapport IA du forum élèves', aiAnalytics: 'Analyses IA', settings: 'Paramètres',

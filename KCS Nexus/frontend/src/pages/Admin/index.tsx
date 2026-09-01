@@ -181,6 +181,7 @@ type SharedDirectoryTeacher = {
   email?: string | null
   phone?: string | null
   employeeId?: string | null
+  employeeType?: string | null
   department?: string | null
   jobTitle?: string | null
 }
@@ -369,7 +370,7 @@ const extractStudentApiMessage = (error: unknown, fallback: string) => {
   return responseData?.message || responseData?.error || responseData?.details || (error as { message?: string })?.message || fallback
 }
 
-const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'transcripts', 'reports'])
+const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'employees', 'transcripts', 'reports'])
 
 const getAdminRoster = () => studentsAPI.getAll(undefined, {
   headers: {
@@ -1156,7 +1157,9 @@ const AdminSectionView = ({
   const [savingParentEdit, setSavingParentEdit] = useState(false)
   const [editingTeacherId, setEditingTeacherId] = useState('')
   const [teacherNotice, setTeacherNotice] = useState('')
-  const [teacherForm, setTeacherForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', phone: '', employeeId: '', department: '', jobTitle: '' })
+  const [teacherForm, setTeacherForm] = useState({ firstName: '', middleName: '', lastName: '', email: '', phone: '', employeeId: '', employeeType: 'teacher', department: '', jobTitle: '' })
+  const [employeeQuery, setEmployeeQuery] = useState('')
+  const [employeeTypeFilter, setEmployeeTypeFilter] = useState('all')
   const [sentNotice, setSentNotice] = useState('')
   const [studentQuery, setStudentQuery] = useState('')
   const [parentQuery, setParentQuery] = useState('')
@@ -1616,7 +1619,7 @@ const AdminSectionView = ({
 
   const clearTeacherForm = () => {
     setEditingTeacherId('')
-    setTeacherForm({ firstName: '', middleName: '', lastName: '', email: '', phone: '', employeeId: '', department: '', jobTitle: '' })
+    setTeacherForm({ firstName: '', middleName: '', lastName: '', email: '', phone: '', employeeId: '', employeeType: 'teacher', department: '', jobTitle: '' })
   }
 
   const editTeacherRecord = (teacher: SharedDirectoryTeacher) => {
@@ -1628,6 +1631,7 @@ const AdminSectionView = ({
       email: teacher.email || '',
       phone: teacher.phone || '',
       employeeId: teacher.employeeId || '',
+      employeeType: teacher.employeeType || 'teacher',
       department: teacher.department || '',
       jobTitle: teacher.jobTitle || '',
     })
@@ -1636,7 +1640,7 @@ const AdminSectionView = ({
 
   const saveTeacherRecord = async () => {
     if (!teacherForm.firstName.trim() || !teacherForm.lastName.trim()) {
-      setTeacherNotice('Le prénom et le nom de l’enseignant sont obligatoires.')
+      setTeacherNotice('Le prénom et le nom de l’employé sont obligatoires.')
       return
     }
     const payload = {
@@ -1646,6 +1650,7 @@ const AdminSectionView = ({
       email: teacherForm.email.trim() || undefined,
       phone: teacherForm.phone.trim() || null,
       employeeId: teacherForm.employeeId.trim() || undefined,
+      employeeType: teacherForm.employeeType,
       department: teacherForm.department.trim() || null,
       jobTitle: teacherForm.jobTitle.trim() || null,
     }
@@ -1655,9 +1660,9 @@ const AdminSectionView = ({
         : await registryAPI.createEntity('teacher', payload)
       clearTeacherForm()
       await refreshOfficialRoster()
-      setTeacherNotice(response.data?.message || (editingTeacherId ? 'Enseignant modifié et propagé.' : 'Enseignant ajouté et propagé.'))
+      setTeacherNotice(response.data?.message || (editingTeacherId ? 'Employé modifié et propagé.' : 'Employé ajouté et propagé.'))
     } catch (error) {
-      setTeacherNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cet enseignant.'))
+      setTeacherNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cet employé.'))
     }
   }
 
@@ -2747,14 +2752,32 @@ const AdminSectionView = ({
     )
   }
 
-  if (segment === 'teachers') {
+  const filteredEmployees = (sharedDirectory?.teachers || []).filter((employee) => {
+    const type = String(employee.employeeType || 'teacher').toLowerCase()
+    if (employeeTypeFilter !== 'all' && type !== employeeTypeFilter) return false
+    const tokens = employeeQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    const haystack = [employee.fullName, employee.employeeId, employee.email, employee.phone, employee.department, employee.jobTitle, employee.employeeType].filter(Boolean).join(' ').toLowerCase()
+    return tokens.every((token) => haystack.includes(token))
+  })
+
+  if (segment === 'teachers' || segment === 'employees') {
     return (
       <>
       <div className="mb-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="font-bold text-kcs-blue-900 dark:text-white">{editingTeacherId ? 'Modifier un enseignant' : 'Ajouter un enseignant'}</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Toute opération est enregistrée dans Orbit puis propagée aux applications de l’écosystème.</p>
+          <h2 className="font-bold text-kcs-blue-900 dark:text-white">{editingTeacherId ? 'Modifier un employé' : 'Ajouter un employé'}</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Création, modification et désactivation centralisées : chaque opération est enregistrée dans Orbit puis propagée dans l’écosystème.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+              Catégorie d’employé
+              <select value={teacherForm.employeeType} onChange={(event) => setTeacherForm((current) => ({ ...current, employeeType: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                <option value="teacher">Enseignant</option>
+                <option value="administrative">Personnel administratif</option>
+                <option value="support">Personnel de support</option>
+                <option value="leadership">Leadership</option>
+                <option value="specialist">Spécialiste</option>
+              </select>
+            </label>
             {[
               ['firstName', 'Prénom'],
               ['middleName', 'Deuxième prénom'],
@@ -2779,11 +2802,18 @@ const AdminSectionView = ({
         </section>
         <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex items-center justify-between gap-3">
-            <div><h2 className="font-bold text-kcs-blue-900 dark:text-white">Registre partagé des enseignants</h2><p className="text-sm text-gray-500 dark:text-gray-400">{sharedDirectory?.teachers?.length || 0} entité(s) synchronisée(s)</p></div>
+            <div><h2 className="font-bold text-kcs-blue-900 dark:text-white">Registre partagé des employés</h2><p className="text-sm text-gray-500 dark:text-gray-400">{sharedDirectory?.teachers?.length || 0} entité(s) synchronisée(s)</p></div>
             <button type="button" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200" onClick={() => void refreshOfficialRoster()}>Actualiser</button>
           </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_0.65fr]">
+            <input value={employeeQuery} onChange={(event) => setEmployeeQuery(event.target.value)} placeholder="Nom, matricule, email, téléphone, poste, département..." className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
+            <select value={employeeTypeFilter} onChange={(event) => setEmployeeTypeFilter(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="all">Tous les employés</option><option value="teacher">Enseignants</option><option value="administrative">Administration</option><option value="support">Support</option><option value="leadership">Leadership</option><option value="specialist">Spécialistes</option>
+            </select>
+          </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{filteredEmployees.length} résultat(s)</p>
           <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
-            {(sharedDirectory?.teachers || []).map((teacher) => (
+            {filteredEmployees.map((teacher) => (
               <article key={teacher.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div><p className="font-semibold text-kcs-blue-900 dark:text-white">{teacher.fullName}</p><p className="text-sm text-gray-500 dark:text-gray-400">{teacher.employeeId || 'ID non renseigné'} · {teacher.email || teacher.phone || 'Contact non renseigné'}</p></div>
@@ -2791,7 +2821,7 @@ const AdminSectionView = ({
                 </div>
               </article>
             ))}
-            {!sharedDirectory?.teachers?.length ? <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-400">Aucun enseignant partagé. Utilisez le formulaire pour créer le premier.</p> : null}
+            {!sharedDirectory?.teachers?.length ? <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-400">Aucun employé partagé. Utilisez le formulaire pour créer le premier.</p> : null}
           </div>
         </section>
       </div>
