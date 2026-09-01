@@ -446,10 +446,23 @@ const CommunicationPage = () => {
             </thead>
             <tbody>
               {filteredMessages.map((message, index) => (
-                <tr key={message.id || index} className="border-t border-github-border hover:bg-slate-800/35">
+                <tr
+                  key={message.id || index}
+                  className={`border-t transition ${selectedMessageIds.includes(String(message.id))
+                    ? 'border-cyan-300/70 bg-cyan-400/20 shadow-[inset_4px_0_0_rgba(34,211,238,0.95)]'
+                    : 'border-github-border hover:bg-slate-800/35'}`}
+                >
                   <td className="px-4 py-3">
-                    <button type="button" onClick={() => toggleMessage(message.id)} className="rounded-lg p-1.5 text-cyan-200 hover:bg-cyan-400/15" aria-label={L('Sélectionner le message', 'Select message')}>
-                      {selectedMessageIds.includes(String(message.id)) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                    <button
+                      type="button"
+                      onClick={() => toggleMessage(message.id)}
+                      aria-pressed={selectedMessageIds.includes(String(message.id))}
+                      className={`inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border p-2 transition ${selectedMessageIds.includes(String(message.id))
+                        ? 'border-cyan-200 bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-950/30'
+                        : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-cyan-300 hover:text-cyan-200'}`}
+                      aria-label={L('Sélectionner le message', 'Select message')}
+                    >
+                      {selectedMessageIds.includes(String(message.id)) ? <CheckSquare className="h-5 w-5" strokeWidth={3} /> : <Square className="h-5 w-5" />}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-slate-100">
@@ -483,8 +496,8 @@ const CommunicationPage = () => {
       </section>
 
       {selectedMessage ? (
-        <div className="savanex-modal-backdrop fixed inset-0 z-[1000] grid place-items-center overflow-y-auto px-4 py-8" role="dialog" aria-modal="true" onClick={() => setSelectedMessage(null)}>
-          <section className="savanex-modal-panel w-full max-w-4xl overflow-y-auto p-5 sm:p-6" onClick={(event) => event.stopPropagation()}>
+        <div className="savanex-modal-backdrop fixed inset-0 z-[1000] flex items-center justify-center overflow-hidden bg-slate-950/80 px-4 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" onClick={() => setSelectedMessage(null)}>
+          <section className="savanex-modal-panel relative max-h-[calc(100vh-3rem)] w-full max-w-3xl overflow-y-auto rounded-3xl border border-cyan-300/25 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.65)] sm:p-6" onClick={(event) => event.stopPropagation()}>
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">Message parent</p>
@@ -500,8 +513,8 @@ const CommunicationPage = () => {
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {(selectedMessage.delivery || []).map((item) => (
-                <span key={`${item.channel}-${item.status}-${item.detail}`} className={`rounded-full border px-3 py-1.5 text-xs ${deliveryClass[item.status] || deliveryClass.pending}`}>
-                  {item.channel.toUpperCase()} {item.status}: {item.detail || '-'}
+                <span key={`${item.channel}-${item.status}`} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${deliveryClass[item.status] || deliveryClass.pending}`}>
+                  {item.channel.toUpperCase()} · {item.status === 'sent' ? L('Envoyé', 'Sent') : item.status === 'failed' ? L('Échec', 'Failed') : item.status === 'simulated' ? L('Simulation', 'Simulated') : L('En attente', 'Pending')}
                 </span>
               ))}
             </div>
