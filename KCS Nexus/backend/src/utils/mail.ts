@@ -49,6 +49,12 @@ export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo, subject, 
   const normalizedSubject = subject.normalize('NFC')
   const normalizedText = text.normalize('NFC')
   const normalizedHtml = html?.normalize('NFC')
-  await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? brandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
-  return { sent: true as const }
+  try {
+    await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? brandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
+    return { sent: true as const }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown SMTP error'
+    console.error('[mail] Delivery failed', { to, detail })
+    return { sent: false, reason: 'SMTP_SEND_FAILED' as const }
+  }
 }

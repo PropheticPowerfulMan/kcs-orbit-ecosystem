@@ -40,10 +40,22 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const search = query ? { OR: [{ subject: { contains: query, mode: 'insensitive' as const } }, { body: { contains: query, mode: 'insensitive' as const } }] } : {}
   const messages = await prisma.internalMessage.findMany({
     where: { AND: [direction, search] },
-    include: { sender: { select: { id: true, firstName: true, lastName: true, role: true } }, recipient: { select: { id: true, firstName: true, lastName: true, role: true } } },
+    include: { sender: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } }, recipient: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } } },
     orderBy: { createdAt: 'desc' }, take: 250,
   })
-  return success(res, messages)
+  const correspondence = messages.length ? await prisma.correspondenceLog.findMany({
+    where: { senderId: userId },
+    select: { channel: true, status: true, failureReason: true, sentAt: true, deliveredAt: true, metadata: true },
+    orderBy: { createdAt: 'desc' },
+    take: 1000,
+  }) : []
+  const deliveryByMessage = new Map<string, typeof correspondence>()
+  correspondence.forEach((entry) => {
+    const messageId = String((entry.metadata as Record<string, unknown> | null)?.internalMessageId || '')
+    if (!messageId) return
+    deliveryByMessage.set(messageId, [...(deliveryByMessage.get(messageId) || []), entry])
+  })
+  return success(res, messages.map((message) => ({ ...message, deliveries: deliveryByMessage.get(message.id) || [] })))
 }))
 
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -74,23 +86,47 @@ messagesRouter.post('/parent-delivery', asyncHandler(async (req: AuthenticatedRe
   })
   if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid parent accounts.')
 
-  await prisma.$transaction([
-    prisma.internalMessage.createMany({ data: parents.map((parent) => ({ senderId, recipientId: parent.id, subject: data.subject, body: data.body })) }),
-    prisma.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink('PARENT') })) }),
-  ])
+  const createdMessages = await prisma.$transaction(async (tx) => {
+    const rows = []
+    for (const parent of parents) {
+      rows.push(await tx.internalMessage.create({ data: { senderId, recipientId: parent.id, subject: data.subject, body: data.body }, select: { id: true, recipientId: true } }))
+    }
+    await tx.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink('PARENT') })) })
+    return rows
+  })
+  const messageIdByRecipient = new Map(createdMessages.map((message) => [message.recipientId, message.id]))
 
   const delivery: Array<Record<string, unknown>> = []
   for (let index = 0; index < parents.length; index += 10) {
     const batch = parents.slice(index, index + 10)
     const results = await Promise.all(batch.map(async (parent) => {
       const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
-      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body, branded: false }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const }))
-      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const }))
+      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body, branded: false })
+      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}`, { brand: false })
+      const internalMessageId = messageIdByRecipient.get(parent.id)
+      const deliveryRows = data.channels.map((channel) => {
+        const result = row[channel] as { sent: boolean; reason?: string }
+        return {
+          channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const,
+          status: result.sent ? 'SENT' as const : 'FAILED' as const,
+          subject: data.subject,
+          body: data.body,
+          senderId,
+          recipientName: String(row.name),
+          recipientEmail: parent.email,
+          recipientPhone: parent.phone,
+          sentAt: result.sent ? new Date() : null,
+          failureReason: result.sent ? null : (result.reason || 'DELIVERY_FAILED'),
+          metadata: { internalMessageId, recipientId: parent.id },
+        }
+      })
+      await prisma.correspondenceLog.createMany({ data: deliveryRows })
       return row
     }))
     delivery.push(...results)
   }
-  return success(res, { recipients: parents.length, channels: data.channels, delivery }, 'Parent communication recorded and delivered', 201)
+  const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => Boolean((row[channel] as { sent?: boolean } | undefined)?.sent)))
+  return success(res, { recipients: parents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded and delivered' : 'Parent communication recorded, but external delivery failed', 201)
 }))
 
 messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
