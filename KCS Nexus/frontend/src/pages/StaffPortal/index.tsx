@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Bell, ClipboardList, FileText, Megaphone, MessageSquare, Search, ShieldCheck, Users, WalletCards } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
+import AdminOperationsPanel from '@/components/admin/AdminOperationsPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -114,7 +115,7 @@ const StaffPortal = () => {
 
   const permissionsView = <div className="grid gap-6 xl:grid-cols-2"><section className={card}><h2 className="font-bold dark:text-white">{roleTitle} permissions</h2><div className="mt-4 flex flex-wrap gap-2">{(isAdministrator ? ['Read shared records','Coordinate admission review','Read EduPay summary','Send internal messages','Read report workflow','Review incidents','No Super Admin provisioning'] : ['Read shared records','Process admission stages','Read EduPay summary','Send internal messages','Read report workflow','No final approval','No account provisioning']).map((item)=><span key={item} className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700">{item}</span>)}</div></section><section className={card}><h2 className="font-bold dark:text-white">My audit activity</h2>{(overview.recentActivity??[]).length===0?empty('No recent administrative action recorded for this account.'):<div className="mt-4 space-y-3">{overview.recentActivity.map((item:any)=><div key={item.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><b>{item.action}</b><p className="text-xs text-gray-500">{item.targetType} · {new Date(item.createdAt).toLocaleString()}</p></div>)}</div>}</section></div>
 
-  const dashboard = <><SuggestionBox/><div className="grid grid-cols-2 gap-4 xl:grid-cols-5">{[
+  const dashboard = <><SuggestionBox/><AdminOperationsPanel isAdministrator={isAdministrator} basePath={basePath} overview={overview} language={language}/><div className="grid grid-cols-2 gap-4 xl:grid-cols-5">{[
     ['Student records',directory.counts?.students??students.length,Users,'Shared Orbit registry'],
     ['Families',directory.counts?.families??0,Users,'Responsible families'],
     ['Pending messages',overview.stats?.pendingMessages??0,MessageSquare,'Unread internal messages'],
