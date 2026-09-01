@@ -19,7 +19,7 @@ import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSetting
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenter'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
-import { adminAPI, admissionsAPI, financeAPI, registryAPI, studentsAPI } from '@/services/api'
+import { adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
 import { normalizeSchoolLevel, SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -1178,19 +1178,11 @@ const AdminSectionView = ({
   const [selectedTranscriptId, setSelectedTranscriptId] = useState('')
   const [transcriptQuery, setTranscriptQuery] = useState('')
   const [transcriptClassFilter, setTranscriptClassFilter] = useState('All')
-  const [communicationRecipient, setCommunicationRecipient] = useState('All parents, students, teachers, and staff')
+  const [communicationRecipient, setCommunicationRecipient] = useState<'ALL' | 'PARENTS' | 'STUDENTS' | 'TEACHERS' | 'STAFF' | 'GRADE_9_12_FAMILIES'>('ALL')
   const [communicationSubject, setCommunicationSubject] = useState('')
   const [communicationBody, setCommunicationBody] = useState('')
-  const [communicationHistory, setCommunicationHistory] = useState(() => messages.map((message, index) => ({
-    id: `message-${index}`,
-    direction: 'Sent',
-    audience: message.toRole,
-    subject: message.subject,
-    body: message.body,
-    sender: message.from,
-    timestamp: `Apr ${22 - index}, 9:${10 + index} AM`,
-    status: message.requiresResponse ? 'Response requested' : 'Delivered',
-  })))
+  const [communicationHistory, setCommunicationHistory] = useState<any[]>([])
+  const [communicationSending, setCommunicationSending] = useState(false)
   const [detailDialog, setDetailDialog] = useState<{ title: string; subtitle: string; details: Array<[string, string]> } | null>(null)
   const [diagnosticStatuses, setDiagnosticStatuses] = useState<Record<string, string>>(() => Object.fromEntries(diagnosticTests.map((test) => [test.id, test.status])))
   const [financeSummary, setFinanceSummary] = useState<EduPayFinanceSummary | null>(null)
@@ -1232,6 +1224,38 @@ const AdminSectionView = ({
   useEffect(() => {
     if (segment === 'finance') void refreshEduPayFinance()
   }, [segment])
+
+  useEffect(() => {
+    if (segment !== 'communications') return
+    messagesAPI.getAll({ box: 'sent' }).then((response) => {
+      const rows = response.data?.data ?? []
+      setCommunicationHistory(rows.map((message: any) => ({
+        id: message.id,
+        direction: 'Sent',
+        audience: message.recipient ? [message.recipient.firstName, message.recipient.lastName].filter(Boolean).join(' ') + ' (' + message.recipient.role + ')' : message.targetRole ?? 'Audience',
+        subject: message.subject,
+        body: message.body,
+        sender: message.sender ? [message.sender.firstName, message.sender.lastName].filter(Boolean).join(' ') : 'Administration',
+        timestamp: new Date(message.createdAt).toLocaleString(),
+        status: message.readAt ? 'Read' : 'Delivered',
+      })))
+    }).catch(() => setSentNotice('Unable to load the traceable message history.'))
+  }, [segment])
+
+  const sendSchoolCommunication = async () => {
+    if (!communicationSubject.trim() || !communicationBody.trim()) { setSentNotice('Enter a subject and a message before sending.'); return }
+    setCommunicationSending(true); setSentNotice('')
+    try {
+      const response = await messagesAPI.broadcast({ audience: communicationRecipient, subject: communicationSubject.trim(), body: communicationBody.trim() })
+      const count = response.data?.data?.recipients ?? 0
+      setCommunicationSubject(''); setCommunicationBody('')
+      setSentNotice('Communication delivered to ' + count + ' recipient(s) and recorded in their Nexus inbox.')
+      const history = await messagesAPI.getAll({ box: 'sent' })
+      const rows = history.data?.data ?? []
+      setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.firstName,message.recipient.lastName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.firstName,message.sender.lastName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(), status: message.readAt ? 'Read' : 'Delivered' })))
+    } catch (error: any) { setSentNotice(error?.response?.data?.message ?? 'The communication could not be delivered.') }
+    finally { setCommunicationSending(false) }
+  }
 
   const detailModal = detailDialog ? (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-kcs-blue-950/70 p-4" role="dialog" aria-modal="true" aria-label={detailDialog.title} onClick={() => setDetailDialog(null)}>
@@ -2661,19 +2685,17 @@ const AdminSectionView = ({
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Send School Communication</h2>
           <div className="grid gap-3">
-            <select value={communicationRecipient} onChange={(event) => setCommunicationRecipient(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option>All parents, students, teachers, and staff</option>
-              <option>Parents only</option>
-              <option>Grade 9-12 families</option>
-              <option>Staff only</option>
+            <select value={communicationRecipient} onChange={(event) => setCommunicationRecipient(event.target.value as typeof communicationRecipient)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="ALL">All parents, students, teachers, and staff</option>
+              <option value="PARENTS">Parents only</option>
+              <option value="STUDENTS">Students only</option>
+              <option value="TEACHERS">Teachers only</option>
+              <option value="GRADE_9_12_FAMILIES">Grade 9-12 families</option>
+              <option value="STAFF">Staff only</option>
             </select>
             <input value={communicationSubject} onChange={(event) => setCommunicationSubject(event.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Subject" />
             <textarea value={communicationBody} onChange={(event) => setCommunicationBody(event.target.value)} className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email, SMS, and portal message..." />
-            <button className={adminButton} onClick={() => {
-              if (!communicationSubject.trim() || !communicationBody.trim()) { setSentNotice('Enter a subject and a message before sending.'); return }
-              setCommunicationHistory((items) => [{ id: `message-${Date.now()}`, direction: 'Sent', audience: communicationRecipient, subject: communicationSubject.trim(), body: communicationBody.trim(), sender: 'Administration', timestamp: new Date().toLocaleString(), status: 'Queued for delivery' }, ...items])
-              setCommunicationSubject(''); setCommunicationBody(''); setSentNotice('Communication queued for email, SMS, and in-site inbox.')
-            }}>Send communication</button>
+            <button className={adminButton} disabled={communicationSending} onClick={() => void sendSchoolCommunication()}>{communicationSending ? 'Sending...' : 'Send communication'}</button>
             {sentNotice && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{sentNotice}</p>}
           </div>
           <div className="mt-6 border-t border-gray-100 pt-5 dark:border-kcs-blue-800"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Traceable message history</h3><div className="mt-3 space-y-2">{communicationHistory.map((message) => <button key={message.id} type="button" onClick={() => setDetailDialog({ title: message.subject, subtitle: `${message.direction} to ${message.audience}`, details: [['From', message.sender], ['Sent', message.timestamp], ['Status', message.status], ['Message', message.body]] })} className="w-full rounded-xl bg-gray-50 p-3 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800"><p className="font-semibold text-kcs-blue-900 dark:text-white">{message.subject}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{message.direction} · {message.audience} · {message.status}</p></button>)}</div></div>

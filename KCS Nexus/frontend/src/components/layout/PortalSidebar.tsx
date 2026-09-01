@@ -77,7 +77,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/staff/announcements', label: t('portalNav.announcements'), icon: Megaphone },
         { to: '/portal/staff/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
         { to: '/portal/staff/finance', label: t('portalNav.feeTracking'), icon: WalletCards },
-        { to: '/portal/staff/messages', label: t('portalNav.messages'), icon: MessageSquare, badge: 12 },
+        { to: '/portal/staff/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/staff/permissions', label: t('portalNav.permissions'), icon: Shield },
       ]
     case 'admin':
