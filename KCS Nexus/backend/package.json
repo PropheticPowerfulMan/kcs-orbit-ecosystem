@@ -9,7 +9,6 @@
     "test:security": "tsx --test src/utils/mediaUpload.test.ts",
     "start": "node dist/index.js",
     "superadmin:upsert": "tsx scripts/create-super-admin.ts",
-    "demo-users:seed": "tsx scripts/seed-demo-users.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",

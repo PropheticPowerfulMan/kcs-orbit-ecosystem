@@ -80,3 +80,14 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
         self.assertEqual(parent.role, User.ROLE_PARENT)
         self.assertEqual(parent.username, 'parent-imported')
         reset_credentials.assert_called_once_with(parent, defer_side_effects=True)
+
+
+@override_settings(KCS_NEXUS_AUTH_KEY='nexus-test-key')
+class EcosystemEmployeeIntegrationTests(TestCase):
+    def setUp(self): self.client=APIClient()
+    def test_employee_directory_rejects_missing_service_key(self):
+        self.assertEqual(self.client.get('/api/integration/employees/').status_code,401)
+    def test_employee_directory_accepts_nexus_service_key(self):
+        response=self.client.get('/api/integration/employees/',HTTP_X_API_KEY='nexus-test-key')
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.data,[])

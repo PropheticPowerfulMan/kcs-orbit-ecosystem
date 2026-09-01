@@ -309,12 +309,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [submittedTeacherReports, setSubmittedTeacherReports] = useState<Array<Record<string, unknown>>>([])
 
   const [courseDraft, setCourseDraft] = useState({
-    name: 'Integrated Science Lab',
-    abbreviation: 'ISL',
+    name: '',
+    abbreviation: '',
     creditHours: 1,
-    className: 'Grade 10A',
-    room: 'Lab 2',
-    gradeLevels: ['10th Grade'],
+    className: '',
+    room: '',
+    gradeLevels: [] as string[],
     studentId: '',
   })
   const [selectedStudentId, setSelectedStudentId] = useState('')
@@ -614,7 +614,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       {
         id: `rc-${Date.now()}`,
         course: 'New Course',
-        teacher: 'Dr. Mukendi',
+        teacher: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Teacher',
         coefficient: 1,
         points: 0,
         maxPoints: 100,
@@ -632,12 +632,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const firstStudentId = superAdminStudentPool[0]?.id ?? ''
     setEditingCourseId(null)
     setCourseDraft({
-      name: 'Integrated Science Lab',
-      abbreviation: 'ISL',
+      name: '',
+      abbreviation: '',
       creditHours: 1,
-      className: 'Grade 10A',
-      room: 'Lab 2',
-      gradeLevels: ['10th Grade'],
+      className: '',
+      room: '',
+      gradeLevels: [] as string[],
       studentId: firstStudentId,
     })
   }
@@ -678,7 +678,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       name: courseDraft.name,
       abbreviation: courseDraft.abbreviation,
       creditHours: courseDraft.creditHours,
-      teacher: 'Dr. Mukendi',
+      teacher: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Teacher',
       className: selectedGrade,
       room: courseDraft.room,
       gradeLevels: [selectedGrade],

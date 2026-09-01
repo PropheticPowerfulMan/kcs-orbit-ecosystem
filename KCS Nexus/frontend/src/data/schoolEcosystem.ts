@@ -435,3 +435,13 @@ export const studentTrackingProfiles = students
   disciplineReports, transcripts, diagnosticTests, feeAccounts, auditLogs,
   sensitiveActions, staffOperations, performanceTrend, studentTrackingProfiles,
 ].forEach((collection) => collection.splice(0, collection.length))
+
+
+// Production policy: this legacy module retains only schemas and configuration.
+// Runtime records must come from authenticated APIs; an empty API stays empty.
+;[parents, employees, students, subjects, grades, attendance, attendanceAnalytics,
+  assignments, lmsResources, schedules, scheduleConflicts, announcements,
+  communicationFlows, events, messages, internalThreads, aiSignals,
+  aiRecommendations, reportCards, disciplineReports, transcripts, diagnosticTests,
+  feeAccounts, financeReadiness, auditLogs, sensitiveActions, staffOperations,
+  performanceTrend, studentTrackingProfiles].forEach((records) => records.splice(0, records.length))

@@ -206,6 +206,14 @@ export const teachersAPI = {
   update: (id: string, data: object) => api.put(`/teachers/${id}`, data),
 }
 
+export const employeesAPI = {
+  getAll: () => api.get('/employees'),
+  getById: (id: string) => api.get('/employees/' + id),
+  create: (data: object) => api.post('/employees', data),
+  update: (id: string, data: object) => api.patch('/employees/' + id, data),
+  delete: (id: string) => api.delete('/employees/' + id),
+}
+
 export const teacherWorkspaceAPI = {
   overview: () => api.get('/teachers/me/overview'),
   get: () => api.get('/teachers/me/workspace'),

@@ -1,5 +1,6 @@
 import InternationalPhoneInput from "../../components/InternationalPhoneInput";
 import ParentCommunicationPanel from './ParentCommunicationPanel'
+import EmployeesPanel from './EmployeesPanel'
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
@@ -93,6 +94,10 @@ const recentActivity = [
   'News post on science fair produced 1,240 page views in 48 hours.',
 ]
 
+// Never display seed metrics or people in authenticated production dashboards.
+;[enrollmentTrend, departmentPerformance, admissionsQueue, riskAlerts, staffLoad, recentActivity]
+  .forEach((records) => records.splice(0, records.length))
+
 const SCHOOL_NAME = 'Kinshasa Christian School'
 
 const SCHOOL_SEAL_SRC = getAssetUrl('images/kcs.jpg')
@@ -102,6 +107,8 @@ const liveEventControls = [
   { title: 'Annual Sports Day', status: 'Scheduled', platform: 'KCS Live', audience: 'May 10, 8:00 AM', nextStep: 'Confirm camera crew and field audio' },
   { title: 'Graduation Ceremony 2026', status: 'Scheduled', platform: 'YouTube Live', audience: 'Jun 8, 4:00 PM', nextStep: 'Publish family access link' },
 ]
+
+liveEventControls.splice(0, liveEventControls.length)
 
 const adminRosterSeed = [
   { id: 'adm-001', name: 'Anne Itela Mouyeke', grade: 'Grade 11', section: 'A', parent: 'Beatrice Itela', parentEmail: 'beatrice.itela@kcs.test', parentPhone: '+243 810 100 001', status: 'Active', gpa: 3.7, attendance: 94, discipline: 'Clear' },
@@ -123,6 +130,8 @@ const adminRosterSeed = [
     discipline: student.risk === 'low' ? 'Clear' : 'Monitored',
   })),
 ]
+
+adminRosterSeed.splice(0, adminRosterSeed.length)
 
 type AdminStudentRecord = {
   id: string
@@ -518,6 +527,7 @@ const staffSeed = [
   { id: 'staff-004', name: 'Registrar Office', role: 'Registrar', department: 'Administration', status: 'Present', time: '7:05 AM' },
   { id: 'staff-005', name: 'Discipline Office', role: 'Discipline Lead', department: 'Student Life', status: 'Absent', time: '-' },
 ]
+staffSeed.splice(0, staffSeed.length)
 
 const getAdminSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
@@ -2760,102 +2770,7 @@ const AdminSectionView = ({
     return tokens.every((token) => haystack.includes(token))
   })
 
-  if (segment === 'teachers' || segment === 'employees') {
-    return (
-      <>
-      <div className="mb-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="font-bold text-kcs-blue-900 dark:text-white">{editingTeacherId ? 'Modifier un employé' : 'Ajouter un employé'}</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Création, modification et désactivation centralisées : chaque opération est enregistrée dans Orbit puis propagée dans l’écosystème.</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-              Catégorie d’employé
-              <select value={teacherForm.employeeType} onChange={(event) => setTeacherForm((current) => ({ ...current, employeeType: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                <option value="teacher">Enseignant</option>
-                <option value="administrative">Personnel administratif</option>
-                <option value="support">Personnel de support</option>
-                <option value="leadership">Leadership</option>
-                <option value="specialist">Spécialiste</option>
-              </select>
-            </label>
-            {[
-              ['firstName', 'Prénom'],
-              ['middleName', 'Deuxième prénom'],
-              ['lastName', 'Nom'],
-              ['email', 'Email'],
-              ['phone', 'Téléphone'],
-              ['employeeId', 'ID employé'],
-              ['department', 'Département'],
-              ['jobTitle', 'Fonction'],
-            ].map(([field, label]) => (
-              <label key={field} className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                {label}
-                {field === "phone" ? <InternationalPhoneInput value={teacherForm.phone} onChange={(value) => setTeacherForm((current) => ({ ...current, phone: value }))} /> : <input value={teacherForm[field as keyof typeof teacherForm]} onChange={(event) => setTeacherForm((current) => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />}
-              </label>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" className={adminButton} onClick={() => void saveTeacherRecord()}>{editingTeacherId ? 'Enregistrer les modifications' : 'Ajouter et propager'}</button>
-            {editingTeacherId ? <button type="button" className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200" onClick={clearTeacherForm}>Annuler</button> : null}
-          </div>
-          {teacherNotice ? <p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">{teacherNotice}</p> : null}
-        </section>
-        <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex items-center justify-between gap-3">
-            <div><h2 className="font-bold text-kcs-blue-900 dark:text-white">Registre partagé des employés</h2><p className="text-sm text-gray-500 dark:text-gray-400">{sharedDirectory?.teachers?.length || 0} entité(s) synchronisée(s)</p></div>
-            <button type="button" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200" onClick={() => void refreshOfficialRoster()}>Actualiser</button>
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_0.65fr]">
-            <input value={employeeQuery} onChange={(event) => setEmployeeQuery(event.target.value)} placeholder="Nom, matricule, email, téléphone, poste, département..." className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
-            <select value={employeeTypeFilter} onChange={(event) => setEmployeeTypeFilter(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="all">Tous les employés</option><option value="teacher">Enseignants</option><option value="administrative">Administration</option><option value="support">Support</option><option value="leadership">Leadership</option><option value="specialist">Spécialistes</option>
-            </select>
-          </div>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{filteredEmployees.length} résultat(s)</p>
-          <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
-            {filteredEmployees.map((teacher) => (
-              <article key={teacher.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div><p className="font-semibold text-kcs-blue-900 dark:text-white">{teacher.fullName}</p><p className="text-sm text-gray-500 dark:text-gray-400">{teacher.employeeId || 'ID non renseigné'} · {teacher.email || teacher.phone || 'Contact non renseigné'}</p></div>
-                  <div className="flex gap-2"><button type="button" onClick={() => editTeacherRecord(teacher)} className="rounded-lg bg-kcs-blue-100 px-3 py-2 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-kcs-blue-200">Modifier</button><button type="button" onClick={() => void deleteTeacherRecord(teacher)} className="rounded-lg bg-red-100 px-3 py-2 text-xs font-bold text-red-700 dark:bg-red-900/30 dark:text-red-300">Supprimer</button></div>
-                </div>
-              </article>
-            ))}
-            {!sharedDirectory?.teachers?.length ? <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-kcs-blue-800/30 dark:text-gray-400">Aucun employé partagé. Utilisez le formulaire pour créer le premier.</p> : null}
-          </div>
-        </section>
-      </div>
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Teachers & Load</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {staffLoad.map((teacher) => (
-              <button key={teacher.teacher} type="button" onClick={() => setDetailDialog({ title: teacher.teacher, subtitle: 'Teacher workload record', details: [['Teaching load', teacher.load], ['AI support', teacher.aiSupport], ['Related subjects', subjects.filter((subject) => subject.teacher === teacher.teacher).map((subject) => `${subject.name} (${subject.className})`).join(', ') || 'Not assigned']] })} className="w-full rounded-xl bg-gray-50 p-4 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{teacher.teacher}</p>
-                  <span className="rounded-full bg-kcs-blue-100 px-2.5 py-1 text-xs font-semibold text-kcs-blue-700 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-300">{teacher.load}</span>
-                </div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">AI support: {teacher.aiSupport}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Staff Operations</h2>
-          <div className="space-y-3">
-            {staffOperations.map((item) => (
-              <button type="button" onClick={() => setDetailDialog({ title: item.function, subtitle: 'Teacher operations detail', details: [['Current value', String(item.value)], ['Operational metric', item.metric], ['Status', item.status]] })} key={item.function} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
-                <div className="flex items-center justify-between"><p className="font-semibold text-kcs-blue-900 dark:text-white">{item.function}</p><span className="font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{item.value}</span></div>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{item.metric} - {item.status}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      {detailModal}
-      </>
-    )
-  }
+  if (segment === 'teachers' || segment === 'employees') return <EmployeesPanel />
 
   if (segment === 'courses') {
     return (

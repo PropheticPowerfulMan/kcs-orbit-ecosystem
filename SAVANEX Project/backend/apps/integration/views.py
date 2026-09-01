@@ -9,11 +9,45 @@ from django.db.models import Q
 
 from apps.students.models import Student
 from apps.teachers.models import Teacher
+from apps.teachers.serializers import TeacherSerializer, TeacherCreateSerializer
+from apps.teachers.views import finalize_teacher_creation
+from apps.teachers.services import deactivate_teacher
+from apps.integration.orbit import sync_teacher
 from apps.users.models import User
 from apps.users.serializers import UserMeSerializer
 from apps.users.views import provision_parent_access_identity, provision_student_access_identity, reset_user_access_credentials
 from apps.users.permissions import IsAdminUser
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
+
+
+
+
+def _trusted_nexus(request):
+    key=request.headers.get('x-api-key','')
+    return bool(key and key==settings.KCS_NEXUS_AUTH_KEY)
+
+@api_view(['GET','POST'])
+@permission_classes([AllowAny])
+def ecosystem_employees_view(request):
+    if not _trusted_nexus(request):return Response({'detail':'Unauthorized.'},status=401)
+    if request.method=='GET':
+        rows=Teacher.objects.select_related('user').filter(is_active=True).order_by('user__last_name','user__first_name')
+        return Response(TeacherSerializer(rows,many=True).data)
+    serializer=TeacherCreateSerializer(data=request.data);serializer.is_valid(raise_exception=True)
+    teacher=serializer.save();delivery=finalize_teacher_creation(teacher)
+    data=serializer.to_representation(teacher);data['credentialDelivery']=delivery
+    return Response(data,status=201)
+
+@api_view(['GET','PATCH','DELETE'])
+@permission_classes([AllowAny])
+def ecosystem_employee_detail_view(request,pk):
+    if not _trusted_nexus(request):return Response({'detail':'Unauthorized.'},status=401)
+    try:teacher=Teacher.objects.select_related('user').get(pk=pk)
+    except Teacher.DoesNotExist:return Response({'detail':'Employee not found.'},status=404)
+    if request.method=='GET':return Response(TeacherSerializer(teacher).data)
+    if request.method=='DELETE':deactivate_teacher(teacher);return Response({'detail':'Employee deactivated.'})
+    serializer=TeacherSerializer(teacher,data=request.data,partial=True);serializer.is_valid(raise_exception=True)
+    teacher=serializer.save();sync_teacher(teacher);return Response(TeacherSerializer(teacher).data)
 
 
 @api_view(['GET'])

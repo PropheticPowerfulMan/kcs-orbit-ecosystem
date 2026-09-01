@@ -69,38 +69,6 @@ const emptyQuestion: DiagnosticQuestion = {
 
 const diagnosticInputClass = 'rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-kcs-blue-900 outline-none transition-colors placeholder:text-gray-400 focus:border-kcs-blue-500 focus:ring-2 focus:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-kcs-blue-400 dark:focus:ring-kcs-blue-800/60'
 
-const demoDiagnosticTests: DiagnosticTest[] = [
-  {
-    id: 'diag-demo-math-6',
-    title: 'KCS Diagnostic Assessment - Grade 6 Mathematics',
-    subject: 'MATHEMATICS',
-    gradeLevel: 'Grade 6',
-    academicYear: '2026-2027',
-    status: 'PUBLISHED',
-    durationMinutes: 45,
-    passingScore: 70,
-    competencies: ['Number sense', 'Problem solving', 'Fractions'],
-    questions: [
-      { id: 'diag-q1', questionText: 'What is 12 x 8?', questionType: 'NUMERIC', correctAnswer: 96, points: 2, difficulty: 'EASY', competencyTag: 'Multiplication' },
-      { id: 'diag-q2', questionText: 'Simplify 6/12.', questionType: 'SHORT_ANSWER', correctAnswer: '1/2', points: 2, difficulty: 'MEDIUM', competencyTag: 'Fractions' },
-    ],
-  },
-  {
-    id: 'diag-demo-french-6',
-    title: 'KCS Diagnostic Assessment - Grade 6 French',
-    subject: 'FRENCH',
-    gradeLevel: 'Grade 6',
-    academicYear: '2026-2027',
-    status: 'PUBLISHED',
-    durationMinutes: 35,
-    passingScore: 70,
-    competencies: ['Grammar', 'Reading comprehension'],
-    questions: [
-      { id: 'diag-q3', questionText: 'Conjugate le verbe etre au present avec nous.', questionType: 'SHORT_ANSWER', correctAnswer: 'nous sommes', points: 2, difficulty: 'EASY', competencyTag: 'Grammar' },
-    ],
-  },
-]
-
 const badgeTone = (status: string) => {
   if (['APPROVED', 'PUBLISHED', 'AUTO_GRADED'].includes(status)) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
   if (['REJECTED', 'RETAKE_REQUESTED'].includes(status)) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
@@ -178,7 +146,7 @@ export default function DiagnosticCenter() {
       diagnosticAPI.getAnalytics().catch(() => ({ data: { data: null } })),
     ])
     const loadedTests = testResponse.data.data ?? []
-    setTests(loadedTests.length ? loadedTests : demoDiagnosticTests)
+    setTests(loadedTests)
     setSubmissions(submissionResponse.data.data ?? [])
     setAnalytics(analyticsResponse.data.data ?? { totalSubmissions: 0, bySubject: [{ subject: 'MATHEMATICS', count: 0, average: 0 }, { subject: 'FRENCH', count: 0, average: 0 }] })
   }
@@ -219,7 +187,8 @@ export default function DiagnosticCenter() {
   }
 
   const start = async (testId: string) => {
-    const test = tests.find((item) => item.id === testId) ?? demoDiagnosticTests[0]
+    const test = tests.find((item) => item.id === testId)
+    if (!test) throw new Error('Diagnostic test not found')
     const response = await diagnosticAPI.startSubmission({ testId, applicantName: 'Student Diagnostic Preview' }).catch(() => ({
       data: {
         data: {

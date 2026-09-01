@@ -129,36 +129,19 @@ const AITutorPage = () => {
       }
       setMessages((prev) => [...prev, assistantMessage])
     } catch {
-      // Fallback for demo
-      const fallbackContent = getFallbackTutorResponse(text, selectedSubject || '')
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: generateId(),
-          role: 'assistant',
-          content: fallbackContent,
-          timestamp: new Date().toISOString(),
-        },
-      ])
+      setMessages((prev) => [...prev, {
+        id: generateId(),
+        role: 'assistant',
+        content: 'The KCS AI service is temporarily unavailable. No generated answer has been recorded; please try again.',
+        timestamp: new Date().toISOString(),
+      }])
     } finally {
       setIsLoading(false)
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }
 
-  const getFallbackTutorResponse = (question: string, subject: string): string => {
-    const q = question.toLowerCase()
 
-    if (q.includes('quadratic') || (subject === 'math' && q.includes('equation'))) {
-      return `**Solving Quadratic Equations** 📐\n\nA quadratic equation has the form: **ax² + bx + c = 0**\n\n**Method 1: Quadratic Formula**\nx = (-b ± √(b² - 4ac)) / 2a\n\n**Example:** Solve x² - 5x + 6 = 0\n• a = 1, b = -5, c = 6\n• x = (5 ± √(25 - 24)) / 2\n• x = (5 ± 1) / 2\n• **x = 3 or x = 2** ✅\n\n**Method 2: Factoring**\nx² - 5x + 6 = (x - 3)(x - 2) = 0\n\nWould you like me to give you a practice problem?`
-    }
-
-    if (q.includes('photosynthesis')) {
-      return `**Photosynthesis Explained** 🔬\n\nPhotosynthesis is the process plants use to convert sunlight into food.\n\n**The Equation:**\n6CO₂ + 6H₂O + Light Energy → C₆H₁₂O₆ + 6O₂\n\n**Two Stages:**\n1. **Light Reactions** (in Thylakoids)\n   • Capture light energy\n   • Split water molecules\n   • Produce ATP and NADPH\n\n2. **Calvin Cycle** (in Stroma)\n   • Uses ATP and NADPH\n   • Fixes CO₂ into glucose\n\n**Key factors that affect rate:**\n• Light intensity\n• CO₂ concentration\n• Temperature\n\nShall I generate some practice questions on this?`
-    }
-
-    return `Great question! Let me help you with that.\n\nThis is a topic in **${subjects.find(s => s.id === subject)?.name || 'your subject'}** that's important for your studies.\n\nHere's how I'd approach this:\n\n1. **First**, let's understand the core concept\n2. **Then**, we'll look at examples\n3. **Finally**, we'll practice together\n\nCould you give me a bit more detail about what specifically you're struggling with? That way I can give you the most targeted explanation. 💡`
-  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
