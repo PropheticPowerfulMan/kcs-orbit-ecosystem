@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { CheckSquare, Eye, Mail, MessageSquare, Send, Square, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CheckSquare, Eye, Mail, MessageSquare, Send, Square, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { messagesAPI } from '../../services/api'
 
@@ -19,7 +19,7 @@ const copy = {
     recipients: 'Destinataires', families: 'Parents et familles', selected: 'sélectionné(s)', parentSearch: 'Nom complet, email, téléphone ou code d’accès...', deselect: 'Désélectionner', selectResults: 'Sélectionner les résultats', clear: 'Effacer', noEmail: 'Email absent', noPhone: 'Téléphone absent',
     official: 'Communication officielle', channels: 'Email, SMS et boîte Nexus', subject: 'Sujet', exactMessage: 'Message exact à envoyer...', copyStored: 'Sans préfixe applicatif ; une copie est conservée dans Nexus.', sending: 'Envoi...', sendTo: (count: number) => 'Envoyer à ' + count + ' parent(s)',
     history: 'Historique', oldMessages: 'Anciens messages envoyés', historySearch: 'Parent, sujet, contenu, email, téléphone ou date...', startDate: 'Date de début', endDate: 'Date de fin', results: 'résultat(s)', deleting: 'Suppression...', deleteSelection: 'Supprimer la sélection',
-    choice: 'Choix', parent: 'Parent', date: 'Date', action: 'Action', view: 'Voir', sentMessage: 'Message envoyé', close: 'Fermer', nexus: 'Nexus', sent: 'Envoyé', failed: 'Échec', logged: 'Enregistré'
+    choice: 'Choix', parent: 'Parent', date: 'Date', action: 'Action', view: 'Voir', sentMessage: 'Message envoyé', close: 'Fermer', nexus: 'Nexus', sent: 'Envoyé', failed: 'Échec', logged: 'Enregistré', deliveryTitle: 'Résultat de l’envoi', deliveryIntro: 'Résultat technique reçu pour chaque destinataire.', providerAccepted: 'Accepté par le fournisseur', notSent: 'Non envoyé', finalPending: 'Réception finale à confirmer', deliveryNote: 'Un statut accepté confirme la prise en charge par le serveur email ou l’opérateur SMS. La réception finale dans la boîte mail ou sur le téléphone dépend ensuite du fournisseur.', emailLabel: 'E-mail', smsLabel: 'SMS'
   },
   en: {
     loadFailed: 'Unable to load communications.', selectParent: 'Select at least one parent.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
@@ -28,7 +28,7 @@ const copy = {
     recipients: 'Recipients', families: 'Parents and families', selected: 'selected', parentSearch: 'Full name, email, phone number or access code...', deselect: 'Deselect', selectResults: 'Select results', clear: 'Clear', noEmail: 'No email', noPhone: 'No phone number',
     official: 'Official communication', channels: 'Email, SMS and Nexus inbox', subject: 'Subject', exactMessage: 'Exact message to send...', copyStored: 'No application prefix; a copy is retained in Nexus.', sending: 'Sending...', sendTo: (count: number) => 'Send to ' + count + ' parent(s)',
     history: 'History', oldMessages: 'Previously sent messages', historySearch: 'Parent, subject, content, email, phone number or date...', startDate: 'Start date', endDate: 'End date', results: 'result(s)', deleting: 'Deleting...', deleteSelection: 'Delete selection',
-    choice: 'Select', parent: 'Parent', date: 'Date', action: 'Action', view: 'View', sentMessage: 'Sent message', close: 'Close', nexus: 'Nexus', sent: 'Sent', failed: 'Failed', logged: 'Recorded'
+    choice: 'Select', parent: 'Parent', date: 'Date', action: 'Action', view: 'View', sentMessage: 'Sent message', close: 'Close', nexus: 'Nexus', sent: 'Sent', failed: 'Failed', logged: 'Recorded', deliveryTitle: 'Delivery result', deliveryIntro: 'Technical result received for each recipient.', providerAccepted: 'Accepted by provider', notSent: 'Not sent', finalPending: 'Final receipt pending confirmation', deliveryNote: 'An accepted status confirms processing by the email server or SMS operator. Final arrival in the inbox or on the phone then depends on the provider.', emailLabel: 'Email', smsLabel: 'SMS'
   },
 } as const
 
@@ -48,6 +48,7 @@ export default function ParentCommunicationPanel() {
   const [historyTo, setHistoryTo] = useState('')
   const [selectedHistory, setSelectedHistory] = useState<string[]>([])
   const [viewingMessage, setViewingMessage] = useState<any | null>(null)
+  const [deliveryReport, setDeliveryReport] = useState<any | null>(null)
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [notice, setNotice] = useState('')
@@ -107,6 +108,7 @@ export default function ParentCommunicationPanel() {
       const emailFailed = channels.includes('email') ? delivery.length - emailSent : 0
       const smsFailed = channels.includes('sms') ? delivery.length - smsSent : 0
       setNotice(c.recorded(data?.recipients ?? 0, emailSent, emailFailed, smsSent, smsFailed))
+      setDeliveryReport({ delivery, channels: data?.channels ?? channels, recipients: data?.recipients ?? delivery.length })
       setSubject('')
       setBody('')
       setSelectedParents([])
@@ -214,6 +216,14 @@ export default function ParentCommunicationPanel() {
           </table>
         </div>
       </section>
+
+      {deliveryReport ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={() => setDeliveryReport(null)} role="dialog" aria-modal="true" aria-labelledby="delivery-result-title">
+        <section className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl border border-kcs-blue-300/30 bg-white p-6 shadow-2xl dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-600">{c.official}</p><h3 id="delivery-result-title" className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{c.deliveryTitle}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{c.deliveryIntro}</p></div><button className={primaryButton} onClick={() => setDeliveryReport(null)}><X size={17}/>{c.close}</button></div>
+          <div className="mt-5 space-y-3">{deliveryReport.delivery.map((row: any) => <article key={row.userId} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50"><h4 className="font-bold text-kcs-blue-950 dark:text-white">{row.name}</h4><div className="mt-3 grid gap-3 sm:grid-cols-2">{deliveryReport.channels.map((channel: 'email' | 'sms') => { const result = row[channel]; const accepted = Boolean(result?.sent); return <div key={channel} className={`rounded-xl border p-3 ${accepted ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30' : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30'}`}><div className="flex items-center gap-2">{accepted ? <CheckCircle2 className="text-emerald-600" size={20}/> : <AlertTriangle className="text-red-600" size={20}/>}<b className="text-kcs-blue-950 dark:text-white">{channel === 'email' ? c.emailLabel : c.smsLabel}</b></div><p className={`mt-2 text-sm font-bold ${accepted ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{accepted ? c.providerAccepted : c.notSent}</p>{accepted ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{c.finalPending}</p> : null}</div> })}</div></article>)}</div>
+          <div className="mt-5 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"><AlertTriangle className="mt-0.5 shrink-0" size={20}/><p>{c.deliveryNote}</p></div>
+        </section>
+      </div> : null}
 
       {viewingMessage ? <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={() => setViewingMessage(null)} role="dialog" aria-modal="true">
         <section className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl border border-kcs-blue-300/30 bg-white p-6 shadow-2xl dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
