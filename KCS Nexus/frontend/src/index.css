@@ -2,38 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-.dark input[type="date"] {
-  color-scheme: dark;
-  background-color: rgba(10, 25, 53, 0.6);
-  color: #f1f5f9;
+.dark input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"]) {
+  color-scheme: dark !important;
+  color: #f8fafc;
 }
-.dark input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(2);
-  opacity: 0.95;
+
+.dark input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"])::-webkit-calendar-picker-indicator {
+  box-sizing: content-box;
+  min-width: 1rem;
+  min-height: 1rem;
+  padding: 0.25rem;
+  border-radius: 0.45rem;
+  background-color: rgba(255, 255, 255, 0.12);
+  filter: brightness(0) invert(1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.85)) !important;
+  opacity: 1 !important;
   cursor: pointer;
 }
-input[type="date"]::-webkit-calendar-picker-indicator {
+
+.dark input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"])::-webkit-calendar-picker-indicator:hover {
+  background-color: rgba(255, 203, 5, 0.2);
+  filter: brightness(0) saturate(100%) invert(84%) sepia(98%) saturate(1092%) hue-rotate(349deg) brightness(104%) contrast(102%) !important;
+}
+
+input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"])::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  opacity: 0.8;
-  transition: opacity 0.15s ease;
+  opacity: 0.85;
+  transition: background-color 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
 }
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-.dark .suggestion-date-field { color-scheme: dark; }
-.dark .suggestion-date-field::-webkit-calendar-picker-indicator {
-  filter: invert(100%) sepia(8%) saturate(350%) hue-rotate(175deg) brightness(118%) contrast(100%);
-  opacity: 1;
-  cursor: pointer;
-}
-.dark input[aria-label="Date de début"]::-webkit-calendar-picker-indicator,
-.dark input[aria-label="Date de fin"]::-webkit-calendar-picker-indicator,
-.dark input[aria-label="Date de dÃ©but"]::-webkit-calendar-picker-indicator {
-  filter: invert(100%) brightness(180%) contrast(100%);
-  opacity: 1;
-}
-.dark .attendance-date-field::-webkit-calendar-picker-indicator {
-  filter: invert(100%) brightness(200%) contrast(100%);
+
+input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"])::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
