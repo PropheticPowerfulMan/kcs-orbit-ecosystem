@@ -9,6 +9,7 @@ type MailPayload = {
   text: string
   html?: string
   attachments?: Attachment[]
+  branded?: boolean
 }
 
 export type MailResult =
@@ -40,7 +41,7 @@ const brandedEmailHtml = (subject: string, text: string, suppliedHtml?: string) 
 <tr><td style="background:#004080;padding:20px 28px;text-align:center"><img src="${LOGO_URL}" width="34" height="34" alt="KCS" style="display:inline-block;vertical-align:middle;background:#fff;border-radius:50%;padding:2px"><p style="margin:9px 0 0;color:#fff;font-size:13px;font-weight:700">Kinshasa Christian School</p><p style="margin:5px 0 0;color:#b9d7f7;font-size:11px">Macampagne, Ngaliema · Notification automatisée KCS Nexus</p></td></tr></table></td></tr></table></body></html>`
 }
 
-export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo, subject, text, html, attachments }: MailPayload): Promise<MailResult> => {
+export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo, subject, text, html, attachments, branded = true }: MailPayload): Promise<MailResult> => {
   if (!transporter) {
     console.warn(`[mail] SMTP is not configured. Email "${subject}" was not sent to ${to}.`)
     return { sent: false, reason: 'SMTP_NOT_CONFIGURED' as const }
@@ -48,6 +49,6 @@ export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo, subject, 
   const normalizedSubject = subject.normalize('NFC')
   const normalizedText = text.normalize('NFC')
   const normalizedHtml = html?.normalize('NFC')
-  await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: brandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml), attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
+  await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? brandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
   return { sent: true as const }
 }

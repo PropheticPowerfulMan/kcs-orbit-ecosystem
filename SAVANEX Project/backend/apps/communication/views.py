@@ -81,6 +81,7 @@ class MessageListCreateView(generics.ListCreateAPIView):
                     subject=subject,
                     body=body,
                     channels=normalized_channels,
+                    branded=False,
                 )
                 delivery_rows = [result.__dict__ for result in delivery]
                 direct_message = DirectParentMessage.objects.create(
@@ -114,7 +115,7 @@ class MessageListCreateView(generics.ListCreateAPIView):
             message = serializer.save()
             Notification.objects.create(user=message.receiver, title=message.subject[:200], body=message.body, notif_type=Notification.TYPE_MESSAGE, link='/communication')
         try:
-            delivery = deliver_user_communication(message.receiver, message.subject, message.body, notif_type=Notification.TYPE_MESSAGE, link='/communication', create_notification=False)
+            delivery = deliver_user_communication(message.receiver, message.subject, message.body, notif_type=Notification.TYPE_MESSAGE, link='/communication', create_notification=False, branded=getattr(request.user, 'role', '') != 'admin')
             delivery_rows = [result.__dict__ for result in delivery]
         except Exception as exc:
             delivery_rows = [{'channel': 'external', 'status': 'failed', 'detail': str(exc)}]

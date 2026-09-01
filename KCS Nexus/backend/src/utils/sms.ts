@@ -4,10 +4,12 @@ export type SmsResult =
   | { sent: true }
   | { sent: false; reason: 'PHONE_MISSING' | 'SMS_NOT_CONFIGURED' | 'SMS_SEND_FAILED' }
 
-export async function sendSchoolSms(to: string | null | undefined, message: string): Promise<SmsResult> {
+export async function sendSchoolSms(to: string | null | undefined, message: string, options: { brand?: boolean } = {}): Promise<SmsResult> {
   const phone = (to || '').replace(/[\s()-]/g, '')
   const cleanMessage = message.normalize('NFC').replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
-  const brandedMessage = /^\s*(?:\[?KCS Nexus\]?\s*[:—-])/i.test(cleanMessage) ? cleanMessage : `KCS Nexus : ${cleanMessage}`
+  const outboundMessage = options.brand === false
+    ? cleanMessage
+    : (/^\s*(?:\[?KCS Nexus\]?\s*[:—-])/i.test(cleanMessage) ? cleanMessage : `KCS Nexus : ${cleanMessage}`)
   const apiUrl = env.AFRICASTALKING_API_URL || env.SMS_API_URL
   const apiKey = env.AFRICASTALKING_API_KEY || env.SMS_API_KEY
   const username = env.AFRICASTALKING_USERNAME || env.SMS_USERNAME
@@ -20,8 +22,8 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
   try {
     const isAfricasTalking = /africastalking/i.test(apiUrl)
     const body = isAfricasTalking
-      ? new URLSearchParams({ username, to: phone, message: brandedMessage, ...(sender ? { from: sender } : {}) })
-      : JSON.stringify({ to: phone, message: brandedMessage, sender })
+      ? new URLSearchParams({ username, to: phone, message: outboundMessage, ...(sender ? { from: sender } : {}) })
+      : JSON.stringify({ to: phone, message: outboundMessage, sender })
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: isAfricasTalking

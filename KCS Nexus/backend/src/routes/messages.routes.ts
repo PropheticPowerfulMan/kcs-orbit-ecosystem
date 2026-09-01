@@ -4,6 +4,8 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
+import { sendSchoolMail } from '../utils/mail.js'
+import { sendSchoolSms } from '../utils/sms.js'
 
 export const messagesRouter = Router()
 messagesRouter.use(authenticate)
@@ -35,7 +37,7 @@ messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, r
 
 messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = messageSchema.parse(req.body)
-  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true } })
+  const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true } })
   if (!recipient) throw new ApiError(404, 'Recipient not found')
   if ((req.user!.role === 'parent' || req.user!.role === 'student') && !['ADMIN', 'STAFF', 'TEACHER'].includes(recipient.role)) {
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
@@ -45,7 +47,13 @@ messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => 
     await tx.notification.create({ data: { userId: data.recipientId, title: data.subject, message: data.body, type: 'MESSAGE', link: messageLink(recipient.role) } })
     return created
   })
-  return success(res, message, 'Message sent', 201)
+  const delivery = req.user!.sub === 'configured-superadmin'
+    ? await Promise.all([
+        sendSchoolMail({ to: recipient.email, subject: data.subject, text: data.body, branded: false }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+        sendSchoolSms(recipient.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+      ])
+    : []
+  return success(res, { ...message, delivery }, 'Message sent', 201)
 }))
 
 messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest, res) => {

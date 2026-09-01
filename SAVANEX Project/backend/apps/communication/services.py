@@ -70,12 +70,17 @@ def send_branded_email(to, subject, body, action_url='', action_label='Ouvrir SA
     message.attach_alternative(build_branded_email_html(subject, body, action_url, action_label), 'text/html')
     return message.send(fail_silently=False)
 
-def _send_user_email(user, subject, body, label='User'):
+def _send_user_email(user, subject, body, label='User', branded=True):
     if not user.email:
         return DeliveryResult('email', 'skipped', f'{label} email is missing.')
 
     try:
-        sent_count = send_branded_email(user.email, subject, body)
+        if branded:
+            sent_count = send_branded_email(user.email, subject, body)
+        else:
+            message = EmailMultiAlternatives(_normalize_unicode_text(subject), _normalize_unicode_text(body), getattr(settings, 'DEFAULT_FROM_EMAIL', None), [user.email])
+            message.encoding = 'utf-8'
+            sent_count = message.send(fail_silently=False)
 
     except Exception as exc:
         logger.exception('Unable to send %s email to %s', label.lower(), user.email)
@@ -193,12 +198,13 @@ def _send_sms_with_africas_talking(phone, body):
     return DeliveryResult('sms', 'failed', response_body[:160])
 
 
-def _send_user_sms(user, body, label='User'):
+def _send_user_sms(user, body, label='User', branded=True):
     phone = _normalize_phone(user.phone)
     body = _normalize_unicode_text(body)
     lines = [' '.join(line.split()) for line in (body or '').replace('\r\n', '\n').split('\n')]
     body = '\n'.join(lines).strip()
-    body = body if body.upper().startswith('SAVANEX :') else f'SAVANEX : {body}'
+    if branded:
+        body = body if body.upper().startswith('SAVANEX :') else f'SAVANEX : {body}'
     if not phone:
         return DeliveryResult('sms', 'skipped', f'{label} phone is missing.')
 
@@ -221,12 +227,13 @@ def _send_parent_sms(parent, body):
     return _send_user_sms(parent, body, 'Parent')
 
 
-def _short_sms(subject, body):
+def _short_sms(subject, body, branded=True):
     subject = _normalize_unicode_text(subject)
     body = _normalize_unicode_text(body)
     clean_lines = [' '.join(line.split()) for line in (body or '').replace('\r\n', '\n').split('\n')]
     clean_body = '\n'.join(clean_lines).strip()
-    return f'SAVANEX : {_school_sender_name()}\n{subject.strip()}\n\n{clean_body}'
+    content = f'{subject.strip()}\n\n{clean_body}'.strip()
+    return f'SAVANEX : {_school_sender_name()}\n{content}' if branded else content
 
 
 def deliver_parent_communication(parent, subject, body, notif_type=Notification.TYPE_MESSAGE, link=''):
@@ -246,7 +253,7 @@ def deliver_parent_communication(parent, subject, body, notif_type=Notification.
     return [email_result, sms_result]
 
 
-def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE_MESSAGE, link='', create_notification=True):
+def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE_MESSAGE, link='', create_notification=True, branded=True):
     if not user:
         return []
 
@@ -259,8 +266,8 @@ def deliver_user_communication(user, subject, body, notif_type=Notification.TYPE
             link=link,
         )
 
-    sms_result = _send_user_sms(user, _short_sms(subject, body))
-    email_result = _send_user_email(user, subject, body)
+    sms_result = _send_user_sms(user, _short_sms(subject, body, branded=branded), branded=branded)
+    email_result = _send_user_email(user, subject, body, branded=branded)
     return [email_result, sms_result]
 
 
@@ -300,17 +307,17 @@ def deliver_employee_communication(employee, subject, body, notif_type=Notificat
 
     return [*email_results, sms_result]
 
-def deliver_direct_parent_contact(name='', email='', phone='', subject='', body='', channels=None):
+def deliver_direct_parent_contact(name='', email='', phone='', subject='', body='', channels=None, branded=True):
     enabled_channels = set(channels or ['email', 'sms'])
     contact = SimpleNamespace(email=email or '', phone=phone or '')
     label = name or 'Parent'
     sms_result = (
-        _send_user_sms(contact, _short_sms(subject, body), label)
+        _send_user_sms(contact, _short_sms(subject, body, branded=branded), label, branded=branded)
         if 'sms' in enabled_channels
         else DeliveryResult('sms', 'skipped', 'SMS channel disabled.')
     )
     email_result = (
-        _send_user_email(contact, subject, body, label)
+        _send_user_email(contact, subject, body, label, branded=branded)
         if 'email' in enabled_channels
         else DeliveryResult('email', 'skipped', 'Email channel disabled.')
     )

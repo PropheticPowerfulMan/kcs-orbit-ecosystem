@@ -60,6 +60,23 @@ class SmsDeliveryTests(SimpleTestCase):
         self.assertNotIn('Ã', message)
         self.assertNotIn('Â', message)
 
+class ManualAdminFormattingTests(SimpleTestCase):
+    def test_manual_superadmin_sms_has_no_application_header(self):
+        message = _short_sms('Réunion parents', 'Bonjour, rendez-vous à 14 h.', branded=False)
+        self.assertEqual(message, 'Réunion parents\n\nBonjour, rendez-vous à 14 h.')
+        self.assertNotIn('SAVANEX', message)
+
+    @patch('apps.communication.services._send_user_email')
+    @patch('apps.communication.services._send_user_sms')
+    def test_direct_parent_delivery_disables_branding(self, send_sms, send_email):
+        from .services import DeliveryResult, deliver_direct_parent_contact
+        send_sms.return_value = DeliveryResult('sms', 'sent')
+        send_email.return_value = DeliveryResult('email', 'sent')
+        deliver_direct_parent_contact(name='Parent', email='parent@example.com', phone='+243810000000', subject='Sujet', body='Texte', branded=False)
+        self.assertFalse(send_sms.call_args.kwargs['branded'])
+        self.assertFalse(send_email.call_args.kwargs['branded'])
+
+
 class NotificationOrderingTests(SimpleTestCase):
     @patch('apps.communication.services._send_user_email')
     @patch('apps.communication.services._send_user_sms')
@@ -67,8 +84,8 @@ class NotificationOrderingTests(SimpleTestCase):
         from .services import DeliveryResult, deliver_direct_parent_contact
 
         calls = []
-        send_sms.side_effect = lambda *_args: calls.append('sms') or DeliveryResult('sms', 'sent')
-        send_email.side_effect = lambda *_args: calls.append('email') or DeliveryResult('email', 'sent')
+        send_sms.side_effect = lambda *_args, **_kwargs: calls.append('sms') or DeliveryResult('sms', 'sent')
+        send_email.side_effect = lambda *_args, **_kwargs: calls.append('email') or DeliveryResult('email', 'sent')
 
         results = deliver_direct_parent_contact(
             email='parent@example.com',
