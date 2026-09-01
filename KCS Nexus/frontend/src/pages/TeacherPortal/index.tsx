@@ -2082,7 +2082,7 @@ const TeacherDashboardHome = () => {
 
 const TeacherPortal = () => {
   const { user } = useAuthStore()
-  const { language } = useUIStore()
+  const language = useUIStore((state) => state.language)
   const location = useLocation()
   const activeSegment = getTeacherSegment(location.pathname)
   const isDashboard = activeSegment === 'dashboard'

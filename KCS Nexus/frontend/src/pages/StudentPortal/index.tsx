@@ -32,7 +32,7 @@ const initialOverview: Overview = { profile: null, academicSummary: null, grades
 
 export default function StudentPortal() {
   const { user } = useAuthStore()
-  const { language } = useUIStore()
+  const language = useUIStore((state) => state.language)
   const segment = segmentOf(useLocation().pathname)
   const [overview, setOverview] = useState<Overview>(initialOverview)
   const [notices, setNotices] = useState<Notice[]>([])

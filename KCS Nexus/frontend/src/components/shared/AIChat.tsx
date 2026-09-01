@@ -81,7 +81,9 @@ const getLocalSchoolResponse = (question: string, lang: 'en' | 'fr'): string => 
 }
 
 const AIChat = () => {
-  const { chatOpen, toggleChat, language } = useUIStore()
+  const chatOpen = useUIStore((state) => state.chatOpen)
+  const toggleChat = useUIStore((state) => state.toggleChat)
+  const language = useUIStore((state) => state.language)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)

@@ -23,7 +23,7 @@ const personName = (value: any) => value?.fullName || [value?.firstName, value?.
 
 const StaffPortal = () => {
   const { user } = useAuthStore()
-  const { language } = useUIStore()
+  const language = useUIStore((state) => state.language)
   const location = useLocation()
   const segment = segmentOf(location.pathname)
   const isAdministrator = user?.role === 'admin'

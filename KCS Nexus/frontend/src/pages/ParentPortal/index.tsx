@@ -63,7 +63,7 @@ function downloadCalendarEvent(event: EventItem) {
 
 export default function ParentPortal() {
   const { user } = useAuthStore()
-  const { language } = useUIStore()
+  const language = useUIStore((state) => state.language)
   const location = useLocation()
   const segment = segmentFrom(location.pathname)
   const [children, setChildren] = useState<ParentChild[]>([])

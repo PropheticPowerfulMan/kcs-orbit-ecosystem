@@ -16,7 +16,7 @@ const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (
 
 export default function SuggestionBox() {
   const { user } = useAuthStore()
-  const { language } = useUIStore()
+  const language = useUIStore((state) => state.language)
   const [category, setCategory] = useState('wellbeing')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
