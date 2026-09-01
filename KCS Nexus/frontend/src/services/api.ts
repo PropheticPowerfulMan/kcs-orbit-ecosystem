@@ -326,6 +326,7 @@ export const messagesAPI = {
   send: (data: { recipientId: string; subject: string; body: string }) => api.post('/messages', data),
   broadcast: (data: { audience: 'ALL' | 'PARENTS' | 'STUDENTS' | 'TEACHERS' | 'STAFF' | 'GRADE_9_12_FAMILIES'; subject: string; body: string }) => api.post('/messages/broadcast', data),
   markRead: (id: string) => api.patch(`/messages/${id}/read`),
+  deleteMany: (ids: string[]) => api.post('/messages/bulk-delete', { ids }),
 }
 
 

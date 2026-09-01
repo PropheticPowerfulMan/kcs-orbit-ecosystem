@@ -31,7 +31,17 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
         : { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body,
     })
+    const responseText = await response.text()
     if (!response.ok) throw new Error(`SMS provider responded with ${response.status}`)
+    if (isAfricasTalking) {
+      const payload = JSON.parse(responseText || '{}')
+      const recipients = Array.isArray(payload?.SMSMessageData?.Recipients) ? payload.SMSMessageData.Recipients : []
+      const accepted = recipients.some((recipient: any) =>
+        String(recipient?.statusCode || '') === '101'
+        || /success|sent|submitted/i.test(String(recipient?.status || ''))
+      )
+      if (!accepted) throw new Error('SMS provider did not accept the recipient')
+    }
     return { sent: true }
   } catch (error) {
     console.error('[sms] Delivery failed', error)

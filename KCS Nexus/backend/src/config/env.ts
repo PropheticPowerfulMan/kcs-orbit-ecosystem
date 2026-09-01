@@ -33,7 +33,7 @@ const envSchema = z.object({
   SMS_API_KEY: z.string().optional(),
   SMS_USERNAME: z.string().optional(),
   SMS_SENDER: z.string().optional(),
-  AFRICASTALKING_API_URL: z.string().url().optional(),
+  AFRICASTALKING_API_URL: z.string().url().default('https://api.africastalking.com/version1/messaging'),
   AFRICASTALKING_API_KEY: z.string().optional(),
   AFRICASTALKING_USERNAME: z.string().optional(),
   AFRICASTALKING_SENDER: z.string().optional(),
