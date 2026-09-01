@@ -101,7 +101,7 @@ messagesRouter.post('/parent-delivery', asyncHandler(async (req: AuthenticatedRe
     const batch = parents.slice(index, index + 10)
     const results = await Promise.all(batch.map(async (parent) => {
       const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
-      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body, branded: false })
+      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body, branded: true })
       if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}`, { brand: false })
       const internalMessageId = messageIdByRecipient.get(parent.id)
       const deliveryRows = data.channels.map((channel) => {
@@ -144,7 +144,7 @@ messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => 
   })
   const delivery = req.user!.sub === 'configured-superadmin'
     ? await Promise.all([
-        sendSchoolMail({ to: recipient.email, subject: data.subject, text: data.body, branded: false }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+        sendSchoolMail({ to: recipient.email, subject: data.subject, text: data.body, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
         sendSchoolSms(recipient.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
       ])
     : []
