@@ -126,6 +126,29 @@ class MessageListCreateView(generics.ListCreateAPIView):
 
 
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def bulk_delete_messages(request):
+    if getattr(request.user, 'role', '') != 'admin' and not request.user.is_staff:
+        return Response({'detail': 'Only an administrator can delete sent message history.'}, status=status.HTTP_403_FORBIDDEN)
+    raw_ids = request.data.get('ids')
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return Response({'detail': 'Select at least one message.'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(raw_ids) > 250:
+        return Response({'detail': 'A maximum of 250 messages can be deleted at once.'}, status=status.HTTP_400_BAD_REQUEST)
+    direct_ids, internal_ids = set(), set()
+    for raw_id in raw_ids:
+        value = str(raw_id).strip()
+        if value.startswith('direct-'):
+            value = value[7:]
+            if value.isdigit(): direct_ids.add(int(value))
+        elif value.isdigit(): internal_ids.add(int(value))
+    with transaction.atomic():
+        direct_count, _ = DirectParentMessage.objects.filter(sender=request.user, pk__in=direct_ids).delete()
+        internal_count, _ = Message.objects.filter(sender=request.user, pk__in=internal_ids).delete()
+    return Response({'deletedCount': direct_count + internal_count})
+
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def message_contacts(request):

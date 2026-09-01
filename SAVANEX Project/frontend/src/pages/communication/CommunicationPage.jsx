@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckSquare, Eye, Mail, MessageSquare, Send, Square, Users, X } from 'lucide-react';
+import { CheckSquare, Eye, Mail, MessageSquare, Send, Square, Trash2, Users, X } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import StatCard from '../../components/ui/StatCard';
 import { useTranslation } from 'react-i18next';
@@ -69,11 +69,15 @@ const CommunicationPage = () => {
   const [contactFilter, setContactFilter] = useState('all');
   const [historySearch, setHistorySearch] = useState('');
   const [deliveryFilter, setDeliveryFilter] = useState('all');
+  const [historyDateFrom, setHistoryDateFrom] = useState('');
+  const [historyDateTo, setHistoryDateTo] = useState('');
+  const [selectedMessageIds, setSelectedMessageIds] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -142,14 +146,73 @@ const CommunicationPage = () => {
   ], [sendEmail, sendSms]);
 
   const filteredMessages = useMemo(() => {
-    const query = historySearch.trim().toLowerCase();
+    const tokens = historySearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const from = historyDateFrom ? new Date(`${historyDateFrom}T00:00:00`) : null;
+    const to = historyDateTo ? new Date(`${historyDateTo}T23:59:59.999`) : null;
     return messageList.filter((message) => {
-      const haystack = `${message.subject || ''} ${message.receiver_name || ''} ${message.body || ''}`.toLowerCase();
-      const matchesQuery = !query || haystack.includes(query);
+      const deliveryText = (message.delivery || []).map((item) => `${item.channel} ${item.status} ${item.detail || ''}`).join(' ');
+      const haystack = [
+        message.subject,
+        message.receiver_name,
+        message.receiver_email,
+        message.receiver_phone,
+        message.body,
+        deliveryText,
+      ].filter(Boolean).join(' ').toLowerCase();
+      const sentAt = message.sent_at ? new Date(message.sent_at) : null;
+      const matchesQuery = tokens.every((token) => haystack.includes(token));
       const matchesDelivery = deliveryFilter === 'all' || (message.delivery || []).some((item) => item.status === deliveryFilter || item.channel === deliveryFilter);
-      return matchesQuery && matchesDelivery;
+      const matchesFrom = !from || (sentAt && sentAt >= from);
+      const matchesTo = !to || (sentAt && sentAt <= to);
+      return matchesQuery && matchesDelivery && matchesFrom && matchesTo;
     });
-  }, [deliveryFilter, historySearch, messageList]);
+  }, [deliveryFilter, historyDateFrom, historyDateTo, historySearch, messageList]);
+
+  const allFilteredMessagesSelected = filteredMessages.length > 0
+    && filteredMessages.every((message) => selectedMessageIds.includes(String(message.id)));
+
+  const toggleMessage = (id) => {
+    const safeId = String(id);
+    setSelectedMessageIds((current) => (
+      current.includes(safeId) ? current.filter((item) => item !== safeId) : [...current, safeId]
+    ));
+  };
+
+  const toggleAllFilteredMessages = () => {
+    const visibleIds = filteredMessages.map((message) => String(message.id));
+    if (allFilteredMessagesSelected) {
+      const visibleSet = new Set(visibleIds);
+      setSelectedMessageIds((current) => current.filter((id) => !visibleSet.has(id)));
+      return;
+    }
+    setSelectedMessageIds((current) => Array.from(new Set([...current, ...visibleIds])));
+  };
+
+  const deleteSelectedMessages = async () => {
+    if (!selectedMessageIds.length || deleting) return;
+    const confirmed = window.confirm(L(
+      `Supprimer définitivement ${selectedMessageIds.length} message(s) sélectionné(s) ?`,
+      `Permanently delete ${selectedMessageIds.length} selected message(s)?`,
+    ));
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError('');
+    try {
+      const result = await communicationService.deleteMessages(selectedMessageIds);
+      const selectedSet = new Set(selectedMessageIds);
+      setMessageList((current) => current.filter((message) => !selectedSet.has(String(message.id))));
+      setSelectedMessageIds([]);
+      setNotice(L(
+        `${result.deletedCount} message(s) supprimé(s).`,
+        `${result.deletedCount} message(s) deleted.`,
+      ));
+    } catch (deleteError) {
+      setError(deleteError?.response?.data?.detail || deleteError?.message || L('Suppression impossible.', 'Unable to delete messages.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const deliveryStats = useMemo(() => {
     const all = messageList.flatMap((message) => message.delivery || []);
@@ -328,7 +391,7 @@ const CommunicationPage = () => {
             <div className="rounded-2xl border border-github-border bg-slate-950/45 p-4 text-sm text-slate-300">
               {recommendedText}
             </div>
-            <button type="submit" disabled={sending} className="sticky bottom-3 z-10 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-2xl border border-cyan-200/60 bg-gradient-to-r from-cyan-300 via-sky-300 to-blue-400 px-6 py-4 text-base font-black text-slate-950 shadow-[0_16px_40px_rgba(14,165,233,0.38)] ring-2 ring-cyan-300/20 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-wait disabled:opacity-60 sm:w-auto">
+            <button type="submit" disabled={sending} className="inline-flex min-h-[60px] w-full items-center justify-center gap-3 rounded-2xl border-2 border-white/70 bg-gradient-to-r from-amber-300 via-cyan-300 to-sky-400 px-6 py-4 text-base font-black text-slate-950 shadow-[0_18px_44px_rgba(34,211,238,0.42)] ring-4 ring-cyan-300/20 transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-wait disabled:opacity-60">
               <Send className="h-5 w-5" />
               {sending ? 'Envoi en cours...' : selectedParents.length > 1 ? `Envoyer aux ${selectedParents.length} parents` : 'Envoyer au parent'}
             </button>
@@ -342,22 +405,38 @@ const CommunicationPage = () => {
             <p className="text-xs uppercase tracking-[0.2em] text-amber-300">{L('Historique', 'History')}</p>
             <h3 className="mt-2 font-display text-xl font-semibold text-slate-100">{L('Messages sortants', 'Outgoing messages')}</h3>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={L("Rechercher dans l'historique...", 'Search message history...')} className={inputClass} />
+          <div className="grid w-full gap-2 lg:max-w-4xl sm:grid-cols-2 lg:grid-cols-4">
+            <input value={historySearch} onChange={(event) => setHistorySearch(event.target.value)} placeholder={L('Parent, sujet, contenu, email, téléphone...', 'Parent, subject, content, email, phone...')} className={inputClass} />
             <select value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)} className={inputClass}>
-              <option value="all">Tous les statuts</option>
+              <option value="all">{L('Tous les canaux/statuts', 'All channels/statuses')}</option>
               <option value="email">Email</option>
               <option value="sms">SMS</option>
-              <option value="sent">Envoyé</option>
-              <option value="simulated">Simulation</option>
-              <option value="failed">Échec</option>
+              <option value="sent">{L('Envoyé', 'Sent')}</option>
+              <option value="simulated">{L('Simulation', 'Simulated')}</option>
+              <option value="failed">{L('Échec', 'Failed')}</option>
             </select>
+            <input type="date" value={historyDateFrom} onChange={(event) => setHistoryDateFrom(event.target.value)} aria-label={L('Date de début', 'Start date')} className={inputClass} />
+            <input type="date" value={historyDateTo} onChange={(event) => setHistoryDateTo(event.target.value)} aria-label={L('Date de fin', 'End date')} className={inputClass} />
+          </div>
+        </div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-github-border bg-slate-950/35 p-3">
+          <button type="button" onClick={toggleAllFilteredMessages} className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-cyan-300/35 bg-cyan-400/10 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-400/20">
+            {allFilteredMessagesSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+            {allFilteredMessagesSelected ? L('Désélectionner les résultats', 'Clear result selection') : L('Sélectionner les résultats', 'Select results')}
+          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-400">{filteredMessages.length} {L('résultat(s)', 'result(s)')} · {selectedMessageIds.length} {L('sélectionné(s)', 'selected')}</span>
+            <button type="button" onClick={deleteSelectedMessages} disabled={!selectedMessageIds.length || deleting} className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-rose-300/50 bg-rose-500/20 px-4 py-2 text-sm font-black text-rose-100 shadow-lg shadow-rose-950/20 hover:bg-rose-500/30 disabled:cursor-not-allowed disabled:opacity-40">
+              <Trash2 className="h-4 w-4" />
+              {deleting ? L('Suppression...', 'Deleting...') : L('Supprimer la sélection', 'Delete selection')}
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[780px] text-sm">
             <thead className="bg-slate-800/55 text-slate-300">
               <tr>
+                <th className="w-12 px-4 py-3 text-left font-semibold"><span className="sr-only">{L('Sélection', 'Selection')}</span></th>
                 <th className="px-4 py-3 text-left font-semibold">Parent</th>
                 <th className="px-4 py-3 text-left font-semibold">Sujet</th>
                 <th className="px-4 py-3 text-left font-semibold">Canaux</th>
@@ -368,7 +447,15 @@ const CommunicationPage = () => {
             <tbody>
               {filteredMessages.map((message, index) => (
                 <tr key={message.id || index} className="border-t border-github-border hover:bg-slate-800/35">
-                  <td className="px-4 py-3 text-slate-100">{message.receiver_name || 'Parent'}</td>
+                  <td className="px-4 py-3">
+                    <button type="button" onClick={() => toggleMessage(message.id)} className="rounded-lg p-1.5 text-cyan-200 hover:bg-cyan-400/15" aria-label={L('Sélectionner le message', 'Select message')}>
+                      {selectedMessageIds.includes(String(message.id)) ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-slate-100">
+                    <p>{message.receiver_name || 'Parent'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{message.receiver_email || message.receiver_phone || ''}</p>
+                  </td>
                   <td className="px-4 py-3 text-slate-200">
                     <p className="font-semibold">{message.subject}</p>
                     <p className="mt-1 line-clamp-1 text-xs text-slate-500">{message.body}</p>

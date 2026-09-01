@@ -725,6 +725,11 @@ export const communicationService = {
     if (isDemoSession()) return;
     await api.post(`/communication/messages/${id}/read/`);
   },
+  async deleteMessages(ids) {
+    if (isDemoSession()) return { deletedCount: 0 };
+    const res = await api.post('/communication/messages/bulk-delete/', { ids });
+    return res.data;
+  },
   async getMessages(box = 'sent') {
     if (isDemoSession()) {
       const { messages } = await import('../data/demoSchoolData');

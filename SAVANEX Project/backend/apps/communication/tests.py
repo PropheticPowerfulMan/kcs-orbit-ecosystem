@@ -102,7 +102,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.users.models import User
-from .models import Message, Notification
+from .models import DirectParentMessage, Message, Notification
 
 
 class InternalMessagingApiTests(APITestCase):
@@ -165,3 +165,37 @@ class InternalMessagingApiTests(APITestCase):
         self.assertTrue(roles <= {User.ROLE_ADMIN, User.ROLE_EMPLOYEE, User.ROLE_TEACHER})
         self.assertNotIn(User.ROLE_PARENT, roles)
         self.assertNotIn(User.ROLE_STUDENT, roles)
+
+
+class MessageHistoryDeletionApiTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username='history-admin', password='test', role=User.ROLE_ADMIN)
+        self.other_admin = User.objects.create_user(username='history-other-admin', password='test', role=User.ROLE_ADMIN)
+        self.parent = User.objects.create_user(username='history-parent', password='test', role=User.ROLE_PARENT)
+        self.own_internal = Message.objects.create(sender=self.admin, receiver=self.parent, subject='Own internal', body='Body')
+        self.other_internal = Message.objects.create(sender=self.other_admin, receiver=self.parent, subject='Other internal', body='Body')
+        self.own_direct = DirectParentMessage.objects.create(sender=self.admin, recipient_name='Parent', subject='Own direct', body='Body')
+        self.other_direct = DirectParentMessage.objects.create(sender=self.other_admin, recipient_name='Parent', subject='Other direct', body='Body')
+
+    def test_admin_deletes_only_selected_owned_history(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/communication/messages/bulk-delete/', {'ids': [self.own_internal.pk, f'direct-{self.own_direct.pk}']}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['deletedCount'], 2)
+        self.assertFalse(Message.objects.filter(pk=self.own_internal.pk).exists())
+        self.assertFalse(DirectParentMessage.objects.filter(pk=self.own_direct.pk).exists())
+        self.assertTrue(Message.objects.filter(pk=self.other_internal.pk).exists())
+        self.assertTrue(DirectParentMessage.objects.filter(pk=self.other_direct.pk).exists())
+
+    def test_admin_cannot_delete_another_sender_history(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/communication/messages/bulk-delete/', {'ids': [self.other_internal.pk, f'direct-{self.other_direct.pk}']}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['deletedCount'], 0)
+        self.assertTrue(Message.objects.filter(pk=self.other_internal.pk).exists())
+        self.assertTrue(DirectParentMessage.objects.filter(pk=self.other_direct.pk).exists())
+
+    def test_non_admin_cannot_delete_history(self):
+        self.client.force_authenticate(self.parent)
+        response = self.client.post('/api/communication/messages/bulk-delete/', {'ids': [self.own_internal.pk]}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
