@@ -48,90 +48,20 @@ import {
   transcripts,
 } from '@/data/schoolEcosystem'
 
-const enrollmentTrend = [
-  { month: 'Sep', students: 472, applications: 68 },
-  { month: 'Oct', students: 478, applications: 74 },
-  { month: 'Nov', students: 481, applications: 71 },
-  { month: 'Dec', students: 483, applications: 79 },
-  { month: 'Jan', students: 489, applications: 83 },
-  { month: 'Feb', students: 496, applications: 91 },
-  { month: 'Mar', students: 503, applications: 96 },
-  { month: 'Apr', students: 511, applications: 102 },
-]
-
-const departmentPerformance = [
-  { name: 'Elementary', score: 91 },
-  { name: 'Middle', score: 88 },
-  { name: 'High', score: 93 },
-  { name: 'Admissions', score: 84 },
-  { name: 'Support', score: 89 },
-]
-
-const admissionsQueue = [
-  { name: 'Amani M.', grade: 'Grade 6', status: 'Interview Scheduled', date: 'Apr 22' },
-  { name: 'Lydia T.', grade: 'Grade 10', status: 'Under Review', date: 'Apr 21' },
-  { name: 'Joel B.', grade: 'Grade 2', status: 'Documents Missing', date: 'Apr 20' },
-  { name: 'Nathan S.', grade: 'Grade 11', status: 'Accepted', date: 'Apr 18' },
-]
-
-const riskAlerts = [
-  { title: 'Attendance risk cluster', description: '7 students in Grade 8 crossed the 85% threshold this month.', level: 'high' },
-  { title: 'Admissions response time', description: 'Average review cycle slipped to 6.2 days. Goal is under 5 days.', level: 'medium' },
-  { title: 'Teacher capacity opportunity', description: 'High school math section demand suggests adding one more instructor next term.', level: 'positive' },
-]
-
-const staffLoad = [
-  { teacher: 'Dr. Mukendi', load: '5 sections', aiSupport: 'High' },
-  { teacher: 'Mrs. Diallo', load: '4 sections', aiSupport: 'Medium' },
-  { teacher: 'Mr. Belanger', load: '5 sections', aiSupport: 'Medium' },
-  { teacher: 'Mrs. Nkosi', load: '3 sections', aiSupport: 'Low' },
-]
-
-const recentActivity = [
-  '24 new admission documents uploaded this week.',
-  'AI tutor sessions increased by 38% among Grade 11 students.',
-  'Parent conference booking reached 82% completion.',
-  'News post on science fair produced 1,240 page views in 48 hours.',
-]
-
-// Never display seed metrics or people in authenticated production dashboards.
-;[enrollmentTrend, departmentPerformance, admissionsQueue, riskAlerts, staffLoad, recentActivity]
-  .forEach((records) => records.splice(0, records.length))
+const enrollmentTrend: any[] = []
+const departmentPerformance: any[] = []
+const admissionsQueue: any[] = []
+const riskAlerts: any[] = []
+const staffLoad: any[] = []
+const recentActivity: any[] = []
 
 const SCHOOL_NAME = 'Kinshasa Christian School'
 
 const SCHOOL_SEAL_SRC = getAssetUrl('images/kcs.jpg')
 
-const liveEventControls = [
-  { title: 'Spring Arts Festival', status: 'Live now', platform: 'YouTube Live', audience: '312 viewers', nextStep: 'Monitor comments and stream health' },
-  { title: 'Annual Sports Day', status: 'Scheduled', platform: 'KCS Live', audience: 'May 10, 8:00 AM', nextStep: 'Confirm camera crew and field audio' },
-  { title: 'Graduation Ceremony 2026', status: 'Scheduled', platform: 'YouTube Live', audience: 'Jun 8, 4:00 PM', nextStep: 'Publish family access link' },
-]
+const liveEventControls: any[] = []
 
-liveEventControls.splice(0, liveEventControls.length)
-
-const adminRosterSeed = [
-  { id: 'adm-001', name: 'Anne Itela Mouyeke', grade: 'Grade 11', section: 'A', parent: 'Beatrice Itela', parentEmail: 'beatrice.itela@kcs.test', parentPhone: '+243 810 100 001', status: 'Active', gpa: 3.7, attendance: 94, discipline: 'Clear' },
-  { id: 'adm-002', name: 'Assimbo Loango Grace', grade: 'Grade 11', section: 'A', parent: 'Moise Loango', parentEmail: 'moise.loango@kcs.test', parentPhone: '+243 810 100 002', status: 'Active', gpa: 3.5, attendance: 92, discipline: 'Monitored' },
-  { id: 'adm-003', name: 'Beni Amisi Ali', grade: 'Grade 9', section: 'B', parent: 'Sarah Amisi', parentEmail: 'sarah.amisi@kcs.test', parentPhone: '+243 810 100 003', status: 'Active', gpa: 3.1, attendance: 88, discipline: 'Open' },
-  { id: 'adm-004', name: 'Daniella Sambu', grade: 'Grade 10', section: 'A', parent: 'Joel Sambu', parentEmail: 'joel.sambu@kcs.test', parentPhone: '+243 810 100 004', status: 'Active', gpa: 3.8, attendance: 96, discipline: 'Clear' },
-  { id: 'adm-005', name: 'Eliane Kazadi Mbuyi', grade: 'Grade 12', section: 'A', parent: 'Rachel Kazadi', parentEmail: 'rachel.kazadi@kcs.test', parentPhone: '+243 810 100 005', status: 'Graduation track', gpa: 3.9, attendance: 97, discipline: 'Clear' },
-  ...students.map((student, index) => ({
-    id: student.id,
-    name: student.name,
-    grade: student.grade,
-    section: student.section,
-    parent: student.parentId === 'parent-kabongo' ? 'Rachel Kabongo' : 'Parent record pending',
-    parentEmail: `${student.name.toLowerCase().replace(/\s+/g, '.')}@family.kcs.test`,
-    parentPhone: `+243 810 200 00${index + 1}`,
-    status: 'Active',
-    gpa: student.gpa,
-    attendance: student.attendance,
-    discipline: student.risk === 'low' ? 'Clear' : 'Monitored',
-  })),
-]
-
-adminRosterSeed.splice(0, adminRosterSeed.length)
+const adminRosterSeed: any[] = []
 
 type AdminStudentRecord = {
   id: string
@@ -520,14 +450,7 @@ const createStudentFromAdmission = (application: AdminAdmissionRequest): AdminSt
   discipline: 'Clear',
 })
 
-const staffSeed = [
-  { id: 'staff-001', name: 'Dr. Mukendi', role: 'Science Teacher', department: 'High School', status: 'Present', time: '7:12 AM' },
-  { id: 'staff-002', name: 'Mrs. Diallo', role: 'English Teacher', department: 'High School', status: 'Present', time: '7:18 AM' },
-  { id: 'staff-003', name: 'Mr. Belanger', role: 'Math Teacher', department: 'Middle School', status: 'Late', time: '7:51 AM' },
-  { id: 'staff-004', name: 'Registrar Office', role: 'Registrar', department: 'Administration', status: 'Present', time: '7:05 AM' },
-  { id: 'staff-005', name: 'Discipline Office', role: 'Discipline Lead', department: 'Student Life', status: 'Absent', time: '-' },
-]
-staffSeed.splice(0, staffSeed.length)
+const staffSeed: any[] = []
 
 const getAdminSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
@@ -3202,7 +3125,7 @@ const AdminDashboard = () => {
               </p>
             </div>
             <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">
-              Live snapshot • 2025/26 cycle
+              Live production snapshot
             </div>
           </div>
         </div>

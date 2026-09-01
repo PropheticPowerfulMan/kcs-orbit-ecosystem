@@ -36,33 +36,10 @@ import {
   subjects,
 } from '@/data/schoolEcosystem'
 
-const todayClasses = [
-  { time: '7:45 AM', course: 'Grade 11 AP Biology', room: 'Lab 3', students: 24 },
-  { time: '9:15 AM', course: 'Grade 10 Biology', room: 'Room 204', students: 28 },
-  { time: '11:00 AM', course: 'Grade 9 General Science', room: 'Lab 1', students: 31 },
-  { time: '1:30 PM', course: 'Teacher Mentorship Block', room: 'Faculty Lounge', students: 6 },
-]
-
-const gradingQueue = [
-  { id: 1, title: 'AP Biology Lab Reports', className: 'Grade 11', pending: 18, due: 'Today' },
-  { id: 2, title: 'Genetics Quiz', className: 'Grade 10', pending: 27, due: 'Tomorrow' },
-  { id: 3, title: 'Science Fair Proposal', className: 'Grade 9', pending: 11, due: 'Apr 24' },
-]
-
-const studentAlerts = [
-  { student: 'Naomi K.', note: 'Attendance dropped to 84% over the last 3 weeks.', severity: 'high' },
-  { student: 'Jordan M.', note: 'Strong performance growth. Candidate for science fair coaching.', severity: 'positive' },
-  { student: 'David K.', note: 'Needs intervention in algebra foundations impacting science assessments.', severity: 'medium' },
-]
-
-const messages = [
-  { id: 1, from: 'Admissions Office', subject: 'Prospective Family Shadow Day', time: '35m ago' },
-  { id: 2, from: 'Principal Carter', subject: 'Faculty meeting agenda for Friday', time: '2h ago' },
-  { id: 3, from: 'Parent of Elise K.', subject: 'Question about AP exam preparation', time: '5h ago' },
-]
-
-;[todayClasses, gradingQueue, studentAlerts, messages]
-  .forEach((collection) => collection.splice(0, collection.length))
+const todayClasses: any[] = []
+const gradingQueue: any[] = []
+const studentAlerts: any[] = []
+const messages: any[] = []
 
 const getTeacherSegment = (pathname: string) => {
   const segment = pathname.split('/').filter(Boolean).at(-1)
@@ -257,11 +234,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [studentClassFilter, setStudentClassFilter] = useState('All')
   const [studentDetail, setStudentDetail] = useState<RegistryStudent | null>(null)
   const [courses, setCourses] = useState(() =>
-    subjects.map((subject, index) => {
+    subjects.map((subject: any, index: number) => {
       const gradeLevel = inferGradeLabel(subject.className)
       return {
         ...subject,
-        abbreviation: subject.name.split(' ').map((word) => word[0]).join('').slice(0, 6).toUpperCase(),
+        abbreviation: subject.name.split(' ').map((word: string) => word[0]).join('').slice(0, 6).toUpperCase(),
         creditHours: index === 1 ? 4 : index === 0 ? 3 : 2,
         gradeLevels: [gradeLevel],
         studentIds: [] as string[],
@@ -283,7 +260,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [reportList, setReportList] = useState(() => reportCards.slice(0, 0))
   const [disciplineList, setDisciplineList] = useState(() => disciplineReports.slice(0, 0))
   const [reportCardStudentId, setReportCardStudentId] = useState('')
-  const [reportCardTerm, setReportCardTerm] = useState('Term 3')
+  const [reportCardTerm, setReportCardTerm] = useState('')
   const [reportCardRows, setReportCardRows] = useState(() =>
     subjects.slice(0, 4).map((subject, index) => ({
       id: subject.id,
@@ -320,50 +297,50 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [attendanceDraft, setAttendanceDraft] = useState({
     studentId: '',
-    date: 'Apr 29',
+    date: new Date().toISOString().slice(0, 10),
     status: 'present',
-    className: 'Grade 11A',
+    className: '',
   })
   const [assignmentDraft, setAssignmentDraft] = useState({
     studentId: '',
-    title: 'Exit ticket reflection',
-    subject: 'AP Biology',
-    due: 'Tomorrow',
+    title: '',
+    subject: '',
+    due: '',
     status: 'pending',
     priority: 'medium',
   })
   const [gradeDraft, setGradeDraft] = useState({
     studentId: '',
-    subject: 'AP Biology',
-    assessment: 'Quick Check',
-    score: 88,
+    subject: '',
+    assessment: '',
+    score: 0,
     max: 100,
-    date: 'Apr 29',
+    date: new Date().toISOString().slice(0, 10),
   })
   const [reportDraft, setReportDraft] = useState({
     student: '',
-    term: 'Term 3',
-    average: 88,
-    conduct: 'Good',
-    teacherComment: 'Shows steady progress and responds well to targeted feedback.',
+    term: '',
+    average: 0,
+    conduct: '',
+    teacherComment: '',
   })
   const [disciplineDraft, setDisciplineDraft] = useState({
     studentId: '',
-    category: 'Classroom conduct',
-    incident: 'Needs a documented follow-up after repeated disruption during group activity.',
-    actionTaken: 'Teacher conference completed and behavior target assigned.',
-    followUp: 'Review progress in one week with advisor.',
+    category: '',
+    incident: '',
+    actionTaken: '',
+    followUp: '',
     level: 'medium',
   })
   const [messageDraft, setMessageDraft] = useState({
     to: '',
-    subject: 'Student support update',
-    body: 'Please review the new intervention note and confirm next steps.',
+    subject: '',
+    body: '',
   })
   const [gradebookColumnDraft, setGradebookColumnDraft] = useState({
-    title: 'Homework',
-    type: 'Assignment',
-    date: '04/30/2026',
+    title: '',
+    type: '',
+    date: '',
     maxPoints: 100,
   })
 
@@ -740,7 +717,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const course = courses.find((item) => item.id === courseId)
     if (!course) return
     const enrolled = course.studentIds.includes(student.id)
-    const nextCourses = courses.map((item) => item.id === courseId ? { ...item, studentIds: enrolled ? item.studentIds.filter((id) => id !== student.id) : [...item.studentIds, student.id] } : item)
+    const nextCourses = courses.map((item) => item.id === courseId ? { ...item, studentIds: enrolled ? item.studentIds.filter((id: string) => id !== student.id) : [...item.studentIds, student.id] } : item)
     const nextStudents = !enrolled && !teacherStudents.some((item) => item.id === student.id) ? [student, ...teacherStudents] : teacherStudents
     if (!await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, `${student.name} ${enrolled ? 'removed from' : 'enrolled in'} ${course.name}; enrollment saved.`)) return
     setCourses(nextCourses)
@@ -750,8 +727,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const selectedGradebookCourse = courses.find((course) => course.id === selectedGradebookCourseId) ?? courses[0]
   const gradebookColumns = selectedGradebookCourse ? gradebookColumnsByCourse[selectedGradebookCourse.id] ?? [] : []
   const gradebookStudents = selectedGradebookCourse?.studentIds
-    .map((studentId) => findStudent(studentId))
-    .filter((student): student is NonNullable<typeof student> => Boolean(student)) ?? []
+    .map((studentId: string) => findStudent(studentId))
+    .filter((student: RegistryStudent | undefined): student is RegistryStudent => Boolean(student)) ?? []
 
   const getGradebookScoreKey = (columnId: string, studentId: string) => `${selectedGradebookCourse?.id}-${columnId}-${studentId}`
   const normalizeGradebookEntry = (value: string, maxPoints: number) => {
@@ -766,15 +743,15 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const getFinalGrade = (studentId: string) => {
     const countedScores = gradebookColumns
       .map((column) => normalizeGradebookEntry(gradebookScores[getGradebookScoreKey(column.id, studentId)] ?? '', column.maxPoints))
-      .filter((score): score is number => score !== null)
+      .filter((score: number | null): score is number => score !== null)
     if (!countedScores.length) return null
-    return Math.round(countedScores.reduce((sum, score) => sum + score, 0) / countedScores.length)
+    return Math.round(countedScores.reduce((sum: number, score: number) => sum + score, 0) / countedScores.length)
   }
 
   const gradebookValues = gradebookStudents
-    .map((student) => getFinalGrade(student.id))
-    .filter((score): score is number => score !== null)
-  const gradebookAverage = gradebookValues.length ? Math.round(gradebookValues.reduce((sum, score) => sum + score, 0) / gradebookValues.length) : 0
+    .map((student: RegistryStudent) => getFinalGrade(student.id))
+    .filter((score: number | null): score is number => score !== null)
+  const gradebookAverage = gradebookValues.length ? Math.round(gradebookValues.reduce((sum: number, score: number) => sum + score, 0) / gradebookValues.length) : 0
   const gradebookMedian = gradebookValues.length ? [...gradebookValues].sort((a, b) => a - b)[Math.floor(gradebookValues.length / 2)] : 0
 
   const updateGradebookScore = (columnId: string, studentId: string, score: string) => {
@@ -968,7 +945,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <div>
                   <p className="text-xs font-semibold uppercase text-kcs-blue-500">Kinshasa Christian School</p>
                   <h3 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">Subject Setup</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">2025-2026, Second Semester Q4. Tell the system what subjects you teach and which grades are enrolled.</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Current production academic cycle. Add only subjects you actually teach and grades officially enrolled.</p>
                 </div>
                 <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-kcs-blue-800/40">
                   {[
@@ -1289,8 +1266,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.4fr_0.6fr]">
               <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                 Semester
-                <select className={inputClass} defaultValue="2025-2026, SECOND SEMESTER Q4 2025-2026">
-                  <option>2025-2026, SECOND SEMESTER Q4 2025-2026</option>
+                <select className={inputClass} value="">
+                  <option value="">Current production academic cycle</option>
                 </select>
               </label>
               <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1380,7 +1357,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
-                  {gradebookStudents.map((student) => {
+                  {gradebookStudents.map((student: RegistryStudent) => {
                     const finalGrade = getFinalGrade(student.id)
                     return (
                       <tr key={student.id} className="text-gray-700 dark:text-gray-300">
