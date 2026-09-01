@@ -31,6 +31,8 @@ type ParentChild = {
 }
 type Grade = { id: string; score: number; maxScore: number; percentage: number; letterGrade: string; period: string; createdAt: string; course?: { name?: string; code?: string } }
 type Assignment = { id: string; status: string; score?: number | null; assignment?: { title?: string; dueDate?: string; course?: { name?: string } } }
+type Attendance = { id: string; date: string; className: string; period?: string | null; subject?: string | null; status: string; note?: string | null }
+type Schedule = { id?: string; day: string; startTime: string; endTime: string; room: string }
 type EventItem = { id: string; title: string; description?: string; startDate: string; endDate: string; location: string; type: string }
 type Notice = { id: string; title: string; message: string; type: string; isRead: boolean; createdAt: string; link?: string }
 type Contact = { id: string; firstName: string; lastName: string; role: string }
@@ -68,6 +70,8 @@ export default function ParentPortal() {
   const [selectedId, setSelectedId] = useState('')
   const [grades, setGrades] = useState<Grade[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [attendance, setAttendance] = useState<Attendance[]>([])
+  const [timetable, setTimetable] = useState<Schedule[]>([])
   const [events, setEvents] = useState<EventItem[]>([])
   const [notices, setNotices] = useState<Notice[]>([])
   const [messages, setMessages] = useState<InternalMessage[]>([])
@@ -117,14 +121,16 @@ export default function ParentPortal() {
 
   useEffect(() => {
     const profileId = selectedChild?.localProfileId
-    if (!profileId) { setGrades([]); setAssignments([]); return }
+    if (!profileId) { setGrades([]); setAssignments([]); setAttendance([]); setTimetable([]); return }
     let active = true
     setDetailLoading(true)
-    Promise.allSettled([studentsAPI.getGrades(profileId), studentsAPI.getAssignments(profileId)])
-      .then(([gradeResult, assignmentResult]) => {
+    Promise.allSettled([studentsAPI.getGrades(profileId), studentsAPI.getAssignments(profileId), studentsAPI.getAttendance(profileId), studentsAPI.getTimetable(profileId)])
+      .then(([gradeResult, assignmentResult, attendanceResult, timetableResult]) => {
         if (!active) return
         setGrades(gradeResult.status === 'fulfilled' && Array.isArray(gradeResult.value.data?.data) ? gradeResult.value.data.data : [])
         setAssignments(assignmentResult.status === 'fulfilled' && Array.isArray(assignmentResult.value.data?.data) ? assignmentResult.value.data.data : [])
+        setAttendance(attendanceResult.status === 'fulfilled' && Array.isArray(attendanceResult.value.data?.data) ? attendanceResult.value.data.data : [])
+        setTimetable(timetableResult.status === 'fulfilled' && Array.isArray(timetableResult.value.data?.data) ? timetableResult.value.data.data : [])
       })
       .finally(() => active && setDetailLoading(false))
     return () => { active = false }
@@ -158,6 +164,7 @@ export default function ParentPortal() {
         {detailLoading ? empty('Loading academic records…') : grades.length === 0 ? empty('No grade has been published for this student yet.') : <div className="overflow-x-auto"><table className="min-w-[620px] w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-gray-400"><th className="pb-3">Course</th><th className="pb-3">Period</th><th className="pb-3 text-right">Score</th><th className="pb-3 text-right">Published</th></tr></thead><tbody>{grades.map((grade) => <tr key={grade.id} className="border-b border-gray-50 dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white">{grade.course?.name ?? grade.course?.code ?? 'Course'}</td><td>{grade.period}</td><td className="text-right font-bold">{grade.score}/{grade.maxScore} ({grade.percentage.toFixed(1)}%)</td><td className="text-right">{displayDate(grade.createdAt)}</td></tr>)}</tbody></table></div>}
       </div>
       <div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Assignments</h2>{assignments.length === 0 ? empty('No assignment is currently linked to this student.') : <div className="grid gap-3 md:grid-cols-2">{assignments.map((item) => <div key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold dark:text-white">{item.assignment?.title ?? 'Assignment'}</p><p className="mt-1 text-sm text-gray-500">{item.assignment?.course?.name ?? 'Course'} · due {displayDate(item.assignment?.dueDate)}</p><span className="mt-2 inline-block rounded-full bg-kcs-blue-100 px-2 py-1 text-xs font-bold text-kcs-blue-700">{item.status}</span></div>)}</div>}</div>
+      <div className="grid gap-6 xl:grid-cols-2"><div className={card}><h2 className="mb-4 font-bold dark:text-white">Verified attendance history</h2>{attendance.length === 0 ? empty('No attendance record has been entered yet.') : <div className="space-y-2">{attendance.slice(0,12).map((record) => <div key={record.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><span><strong className="dark:text-white">{displayDate(record.date)}</strong><span className="block text-xs text-gray-500">{record.subject || record.className}{record.period ? ' · ' + record.period : ''}</span></span><span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-700">{record.status}</span></div>)}</div>}</div><div className={card}><h2 className="mb-4 font-bold dark:text-white">Published timetable</h2>{timetable.length === 0 ? empty('No timetable has been published for this child.') : <div className="space-y-2">{timetable.slice(0,12).map((slot,index) => <div key={slot.id ?? index} className="flex justify-between rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><span className="font-semibold dark:text-white">{slot.day}</span><span className="text-gray-500">{slot.startTime}–{slot.endTime} · {slot.room}</span></div>)}</div>}</div></div>
       <OfficialTranscriptPanel studentId={selectedChild?.id} />
     </div>
   )

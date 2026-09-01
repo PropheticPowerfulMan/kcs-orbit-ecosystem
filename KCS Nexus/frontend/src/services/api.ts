@@ -149,6 +149,7 @@ export const studentsAPI = {
   getGrades: (id: string) => api.get(`/students/${id}/grades`),
   getAssignments: (id: string) => api.get(`/students/${id}/assignments`),
   getTimetable: (id: string) => api.get(`/students/${id}/timetable`),
+  getAttendance: (id: string) => api.get(`/students/${id}/attendance`),
   getAnalytics: (id: string) => api.get(`/students/${id}/analytics`),
   getMyAssignments: () => api.get('/students/me/assignments'),
   getMyTimetable: () => api.get('/students/me/timetable'),

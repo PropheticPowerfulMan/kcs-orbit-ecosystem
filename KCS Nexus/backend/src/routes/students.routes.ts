@@ -483,8 +483,8 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
       submissions: { include: { assignment: { include: { course: true } } }, orderBy: { assignment: { dueDate: 'asc' } } },
       enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } },
       attendanceRecords: { orderBy: { date: 'desc' }, take: 120 },
-      reportCards: { orderBy: { createdAt: 'desc' } },
-      transcripts: { orderBy: { createdAt: 'desc' } },
+      reportCards: { where: { publicationStatus: 'POSTED_TO_PORTAL' }, orderBy: { createdAt: 'desc' } },
+      transcripts: { where: { status: { in: ['APPROVED', 'PUBLISHED', 'ISSUED'] } }, orderBy: { createdAt: 'desc' } },
     },
   })
   if (!student) {
@@ -883,28 +883,32 @@ studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req: Auth
   return success(res, timetable)
 }))
 
+studentsRouter.get('/:id/attendance', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const studentId = getRouteParam(req.params.id)
+  await assertStudentAccess(req, studentId)
+  const records = await prisma.attendanceRecord.findMany({ where: { studentId }, orderBy: { date: 'desc' }, take: 180 })
+  return success(res, records, 'Verified attendance history loaded')
+}))
+
 studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
   await assertStudentAccess(req, studentId)
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
-    include: { aiRecommendations: true, grades: true },
+    include: { aiRecommendations: true, grades: { orderBy: { createdAt: 'asc' } }, attendanceRecords: true, submissions: true },
   })
   if (!student) throw new ApiError(404, 'Student not found')
-
-  const overallPercentage = student.grades.length
-    ? student.grades.reduce((sum, grade) => sum + grade.percentage, 0) / student.grades.length
-    : 0
-
-  return success(res, {
-    studentId: student.id,
-    overallGPA: student.gpa ?? Number((overallPercentage / 25).toFixed(2)),
-    attendanceRate: student.attendanceRate ?? 0,
-    assignmentCompletion: 91,
-    riskLevel: overallPercentage < 70 ? 'high' : overallPercentage < 82 ? 'medium' : 'low',
-    recommendations: student.aiRecommendations,
-    performanceTrend: overallPercentage > 85 ? 'improving' : 'stable',
-  })
+  const overallPercentage = student.grades.length ? Number((student.grades.reduce((sum, grade) => sum + grade.percentage, 0) / student.grades.length).toFixed(1)) : null
+  const present = student.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
+  const attendanceRate = student.attendanceRecords.length ? Number(((present / student.attendanceRecords.length) * 100).toFixed(1)) : null
+  const completed = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
+  const assignmentCompletion = student.submissions.length ? Number(((completed / student.submissions.length) * 100).toFixed(1)) : null
+  const midpoint = Math.floor(student.grades.length / 2)
+  const firstAverage = midpoint ? student.grades.slice(0, midpoint).reduce((sum, grade) => sum + grade.percentage, 0) / midpoint : null
+  const recentAverage = midpoint ? student.grades.slice(midpoint).reduce((sum, grade) => sum + grade.percentage, 0) / (student.grades.length - midpoint) : null
+  const performanceTrend = firstAverage === null || recentAverage === null ? 'insufficient-data' : recentAverage > firstAverage + 2 ? 'improving' : recentAverage < firstAverage - 2 ? 'declining' : 'stable'
+  const riskLevel = overallPercentage === null && attendanceRate === null ? 'unassessed' : overallPercentage !== null && overallPercentage < 60 || attendanceRate !== null && attendanceRate < 80 ? 'high' : overallPercentage !== null && overallPercentage < 70 || attendanceRate !== null && attendanceRate < 90 ? 'medium' : 'low'
+  return success(res, { studentId: student.id, overallPercentage, attendanceRate, assignmentCompletion, evidence: { grades: student.grades.length, attendance: student.attendanceRecords.length, assignments: student.submissions.length }, riskLevel, recommendations: student.aiRecommendations, performanceTrend })
 }))
 
 studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
