@@ -452,12 +452,17 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     const orbitProfiles = orbitStudentsToProfiles(familyDirectory)
     const localProfiles = await prisma.studentProfile.findMany({
       where: { studentNumber: { in: orbitProfiles.map((student) => student.studentNumber) } },
-      select: { id: true, studentNumber: true, gpa: true, attendanceRate: true, _count: { select: { grades: true, attendanceRecords: true } } },
+      select: { id: true, studentNumber: true, grades: { select: { percentage: true } }, attendanceRecords: { select: { status: true } }, submissions: { select: { status: true, assignment: { select: { dueDate: true } } } }, _count: { select: { enrollments: true } } },
     })
     const localByNumber = new Map(localProfiles.map((profile) => [profile.studentNumber.toLowerCase(), profile]))
     const children = orbitProfiles.map((profile) => {
       const local = localByNumber.get(profile.studentNumber.toLowerCase())
-      return { ...profile, localProfileId: local?.id ?? null, gpa: local?._count.grades ? local.gpa : null, attendanceRate: local?._count.attendanceRecords ? local.attendanceRate : null }
+      const average = local?.grades.length ? Number((local.grades.reduce((sum, grade) => sum + grade.percentage, 0) / local.grades.length).toFixed(1)) : null
+      const present = local?.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length ?? 0
+      const attendanceRate = local?.attendanceRecords.length ? Number(((present / local.attendanceRecords.length) * 100).toFixed(1)) : null
+      const pendingAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING').length ?? 0
+      const overdueAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length ?? 0
+      return { ...profile, localProfileId: local?.id ?? null, gpa: null, attendanceRate: null, academicSummary: { average, attendanceRate, publishedGrades: local?.grades.length ?? 0, attendanceRecords: local?.attendanceRecords.length ?? 0, pendingAssignments, overdueAssignments, enrolledCourses: local?._count.enrollments ?? 0 } }
     })
     return success(res, children, 'Parent children loaded from Orbit')
   }
@@ -485,13 +490,22 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
   if (!student) {
     return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
   }
+  const average = student.grades.length ? Number((student.grades.reduce((sum, grade) => sum + grade.percentage, 0) / student.grades.length).toFixed(1)) : null
+  const present = student.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
+  const attendanceRate = student.attendanceRecords.length ? Number(((present / student.attendanceRecords.length) * 100).toFixed(1)) : null
+  const pendingAssignments = student.submissions.filter((submission) => submission.status === 'PENDING').length
+  const overdueAssignments = student.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length
+  const completedAssignments = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
+  const assignmentCompletion = student.submissions.length ? Number(((completedAssignments / student.submissions.length) * 100).toFixed(1)) : null
+  const academicSummary = { average, attendanceRate, publishedGrades: student.grades.length, attendanceRecords: student.attendanceRecords.length, pendingAssignments, overdueAssignments, assignmentCompletion, enrolledCourses: student.enrollments.length }
   const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({
     ...slot,
     course: { id: course.id, name: course.name, code: course.code, description: course.description },
     teacher: [course.teacher.user.firstName, course.teacher.user.lastName].filter(Boolean).join(' '),
   })))
   return success(res, {
-    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.grades.length ? student.gpa : null, attendanceRate: student.attendanceRecords.length ? student.attendanceRate : null, status: student.status, user: student.user },
+    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: null, attendanceRate: null, status: student.status, user: student.user },
+    academicSummary,
     grades: student.grades,
     assignments: student.submissions,
     timetable,
