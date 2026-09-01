@@ -21,28 +21,47 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
   }
   try {
     const isAfricasTalking = /africastalking/i.test(apiUrl)
-    const body = isAfricasTalking
-      ? new URLSearchParams({ username, to: phone, message: outboundMessage, ...(sender ? { from: sender } : {}) })
-      : JSON.stringify({ to: phone, message: outboundMessage, sender })
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: isAfricasTalking
-        ? { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', apiKey }
-        : { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body,
-    })
-    const responseText = await response.text()
-    if (!response.ok) throw new Error(`SMS provider responded with ${response.status}`)
-    if (isAfricasTalking) {
-      const payload = JSON.parse(responseText || '{}')
+    const submit = async (includeSender: boolean) => {
+      const body = isAfricasTalking
+        ? new URLSearchParams({ username, to: phone, message: outboundMessage, ...(includeSender && sender ? { from: sender } : {}) })
+        : JSON.stringify({ to: phone, message: outboundMessage, sender })
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: isAfricasTalking
+          ? { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', apiKey }
+          : { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body,
+      })
+      return { response, responseText: await response.text() }
+    }
+    const providerResult = (response: Response, responseText: string) => {
+      if (!response.ok) return { accepted: false, summary: `HTTP ${response.status}` }
+      if (!isAfricasTalking) return { accepted: true, summary: 'accepted' }
+      let payload: any = {}
+      try { payload = JSON.parse(responseText || '{}') } catch { return { accepted: false, summary: 'invalid provider response' } }
       const recipients = Array.isArray(payload?.SMSMessageData?.Recipients) ? payload.SMSMessageData.Recipients : []
       const accepted = recipients.some((recipient: any) =>
         String(recipient?.statusCode || '') === '101'
         || /success|sent|submitted/i.test(String(recipient?.status || ''))
       )
-      if (!accepted) throw new Error('SMS provider did not accept the recipient')
+      const summary = recipients.map((recipient: any) => `${String(recipient?.statusCode || 'unknown')}:${String(recipient?.status || 'unknown')}`).join(', ') || 'no recipient status'
+      return { accepted, summary }
     }
-    return { sent: true }
+
+    let submission = await submit(Boolean(sender))
+    let result = providerResult(submission.response, submission.responseText)
+    if (result.accepted) return { sent: true }
+
+    const senderRejected = Boolean(sender) && /sender|from|short ?code|not allowed|not registered|invalid/i.test(submission.responseText)
+    if (isAfricasTalking && senderRejected) {
+      console.warn('[sms] Sender ID rejected; retrying without Sender ID', { providerStatus: result.summary })
+      submission = await submit(false)
+      result = providerResult(submission.response, submission.responseText)
+      if (result.accepted) return { sent: true }
+    }
+    console.error('[sms] Provider rejected delivery', { providerStatus: result.summary })
+    return { sent: false, reason: 'SMS_SEND_FAILED' }
+
   } catch (error) {
     console.error('[sms] Delivery failed', error)
     return { sent: false, reason: 'SMS_SEND_FAILED' }
