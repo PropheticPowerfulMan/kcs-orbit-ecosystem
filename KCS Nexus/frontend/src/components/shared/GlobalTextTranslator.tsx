@@ -16,6 +16,14 @@ const translateText = (value: string, language: string) => {
   if (!trimmed) return value
 
   if (language === 'fr') {
+    const dynamicRules: Array<[RegExp, string]> = [
+      [/^To (.+)$/, 'A $1'], [/^From (.+)$/, 'De $1'], [/^(\d+) unread$/, '$1 non lu(s)'],
+      [/^Due (.+)$/, 'Echeance : $1'], [/^Max (.+) points$/, 'Maximum : $1 points'],
+      [/^(\d+) student\(s\)$/, '$1 eleve(s)'],
+    ]
+    for (const [pattern, replacement] of dynamicRules) {
+      if (pattern.test(trimmed)) return value.replace(trimmed, trimmed.replace(pattern, replacement))
+    }
     if (/^\d+\s+years?\s+experience$/i.test(trimmed)) {
       return value.replace(trimmed, trimmed.replace(/\s+years?\s+experience/i, ' ans d’expérience'))
     }
