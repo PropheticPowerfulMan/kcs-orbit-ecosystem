@@ -13,14 +13,15 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
   const apiUrl = env.AFRICASTALKING_API_URL || env.SMS_API_URL
   const apiKey = env.AFRICASTALKING_API_KEY || env.SMS_API_KEY
   const username = env.AFRICASTALKING_USERNAME || env.SMS_USERNAME
-  const sender = env.AFRICASTALKING_SENDER || env.SMS_SENDER
+  const isAfricasTalkingApi = /africastalking/i.test(apiUrl || '')
+  const sender = isAfricasTalkingApi ? env.AFRICASTALKING_SENDER : env.SMS_SENDER
   if (!phone) return { sent: false, reason: 'PHONE_MISSING' }
   if (!apiUrl || !apiKey || !username) {
     console.warn(`[sms] SMS is not configured. Message was not sent to ${phone}.`)
     return { sent: false, reason: 'SMS_NOT_CONFIGURED' }
   }
   try {
-    const isAfricasTalking = /africastalking/i.test(apiUrl)
+    const isAfricasTalking = isAfricasTalkingApi
     const submit = async (includeSender: boolean) => {
       const body = isAfricasTalking
         ? new URLSearchParams({ username, to: phone, message: outboundMessage, ...(includeSender && sender ? { from: sender } : {}) })
