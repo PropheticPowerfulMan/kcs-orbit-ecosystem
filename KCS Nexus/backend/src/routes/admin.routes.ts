@@ -7,7 +7,7 @@ export const adminRouter = Router()
 
 adminRouter.get('/staff-overview', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const [students, applications, unreadMessages, reportCards, recentActivity, announcements, incidents] = await Promise.all([
-    prisma.studentProfile.findMany({ select: { id: true, grade: true, section: true, attendanceRate: true, status: true } }),
+    prisma.studentProfile.findMany({ select: { id: true, grade: true, section: true, status: true, attendanceRecords: { select: { status: true } } } }),
     prisma.admissionApplication.findMany({ orderBy: { submittedAt: 'desc' }, take: 25, select: { id: true, applicationNumber: true, firstName: true, middleName: true, lastName: true, gradeApplying: true, parentName: true, status: true, submittedAt: true } }),
     prisma.internalMessage.count({ where: { readAt: null, OR: [{ recipientId: req.user!.sub }, { targetRole: 'STAFF' }] } }),
     prisma.reportCard.findMany({ orderBy: { updatedAt: 'desc' }, take: 20, select: { id: true, term: true, average: true, principalStatus: true, publicationStatus: true, updatedAt: true, student: { select: { studentNumber: true, user: { select: { firstName: true, lastName: true } } } } } }),
@@ -16,8 +16,9 @@ adminRouter.get('/staff-overview', authenticate, requireRoles('admin', 'staff'),
     prisma.incidentReport.count({ where: { status: { not: 'CLOSED' } } }),
   ])
   const attendanceByClass = [...new Set(students.map((student) => student.grade))].map((grade) => {
-    const values = students.filter((student) => student.grade === grade && student.attendanceRate != null).map((student) => student.attendanceRate as number)
-    return { label: grade, attendance: values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0 }
+    const records = students.filter((student) => student.grade === grade).flatMap((student) => student.attendanceRecords)
+    const present = records.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
+    return { label: grade, attendance: records.length ? Math.round((present / records.length) * 100) : null, evidence: records.length }
   })
   return success(res, {
     stats: {

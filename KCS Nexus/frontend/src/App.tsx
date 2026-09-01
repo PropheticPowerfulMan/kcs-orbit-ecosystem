@@ -67,10 +67,12 @@ class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: stri
 
 const AdminDashboardRoute = () => {
   const location = useLocation()
+  const { user } = useAuthStore()
+  const isSuperAdministrator = user?.id === 'configured-superadmin'
 
   return (
     <AdminErrorBoundary routeKey={location.pathname}>
-      <AdminDashboard />
+      {isSuperAdministrator ? <AdminDashboard /> : <StaffPortal />}
     </AdminErrorBoundary>
   )
 }

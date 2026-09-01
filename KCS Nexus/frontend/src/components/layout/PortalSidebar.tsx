@@ -171,7 +171,18 @@ const PortalSidebar = () => {
 
   if (!user) return null
 
-  const navItems = getNavItems(user.role, t)
+  const navItems: NavItem[] = user.role === 'admin' && user.id !== 'configured-superadmin' ? [
+    { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
+    { to: '/incident-reports', label: 'Incident Report', icon: ClipboardList },
+    { to: '/admin/records', label: t('portalNav.records'), icon: LibraryBig },
+    { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
+    { to: '/admin/announcements', label: t('portalNav.announcements'), icon: Megaphone },
+    { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
+    { to: '/admin/finance', label: t('portalNav.feeTracking'), icon: WalletCards },
+    { to: '/admin/messages', label: t('portalNav.messages'), icon: MessageSquare },
+    { to: '/admin/permissions', label: t('portalNav.permissions'), icon: Shield },
+    { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
+  ] : getNavItems(user.role, t)
   const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
   const toggleLanguage = () => {
