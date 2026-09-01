@@ -1,4 +1,5 @@
 import InternationalPhoneInput from "../../components/InternationalPhoneInput";
+import ParentCommunicationPanel from './ParentCommunicationPanel'
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
@@ -2666,45 +2667,7 @@ const AdminSectionView = ({
     )
   }
 
-  if (segment === 'communications') {
-    return (
-      <>
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Communication Flows</h2>
-          <div className="space-y-3">
-            {communicationFlows.map((flow) => (
-              <div key={flow.trigger} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <p className="font-semibold text-kcs-blue-900 dark:text-white">{flow.trigger}</p>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{flow.update}</p>
-                <p className="mt-2 text-xs font-semibold text-kcs-gold-600 dark:text-kcs-gold-300">{flow.notification}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Send School Communication</h2>
-          <div className="grid gap-3">
-            <select value={communicationRecipient} onChange={(event) => setCommunicationRecipient(event.target.value as typeof communicationRecipient)} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="ALL">All parents, students, teachers, and staff</option>
-              <option value="PARENTS">Parents only</option>
-              <option value="STUDENTS">Students only</option>
-              <option value="TEACHERS">Teachers only</option>
-              <option value="GRADE_9_12_FAMILIES">Grade 9-12 families</option>
-              <option value="STAFF">Staff only</option>
-            </select>
-            <input value={communicationSubject} onChange={(event) => setCommunicationSubject(event.target.value)} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Subject" />
-            <textarea value={communicationBody} onChange={(event) => setCommunicationBody(event.target.value)} className="min-h-36 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email, SMS, and portal message..." />
-            <button className={adminButton} disabled={communicationSending} onClick={() => void sendSchoolCommunication()}>{communicationSending ? 'Sending...' : 'Send communication'}</button>
-            {sentNotice && <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{sentNotice}</p>}
-          </div>
-          <div className="mt-6 border-t border-gray-100 pt-5 dark:border-kcs-blue-800"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Traceable message history</h3><div className="mt-3 space-y-2">{communicationHistory.map((message) => <button key={message.id} type="button" onClick={() => setDetailDialog({ title: message.subject, subtitle: `${message.direction} to ${message.audience}`, details: [['From', message.sender], ['Sent', message.timestamp], ['Status', message.status], ['Message', message.body]] })} className="w-full rounded-xl bg-gray-50 p-3 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800"><p className="font-semibold text-kcs-blue-900 dark:text-white">{message.subject}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{message.direction} · {message.audience} · {message.status}</p></button>)}</div></div>
-        </div>
-      </div>
-      {detailModal}
-      </>
-    )
-  }
+  if (segment === 'communications') return <ParentCommunicationPanel />
 
   if (segment === 'staff-attendance') {
     return (

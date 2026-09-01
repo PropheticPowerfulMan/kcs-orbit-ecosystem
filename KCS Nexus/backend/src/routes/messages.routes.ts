@@ -11,6 +11,7 @@ export const messagesRouter = Router()
 messagesRouter.use(authenticate)
 
 const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const parentDeliverySchema = z.object({ recipientIds: z.array(z.string().min(1)).min(1).max(250), channels: z.array(z.enum(['email','sms'])).min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const broadcastSchema = z.object({ audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messages' : role === 'STUDENT' ? '/portal/student/messages' : role === 'TEACHER' ? '/portal/teacher/messages' : role === 'STAFF' ? '/portal/staff/messages' : '/admin/communications'
 
@@ -33,6 +34,45 @@ messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, r
   const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const contacts = await prisma.user.findMany({ where: { id: { not: req.user!.sub }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, lastName: true, role: true }, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
   return success(res, contacts)
+}))
+
+messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
+  const parents = await prisma.user.findMany({
+    where: { role: 'PARENT', id: { not: req.user!.sub } },
+    select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true },
+    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+  })
+  return success(res, parents)
+}))
+
+messagesRouter.post('/parent-delivery', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
+  const data = parentDeliverySchema.parse(req.body)
+  const recipientIds = [...new Set(data.recipientIds)]
+  const parents = await prisma.user.findMany({
+    where: { id: { in: recipientIds }, role: 'PARENT' },
+    select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true },
+  })
+  if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid parent accounts.')
+
+  await prisma.$transaction([
+    prisma.internalMessage.createMany({ data: parents.map((parent) => ({ senderId: req.user!.sub, recipientId: parent.id, subject: data.subject, body: data.body })) }),
+    prisma.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink('PARENT') })) }),
+  ])
+
+  const delivery: Array<Record<string, unknown>> = []
+  for (let index = 0; index < parents.length; index += 10) {
+    const batch = parents.slice(index, index + 10)
+    const results = await Promise.all(batch.map(async (parent) => {
+      const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
+      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body, branded: false }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const }))
+      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const }))
+      return row
+    }))
+    delivery.push(...results)
+  }
+  return success(res, { recipients: parents.length, channels: data.channels, delivery }, 'Parent communication recorded and delivered', 201)
 }))
 
 messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
