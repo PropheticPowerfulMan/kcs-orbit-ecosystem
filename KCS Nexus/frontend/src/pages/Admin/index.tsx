@@ -3060,9 +3060,6 @@ const AdminDashboard = () => {
   }, [activeSegment])
 
   useEffect(() => {
-    window.localStorage.removeItem(ADMIN_ROSTER_STORAGE_KEY)
-    window.localStorage.removeItem(ADMIN_ADMISSIONS_STORAGE_KEY)
-    setAdmissionRequests([])
     void admissionsAPI.getAll()
       .then((response) => {
         const records = Array.isArray(response.data?.data) ? response.data.data : []
@@ -3071,7 +3068,6 @@ const AdminDashboard = () => {
         saveAdmissions(applications)
       })
       .catch((error: any) => {
-        setAdmissionRequests([])
         setDashboardAction(error?.response?.data?.message ?? 'Unable to load online admissions from the central registry.')
       })
     void registryAPI.getDirectory()
@@ -3085,8 +3081,6 @@ const AdminDashboard = () => {
         saveRoster(roster)
       })
       .catch(() => {
-        setOfficialRoster([])
-        saveRoster([])
       })
   }, [])
 
