@@ -124,6 +124,17 @@ class TeacherSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data.update({
+            'first_name': instance.user.first_name,
+            'middle_name': instance.user.middle_name,
+            'last_name': instance.user.last_name,
+            'user_email': instance.user.email,
+            'phone': instance.user.phone,
+        })
+        return data
+
     def get_has_photo(self, obj):
         return bool(obj.user.photo_data or obj.user.avatar)
 
