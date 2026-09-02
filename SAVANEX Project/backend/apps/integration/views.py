@@ -11,6 +11,8 @@ from apps.students.models import Student
 from apps.teachers.models import Teacher
 from apps.teachers.serializers import TeacherSerializer, TeacherCreateSerializer
 from apps.teachers.views import finalize_teacher_creation
+from apps.communication.models import Notification
+from apps.communication.services import deliver_employee_communication
 from apps.teachers.services import deactivate_teacher
 from apps.integration.orbit import sync_teacher
 from apps.users.models import User
@@ -46,8 +48,31 @@ def ecosystem_employee_detail_view(request,pk):
     except Teacher.DoesNotExist:return Response({'detail':'Employee not found.'},status=404)
     if request.method=='GET':return Response(TeacherSerializer(teacher).data)
     if request.method=='DELETE':deactivate_teacher(teacher);return Response({'detail':'Employee deactivated.'})
-    serializer=TeacherSerializer(teacher,data=request.data,partial=True);serializer.is_valid(raise_exception=True)
-    teacher=serializer.save();sync_teacher(teacher);return Response(TeacherSerializer(teacher).data)
+    payload = request.data.copy()
+    for field in ('contract_duration_months', 'birth_date', 'end_date', 'base_salary'):
+        if payload.get(field) == '':
+            payload[field] = None
+    value_aliases = {
+        'gender': {'male': 'M', 'female': 'F', 'other': 'O'},
+        'employment_status': {'leave': 'on_leave'},
+    }
+    for field, aliases in value_aliases.items():
+        if payload.get(field) in aliases:
+            payload[field] = aliases[payload[field]]
+    serializer = TeacherSerializer(teacher, data=payload, partial=True)
+    serializer.is_valid(raise_exception=True)
+    teacher = serializer.save()
+    sync_teacher(teacher)
+    subject = 'Mise ' + chr(0x00e0) + ' jour de votre dossier employ' + chr(0x00e9) + ' KCS'
+    body = (
+        f'Bonjour {teacher.full_name or teacher.user.username},' + chr(10) * 2
+        + 'Votre dossier employ' + chr(0x00e9) + ' KCS a ' + chr(0x00e9) + 't' + chr(0x00e9) + ' mis ' + chr(0x00e0) + ' jour par un administrateur.' + chr(10)
+        + 'Si vous constatez une information incorrecte, veuillez contacter l' + chr(0x2019) + 'administration.'
+    )
+    delivery = deliver_employee_communication(teacher, subject, body, notif_type=Notification.TYPE_MESSAGE, link='/teachers')
+    data = TeacherSerializer(teacher).data
+    data['notificationDelivery'] = [item.__dict__ for item in delivery]
+    return Response(data)
 
 
 @api_view(['GET'])

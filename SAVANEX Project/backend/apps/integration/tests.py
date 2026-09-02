@@ -94,3 +94,46 @@ class EcosystemEmployeeIntegrationTests(TestCase):
         response=self.client.get('/api/integration/employees/',HTTP_X_API_KEY='nexus-test-key')
         self.assertEqual(response.status_code,200)
         self.assertEqual(response.data,[])
+
+    ('apps.integration.views.deliver_employee_communication')
+    ('apps.integration.views.sync_teacher')
+    def test_employee_update_normalizes_nullable_fields_and_notifies(self, sync_teacher, deliver):
+        deliver.return_value = []
+        user = User.objects.create_user(
+            username='employee-update',
+            email='employee.update.com',
+            password='TemporaryPass123!',
+            role=User.ROLE_TEACHER,
+            first_name='Old',
+            last_name='Name',
+            phone='+243810000001',
+        )
+        teacher = Teacher.objects.create(
+            user=user,
+            teacher_id='SAV-TCH-UPDATE',
+            employee_id='SAV-EMP-UPDATE',
+            hire_date='2026-09-01',
+        )
+
+        response = self.client.patch(
+            f'/api/integration/employees/{teacher.pk}/',
+            {
+                'first_name': 'Maria',
+                'contract_duration_months': '',
+                'birth_date': '',
+                'base_salary': '',
+            },
+            format='json',
+            HTTP_X_API_KEY='nexus-test-key',
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        teacher.refresh_from_db()
+        teacher.user.refresh_from_db()
+        self.assertEqual(teacher.user.first_name, 'Maria')
+        self.assertIsNone(teacher.contract_duration_months)
+        self.assertIsNone(teacher.birth_date)
+        self.assertIsNone(teacher.base_salary)
+        sync_teacher.assert_called_once_with(teacher)
+        deliver.assert_called_once()
+        self.assertEqual(response.data['notificationDelivery'], [])
