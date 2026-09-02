@@ -4,7 +4,9 @@ from django.core.exceptions import ImproperlyConfigured
 
 DEBUG = False
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
+ALLOWED_HOSTS = [host.strip() for host in config('ALLOWED_HOSTS', default='').split(',') if host.strip()]
+if 'savanex.kinshasachristianschool.org' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('savanex.kinshasachristianschool.org')
 
 # CORS
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')
