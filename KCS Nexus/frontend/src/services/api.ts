@@ -164,7 +164,7 @@ export const registryAPI = {
   getDirectory: () => api.get('/registry/directory'),
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
-  resetAccess: (entityType: 'parent' | 'student', identifier: string) => api.post(`/registry/entities/${entityType}/${identifier}/reset-access`),
+  resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),
   deleteEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.delete(`/registry/entities/${entityType}/${identifier}`, { params: { identifierType } }),
   registerFamily: (data: object) => api.post('/registry/families', data),
 }
@@ -212,6 +212,7 @@ export const employeesAPI = {
   create: (data: object) => api.post('/employees', data),
   update: (id: string, data: object) => api.patch('/employees/' + id, data),
   delete: (id: string) => api.delete('/employees/' + id),
+  resetAccess: (id: string) => api.post(`/registry/entities/teacher/${encodeURIComponent(id)}/reset-access`),
 }
 
 export const teacherWorkspaceAPI = {

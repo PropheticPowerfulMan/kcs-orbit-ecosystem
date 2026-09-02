@@ -439,6 +439,23 @@ const TeachersPage = () => {
       setSubmitting(false);
     }
   }
+  async function handleResetAccess(teacher) {
+    const confirmed = window.confirm(`Réinitialiser les accès institutionnels de ${teacher.full_name || teacher.employee_id} ?`);
+    if (!confirmed) return;
+    setSubmitting(true);
+    setFeedback('');
+    setError('');
+    try {
+      const credentials = await teachersService.resetAccess(teacher);
+      setLastTemporaryCredentials(credentials);
+      setFeedback(`Accès de ${teacher.full_name || teacher.employee_id} réinitialisés. Les anciennes sessions sont invalidées et les nouveaux identifiants ont été transmis.`);
+    } catch (resetError) {
+      setError(formatApiError(resetError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
 
   const columns = [
     { key: 'full_name', label: 'Employé' },
@@ -458,6 +475,7 @@ const TeachersPage = () => {
           <button type="button" onClick={() => setSelectedEmployee({ ...row, role: row.employee_label || 'Employe' })} className="savanex-entity-action savanex-entity-action-view">Voir</button>
           <EntityPdfButton entity={row} type="employee" />
           <button type="button" onClick={() => openEmployeeEdit(row)} className="savanex-entity-action savanex-entity-action-edit">Modifier</button>
+          <button type="button" disabled={submitting} onClick={() => void handleResetAccess(row)} className="savanex-entity-action savanex-entity-action-edit">Reset accès</button>
           <button type="button" onClick={() => void handleDelete(row)} className="savanex-entity-action savanex-entity-action-danger">Supprimer</button>
         </div>
       )

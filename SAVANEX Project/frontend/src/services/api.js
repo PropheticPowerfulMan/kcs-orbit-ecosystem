@@ -890,6 +890,16 @@ export const teachersService = {
     const res = await api.patch(`/teachers/${id}/`, data);
     return res.data;
   },
+  async resetAccess(teacher) {
+    const identifier = teacher?.teacher_id || teacher?.employee_id || teacher?.email || teacher?.id;
+    const res = await api.post(`/users/reset-access/employee/${encodeURIComponent(identifier)}/`, {
+      email: teacher?.email || '',
+      phone: teacher?.phone || '',
+      fullName: teacher?.full_name || '',
+    });
+    return res.data;
+  },
+
 
   async remove(id) {
     if (isDemoSession()) {

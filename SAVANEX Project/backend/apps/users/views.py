@@ -200,6 +200,14 @@ def reset_entity_access(request, entity_type, identifier):
         user = student.user if student else None
         if not user:
             user = provision_student_access_identity(identifier, request.data)
+    elif entity_type in ('employee', 'teacher'):
+        from apps.teachers.models import Teacher
+        teacher = Teacher.objects.select_related('user').filter(is_active=True).filter(
+            Q(teacher_id__iexact=identifier) | Q(user__username__iexact=identifier)
+            | Q(user__kcs_card_id__iexact=identifier) | Q(user__access_code__iexact=identifier)
+            | Q(user__email__iexact=identifier)
+        ).first()
+        user = teacher.user if teacher else None
     else:
         return Response({'detail': 'Type d\'entite non pris en charge.'}, status=status.HTTP_400_BAD_REQUEST)
 

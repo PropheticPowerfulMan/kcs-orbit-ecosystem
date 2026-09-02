@@ -505,10 +505,11 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
 }))
 
 registryRouter.post('/entities/:entityType/:identifier/reset-access', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
-  const entityType = z.enum(['parent', 'student']).parse(req.params.entityType)
+  const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType)
   const identifier = String(req.params.identifier)
   const directory = await getSharedDirectoryFromOrbit()
-  let entity = (entityType === 'parent' ? directory.parents : directory.students).find((item: any) =>
+  const collection = entityType === 'parent' ? directory.parents : entityType === 'student' ? directory.students : directory.teachers
+  let entity = collection.find((item: any) =>
     item.id === identifier || item.displayId === identifier || item.studentNumber === identifier
       || item.externalIds?.some((link: any) => link.externalId === identifier)
   ) as any
@@ -562,9 +563,12 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
   const linkedSavanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
   const savanexExternalId = entityType === 'student'
     ? (entity.studentNumber || identifier)
-    : (linkedSavanexExternalId || entity.email || entity.displayId || identifier)
+    : entityType === 'teacher'
+      ? (linkedSavanexExternalId || entity.employeeId || entity.email || entity.displayId || identifier)
+      : (linkedSavanexExternalId || entity.email || entity.displayId || identifier)
   if (env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
-    const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
+    const upstreamType = entityType === 'teacher' ? 'employee' : entityType
+    const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${upstreamType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
     const resetResponse = await fetch(resetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY },
@@ -592,7 +596,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     .filter((value): value is string => Boolean(value))
   let user = await prisma.user.findFirst({
     where: {
-      role: entityType === 'parent' ? 'PARENT' : 'STUDENT',
+      role: entityType === 'parent' ? 'PARENT' : entityType === 'student' ? 'STUDENT' : 'TEACHER',
       OR: accountKeys.flatMap((key) => [
         { id: key },
         { email: { equals: key, mode: 'insensitive' as const } },
@@ -628,7 +632,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non défini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
   ])
   await prisma.notification.create({
-    data: { userId: user.id, title: subject, message, type: 'MESSAGE', link: entityType === 'parent' ? '/parent/messages' : '/student/messages' },
+    data: { userId: user.id, title: subject, message, type: 'MESSAGE', link: entityType === 'parent' ? '/parent/messages' : entityType === 'student' ? '/student/messages' : '/teacher/messages' },
   })
   return success(res, {
     username: user.email,
