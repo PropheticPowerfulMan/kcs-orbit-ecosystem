@@ -447,6 +447,7 @@ const TeachersPage = () => {
     setError('');
     try {
       const credentials = await teachersService.resetAccess(teacher);
+      setEmployeeFormVisible(true);
       setLastTemporaryCredentials(credentials);
       setFeedback(`Accès de ${teacher.full_name || teacher.employee_id} réinitialisés. Les anciennes sessions sont invalidées et les nouveaux identifiants ont été transmis.`);
     } catch (resetError) {

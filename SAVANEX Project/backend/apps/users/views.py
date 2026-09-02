@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from apps.integration.orbit import delete_parent, delete_student, sync_parent, sync_student, sync_teacher
-from apps.communication.services import _send_user_sms, deliver_direct_parent_contact, send_branded_email
+from apps.communication.services import _send_user_sms, deliver_direct_parent_contact, deliver_employee_communication, send_branded_email
 from apps.teachers.services import deactivate_teacher
 from .models import InstitutionalEmailAudit, User
 from .serializers import (
@@ -296,14 +296,17 @@ def _deliver_reset_side_effects(user_id, subject, body, channels):
         elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
             sync_teacher(user.teacher_profile)
 
-        deliver_direct_parent_contact(
-            name=user.get_full_name() or user.username,
-            email=user.email,
-            phone=user.phone,
-            subject=subject,
-            body=body,
-            channels=channels,
-        )
+        if user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
+            deliver_employee_communication(user.teacher_profile, subject, body)
+        else:
+            deliver_direct_parent_contact(
+                name=user.get_full_name() or user.username,
+                email=user.email,
+                phone=user.phone,
+                subject=subject,
+                body=body,
+                channels=channels,
+            )
     except Exception:
         logger.exception('Deferred access reset delivery failed for user %s', user_id)
     finally:
@@ -342,14 +345,18 @@ def reset_user_access_credentials(user, defer_side_effects=False):
         elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
             sync_teacher(user.teacher_profile)
 
-        delivery = [result.__dict__ for result in deliver_direct_parent_contact(
-            name=user.get_full_name() or user.username,
-            email=user.email,
-            phone=user.phone,
-            subject=subject,
-            body=body,
-            channels=channels,
-        )]
+        if user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
+            results = deliver_employee_communication(user.teacher_profile, subject, body)
+        else:
+            results = deliver_direct_parent_contact(
+                name=user.get_full_name() or user.username,
+                email=user.email,
+                phone=user.phone,
+                subject=subject,
+                body=body,
+                channels=channels,
+            )
+        delivery = [result.__dict__ for result in results]
 
     return {
         'userId': user.pk,

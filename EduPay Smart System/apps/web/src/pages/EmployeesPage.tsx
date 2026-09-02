@@ -1008,13 +1008,15 @@ export function EmployeesPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await api<{ username?: string; accessCode?: string; temporaryPassword: string }>(`/api/shared-directory/reset-access/employee/${encodeURIComponent(identifier)}`, { method: "POST" });
+      const result = await api<{ username?: string; accessCode?: string; temporaryPassword: string; delivery?: Array<{ channel?: string; status?: string; detail?: string }> }>(`/api/shared-directory/reset-access/employee/${encodeURIComponent(identifier)}`, { method: "POST" });
+      setSelectedEmployee(null);
       setMutationNotice([
         `Accès de ${employee.fullName} réinitialisé avec succès.`,
         `Identifiant : ${result.username || employee.email || employee.displayId || identifier}`,
         `Code d'accès : ${result.accessCode || "Non renseigné"}`,
         `Mot de passe temporaire : ${result.temporaryPassword}`,
         "Ce mot de passe devra être changé à la prochaine connexion.",
+        ...(result.delivery || []).map((item) => (item.channel === "sms" ? "SMS" : "Email") + " : " + (item.status === "sent" ? "envoyé" : item.status === "queued" ? "programmé" : item.status === "skipped" ? "non envoyé" : "échec")),
       ].join("\n"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de réinitialiser l'accès de cet employé.");
@@ -1026,7 +1028,7 @@ export function EmployeesPage() {
   return (
     <div className="space-y-6 pb-8">
       {mutationNotice ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-5 text-white shadow-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">{L("Modification synchronisée", "Synchronized update")}</p>
             <h2 className="mt-2 font-display text-2xl font-bold">{L("Notification envoyée", "Notification sent")}</h2>
