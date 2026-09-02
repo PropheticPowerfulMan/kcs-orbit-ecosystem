@@ -2,6 +2,7 @@ import LegacyImportLink from '../../components/common/LegacyImportLink';
 import InternationalPhoneInput from '../../components/InternationalPhoneInput';
 import DateSelect from '../../components/common/DateSelect';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import DataTable from '../../components/ui/DataTable';
 import EntityDetailPanel from '../../components/ui/EntityDetailPanel';
@@ -517,8 +518,8 @@ const TeachersPage = () => {
         </div>
 
         {employeeFormVisible ? <form onSubmit={submitTeacher} className="space-y-4">
-          {lastTemporaryCredentials && !editingEmployee ? (
-            <section role="dialog" aria-modal="true" aria-label="Nouveaux accès de l'employé" className="fixed left-1/2 top-1/2 z-[120] w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-emerald-400/35 bg-slate-950 p-6 shadow-2xl ring-1 ring-black/50">
+          {lastTemporaryCredentials ? createPortal(
+            <section role="dialog" aria-modal="true" aria-label="Nouveaux accès de l'employé" className="fixed left-1/2 top-1/2 z-[9999] w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-emerald-400/35 bg-slate-950 p-6 shadow-2xl ring-1 ring-black/50">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Accès temporaire généré</p>

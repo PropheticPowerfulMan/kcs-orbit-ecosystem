@@ -2,6 +2,7 @@ import InternationalPhoneInput from "../components/InternationalPhoneInput";
 import { BulkImportLink } from "../components/BulkImportLink";
 import DateSelect from '../components/DateSelect';
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { FileSpreadsheet, FileText, KeyRound, Printer } from "lucide-react";
 import { SearchField } from "../components/SearchField";
 import { schoolBranding } from "../config/branding";
@@ -1027,8 +1028,8 @@ export function EmployeesPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {mutationNotice ? (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      {mutationNotice ? createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
           <div className="w-full max-w-lg rounded-2xl border border-emerald-400/30 bg-slate-950 p-5 text-white shadow-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">{L("Modification synchronisée", "Synchronized update")}</p>
             <h2 className="mt-2 font-display text-2xl font-bold">{L("Notification envoyée", "Notification sent")}</h2>
@@ -1043,7 +1044,7 @@ export function EmployeesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>, document.body
       ) : null}
 
       <div className="flex flex-wrap items-start justify-between gap-4 animate-fadeInDown">

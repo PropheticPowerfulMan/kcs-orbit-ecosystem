@@ -320,13 +320,13 @@ def reset_user_access_credentials(user, defer_side_effects=False):
     user.password_generated_by_system = True
     user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system'])
 
-    subject = 'Nouveaux identifiants temporaires KCS'
+    subject = "Vos nouveaux accès institutionnels KCS"
     body = (
         f'Bonjour {user.get_full_name() or user.username},\n\n'
         'Votre mot de passe a été réinitialisé par un administrateur.\n'
-        f'Identifiant: {user.username}\n'
-        f"Code d'accès: {user.access_code or 'non défini'}\n"
-        f'Mot de passe temporaire: {temporary_password}\n\n'
+        f"Identifiant : {user.username}\n"
+        f"Code d’accès : {user.access_code or 'non défini'}\n"
+        f"Mot de passe temporaire : {temporary_password}\n\n"
         'Changez ce mot de passe lors de votre prochaine connexion.'
     )
     channels = ['email'] if user.role == User.ROLE_STUDENT else ['email', 'sms']
