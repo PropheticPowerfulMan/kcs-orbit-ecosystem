@@ -510,7 +510,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
   const directory = await getSharedDirectoryFromOrbit()
   const collection = entityType === 'parent' ? directory.parents : entityType === 'student' ? directory.students : directory.teachers
   let entity = collection.find((item: any) =>
-    item.id === identifier || item.displayId === identifier || item.studentNumber === identifier
+    item.id === identifier || item.displayId === identifier || item.studentNumber === identifier || item.employeeId === identifier
       || item.externalIds?.some((link: any) => link.externalId === identifier)
   ) as any
 

@@ -517,12 +517,13 @@ const TeachersPage = () => {
 
         {employeeFormVisible ? <form onSubmit={submitTeacher} className="space-y-4">
           {lastTemporaryCredentials && !editingEmployee ? (
-            <section className="rounded-2xl border border-emerald-400/35 bg-emerald-400/10 p-4">
+            <section role="dialog" aria-modal="true" aria-label="Nouveaux accès de l'employé" className="fixed left-1/2 top-1/2 z-[120] w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-emerald-400/35 bg-slate-950 p-6 shadow-2xl ring-1 ring-black/50">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">Accès temporaire généré</p>
                   <h4 className="mt-1 font-display text-lg font-semibold text-slate-100">Accès aux applications de l'employé</h4>
                 </div>
+                <button type="button" onClick={() => setLastTemporaryCredentials(null)} className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-bold text-slate-100 hover:bg-slate-800">Fermer</button>
                 <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-bold text-slate-950">À changer à la première connexion</span>
               </div>
               <div className="mt-4 rounded-xl border border-emerald-300/25 bg-slate-950/70 p-3">
@@ -530,7 +531,8 @@ const TeachersPage = () => {
                 <p className="text-sm text-slate-200">Identifiant: <span className="font-metric font-bold text-white">{lastTemporaryCredentials.email || lastTemporaryCredentials.username}</span></p>
                 <p className="mt-1 text-sm text-slate-200">Code d'accès: <span className="font-metric font-bold text-sky-200">{lastTemporaryCredentials.accessCode || 'Non défini'}</span></p>
                 <p className="mt-1 text-sm text-slate-200">Mot de passe: <span className="font-metric font-bold text-emerald-200">{lastTemporaryCredentials.temporaryPassword || 'Déjà défini'}</span></p>
-                <p className="mt-3 text-xs text-slate-400">Ces mêmes identifiants ouvrent EduPay et, pour un enseignant, KCS Nexus. Ils ont aussi été envoyés par SMS et selon le choix email du dossier.</p>
+                <div className="mt-3 flex flex-wrap gap-2">{(lastTemporaryCredentials.delivery || []).map((item, index) => <span key={item.channel || index} className={'rounded-full px-3 py-1 text-xs font-bold ' + (['sent','queued'].includes(item.status) ? 'bg-emerald-400/20 text-emerald-200' : 'bg-rose-400/20 text-rose-200')}>{item.channel === 'sms' ? 'SMS' : 'Email'} : {item.status === 'sent' ? 'envoyé' : item.status === 'queued' ? 'programmé' : 'échec'}</span>)}</div>
+                <p className="mt-3 text-xs text-slate-400">Ces mêmes identifiants ouvrent Savanex, EduPay et, pour un enseignant, KCS Nexus.</p>
               </div>
             </section>
           ) : null}
