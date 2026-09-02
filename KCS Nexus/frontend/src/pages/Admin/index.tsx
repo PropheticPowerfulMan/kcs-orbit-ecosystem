@@ -1081,9 +1081,9 @@ const AdminSectionView = ({
   admissionRequests: AdminAdmissionRequest[]
   setAdmissionRequests: Dispatch<SetStateAction<AdminAdmissionRequest[]>>
 }) => {
-  const [selectedStudent, setSelectedStudent] = useState(officialRoster[0] ?? adminRosterSeed[0])
+  const [selectedStudent, setSelectedStudent] = useState<AdminStudentRecord | null>(officialRoster[0] ?? null)
   const [viewingStudent, setViewingStudent] = useState<AdminStudentRecord | null>(null)
-  const [selectedStaff, setSelectedStaff] = useState(staffSeed[0])
+  const [selectedStaff, setSelectedStaff] = useState<(typeof staffSeed)[number] | null>(staffSeed[0] ?? null)
   const [selectedParent, setSelectedParent] = useState<AdminParentRecord | null>(null)
   const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
   const [parentEditForm, setParentEditForm] = useState<AdminParentEditForm>(() => createAdminParentEditForm(null))
@@ -1217,7 +1217,7 @@ const AdminSectionView = ({
       const fallbackRoster = readStoredRoster()
       const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
       setOfficialRoster(roster)
-      setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? adminRosterSeed[0])
+      setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? null)
       setViewingStudent(null)
       setApiSynced(false)
       return [] as AdminStudentRecord[]
@@ -1225,7 +1225,7 @@ const AdminSectionView = ({
     const apiRoster = profiles.map(apiProfileToRosterRecord)
     setOfficialRoster(apiRoster)
     saveRoster(apiRoster)
-    setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? adminRosterSeed[0])
+    setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? null)
     setViewingStudent((current) => current ? apiRoster.find((item) => item.id === current.id) ?? null : null)
     setApiSynced(true)
     return apiRoster
@@ -1253,7 +1253,7 @@ const AdminSectionView = ({
           const fallbackRoster = readStoredRoster()
           const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
           setOfficialRoster(roster)
-          setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? adminRosterSeed[0])
+          setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? null)
           setViewingStudent(null)
           setApiSynced(false)
           return
@@ -1261,14 +1261,14 @@ const AdminSectionView = ({
         const apiRoster = profiles.map(apiProfileToRosterRecord)
         setOfficialRoster(apiRoster)
         saveRoster(apiRoster)
-        setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? adminRosterSeed[0])
+        setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? null)
         setApiSynced(true)
       })
       .catch(() => {
         const fallbackRoster = readStoredRoster()
         const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
         setOfficialRoster(roster)
-        setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? adminRosterSeed[0])
+        setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? null)
         setViewingStudent(null)
         setSharedDirectory(null)
         setApiSynced(false)
@@ -1686,8 +1686,8 @@ const AdminSectionView = ({
     })
   }, [grade9to12, transcriptClassFilter, transcriptQuery])
 
-  const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0] ?? adminRosterSeed[0]
-  const officialTranscript = buildOfficialTranscript(transcriptStudent)
+  const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0] ?? null
+  const officialTranscript = transcriptStudent ? buildOfficialTranscript(transcriptStudent) : null
 
   const filteredRoster = useMemo(() => {
     const query = studentQuery.trim().toLowerCase()
@@ -1761,12 +1761,12 @@ const AdminSectionView = ({
     })
   }, [officialRoster])
 
-  const selectedTrend = useMemo<Array<{ month: string; score: number }>>(() => [], [selectedStudent.id])
+  const selectedTrend = useMemo<Array<{ month: string; score: number }>>(() => [], [selectedStudent?.id])
 
-  const selectedGrades = grades.filter((grade) => grade.studentId === selectedStudent.id || selectedStudent.name.includes('Elise') && grade.studentId === 'stu-elise' || selectedStudent.name.includes('David') && grade.studentId === 'stu-david')
-  const selectedAttendanceEvents = attendance.filter((item) => item.studentId === selectedStudent.id || selectedStudent.name.includes('Elise') && item.studentId === 'stu-elise' || selectedStudent.name.includes('David') && item.studentId === 'stu-david')
-  const selectedDiscipline = disciplineReports.find((item) => item.studentId === selectedStudent.id || item.student === selectedStudent.name)
-  const selectedInsight = students.find((item) => item.id === selectedStudent.id || item.name === selectedStudent.name)
+  const selectedGrades = selectedStudent ? grades.filter((grade) => grade.studentId === selectedStudent.id) : []
+  const selectedAttendanceEvents = selectedStudent ? attendance.filter((item) => item.studentId === selectedStudent.id) : []
+  const selectedDiscipline = selectedStudent ? disciplineReports.find((item) => item.studentId === selectedStudent.id || item.student === selectedStudent.name) : undefined
+  const selectedInsight = selectedStudent ? students.find((item) => item.id === selectedStudent.id || item.name === selectedStudent.name) : undefined
 
   if (segment === 'parents') {
     const totalLinkedStudents = parentRecords.reduce((sum, parent) => sum + parent.studentCount, 0)
@@ -2170,7 +2170,7 @@ const AdminSectionView = ({
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800/70">
                 {filteredRoster.map((student) => (
-                  <tr key={student.id} className={`transition-colors ${selectedStudent.id === student.id ? 'bg-kcs-blue-50 dark:bg-kcs-blue-800/40' : 'hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20'}`}>
+                  <tr key={student.id} className={`transition-colors ${selectedStudent?.id === student.id ? 'bg-kcs-blue-50 dark:bg-kcs-blue-800/40' : 'hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20'}`}>
                     <td className="px-5 py-4">
                       <button className="text-left" onClick={() => {
                         setSelectedStudent(student)
@@ -2441,6 +2441,8 @@ const AdminSectionView = ({
   }
 
   if (segment === 'transcripts') {
+    if (!transcriptStudent) return <div>Aucun eleve reel disponible pour generer un releve de notes.</div>
+    if (!officialTranscript) return <div>Le releve officiel ne peut pas encore etre genere.</div>
     return (
       <div className="space-y-6">
         <AcademicRecordsControlCenter />
@@ -2475,7 +2477,7 @@ const AdminSectionView = ({
               const transcript = transcripts.find((item) => item.student === student.name)
               const generated = buildOfficialTranscript(student)
               return (
-                <button key={student.id} className={`w-full rounded-2xl border bg-white p-5 text-left transition-colors hover:border-kcs-blue-200 hover:bg-kcs-blue-50 dark:bg-kcs-blue-900/50 dark:hover:bg-kcs-blue-900 ${transcriptStudent.id === student.id ? 'border-kcs-blue-400 ring-2 ring-kcs-blue-100 dark:border-kcs-blue-400 dark:ring-kcs-blue-900' : 'border-gray-100 dark:border-kcs-blue-800'}`} onClick={() => setSelectedTranscriptId(student.id)}>
+                <button key={student.id} className={`w-full rounded-2xl border bg-white p-5 text-left transition-colors hover:border-kcs-blue-200 hover:bg-kcs-blue-50 dark:bg-kcs-blue-900/50 dark:hover:bg-kcs-blue-900 ${transcriptStudent?.id === student.id ? 'border-kcs-blue-400 ring-2 ring-kcs-blue-100 dark:border-kcs-blue-400 dark:ring-kcs-blue-900' : 'border-gray-100 dark:border-kcs-blue-800'}`} onClick={() => setSelectedTranscriptId(student.id)}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
@@ -2608,6 +2610,7 @@ const AdminSectionView = ({
   if (segment === 'communications') return <ParentCommunicationPanel />
 
   if (segment === 'staff-attendance') {
+    if (!selectedStaff) return <div>Aucune donnee reelle de presence du personnel disponible.</div>
     return (
       <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
