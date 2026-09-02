@@ -4,6 +4,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.users.models import User
+from apps.teachers.models import Teacher
 
 
 @override_settings(
@@ -44,14 +45,16 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
             password=self.password,
             role=User.ROLE_TEACHER,
         )
+        Teacher.objects.create(user=user, teacher_id='SAV-TCH-ALLAPPS', personal_email='all.apps.personal@example.com', hire_date='2026-09-01')
         for api_key in ('nexus-test-key', 'edupay-test-key', 'edusync-test-key'):
-            response = self.client.post(
-                '/api/integration/authenticate/',
-                {'identifier': user.email, 'password': self.password},
-                format='json',
-                HTTP_X_API_KEY=api_key,
-            )
-            self.assertEqual(response.status_code, 200)
+            for identifier in (user.email, user.teacher_profile.personal_email):
+                response = self.client.post(
+                    '/api/integration/authenticate/',
+                    {'identifier': identifier, 'password': self.password},
+                    format='json',
+                    HTTP_X_API_KEY=api_key,
+                )
+                self.assertEqual(response.status_code, 200)
 
     @patch('apps.integration.views.reset_user_access_credentials')
     def test_parent_reset_provisions_missing_parent_identity(self, reset_credentials):

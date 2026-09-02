@@ -4,6 +4,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from apps.users.models import InstitutionalEmailAudit, User
+from apps.teachers.models import Teacher
 from apps.users.serializers import UserCreateSerializer
 from apps.users.views import UserMeView, reset_user_access_credentials
 
@@ -59,9 +60,10 @@ class UserAccessCodeTests(TestCase):
             access_code='ACC-TCH-LOGIN1',
             kcs_card_id='KCS-TCH-LOGIN1',
         )
+        Teacher.objects.create(user=user, teacher_id='SAV-TCH-LOGIN1', personal_email='jonathan.personal@example.com', hire_date='2026-09-01')
         client = APIClient()
 
-        for identifier in (user.username, user.email, user.access_code, user.kcs_card_id):
+        for identifier in (user.username, user.email, user.access_code, user.kcs_card_id, user.teacher_profile.personal_email):
             with self.subTest(identifier=identifier):
                 response = client.post('/api/auth/login/', {
                     'username': identifier,

@@ -73,6 +73,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             | Q(teacher_profile__employee_id__iexact=identifier)
             | Q(teacher_profile__teacher_id__iexact=identifier)
             | Q(teacher_profile__work_email__iexact=identifier)
+            | Q(teacher_profile__personal_email__iexact=identifier)
         ).distinct().first()
 
         if self.user is None or not self.user.check_password(password) or not self.user.is_active:

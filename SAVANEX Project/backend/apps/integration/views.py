@@ -169,6 +169,7 @@ def authenticate_ecosystem_identity_view(request):
         | Q(teacher_profile__employee_id__iexact=identifier)
         | Q(teacher_profile__teacher_id__iexact=identifier)
         | Q(teacher_profile__work_email__iexact=identifier)
+        | Q(teacher_profile__personal_email__iexact=identifier)
     ).distinct().first()
     if user is None or not user.is_active or not user.check_password(password):
         return Response({'detail': 'Invalid credentials.'}, status=401)
