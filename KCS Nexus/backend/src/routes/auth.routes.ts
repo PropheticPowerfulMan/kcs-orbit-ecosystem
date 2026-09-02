@@ -210,7 +210,7 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   try {
     response = await fetch(loginUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY! },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_INTELLIGENCE_API_KEY! },
       body: JSON.stringify({ identifier, password }),
       signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
     })

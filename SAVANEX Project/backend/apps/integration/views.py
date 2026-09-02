@@ -35,7 +35,7 @@ def ecosystem_employees_view(request):
         return Response(TeacherSerializer(rows,many=True).data)
     serializer=TeacherCreateSerializer(data=request.data);serializer.is_valid(raise_exception=True)
     teacher=serializer.save();delivery=finalize_teacher_creation(teacher)
-    data=serializer.to_representation(teacher);data['credentialDelivery']=delivery
+    data=serializer.to_representation(teacher);data.update(credentialDelivery=[item.__dict__ for item in delivery])
     return Response(data,status=201)
 
 @api_view(['GET','PATCH','DELETE'])
