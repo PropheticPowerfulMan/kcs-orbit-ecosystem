@@ -97,7 +97,7 @@ function mapEduPayStaffFunction(role: string | undefined) {
 }
 
 function savanexAuthIsEnabled() {
-  return Boolean(env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY)
+  return Boolean(env.SAVANEX_API_URL && env.SAVANEX_AUTH_API_KEY)
 }
 
 function edupayAuthIsEnabled() {
@@ -210,7 +210,7 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   try {
     response = await fetch(loginUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY! },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY! },
       body: JSON.stringify({ identifier, password }),
       signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
     })
@@ -434,12 +434,12 @@ async function updateFederatedPhoto(user: { role: string; accessCode: string | n
 }
 
 async function changeFederatedPassword(user: { role: string; accessCode: string | null; email: string }, currentPassword: string, newPassword: string) {
-  if (!env.SAVANEX_API_URL || !env.KCS_ORBIT_API_KEY) throw new ApiError(503, 'SAVANEX password authority is unavailable.')
+  if (!env.SAVANEX_API_URL || !env.SAVANEX_AUTH_API_KEY) throw new ApiError(503, 'SAVANEX password authority is unavailable.')
   const entityType = user.role === 'PARENT' ? 'parent' : user.role === 'STUDENT' ? 'student' : 'teacher'
   const identifier = user.accessCode || user.email
   const response = await fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(identifier)}/change-password/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY },
+    headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY },
     body: JSON.stringify({ currentPassword, newPassword }),
     signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
   })

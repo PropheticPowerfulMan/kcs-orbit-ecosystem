@@ -566,12 +566,12 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     : entityType === 'teacher'
       ? (linkedSavanexExternalId || entity.employeeId || entity.email || entity.displayId || identifier)
       : (linkedSavanexExternalId || entity.email || entity.displayId || identifier)
-  if (env.SAVANEX_API_URL && env.KCS_ORBIT_API_KEY) {
+  if (env.SAVANEX_API_URL && env.SAVANEX_AUTH_API_KEY) {
     const upstreamType = entityType === 'teacher' ? 'employee' : entityType
     const resetUrl = `${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${upstreamType}/${encodeURIComponent(savanexExternalId)}/reset-access/`
     const resetResponse = await fetch(resetUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY },
       body: JSON.stringify({
         fullName: entity.fullName,
         firstName: entity.firstName,

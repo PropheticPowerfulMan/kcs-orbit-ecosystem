@@ -54,6 +54,7 @@ const envSchema = z.object({
   SAVANEX_API_URL: z.string().optional(),
   SAVANEX_LOGIN_PATH: z.string().default('/api/integration/authenticate/'),
   SAVANEX_TIMEOUT_SECONDS: z.coerce.number().default(10),
+  SAVANEX_AUTH_API_KEY: z.string().optional(),
   SAVANEX_INTELLIGENCE_API_KEY: z.string().optional(),
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV !== 'production') return
