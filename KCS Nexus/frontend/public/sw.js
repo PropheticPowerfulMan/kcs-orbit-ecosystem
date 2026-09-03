@@ -1,4 +1,4 @@
-const CACHE_NAME = "kcs-nexus-app-v2";
+const CACHE_NAME = "kcs-nexus-app-v3";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./images/kcs-logo.png", "./images/kcs.jpg"];
 
 self.addEventListener("install", (event) => {
@@ -16,6 +16,11 @@ self.addEventListener("activate", (event) => {
       .then(() => self.clients.claim())
   );
 });
+  if (requestUrl.pathname.startsWith("/assets/")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
@@ -26,7 +31,7 @@ self.addEventListener("fetch", (event) => {
     fetch(event.request)
       .then((response) => {
         const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        if (response.ok && event.request.mode === "navigate") caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
       })
       .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./")))
