@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import multer from 'multer'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
@@ -11,7 +12,10 @@ export const messagesRouter = Router()
 messagesRouter.use(authenticate)
 
 const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
-const parentDeliverySchema = z.object({ recipientIds: z.array(z.string().min(1)).min(1).max(250), channels: z.array(z.enum(['email','sms'])).min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const jsonArray = (value: unknown) => typeof value === 'string' ? JSON.parse(value) : value
+const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(250)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp'])
+const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10485760, files: 1 }, fileFilter: (_req, file, cb) => attachmentTypes.has(file.mimetype) ? cb(null, true) : cb(new ApiError(400, 'Unsupported attachment type')) })
 const broadcastSchema = z.object({ audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messages' : role === 'STUDENT' ? '/portal/student/messages' : role === 'TEACHER' ? '/portal/teacher/messages' : role === 'STAFF' ? '/portal/staff/messages' : '/admin/communications'
 
@@ -55,7 +59,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!messageId) return
     deliveryByMessage.set(messageId, [...(deliveryByMessage.get(messageId) || []), entry])
   })
-  return success(res, messages.map((message) => ({ ...message, deliveries: deliveryByMessage.get(message.id) || [] })))
+  return success(res, messages.map(({ attachmentData: _data, ...message }) => ({ ...message, hasAttachment: Boolean(message.attachmentName), deliveries: deliveryByMessage.get(message.id) || [] })))
 }))
 
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -75,7 +79,7 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
   return success(res, parents)
 }))
 
-messagesRouter.post('/parent-delivery', asyncHandler(async (req: AuthenticatedRequest, res) => {
+messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
   const data = parentDeliverySchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
@@ -89,7 +93,7 @@ messagesRouter.post('/parent-delivery', asyncHandler(async (req: AuthenticatedRe
   const createdMessages = await prisma.$transaction(async (tx) => {
     const rows = []
     for (const parent of parents) {
-      rows.push(await tx.internalMessage.create({ data: { senderId, recipientId: parent.id, subject: data.subject, body: data.body }, select: { id: true, recipientId: true } }))
+      rows.push(await tx.internalMessage.create({ data: { senderId, recipientId: parent.id, subject: data.subject, body: data.body, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, select: { id: true, recipientId: true } }))
     }
     await tx.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink('PARENT') })) })
     return rows
@@ -101,8 +105,9 @@ messagesRouter.post('/parent-delivery', asyncHandler(async (req: AuthenticatedRe
     const batch = parents.slice(index, index + 10)
     const results = await Promise.all(batch.map(async (parent) => {
       const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
-      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body, branded: true })
-      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}`, { brand: false })
+      const attachmentNote = req.file ? `\n\nDocument joint : ${req.file.originalname}. Disponible aussi dans votre boîte Nexus.` : ''
+      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body + attachmentNote, attachments: req.file ? [{ filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype }] : undefined, branded: true })
+      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}${attachmentNote}`, { brand: false })
       const internalMessageId = messageIdByRecipient.get(parent.id)
       const deliveryRows = data.channels.map((channel) => {
         const result = row[channel] as { sent: boolean; reason?: string }
@@ -199,4 +204,13 @@ messagesRouter.patch('/:id/read', asyncHandler(async (req: AuthenticatedRequest,
   if (!existing) throw new ApiError(404, 'Message not found')
   const message = await prisma.internalMessage.update({ where: { id }, data: { readAt: existing.readAt ?? new Date() }, include: { sender: true, recipient: true } })
   return success(res, message)
+}))
+messagesRouter.get('/:id/attachment', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const actorId = await resolveMessageActorId(req)
+  const message = await prisma.internalMessage.findUnique({ where: { id: getRouteParam(req.params.id) } })
+  if (!message) throw new ApiError(404, 'Message not found')
+  if (message.senderId !== actorId && message.recipientId !== actorId) throw new ApiError(403, 'Access denied')
+  if (!message.attachmentData || !message.attachmentName || !message.attachmentMime) throw new ApiError(404, 'No attachment')
+  res.type(message.attachmentMime).set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(message.attachmentName)}`).set('X-Content-Type-Options', 'nosniff')
+  return res.send(Buffer.from(message.attachmentData))
 }))

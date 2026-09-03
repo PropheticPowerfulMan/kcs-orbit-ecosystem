@@ -589,6 +589,10 @@ model InternalMessage {
   recipientId String?
   subject     String
   body        String
+  attachmentName String?
+  attachmentMime String?
+  attachmentSize Int?
+  attachmentData Bytes?
   targetRole  UserRole?
   readAt      DateTime?
   priority    String                @default("normal")

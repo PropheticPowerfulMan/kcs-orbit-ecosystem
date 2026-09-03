@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, CheckSquare, Eye, Mail, MessageSquare, Send, Square, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, CheckSquare, Download, Eye, Mail, MessageSquare, Paperclip, Send, Square, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { messagesAPI } from '../../services/api'
 
@@ -42,6 +42,7 @@ export default function ParentCommunicationPanel() {
   const [channels, setChannels] = useState<Array<'email' | 'sms'>>(['email', 'sms'])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [attachment, setAttachment] = useState<File | null>(null)
   const [history, setHistory] = useState<any[]>([])
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyFrom, setHistoryFrom] = useState('')
@@ -100,7 +101,13 @@ export default function ParentCommunicationPanel() {
     setBusy(true)
     setNotice('')
     try {
-      const response = await messagesAPI.deliverToParents({ recipientIds: selectedParents, channels, subject: subject.trim(), body: body.trim() })
+      const formData = new FormData()
+      formData.append('recipientIds', JSON.stringify(selectedParents))
+      formData.append('channels', JSON.stringify(channels))
+      formData.append('subject', subject.trim())
+      formData.append('body', body.trim())
+      if (attachment) formData.append('attachment', attachment)
+      const response = await messagesAPI.deliverToParents(formData)
       const data = response.data?.data
       const delivery = Array.isArray(data?.delivery) ? data.delivery : []
       const emailSent = delivery.filter((row: any) => row.email?.sent).length
@@ -111,6 +118,7 @@ export default function ParentCommunicationPanel() {
       setDeliveryReport({ delivery, channels: data?.channels ?? channels, recipients: data?.recipients ?? delivery.length })
       setSubject('')
       setBody('')
+      setAttachment(null)
       setSelectedParents([])
       await load()
     } catch (error: any) {
@@ -177,6 +185,8 @@ export default function ParentCommunicationPanel() {
           </div>
           <input className={fieldClass + ' mt-4'} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder={c.subject} />
           <textarea className={fieldClass + ' mt-3 min-h-44 resize-y'} value={body} onChange={(event) => setBody(event.target.value)} placeholder={c.exactMessage} />
+          <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-kcs-blue-300 p-3 text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-200"><Paperclip size={18}/>{attachment?.name||'Joindre un document'}<input type="file" className="sr-only" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,image/jpeg,image/png,image/webp" onChange={event=>{const file=event.target.files?.[0];if(file&&file.size>10*1024*1024){setNotice('Le document ne doit pas dépasser 10 Mo.');return}setAttachment(file||null)}}/></label>
+          {attachment?<button type="button" className="mt-2 text-xs font-bold text-red-600" onClick={()=>setAttachment(null)}>Retirer la pièce jointe</button>:null}
           <p className="my-3 text-xs text-gray-500 dark:text-gray-300">{c.copyStored}</p>
           <button className={primaryButton + ' w-full'} disabled={busy || !selectedParents.length} onClick={() => void send()}><Send size={18} />{busy ? c.sending : c.sendTo(selectedParents.length)}</button>
         </section>
@@ -230,6 +240,7 @@ export default function ParentCommunicationPanel() {
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.sentMessage}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{viewingMessage.subject}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{messageRecipient(viewingMessage)} · {new Date(viewingMessage.createdAt).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US')}</p></div><button className={primaryButton} onClick={() => setViewingMessage(null)}><X size={17} />{c.close}</button></div>
           <div className="mt-5 whitespace-pre-wrap rounded-2xl bg-gray-50 p-5 leading-7 text-gray-700 dark:bg-kcs-blue-900 dark:text-gray-100">{viewingMessage.body}</div>
           <div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700">{c.nexus} · {viewingMessage.deliveries?.some((item: any) => item.status === 'FAILED') ? c.failed : viewingMessage.deliveries?.some((item: any) => item.status === 'SENT' || item.status === 'DELIVERED') ? c.sent : c.logged}</span></div>
+          {viewingMessage.hasAttachment?<button type="button" className={primaryButton+' mt-4'} onClick={async()=>{const response=await messagesAPI.attachment(viewingMessage.id);const url=URL.createObjectURL(response.data);const link=document.createElement('a');link.href=url;link.download=viewingMessage.attachmentName||'document';link.click();URL.revokeObjectURL(url)}}><Download size={17}/>Télécharger · {viewingMessage.attachmentName}</button>:null}
         </section>
       </div> : null}
     </div>

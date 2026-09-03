@@ -2,6 +2,7 @@ import InternationalPhoneInput from "../../components/InternationalPhoneInput";
 import ParentCommunicationPanel from './ParentCommunicationPanel'
 import EmployeesPanel from './EmployeesPanel'
 import DateSelect from '@/components/shared/DateSelect'
+import PhotoCaptureField from '@/components/shared/PhotoCaptureField'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
@@ -168,6 +169,7 @@ type AdminStudentDraft = {
   section: string
   email: string
   dateOfBirth: string
+  photoData: string
 }
 
 type EduPayFinanceSummary = {
@@ -193,6 +195,7 @@ const createAdminStudentDraft = (grade = 'Grade 1', section = ''): AdminStudentD
   section,
   email: '',
   dateOfBirth: '',
+  photoData: '',
 })
 
 const schoolEmailPreview = (student: Pick<AdminStudentDraft, 'firstName' | 'middleName' | 'lastName'>) => {
@@ -1138,6 +1141,7 @@ const AdminSectionView = ({
     parentAddress: '',
     parentEmail: '',
     parentPhone: '',
+    parentPhotoData: '',
     advisor: '',
     students: [createAdminStudentDraft()],
   })
@@ -1355,6 +1359,7 @@ const AdminSectionView = ({
           email: parentEmail,
           phone: parentPhone,
           relationship: 'Parent',
+          photoData: newFamily.parentPhotoData || undefined,
         },
         students: readyStudents.map((student) => {
           return {
@@ -1365,6 +1370,7 @@ const AdminSectionView = ({
             section: student.section,
             email: student.email.trim() || undefined,
             dateOfBirth: student.dateOfBirth,
+            photoData: student.photoData || undefined,
           }
         }),
       })
@@ -1392,7 +1398,7 @@ const AdminSectionView = ({
     setDivisionFilter(getDivisionForGrade(focusStudent.grade).id)
     setGradeFilter(focusStudent.grade)
     setClassSuffixFilter(focusStudent.section as typeof SEARCH_CLASS_SUFFIXES[number] || 'All')
-    setNewFamily({ parentFirstName: '', parentMiddleName: '', parentLastName: '', parent: '', parentAddress: '', parentEmail: '', parentPhone: '', advisor: '', students: [createAdminStudentDraft()] })
+    setNewFamily({ parentFirstName: '', parentMiddleName: '', parentLastName: '', parent: '', parentAddress: '', parentEmail: '', parentPhone: '', parentPhotoData: '', advisor: '', students: [createAdminStudentDraft()] })
   }
 
   const openEditStudent = (student: AdminStudentRecord) => {
@@ -2111,6 +2117,7 @@ const AdminSectionView = ({
                 <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
                 <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Advisor, optional" />
               </div>
+              <div className="mt-4"><PhotoCaptureField label="Photo du parent" value={newFamily.parentPhotoData} onChange={parentPhotoData=>setNewFamily(item=>({...item,parentPhotoData}))} onError={setStudentNotice}/></div>
               <div className="mt-5 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h4 className="text-sm font-bold text-kcs-blue-900 dark:text-white">Élèves liés</h4>
@@ -2125,6 +2132,7 @@ const AdminSectionView = ({
                       ) : null}
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
+                    <PhotoCaptureField label={`Photo de l’élève ${index+1}`} value={student.photoData} onChange={photoData=>setNewFamily(item=>({...item,students:item.students.map((draft,studentIndex)=>studentIndex===index?{...draft,photoData}:draft)}))} onError={setStudentNotice}/>
                       <input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required />
                       <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
                       <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />
