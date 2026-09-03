@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { 
   MapPin, Phone, Mail, Clock, Facebook, 
-  Instagram, Youtube, Linkedin, ArrowRight, BookOpen
+  Instagram, Youtube, Linkedin, MessageCircle, ArrowRight, BookOpen
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { getAssetUrl } from '@/utils/assets'
@@ -40,6 +40,7 @@ const Footer = () => {
     { icon: Facebook, href: 'https://www.facebook.com/KinshasaChristianSchool', label: 'Facebook' },
     { icon: Instagram, href: 'https://www.instagram.com/kinshasachristianschoolknights', label: 'Instagram' },
     { icon: Youtube, href: 'https://www.youtube.com/@kinshasachristianschool4789', label: 'YouTube' },
+    { icon: MessageCircle, href: 'https://wa.me/243895326011', label: 'WhatsApp' },
     { icon: Linkedin, href: '#', label: 'LinkedIn' },
   ]
 
