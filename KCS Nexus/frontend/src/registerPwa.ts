@@ -3,6 +3,13 @@ export function registerPwa() {
 
   window.addEventListener("load", () => {
     const baseUrl = import.meta.env.BASE_URL || "/";
-    navigator.serviceWorker.register(`${baseUrl}sw.js`).catch(() => undefined);
+    if ("caches" in window) {
+      caches.keys()
+        .then((keys) => Promise.all(keys.filter((key) => key.startsWith("kcs-nexus-app-")).map((key) => caches.delete(key))))
+        .catch(() => undefined);
+    }
+    navigator.serviceWorker.register(`${baseUrl}sw.js`, { updateViaCache: "none" })
+      .then((registration) => registration.update())
+      .catch(() => undefined);
   });
 }
