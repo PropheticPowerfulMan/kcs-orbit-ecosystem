@@ -371,6 +371,7 @@ export const academicCalendarAPI = {
 
 export const academicRecordsAPI = {
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
+  myFinalGrades: () => api.get('/academic-records/final-grades/me'),
   review: (params?: object) => api.get('/academic-records/review', { params }),
   generateReportCards: (data: object) => api.post('/academic-records/report-cards/generate', data),
   reportCards: (params?: object) => api.get('/academic-records/report-cards', { params }),

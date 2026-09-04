@@ -13,6 +13,7 @@ import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import TeacherAcademicOperations from '@/components/teacher/TeacherAcademicOperations'
 import TeacherHomeroomAttendance from '@/components/teacher/TeacherHomeroomAttendance'
+import TeacherReportCards from '@/components/teacher/TeacherReportCards'
 import { aiAPI, authAPI, messagesAPI, teacherWorkspaceAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -196,7 +197,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     attendance: { title: 'Attendance', subtitle: 'Daily attendance records, class trends, and follow-up signals.', icon: ClipboardCheck },
     assignments: { title: 'Assignments', subtitle: 'Homework status, priorities, missing work, and LMS resources.', icon: FileText },
     grades: { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
-    'report-card': { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
+    'report-card': { title: 'Report Cards', subtitle: 'Official Gradebook synthesis, attendance, comments, controlled submission, and publication status.', icon: GraduationCap },
     reports: { title: 'Reports', subtitle: 'Report cards, AI comments, exports, and principal approval status.', icon: GraduationCap },
     diagnostics: { title: 'AI Diagnostics', subtitle: 'Actionable academic and attendance signals based on your assigned learners.', icon: Brain },
     timetable: { title: 'Timetable', subtitle: 'Your synchronized teaching schedule, rooms, and class details.', icon: Calendar },
@@ -871,6 +872,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   if (segment === 'attendance') return <TeacherHomeroomAttendance />
 
   if (segment === 'assignments') return <TeacherAcademicOperations segment={segment} />
+
+  if (segment === 'report-card') return <TeacherReportCards />
 
   if (segment === 'grades') {
     return (

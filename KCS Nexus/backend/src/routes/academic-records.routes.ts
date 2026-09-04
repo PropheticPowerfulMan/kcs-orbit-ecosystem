@@ -27,6 +27,8 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
  const enrolled=new Set(course.enrollments.map(item=>item.studentId))
  if(payload.results.some(item=>!enrolled.has(item.studentId)))throw new ApiError(400,'A submitted student is not enrolled in this course')
  if(new Set(payload.results.map(item=>item.studentId)).size!==payload.results.length)throw new ApiError(400,'Duplicate student in submission')
+ const lockedCards=await prisma.reportCard.count({where:{studentId:{in:payload.results.map(item=>item.studentId)},term:`${payload.academicYear} · ${payload.term}`,publicationStatus:{in:['APPROVED','EMAILED','POSTED_TO_PORTAL']}}})
+ if(lockedCards)throw new ApiError(409,'This reporting session is already approved or published and can no longer be changed')
  const period=periodKey(payload.academicYear,payload.term,'SUBMITTED')
  const saved=await prisma.$transaction(async tx=>{
   await tx.grade.deleteMany({where:{courseId:course.id,assignmentId:null,period}})
@@ -36,6 +38,18 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
   return created
  })
  return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.length},'Final grades submitted for administrative review',201)
+}))
+
+academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const teacher=await prisma.teacherProfile.findUnique({where:{userId:req.user!.sub},select:{courses:{select:{id:true,enrollments:{select:{studentId:true}}}}}})
+ if(!teacher)return success(res,{submissions:[],reportCards:[]},'Teacher profile synchronization pending')
+ const courseIds=teacher.courses.map(course=>course.id)
+ const studentIds=[...new Set(teacher.courses.flatMap(course=>course.enrollments.map(item=>item.studentId)))]
+ const [grades,cards]=await Promise.all([
+  courseIds.length?prisma.grade.findMany({where:{courseId:{in:courseIds},assignmentId:null,period:{contains:'::SUBMITTED'}},select:{id:true,studentId:true,courseId:true,percentage:true,letterGrade:true,period:true,createdAt:true},orderBy:{createdAt:'desc'}}):[],
+  studentIds.length?prisma.reportCard.findMany({where:{studentId:{in:studentIds}},select:{id:true,studentId:true,term:true,average:true,principalStatus:true,publicationStatus:true,approvedAt:true,portalPostedAt:true,updatedAt:true},orderBy:{updatedAt:'desc'}}):[],
+ ])
+ return success(res,{submissions:grades.map(item=>({...item,cycle:parsePeriod(item.period)})),reportCards:cards},'Teacher report-card workflow loaded')
 }))
 
 academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{

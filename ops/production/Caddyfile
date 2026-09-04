@@ -40,7 +40,14 @@ www.{$NEXUS_DOMAIN} {
 
 {$EDUPAY_DOMAIN} {
   import security_headers
-  reverse_proxy edupay_web:80
+  # Compatibility route for older installed PWA bundles that still send
+  # institutional login requests to the public Web origin.
+  handle /api/* {
+    reverse_proxy edupay_api:4000
+  }
+  handle {
+    reverse_proxy edupay_web:80
+  }
 }
 
 {$EDUPAY_API_DOMAIN} {

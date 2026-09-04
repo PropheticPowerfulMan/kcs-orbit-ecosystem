@@ -117,6 +117,16 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     const average = grades.length ? Number((grades.reduce((sum, grade) => sum + grade.percentage, 0) / grades.length).toFixed(1)) : null
     const present = attendanceRows.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
     const attendanceRate = attendanceRows.length ? Number(((present / attendanceRows.length) * 100).toFixed(1)) : null
+    const attendanceSummary = {
+      total: attendanceRows.length,
+      present: attendanceRows.filter((record) => record.status === 'PRESENT').length,
+      absent: attendanceRows.filter((record) => record.status === 'ABSENT').length,
+      late: attendanceRows.filter((record) => record.status === 'LATE').length,
+      excused: attendanceRows.filter((record) => record.status === 'EXCUSED').length,
+      sick: attendanceRows.filter((record) => record.status === 'SICK').length,
+      suspended: attendanceRows.filter((record) => record.status === 'SUSPENDED').length,
+      attendanceRate,
+    }
     const missingAssignments = submissions.filter((submission) => submission.status === 'PENDING' && submission.dueDate < now).length
     const courseAverages = teacher.courses.map((course) => {
       const values = course.grades.filter((grade) => grade.studentId === student.id)
@@ -128,6 +138,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
       analytics: {
         average,
         attendanceRate,
+        attendanceSummary,
         gradedItems: grades.length,
         attendanceRecords: attendanceRows.length,
         missingAssignments,
