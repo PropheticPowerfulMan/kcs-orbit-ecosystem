@@ -149,7 +149,10 @@ type AdminStudentEditForm = {
   section: string
   status: string
   dateOfBirth: string
+  photoData?: string
 }
+
+type ParentEditStudentForm = AdminStudentEditForm & { id: string }
 
 type AdminParentEditForm = {
   firstName: string
@@ -225,6 +228,7 @@ const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminSt
   section: student?.section ?? '',
   status: student?.status ?? 'Active',
   dateOfBirth: student?.dateOfBirth?.slice(0, 10) ?? '',
+  photoData: '',
 })
 
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
@@ -1091,7 +1095,9 @@ const AdminSectionView = ({
   const [selectedParent, setSelectedParent] = useState<AdminParentRecord | null>(null)
   const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
   const [parentEditForm, setParentEditForm] = useState<AdminParentEditForm>(() => createAdminParentEditForm(null))
-  const [parentEditStudentIds, setParentEditStudentIds] = useState<string[]>([])
+  const [parentEditStudents, setParentEditStudents] = useState<ParentEditStudentForm[]>([])
+  const [parentNewStudents, setParentNewStudents] = useState<AdminStudentDraft[]>([])
+  const [showParentNewStudent, setShowParentNewStudent] = useState(false)
   const [savingParentEdit, setSavingParentEdit] = useState(false)
   const [editingTeacherId, setEditingTeacherId] = useState('')
   const [teacherNotice, setTeacherNotice] = useState('')
@@ -1506,7 +1512,9 @@ const AdminSectionView = ({
     setSelectedParent(null)
     setEditingParent(parent)
     setParentEditForm(createAdminParentEditForm(parent))
-    setParentEditStudentIds(parent.students.map((student) => student.id))
+    setParentEditStudents(parent.students.map((student) => ({ id: student.id, ...createAdminStudentEditForm(student) })))
+    setParentNewStudents([])
+    setShowParentNewStudent(false)
     setParentNotice('')
   }
 
@@ -1521,6 +1529,64 @@ const AdminSectionView = ({
 
     setSavingParentEdit(true)
     try {
+      for (const student of parentEditStudents) {
+        if (!student.firstName.trim() || !student.lastName.trim() || !student.studentNumber.trim()) {
+          throw new Error('Chaque enfant lié doit avoir un nom, un prénom et un identifiant.')
+        }
+        const original = editingParent.students.find((item) => item.id === student.id)
+        const originalForm = createAdminStudentEditForm(original ?? null)
+        const changed = student.photoData || (['firstName', 'middleName', 'lastName', 'email', 'studentNumber', 'grade', 'section', 'status', 'dateOfBirth'] as const).some((field) => student[field] !== originalForm[field])
+        if (changed) {
+          await studentsAPI.update(student.id, {
+            firstName: student.firstName.trim(),
+            middleName: student.middleName.trim() || null,
+            lastName: student.lastName.trim(),
+            email: student.email.trim() || undefined,
+            studentNumber: student.studentNumber.trim(),
+            grade: student.grade,
+            section: student.section,
+            status: student.status,
+            dateOfBirth: student.dateOfBirth || null,
+            ...(student.photoData ? { photoData: student.photoData } : {}),
+          })
+        }
+      }
+
+      const readyNewStudents = parentNewStudents.filter((student) => student.firstName.trim() || student.lastName.trim())
+      if (readyNewStudents.some((student) => !student.firstName.trim() || !student.lastName.trim() || !student.dateOfBirth)) {
+        throw new Error('Complétez le nom, le prénom et la date de naissance de chaque nouvel enfant.')
+      }
+      if (readyNewStudents.length > 0 && !parentEditForm.email.trim()) {
+        throw new Error('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
+      }
+      let createdStudentIds: string[] = []
+      if (readyNewStudents.length > 0) {
+        const creation = await studentsAPI.create({
+          parent: {
+            existingParentId: editingParent.id,
+            firstName: parentEditForm.firstName.trim(),
+            middleName: parentEditForm.middleName.trim() || undefined,
+            lastName: parentEditForm.lastName.trim() || 'Parent',
+            email: parentEditForm.email.trim(),
+            phone: parentEditForm.phone.trim() || undefined,
+            physicalAddress: parentEditForm.physicalAddress.trim() || undefined,
+            relationship: 'Parent',
+          },
+          students: readyNewStudents.map((student) => ({
+            firstName: student.firstName.trim(),
+            middleName: student.middleName.trim() || undefined,
+            lastName: student.lastName.trim(),
+            grade: student.grade,
+            section: student.section,
+            dateOfBirth: student.dateOfBirth,
+            photoData: student.photoData || undefined,
+          })),
+        })
+        const createdStudents = creation.data?.data?.students
+        createdStudentIds = Array.isArray(createdStudents) ? createdStudents.map((student: any) => student.id).filter(Boolean) : []
+        if (creation.data?.data?.temporaryCredentials) setFamilyCredentials(creation.data.data.temporaryCredentials)
+      }
+
       const response = await registryAPI.updateEntity('parent', editingParent.id, {
         firstName: parentEditForm.firstName.trim(),
         middleName: parentEditForm.middleName.trim() || null,
@@ -1528,7 +1594,7 @@ const AdminSectionView = ({
         email: parentEditForm.email.trim() || undefined,
         phone: parentEditForm.phone.trim() || null,
         physicalAddress: parentEditForm.physicalAddress.trim() || null,
-        studentIds: parentEditStudentIds,
+        studentIds: Array.from(new Set([...parentEditStudents.map((student) => student.id), ...createdStudentIds])),
       }, editingParent.identifierType)
       const roster = await refreshOfficialRoster()
       const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
@@ -1784,17 +1850,15 @@ const AdminSectionView = ({
 
     return (
       <div className="space-y-6">
-        {familyCredentials?.reset && createPortal((
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Reinitialisation des identifiants">
-            <section className="w-full max-w-xl rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl dark:border-emerald-900 dark:bg-kcs-blue-950">
+        {familyCredentials && createPortal((
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+            <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl dark:border-emerald-900 dark:bg-kcs-blue-950">
               <button type="button" onClick={() => setFamilyCredentials(null)} className="float-right rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button>
-              <p className="text-xs font-bold uppercase text-emerald-600">Reinitialisation terminee</p>
-              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">Nouvel acces de {familyCredentials.reset.identifier}</h3>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Le mot de passe devra etre change a la prochaine connexion.</p>
-              <div className="mt-6 space-y-3 rounded-2xl bg-emerald-50 p-5 text-kcs-blue-950 dark:bg-emerald-950/30 dark:text-white">
-                <p>Identifiant : <strong>{familyCredentials.parent?.username}</strong></p>
-                <p>Code acces : <strong>{familyCredentials.parent?.accessCode || 'Non defini'}</strong></p>
-                <p>Mot de passe temporaire : <strong>{familyCredentials.parent?.temporaryPassword}</strong></p>
+              <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.reset ? 'Réinitialisation terminée' : 'Nouvel enfant enregistré'}</p>
+              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Identifiants générés et propagés'}</h3>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Conservez ces informations dans un canal sûr. Le mot de passe devra être changé à la première connexion.</p>
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-2xl bg-emerald-50 p-5 text-kcs-blue-950 dark:bg-emerald-950/30 dark:text-white"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{credential.studentId ? `Élève ${credential.studentId}` : 'Parent'}</p><p className="mt-3 font-bold">{credential.displayName || credential.studentId}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d’accès : <strong>{credential.accessCode || 'Non défini'}</strong></p><p className="mt-2 text-sm">Mot de passe temporaire : <strong>{credential.temporaryPassword}</strong></p></article>)}
               </div>
             </section>
           </div>
@@ -2011,20 +2075,48 @@ const AdminSectionView = ({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Enfants liés</p>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Ajoutez ou retirez les enfants de cette famille. Un enfant déjà rattaché à une autre famille reste protégé.</p>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Modifiez les dossiers liés, retirez un rattachement ou créez un nouvel élève complet.</p>
                     </div>
-                    <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{parentEditStudentIds.length} sélectionné(s)</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{parentEditStudents.length} enfant(s) lié(s)</span>
+                      <button type="button" onClick={() => { setShowParentNewStudent(true); setParentNewStudents((current) => current.length ? current : [createAdminStudentDraft(parentEditStudents[0]?.grade || 'K3', parentEditStudents[0]?.section || '')]) }} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950"><UserPlus size={16} /> Ajouter un enfant</button>
+                    </div>
                   </div>
-                  <div className="mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
-                    {officialRoster.map((student) => {
-                      const currentParent = parentRecords.find((parent) => parent.students.some((item) => item.id === student.id))
-                      const selected = parentEditStudentIds.includes(student.id)
-                      const unavailable = Boolean(currentParent && currentParent.id !== editingParent.id)
-                      return <label key={student.id} className={`flex items-start gap-3 rounded-xl border p-3 ${unavailable ? 'cursor-not-allowed border-gray-100 opacity-50' : 'cursor-pointer border-gray-200 bg-white hover:border-kcs-blue-300 dark:border-kcs-blue-700 dark:bg-kcs-blue-900'}`}>
-                        <input type="checkbox" checked={selected} disabled={unavailable} onChange={() => setParentEditStudentIds((current) => selected ? current.filter((id) => id !== student.id) : [...current, student.id])} className="mt-1 h-4 w-4 accent-kcs-blue-700" />
-                        <span><strong className="block text-sm text-kcs-blue-900 dark:text-white">{student.name}</strong><span className="text-xs text-gray-500">{student.studentNumber || 'Sans ID'} · {formatClassName(student.grade, student.section) || 'Classe non assignée'}{unavailable ? ` · Lié à ${currentParent?.name}` : ''}</span></span>
-                      </label>
-                    })}
+                  <div className="mt-4 space-y-4">
+                    {parentEditStudents.length === 0 ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Aucun enfant n’est lié. Utilisez « Ajouter un enfant » pour compléter cette famille.</p> : null}
+                    {parentEditStudents.map((student, index) => (
+                      <article key={student.id} className="rounded-2xl border border-kcs-blue-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant lié {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">Retirer de cette famille</button></div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo de l’enfant ${index + 1}`} value={student.photoData || ''} onChange={(photoData) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
+                          <input value={student.lastName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
+                          <input value={student.middleName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                          <input value={student.firstName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
+                          <input value={student.studentNumber} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, studentNumber: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Identifiant élève *" required />
+                          <input type="email" value={student.email} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, email: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail scolaire" />
+                          <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
+                          <select value={student.grade} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
+                          <select value={student.section} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}</select>
+                        </div>
+                      </article>
+                    ))}
+                    {showParentNewStudent ? <section className="rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 p-4 dark:border-emerald-700 dark:bg-emerald-950/20">
+                      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Nouveaux enfants</p><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Leurs accès seront générés et propagés dans l’écosystème à l’enregistrement.</p></div><button type="button" onClick={() => setParentNewStudents((current) => [...current, createAdminStudentDraft(current[0]?.grade || parentEditStudents[0]?.grade || 'K3', current[0]?.section || '')])} className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-700 dark:bg-kcs-blue-950 dark:text-emerald-200">Ajouter encore</button></div>
+                      <div className="mt-4 space-y-4">{parentNewStudents.map((student, index) => <article key={`parent-new-student-${index}`} className="rounded-xl border border-emerald-200 bg-white p-4 dark:border-emerald-800 dark:bg-kcs-blue-900">
+                        <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Nouvel élève {index + 1}</p><button type="button" onClick={() => setParentNewStudents((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="text-xs font-bold text-red-700 dark:text-red-300">Retirer</button></div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo du nouvel élève ${index + 1}`} value={student.photoData} onChange={(photoData) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
+                          <input value={student.lastName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
+                          <input value={student.middleName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                          <input value={student.firstName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
+                          <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200"><strong>ID :</strong> généré automatiquement</div>
+                          <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance *<DateSelect value={student.dateOfBirth} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
+                          <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement" />
+                          <select value={student.grade} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
+                          <select value={student.section} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}</select>
+                        </div>
+                      </article>)}</div>
+                    </section> : null}
                   </div>
                 </section>
               </div>

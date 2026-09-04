@@ -84,6 +84,7 @@ const studentUpdateSchema = z.object({
   section: z.string().max(10).optional(),
   status: z.string().min(1).optional(),
   dateOfBirth: z.coerce.date().nullable().optional(),
+  photoData: z.string().max(8_000_000).optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: 'At least one field must be provided for student update.',
 })
@@ -276,6 +277,7 @@ const createStudentSchema = z.object({
     relationship: z.string().default('Parent'),
     physicalAddress: z.string().trim().min(1).optional(),
     photoData: z.string().max(8_000_000).optional(),
+    existingParentId: z.string().trim().min(1).optional(),
   }),
   student: z.object({
     firstName: z.string().min(1),
@@ -546,35 +548,59 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       throw new ApiError(409, `Student number already exists: ${duplicateOrbitStudents.map((student) => orbitExternalId(student)).join(', ')}`)
     }
 
-    const parentTemporaryPassword = generateTemporaryPassword('PAR')
-    const parentResult = await createRegistryEntityInOrbit('parent', {
-      firstName: parent.firstName,
-      middleName: parent.middleName,
-      lastName: parent.lastName,
-      email: parent.email,
-      phone: parent.phone || undefined,
-      physicalAddress: parent.physicalAddress || undefined,
-      photoData: parent.photoData || undefined,
-      mustChangePassword: true,
-    })
+    const existingParent = parent.existingParentId
+      ? directoryBeforeCreate.parents.find((candidate) =>
+          candidate.id === parent.existingParentId
+          || candidate.displayId === parent.existingParentId
+          || candidate.externalIds?.some((link) => link.externalId === parent.existingParentId),
+        )
+      : undefined
+    if (parent.existingParentId && !existingParent) {
+      throw new ApiError(404, 'Existing parent not found in the shared Orbit registry')
+    }
+
+    const parentResult = existingParent
+      ? { orbitId: existingParent.id, entity: existingParent }
+      : await createRegistryEntityInOrbit('parent', {
+          firstName: parent.firstName,
+          middleName: parent.middleName,
+          lastName: parent.lastName,
+          email: parent.email,
+          phone: parent.phone || undefined,
+          physicalAddress: parent.physicalAddress || undefined,
+          photoData: parent.photoData || undefined,
+          mustChangePassword: true,
+        })
     const parentOrbitId = parentResult.orbitId
     if (!parentOrbitId) {
       throw new ApiError(502, 'Orbit parent creation did not return an id')
     }
 
-    const parentAccessCode = String((parentResult.entity as { accessCode?: string } | undefined)?.accessCode || await generateUniqueAccessCode(prisma, 'parent'))
-    const parentPasswordHash = await bcrypt.hash(parentTemporaryPassword, 10)
-    const localParentUser = await prisma.user.upsert({
-      where: { email: parent.email },
-      update: { accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, avatar: parent.photoData || null, role: 'PARENT' },
-      create: { email: parent.email, accessCode: parentAccessCode, passwordHash: parentPasswordHash, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, avatar: parent.photoData || null, role: 'PARENT' },
+    const existingLocalParent = await prisma.user.findFirst({
+      where: {
+        role: 'PARENT',
+        OR: [
+          { email: { equals: parent.email, mode: 'insensitive' } },
+          { orbitUserId: parentOrbitId },
+        ],
+      },
     })
+    const parentTemporaryPassword = existingLocalParent ? null : generateTemporaryPassword('PAR')
+    const parentAccessCode = String(existingLocalParent?.accessCode || (parentResult.entity as { accessCode?: string } | undefined)?.accessCode || await generateUniqueAccessCode(prisma, 'parent'))
+    const localParentUser = existingLocalParent
+      ? await prisma.user.update({
+          where: { id: existingLocalParent.id },
+          data: { accessCode: parentAccessCode, orbitUserId: parentOrbitId, firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, ...(parent.photoData ? { avatar: parent.photoData } : {}), role: 'PARENT' },
+        })
+      : await prisma.user.create({
+          data: { email: parent.email, accessCode: parentAccessCode, orbitUserId: parentOrbitId, passwordHash: await bcrypt.hash(parentTemporaryPassword!, 10), firstName: parent.firstName, middleName: parent.middleName || null, lastName: parent.lastName, phone: parent.phone || null, avatar: parent.photoData || null, role: 'PARENT' },
+        })
 
     const temporaryCredentials: {
       parent: { displayName: string; username: string; accessCode: string; temporaryPassword: string } | null
       students: Array<{ displayName: string; studentId: string; username: string; accessCode: string; temporaryPassword: string }>
     } = {
-      parent: { displayName: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), username: parent.email, accessCode: parentAccessCode, temporaryPassword: parentTemporaryPassword },
+      parent: parentTemporaryPassword ? { displayName: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), username: parent.email, accessCode: parentAccessCode, temporaryPassword: parentTemporaryPassword } : null,
       students: [],
     }
     const studentDeliveryCredentials: Array<FamilyCredential & { userId: string }> = []
@@ -929,11 +955,18 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       ...(payload.studentNumber !== undefined ? { studentNumber: payload.studentNumber } : {}),
       ...(payload.status !== undefined ? { status: payload.status.toUpperCase() } : {}),
       ...(payload.dateOfBirth !== undefined ? { dateOfBirth: payload.dateOfBirth } : {}),
+      ...(payload.photoData !== undefined ? { photoData: payload.photoData } : {}),
       ...(payload.grade !== undefined || payload.section !== undefined
         ? { className: `${payload.grade ?? currentClass.grade} ${payload.section ?? currentClass.section}`.trim() }
         : {}),
     })
     const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
+    if (payload.photoData !== undefined) {
+      await prisma.user.updateMany({
+        where: { OR: [{ orbitUserId: target.id }, ...(target.email ? [{ email: target.email }] : [])] },
+        data: { avatar: payload.photoData },
+      })
+    }
     const localUsers = await prisma.user.findMany({
       where: { email: { in: [target.email, parent?.email].filter(Boolean) as string[] } },
       select: { id: true, email: true, role: true },
@@ -986,7 +1019,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
   }
 
   const student = await prisma.$transaction(async (tx) => {
-    if (payload.firstName !== undefined || payload.middleName !== undefined || payload.lastName !== undefined || payload.email !== undefined) {
+    if (payload.firstName !== undefined || payload.middleName !== undefined || payload.lastName !== undefined || payload.email !== undefined || payload.photoData !== undefined) {
       await tx.user.update({
         where: { id: currentStudent.userId },
         data: {
@@ -994,6 +1027,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
           ...(payload.middleName !== undefined ? { middleName: payload.middleName || null } : {}),
           ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
           ...(payload.email !== undefined ? { email: payload.email } : {}),
+          ...(payload.photoData !== undefined ? { avatar: payload.photoData } : {}),
         },
       })
     }

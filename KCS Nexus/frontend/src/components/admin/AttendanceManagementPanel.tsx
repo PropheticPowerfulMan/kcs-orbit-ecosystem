@@ -12,6 +12,12 @@ const button='inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-bl
 const normalizeClassPart=(value:unknown)=>String(value??'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
 const formatClassLabel=(gradeValue:unknown,sectionValue:unknown)=>{
  const grade=String(gradeValue??'').trim(),section=String(sectionValue??'').trim()
+ const combined=[grade,section].filter(Boolean).join(' ').replace(/\s+/g,' ').trim()
+ const normalizedCombined=normalizeClassPart(combined)
+ const kindergarten=normalizedCombined.match(/(?:^|\s)(?:kindergarten\s*)?k?([345])(?:\s|$)/)
+ if(kindergarten&&/(?:kindergarten|^k?[345]$)/.test(normalizedCombined))return `K${kindergarten[1]}`
+ const numberedGrade=normalizedCombined.match(/(?:^|\s)grade\s*(1[0-2]|[1-9])(?:\s|$)/)
+ if(numberedGrade)return `Grade ${Number(numberedGrade[1])}`
  if(!grade)return section||'Classe'
  if(!section)return grade
  const normalizedGrade=normalizeClassPart(grade),normalizedSection=normalizeClassPart(section)
