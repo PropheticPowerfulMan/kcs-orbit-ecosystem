@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, BookOpen, Calendar, CheckCircle2, Clock, Mail, Phone, TrendingUp, UserRound } from 'lucide-react'
+import { AlertTriangle, Bell, BookOpen, Calendar, CheckCircle2, Clock, Mail, Phone, TrendingUp, UserRound } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
@@ -22,6 +22,14 @@ type ParentChild = {
   avatar: string | null
   gpa: number | null
   attendance: number | null
+  academicAccess?: {
+    allowed: boolean
+    exempt?: boolean
+    balance?: number | null
+    overdueInstallments?: number | null
+    reason?: string
+    synchronizedAt?: string
+  }
   academicSummary?: {
     average: number | null
     attendanceRate: number | null
@@ -104,6 +112,8 @@ export default function ParentPortal() {
   }, [calendarEvents])
   const unread = notices.filter((notice) => !notice.isRead).length
   const academicSummary = selectedChild?.academicSummary
+  const academicAccess = selectedChild?.academicAccess
+  const academicLocked = academicAccess?.allowed === false
 
   useEffect(() => {
     let active = true
@@ -116,7 +126,7 @@ export default function ParentPortal() {
           studentNumber: String(profile.studentNumber ?? ''),
           name: [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || String(profile.studentNumber ?? 'Student'),
           grade: [profile.grade, profile.section].filter(Boolean).join(' '), avatar: profile.user?.avatar ?? null,
-          gpa: null, attendance: null, academicSummary: profile.academicSummary,
+          gpa: null, attendance: null, academicSummary: profile.academicSummary, academicAccess: profile.academicAccess,
         }))
         setChildren(loaded)
         setSelectedId((current) => current || loaded[0]?.id || '')
@@ -136,7 +146,7 @@ export default function ParentPortal() {
 
   useEffect(() => {
     const profileId = selectedChild?.localProfileId
-    if (!profileId) { setGrades([]); setAssignments([]); setAttendance([]); setTimetable([]); return }
+    if (!profileId || academicLocked) { setGrades([]); setAssignments([]); setAttendance([]); setTimetable([]); return }
     let active = true
     setDetailLoading(true)
     Promise.allSettled([studentsAPI.getGrades(profileId), studentsAPI.getAssignments(profileId), studentsAPI.getAttendance(profileId), studentsAPI.getTimetable(profileId)])
@@ -149,7 +159,7 @@ export default function ParentPortal() {
       })
       .finally(() => active && setDetailLoading(false))
     return () => { active = false }
-  }, [selectedChild?.localProfileId])
+  }, [selectedChild?.localProfileId, academicLocked])
 
   const sendMessage = async () => {
     if (!recipientId || subject.trim().length < 2 || !messageBody.trim()) return
@@ -169,7 +179,18 @@ export default function ParentPortal() {
 
   const title = segment === 'dashboard' ? 'Family Dashboard' : ({ performance: 'Academic Performance', grades: 'Grades & Reports', notifications: 'Notifications', messages: 'School Messages', calendar: 'School Calendar', finance: 'Finance & EduPay', profile: 'Family Profile', settings: 'Account Settings' } as Record<string, string>)[segment] ?? 'Parent Portal'
 
-  const academics = (
+  const financialLockCard = <div className="rounded-3xl border border-amber-300 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm dark:border-amber-700 dark:from-amber-950/45 dark:to-kcs-blue-950">
+    <AlertTriangle className="text-amber-600" size={30}/>
+    <h2 className="mt-3 text-xl font-bold text-kcs-blue-950 dark:text-white">Suivi académique temporairement réservé</h2>
+    <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">{academicAccess?.reason ?? 'Le compte financier familial doit être en ordre pour consulter les informations académiques en temps réel.'}</p>
+    <div className="mt-4 flex flex-wrap gap-3 text-sm">
+      {academicAccess?.balance != null && <span className="rounded-full bg-white px-3 py-1.5 font-bold text-amber-800 dark:bg-kcs-blue-900 dark:text-amber-200">Solde : {new Intl.NumberFormat('fr-CD', { style: 'currency', currency: 'USD' }).format(academicAccess.balance)}</span>}
+      {academicAccess?.overdueInstallments != null && <span className="rounded-full bg-white px-3 py-1.5 font-bold text-amber-800 dark:bg-kcs-blue-900 dark:text-amber-200">{academicAccess.overdueInstallments} échéance(s) en retard</span>}
+    </div>
+    <Link to="/portal/parent/finance" className={button + ' mt-5 inline-flex'}>Voir les détails dans EduPay</Link>
+  </div>
+
+  const academics = academicLocked ? financialLockCard : (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         {[['Verified average', academicSummary?.average != null ? academicSummary.average + '%' : '—'], ['Verified attendance', academicSummary?.attendanceRate != null ? academicSummary.attendanceRate + '%' : 'Aucune donnée'], ['Recorded grades', String(academicSummary?.publishedGrades ?? grades.length)]].map(([label, value]) => <div key={label} className={card}><p className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</p><p className="mt-2 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}
@@ -191,5 +212,5 @@ export default function ParentPortal() {
   : segment === 'profile' ? <div className="grid gap-6 xl:grid-cols-2"><div className={card}><div className="flex items-center gap-4"><div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-kcs-blue-100 text-xl font-bold text-kcs-blue-700">{user?.firstName?.[0]}{user?.lastName?.[0]}</div><div><h2 className="text-2xl font-bold dark:text-white">{`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || 'KCS Parent'}</h2><p className="text-sm text-gray-500">Authorized family account</p></div></div><div className="mt-5 space-y-2 text-sm"><a className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300" href={`mailto:${user?.email}`}><Mail size={16}/>{user?.email}</a>{user?.phone && <a className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300" href={`tel:${user.phone}`}><Phone size={16}/>{user.phone}</a>}</div></div><div className={card}><h2 className="mb-4 font-bold dark:text-white">Children linked to this account</h2><div className="space-y-3">{children.map((child) => <button key={child.id} onClick={() => setSelectedId(child.id)} className="flex w-full items-center justify-between rounded-xl bg-gray-50 p-4 text-left dark:bg-kcs-blue-800/30"><span><strong className="block dark:text-white">{child.name}</strong><span className="text-sm text-gray-500">{child.grade} · {child.studentNumber}</span></span><CheckCircle2 className="text-green-500" size={20}/></button>)}</div></div></div>
   : <div className="space-y-6"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[[BookOpen,'Children',String(children.length)],[TrendingUp,'Verified average',academicSummary?.average != null ? academicSummary.average + '%' : '—'],[CheckCircle2,'Verified attendance',academicSummary?.attendanceRate != null ? academicSummary.attendanceRate + '%' : 'Aucune donnée'],[Bell,'Overdue assignments',String(academicSummary?.overdueAssignments ?? 0)]].map(([Icon,label,value]: any) => <div key={label} className={card}><Icon className="text-kcs-blue-600" size={22}/><p className="mt-3 text-xs font-bold uppercase text-gray-400">{label}</p><p className="mt-1 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><div className="grid gap-6 xl:grid-cols-2"><div className={card}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold dark:text-white">Latest grades</h2><Link to="/portal/parent/grades" className="text-sm font-semibold text-kcs-blue-600">View all</Link></div>{grades.slice(0,5).length === 0 ? empty('No grade has been published yet.') : grades.slice(0,5).map((grade) => <div key={grade.id} className="flex justify-between border-b py-3 text-sm dark:border-kcs-blue-800"><span className="dark:text-white">{grade.course?.name ?? 'Course'}</span><strong className="text-kcs-blue-700 dark:text-kcs-blue-300">{grade.percentage.toFixed(1)}%</strong></div>)}</div><div className={card}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold dark:text-white">Notifications</h2><Link to="/portal/parent/messages" className="text-sm font-semibold text-kcs-blue-600">Messages</Link></div>{notices.slice(0,6).length === 0 ? empty('No notification at this time.') : notices.slice(0,6).map((notice) => <button key={notice.id} onClick={() => void markNotice(notice)} className={`mb-2 w-full rounded-xl p-3 text-left ${notice.isRead ? 'bg-gray-50 dark:bg-kcs-blue-800/20' : 'bg-kcs-blue-50 dark:bg-kcs-blue-800/50'}`}><span className="block text-sm font-semibold dark:text-white">{notice.title}</span><span className="mt-1 block text-xs text-gray-500 dark:text-gray-300">{notice.message}</span></button>)}</div></div><div className={card}><div className="mb-4 flex items-center justify-between"><h2 className="font-bold dark:text-white">Upcoming school events</h2><Link to="/portal/parent/calendar" className="text-sm font-semibold text-kcs-blue-600">Full calendar</Link></div><div className="grid gap-3 md:grid-cols-3">{upcoming.slice(0,3).length === 0 ? empty('No upcoming event.') : upcoming.slice(0,3).map((event) => <div key={event.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><Calendar size={18} className="text-kcs-gold-600"/><p className="mt-2 font-semibold dark:text-white">{event.title}</p><p className="mt-1 text-xs text-gray-500">{displayDate(event.startDate)}</p></div>)}</div></div></div>
 
-  return <div className="parent-portal-shell flex min-h-screen bg-sky-50 dark:bg-kcs-blue-950"><PortalSidebar/><main className="min-w-0 flex-1 p-4 pt-24 sm:p-6 sm:pt-24 lg:p-8"><div className="mx-auto max-w-7xl"><div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-semibold text-kcs-gold-600">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</p><h1 className="mt-1 font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{title}</h1><p className="mt-1 text-sm text-gray-500">{getLocalizedPortalDate(language)}</p></div>{children.length > 0 && <label className="min-w-64 text-xs font-bold uppercase text-gray-400">Active child<select className={`${field} mt-1 normal-case`} value={selectedChild?.id ?? ''} onChange={(event) => setSelectedId(event.target.value)}>{children.map((child) => <option key={child.id} value={child.id}>{child.name} — {child.grade}</option>)}</select></label>}</div>{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>Loading the secure family workspace…</div></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">No child is linked to this parent account</h2><p className="mt-2 text-sm text-gray-500">Please contact the school registry. The portal does not infer or expose unverified family links.</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
+  return <div className="parent-portal-shell flex min-h-screen bg-sky-50 dark:bg-kcs-blue-950"><PortalSidebar/><main className="min-w-0 flex-1 p-4 pt-24 sm:p-6 sm:pt-24 lg:p-8"><div className="mx-auto max-w-7xl"><div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-sm font-semibold text-kcs-gold-600">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</p><h1 className="mt-1 font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{title}</h1><p className="mt-1 text-sm text-gray-500">{getLocalizedPortalDate(language)}</p></div>{children.length > 0 && <label className="min-w-64 text-xs font-bold uppercase text-gray-400">Active child<select className={`${field} mt-1 normal-case`} value={selectedChild?.id ?? ''} onChange={(event) => setSelectedId(event.target.value)}>{children.map((child) => <option key={child.id} value={child.id}>{child.name} — {child.grade}</option>)}</select></label>}</div>{error && <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}{!loading && academicAccess?.exempt && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">Famille test KCS : accès académique permanent autorisé.</p>}{!loading && academicLocked && segment === 'dashboard' ? <div className="mb-6">{financialLockCard}</div> : null}{loading ? <div className={card}><div className="flex items-center gap-3 text-gray-500"><Clock className="animate-spin" size={20}/>Loading the secure family workspace…</div></div> : children.length === 0 ? <div className={card}><UserRound className="text-kcs-blue-500"/><h2 className="mt-3 text-xl font-bold dark:text-white">No child is linked to this parent account</h2><p className="mt-2 text-sm text-gray-500">Please contact the school registry. The portal does not infer or expose unverified family links.</p></div> : content}<div className="mt-8"><SuggestionBox/></div></div></main></div>
 }

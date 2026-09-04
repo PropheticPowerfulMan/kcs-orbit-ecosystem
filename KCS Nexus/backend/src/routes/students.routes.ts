@@ -9,6 +9,8 @@ import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { splitClassName } from '../utils/className.js'
 import { sendSchoolMail } from '../utils/mail.js'
 import { sendSchoolSms } from '../utils/sms.js'
+import { getParentAcademicClearance } from './finance.routes.js'
+import { KCS_ACADEMIC_PASSING_SCORE_PERCENT, meetsKcsAcademicPassingScore } from '@ecosystem/shared-contracts'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -47,6 +49,7 @@ type OrbitPerson = {
   lastName?: string | null
   email?: string | null
   phone?: string | null
+  photoData?: string | null
   accessCode?: string | null
   studentIds?: string[]
   externalIds?: Array<{ appSlug: string; externalId: string }>
@@ -61,6 +64,7 @@ type OrbitStudent = {
   studentNumber?: string | null
   email?: string | null
   phone?: string | null
+  photoData?: string | null
   status?: string | null
   dateOfBirth?: string | null
   accessCode?: string | null
@@ -242,6 +246,7 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
         middleName: student.middleName ?? null,
         lastName: studentName.lastName,
         phone: student.phone ?? null,
+        avatar: student.photoData ?? null,
         role: 'STUDENT',
       },
       parentLinks: parent ? [{
@@ -255,6 +260,7 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
           firstName: parentName.firstName,
           lastName: parentName.lastName,
           phone: parent.phone ?? null,
+          avatar: parent.photoData ?? null,
           role: 'PARENT',
         },
       }] : [],
@@ -429,6 +435,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     select: { id: true, email: true, accessCode: true, orbitUserId: true },
   })
   if (!currentUser) throw new ApiError(404, 'Parent account not found')
+  const academicAccess = await getParentAcademicClearance(currentUser.id)
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
@@ -464,7 +471,24 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
       const attendanceRate = local?.attendanceRecords.length ? Number(((present / local.attendanceRecords.length) * 100).toFixed(1)) : null
       const pendingAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING').length ?? 0
       const overdueAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length ?? 0
-      return { ...profile, localProfileId: local?.id ?? null, gpa: null, attendanceRate: null, academicSummary: { average, attendanceRate, publishedGrades: local?.grades.length ?? 0, attendanceRecords: local?.attendanceRecords.length ?? 0, pendingAssignments, overdueAssignments, enrolledCourses: local?._count.enrollments ?? 0 } }
+      return {
+        ...profile,
+        localProfileId: local?.id ?? null,
+        gpa: null,
+        attendanceRate: null,
+        academicAccess,
+        academicSummary: academicAccess.allowed ? {
+          average,
+          attendanceRate,
+          publishedGrades: local?.grades.length ?? 0,
+          attendanceRecords: local?.attendanceRecords.length ?? 0,
+          pendingAssignments,
+          overdueAssignments,
+          enrolledCourses: local?._count.enrollments ?? 0,
+          passingScore: KCS_ACADEMIC_PASSING_SCORE_PERCENT,
+          promotionEligible: meetsKcsAcademicPassingScore(average),
+        } : null,
+      }
     })
     return success(res, children, 'Parent children loaded from Orbit')
   }
@@ -473,7 +497,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     where: { parentId: currentUser.id },
     include: { student: { include: { user: true, parentLinks: { include: { parent: true } } } } },
   })
-  return success(res, links.map((link) => link.student), 'Parent children loaded')
+  return success(res, links.map((link) => ({ ...link.student, academicAccess })), 'Parent children loaded')
 }))
 
 studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -838,7 +862,7 @@ studentsRouter.patch('/me/assignments/:submissionId/submit', authenticate, requi
   return success(res, updated, 'Assignment submitted')
 }))
 
-async function assertStudentAccess(req: AuthenticatedRequest, studentId: string) {
+async function assertStudentAccess(req: AuthenticatedRequest, studentId: string, options: { requireFinancialClearance?: boolean } = {}) {
   const role = req.user!.role
   if (role === 'admin' || role === 'staff' || role === 'teacher') return
 
@@ -848,7 +872,13 @@ async function assertStudentAccess(req: AuthenticatedRequest, studentId: string)
   })
   if (!student) throw new ApiError(404, 'Student not found')
   if (role === 'student' && student.userId === req.user!.sub) return
-  if (role === 'parent' && student.parentLinks.some((link) => link.parentId === req.user!.sub)) return
+  if (role === 'parent' && student.parentLinks.some((link) => link.parentId === req.user!.sub)) {
+    if (options.requireFinancialClearance) {
+      const clearance = await getParentAcademicClearance(req.user!.sub)
+      if (!clearance.allowed) throw new ApiError(402, clearance.reason)
+    }
+    return
+  }
   throw new ApiError(403, 'You are not authorized to access this student.')
 }
 
@@ -869,7 +899,7 @@ studentsRouter.get('/:id', authenticate, asyncHandler(async (req: AuthenticatedR
 
 studentsRouter.get('/:id/grades', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
-  await assertStudentAccess(req, studentId)
+  await assertStudentAccess(req, studentId, { requireFinancialClearance: true })
   const grades = await prisma.grade.findMany({
     where: { studentId },
     include: { course: true },
@@ -880,7 +910,7 @@ studentsRouter.get('/:id/grades', authenticate, asyncHandler(async (req: Authent
 
 studentsRouter.get('/:id/assignments', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
-  await assertStudentAccess(req, studentId)
+  await assertStudentAccess(req, studentId, { requireFinancialClearance: true })
   const submissions = await prisma.assignmentSubmission.findMany({
     where: { studentId },
     include: { assignment: { include: { course: true } } },
@@ -891,7 +921,7 @@ studentsRouter.get('/:id/assignments', authenticate, asyncHandler(async (req: Au
 
 studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
-  await assertStudentAccess(req, studentId)
+  await assertStudentAccess(req, studentId, { requireFinancialClearance: true })
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
     include: {
@@ -911,14 +941,14 @@ studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req: Auth
 
 studentsRouter.get('/:id/attendance', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
-  await assertStudentAccess(req, studentId)
+  await assertStudentAccess(req, studentId, { requireFinancialClearance: true })
   const records = await prisma.attendanceRecord.findMany({ where: { studentId }, orderBy: { date: 'desc' }, take: 180 })
   return success(res, records, 'Verified attendance history loaded')
 }))
 
 studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
-  await assertStudentAccess(req, studentId)
+  await assertStudentAccess(req, studentId, { requireFinancialClearance: true })
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
     include: { aiRecommendations: true, grades: { orderBy: { createdAt: 'asc' } }, attendanceRecords: true, submissions: true },

@@ -316,6 +316,17 @@ export function composeCanonicalFullName(identity: CanonicalIdentity) {
 type AcademicStudent = { id: string; firstName: string; lastName: string; classId?: string | null; className?: string | null; status?: string | null; averagePercent?: number | null };
 type AcademicClass = { id: string; name: string; gradeLevel?: string | null; suffix?: string | null };
 
+/** Règle académique institutionnelle unique, partagée par toutes les applications KCS. */
+export const KCS_ACADEMIC_PASSING_SCORE_PERCENT = 70 as const;
+export const KCS_TEST_FAMILY_EXEMPTION_NAME = "LOKALA LOMBOTO JONATHAN" as const;
+
+export function meetsKcsAcademicPassingScore(averagePercent?: number | null) {
+  return averagePercent !== null
+    && averagePercent !== undefined
+    && Number.isFinite(averagePercent)
+    && averagePercent >= KCS_ACADEMIC_PASSING_SCORE_PERCENT;
+}
+
 const numericGrade = (value?: string | null) => Number((value || "").match(/\d+/)?.[0] || 0);
 const academicYearFor = (date: Date) => {
   const year = date.getUTCFullYear();
@@ -346,14 +357,15 @@ export function buildAcademicProgressionPlan(input: {
   effectiveDate: Date;
   passThreshold?: number;
 }) {
-  const passThreshold = input.passThreshold ?? 70;
+  // Kept in the input for API compatibility: callers cannot override KCS policy.
+  const passThreshold = KCS_ACADEMIC_PASSING_SCORE_PERCENT;
   const window = getAcademicYearWindow(input.effectiveDate);
   const byStudent = new Map((input.overrides || []).map((override) => [override.studentId, override]));
   const items = input.students.map((student) => {
     const override = byStudent.get(student.id);
     const currentClass = input.classes.find((item) => item.id === student.classId) || input.classes.find((item) => item.name === student.className);
     const currentGrade = numericGrade(currentClass?.gradeLevel || currentClass?.name || student.className);
-    const passed = student.averagePercent !== null && student.averagePercent !== undefined && student.averagePercent >= passThreshold;
+    const passed = meetsKcsAcademicPassingScore(student.averagePercent);
     const defaultDecision = !currentGrade ? "HOLD" : student.averagePercent === null || student.averagePercent === undefined ? "HOLD" : currentGrade >= 12 ? "GRADUATE" : passed ? "PROMOTE" : "REPEAT";
     const decision = override?.decision || defaultDecision;
     const nextClassName = decision === "PROMOTE" ? getNextAcademicClassName(currentClass?.name || student.className || "") : null;

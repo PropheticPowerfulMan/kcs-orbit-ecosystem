@@ -834,6 +834,103 @@ function calculateBehaviorScore(input: { expected: number; paid: number; overdue
   )));
 }
 
+export const TUITION_REMINDER_WEEKDAYS = ["Mon", "Wed", "Fri"] as const;
+export const TUITION_REMINDER_LOOKAHEAD_DAYS = 7;
+export const KCS_TEST_FAMILY_NAME = "LOKALA LOMBOTO JONATHAN";
+
+function kinshasaDateKey(value: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Kinshasa",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(value);
+}
+
+export function isTuitionReminderRunDay(value: Date) {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Kinshasa",
+    weekday: "short"
+  }).format(value);
+  return TUITION_REMINDER_WEEKDAYS.includes(weekday as typeof TUITION_REMINDER_WEEKDAYS[number]);
+}
+
+export function buildTuitionReminderMarker(installmentId: string, value: Date) {
+  return "[TUITION_REMINDER:" + installmentId + ":DATE:" + kinshasaDateKey(value) + "]";
+}
+
+function normalizedFamilyName(value: string) {
+  return value.toUpperCase().trim().split(" ").filter(Boolean).sort().join(" ");
+}
+
+export function isKcsTestFamily(value: string) {
+  return normalizedFamilyName(value) === normalizedFamilyName(KCS_TEST_FAMILY_NAME);
+}
+
+function buildRecurringTuitionReminderMessages(input: {
+  occurrence: number;
+  parentName: string;
+  studentName: string;
+  installmentLabel: string;
+  dueDate: Date;
+  planName: string;
+  balance: number;
+  amountDue: number;
+  amountPaid: number;
+  delayDays: number;
+  marker: string;
+  language?: string | null;
+}) {
+  const language = normalizeMessageLanguage(input.language);
+  const overdue = input.delayDays > 0;
+  const amount = formatAlertCurrency(input.balance);
+  const dueDate = dayjs(input.dueDate).format("DD/MM/YYYY");
+  if (language === "en") {
+    const subject = overdue ? "Tuition payment reminder - overdue balance" : "Tuition payment reminder - upcoming due date";
+    const timing = overdue ? "has been overdue for " + input.delayDays + " day(s)" : "is due on " + dueDate;
+    const emailBody = [
+      "Hello " + input.parentName + ",",
+      "",
+      "Reminder #" + input.occurrence + ": " + input.installmentLabel + " for " + input.studentName + " " + timing + ".",
+      "Tuition plan: " + input.planName,
+      "Due date: " + dueDate,
+      "Expected: " + formatAlertCurrency(input.amountDue),
+      "Paid: " + formatAlertCurrency(input.amountPaid),
+      "Balance: " + amount,
+      "",
+      "Reminders are sent Monday, Wednesday and Friday until the account is settled.",
+      "EduPay reference: " + input.marker
+    ].join(String.fromCharCode(10));
+    return {
+      subject,
+      emailBody,
+      smsBody: "EduPay reminder #" + input.occurrence + ": " + input.installmentLabel + ", " + input.studentName + ". Balance " + amount + ", due " + dueDate + ". " + input.marker,
+      dashboardBody: "Reminder #" + input.occurrence + ": " + input.installmentLabel + ". Balance " + amount + ", due " + dueDate + "."
+    };
+  }
+  const subject = overdue ? "Rappel frais scolaires - solde en retard" : "Rappel frais scolaires - echeance proche";
+  const timing = overdue ? "est en retard de " + input.delayDays + " jour(s)" : "arrive a echeance le " + dueDate;
+  const emailBody = [
+    "Bonjour " + input.parentName + ",",
+    "",
+    "Rappel n°" + input.occurrence + " : echeance " + input.installmentLabel + " pour " + input.studentName + " " + timing + ".",
+    "Plan : " + input.planName,
+    "Date limite : " + dueDate,
+    "Montant attendu : " + formatAlertCurrency(input.amountDue),
+    "Deja paye : " + formatAlertCurrency(input.amountPaid),
+    "Solde : " + amount,
+    "",
+    "Les rappels sont envoyes lundi, mercredi et vendredi jusqu a regularisation complete.",
+    "Reference EduPay : " + input.marker
+  ].join(String.fromCharCode(10));
+  return {
+    subject,
+    emailBody,
+    smsBody: "EduPay rappel n°" + input.occurrence + " : " + input.installmentLabel + ", " + input.studentName + ". Solde " + amount + ", limite " + dueDate + ". " + input.marker,
+    dashboardBody: "Rappel n°" + input.occurrence + " : " + input.installmentLabel + ". Solde " + amount + ", limite " + dueDate + "."
+  };
+}
+
 function buildDerivedPlanReduction(input: {
   parentId: string;
   studentId: string;
@@ -969,15 +1066,19 @@ export async function runOverdueTuitionReminderSweep(input: {
   schoolId: string;
   parentId?: string;
   academicYearName?: string;
+  referenceDate?: Date;
+  force?: boolean;
 }) {
   const { academicYear } = await getTargetAcademicYear(input.schoolId, input.academicYearName);
-  const now = new Date();
+  const now = input.referenceDate ?? new Date();
+  const scheduledToday = isTuitionReminderRunDay(now);
+  const dueDateLimit = dayjs(now).add(TUITION_REMINDER_LOOKAHEAD_DAYS, "day").endOf("day").toDate();
   const installments = await prisma.paymentInstallment.findMany({
     where: {
       schoolId: input.schoolId,
       academicYearId: academicYear.id,
       parentId: input.parentId,
-      dueDate: { lt: now },
+      dueDate: { lte: dueDateLimit },
       status: { notIn: [InstallmentStatus.PAID, InstallmentStatus.WAIVED, InstallmentStatus.CANCELLED] }
     },
     include: {
@@ -988,28 +1089,40 @@ export async function runOverdueTuitionReminderSweep(input: {
       financialProfile: true,
       sourceDebts: true
     },
-    orderBy: [{ dueDate: "asc" }, { sequence: "asc" }]
+    orderBy: [{ dueDate: "asc" }, { sequence: "asc" }],
+    take: input.force ? undefined : 30
   });
 
   const result = {
     scannedInstallments: installments.length,
     overdueInstallments: 0,
+    upcomingInstallments: 0,
+    exemptFamilies: 0,
+    skippedOutsideSchedule: !scheduledToday && !input.force,
     debtsUpdated: 0,
     parentEmails: 0,
     parentSms: 0,
     financeAlerts: 0
   };
 
+  if (!scheduledToday && !input.force) return result;
+
   for (const installment of installments) {
     if (!installment.parentId || !installment.parent) continue;
+    if (isKcsTestFamily(installment.parent.fullName)) {
+      result.exemptFamilies += 1;
+      continue;
+    }
 
     const amountDue = roundCurrency(Number(installment.amountDue || 0));
     const amountPaid = roundCurrency(Number(installment.amountPaid || 0));
     const balance = roundCurrency(Math.max(amountDue - amountPaid, 0));
     if (balance <= 0) continue;
 
-    result.overdueInstallments += 1;
-    if (installment.status !== InstallmentStatus.OVERDUE) {
+    const isOverdue = installment.dueDate.getTime() < now.getTime();
+    if (isOverdue) result.overdueInstallments += 1;
+    else result.upcomingInstallments += 1;
+    if (isOverdue && installment.status !== InstallmentStatus.OVERDUE) {
       await prisma.paymentInstallment.update({
         where: { id: installment.id },
         data: { status: InstallmentStatus.OVERDUE }
@@ -1018,7 +1131,7 @@ export async function runOverdueTuitionReminderSweep(input: {
 
     const existingDebt = installment.sourceDebts.find((debt) => debt.sourceInstallmentId === installment.id);
     const debtStatus = amountPaid > 0 ? DebtStatus.PARTIALLY_PAID : DebtStatus.OPEN;
-    const debt = existingDebt
+    const debt = !isOverdue ? null : existingDebt
       ? await prisma.debt.update({
         where: { id: existingDebt.id },
         data: {
@@ -1054,9 +1167,113 @@ export async function runOverdueTuitionReminderSweep(input: {
           }
         }
       });
-    result.debtsUpdated += 1;
+    if (debt) result.debtsUpdated += 1;
 
     const delayDays = Math.max(dayjs(now).startOf("day").diff(dayjs(installment.dueDate).startOf("day"), "day"), 0);
+    const recurringLogs = await prisma.notificationLog.findMany({
+      where: {
+        schoolId: input.schoolId,
+        parentId: installment.parentId,
+        content: { contains: "[TUITION_REMINDER:" + installment.id + ":DATE:" }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    const marker = buildTuitionReminderMarker(installment.id, now);
+    if (recurringLogs.some((log) => log.content.includes(marker))) continue;
+
+    const occurrence = recurringLogs.filter((log) => log.channel === NotificationChannel.DASHBOARD).length + 1;
+    const messages = buildRecurringTuitionReminderMessages({
+      occurrence,
+      parentName: installment.parent.fullName,
+      studentName: installment.student?.fullName ?? "Compte parent",
+      installmentLabel: installment.label,
+      dueDate: installment.dueDate,
+      planName: installment.tuitionPlan?.name ?? installment.financialAgreement?.title ?? PAYMENT_OPTION_LABELS[PaymentOptionType.CUSTOM],
+      balance,
+      amountDue,
+      amountPaid,
+      delayDays,
+      marker,
+      language: installment.parent.preferredLanguage
+    });
+    const notificationType = isOverdue ? NotificationType.OVERDUE_INSTALLMENT : NotificationType.REMINDER;
+
+    if (installment.parent.email) {
+      const status = await sendEmail({ to: installment.parent.email, subject: messages.subject, text: messages.emailBody });
+      await prisma.notificationLog.create({
+        data: {
+          schoolId: input.schoolId,
+          parentId: installment.parentId,
+          type: notificationType,
+          language: normalizeMessageLanguage(installment.parent.preferredLanguage),
+          channel: NotificationChannel.EMAIL,
+          content: marker + " " + messages.emailBody,
+          status
+        }
+      });
+      result.parentEmails += 1;
+    }
+
+    if (installment.parent.phone) {
+      const status = await sendSms({ to: installment.parent.phone, text: messages.smsBody });
+      await prisma.notificationLog.create({
+        data: {
+          schoolId: input.schoolId,
+          parentId: installment.parentId,
+          type: notificationType,
+          language: normalizeMessageLanguage(installment.parent.preferredLanguage),
+          channel: NotificationChannel.SMS,
+          content: marker + " " + messages.smsBody,
+          status
+        }
+      });
+      result.parentSms += 1;
+    }
+
+    await prisma.notificationLog.create({
+      data: {
+        schoolId: input.schoolId,
+        parentId: installment.parentId,
+        type: notificationType,
+        language: normalizeMessageLanguage(installment.parent.preferredLanguage),
+        channel: NotificationChannel.DASHBOARD,
+        content: marker + " " + messages.dashboardBody,
+        status: "OPEN"
+      }
+    });
+
+    const existingRecurringAlert = await prisma.financialAlert.findFirst({
+      where: {
+        schoolId: input.schoolId,
+        parentId: installment.parentId,
+        installmentId: installment.id,
+        message: { contains: marker }
+      }
+    });
+    if (!existingRecurringAlert) {
+      await prisma.financialAlert.create({
+        data: {
+          schoolId: input.schoolId,
+          parentId: installment.parentId,
+          academicYearId: academicYear.id,
+          financialProfileId: installment.financialProfileId,
+          installmentId: installment.id,
+          debtId: debt?.id,
+          type: isOverdue ? FinancialAlertType.OVERDUE_INSTALLMENT : FinancialAlertType.MISSING_PAYMENT,
+          title: isOverdue ? "Rappel frais scolaires en retard" : "Echeance de frais scolaires proche",
+          message: marker + " " + messages.dashboardBody,
+          severity: isOverdue ? "HIGH" : "MEDIUM",
+          status: "OPEN",
+          channel: NotificationChannel.DASHBOARD,
+          supportedChannels: [NotificationChannel.DASHBOARD, NotificationChannel.EMAIL, NotificationChannel.SMS]
+        }
+      });
+      result.financeAlerts += 1;
+    }
+    continue;
+
+    /* Legacy seven-stage reminder flow superseded by the recurring KCS policy above.
+    if (!installment.parent || !installment.parentId) continue;
     const logs = await prisma.notificationLog.findMany({
       where: {
         schoolId: input.schoolId,
@@ -1151,7 +1368,7 @@ export async function runOverdueTuitionReminderSweep(input: {
             academicYearId: academicYear.id,
             financialProfileId: installment.financialProfileId,
             installmentId: installment.id,
-            debtId: debt.id,
+            debtId: debt!.id,
             type: FinancialAlertType.OVERDUE_INSTALLMENT,
             title: `Avertissement ${stageConfig.stage}/7 - retard de scolarité`,
             message: messages.dashboardBody,
@@ -1166,9 +1383,42 @@ export async function runOverdueTuitionReminderSweep(input: {
 
       break;
     }
+    */
   }
 
   return result;
+}
+
+export async function runAutomaticTuitionReminderSweeps(referenceDate = new Date()) {
+  if (isTuitionReminderRunDay(referenceDate) === false) {
+    return { schools: 0, ran: false, reason: "OUTSIDE_MONDAY_WEDNESDAY_FRIDAY_SCHEDULE" };
+  }
+  const schools = await prisma.school.findMany({ select: { id: true } });
+  const results = [];
+  for (const school of schools) {
+    results.push(await runOverdueTuitionReminderSweep({ schoolId: school.id, referenceDate }));
+  }
+  return { schools: schools.length, ran: true, results };
+}
+
+export function startAutomaticTuitionReminderScheduler(intervalMs = 60 * 60 * 1000) {
+  let running = false;
+  const run = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const result = await runAutomaticTuitionReminderSweeps();
+      if (result.ran) console.log("[EDUPAY_REMINDERS] automatic sweep completed", { schools: result.schools });
+    } catch (error) {
+      console.error("[EDUPAY_REMINDERS] automatic sweep failed", error);
+    } finally {
+      running = false;
+    }
+  };
+  void run();
+  const timer = setInterval(() => void run(), intervalMs);
+  timer.unref();
+  return () => clearInterval(timer);
 }
 
 export async function getParentFinancialSnapshot(input: { schoolId: string; parentId: string; academicYearName?: string; refreshOverdue?: boolean }) {

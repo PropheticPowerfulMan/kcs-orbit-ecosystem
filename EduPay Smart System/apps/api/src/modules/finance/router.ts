@@ -143,7 +143,8 @@ financeRouter.post("/overdue-reminders/run", authorize("ADMIN", "ACCOUNTANT"), a
     const result = await runOverdueTuitionReminderSweep({
       schoolId: req.user!.schoolId,
       parentId: payload.parentId,
-      academicYearName: payload.academicYearName
+      academicYearName: payload.academicYearName,
+      force: true
     });
     return res.json(result);
   } catch (error) {

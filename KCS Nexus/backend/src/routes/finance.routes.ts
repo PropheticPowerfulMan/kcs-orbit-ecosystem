@@ -3,6 +3,7 @@ import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { KCS_TEST_FAMILY_EXEMPTION_NAME } from '@ecosystem/shared-contracts'
 
 export const financeRouter = Router()
 
@@ -46,6 +47,76 @@ const fetchEduPay = async (path: string, serviceToken: string) => {
     signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
   })
   return response
+}
+
+const normalizeNameTokens = (value: unknown) => String(value ?? '').toLocaleUpperCase().trim().split(' ').filter(Boolean).sort().join(' ')
+
+type ParentAcademicClearance = {
+  allowed: boolean
+  exempt: boolean
+  balance: number | null
+  overdueInstallments: number | null
+  reason: string
+  source: string
+  synchronizedAt: string
+}
+const parentAcademicClearanceCache = new Map<string, { expiresAt: number; value: ParentAcademicClearance }>()
+const rememberParentAcademicClearance = (parentUserId: string, value: ParentAcademicClearance) => {
+  parentAcademicClearanceCache.set(parentUserId, { expiresAt: Date.now() + 60_000, value })
+  return value
+}
+
+export const getParentAcademicClearance = async (parentUserId: string) => {
+  const cached = parentAcademicClearanceCache.get(parentUserId)
+  if (cached && cached.expiresAt > Date.now()) return cached.value
+  const parent = await prisma.user.findUnique({
+    where: { id: parentUserId },
+    select: {
+      firstName: true, middleName: true, lastName: true, email: true, phone: true, orbitUserId: true,
+      parentLinks: { select: { student: { select: { studentNumber: true, user: { select: { firstName: true, middleName: true, lastName: true, orbitUserId: true } } } } } },
+    },
+  })
+  if (!parent) throw new ApiError(404, 'Parent account not found.')
+  const parentName = [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ')
+  if (normalizeNameTokens(parentName) === normalizeNameTokens(KCS_TEST_FAMILY_EXEMPTION_NAME)) {
+    return rememberParentAcademicClearance(parentUserId, { allowed: true, exempt: true, balance: 0, overdueInstallments: 0, reason: 'Permanent KCS test-family exemption.', source: 'KCS_POLICY', synchronizedAt: new Date().toISOString() })
+  }
+  if (!env.EDUPAY_API_URL) return rememberParentAcademicClearance(parentUserId, { allowed: false, exempt: false, balance: null, overdueInstallments: null, reason: 'EduPay finance synchronization is unavailable.', source: 'EduPay', synchronizedAt: new Date().toISOString() })
+
+  const serviceToken = await getEduPayServiceToken()
+  const directoryResponse = await fetchEduPay('/api/parents/options', serviceToken)
+  if (!directoryResponse.ok) throw new ApiError(502, 'EduPay family directory synchronization failed.')
+  const directoryPayload = await directoryResponse.json() as unknown
+  const directory = Array.isArray(directoryPayload) ? directoryPayload as EduPayParentOption[] : []
+  const parentEmail = normalizeIdentity(parent.email)
+  const parentPhone = normalizePhone(parent.phone)
+  const parentOrbitId = normalizeIdentity(parent.orbitUserId)
+  const studentIdentifiers = new Set(parent.parentLinks.flatMap(({ student }) => [normalizeIdentity(student.studentNumber), normalizeIdentity(student.user.orbitUserId)]).filter(Boolean))
+  const ranked = directory.map((candidate) => {
+    let score = 0
+    let strongMatches = 0
+    if (parentOrbitId && normalizeIdentity(candidate.orbitId) === parentOrbitId) { score += 1000; strongMatches += 1 }
+    if (parentEmail && normalizeIdentity(candidate.email) === parentEmail) { score += 400; strongMatches += 1 }
+    if (parentPhone && normalizePhone(candidate.phone) === parentPhone) { score += 300; strongMatches += 1 }
+    for (const student of candidate.students ?? []) {
+      if ([student.orbitId, student.externalStudentId].some((value) => studentIdentifiers.has(normalizeIdentity(value)))) { score += 500; strongMatches += 1 }
+    }
+    return { candidate, score, strongMatches }
+  }).filter((entry) => entry.strongMatches > 0).sort((left, right) => right.score - left.score)
+  if (!ranked.length || (ranked.length > 1 && ranked[0].score === ranked[1].score)) {
+    return rememberParentAcademicClearance(parentUserId, { allowed: false, exempt: false, balance: null, overdueInstallments: null, reason: 'No unique securely matching EduPay family account was found.', source: 'EduPay', synchronizedAt: new Date().toISOString() })
+  }
+  const profileResponse = await fetchEduPay('/api/finance/parents/' + encodeURIComponent(ranked[0].candidate.id) + '/profile', serviceToken)
+  if (!profileResponse.ok) throw new ApiError(502, 'EduPay family finance synchronization failed.')
+  const snapshot = await profileResponse.json() as { profile?: Record<string, unknown> }
+  const balance = Number(snapshot.profile?.totalDebt ?? 0)
+  const overdueInstallments = Number(snapshot.profile?.overdueInstallments ?? 0)
+  const allowed = balance <= 0 && overdueInstallments <= 0
+  return rememberParentAcademicClearance(parentUserId, {
+    allowed, exempt: false, balance, overdueInstallments,
+    reason: allowed ? 'Financial account is current.' : 'Academic progress is held until all school fees are settled.',
+    source: 'EduPay', synchronizedAt: new Date().toISOString(),
+  })
 }
 
 financeRouter.use(authenticate)

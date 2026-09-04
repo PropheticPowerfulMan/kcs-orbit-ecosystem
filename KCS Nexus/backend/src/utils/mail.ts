@@ -13,8 +13,8 @@ type MailPayload = {
 }
 
 export type MailResult =
-  | { sent: true }
-  | { sent: false; reason: 'SMTP_NOT_CONFIGURED' | 'SMTP_SEND_FAILED' }
+  | { sent: true; provider: 'smtp' }
+  | { sent: false; reason: 'SMTP_NOT_CONFIGURED' | 'SMTP_SEND_FAILED'; providerDetail?: string }
 
 const LOGO_URL = 'https://kinshasachristianschool.org/icons/nexus-192.png'
 const SCHOOL_URL = 'https://kinshasachristianschool.org/'
@@ -22,10 +22,16 @@ const hasSmtpConfig = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS)
 
 const transporter = hasSmtpConfig
   ? nodemailer.createTransport({
+      pool: true,
+      maxConnections: 1,
+      maxMessages: 100,
       host: env.SMTP_HOST,
       port: env.SMTP_PORT ?? 587,
       secure: env.SMTP_SECURE ?? false,
       auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+      connectionTimeout: 15_000,
+      greetingTimeout: 20_000,
+      socketTimeout: 45_000,
     })
   : null
 
@@ -51,10 +57,10 @@ export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo, subject, 
   const normalizedHtml = html?.normalize('NFC')
   try {
     await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? brandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
-    return { sent: true as const }
+    return { sent: true as const, provider: 'smtp' as const }
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown SMTP error'
     console.error('[mail] Delivery failed', { to, detail })
-    return { sent: false, reason: 'SMTP_SEND_FAILED' as const }
+    return { sent: false, reason: 'SMTP_SEND_FAILED' as const, providerDetail: detail.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+/gi, '[adresse masquée]') }
   }
 }

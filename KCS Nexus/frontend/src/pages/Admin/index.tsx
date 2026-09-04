@@ -61,6 +61,18 @@ const SCHOOL_NAME = 'Kinshasa Christian School'
 
 const SCHOOL_SEAL_SRC = getAssetUrl('images/kcs.jpg')
 
+const ProfilePhoto = ({ src, name, size = 'large' }: { src?: string | null; name: string; size?: 'small' | 'large' }) => {
+  const initials = name.split(/s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'KCS'
+  const sizeClass = size === 'small' ? 'h-14 w-14 text-sm' : 'h-32 w-32 text-2xl'
+  return (
+    <div className={`${sizeClass} shrink-0 overflow-hidden rounded-2xl border-4 border-white bg-gradient-to-br from-kcs-blue-700 to-kcs-blue-950 shadow-lg ring-1 ring-kcs-blue-200 dark:border-kcs-blue-900 dark:ring-kcs-blue-700`} aria-label={`Photo de ${name}`}>
+      {src
+        ? <img src={src} alt={`Photo de ${name}`} className="h-full w-full object-cover" />
+        : <div className="flex h-full w-full items-center justify-center font-display font-black tracking-wide text-white" title="Photo non renseignée">{initials}</div>}
+    </div>
+  )
+}
+
 const liveEventControls: any[] = []
 
 const adminRosterSeed: any[] = []
@@ -85,6 +97,7 @@ type AdminStudentRecord = {
   isEditable?: boolean
   isDeletable?: boolean
   dateOfBirth?: string | null
+  photoData?: string | null
 }
 
 type AdminParentRecord = {
@@ -100,6 +113,7 @@ type AdminParentRecord = {
   syncSource: 'local' | 'orbit' | 'mixed'
   status: string
   identifierType: 'orbitId' | 'externalId'
+  photoData?: string | null
 }
 
 type SharedDirectoryParent = {
@@ -109,6 +123,7 @@ type SharedDirectoryParent = {
   email?: string | null
   phone?: string | null
   physicalAddress?: string | null
+  photoData?: string | null
   studentIds?: string[]
   externalIds?: Array<{ appSlug?: string; externalId?: string }>
 }
@@ -340,6 +355,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
     dateOfBirth: profile.dateOfBirth ?? null,
+    photoData: profile.user?.avatar ?? profile.photoData ?? null,
     grade: normalizeSchoolLevel(profile.grade) ?? profile.grade,
     section: profile.section ?? '',
     parent: parent ? [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') : 'Parent record pending',
@@ -618,6 +634,7 @@ const buildAdminParentRecords = (roster: AdminStudentRecord[]): AdminParentRecor
       syncSource,
       status: needsAction ? 'Suivi requis' : 'Actif',
       identifierType,
+      photoData: undefined,
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -653,6 +670,7 @@ const buildAdminParentRecordsFromDirectory = (
       syncSource: (directory.source === 'orbit' ? 'orbit' : 'local') as AdminParentRecord['syncSource'],
       status: linkedStudents.length === 0 ? 'Sans enfant rattache' : needsAction ? 'Suivi requis' : 'Actif',
       identifierType,
+      photoData: parent.photoData ?? null,
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -1982,6 +2000,7 @@ const AdminSectionView = ({
 
               <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
                 <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
+                  <ProfilePhoto src={selectedParent.photoData} name={selectedParent.name} />
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Responsable</p>
                   <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedParent.name}</h4>
                   <div className="mt-5 space-y-3">
@@ -2005,9 +2024,12 @@ const AdminSectionView = ({
                   {selectedParent.students.map((student) => (
                     <div key={student.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
+                        <div className="flex items-start gap-3">
+                          <ProfilePhoto src={student.photoData} name={student.name} size="small" />
+                          <div>
                           <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
                           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{student.studentNumber ?? 'ID non renseigne'} - {formatClassName(student.grade, student.section) || 'Non assignee'}</p>
+                          </div>
                         </div>
                         <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span>
                       </div>
@@ -2423,6 +2445,7 @@ const AdminSectionView = ({
                 </div>
 
                 <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
+                  <ProfilePhoto src={viewingStudent.photoData} name={viewingStudent.name} />
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Résumé</p>

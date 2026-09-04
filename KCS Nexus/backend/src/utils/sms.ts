@@ -1,8 +1,8 @@
 import { env } from '../config/env.js'
 
 export type SmsResult =
-  | { sent: true }
-  | { sent: false; reason: 'PHONE_MISSING' | 'SMS_NOT_CONFIGURED' | 'SMS_SEND_FAILED' }
+  | { sent: true; provider: 'africastalking' | 'generic' }
+  | { sent: false; reason: 'PHONE_MISSING' | 'SMS_NOT_CONFIGURED' | 'SMS_INSUFFICIENT_BALANCE' | 'SMS_INVALID_PHONE' | 'SMS_SEND_FAILED'; providerDetail?: string }
 
 export async function sendSchoolSms(to: string | null | undefined, message: string, options: { brand?: boolean } = {}): Promise<SmsResult> {
   const phone = (to || '').replace(/[\s()-]/g, '')
@@ -51,17 +51,22 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
 
     let submission = await submit(Boolean(sender))
     let result = providerResult(submission.response, submission.responseText)
-    if (result.accepted) return { sent: true }
+    if (result.accepted) return { sent: true, provider: isAfricasTalking ? 'africastalking' : 'generic' }
 
     const senderRejected = Boolean(sender) && /sender|from|short ?code|not allowed|not registered|invalid/i.test(submission.responseText)
     if (isAfricasTalking && senderRejected) {
       console.warn('[sms] Sender ID rejected; retrying without Sender ID', { providerStatus: result.summary })
       submission = await submit(false)
       result = providerResult(submission.response, submission.responseText)
-      if (result.accepted) return { sent: true }
+      if (result.accepted) return { sent: true, provider: 'africastalking' }
     }
     console.error('[sms] Provider rejected delivery', { providerStatus: result.summary })
-    return { sent: false, reason: 'SMS_SEND_FAILED' }
+    const reason = /405:InsufficientBalance/i.test(result.summary)
+      ? 'SMS_INSUFFICIENT_BALANCE' as const
+      : /403:InvalidPhoneNumber/i.test(result.summary)
+        ? 'SMS_INVALID_PHONE' as const
+        : 'SMS_SEND_FAILED' as const
+    return { sent: false, reason, providerDetail: result.summary }
 
   } catch (error) {
     console.error('[sms] Delivery failed', error)

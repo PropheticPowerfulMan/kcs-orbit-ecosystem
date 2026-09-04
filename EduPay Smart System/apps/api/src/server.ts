@@ -20,6 +20,7 @@ import { sharedDirectoryRouter } from "./modules/shared-directory/router";
 import { startOrbitOutboxWorker } from "./integrations/orbit";
 import { prisma } from "./prisma";
 import { createCorsOptions } from "./cors";
+import { startAutomaticTuitionReminderScheduler } from "./modules/finance/service";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -108,6 +109,7 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 });
 
 const stopOrbitOutboxWorker = startOrbitOutboxWorker();
+const stopTuitionReminderScheduler = startAutomaticTuitionReminderScheduler();
 
 const server = app.listen(Number(process.env.PORT ?? env.API_PORT), "0.0.0.0", () => {
   console.log(`API running on port ${process.env.PORT ?? env.API_PORT}`);
@@ -116,6 +118,7 @@ const server = app.listen(Number(process.env.PORT ?? env.API_PORT), "0.0.0.0", (
 function shutdown(signal: string) {
   console.log(`Received ${signal}, shutting down EduPay API`);
   stopOrbitOutboxWorker();
+  stopTuitionReminderScheduler();
   server.close(() => {
     process.exit(0);
   });

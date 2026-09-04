@@ -237,17 +237,27 @@ export function getMessagingConfigStatus(): MessagingConfigStatus {
   };
 }
 
+let pooledSmtpTransport: ReturnType<typeof nodemailer.createTransport> | null = null;
+
 function smtpTransport() {
+  if (pooledSmtpTransport) return pooledSmtpTransport;
   const port = Number(env.SMTP_PORT);
-  return nodemailer.createTransport({
+  pooledSmtpTransport = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 100,
     host: env.SMTP_HOST,
     port,
     secure: port === 465,
     auth: {
       user: env.SMTP_USER,
       pass: env.SMTP_PASS
-    }
+    },
+    connectionTimeout: 15_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 45_000
   });
+  return pooledSmtpTransport;
 }
 
 function normalizePhoneNumber(phone: string) {

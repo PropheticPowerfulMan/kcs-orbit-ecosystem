@@ -2,7 +2,8 @@ import { AppSlug, Prisma } from "@prisma/client";
 import {
   AcademicProgressionOverride,
   buildAcademicProgressionPlan,
-  getAcademicYearWindow
+  getAcademicYearWindow,
+  KCS_ACADEMIC_PASSING_SCORE_PERCENT
 } from "@ecosystem/shared-contracts";
 import { prisma } from "../db";
 
@@ -170,7 +171,7 @@ export async function executeAcademicYearRollover(input: AcademicYearRolloverInp
           nextAcademicYear: plan.nextAcademicYear,
           effectiveDate: plan.effectiveDate,
           counts: plan.counts,
-          passThreshold: input.passThreshold ?? 70,
+          passThreshold: KCS_ACADEMIC_PASSING_SCORE_PERCENT,
           force: Boolean(input.force),
           warningCount: plan.warnings.length
         } as never

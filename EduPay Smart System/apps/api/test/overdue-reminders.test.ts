@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { canSendOverdueStage, OVERDUE_REMINDER_STAGES } from "../src/modules/finance/service";
+import {
+  buildTuitionReminderMarker,
+  canSendOverdueStage,
+  isKcsTestFamily,
+  isTuitionReminderRunDay,
+  OVERDUE_REMINDER_STAGES,
+  TUITION_REMINDER_WEEKDAYS
+} from "../src/modules/finance/service";
 
 describe("overdue tuition reminder cadence", () => {
   it("defines exactly seven daily warning stages in one week", () => {
@@ -29,5 +36,26 @@ describe("overdue tuition reminder cadence", () => {
     })).toBe(false);
 
     vi.useRealTimers();
+  });
+});
+
+describe("permanent KCS tuition reminder policy", () => {
+  it("runs exactly Monday, Wednesday and Friday in Kinshasa", () => {
+    expect(TUITION_REMINDER_WEEKDAYS).toEqual(["Mon", "Wed", "Fri"]);
+    expect(isTuitionReminderRunDay(new Date("2026-09-07T10:00:00.000Z"))).toBe(true);
+    expect(isTuitionReminderRunDay(new Date("2026-09-09T10:00:00.000Z"))).toBe(true);
+    expect(isTuitionReminderRunDay(new Date("2026-09-11T10:00:00.000Z"))).toBe(true);
+    expect(isTuitionReminderRunDay(new Date("2026-09-08T10:00:00.000Z"))).toBe(false);
+  });
+
+  it("deduplicates a reminder by installment and Kinshasa calendar date", () => {
+    expect(buildTuitionReminderMarker("inst-1", new Date("2026-09-07T10:00:00.000Z")))
+      .toBe("[TUITION_REMINDER:inst-1:DATE:2026-09-07]");
+  });
+
+  it("protects the permanent test-family exemption regardless of name order", () => {
+    expect(isKcsTestFamily("LOKALA LOMBOTO Jonathan")).toBe(true);
+    expect(isKcsTestFamily("Jonathan Lokala Lomboto")).toBe(true);
+    expect(isKcsTestFamily("Other Parent")).toBe(false);
   });
 });
