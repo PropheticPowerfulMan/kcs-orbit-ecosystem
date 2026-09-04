@@ -34,9 +34,17 @@ class TeacherListCreateView(generics.ListCreateAPIView):
             return TeacherCreateSerializer
         return TeacherSerializer
 
-    def perform_create(self, serializer):
-        teacher=serializer.save()
-        finalize_teacher_creation(teacher)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        teacher = serializer.save()
+        delivery = finalize_teacher_creation(teacher)
+        response_data = serializer.to_representation(teacher)
+        response_data['temporaryCredentials']['delivery'] = [
+            {'channel': item.channel, 'status': item.status, 'detail': item.detail}
+            for item in delivery
+        ]
+        return Response(response_data, status=status.HTTP_201_CREATED, headers=self.get_success_headers(response_data))
 
 
 class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):

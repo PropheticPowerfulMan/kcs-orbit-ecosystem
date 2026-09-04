@@ -226,6 +226,16 @@ export const teacherWorkspaceAPI = {
   deleteAssignment: (assignmentId: string) => api.delete(`/teachers/me/assignments/${assignmentId}`),
 }
 
+export const attendanceAPI = {
+  teacherHomeroom: (date: string) => api.get('/attendance/teacher/homeroom', { params: { date } }),
+  saveTeacherHomeroom: (data: object) => api.post('/attendance/teacher/homeroom', data),
+  students: (date: string) => api.get('/attendance/students', { params: { date } }),
+  saveStudents: (data: object) => api.post('/attendance/students', data),
+  staff: (date?: string) => api.get('/attendance/staff', { params: date ? { date } : undefined }),
+  saveStaff: (data: object) => api.post('/attendance/staff', data),
+  mine: () => api.get('/attendance/staff/me'),
+}
+
 export const suggestionsAPI = {
   submit: (data: { category: string; message: string }) => api.post('/suggestions', data),
   getAll: () => api.get('/suggestions'),

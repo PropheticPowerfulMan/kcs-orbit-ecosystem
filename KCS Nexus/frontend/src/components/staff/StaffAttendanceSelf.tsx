@@ -1,0 +1,10 @@
+import { useEffect, useState } from 'react'
+import { ClipboardCheck } from 'lucide-react'
+import { attendanceAPI } from '@/services/api'
+const card='rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
+export default function StaffAttendanceSelf(){
+ const [data,setData]=useState<any>({records:[],summary:{}}),[error,setError]=useState('')
+ useEffect(()=>{attendanceAPI.mine().then(response=>setData(response.data.data)).catch(reason=>setError(reason?.response?.data?.message??'Le dossier de présence est indisponible.'))},[])
+ const summary=data.summary??{}
+ return <div className="space-y-5"><section className={card}><div className="flex items-center gap-3"><ClipboardCheck className="text-kcs-blue-600"/><div><h2 className="text-xl font-bold dark:text-white">Ma présence</h2><p className="text-sm text-gray-500">Historique officiel enregistré par le Super Administrateur.</p></div></div>{error&&<p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}<div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">{[['Présent',summary.present??0],['Absent',summary.absent??0],['Retard',summary.late??0],['Taux',summary.attendanceRate==null?'—':summary.attendanceRate+'%']].map(([label,value])=><div key={String(label)} className="rounded-xl bg-sky-50 p-4 dark:bg-kcs-blue-800/30"><b className="block text-2xl dark:text-white">{value}</b><span className="text-xs text-gray-500">{label}</span></div>)}</div></section><section className={card}><h3 className="mb-4 font-bold dark:text-white">Historique détaillé</h3>{data.records.length===0?<p className="text-sm text-gray-500">Aucune présence n’a encore été enregistrée.</p>:<div className="space-y-2">{data.records.map((record:any)=><div key={record.id} className="grid gap-2 rounded-xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-800/30 sm:grid-cols-4"><b className="dark:text-white">{new Date(record.date).toLocaleDateString()}</b><span>{record.status}</span><span>{record.arrivalTime||'—'}</span><span>{record.note||'—'}</span></div>)}</div>}</section></div>
+}

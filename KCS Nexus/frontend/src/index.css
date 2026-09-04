@@ -400,6 +400,31 @@ html:not(.dark) .gradebook-focus-window .input-kcs {
            transition-all duration-300 hover:shadow-kcs-lg hover:-translate-y-0.5 active:translate-y-0;
   }
   
+
+/* Parent portal daylight palette: calm blue-white surfaces without glare. */
+html:not(.dark) .parent-portal-shell {
+  background: linear-gradient(145deg, #edf7ff 0%, #f4f9fd 52%, #eaf4fb 100%);
+}
+
+html:not(.dark) .parent-portal-shell main .bg-white {
+  background-color: #f8fcff !important;
+  border-color: #d9e9f5 !important;
+  box-shadow: 0 10px 30px rgba(30, 86, 130, 0.07);
+}
+
+html:not(.dark) .parent-portal-shell main .bg-gray-50 {
+  background-color: #eef7fd !important;
+}
+
+html:not(.dark) .parent-portal-shell main .bg-kcs-blue-50 {
+  background-color: #e4f2fb !important;
+}
+
+html:not(.dark) .parent-portal-shell main input,
+html:not(.dark) .parent-portal-shell main select,
+html:not(.dark) .parent-portal-shell main textarea {
+  background-color: #fbfdff;
+}
   .btn-gold {
     @apply bg-kcs-blue-700 hover:bg-kcs-blue-800 text-white font-bold px-6 py-3 rounded-xl
            transition-all duration-300 hover:shadow-gold hover:-translate-y-0.5 active:translate-y-0;

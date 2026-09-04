@@ -311,6 +311,7 @@ model User {
   auditLogs              AuditLog[]             @relation("AuditActor")
   staffProfile           StaffProfile?
   attendanceRecorded     AttendanceRecord[]     @relation("AttendanceRecorder")
+  staffAttendanceRecorded StaffAttendanceRecord[] @relation("StaffAttendanceRecorder")
   sentMessages           InternalMessage[]      @relation("MessageSender")
   receivedMessages       InternalMessage[]      @relation("MessageRecipient")
   approvedReportCards    ReportCard[]           @relation("ReportCardApprover")
@@ -583,6 +584,29 @@ model AttendanceRecord {
   @@index([status])
 }
 
+model StaffAttendanceRecord {
+  id             String           @id @default(cuid())
+  staffOrbitId   String
+  employeeNumber String?
+  staffName      String
+  staffEmail     String?
+  department     String?
+  date           DateTime
+  status         AttendanceStatus
+  arrivalTime    String?
+  departureTime  String?
+  note           String?
+  recordedById   String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  recordedBy     User?            @relation("StaffAttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([staffOrbitId, date])
+  @@index([date])
+  @@index([staffEmail])
+  @@index([status])
+}
+
 model InternalMessage {
   id          String                @id @default(cuid())
   senderId    String?
@@ -618,6 +642,7 @@ model ReportCard {
   pdfUrl             String?
   paymentCondition   String                  @default("PENDING_REVIEW")
   feeSummary         Json?
+  attendanceSummary  Json?
   publicationStatus  ReportPublicationStatus @default(DRAFT)
   emailedAt          DateTime?
   portalPostedAt     DateTime?

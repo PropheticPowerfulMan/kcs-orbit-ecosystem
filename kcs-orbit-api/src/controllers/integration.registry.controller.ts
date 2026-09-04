@@ -94,6 +94,7 @@ const updateParentSchema = z.object({
   mustChangePassword: z.boolean().optional(),
   photoData: z.string().nullable().optional(),
   photoSource: z.string().nullable().optional(),
+  studentIds: z.array(z.string().min(1)).max(100).optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
 });
@@ -486,6 +487,14 @@ export async function updateRegistryEntity(req: Request, res: Response) {
       }
     }
 
+    if (parentPayload.studentIds !== undefined) {
+      const requestedIds = [...new Set(parentPayload.studentIds)];
+      if (requestedIds.length !== parentPayload.studentIds.length) return res.status(400).json({ message: "A child can only be linked once" });
+      const requestedStudents = await prisma.student.findMany({ where: { id: { in: requestedIds }, organizationId: query.organizationId }, select: { id: true, parentId: true } });
+      if (requestedStudents.length !== requestedIds.length) return res.status(404).json({ message: "One or more selected children were not found" });
+      if (requestedStudents.some((student) => student.parentId && student.parentId !== target.orbitId)) return res.status(409).json({ message: "A selected child is already linked to another parent" });
+    }
+
     const parent = await prisma.$transaction(async (tx) => {
       const fullName = parentPayload.fullName || parentPayload.firstName || parentPayload.lastName
         ? buildCanonicalFullName(parentPayload)
@@ -506,6 +515,12 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(parentPayload.photoSource !== undefined ? { photoSource: parentPayload.photoSource } : {}),
         },
       });
+
+      if (parentPayload.studentIds !== undefined) {
+        const studentIds = [...new Set(parentPayload.studentIds)];
+        await tx.student.updateMany({ where: { organizationId: query.organizationId, parentId: target.orbitId, id: { notIn: studentIds } }, data: { parentId: null } });
+        await tx.student.updateMany({ where: { organizationId: query.organizationId, id: { in: studentIds } }, data: { parentId: target.orbitId } });
+      }
 
       await createSyncEvent(tx, { organizationId: query.organizationId, appSlug, eventType: "parent.updated", entityType, entityId: target.orbitId, payload });
       await createAuditLog(tx, { organizationId: query.organizationId, action: `${appSlug.toLowerCase()}.parent.updated`, entityType, entityId: target.orbitId, metadata: { identifier: req.params.identifier, identifierType: query.identifierType } });

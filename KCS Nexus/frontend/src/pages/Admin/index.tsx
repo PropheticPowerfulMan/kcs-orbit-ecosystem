@@ -20,6 +20,7 @@ import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenter'
+import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
@@ -1090,6 +1091,7 @@ const AdminSectionView = ({
   const [selectedParent, setSelectedParent] = useState<AdminParentRecord | null>(null)
   const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
   const [parentEditForm, setParentEditForm] = useState<AdminParentEditForm>(() => createAdminParentEditForm(null))
+  const [parentEditStudentIds, setParentEditStudentIds] = useState<string[]>([])
   const [savingParentEdit, setSavingParentEdit] = useState(false)
   const [editingTeacherId, setEditingTeacherId] = useState('')
   const [teacherNotice, setTeacherNotice] = useState('')
@@ -1504,6 +1506,7 @@ const AdminSectionView = ({
     setSelectedParent(null)
     setEditingParent(parent)
     setParentEditForm(createAdminParentEditForm(parent))
+    setParentEditStudentIds(parent.students.map((student) => student.id))
     setParentNotice('')
   }
 
@@ -1525,6 +1528,7 @@ const AdminSectionView = ({
         email: parentEditForm.email.trim() || undefined,
         phone: parentEditForm.phone.trim() || null,
         physicalAddress: parentEditForm.physicalAddress.trim() || null,
+        studentIds: parentEditStudentIds,
       }, editingParent.identifierType)
       const roster = await refreshOfficialRoster()
       const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
@@ -1894,7 +1898,7 @@ const AdminSectionView = ({
 
         {selectedParent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche parent">
-            <section className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+            <section className="max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
@@ -1958,7 +1962,7 @@ const AdminSectionView = ({
 
         {editingParent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Modifier parent">
-            <section className="w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+            <section className="w-[calc(100vw-2rem)] max-w-none lg:w-[80vw] rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
@@ -2001,6 +2005,26 @@ const AdminSectionView = ({
                       <InternationalPhoneInput value={parentEditForm.phone} onChange={(value) => setParentEditForm((current) => ({ ...current, phone: value }))} />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Enfants liés</p>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Ajoutez ou retirez les enfants de cette famille. Un enfant déjà rattaché à une autre famille reste protégé.</p>
+                    </div>
+                    <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{parentEditStudentIds.length} sélectionné(s)</span>
+                  </div>
+                  <div className="mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                    {officialRoster.map((student) => {
+                      const currentParent = parentRecords.find((parent) => parent.students.some((item) => item.id === student.id))
+                      const selected = parentEditStudentIds.includes(student.id)
+                      const unavailable = Boolean(currentParent && currentParent.id !== editingParent.id)
+                      return <label key={student.id} className={`flex items-start gap-3 rounded-xl border p-3 ${unavailable ? 'cursor-not-allowed border-gray-100 opacity-50' : 'cursor-pointer border-gray-200 bg-white hover:border-kcs-blue-300 dark:border-kcs-blue-700 dark:bg-kcs-blue-900'}`}>
+                        <input type="checkbox" checked={selected} disabled={unavailable} onChange={() => setParentEditStudentIds((current) => selected ? current.filter((id) => id !== student.id) : [...current, student.id])} className="mt-1 h-4 w-4 accent-kcs-blue-700" />
+                        <span><strong className="block text-sm text-kcs-blue-900 dark:text-white">{student.name}</strong><span className="text-xs text-gray-500">{student.studentNumber || 'Sans ID'} · {formatClassName(student.grade, student.section) || 'Classe non assignée'}{unavailable ? ` · Lié à ${currentParent?.name}` : ''}</span></span>
+                      </label>
+                    })}
                   </div>
                 </section>
               </div>
@@ -2267,7 +2291,7 @@ const AdminSectionView = ({
 
         {viewingStudent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche élève">
-            <section className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+            <section className="max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
@@ -2357,7 +2381,7 @@ const AdminSectionView = ({
 
         {editingStudent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Modifier élève">
-            <section className="w-full max-w-2xl rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+            <section className="w-[calc(100vw-2rem)] max-w-none lg:w-[80vw] rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Modification</p>
@@ -2616,6 +2640,8 @@ const AdminSectionView = ({
       </div>
     )
   }
+
+  if (segment === 'attendance' || segment === 'staff-attendance') return <AttendanceManagementPanel />
 
   if (segment === 'communications') return <ParentCommunicationPanel />
 
