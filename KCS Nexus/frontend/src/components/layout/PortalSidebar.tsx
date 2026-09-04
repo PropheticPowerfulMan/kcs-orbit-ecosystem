@@ -210,8 +210,8 @@ const PortalSidebar = () => {
 
   const renderNavigation = (isMobile = false) => (
     <>
-      <nav className={`${isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'flex-1 space-y-1 overflow-y-auto p-3'}`}>
-        {navItems.map(({ to, label, icon: Icon, badge }) => (
+      <nav className={`${isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'min-h-0 flex-1 space-y-1 overflow-y-auto p-3'}`}>
+        {navItems.map(({ to, label, icon: Icon, badge }, index) => (
           <NavLink
             key={to}
             to={to}
@@ -223,7 +223,7 @@ const PortalSidebar = () => {
               navigate(to)
             }}
             className={({ isActive }) =>
-              `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''}`
+              `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''} ${!isMobile && index === 0 ? 'sticky top-0 z-10 bg-white/95 shadow-sm backdrop-blur dark:bg-kcs-blue-950/95' : ''}`
             }
             title={!isMobile && sidebarCollapsed ? label : undefined}
           >
@@ -400,6 +400,14 @@ const PortalSidebar = () => {
         )}
       </AnimatePresence>
 
+      <motion.div
+        animate={{ width: sidebarCollapsed ? 72 : 260 }}
+        initial={false}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="hidden shrink-0 lg:block"
+        aria-hidden="true"
+      />
+
       <AnimatePresence initial={false}>
         {(
     <motion.aside
@@ -407,7 +415,7 @@ const PortalSidebar = () => {
       initial={{ width: 0, opacity: 0 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="nexus-glass-rail sticky top-0 z-30 hidden h-screen shrink-0 self-start flex-col overflow-hidden border-r lg:flex"
+      className="nexus-glass-rail fixed inset-y-0 left-0 z-40 hidden h-dvh flex-col overflow-hidden border-r lg:flex"
     >
       {/* Logo */}
       <div className={`${sidebarCollapsed ? 'px-3 py-4' : 'p-4'} border-b border-gray-100 dark:border-kcs-blue-800`}>
