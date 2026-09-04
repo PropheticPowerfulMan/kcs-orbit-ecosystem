@@ -11,6 +11,24 @@ const iso = (year: number, month: number, day: number, end = false) =>
 function template(startYear: number) {
   const period = (type: Period['type'], sequence: number, code: string, name: string, startDate: string, endDate: string): Period =>
     ({ type, sequence, code, name, startDate, endDate })
+
+  if (startYear === 2026) {
+    return {
+      name: '2026-2027',
+      startDate: iso(2026, 8, 7),
+      endDate: iso(2027, 5, 11, true),
+      status: 'ACTIVE',
+      isCurrent: true,
+      periods: [
+        period('SEMESTER', 1, 'S1', 'Semestre 1', iso(2026, 8, 7), iso(2027, 0, 29, true)),
+        period('SEMESTER', 2, 'S2', 'Semestre 2', iso(2027, 1, 1), iso(2027, 5, 11, true)),
+        period('TRIMESTER', 1, 'T1', 'Trimestre 1', iso(2026, 8, 7), iso(2026, 11, 18, true)),
+        period('TRIMESTER', 2, 'T2', 'Trimestre 2', iso(2027, 0, 5), iso(2027, 2, 19, true)),
+        period('TRIMESTER', 3, 'T3', 'Trimestre 3', iso(2027, 3, 5), iso(2027, 5, 11, true)),
+      ],
+    }
+  }
+
   return {
     name: `${startYear}-${startYear + 1}`,
     startDate: iso(startYear, 8, 1),
@@ -67,7 +85,7 @@ export default function AcademicCalendarSettings() {
         <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Année de rentrée
           <input type="number" min="2020" max="2100" value={startYear} onChange={(event) => setStartYear(Number(event.target.value))} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none focus:border-kcs-gold-500 focus:ring-4 focus:ring-kcs-gold-100/60 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/>
         </label>
-        <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/70 dark:text-kcs-blue-100">{proposed.name} · 1 sept. – 30 juin</div>
+        <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/70 dark:text-kcs-blue-100">{proposed.name} · {fmt(proposed.startDate)} — {fmt(proposed.endDate)}</div>
         <button type="button" onClick={save} className="btn-primary flex items-center gap-2 py-2"><Save size={16}/> Enregistrer et activer</button>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">

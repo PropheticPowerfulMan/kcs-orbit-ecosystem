@@ -2132,7 +2132,9 @@ const AdminSectionView = ({
                       ) : null}
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
-                    <PhotoCaptureField label={`Photo de l’élève ${index+1}`} value={student.photoData} onChange={photoData=>setNewFamily(item=>({...item,students:item.students.map((draft,studentIndex)=>studentIndex===index?{...draft,photoData}:draft)}))} onError={setStudentNotice}/>
+                    <div className="md:col-span-2">
+                      <PhotoCaptureField label={`Photo de l’élève ${index + 1}`} value={student.photoData} onChange={photoData => setNewFamily(item => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, photoData } : draft) }))} onError={setStudentNotice} />
+                    </div>
                       <input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required />
                       <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
                       <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />

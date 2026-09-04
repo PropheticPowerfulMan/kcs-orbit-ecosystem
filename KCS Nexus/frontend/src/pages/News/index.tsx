@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
-import { Calendar, ArrowRight, Clock, Eye, PlayCircle, Radio, Search, Video } from 'lucide-react'
+import { Calendar, ArrowRight, Clock, Search } from 'lucide-react'
 import SearchField from '@/components/shared/SearchField'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
+import { formatSchoolCalendarDate, getUpcomingSchoolEvents, schoolCalendarEvents2026_2027, schoolYear2026_2027 } from '@/data/schoolCalendar2026_2027'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -24,105 +25,68 @@ const AnimSection = ({ children, className = '' }: { children: React.ReactNode; 
 
 const allPosts = [
   {
-    id: '1',
-    category: 'achievement',
-    title: 'KCS Students Win National Science Olympiad Championship',
-    excerpt: 'Our talented science team brought home gold at the DRC National Science Olympiad, defeating 35 schools from across the country.',
-    date: 'April 15, 2026',
-    author: 'KCS Communications',
-    image: kcsPublicImages.qualityEducation,
-    readTime: '3 min read',
-    views: 1240,
-  },
-  {
-    id: '2',
-    category: 'event',
-    title: 'Spring Arts Festival 2026 — April 28th',
-    excerpt: 'Join us for an unforgettable evening celebrating student creativity in music, visual arts, dance, and theater performances.',
-    date: 'April 10, 2026',
-    author: 'Arts Department',
-    image: kcsPublicImages.springConcert,
-    readTime: '2 min read',
-    views: 890,
-  },
-  {
-    id: '3',
-    category: 'news',
-    title: 'KCS Launches AI-Powered KCS Nexus Platform',
-    excerpt: 'We are proud to unveil KCS Nexus — our revolutionary AI-powered school management and learning platform, the first of its kind in Central Africa.',
-    date: 'April 5, 2026',
-    author: 'IT Department',
-    image: kcsPublicImages.assembly,
-    readTime: '5 min read',
-    views: 2100,
-  },
-  {
-    id: '4',
+    id: 'official-calendar-2026-2027',
     category: 'announcement',
-    title: '2025–2026 Academic Year Enrollment Now Open',
-    excerpt: 'Applications for the upcoming academic year are now being accepted. Early applications receive priority placement.',
-    date: 'March 28, 2026',
-    author: 'Admissions Office',
+    title: 'Official KCS 2026-2027 School Calendar',
+    excerpt: 'Classes begin September 7, 2026. The calendar includes official quarters, semester exams, school breaks, conferences, graduation, and closing ceremonies.',
+    date: 'September 1, 2026',
+    author: 'KCS Administration',
     image: kcsPublicImages.campusGlory,
     readTime: '2 min read',
-    views: 3200,
   },
   {
-    id: '5',
-    category: 'achievement',
-    title: 'Class of 2026 College Acceptances — Record-Breaking Year',
-    excerpt: '100% of our graduating seniors received college acceptances, with 28 students admitted to universities in the US, UK, Canada, and South Africa.',
-    date: 'March 20, 2026',
-    author: 'College Counseling',
-    image: kcsPublicImages.graduation,
-    readTime: '4 min read',
-    views: 4500,
-  },
-  {
-    id: '6',
+    id: 'first-day-2026',
     category: 'event',
-    title: 'Annual KCS Sports Day — May 10, 2026',
-    excerpt: 'Get ready for a full day of athletics, teamwork, and school spirit at our annual Sports Day on the main KCS field.',
-    date: 'March 15, 2026',
-    author: 'Athletics Department',
-    image: kcsPublicImages.brazzavilleTrip,
-    readTime: '2 min read',
-    views: 720,
+    title: 'First Day of School — September 7',
+    excerpt: 'The official first day of classes for every KCS family is Monday, September 7, 2026.',
+    date: 'September 7, 2026',
+    author: 'KCS Administration',
+    image: kcsPublicImages.qualityEducation,
+    readTime: '1 min read',
+  },
+  {
+    id: 'high-school-orientation-2026',
+    category: 'event',
+    title: 'High School Orientation — September 9-10',
+    excerpt: 'Upper School students begin the year with the official High School orientation program.',
+    date: 'September 9, 2026',
+    author: 'Upper School',
+    image: kcsPublicImages.assembly,
+    readTime: '1 min read',
+  },
+  {
+    id: 'parent-orientation-2026',
+    category: 'announcement',
+    title: 'High School Parent Orientation — September 12',
+    excerpt: 'The official parent orientation meeting will be held online.',
+    date: 'September 12, 2026',
+    author: 'Upper School',
+    image: kcsPublicImages.campusGlory,
+    readTime: '1 min read',
+  },
+  {
+    id: 'parent-prayer-2026',
+    category: 'event',
+    title: 'Parent Prayer Meeting — September 19',
+    excerpt: 'KCS parents are invited to the first official prayer meeting of the school year.',
+    date: 'September 19, 2026',
+    author: 'KCS Administration',
+    image: kcsPublicImages.assembly,
+    readTime: '1 min read',
+  },
+  {
+    id: 'legacy-day-2026',
+    category: 'event',
+    title: 'Legacy Day — October 19',
+    excerpt: 'The KCS community celebrates Legacy Day during Legacy Month.',
+    date: 'October 19, 2026',
+    author: 'KCS Communications',
+    image: kcsPublicImages.graduation,
+    readTime: '1 min read',
   },
 ]
 
-const upcomingEvents = [
-  {
-    date: 'Apr 28',
-    title: 'Spring Arts Festival',
-    time: '6:00 PM',
-    location: 'KCS Auditorium',
-    type: 'cultural',
-    liveStreamEnabled: true,
-    liveStreamStatus: 'live',
-    liveStreamPlatform: 'YouTube Live',
-    liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789',
-    coverImage: kcsPublicImages.springConcert,
-  },
-  { date: 'May 2', title: 'AP Exams Begin', time: '8:00 AM', location: 'Testing Center', type: 'academic', liveStreamEnabled: false },
-  {
-    date: 'May 10',
-    title: 'Annual Sports Day',
-    time: '8:00 AM',
-    location: 'Main Field',
-    type: 'sports',
-    liveStreamEnabled: true,
-    liveStreamStatus: 'scheduled',
-    liveStreamPlatform: 'KCS Live',
-    liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789',
-    coverImage: kcsPublicImages.brazzavilleTrip,
-  },
-  { date: 'May 20', title: 'Parent-Teacher Conference', time: '1:00 PM', location: 'Classrooms', type: 'academic', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'Zoom Webinar', liveStreamUrl: 'https://zoom.us/' },
-  { date: 'Jun 5', title: 'Baccalaureate Service', time: '10:00 AM', location: 'School Chapel', type: 'spiritual', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789' },
-  { date: 'Jun 8', title: 'Graduation Ceremony 2026', time: '4:00 PM', location: 'KCS Auditorium', type: 'academic', liveStreamEnabled: true, liveStreamStatus: 'scheduled', liveStreamPlatform: 'YouTube Live', liveStreamUrl: 'https://www.youtube.com/@kinshasachristianschool4789' },
-]
-
-const liveBroadcasts = upcomingEvents.filter((event) => event.liveStreamEnabled)
+const upcomingEvents = getUpcomingSchoolEvents().slice(0, 8)
 
 const categories = ['all', 'news', 'event', 'announcement', 'achievement']
 
@@ -135,22 +99,18 @@ const categoryColors: Record<string, string> = {
 }
 
 const eventTypeColors: Record<string, string> = {
-  cultural: 'bg-pink-100 text-pink-700',
   academic: 'bg-kcs-blue-100 text-kcs-blue-700',
-  sports: 'bg-green-100 text-green-700',
+  assessment: 'bg-orange-100 text-orange-700',
+  break: 'bg-emerald-100 text-emerald-700',
+  community: 'bg-pink-100 text-pink-700',
+  holiday: 'bg-red-100 text-red-700',
   spiritual: 'bg-purple-100 text-purple-700',
-}
-
-const liveStatusColors: Record<string, string> = {
-  live: 'bg-red-600 text-white',
-  scheduled: 'bg-kcs-gold-400 text-kcs-blue-950',
-  ended: 'bg-gray-700 text-white',
-  cancelled: 'bg-gray-200 text-gray-700',
 }
 
 const NewsPage = () => {
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [showFullCalendar, setShowFullCalendar] = useState(false)
 
   const filtered = allPosts.filter((p) => {
     const matchCategory = activeCategory === 'all' || p.category === activeCategory
@@ -221,66 +181,43 @@ const NewsPage = () => {
       <section className="py-16 bg-white dark:bg-kcs-blue-950">
         <div className="container-custom">
           <AnimSection className="mb-12">
-            <motion.div variants={fadeUp} className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
-              <div>
-                <span className="badge-gold mb-3 inline-flex items-center gap-2 text-sm">
-                  <Radio size={14} /> Live Broadcasts
-                </span>
-                <h2 className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">
-                  Watch KCS Events Live
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                  Families can join school ceremonies, arts showcases, sports days, chapel services, and selected meetings from anywhere.
-                </p>
-              </div>
-              <span className="inline-flex w-fit items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                {liveBroadcasts.filter((event) => event.liveStreamStatus === 'live').length || 1} active channel
+            <motion.div variants={fadeUp} className="mb-6">
+              <span className="badge-gold mb-3 inline-flex items-center gap-2 text-sm">
+                <Calendar size={14} /> Official 2026-2027 Calendar
               </span>
+              <h2 className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">
+                One verified calendar for the whole KCS ecosystem
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                Nexus, Savanex, EduPay, EduSync and Academy use the same school year, semester and trimester reference dates.
+              </p>
             </motion.div>
 
-            <div className="grid gap-5 md:grid-cols-3">
-              {liveBroadcasts.slice(0, 3).map((event) => (
-                <motion.article
-                  key={event.title}
-                  variants={fadeUp}
-                  className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-kcs dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
-                >
-                  <div className="relative h-44 overflow-hidden bg-kcs-blue-900">
-                    {event.coverImage ? (
-                      <img src={event.coverImage} alt={event.title} className="h-full w-full object-cover" loading="lazy" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <Video size={42} className="text-kcs-gold-300" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-kcs-blue-950/75 to-transparent" />
-                    <div className="absolute left-3 top-3">
-                      <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${liveStatusColors[event.liveStreamStatus || 'scheduled']}`}>
-                        {event.liveStreamStatus === 'live' ? 'Live now' : event.liveStreamStatus}
-                      </span>
-                    </div>
-                    <div className="absolute bottom-3 left-3 right-3">
-                      <p className="text-xs font-semibold text-kcs-gold-300">{event.liveStreamPlatform}</p>
-                      <h3 className="mt-1 line-clamp-1 font-display text-lg font-bold text-white">{event.title}</h3>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <div className="mb-4 flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-gray-400">
-                      <span className="flex items-center gap-1.5"><Calendar size={12} /> {event.date}</span>
-                      <span>{event.time}</span>
-                    </div>
-                    <a
-                      href={event.liveStreamUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800"
-                    >
-                      <PlayCircle size={16} />
-                      {event.liveStreamStatus === 'live' ? 'Watch live' : 'Open stream'}
-                    </a>
-                  </div>
-                </motion.article>
+            <div className="grid gap-5 lg:grid-cols-3">
+              <motion.article variants={fadeUp} className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">School year</p>
+                <h3 className="mt-2 text-xl font-bold text-kcs-blue-950 dark:text-white">{schoolYear2026_2027.name}</h3>
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">First day: {formatSchoolCalendarDate({ date: schoolYear2026_2027.firstDay })}</p>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Last official day: {formatSchoolCalendarDate({ date: schoolYear2026_2027.lastOfficialDay })}</p>
+              </motion.article>
+              <motion.article variants={fadeUp} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Semesters</p>
+                <div className="mt-3 space-y-3">{schoolYear2026_2027.semesters.map((period) => (
+                  <div key={period.code}><p className="font-bold text-kcs-blue-950 dark:text-white">{period.code} · {period.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">{formatSchoolCalendarDate({ date: period.startDate, endDate: period.endDate })}</p></div>
+                ))}</div>
+              </motion.article>
+              <motion.article variants={fadeUp} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Trimesters</p>
+                <div className="mt-3 space-y-3">{schoolYear2026_2027.trimesters.map((period) => (
+                  <div key={period.code}><p className="font-bold text-kcs-blue-950 dark:text-white">{period.code} · {period.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">{formatSchoolCalendarDate({ date: period.startDate, endDate: period.endDate })}</p></div>
+                ))}</div>
+              </motion.article>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {schoolYear2026_2027.quarterEnds.map((quarter) => (
+                <span key={quarter.code} className="rounded-full border border-kcs-gold-200 bg-kcs-gold-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-800">
+                  {quarter.code} ends {formatSchoolCalendarDate({ date: quarter.date })}
+                </span>
               ))}
             </div>
           </AnimSection>
@@ -333,7 +270,6 @@ const NewsPage = () => {
                       <div className="p-4">
                         <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 mb-2">
                           <span className="flex items-center gap-1"><Calendar size={11} /> {post.date}</span>
-                          <span className="flex items-center gap-1"><Eye size={11} /> {post.views.toLocaleString()}</span>
                         </div>
                         <h3 className="font-bold text-kcs-blue-900 dark:text-white mb-2 line-clamp-2 text-sm leading-tight">
                           {post.title}
@@ -362,56 +298,62 @@ const NewsPage = () => {
             {/* Sidebar: Upcoming Events */}
             <div className="lg:col-span-1">
               <div className="sticky top-28">
-                <div className="bg-gray-50 dark:bg-kcs-blue-900/50 rounded-2xl border border-gray-100 dark:border-kcs-blue-800 overflow-hidden">
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                   <div className="p-5 kcs-gradient">
-                    <h3 className="font-bold text-white flex items-center gap-2">
+                    <h3 className="flex items-center gap-2 font-bold text-white">
                       <Calendar size={18} className="text-kcs-gold-400" />
-                      Upcoming Events
+                      Upcoming Official Events
                     </h3>
                   </div>
                   <div className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
-                    {upcomingEvents.map((event) => (
-                      <div key={event.title} className="p-4 hover:bg-white dark:hover:bg-kcs-blue-800/50 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <div className="text-center min-w-[40px]">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{event.date.split(' ')[0]}</p>
-                            <p className="text-xl font-bold text-kcs-blue-700 dark:text-kcs-blue-300 font-display leading-none">
-                              {event.date.split(' ')[1]}
-                            </p>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-kcs-blue-900 dark:text-white text-sm truncate">{event.title}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{event.time} · {event.location}</p>
-                            <div className="mt-1 flex flex-wrap gap-1.5">
-                              <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium capitalize ${eventTypeColors[event.type] || 'bg-gray-100 text-gray-700'}`}>
-                                {event.type}
-                              </span>
-                              {event.liveStreamEnabled && (
-                                <a
-                                  href={event.liveStreamUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${liveStatusColors[event.liveStreamStatus || 'scheduled']}`}
-                                >
-                                  <Radio size={10} />
-                                  {event.liveStreamStatus === 'live' ? 'Live' : 'Stream'}
-                                </a>
-                              )}
-                            </div>
-                          </div>
+                    {upcomingEvents.length ? upcomingEvents.map((event) => (
+                      <article key={`${event.date}-${event.title}`} className="p-4 transition-colors hover:bg-white dark:hover:bg-kcs-blue-800/50">
+                        <p className="text-xs font-bold text-kcs-gold-700 dark:text-kcs-gold-300">{formatSchoolCalendarDate(event)}</p>
+                        <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{event.description}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${eventTypeColors[event.type]}`}>{event.type}</span>
+                          <span className="text-xs text-gray-400">{event.location}</span>
                         </div>
-                      </div>
-                    ))}
+                      </article>
+                    )) : (
+                      <p className="p-5 text-sm text-gray-500 dark:text-gray-400">The 2026-2027 official calendar is complete.</p>
+                    )}
                   </div>
-                  <div className="p-4 border-t border-gray-100 dark:border-kcs-blue-800">
-                    <button className="w-full text-center text-sm text-kcs-blue-600 dark:text-kcs-blue-400 font-semibold flex items-center justify-center gap-1 hover:gap-2 transition-all">
-                      View Full Calendar <ArrowRight size={14} />
+                  <div className="border-t border-gray-100 p-4 dark:border-kcs-blue-800">
+                    <button type="button" onClick={() => setShowFullCalendar((visible) => !visible)} className="flex w-full items-center justify-center gap-1 text-center text-sm font-semibold text-kcs-blue-600 transition-all hover:gap-2 dark:text-kcs-blue-400">
+                      {showFullCalendar ? 'Hide Full Calendar' : 'View Full Calendar'} <ArrowRight size={14} className={showFullCalendar ? 'rotate-90' : ''} />
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          {showFullCalendar && (
+            <AnimSection className="mt-12">
+              <motion.div variants={fadeUp} className="rounded-3xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40 sm:p-7">
+                <div className="mb-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-700 dark:text-kcs-gold-300">Approved source: KCS 2026-2027 School Event Calendar</p>
+                  <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">Full Official Calendar</h2>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">All dates below come from the school calendar supplied by KCS administration.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {schoolCalendarEvents2026_2027.map((event) => (
+                    <article key={`full-${event.date}-${event.title}`} className="rounded-xl border border-white bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60">
+                      <p className="text-xs font-bold text-kcs-gold-700 dark:text-kcs-gold-300">{formatSchoolCalendarDate(event)}</p>
+                      <h3 className="mt-1 font-bold text-kcs-blue-950 dark:text-white">{event.title}</h3>
+                      <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{event.description}</p>
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${eventTypeColors[event.type]}`}>{event.type}</span>
+                        <span className="text-xs text-gray-400">{event.location}</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </motion.div>
+            </AnimSection>
+          )}
         </div>
       </section>
     </div>

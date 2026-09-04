@@ -13,8 +13,14 @@ export function validateAcademicCalendar(raw: AcademicCalendarInput) {
   const [startYear, endYear] = input.name.split("-").map(Number);
   const errors: string[] = [];
   if (endYear !== startYear + 1) errors.push("Academic year name must contain consecutive years.");
-  if (day(input.startDate) !== `${startYear}-09-01`) errors.push("Academic year must start on September 1.");
-  if (day(input.endDate) !== `${endYear}-06-30`) errors.push("Academic year must end on June 30.");
+  const startDay = day(input.startDate);
+  const endDay = day(input.endDate);
+  if (startDay < `${startYear}-09-01` || startDay > `${startYear}-09-30`) {
+    errors.push("Academic year must start during September.");
+  }
+  if (endDay < `${endYear}-06-01` || endDay > `${endYear}-06-30`) {
+    errors.push("Academic year must end during June.");
+  }
   if (input.startDate >= input.endDate) errors.push("Academic year end date must follow its start date.");
 
   for (const type of ["SEMESTER", "TRIMESTER"] as const) {
@@ -27,14 +33,10 @@ export function validateAcademicCalendar(raw: AcademicCalendarInput) {
         errors.push(`${period.code} must stay inside the academic year.`);
       }
       if (index) {
-        const next = new Date(periods[index - 1].endDate);
-        next.setUTCDate(next.getUTCDate() + 1);
-        if (day(next) !== day(period.startDate)) errors.push(`${type} periods must be contiguous and non-overlapping.`);
+        const previous = periods[index - 1];
+        if (period.startDate <= previous.endDate) errors.push(`${type} periods must not overlap.`);
       }
     });
-    if (periods.length && (day(periods[0].startDate) !== day(input.startDate) || day(periods.at(-1)!.endDate) !== day(input.endDate))) {
-      errors.push(`${type} periods must cover the complete academic year.`);
-    }
   }
   if (errors.length) throw new Error([...new Set(errors)].join(" "));
   return input;

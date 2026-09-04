@@ -27,9 +27,55 @@ export const AcademicCalendarInputSchema = z.object({
 export type AcademicPeriodInput = z.infer<typeof AcademicPeriodSchema>;
 export type AcademicCalendarInput = z.infer<typeof AcademicCalendarInputSchema>;
 
+export const KCS_OFFICIAL_CALENDAR_2026_2027 = {
+  academicStart: "2026-09-07",
+  academicEnd: "2027-06-11",
+  semesters: [
+    { sequence: 1, code: "S1", name: "Semestre 1", startDate: "2026-09-07", endDate: "2027-01-29" },
+    { sequence: 2, code: "S2", name: "Semestre 2", startDate: "2027-02-01", endDate: "2027-06-11" }
+  ],
+  trimesters: [
+    { sequence: 1, code: "T1", name: "Trimestre 1", startDate: "2026-09-07", endDate: "2026-12-18" },
+    { sequence: 2, code: "T2", name: "Trimestre 2", startDate: "2027-01-05", endDate: "2027-03-19" },
+    { sequence: 3, code: "T3", name: "Trimestre 3", startDate: "2027-04-05", endDate: "2027-06-11" }
+  ],
+  quarterEnds: ["2026-11-06", "2027-01-22", "2027-04-09", "2027-06-11"]
+} as const;
+
 export function buildDefaultAcademicCalendar(startYear: number, organizationId: string): AcademicCalendarInput {
   const utc = (year: number, month: number, day: number, end = false) =>
     new Date(Date.UTC(year, month, day, end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0));
+  const fromIso = (value: string, end = false) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return utc(year, month - 1, day, end);
+  };
+
+  if (startYear === 2026) {
+    const official = KCS_OFFICIAL_CALENDAR_2026_2027;
+    return {
+      organizationId,
+      name: "2026-2027",
+      startDate: fromIso(official.academicStart),
+      endDate: fromIso(official.academicEnd, true),
+      status: "ACTIVE",
+      isCurrent: true,
+      periods: [
+        ...official.semesters.map((period) => ({
+          type: "SEMESTER" as const,
+          ...period,
+          startDate: fromIso(period.startDate),
+          endDate: fromIso(period.endDate, true)
+        })),
+        ...official.trimesters.map((period) => ({
+          type: "TRIMESTER" as const,
+          ...period,
+          startDate: fromIso(period.startDate),
+          endDate: fromIso(period.endDate, true)
+        }))
+      ]
+    };
+  }
+
   return {
     organizationId,
     name: `${startYear}-${startYear + 1}`,

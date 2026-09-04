@@ -10,6 +10,13 @@ STANDARD_CLASS_LEVELS = KINDERGARTEN_LEVELS + GRADE_LEVELS
 SECTION_SUFFIXES = [chr(code) for code in range(ord("A"), ord("Z") + 1)]
 
 
+def default_academic_year_dates(start_year: int) -> tuple[date, date]:
+    if start_year == 2026:
+        return date(2026, 9, 7), date(2027, 6, 11)
+
+    return date(start_year, 9, 1), date(start_year + 1, 6, 30)
+
+
 def normalize_class_level(value: str) -> str:
     raw = (value or "").strip()
     compact = re.sub(r"\s+", " ", raw).upper()
@@ -73,10 +80,11 @@ def current_or_default_academic_year() -> AcademicYear:
     today = date.today()
     # Année scolaire commence en septembre (9) et finit en juin (6) de l’année suivante
     start_year = today.year if today.month >= 9 else today.year - 1
+    start_date, end_date = default_academic_year_dates(start_year)
     return AcademicYear.objects.create(
         name=f"{start_year}-{start_year + 1}",
-        start_date=date(start_year, 9, 1),
-        end_date=date(start_year + 1, 6, 30),
+        start_date=start_date,
+        end_date=end_date,
         is_current=True,
     )
 
