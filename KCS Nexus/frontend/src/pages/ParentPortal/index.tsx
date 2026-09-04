@@ -5,6 +5,8 @@ import PortalSidebar from '@/components/layout/PortalSidebar'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import OfficialTranscriptPanel from '@/components/shared/OfficialTranscriptPanel'
+import ParentNotificationsPanel from './ParentNotificationsPanel'
+import { schoolCalendarEvents2026_2027 } from '@/data/schoolCalendar2026_2027'
 import { eventsAPI, messagesAPI, notificationsAPI, studentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -46,8 +48,11 @@ const segmentFrom = (pathname: string) => {
   const value = pathname.split('/').filter(Boolean).at(-1)
   return !value || value === 'parent' || value === 'dashboard' ? 'dashboard' : value
 }
-const displayDate = (value?: string) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—'
+const displayDate = (value?: string) => value
+  ? new Intl.DateTimeFormat(undefined, /^\d{4}-\d{2}-\d{2}$/.test(value) ? { dateStyle: 'medium', timeZone: 'UTC' } : { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  : '—'
 const personName = (person?: Contact) => person ? `${person.firstName} ${person.lastName}`.trim() : 'KCS'
+const officialCalendarEvents: EventItem[] = schoolCalendarEvents2026_2027.map((event, index) => ({ id: `official-${event.date}-${index}`, title: event.title, description: event.description, startDate: event.date, endDate: event.endDate ?? event.date, location: event.location, type: event.type }))
 
 function downloadCalendarEvent(event: EventItem) {
   const stamp = (value: string) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
@@ -86,7 +91,16 @@ export default function ParentPortal() {
   const [feedback, setFeedback] = useState('')
 
   const selectedChild = useMemo(() => children.find((child) => child.id === selectedId) ?? children[0] ?? null, [children, selectedId])
-  const upcoming = useMemo(() => events.filter((event) => new Date(event.endDate).getTime() >= Date.now()).slice(0, 12), [events])
+  const calendarEvents = useMemo(() => {
+    const merged = new Map<string, EventItem>()
+    officialCalendarEvents.forEach((event) => merged.set(`${event.startDate.slice(0, 10)}:${event.title.toLocaleLowerCase()}`, event))
+    events.forEach((event) => merged.set(`${event.startDate.slice(0, 10)}:${event.title.toLocaleLowerCase()}`, event))
+    return [...merged.values()].sort((left, right) => left.startDate.localeCompare(right.startDate))
+  }, [events])
+  const upcoming = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return calendarEvents.filter((event) => event.endDate.slice(0, 10) >= today)
+  }, [calendarEvents])
   const unread = notices.filter((notice) => !notice.isRead).length
   const academicSummary = selectedChild?.academicSummary
 
@@ -152,7 +166,7 @@ export default function ParentPortal() {
     setNotices((items) => items.map((item) => item.id === notice.id ? { ...item, isRead: true } : item))
   }
 
-  const title = segment === 'dashboard' ? 'Family Dashboard' : ({ performance: 'Academic Performance', grades: 'Grades & Reports', messages: 'School Messages', calendar: 'School Calendar', finance: 'Finance & EduPay', profile: 'Family Profile', settings: 'Account Settings' } as Record<string, string>)[segment] ?? 'Parent Portal'
+  const title = segment === 'dashboard' ? 'Family Dashboard' : ({ performance: 'Academic Performance', grades: 'Grades & Reports', notifications: 'Notifications', messages: 'School Messages', calendar: 'School Calendar', finance: 'Finance & EduPay', profile: 'Family Profile', settings: 'Account Settings' } as Record<string, string>)[segment] ?? 'Parent Portal'
 
   const academics = (
     <div className="space-y-6">
@@ -169,7 +183,7 @@ export default function ParentPortal() {
     </div>
   )
 
-  const content = segment === 'settings' ? <AccountSettingsPanel roleLabel="Parent account" /> : segment === 'performance' || segment === 'grades' ? academics : segment === 'messages' ? (
+  const content = segment === 'settings' ? <AccountSettingsPanel roleLabel="Parent account" /> : segment === 'performance' || segment === 'grades' ? academics : segment === 'notifications' ? <ParentNotificationsPanel notices={notices} onChange={setNotices} /> : segment === 'messages' ? (
     <div className="grid gap-6 xl:grid-cols-2"><div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Conversation history</h2>{messages.length === 0 ? empty('No school message yet.') : <div className="space-y-3">{messages.map((item) => <div key={item.id} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><div className="flex justify-between gap-3"><p className="font-semibold dark:text-white">{item.subject}</p><span className="text-xs text-gray-400">{displayDate(item.createdAt)}</span></div><p className="mt-1 text-xs font-semibold text-kcs-blue-600">{item.senderId === user?.id ? `To ${personName(item.recipient)}` : `From ${personName(item.sender)}`}</p><p className="mt-2 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-300">{item.body}</p></div>)}</div>}</div><div className={card}><h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Write to the school</h2><div className="space-y-3"><select className={field} value={recipientId} onChange={(event) => setRecipientId(event.target.value)}><option value="">Select an authorized contact</option>{contacts.map((contact) => <option key={contact.id} value={contact.id}>{personName(contact)} — {contact.role}</option>)}</select><input className={field} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Subject" maxLength={160}/><textarea className={`${field} min-h-36`} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder={`Message regarding ${selectedChild?.name ?? 'your family'}`} maxLength={10000}/><button className={`${button} w-full`} disabled={sending || !recipientId || subject.trim().length < 2 || !messageBody.trim()} onClick={() => void sendMessage()}>{sending ? 'Sending…' : 'Send securely'}</button>{feedback && <p className="rounded-xl bg-kcs-blue-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{feedback}</p>}</div></div></div>
   ) : segment === 'calendar' ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{upcoming.length === 0 ? empty('No upcoming school event has been published.') : upcoming.map((event) => <div key={event.id} className={card}><p className="text-xs font-bold uppercase text-kcs-blue-600">{event.type}</p><h2 className="mt-2 font-bold dark:text-white">{event.title}</h2><p className="mt-2 text-sm text-gray-500">{displayDate(event.startDate)} · {event.location}</p><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{event.description}</p><button className={`${button} mt-4 w-full`} onClick={() => downloadCalendarEvent(event)}>Add to my calendar</button></div>)}</div>
   : segment === 'finance' ? <div className={card}><div className="flex items-start gap-4"><div className="rounded-xl bg-kcs-gold-100 p-3 text-kcs-gold-700"><FileText/></div><div><h2 className="text-xl font-bold text-kcs-blue-900 dark:text-white">EduPay is the official financial source</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">Payments, balances, receipts and bank-transfer proofs are managed only in the parent EduPay portal. KCS Nexus never marks an invoice as paid and never generates an unverified receipt.</p><a className={`${button} mt-5 inline-block`} href="https://edupay.kinshasachristianschool.org/" target="_blank" rel="noreferrer">Open EduPay securely</a></div></div></div>

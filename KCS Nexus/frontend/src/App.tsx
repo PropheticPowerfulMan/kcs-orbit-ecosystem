@@ -212,7 +212,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['performance', 'messages', 'calendar', 'profile', 'grades', 'finance', 'settings'].map((segment) => (
+            {['performance', 'notifications', 'messages', 'calendar', 'profile', 'grades', 'finance', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/parent/${segment}`}

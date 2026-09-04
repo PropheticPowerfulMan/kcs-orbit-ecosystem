@@ -278,6 +278,7 @@ export const notificationsAPI = {
   getAll: () => api.get('/notifications'),
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.patch('/notifications/read-all'),
+  deleteMany: (ids: string[]) => api.post('/notifications/bulk-delete', { ids }),
 }
 
 // --- AI API ---

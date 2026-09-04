@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { asyncHandler, success } from '../utils/api.js'
@@ -14,6 +15,17 @@ notificationsRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res)
     orderBy: { createdAt: 'desc' },
   })
   return success(res, notifications)
+}))
+
+notificationsRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const ids = z.array(z.string().min(1)).min(1).max(250).parse(req.body?.ids)
+  const result = await prisma.notification.deleteMany({
+    where: {
+      id: { in: [...new Set(ids)] },
+      userId: req.user!.sub,
+    },
+  })
+  return success(res, { deletedCount: result.count }, 'Notifications deleted')
 }))
 
 notificationsRouter.patch('/:id/read', asyncHandler(async (req: AuthenticatedRequest, res) => {

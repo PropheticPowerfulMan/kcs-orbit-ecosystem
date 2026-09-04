@@ -2,10 +2,18 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { 
   MapPin, Phone, Mail, Clock, Facebook, 
-  Instagram, Youtube, Linkedin, MessageCircle, ArrowRight, BookOpen
+  Instagram, Youtube, Linkedin, ArrowRight, BookOpen
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { getAssetUrl } from '@/utils/assets'
+
+const WhatsAppIcon = ({ size = 16 }: { size?: number }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 32 32" role="img">
+    <path fill="#25D366" d="M16.04 2.5A13.4 13.4 0 0 0 4.42 22.62L2.5 29.5l7.04-1.85A13.5 13.5 0 1 0 16.04 2.5Z" />
+    <path fill="#fff" d="M23.9 19.55c-.43-.22-2.55-1.26-2.95-1.4-.4-.15-.68-.22-.97.21-.28.43-1.1 1.4-1.35 1.69-.25.29-.5.33-.93.11-.43-.21-1.81-.67-3.45-2.13a12.9 12.9 0 0 1-2.38-2.96c-.25-.43-.03-.66.19-.87.19-.19.43-.5.65-.75.21-.25.28-.43.43-.72.14-.29.07-.54-.04-.76-.11-.21-.97-2.33-1.32-3.19-.35-.84-.71-.73-.97-.74h-.83c-.29 0-.76.11-1.15.54-.4.43-1.51 1.48-1.51 3.6 0 2.12 1.55 4.17 1.76 4.46.22.29 3.04 4.64 7.37 6.51 1.03.44 1.83.71 2.46.91 1.03.33 1.97.28 2.71.17.83-.12 2.55-1.04 2.91-2.05.36-1.01.36-1.87.25-2.05-.1-.18-.39-.29-.82-.51Z" />
+  </svg>
+)
+
 
 const Footer = () => {
   const { t } = useTranslation()
@@ -40,7 +48,7 @@ const Footer = () => {
     { icon: Facebook, href: 'https://www.facebook.com/KinshasaChristianSchool', label: 'Facebook' },
     { icon: Instagram, href: 'https://www.instagram.com/kinshasachristianschoolknights', label: 'Instagram' },
     { icon: Youtube, href: 'https://www.youtube.com/@kinshasachristianschool4789', label: 'YouTube' },
-    { icon: MessageCircle, href: 'https://wa.me/243895326011', label: 'WhatsApp' },
+    { icon: WhatsAppIcon, href: 'https://wa.me/243895326011', label: 'WhatsApp' },
     { icon: Linkedin, href: '#', label: 'LinkedIn' },
   ]
 

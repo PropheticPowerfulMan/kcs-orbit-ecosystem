@@ -46,6 +46,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         ...base,
         { to: '/portal/parent/performance', label: t('portalNav.performance'), icon: BarChart3 },
         { to: '/portal/parent/forum', label: t('portalNav.parentForum'), icon: MessageSquare },
+        { to: '/portal/parent/notifications', label: t('portalNav.notifications'), icon: Bell },
         { to: '/portal/parent/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/parent/calendar', label: t('portalNav.calendar'), icon: Calendar },
         { to: '/portal/parent/finance', label: t('portalNav.fees'), icon: WalletCards },
@@ -404,7 +405,7 @@ const PortalSidebar = () => {
       initial={{ width: 0, opacity: 0 }}
       exit={{ width: 0, opacity: 0 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="nexus-glass-rail sticky top-0 z-30 hidden h-screen flex-col overflow-hidden border-r lg:flex"
+      className="nexus-glass-rail sticky top-0 z-30 hidden h-screen shrink-0 self-start flex-col overflow-hidden border-r lg:flex"
     >
       {/* Logo */}
       <div className={`${sidebarCollapsed ? 'px-3 py-4' : 'p-4'} border-b border-gray-100 dark:border-kcs-blue-800`}>
