@@ -200,6 +200,7 @@ const en = {
     aiTutor: 'AI Tutor',
     studentForum: 'Student Forum',
     parentForum: 'Parent Forum',
+    notifications: 'Notifications',
     messages: 'Messages',
     myProfile: 'My Profile',
     profile: 'Profile',

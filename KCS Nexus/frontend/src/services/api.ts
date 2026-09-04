@@ -335,6 +335,7 @@ export const dataMigrationAPI = {
 
 export const financeAPI = {
   getEduPaySummary: () => api.get('/finance/edupay-summary'),
+  getParentProfile: () => api.get('/finance/parent-profile'),
   getStudentClearance: () => api.get('/finance/student-clearance'),
 }
 

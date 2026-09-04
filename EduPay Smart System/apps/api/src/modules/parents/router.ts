@@ -677,12 +677,14 @@ parentRouter.get("/options", authorize("ADMIN", "ACCOUNTANT"), async (req: Authe
       orderBy: { fullName: "asc" },
       select: {
         id: true,
+        orbitId: true,
         fullName: true,
         phone: true,
         email: true,
         students: {
           select: {
             id: true,
+            orbitId: true,
             externalStudentId: true,
             fullName: true,
             classId: true,
@@ -695,11 +697,13 @@ parentRouter.get("/options", authorize("ADMIN", "ACCOUNTANT"), async (req: Authe
     res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
     return res.json(parents.map((parent) => ({
       id: parent.id,
+      orbitId: parent.orbitId,
       fullName: parent.fullName,
       phone: parent.phone,
       email: parent.email,
       students: parent.students.map((student) => ({
         id: student.id,
+        orbitId: student.orbitId,
         externalStudentId: student.externalStudentId,
         fullName: student.fullName,
         classId: student.classId,

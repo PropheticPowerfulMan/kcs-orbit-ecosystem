@@ -23,6 +23,31 @@ const getEduPayServiceToken = async () => {
   return payload.token
 }
 
+type EduPayParentOption = {
+  id: string
+  orbitId?: string | null
+  fullName?: string | null
+  phone?: string | null
+  email?: string | null
+  students?: Array<{
+    id?: string
+    orbitId?: string | null
+    externalStudentId?: string | null
+    fullName?: string | null
+  }>
+}
+
+const normalizeIdentity = (value: unknown) => String(value ?? '').trim().toLocaleLowerCase()
+const normalizePhone = (value: unknown) => String(value ?? '').replace(/\D/g, '')
+
+const fetchEduPay = async (path: string, serviceToken: string) => {
+  const response = await fetch(`${env.EDUPAY_API_URL!.replace(/\/$/, '')}${path}`, {
+    headers: { Authorization: `Bearer ${serviceToken}` },
+    signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
+  })
+  return response
+}
+
 financeRouter.use(authenticate)
 
 financeRouter.get('/edupay-summary', requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
@@ -56,6 +81,109 @@ financeRouter.get('/edupay-summary', requireRoles('admin', 'staff'), asyncHandle
     },
     parentAccounts: parentAccounts.slice(0, 12),
   }, 'EduPay finance overview synchronized')
+}))
+
+financeRouter.get('/parent-profile', requireRoles('parent'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (!env.EDUPAY_API_URL) {
+    throw new ApiError(503, 'EduPay finance synchronization is not configured.')
+  }
+
+  const parent = await prisma.user.findUnique({
+    where: { id: req.user!.sub },
+    select: {
+      firstName: true,
+      middleName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      orbitUserId: true,
+      parentLinks: {
+        select: {
+          student: {
+            select: {
+              studentNumber: true,
+              user: {
+                select: {
+                  firstName: true,
+                  middleName: true,
+                  lastName: true,
+                  orbitUserId: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  if (!parent) throw new ApiError(404, 'Parent account not found.')
+
+  const serviceToken = await getEduPayServiceToken()
+  const directoryResponse = await fetchEduPay('/api/parents/options', serviceToken)
+  if (!directoryResponse.ok) {
+    throw new ApiError(502, `EduPay family directory synchronization failed with status ${directoryResponse.status}.`)
+  }
+
+  const directoryPayload = await directoryResponse.json() as unknown
+  const directory = Array.isArray(directoryPayload) ? directoryPayload as EduPayParentOption[] : []
+  const parentEmail = normalizeIdentity(parent.email)
+  const parentPhone = normalizePhone(parent.phone)
+  const parentOrbitId = normalizeIdentity(parent.orbitUserId)
+  const studentIdentifiers = new Set(parent.parentLinks.flatMap(({ student }) => [
+    normalizeIdentity(student.studentNumber),
+    normalizeIdentity(student.user.orbitUserId),
+  ]).filter(Boolean))
+  const studentNames = new Set(parent.parentLinks.map(({ student }) => normalizeIdentity([
+    student.user.lastName,
+    student.user.middleName,
+    student.user.firstName,
+  ].filter(Boolean).join(' '))).filter(Boolean))
+
+  const ranked = directory.map((candidate) => {
+    let score = 0
+    let strongMatches = 0
+    if (parentOrbitId && normalizeIdentity(candidate.orbitId) === parentOrbitId) { score += 1000; strongMatches += 1 }
+    if (parentEmail && normalizeIdentity(candidate.email) === parentEmail) { score += 400; strongMatches += 1 }
+    if (parentPhone && normalizePhone(candidate.phone) === parentPhone) { score += 300; strongMatches += 1 }
+    for (const student of candidate.students ?? []) {
+      if ([student.orbitId, student.externalStudentId].some((value) => studentIdentifiers.has(normalizeIdentity(value)))) {
+        score += 500
+        strongMatches += 1
+      } else if (studentNames.has(normalizeIdentity(student.fullName))) {
+        score += 25
+      }
+    }
+    return { candidate, score, strongMatches }
+  }).filter((entry) => entry.strongMatches > 0).sort((left, right) => right.score - left.score)
+
+  if (!ranked.length) {
+    throw new ApiError(404, 'No securely matching EduPay family account was found. Please contact the finance office.')
+  }
+  if (ranked.length > 1 && ranked[0].score === ranked[1].score) {
+    throw new ApiError(409, 'Several EduPay family accounts match this profile. Please contact the finance office.')
+  }
+
+  const profileResponse = await fetchEduPay(`/api/finance/parents/${encodeURIComponent(ranked[0].candidate.id)}/profile`, serviceToken)
+  if (!profileResponse.ok) {
+    throw new ApiError(502, `EduPay family finance synchronization failed with status ${profileResponse.status}.`)
+  }
+
+  const snapshot = await profileResponse.json() as Record<string, unknown> & { agreements?: Array<Record<string, unknown>> }
+  const agreements = Array.isArray(snapshot.agreements)
+    ? snapshot.agreements.map((agreement) => {
+        const publicAgreement = { ...agreement }
+        delete publicAgreement.privateNotes
+        return publicAgreement
+      })
+    : []
+  res.setHeader('Cache-Control', 'private, no-store')
+  return success(res, {
+    ...snapshot,
+    agreements,
+    source: 'EduPay',
+    synchronizedAt: new Date().toISOString(),
+    portalUrl: 'https://edupay.kinshasachristianschool.org/',
+  }, 'Parent finance profile synchronized securely from EduPay')
 }))
 
 financeRouter.get('/student-clearance', asyncHandler(async (req: AuthenticatedRequest, res) => {
