@@ -1,4 +1,3 @@
-from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -6,6 +5,7 @@ from secrets import randbelow
 from uuid import uuid4
 
 from .emailing import generate_school_email
+from .authentication import authenticate_user_identifier
 from .models import User
 
 
@@ -65,18 +65,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         identifier = (attrs.get('username') or '').strip()
         password = attrs.get('password') or ''
 
-        self.user = User.objects.filter(
-            Q(username__iexact=identifier)
-            | Q(email__iexact=identifier)
-            | Q(access_code__iexact=identifier)
-            | Q(kcs_card_id__iexact=identifier)
-            | Q(teacher_profile__employee_id__iexact=identifier)
-            | Q(teacher_profile__teacher_id__iexact=identifier)
-            | Q(teacher_profile__work_email__iexact=identifier)
-            | Q(teacher_profile__personal_email__iexact=identifier)
-        ).distinct().first()
+        self.user = authenticate_user_identifier(identifier, password)
 
-        if self.user is None or not self.user.check_password(password) or not self.user.is_active:
+        if self.user is None:
             raise AuthenticationFailed(self.error_messages['no_active_account'], 'no_active_account')
 
         refresh = self.get_token(self.user)

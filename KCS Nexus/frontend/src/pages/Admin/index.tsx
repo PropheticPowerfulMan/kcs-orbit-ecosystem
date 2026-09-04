@@ -1961,21 +1961,21 @@ const AdminSectionView = ({
         )}
 
         {editingParent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Modifier parent">
-            <section className="w-[calc(100vw-2rem)] max-w-none lg:w-[80vw] rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-              <div className="flex items-start justify-between gap-3">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Modifier parent">
+            <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:max-h-[calc(100dvh-3rem)] lg:w-[80vw]">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-kcs-blue-700 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier le parent</h3>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Mettre a jour le nom et les contacts du responsable familial.</p>
                 </div>
-                <button type="button" onClick={() => setEditingParent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
+                <button type="button" onClick={() => setEditingParent(null)} className="inline-flex shrink-0 items-center gap-2 rounded-xl border-2 border-kcs-blue-300 bg-white px-3 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 focus:outline-none focus:ring-2 focus:ring-kcs-blue-500 dark:border-kcs-blue-400 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">
                   <X size={16} />
                   Fermer
                 </button>
               </div>
 
-              <div className="mt-5 space-y-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -2029,9 +2029,9 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 dark:border-kcs-blue-700 dark:text-gray-300 dark:hover:bg-kcs-blue-800">Annuler</button>
-                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-60">{savingParentEdit ? 'Enregistrement...' : 'Enregistrer'}</button>
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
+                <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border-2 border-slate-400 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-300 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">Annuler</button>
+                <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>
             </section>
           </div>

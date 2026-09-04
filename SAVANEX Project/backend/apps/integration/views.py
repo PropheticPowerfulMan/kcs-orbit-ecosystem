@@ -16,6 +16,7 @@ from apps.communication.services import deliver_employee_communication
 from apps.teachers.services import deactivate_teacher
 from apps.integration.orbit import sync_teacher
 from apps.users.models import User
+from apps.users.authentication import authenticate_user_identifier
 from apps.users.serializers import UserMeSerializer
 from apps.users.views import provision_parent_access_identity, provision_student_access_identity, reset_user_access_credentials
 from apps.users.permissions import IsAdminUser
@@ -186,17 +187,8 @@ def authenticate_ecosystem_identity_view(request):
 
     identifier = str(request.data.get('identifier') or request.data.get('username') or '').strip()
     password = str(request.data.get('password') or '')
-    user = User.objects.filter(
-        Q(username__iexact=identifier)
-        | Q(email__iexact=identifier)
-        | Q(access_code__iexact=identifier)
-        | Q(kcs_card_id__iexact=identifier)
-        | Q(teacher_profile__employee_id__iexact=identifier)
-        | Q(teacher_profile__teacher_id__iexact=identifier)
-        | Q(teacher_profile__work_email__iexact=identifier)
-        | Q(teacher_profile__personal_email__iexact=identifier)
-    ).distinct().first()
-    if user is None or not user.is_active or not user.check_password(password):
+    user = authenticate_user_identifier(identifier, password)
+    if user is None:
         return Response({'detail': 'Invalid credentials.'}, status=401)
 
     if user.role not in {User.ROLE_PARENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE, User.ROLE_STUDENT}:

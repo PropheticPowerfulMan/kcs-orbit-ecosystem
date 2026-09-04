@@ -56,6 +56,39 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
                 )
                 self.assertEqual(response.status_code, 200)
 
+    def test_shared_contact_email_is_disambiguated_by_password(self):
+        parent = User.objects.create_user(
+            username='shared-contact-parent',
+            email='shared.contact@example.com',
+            password='ParentPassword123!',
+            role=User.ROLE_PARENT,
+        )
+        teacher_user = User.objects.create_user(
+            username='shared-contact-teacher',
+            email='teacher@ourkcs.org',
+            password='TeacherPassword123!',
+            role=User.ROLE_TEACHER,
+        )
+        Teacher.objects.create(
+            user=teacher_user,
+            teacher_id='SAV-TCH-SHARED',
+            personal_email=parent.email,
+            hire_date='2026-09-01',
+        )
+
+        for password, expected_user in (
+            ('ParentPassword123!', parent),
+            ('TeacherPassword123!', teacher_user),
+        ):
+            response = self.client.post(
+                '/api/integration/authenticate/',
+                {'identifier': parent.email, 'password': password},
+                format='json',
+                HTTP_X_API_KEY='nexus-test-key',
+            )
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data['user']['id'], expected_user.id)
+
     @patch('apps.integration.views.reset_user_access_credentials')
     def test_parent_reset_provisions_missing_parent_identity(self, reset_credentials):
         reset_credentials.return_value = {

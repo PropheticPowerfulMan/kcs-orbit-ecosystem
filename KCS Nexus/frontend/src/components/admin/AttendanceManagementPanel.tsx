@@ -9,6 +9,17 @@ const panel='rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:bord
 const field='w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const button='inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50'
 
+const normalizeClassPart=(value:unknown)=>String(value??'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
+const formatClassLabel=(gradeValue:unknown,sectionValue:unknown)=>{
+ const grade=String(gradeValue??'').trim(),section=String(sectionValue??'').trim()
+ if(!grade)return section||'Classe'
+ if(!section)return grade
+ const normalizedGrade=normalizeClassPart(grade),normalizedSection=normalizeClassPart(section)
+ if(normalizedSection===normalizedGrade||normalizedSection.startsWith(`${normalizedGrade} `))return section
+ if(normalizedGrade==='kindergarten'&&/^k\d+$/i.test(section))return section.toUpperCase()
+ return `${grade} ${section}`
+}
+
 export default function AttendanceManagementPanel(){
  const [tab,setTab]=useState<'students'|'staff'>('students'),[date,setDate]=useState(new Date().toISOString().slice(0,10)),[classes,setClasses]=useState<any[]>([]),[classKey,setClassKey]=useState(''),[staff,setStaff]=useState<any[]>([])
  const [states,setStates]=useState<Record<string,Status>>({}),[notes,setNotes]=useState<Record<string,string>>({}),[times,setTimes]=useState<Record<string,string>>({}),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[notice,setNotice]=useState('')
@@ -21,7 +32,7 @@ export default function AttendanceManagementPanel(){
  return <div className="space-y-5">
   <section className={panel}><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><div className="flex items-center gap-2"><ClipboardCheck className="text-kcs-blue-600"/><h2 className="text-xl font-bold text-kcs-blue-900 dark:text-white">Registre officiel des présences</h2></div><p className="mt-2 text-sm text-gray-500">Élèves et personnel, enregistrés dans l’écosystème et répercutés dans leurs dossiers.</p></div><div className="flex flex-wrap gap-2"><button className={button} onClick={()=>void load()}><RefreshCw size={16}/>Actualiser</button><button className={button} disabled={saving||rows.length===0} onClick={()=>void save()}><Save size={16}/>{saving?'Enregistrement…':'Enregistrer'}</button></div></div></section>
   {notice&&<p className="rounded-xl bg-kcs-blue-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white">{notice}</p>}
-  <section className={panel}><div className="grid gap-3 md:grid-cols-[220px_1fr_auto]"><input type="date" className={field} value={date} onChange={event=>setDate(event.target.value)}/><div className="flex rounded-xl bg-gray-100 p-1 dark:bg-kcs-blue-950">{(['students','staff'] as const).map(value=><button key={value} onClick={()=>setTab(value)} className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold ${tab===value?'bg-white text-kcs-blue-800 shadow dark:bg-kcs-blue-800 dark:text-white':'text-gray-500'}`}>{value==='students'?'Élèves':'Personnel'}</button>)}</div>{tab==='students'&&<select className={field} value={selectedClass?`${selectedClass.grade}::${selectedClass.section}`:''} onChange={event=>setClassKey(event.target.value)}>{classes.map((item:any)=><option key={`${item.grade}::${item.section}`} value={`${item.grade}::${item.section}`}>{item.grade} {item.section} · {item.students.length} élèves</option>)}</select>}</div>
+  <section className={panel}><div className="grid gap-3 md:grid-cols-[220px_1fr_auto]"><input type="date" className={field} value={date} onChange={event=>setDate(event.target.value)}/><div className="flex rounded-xl bg-gray-100 p-1 dark:bg-kcs-blue-950">{(['students','staff'] as const).map(value=><button key={value} onClick={()=>setTab(value)} className={`flex-1 rounded-lg px-4 py-2 text-sm font-bold ${tab===value?'bg-white text-kcs-blue-800 shadow dark:bg-kcs-blue-800 dark:text-white':'text-gray-500'}`}>{value==='students'?'Élèves':'Personnel'}</button>)}</div>{tab==='students'&&<select className={field} value={selectedClass?`${selectedClass.grade}::${selectedClass.section}`:''} onChange={event=>setClassKey(event.target.value)}>{classes.map((item:any)=><option key={`${item.grade}::${item.section}`} value={`${item.grade}::${item.section}`}>{formatClassLabel(item.grade,item.section)} · {item.students.length} élèves</option>)}</select>}</div>
    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{summary.map(item=><div key={item.status} className="rounded-xl bg-sky-50 p-3 text-center dark:bg-kcs-blue-800/30"><b className="block text-xl dark:text-white">{item.count}</b><span className="text-xs text-gray-500">{labels[item.status]}</span></div>)}</div>
    <button className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-green-700" onClick={()=>setStates(current=>({...current,...Object.fromEntries(rows.map((row:any)=>[row.id,'PRESENT']))}))}><CheckCircle2 size={17}/>Tout marquer présent</button>
   </section>
