@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
+import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
@@ -8,6 +9,76 @@ import { getRouteParam } from '../utils/request.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
 
 export const teachersRouter = Router()
+
+type OrbitDirectoryStudent = {
+  id: string
+  fullName?: string | null
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
+  studentNumber?: string | null
+  className?: string | null
+  status?: string | null
+  externalIds?: Array<{ appSlug: string; externalId: string }>
+}
+
+type OrbitSharedDirectory = {
+  students?: OrbitDirectoryStudent[]
+}
+
+const orbitRegistryIsEnabled = () => Boolean(
+  env.KCS_ORBIT_API_URL && env.KCS_ORBIT_API_KEY && env.KCS_ORBIT_ORGANIZATION_ID,
+)
+
+const orbitStudentName = (student: OrbitDirectoryStudent) => {
+  const parts = (student.fullName ?? '').trim().split(/\s+/).filter(Boolean)
+  return {
+    firstName: student.firstName?.trim() || parts.at(-1) || '',
+    middleName: student.middleName?.trim() || (parts.length > 2 ? parts.slice(1, -1).join(' ') : null),
+    lastName: student.lastName?.trim() || parts[0] || '',
+  }
+}
+
+const getOrbitStudentDirectory = async () => {
+  if (!orbitRegistryIsEnabled()) return null
+
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
+    {
+      headers: {
+        'x-api-key': env.KCS_ORBIT_API_KEY!,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
+  if (!response.ok) {
+    throw new Error(`Orbit shared directory request failed with status ${response.status}`)
+  }
+
+  const directory = await response.json() as OrbitSharedDirectory
+  return (directory.students ?? [])
+    .filter((student) => (student.status ?? 'active').toLowerCase() === 'active')
+    .map((student) => {
+      const name = orbitStudentName(student)
+      const studentNumber = student.studentNumber
+        || student.externalIds?.find((item) => item.appSlug === 'SAVANEX')?.externalId
+        || student.id
+      return {
+        id: student.id,
+        studentNumber,
+        grade: student.className?.trim() || 'Unassigned',
+        section: '',
+        status: 'active',
+        user: {
+          id: student.id,
+          firstName: name.firstName,
+          middleName: name.middleName,
+          lastName: name.lastName,
+        },
+      }
+    })
+}
 
 const workspaceSchema = z.object({
   state: z.record(z.unknown()),
@@ -95,21 +166,27 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
         select: {
           id: true, name: true, code: true, description: true, grade: true, credits: true,
           schedules: { select: { id: true, day: true, startTime: true, endTime: true, room: true } },
-          enrollments: { select: { studentId: true, student: { select: { id: true, studentNumber: true, grade: true, section: true, status: true, gpa: true, attendanceRate: true, user: { select: { id: true, firstName: true, lastName: true } } } } } },
+          enrollments: { select: { studentId: true, student: { select: { id: true, studentNumber: true, grade: true, section: true, status: true, gpa: true, attendanceRate: true, user: { select: { id: true, firstName: true, middleName: true, lastName: true } } } } } },
           assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true, submissions: { select: { id: true, studentId: true, submittedAt: true, score: true, status: true } } }, orderBy: { dueDate: 'asc' } },
           grades: { select: { id: true, studentId: true, assignmentId: true, score: true, maxScore: true, percentage: true, letterGrade: true, period: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
         },
       },
     },
   })
-  const studentDirectory = await prisma.studentProfile.findMany({
+  const localStudentDirectory = await prisma.studentProfile.findMany({
     where: { status: { equals: 'active', mode: 'insensitive' } },
     select: {
       id: true, studentNumber: true, grade: true, section: true, status: true,
-      user: { select: { id: true, firstName: true, lastName: true } },
+      user: { select: { id: true, firstName: true, middleName: true, lastName: true } },
     },
     orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
   })
+  let studentDirectory = localStudentDirectory
+  try {
+    studentDirectory = await getOrbitStudentDirectory() ?? localStudentDirectory
+  } catch (error) {
+    console.warn('[teacher-overview] Orbit student directory unavailable; using local Nexus registry.', error)
+  }
   if (!teacher) {
     const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
     const assignedClasses = extractWorkspaceClasses(workspace?.state)

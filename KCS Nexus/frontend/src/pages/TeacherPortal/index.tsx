@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { printOfficialPdf } from '@/utils/officialPdf'
+import { canonicalClassLabel, compareClassLabels, schoolClassOptions } from '@/utils/classLabels'
 import {
   aiSignals,
   aiRecommendations,
@@ -54,37 +55,7 @@ const statusTone = (value: string) => {
   return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
 }
 
-const normalizeClassPart = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ')
-const canonicalClassLabel = (gradeValue: unknown, sectionValue: unknown = '') => {
-  const grade = normalizeClassPart(gradeValue)
-  const section = normalizeClassPart(sectionValue)
-  if (grade && section && grade.toLowerCase() === section.toLowerCase()) {
-    return canonicalClassLabel(grade)
-  }
-  const combined = [grade, section].filter(Boolean).join(' ')
-  const kindergarten = combined.match(/^(?:(?:kindergarten\s+)(?:k|grade)\s*|k(?:indergarten)?\s*)([3-5])$/i)
-  if (kindergarten) return 'K' + kindergarten[1]
-  const ordinal = combined.match(/^(\d{1,2})(?:st|nd|rd|th)\s+grade$/i)
-  if (ordinal) {
-    const gradeNumber = Number(ordinal[1])
-    if (gradeNumber >= 1 && gradeNumber <= 12) return 'Grade ' + gradeNumber
-  }
-  const numberedGrade = combined.match(/^grade\s*(1[0-2]|[1-9])(?:\s+grade\s*\1)?$/i)
-  if (numberedGrade) return 'Grade ' + Number(numberedGrade[1])
-  return combined || 'Unassigned'
-}
-const classRank = (className: string) => {
-  const kindergarten = className.match(/^K([3-5])$/i)
-  if (kindergarten) return Number(kindergarten[1]) - 3
-  const grade = className.match(/^Grade\s*(1[0-2]|[1-9])$/i)
-  if (grade) return Number(grade[1]) + 2
-  return Number.MAX_SAFE_INTEGER
-}
-const compareClassLabels = (left: string, right: string) => {
-  const rankDifference = classRank(left) - classRank(right)
-  return rankDifference || left.localeCompare(right, 'en', { numeric: true })
-}
-const gradeOptions = ['K3', 'K4', 'K5', ...Array.from({ length: 12 }, (_, index) => 'Grade ' + (index + 1))]
+const gradeOptions = schoolClassOptions
 const normalizeCreditHours = (value: unknown) => {
   const numeric = Number(String(value ?? '').replace(/^0+(?=\d)/, ''))
   return Number.isFinite(numeric) ? Math.min(60, Math.max(1, Math.trunc(numeric))) : 1
@@ -176,6 +147,7 @@ type StudentProfileResponse = {
   }
   user?: {
     firstName?: string
+    middleName?: string | null
     lastName?: string
     email?: string
   }
@@ -191,15 +163,16 @@ const toClassKey = (grade: string, section = '') => canonicalClassLabel(grade, s
 
 const mapRegistryStudent = (student: StudentProfileResponse, index: number): RegistryStudent => {
   const firstName = student.user?.firstName?.trim() ?? ''
+  const middleName = student.user?.middleName?.trim() ?? ''
   const lastName = student.user?.lastName?.trim() ?? ''
-  const name = `${firstName} ${lastName}`.trim() || student.studentNumber || `Student ${index + 1}`
+  const name = [lastName, middleName, firstName].filter(Boolean).join(' ') || student.studentNumber || `Student ${index + 1}`
 
   return {
     id: student.id,
     studentNumber: student.studentNumber,
     name,
-    grade: student.grade,
-    section: student.section ?? '',
+    grade: canonicalClassLabel(student.grade, student.section),
+    section: '',
     parentId: student.parentLinks?.[0]?.parentId ?? student.parentLinks?.[0]?.parent?.id,
     advisor: 'Official assigned-course roster',
     average: student.analytics?.average ?? undefined,
@@ -242,7 +215,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [registryStatus, setRegistryStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   const getRosterForClass = (className: string) => superAdminStudentPool.filter((student) => (
-    toClassKey(student.grade, student.section) === toClassKey(className) || inferGradeLabel(`${student.grade}${student.section}`) === className
+    toClassKey(student.grade, student.section) === toClassKey(className)
   ))
 
   const [actionMessage, setActionMessage] = useState('')
@@ -390,8 +363,19 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       const workspace = response.data?.data
       const state = workspace?.state as Record<string, any> | undefined
       if (state) {
-        if (Array.isArray(state.courses) && state.courses.length) setCourses(state.courses)
-        if (Array.isArray(state.teacherStudents) && state.teacherStudents.length) setTeacherStudents(state.teacherStudents)
+        if (Array.isArray(state.courses) && state.courses.length) {
+          setCourses(state.courses.map((course: any) => {
+            const className = canonicalClassLabel(course.className || course.gradeLevels?.[0])
+            return { ...course, className, gradeLevels: [className] }
+          }))
+        }
+        if (Array.isArray(state.teacherStudents) && state.teacherStudents.length) {
+          setTeacherStudents(state.teacherStudents.map((student: RegistryStudent) => ({
+            ...student,
+            grade: canonicalClassLabel(student.grade, student.section),
+            section: '',
+          })))
+        }
         if (Array.isArray(state.attendanceEntries)) setAttendanceEntries(state.attendanceEntries)
         if (Array.isArray(state.assignmentList)) setAssignmentList(state.assignmentList)
         if (Array.isArray(state.gradeEntries)) setGradeEntries(state.gradeEntries)
@@ -449,12 +433,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         const officialCourses = (overview.courses ?? []).map((course: any) => ({
           id: course.id,
           name: course.name,
-          className: course.grade,
+          className: canonicalClassLabel(course.grade),
           room: course.schedules?.[0]?.room ?? '—',
           teacher: 'Assigned teacher',
           abbreviation: course.code,
           creditHours: course.credits ?? 1,
-          gradeLevels: [course.grade],
+          gradeLevels: [canonicalClassLabel(course.grade)],
           studentIds: (course.enrollments ?? []).map((enrollment: any) => enrollment.studentId),
           status: 'active',
         }))
@@ -617,7 +601,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       if (segment === 'discipline') return { columns: ['Reference', 'Student', 'Date', 'Category', 'Level', 'Status'], rows: disciplineList.map((item) => [item.id, item.student, item.date, item.category, item.level, item.status]), narrative: 'Confidential discipline-report register. Distribution is restricted to authorized staff.' }
       if (segment === 'messages') return { columns: ['From / To', 'Subject', 'Time', 'Response'], rows: inbox.map((item) => [item.from, item.subject, item.time, item.requiresResponse ? 'Required' : 'No']), narrative: 'Confidential teacher communication register.' }
       if (segment === 'settings') return { columns: ['Field', 'Recorded value'], rows: [['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim()], ['Email', profileDraft.email], ['Phone', profileDraft.phone]], narrative: 'Teacher profile record. This document does not include the profile photo.' }
-      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: teacherStudents.map((student) => [student.name, `${student.grade}${student.section}`, `${student.average ?? '—'}%`, `${student.attendance ?? '—'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
+      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: teacherStudents.map((student) => [student.name, canonicalClassLabel(student.grade, student.section), `${student.average ?? '—'}%`, `${student.attendance ?? '—'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
     })()
     if (!printOfficialPdf({ title: `Teacher ${meta.title} Export`, subtitle: 'KCS Nexus AI — Kinshasa Christian School', metadata: [['Document', meta.title], ['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim() || 'Teacher'], ['Academic year', '2025–2026'], ['Records', exportData.rows.length]], ...exportData, orientation: exportData.columns.length > 5 ? 'landscape' : 'portrait' })) return runAction('Allow pop-ups to generate the official printable PDF.')
     runAction(`${meta.title} contextual official PDF was generated.`)
@@ -766,6 +750,25 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const enrollmentClasses = useMemo(() => Array.from(new Set(
     superAdminStudentPool.map((student) => canonicalClassLabel(student.grade, student.section)),
   )).sort(compareClassLabels), [superAdminStudentPool])
+  const studentClassOptions = useMemo(() => Array.from(new Set(
+    teacherStudents.map((student) => canonicalClassLabel(student.grade, student.section)),
+  )).filter((className) => gradeOptions.includes(className)).sort(compareClassLabels), [teacherStudents])
+  const visibleTeacherStudents = useMemo(() => {
+    const query = studentQuery.trim().toLowerCase()
+    return teacherStudents
+      .filter((student) => {
+        const className = canonicalClassLabel(student.grade, student.section)
+        const searchable = `${student.name} ${className} ${student.advisor ?? ''} ${student.risk ?? ''} ${student.strengths?.join(' ') ?? ''} ${student.weaknesses?.join(' ') ?? ''}`.toLowerCase()
+        return (studentClassFilter === 'All' || className === studentClassFilter) && (!query || searchable.includes(query))
+      })
+      .sort((left, right) => {
+        const classDifference = compareClassLabels(
+          canonicalClassLabel(left.grade, left.section),
+          canonicalClassLabel(right.grade, right.section),
+        )
+        return classDifference || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
+      })
+  }, [studentClassFilter, studentQuery, teacherStudents])
   const visibleEnrollmentStudents = useMemo(() => {
     const query = enrollmentQuery.trim().toLowerCase()
     return superAdminStudentPool.filter((student) => {
@@ -1415,7 +1418,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <footer className="flex flex-col-reverse gap-3 border-t border-gray-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
               <p className="text-xs text-gray-500 dark:text-gray-400">Changes apply only after saving. Cancel leaves the existing roster untouched.</p>
               <div className="flex gap-2">
-                <button type="button" disabled={enrollmentSaving} onClick={() => setEnrollmentDialogCourseId(null)} className="rounded-xl border-2 border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-900 dark:text-white">Cancel</button>
+                <button type="button" disabled={enrollmentSaving} onClick={() => setEnrollmentDialogCourseId(null)} className="rounded-xl border-2 border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-800 dark:text-kcs-gold-200 dark:hover:bg-kcs-blue-700">Cancel</button>
                 <button type="button" disabled={enrollmentSaving} onClick={() => void saveCourseEnrollment()} className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">
                   {enrollmentSaving ? 'Saving...' : `Save ${enrollmentDraftIds.length} enrolled`}
                 </button>
@@ -1427,14 +1430,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'students' && (
         <div className="space-y-6">
-          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">Detailed student search</h3><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, class, advisor, risk, strengths, weaknesses..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{Array.from(new Set(teacherStudents.map((student) => `${student.grade}${student.section}`))).sort().map((className) => <option key={className}>{className}</option>)}</select></div></div>
+          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">Detailed student search</h3><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, class, advisor, risk, strengths, weaknesses..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{studentClassOptions.map((className) => <option key={className}>{className}</option>)}</select></div></div>
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Import from Super Admin registry</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Teacher-created rosters must be based on official school records.</p>
             <div className="mt-4 grid gap-3">
               <select className={inputClass} value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
-                {superAdminStudentPool.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section} - {student.risk} risk</option>)}
+                {superAdminStudentPool.map((student) => <option key={student.id} value={student.id}>{student.name} - {canonicalClassLabel(student.grade, student.section)} - {student.risk} risk</option>)}
               </select>
               <button onClick={importStudent} className={compactButton}>Add to my students</button>
             </div>
@@ -1443,12 +1446,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-          {teacherStudents.filter((student) => { const text = `${student.name} ${student.grade}${student.section} ${student.advisor} ${student.risk} ${student.strengths?.join(' ')} ${student.weaknesses?.join(' ')}`.toLowerCase(); return (studentClassFilter === 'All' || `${student.grade}${student.section}` === studentClassFilter) && text.includes(studentQuery.toLowerCase()) }).map((student) => (
+          {visibleTeacherStudents.map((student) => (
             <button type="button" onClick={() => setStudentDetail(student)} key={student.id} className="rounded-2xl border border-gray-100 bg-white p-5 text-left transition hover:border-kcs-blue-300 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-kcs-blue-900 dark:text-white">{student.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{student.grade}{student.section} - advisor {student.advisor}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)} - advisor {student.advisor}</p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
               </div>
@@ -1462,7 +1465,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           ))}
           </div>
         </div>
-        {studentDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button onClick={() => setStudentDetail(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', `${studentDetail.grade}${studentDetail.section}`], ['Average', `${studentDetail.average ?? 'N/A'}%`], ['Attendance', `${studentDetail.attendance ?? 'N/A'}%`], ['Rank', `#${studentDetail.rank ?? 'N/A'}`], ['Risk', studentDetail.risk ?? 'low'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
+        {studentDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button onClick={() => setStudentDetail(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', canonicalClassLabel(studentDetail.grade, studentDetail.section)], ['Average', `${studentDetail.average ?? 'N/A'}%`], ['Attendance', `${studentDetail.attendance ?? 'N/A'}%`], ['Rank', `#${studentDetail.rank ?? 'N/A'}`], ['Risk', studentDetail.risk ?? 'low'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
         </div>
       )}
 
@@ -1738,7 +1741,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">Bulletin setup</h3>
               <div className="mt-4 grid gap-3">
                 <select className={inputClass} value={reportCardStudentId} onChange={(event) => setReportCardStudentId(event.target.value)}>
-                  {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {student.grade}{student.section}</option>)}
+                  {teacherStudents.map((student) => <option key={student.id} value={student.id}>{student.name} - {canonicalClassLabel(student.grade, student.section)}</option>)}
                 </select>
                 <input className={inputClass} value={reportCardTerm} onChange={(event) => setReportCardTerm(event.target.value)} />
                 <div className="grid grid-cols-3 gap-3 rounded-xl bg-gray-50 p-4 text-center dark:bg-kcs-blue-800/30">
@@ -1859,7 +1862,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       {segment === 'reports' && (
         <div className="space-y-6">
           <div className={panelClass}><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Operational report generator</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Administrative Staff submission</h3></div><div className="flex flex-wrap gap-2"><select value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value as 'Daily' | 'Weekly' | 'Annual')} className={inputClass}><option>Daily</option><option>Weekly</option><option>Annual</option></select><button type="button" onClick={printTeacherReport} className={compactButton}><Printer size={16}/> Print / PDF</button><button type="button" onClick={submitTeacherReport} className={compactButton}><Upload size={16}/> Submit to staff</button></div></div><div className="mt-5 grid gap-3 md:grid-cols-4">{[['Period', reportPeriod], ['Students', teacherStudents.length], ['Classes', courses.length], ['Generated', new Date().toLocaleDateString()]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs uppercase text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div>{actionMessage && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}</div>
-          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{student.grade}{student.section} · Average {student.average ?? 'N/A'} · Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
+          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · Average {student.average ?? 'N/A'} · Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Draft report card</h3>
@@ -1906,7 +1909,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <div className="mt-4 space-y-3">
               {teacherStudents.slice(0, 8).map((student) => (
                 <button key={student.id} type="button" onClick={() => setSelectedAiStudent(student)} className="flex w-full items-center justify-between rounded-xl bg-gray-50 p-3 text-left dark:bg-kcs-blue-800/30">
-                  <span><strong className="text-kcs-blue-900 dark:text-white">{student.name}</strong><span className="block text-xs text-gray-500">{student.grade}{student.section} - {student.attendance ?? 'N/A'}% attendance</span></span>
+                  <span><strong className="text-kcs-blue-900 dark:text-white">{student.name}</strong><span className="block text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} - {student.attendance ?? 'N/A'}% attendance</span></span>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusTone(student.risk ?? 'low')}`}>{student.risk ?? 'low'} risk</span>
                 </button>
               ))}
