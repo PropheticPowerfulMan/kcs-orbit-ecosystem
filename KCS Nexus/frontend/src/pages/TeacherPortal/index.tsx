@@ -174,7 +174,7 @@ const mapRegistryStudent = (student: StudentProfileResponse, index: number): Reg
     grade: canonicalClassLabel(student.grade, student.section),
     section: '',
     parentId: student.parentLinks?.[0]?.parentId ?? student.parentLinks?.[0]?.parent?.id,
-    advisor: 'Official assigned-course roster',
+    advisor: student.analytics ? 'Official assigned-course roster' : 'Not assigned to this teacher',
     average: student.analytics?.average ?? undefined,
     rank: student.analytics?.rank ?? undefined,
     attendance: student.analytics?.attendanceRate ?? undefined,
@@ -189,6 +189,13 @@ const mapRegistryStudent = (student: StudentProfileResponse, index: number): Reg
       : 'Verified indicators: ' + (student.analytics?.gradedItems ?? 0) + ' graded item(s), ' + (student.analytics?.attendanceRecords ?? 0) + ' attendance record(s), and ' + (student.analytics?.missingAssignments ?? 0) + ' overdue assignment(s).',
 
   }
+}
+
+const sameRegistryStudent = (left: RegistryStudent, right: RegistryStudent) => {
+  if (left.id === right.id) return true
+  const leftNumber = left.studentNumber?.trim().toLowerCase()
+  const rightNumber = right.studentNumber?.trim().toLowerCase()
+  return Boolean(leftNumber && rightNumber && leftNumber === rightNumber)
 }
 
 const TeacherSectionView = ({ segment }: { segment: string }) => {
@@ -417,7 +424,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     return () => { active = false }
   }, [user?.id])
 
-  const findStudent = (studentId: string) => superAdminStudentPool.find((student) => student.id === studentId)
+  const findStudent = (studentId: string) => teacherStudents.find((student) => student.id === studentId)
+    ?? superAdminStudentPool.find((student) => student.id === studentId)
   const runAction = (message: string, isError = false) => { setActionMessage(message); setActionIsError(isError) }
 
   useEffect(() => {
@@ -750,15 +758,45 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const enrollmentClasses = useMemo(() => Array.from(new Set(
     superAdminStudentPool.map((student) => canonicalClassLabel(student.grade, student.section)),
   )).sort(compareClassLabels), [superAdminStudentPool])
+  const officialStudentCatalog = useMemo(() => {
+    const assignedById = new Map(teacherStudents.map((student) => [student.id, student]))
+    const assignedByNumber = new Map(
+      teacherStudents
+        .filter((student) => student.studentNumber?.trim())
+        .map((student) => [student.studentNumber!.trim().toLowerCase(), student]),
+    )
+
+    return superAdminStudentPool.map((officialStudent) => {
+      const assignedStudent = assignedById.get(officialStudent.id)
+        ?? (officialStudent.studentNumber
+          ? assignedByNumber.get(officialStudent.studentNumber.trim().toLowerCase())
+          : undefined)
+      const mergedStudent = assignedStudent
+        ? { ...officialStudent, ...assignedStudent }
+        : officialStudent
+
+      return {
+        ...mergedStudent,
+        id: officialStudent.id,
+        studentNumber: officialStudent.studentNumber ?? assignedStudent?.studentNumber,
+        name: officialStudent.name || assignedStudent?.name || officialStudent.studentNumber || 'Student',
+        grade: canonicalClassLabel(officialStudent.grade, officialStudent.section),
+        section: '',
+      }
+    }).sort((left, right) => {
+      const classDifference = compareClassLabels(left.grade, right.grade)
+      return classDifference || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
+    })
+  }, [superAdminStudentPool, teacherStudents])
   const studentClassOptions = useMemo(() => Array.from(new Set(
-    teacherStudents.map((student) => canonicalClassLabel(student.grade, student.section)),
-  )).filter((className) => gradeOptions.includes(className)).sort(compareClassLabels), [teacherStudents])
+    officialStudentCatalog.map((student) => canonicalClassLabel(student.grade, student.section)),
+  )).filter((className) => gradeOptions.includes(className)).sort(compareClassLabels), [officialStudentCatalog])
   const visibleTeacherStudents = useMemo(() => {
     const query = studentQuery.trim().toLowerCase()
-    return teacherStudents
+    return officialStudentCatalog
       .filter((student) => {
         const className = canonicalClassLabel(student.grade, student.section)
-        const searchable = `${student.name} ${className} ${student.advisor ?? ''} ${student.risk ?? ''} ${student.strengths?.join(' ') ?? ''} ${student.weaknesses?.join(' ') ?? ''}`.toLowerCase()
+        const searchable = `${student.name} ${student.studentNumber ?? ''} ${className} ${student.advisor ?? ''} ${student.risk ?? ''} ${student.strengths?.join(' ') ?? ''} ${student.weaknesses?.join(' ') ?? ''}`.toLowerCase()
         return (studentClassFilter === 'All' || className === studentClassFilter) && (!query || searchable.includes(query))
       })
       .sort((left, right) => {
@@ -768,7 +806,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         )
         return classDifference || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
       })
-  }, [studentClassFilter, studentQuery, teacherStudents])
+  }, [officialStudentCatalog, studentClassFilter, studentQuery])
   const visibleEnrollmentStudents = useMemo(() => {
     const query = enrollmentQuery.trim().toLowerCase()
     return superAdminStudentPool.filter((student) => {
@@ -934,7 +972,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const importStudent = async () => {
     const student = findStudent(selectedStudentId)
     if (!student) return
-    const nextStudents = teacherStudents.some((item) => item.id === student.id) ? teacherStudents : [student, ...teacherStudents]
+    const nextStudents = teacherStudents.some((item) => sameRegistryStudent(item, student)) ? teacherStudents : [student, ...teacherStudents]
     if (!await persistWorkspace({ teacherStudents: nextStudents }, `${student.name} imported from the Super Admin registry and saved.`)) return
     setTeacherStudents(nextStudents)
   }
@@ -1430,14 +1468,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'students' && (
         <div className="space-y-6">
-          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">Detailed student search</h3><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, class, advisor, risk, strengths, weaknesses..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{studentClassOptions.map((className) => <option key={className}>{className}</option>)}</select></div></div>
+          <div className={panelClass}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">Official Orbit student directory</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Active school records enriched with the teacher's verified academic indicators.</p></div><span className="rounded-full bg-kcs-blue-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{registryStatus === 'loading' ? 'Synchronizing…' : `${visibleTeacherStudents.length} of ${officialStudentCatalog.length} students`}</span></div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, student number, class, advisor, risk..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{studentClassOptions.map((className) => <option key={className}>{className}</option>)}</select></div>{registryStatus === 'error' && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">The Orbit directory could not be loaded. Refresh the page to retry.</p>}</div>
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Import from Super Admin registry</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Teacher-created rosters must be based on official school records.</p>
             <div className="mt-4 grid gap-3">
               <select className={inputClass} value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)}>
-                {superAdminStudentPool.map((student) => <option key={student.id} value={student.id}>{student.name} - {canonicalClassLabel(student.grade, student.section)} - {student.risk} risk</option>)}
+                {officialStudentCatalog.map((student) => <option key={student.id} value={student.id}>{student.name} - {canonicalClassLabel(student.grade, student.section)} - {student.studentNumber ?? 'No ID'}</option>)}
               </select>
               <button onClick={importStudent} className={compactButton}>Add to my students</button>
             </div>
@@ -1463,9 +1501,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <p className="mt-4 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{student.aiInsight}</p>
             </button>
           ))}
+          {registryStatus === 'ready' && visibleTeacherStudents.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-gray-300">No active Orbit student matches this search and class filter.</div>}
           </div>
         </div>
-        {studentDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button onClick={() => setStudentDetail(null)}><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', canonicalClassLabel(studentDetail.grade, studentDetail.section)], ['Average', `${studentDetail.average ?? 'N/A'}%`], ['Attendance', `${studentDetail.attendance ?? 'N/A'}%`], ['Rank', `#${studentDetail.rank ?? 'N/A'}`], ['Risk', studentDetail.risk ?? 'low'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
+        {studentDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button type="button" onClick={() => setStudentDetail(null)} aria-label="Close student profile" className="rounded-xl border border-gray-200 bg-white p-2 text-kcs-blue-900 hover:bg-gray-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-white dark:hover:bg-kcs-blue-700"><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', canonicalClassLabel(studentDetail.grade, studentDetail.section)], ['Average', studentDetail.average == null ? 'N/A' : `${studentDetail.average}%`], ['Attendance', studentDetail.attendance == null ? 'N/A' : `${studentDetail.attendance}%`], ['Rank', studentDetail.rank == null ? 'N/A' : `#${studentDetail.rank}`], ['Risk', studentDetail.risk ?? 'unassessed'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
         </div>
       )}
 
