@@ -12,6 +12,14 @@ export function splitClassName(className?: string | null) {
     return { grade: `K${kindergartenMatch[1]}`, section }
   }
 
+  const ordinalGradeMatch = rawGrade.match(/^(\d{1,2})(?:st|nd|rd|th)\s+grade$/i)
+  if (ordinalGradeMatch) {
+    const gradeNumber = Number(ordinalGradeMatch[1])
+    if (gradeNumber >= 1 && gradeNumber <= 12) {
+      return { grade: `Grade ${gradeNumber}`, section }
+    }
+  }
+
   const gradeMatch = rawGrade.match(/^grade\s*(\d{1,2})(?:\s+grade\s*\1)?$/i)
   if (gradeMatch) {
     return { grade: `Grade ${Number(gradeMatch[1])}`, section }

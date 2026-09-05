@@ -12,7 +12,7 @@ import SuggestionBox from '@/components/shared/SuggestionBox'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import TeacherAcademicOperations from '@/components/teacher/TeacherAcademicOperations'
-import TeacherHomeroomAttendance from '@/components/teacher/TeacherHomeroomAttendance'
+import TeacherClassAttendance from '@/components/teacher/TeacherClassAttendance'
 import TeacherReportCards from '@/components/teacher/TeacherReportCards'
 import { aiAPI, authAPI, messagesAPI, teacherWorkspaceAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
@@ -869,7 +869,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const panelClass = 'rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
   const compactButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
 
-  if (segment === 'attendance') return <TeacherHomeroomAttendance />
+  if (segment === 'attendance') return <TeacherClassAttendance />
 
   if (segment === 'assignments') return <TeacherAcademicOperations segment={segment} />
 

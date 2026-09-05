@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { compareClassParts, normalizeClassParts } from '../utils/className.js'
+import { belongsToTeacherClasses, extractWorkspaceClasses, mergeTeacherClasses, teacherClassKey } from '../utils/teacherClassAccess.js'
 
 export const attendanceRouter = Router()
 
@@ -55,6 +56,26 @@ const summarize = (records: Array<{ status: string }>) => {
   }
 }
 
+async function assignedTeacherClasses(userId: string) {
+  const [teacher, workspace] = await Promise.all([
+    prisma.teacherProfile.findUnique({
+      where: { userId },
+      select: {
+        status: true,
+        homeroomGrade: true,
+        homeroomSection: true,
+        courses: { select: { grade: true } },
+      },
+    }),
+    prisma.teacherWorkspace.findUnique({ where: { userId }, select: { state: true } }),
+  ])
+  const profileClasses = teacher?.courses.map((course) => normalizeClassParts(course.grade, '')) ?? []
+  if (teacher?.status === 'HOMEROOM_TEACHER' && teacher.homeroomGrade) {
+    profileClasses.push(normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection))
+  }
+  return mergeTeacherClasses(profileClasses, extractWorkspaceClasses(workspace?.state))
+}
+
 async function updateStudentRates(studentIds: string[]) {
   const records = await prisma.attendanceRecord.findMany({
     where: { studentId: { in: studentIds } },
@@ -84,25 +105,41 @@ attendanceRouter.get('/staff/me', requireRoles('admin', 'staff', 'teacher'), asy
 }))
 
 attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const teacher = await prisma.teacherProfile.findUnique({
-    where: { userId: req.user!.sub },
-    select: { status: true, homeroomGrade: true, homeroomSection: true },
-  })
-  if (!teacher || teacher.status !== 'HOMEROOM_TEACHER' || !teacher.homeroomGrade) {
-    return success(res, { class: null, students: [] }, 'No main-teacher class is assigned to this account')
-  }
   const date = normalizedDay(z.coerce.date().parse(String(req.query.date ?? new Date().toISOString().slice(0, 10))))
-  const students = await prisma.studentProfile.findMany({
-    where: { grade: teacher.homeroomGrade, section: teacher.homeroomSection ?? '' },
+  const assignedClasses = await assignedTeacherClasses(req.user!.sub)
+  const registryStudents = await prisma.studentProfile.findMany({
     include: {
       user: { select: { firstName: true, middleName: true, lastName: true } },
       attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' } },
     },
     orderBy: { user: { lastName: 'asc' } },
   })
+  const visibleStudents = registryStudents.filter((student) => belongsToTeacherClasses(student, assignedClasses))
+  const classesByKey = new Map<string, { grade: string; section: string; studentCount: number }>()
+  for (const student of visibleStudents) {
+    const value = normalizeClassParts(student.grade, student.section)
+    const key = teacherClassKey(value)
+    const existing = classesByKey.get(key)
+    classesByKey.set(key, { ...value, studentCount: (existing?.studentCount ?? 0) + 1 })
+  }
+  const classes = [...classesByKey.values()].sort(compareClassParts)
+  if (!classes.length) {
+    return success(res, { date: date.toISOString().slice(0, 10), class: null, classes: [], students: [] }, 'No students are currently available in the teacher registry')
+  }
+  const requestedClass = req.query.grade
+    ? normalizeClassParts(String(req.query.grade), String(req.query.section ?? ''))
+    : classes[0]
+  if (!classesByKey.has(teacherClassKey(requestedClass))) {
+    throw new ApiError(403, 'The selected class is not assigned to this teacher')
+  }
+  const students = visibleStudents.filter((student) => {
+    const value = normalizeClassParts(student.grade, student.section)
+    return teacherClassKey(value) === teacherClassKey(requestedClass)
+  })
   return success(res, {
     date: date.toISOString().slice(0, 10),
-    class: { grade: teacher.homeroomGrade, section: teacher.homeroomSection ?? '' },
+    class: { grade: requestedClass.grade, section: requestedClass.section },
+    classes,
     students: students.map((student) => ({
       id: student.id,
       studentNumber: student.studentNumber,
@@ -115,22 +152,25 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
 
 attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = studentAttendanceSchema.parse(req.body)
-  const teacher = await prisma.teacherProfile.findUnique({
-    where: { userId: req.user!.sub },
-    select: { status: true, homeroomGrade: true, homeroomSection: true },
-  })
-  if (!teacher || teacher.status !== 'HOMEROOM_TEACHER' || teacher.homeroomGrade !== payload.grade || (teacher.homeroomSection ?? '') !== payload.section) {
-    throw new ApiError(403, 'Attendance is limited to the class assigned to this main teacher')
+  const selectedClass = normalizeClassParts(payload.grade, payload.section)
+  const assignedClasses = await assignedTeacherClasses(req.user!.sub)
+  if (assignedClasses.length && !assignedClasses.some((value) => teacherClassKey(value) === teacherClassKey(selectedClass))) {
+    throw new ApiError(403, 'Attendance is limited to a class assigned to this teacher')
   }
   const date = normalizedDay(payload.date)
   const ids = payload.entries.map((entry) => entry.studentId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate student in attendance register')
   const students = await prisma.studentProfile.findMany({
-    where: { id: { in: ids }, grade: payload.grade, section: payload.section },
-    select: { id: true },
+    where: { id: { in: ids } },
+    select: { id: true, grade: true, section: true },
   })
-  if (students.length !== ids.length) throw new ApiError(400, 'Every student must belong to the assigned main-teacher class')
-  const className = [payload.grade, payload.section].filter(Boolean).join(' ')
+  if (students.length !== ids.length || students.some((student) => {
+    const value = normalizeClassParts(student.grade, student.section)
+    return teacherClassKey(value) !== teacherClassKey(selectedClass)
+  })) {
+    throw new ApiError(400, 'Every student must belong to the selected teacher class')
+  }
+  const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
   await prisma.$transaction(async (tx) => {
     for (const entry of payload.entries) {
       await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className, period: payload.period ?? null } })

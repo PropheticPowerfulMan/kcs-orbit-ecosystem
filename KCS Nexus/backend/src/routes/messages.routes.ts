@@ -106,23 +106,24 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     const results = await Promise.all(batch.map(async (parent) => {
       const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
       const attachmentNote = req.file ? `\n\nDocument joint : ${req.file.originalname}. Disponible aussi dans votre boîte Nexus.` : ''
-      if (data.channels.includes('email')) row.email = await sendSchoolMail({ to: parent.email, subject: data.subject, text: data.body + attachmentNote, attachments: req.file ? [{ filename: req.file.originalname, content: req.file.buffer, contentType: req.file.mimetype }] : undefined, branded: true })
+      if (data.channels.includes('email')) row.email = { sent: true, queued: true, reason: 'QUEUED' }
       if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}${attachmentNote}`, { brand: false })
       const internalMessageId = messageIdByRecipient.get(parent.id)
       const deliveryRows = data.channels.map((channel) => {
-        const result = row[channel] as { sent: boolean; reason?: string }
+        const result = row[channel] as { sent: boolean; queued?: boolean; reason?: string }
+        const queued = channel === 'email' && Boolean(result.queued)
         return {
           channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const,
-          status: result.sent ? 'SENT' as const : 'FAILED' as const,
+          status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const,
           subject: data.subject,
           body: data.body,
           senderId,
           recipientName: String(row.name),
           recipientEmail: parent.email,
           recipientPhone: parent.phone,
-          sentAt: result.sent ? new Date() : null,
-          failureReason: result.sent ? null : (result.reason || 'DELIVERY_FAILED'),
-          metadata: { internalMessageId, recipientId: parent.id },
+          sentAt: queued ? null : result.sent ? new Date() : null,
+          failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'),
+          metadata: { internalMessageId, recipientId: parent.id, ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString() } : {}) },
         }
       })
       await prisma.correspondenceLog.createMany({ data: deliveryRows })
@@ -130,8 +131,8 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     }))
     delivery.push(...results)
   }
-  const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => Boolean((row[channel] as { sent?: boolean } | undefined)?.sent)))
-  return success(res, { recipients: parents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded and delivered' : 'Parent communication recorded, but external delivery failed', 201)
+  const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => { const result = row[channel] as { sent?: boolean; queued?: boolean } | undefined; return Boolean(result?.sent || result?.queued) }))
+  return success(res, { recipients: parents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
 }))
 
 messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {

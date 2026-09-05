@@ -19,6 +19,8 @@ test('normalizes imported grade and section fields into one class identity', () 
   assert.deepEqual(normalizeClassParts('Kindergarten', 'Grade 3'), { grade: 'K3', section: '' })
   assert.deepEqual(normalizeClassParts('K3', ''), { grade: 'K3', section: '' })
   assert.deepEqual(normalizeClassParts('Grade 7', 'Grade 7'), { grade: 'Grade 7', section: '' })
+  assert.deepEqual(normalizeClassParts('7th Grade', ''), { grade: 'Grade 7', section: '' })
+  assert.deepEqual(normalizeClassParts('12th Grade', ''), { grade: 'Grade 12', section: '' })
 })
 
 test('sorts classes from K3 through Grade 12', () => {

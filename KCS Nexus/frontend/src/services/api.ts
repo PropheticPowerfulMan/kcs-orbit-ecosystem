@@ -227,7 +227,7 @@ export const teacherWorkspaceAPI = {
 }
 
 export const attendanceAPI = {
-  teacherHomeroom: (date: string) => api.get('/attendance/teacher/homeroom', { params: { date } }),
+  teacherHomeroom: (date: string, grade?: string, section?: string) => api.get('/attendance/teacher/homeroom', { params: { date, grade, section } }),
   saveTeacherHomeroom: (data: object) => api.post('/attendance/teacher/homeroom', data),
   students: (date: string) => api.get('/attendance/students', { params: { date } }),
   saveStudents: (data: object) => api.post('/attendance/students', data),

@@ -14,7 +14,7 @@ const messageRecipient = (message: any) => message.recipient
 const copy = {
   fr: {
     loadFailed: 'Chargement impossible.', selectParent: 'Sélectionnez au moins un parent.', selectChannel: 'Sélectionnez Email ou SMS.', enterMessage: 'Saisissez un sujet et un message.',
-    confirmSend: (count: number) => 'Confirmer l’envoi à ' + count + ' parent(s) ?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message enregistré pour ' + count + ' parent(s). Emails envoyés : ' + es + ', échecs : ' + ef + '. SMS envoyés : ' + ss + ', échecs : ' + sf + '.',
+    confirmSend: (count: number) => 'Confirmer l’envoi à ' + count + ' parent(s) ?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message enregistré pour ' + count + ' parent(s). Emails placés dans la file sécurisée : ' + es + ', erreurs immédiates : ' + ef + '. SMS envoyés : ' + ss + ', échecs : ' + sf + '.',
     sendFailed: 'Échec de l’envoi.', confirmDelete: (count: number) => 'Supprimer définitivement ' + count + ' ancien(s) message(s) ?', deleted: (count: number) => count + ' message(s) supprimé(s).', deleteFailed: 'Suppression impossible.',
     recipients: 'Destinataires', families: 'Parents et familles', selected: 'sélectionné(s)', parentSearch: 'Nom complet, email, téléphone ou code d’accès...', deselect: 'Désélectionner', selectResults: 'Sélectionner les résultats', clear: 'Effacer', noEmail: 'Email absent', noPhone: 'Téléphone absent',
     official: 'Communication officielle', channels: 'Email, SMS et boîte Nexus', subject: 'Sujet', exactMessage: 'Message exact à envoyer...', copyStored: 'Sans préfixe applicatif ; une copie est conservée dans Nexus.', sending: 'Envoi...', sendTo: (count: number) => 'Envoyer à ' + count + ' parent(s)',
@@ -23,7 +23,7 @@ const copy = {
   },
   en: {
     loadFailed: 'Unable to load communications.', selectParent: 'Select at least one parent.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
-    confirmSend: (count: number) => 'Confirm delivery to ' + count + ' parent(s)?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message recorded for ' + count + ' parent(s). Emails sent: ' + es + ', failed: ' + ef + '. SMS sent: ' + ss + ', failed: ' + sf + '.',
+    confirmSend: (count: number) => 'Confirm delivery to ' + count + ' parent(s)?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message recorded for ' + count + ' parent(s). Emails placed in the secure queue: ' + es + ', immediate errors: ' + ef + '. SMS sent: ' + ss + ', failed: ' + sf + '.',
     sendFailed: 'Delivery failed.', confirmDelete: (count: number) => 'Permanently delete ' + count + ' old message(s)?', deleted: (count: number) => count + ' message(s) deleted.', deleteFailed: 'Unable to delete messages.',
     recipients: 'Recipients', families: 'Parents and families', selected: 'selected', parentSearch: 'Full name, email, phone number or access code...', deselect: 'Deselect', selectResults: 'Select results', clear: 'Clear', noEmail: 'No email', noPhone: 'No phone number',
     official: 'Official communication', channels: 'Email, SMS and Nexus inbox', subject: 'Subject', exactMessage: 'Exact message to send...', copyStored: 'No application prefix; a copy is retained in Nexus.', sending: 'Sending...', sendTo: (count: number) => 'Send to ' + count + ' parent(s)',
@@ -110,7 +110,7 @@ export default function ParentCommunicationPanel() {
       const response = await messagesAPI.deliverToParents(formData)
       const data = response.data?.data
       const delivery = Array.isArray(data?.delivery) ? data.delivery : []
-      const emailSent = delivery.filter((row: any) => row.email?.sent).length
+      const emailSent = delivery.filter((row: any) => row.email?.sent || row.email?.queued).length
       const smsSent = delivery.filter((row: any) => row.sms?.sent).length
       const emailFailed = channels.includes('email') ? delivery.length - emailSent : 0
       const smsFailed = channels.includes('sms') ? delivery.length - smsSent : 0

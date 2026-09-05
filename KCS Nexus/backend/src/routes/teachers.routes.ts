@@ -5,6 +5,7 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
+import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
 
 export const teachersRouter = Router()
 
@@ -101,7 +102,32 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
       },
     },
   })
-  if (!teacher) return success(res, { profile: null, courses: [], students: [], assignments: [], grades: [], timetable: [] }, 'Teacher profile synchronization pending')
+  if (!teacher) {
+    const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
+    const assignedClasses = extractWorkspaceClasses(workspace?.state)
+    const registry = await prisma.studentProfile.findMany({
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, email: true } },
+        parentLinks: { select: { parentId: true } },
+      },
+      orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
+    })
+    const students = registry.filter((student) => belongsToTeacherClasses(student, assignedClasses)).map((student) => ({
+      ...student,
+      analytics: {
+        average: student.gpa ?? null,
+        attendanceRate: student.attendanceRate ?? null,
+        rank: null,
+        risk: 'unassessed',
+        strengths: [],
+        weaknesses: [],
+        gradedItems: 0,
+        attendanceRecords: 0,
+        missingAssignments: 0,
+      },
+    }))
+    return success(res, { profile: null, courses: [], students, assignments: [], grades: [], timetable: [] }, 'Teacher roster loaded while profile synchronization is pending')
+  }
   const students = new Map<string, any>()
   teacher.courses.forEach((course) => course.enrollments.forEach(({ student }) => students.set(student.id, student)))
   const studentIds = [...students.keys()]
