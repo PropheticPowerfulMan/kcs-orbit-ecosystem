@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { compareClassParts, normalizeClassParts } from '../utils/className.js'
 
 export const attendanceRouter = Router()
 
@@ -152,8 +153,9 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
   })
   const classes = new Map<string, { grade: string; section: string; students: unknown[] }>()
   for (const student of students) {
-    const key = `${student.grade}::${student.section}`
-    const group = classes.get(key) ?? { grade: student.grade, section: student.section, students: [] }
+    const normalizedClass = normalizeClassParts(student.grade, student.section)
+    const key = `${normalizedClass.grade}::${normalizedClass.section}`
+    const group = classes.get(key) ?? { ...normalizedClass, students: [] }
     group.students.push({
       id: student.id,
       studentNumber: student.studentNumber,
@@ -163,7 +165,8 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
     })
     classes.set(key, group)
   }
-  return success(res, { date: date.toISOString().slice(0, 10), classes: [...classes.values()] }, 'Student attendance register loaded')
+  const orderedClasses = [...classes.values()].sort(compareClassParts)
+  return success(res, { date: date.toISOString().slice(0, 10), classes: orderedClasses }, 'Student attendance register loaded')
 }))
 
 attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -173,10 +176,14 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate student in attendance register')
   const students = await prisma.studentProfile.findMany({ where: { id: { in: ids } }, select: { id: true, grade: true, section: true } })
   if (students.length !== ids.length) throw new ApiError(404, 'One or more students were not found')
-  if (students.some((student) => student.grade !== payload.grade || student.section !== payload.section)) {
+  const selectedClass = normalizeClassParts(payload.grade, payload.section)
+  if (students.some((student) => {
+    const studentClass = normalizeClassParts(student.grade, student.section)
+    return studentClass.grade !== selectedClass.grade || studentClass.section !== selectedClass.section
+  })) {
     throw new ApiError(400, 'Every student must belong to the selected class')
   }
-  const className = [payload.grade, payload.section].filter(Boolean).join(' ')
+  const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
   await prisma.$transaction(async (tx) => {
     for (const entry of payload.entries) {
       await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className, period: payload.period ?? null } })
