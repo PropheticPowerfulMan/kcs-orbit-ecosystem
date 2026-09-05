@@ -102,6 +102,14 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
       },
     },
   })
+  const studentDirectory = await prisma.studentProfile.findMany({
+    where: { status: { equals: 'active', mode: 'insensitive' } },
+    select: {
+      id: true, studentNumber: true, grade: true, section: true, status: true,
+      user: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
+  })
   if (!teacher) {
     const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
     const assignedClasses = extractWorkspaceClasses(workspace?.state)
@@ -126,7 +134,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
         missingAssignments: 0,
       },
     }))
-    return success(res, { profile: null, courses: [], students, assignments: [], grades: [], timetable: [] }, 'Teacher roster loaded while profile synchronization is pending')
+    return success(res, { profile: null, courses: [], students, studentDirectory, assignments: [], grades: [], timetable: [] }, 'Teacher roster loaded while profile synchronization is pending')
   }
   const students = new Map<string, any>()
   teacher.courses.forEach((course) => course.enrollments.forEach(({ student }) => students.set(student.id, student)))
@@ -180,6 +188,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     profile: { id: teacher.id, employeeNumber: teacher.employeeNumber, department: teacher.department, qualification: teacher.qualification, homeroomGrade: teacher.homeroomGrade, homeroomSection: teacher.homeroomSection, user: teacher.user },
     courses: teacher.courses,
     students: analyticsStudents,
+    studentDirectory,
     assignments: teacher.courses.flatMap((course) => course.assignments.map((assignment) => ({ ...assignment, courseId: course.id, courseName: course.name }))),
     grades: teacher.courses.flatMap((course) => course.grades.map((grade) => ({ ...grade, courseId: course.id, courseName: course.name }))),
     timetable: teacher.courses.flatMap((course) => course.schedules.map((schedule) => ({ ...schedule, courseId: course.id, courseName: course.name, studentCount: course.enrollments.length }))),
