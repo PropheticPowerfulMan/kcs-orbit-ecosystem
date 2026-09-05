@@ -1134,13 +1134,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   ].map((tab) => (
                     <button
                       key={tab.id}
-                      onClick={() => {
-                        if (tab.id === 'enrollment' && selectedEnrollmentCourse) {
-                          openCourseEnrollment(selectedEnrollmentCourse.id)
-                          return
-                        }
-                        setCourseTab('setup')
-                      }}
+                      onClick={() => setCourseTab(tab.id as 'setup' | 'enrollment')}
                       className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${courseTab === tab.id ? 'bg-white text-kcs-blue-800 shadow-sm dark:bg-kcs-blue-950 dark:text-white' : 'text-gray-500 hover:text-kcs-blue-700 dark:text-gray-300'}`}
                     >
                       {tab.label}
@@ -1279,6 +1273,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
             {courseTab === 'enrollment' && (
               <div className="grid gap-4 p-5 lg:grid-cols-2">
+                <div className="lg:col-span-2 rounded-xl border border-dashed border-kcs-blue-200 bg-white p-4 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/40 dark:text-gray-300">
+                  <p className="font-bold text-kcs-blue-900 dark:text-white">Choose the subject roster to manage</p>
+                  <p className="mt-1">All {courses.length} assigned subject{courses.length === 1 ? '' : 's'} are listed below. Select a subject, then open its roster manager to enroll or remove students.</p>
+                </div>
+
                 {selectedEnrollmentCourse && (
                   <div className="lg:col-span-2 rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/30">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1287,8 +1286,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         <h4 className="font-bold text-kcs-blue-900 dark:text-white">{selectedEnrollmentCourse.name}</h4>
                         <p className="text-xs text-gray-600 dark:text-gray-300">{selectedEnrollmentCourse.gradeLevels.join(', ')} - {selectedEnrollmentCourse.studentIds.length} enrolled - {superAdminStudentPool.length - selectedEnrollmentCourse.studentIds.length} available</p>
                       </div>
-                      <button onClick={() => editCourse(selectedEnrollmentCourse.id)} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-kcs-blue-700 shadow-sm hover:bg-kcs-blue-100 dark:bg-kcs-blue-950 dark:text-kcs-blue-200">
-                        Edit selected subject
+                      <button onClick={() => openCourseEnrollment(selectedEnrollmentCourse.id)} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
+                        Manage selected roster
                       </button>
                     </div>
                   </div>
@@ -1306,6 +1305,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button type="button" onClick={(event) => { event.stopPropagation(); editCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-kcs-gold-100 px-3 py-1 text-xs font-bold text-kcs-blue-800">Modify subject</button>
                       <button type="button" onClick={(event) => { event.stopPropagation(); deleteCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">Delete subject</button>
+                      <button type="button" onClick={(event) => { event.stopPropagation(); openCourseEnrollment(subject.id) }} className="rounded-full bg-kcs-blue-700 px-3 py-1 text-xs font-bold text-white hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950">Manage roster</button>
                       {superAdminStudentPool.map((student) => {
                         const enrolled = subject.studentIds.includes(student.id)
                         return (
@@ -1504,7 +1504,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           {registryStatus === 'ready' && visibleTeacherStudents.length === 0 && <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-gray-300">No active Orbit student matches this search and class filter.</div>}
           </div>
         </div>
-        {studentDetail && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button type="button" onClick={() => setStudentDetail(null)} aria-label="Close student profile" className="rounded-xl border border-gray-200 bg-white p-2 text-kcs-blue-900 hover:bg-gray-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-white dark:hover:bg-kcs-blue-700"><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', canonicalClassLabel(studentDetail.grade, studentDetail.section)], ['Average', studentDetail.average == null ? 'N/A' : `${studentDetail.average}%`], ['Attendance', studentDetail.attendance == null ? 'N/A' : `${studentDetail.attendance}%`], ['Rank', studentDetail.rank == null ? 'N/A' : `#${studentDetail.rank}`], ['Risk', studentDetail.risk ?? 'unassessed'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
+        {studentDetail && <div className="fixed inset-0 z-[130] flex items-center justify-center bg-kcs-blue-950/75 p-2 backdrop-blur-sm sm:p-5"><div className="min-h-[70vh] max-h-[96vh] w-[96vw] max-w-6xl overflow-y-auto rounded-3xl border border-kcs-blue-100 bg-white p-5 shadow-2xl sm:p-8 dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Official student profile</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{studentDetail.name}</h3></div><button type="button" onClick={() => setStudentDetail(null)} aria-label="Close student profile" className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border-2 border-kcs-blue-900 bg-kcs-gold-400 p-2 text-kcs-blue-950 shadow-lg ring-2 ring-white transition hover:scale-105 hover:bg-kcs-gold-300 dark:border-white dark:bg-kcs-gold-300 dark:text-kcs-blue-950 dark:ring-kcs-blue-700"><X size={18}/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-3">{[['Class', canonicalClassLabel(studentDetail.grade, studentDetail.section)], ['Average', studentDetail.average == null ? 'N/A' : `${studentDetail.average}%`], ['Attendance', studentDetail.attendance == null ? 'N/A' : `${studentDetail.attendance}%`], ['Rank', studentDetail.rank == null ? 'N/A' : `#${studentDetail.rank}`], ['Risk', studentDetail.risk ?? 'unassessed'], ['Advisor', studentDetail.advisor ?? 'Pending']].map(([label, value]) => <div key={label} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div><p className="mt-4 rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30 dark:text-white">{studentDetail.aiInsight}</p></div></div>}
         </div>
       )}
 

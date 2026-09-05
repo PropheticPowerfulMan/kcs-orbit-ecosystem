@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle,
+  TrendingUp,
   CheckCircle2,
   Clock3,
   Eye,
@@ -154,6 +154,9 @@ export default function TeacherReportCards() {
   const [error, setError] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [viewMode, setViewMode] = useState<'spreadsheet' | 'cards'>('spreadsheet')
+  const [rowFilter, setRowFilter] = useState<'all' | 'incomplete' | 'ready' | 'submitted'>('all')
+  const [bulkComment, setBulkComment] = useState('')
 
   const cycleKey = `${academicYear}::${term}::${courseId}`
   const course = courses.find((item) => item.id === courseId) ?? courses[0]
@@ -203,10 +206,15 @@ export default function TeacherReportCards() {
       })
   }, [academicYear, course, cycleDrafts, officialTerm, reportCards, submissions, term])
 
-  const rows = useMemo(
-    () => allRows.filter((row) => !query.trim() || `${studentName(row.student)} ${row.student.studentNumber}`.toLowerCase().includes(query.toLowerCase())),
-    [allRows, query],
-  )
+  const rows = useMemo(() => allRows.filter((row) => {
+    const matchesQuery = !query.trim()
+      || `${studentName(row.student)} ${row.student.studentNumber}`.toLowerCase().includes(query.toLowerCase())
+    const matchesStatus = rowFilter === 'all'
+      || (rowFilter === 'incomplete' && row.finalGrade === null)
+      || (rowFilter === 'ready' && row.finalGrade !== null && !row.submission)
+      || (rowFilter === 'submitted' && Boolean(row.submission))
+    return matchesQuery && matchesStatus
+  }), [allRows, query, rowFilter])
   const submittedCount = allRows.filter((row) => row.submission).length
   const locked = allRows.length > 0 && (submittedCount === allRows.length || allRows.some((row) => ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(row.card?.publicationStatus ?? '')))
   const readyCount = allRows.filter((row) => row.finalGrade !== null).length
@@ -218,6 +226,11 @@ export default function TeacherReportCards() {
       late: totals.late + (summary?.late ?? 0),
     }
   }, { present: 0, absent: 0, late: 0 })
+  const gradedRows = allRows.filter((row) => row.finalGrade !== null)
+  const classAverage = gradedRows.length
+    ? Number((gradedRows.reduce((sum, row) => sum + (row.finalGrade ?? 0), 0) / gradedRows.length).toFixed(1))
+    : null
+  const passingCount = gradedRows.filter((row) => (row.finalGrade ?? 0) >= 70).length
 
   const updateEntry = (studentId: string, patch: Partial<DraftEntry>) => {
     setDrafts((current) => ({
@@ -229,6 +242,21 @@ export default function TeacherReportCards() {
     }))
   }
 
+
+  const applyBulkComment = () => {
+    if (locked || !bulkComment || !rows.length) return
+    setDrafts((current) => {
+      const nextCycle = { ...(current[cycleKey] ?? {}) }
+      rows.forEach((row) => {
+        nextCycle[row.student.id] = {
+          ...(nextCycle[row.student.id] ?? emptyEntry()),
+          teacherComment: bulkComment,
+        }
+      })
+      return { ...current, [cycleKey]: nextCycle }
+    })
+    setNotice(`Comment applied to ${rows.length} visible learner(s). Save the draft to persist it.`)
+  }
   const persistDrafts = async (successMessage = 'Report-card draft saved in KCS Nexus.') => {
     setSaving(true)
     setError('')
@@ -342,16 +370,35 @@ export default function TeacherReportCards() {
         <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Search<input className={`${field} mt-1 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Name or student number' /></label>
       </div>
+        <div className='mt-4 grid gap-3 border-t border-gray-100 pt-4 lg:grid-cols-[auto_220px_1fr_auto] dark:border-kcs-blue-800'>
+          <div className='flex rounded-xl bg-gray-100 p-1 dark:bg-kcs-blue-800/60'>
+            <button type='button' onClick={() => setViewMode('spreadsheet')} className={`rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'spreadsheet' ? 'bg-white text-kcs-blue-900 shadow dark:bg-kcs-blue-950 dark:text-white' : 'text-gray-500 dark:text-gray-300'}`}>Quick entry grid</button>
+            <button type='button' onClick={() => setViewMode('cards')} className={`rounded-lg px-3 py-2 text-xs font-bold ${viewMode === 'cards' ? 'bg-white text-kcs-blue-900 shadow dark:bg-kcs-blue-950 dark:text-white' : 'text-gray-500 dark:text-gray-300'}`}>Detailed cards</button>
+          </div>
+          <label className='text-[10px] font-bold uppercase text-gray-400'>Row status
+            <select className={`${field} mt-1 normal-case`} value={rowFilter} onChange={(event) => setRowFilter(event.target.value as typeof rowFilter)}>
+              <option value='all'>All learners</option><option value='incomplete'>Incomplete</option><option value='ready'>Ready to submit</option><option value='submitted'>Submitted</option>
+            </select>
+          </label>
+          <label className='text-[10px] font-bold uppercase text-gray-400'>Apply a professional comment to visible rows
+            <select className={`${field} mt-1 normal-case`} value={bulkComment} onChange={(event) => setBulkComment(event.target.value)}>
+              <option value=''>Choose from the comment bank</option>{commentBank.map((comment) => <option key={comment} value={comment}>{comment}</option>)}
+            </select>
+          </label>
+          <button type='button' disabled={locked || !bulkComment || !rows.length} onClick={applyBulkComment} className='self-end rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-300 disabled:cursor-not-allowed disabled:opacity-40'>Apply to {rows.length}</button>
+        </div>
+        <p className='mt-3 text-xs text-gray-500 dark:text-gray-400'>Quick entry provides spreadsheet-style work; detailed cards preserve conduct, recommendations, comment bank, override audit and attendance details.</p>
       {!courses.length && <p className='mt-4 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'>No official subject is assigned to this teacher account yet.</p>}
     </div>
 
-    <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
+    <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-6'>
       {[
         [Users, 'Learners', allRows.length],
         [FileCheck2, 'Grades ready', `${readyCount}/${allRows.length}`],
         [CheckCircle2, 'Submitted', `${submittedCount}/${allRows.length}`],
+        [TrendingUp, 'Class average', classAverage === null ? 'N/A' : `${classAverage}%`],
+        [ShieldCheck, 'Passing ≥70%', `${passingCount}/${gradedRows.length}`],
         [GraduationCap, 'Present', attendanceTotals.present],
-        [AlertTriangle, 'Absent / late', `${attendanceTotals.absent} / ${attendanceTotals.late}`],
       ].map(([Icon, label, value]) => {
         const CardIcon = Icon as typeof Users
         return <div key={String(label)} className={panel}><CardIcon size={19} className='text-kcs-blue-600 dark:text-kcs-blue-300' /><p className='mt-3 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white'>{String(value)}</p><p className='text-xs font-semibold text-gray-500'>{String(label)}</p></div>
@@ -364,7 +411,7 @@ export default function TeacherReportCards() {
         {locked && <span className='inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200'><LockKeyhole size={14} />Submitted · read-only</span>}
       </div>
 
-      <div className='mt-5 space-y-4'>
+      {viewMode === 'cards' ? <div className='mt-5 space-y-4'>
         {rows.map((row) => {
           const attendance = row.student.analytics?.attendanceSummary
           const overrideChanged = row.draft.overrideValue.trim() !== '' && row.finalGrade !== row.calculated
@@ -396,7 +443,60 @@ export default function TeacherReportCards() {
           </article>
         })}
         {!rows.length && <p className='py-10 text-center text-sm text-gray-500'>No enrolled learner matches this subject and search.</p>}
-      </div>
+      </div> : (
+        <div className='mt-5 overflow-hidden rounded-2xl border border-gray-200 dark:border-kcs-blue-700'>
+          <div className='overflow-x-auto'>
+            <table className='w-full min-w-[1180px] text-sm'>
+              <thead className='bg-kcs-blue-950 text-left text-[10px] font-black uppercase tracking-wide text-white'>
+                <tr>
+                  <th className='sticky left-0 z-10 bg-kcs-blue-950 px-4 py-3'>Learner</th>
+                  <th className='px-3 py-3'>Gradebook</th>
+                  <th className='px-3 py-3'>Final / override</th>
+                  <th className='px-3 py-3'>Override audit reason</th>
+                  <th className='px-3 py-3'>Attendance</th>
+                  <th className='px-3 py-3'>Teacher comment</th>
+                  <th className='px-3 py-3'>Workflow status</th>
+                </tr>
+              </thead>
+              <tbody className='divide-y divide-gray-100 dark:divide-kcs-blue-800'>
+                {rows.map((row) => {
+                  const attendance = row.student.analytics?.attendanceSummary
+                  const overrideChanged = row.draft.overrideValue.trim() !== '' && row.finalGrade !== row.calculated
+                  return <tr key={row.student.id} className='align-top bg-white dark:bg-kcs-blue-950/50'>
+                    <td className='sticky left-0 z-[1] min-w-56 bg-white px-4 py-3 dark:bg-kcs-blue-950'>
+                      <p className='font-bold text-kcs-blue-950 dark:text-white'>{studentName(row.student)}</p>
+                      <p className='mt-1 text-xs text-gray-500'>{row.student.studentNumber} · {row.student.grade}{row.student.section ?? ''}</p>
+                    </td>
+                    <td className='px-3 py-3 font-bold text-kcs-blue-800 dark:text-kcs-blue-200'>
+                      {row.calculated === null ? 'Incomplete' : `${row.calculated}% · ${letterGrade(row.calculated)}`}
+                    </td>
+                    <td className='min-w-36 px-3 py-3'>
+                      <input aria-label={`Final grade for ${studentName(row.student)}`} disabled={locked} className={field} type='number' min={0} max={100} value={row.draft.overrideValue} placeholder={row.calculated === null ? '0–100' : String(row.calculated)} onChange={(event) => updateEntry(row.student.id, { overrideValue: event.target.value })} />
+                      <p className={`mt-1 text-[10px] font-bold ${overrideChanged ? 'text-red-600 dark:text-red-300' : 'text-emerald-600 dark:text-emerald-300'}`}>{row.finalGrade === null ? 'Grade required' : `${letterGrade(row.finalGrade)} · ${overrideChanged ? 'manual override' : 'calculated'}`}</p>
+                    </td>
+                    <td className='min-w-56 px-3 py-3'>
+                      <input aria-label={`Override reason for ${studentName(row.student)}`} disabled={locked || !row.draft.overrideValue.trim()} className={field} value={row.draft.overrideReason} onChange={(event) => updateEntry(row.student.id, { overrideReason: event.target.value })} placeholder={overrideChanged ? 'Required justification' : 'No override'} />
+                    </td>
+                    <td className='min-w-44 px-3 py-3 text-xs text-gray-600 dark:text-gray-300'>
+                      <p className='font-bold text-kcs-blue-900 dark:text-white'>{attendance?.attendanceRate == null ? 'Not measured' : `${attendance.attendanceRate}%`}</p>
+                      <p className='mt-1'>{attendance?.present ?? 0} P · {attendance?.absent ?? 0} A · {attendance?.late ?? 0} L</p>
+                    </td>
+                    <td className='min-w-72 px-3 py-3'>
+                      <textarea aria-label={`Teacher comment for ${studentName(row.student)}`} disabled={locked} className={field} rows={2} maxLength={400} value={row.draft.teacherComment} onChange={(event) => updateEntry(row.student.id, { teacherComment: event.target.value })} placeholder='Professional academic comment' />
+                    </td>
+                    <td className='min-w-44 px-3 py-3'><span className='inline-flex rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
+                  </tr>
+                })}
+                {!rows.length && <tr><td colSpan={7} className='px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-300'>No enrolled learner matches the current search and status filter.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className='flex flex-col gap-1 border-t border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 dark:text-gray-300'>
+            <span>{rows.length} visible of {allRows.length} enrolled learners</span>
+            <span>Calculated grades remain traceable; every manual override requires an audit reason before submission.</span>
+          </div>
+        </div>
+      )}
     </div>
 
     <div className='sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-kcs-blue-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-950/95 sm:flex-row sm:items-center sm:justify-between'>
