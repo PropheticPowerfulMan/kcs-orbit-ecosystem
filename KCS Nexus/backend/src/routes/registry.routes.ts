@@ -48,6 +48,7 @@ type SharedDirectoryResponse = {
     lastName?: string
     phone?: string | null
     email?: string | null
+    photoData?: string | null
     mustChangePassword?: boolean
     organizationId?: string | null
     studentIds: string[]
@@ -64,6 +65,7 @@ type SharedDirectoryResponse = {
     phone?: string | null
     dateOfBirth?: string | null
     status?: string | null
+    photoData?: string | null
     mustChangePassword?: boolean
     classId?: string | null
     className?: string | null
@@ -205,7 +207,7 @@ async function updateRegistryEntityInOrbit(entityType: RegistryEntityType, ident
   return data
 }
 
-async function updateLocalParentEntity(identifier: string, payload: { firstName?: string; middleName?: string | null; lastName?: string; email?: string; phone?: string | null }) {
+async function updateLocalParentEntity(identifier: string, payload: { firstName?: string; middleName?: string | null; lastName?: string; email?: string; phone?: string | null; photoData?: string | null }) {
   const parent = await prisma.user.findFirst({
     where: { id: identifier, role: 'PARENT' },
     select: { id: true },
@@ -223,6 +225,7 @@ async function updateLocalParentEntity(identifier: string, payload: { firstName?
       ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
       ...(payload.email !== undefined && payload.email !== null ? { email: payload.email } : {}),
       ...(payload.phone !== undefined ? { phone: payload.phone || null } : {}),
+      ...(payload.photoData !== undefined ? { avatar: payload.photoData || null } : {}),
     },
     select: {
       id: true,
@@ -231,6 +234,7 @@ async function updateLocalParentEntity(identifier: string, payload: { firstName?
       lastName: true,
       email: true,
       phone: true,
+      avatar: true,
       role: true,
     },
   })
@@ -405,6 +409,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
           middleName: link.parent.middleName,
           lastName: link.parent.lastName,
           phone: link.parent.phone,
+          photoData: link.parent.avatar,
           email: link.parent.email,
           mustChangePassword: false,
           organizationId: null,
@@ -439,6 +444,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
       studentNumber: student.studentNumber,
       email: student.user.email,
       phone: null,
+      photoData: student.user.avatar,
       dateOfBirth: null,
       status: student.status,
       mustChangePassword: false,
@@ -498,6 +504,7 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
     lastName: z.string().min(1).optional(),
     email: z.string().email().optional(),
     phone: z.string().nullable().optional(),
+    photoData: z.string().max(8_000_000).nullable().optional(),
   }).parse(req.body ?? {})
 
   const updated = await updateLocalParentEntity(String(req.params.identifier), payload)

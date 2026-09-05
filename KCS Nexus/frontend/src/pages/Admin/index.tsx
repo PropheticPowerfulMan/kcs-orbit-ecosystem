@@ -176,6 +176,7 @@ type AdminParentEditForm = {
   email: string
   phone: string
   physicalAddress: string
+  photoData: string
 }
 
 type AdminStudentDraft = {
@@ -243,7 +244,7 @@ const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminSt
   section: student?.section ?? '',
   status: student?.status ?? 'Active',
   dateOfBirth: student?.dateOfBirth?.slice(0, 10) ?? '',
-  photoData: '',
+  photoData: student?.photoData ?? '',
 })
 
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
@@ -253,6 +254,7 @@ const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParen
   email: parent?.email === 'Email non renseigne' ? '' : (parent?.email ?? ''),
   phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
   physicalAddress: parent?.physicalAddress ?? '',
+  photoData: parent?.photoData ?? '',
 })
 
 type AdminAdmissionRequest = {
@@ -1478,6 +1480,9 @@ const AdminSectionView = ({
         section: studentEditForm.section,
         status: studentEditForm.status,
         dateOfBirth: studentEditForm.dateOfBirth || null,
+        ...(studentEditForm.photoData !== (editingStudent.photoData ?? '')
+          ? { photoData: studentEditForm.photoData ?? '' }
+          : {}),
       })
       const roster = await refreshOfficialRoster()
       const updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
@@ -1553,7 +1558,8 @@ const AdminSectionView = ({
         }
         const original = editingParent.students.find((item) => item.id === student.id)
         const originalForm = createAdminStudentEditForm(original ?? null)
-        const changed = student.photoData || (['firstName', 'middleName', 'lastName', 'email', 'studentNumber', 'grade', 'section', 'status', 'dateOfBirth'] as const).some((field) => student[field] !== originalForm[field])
+        const changed = (student.photoData ?? '') !== (originalForm.photoData ?? '')
+          || (['firstName', 'middleName', 'lastName', 'email', 'studentNumber', 'grade', 'section', 'status', 'dateOfBirth'] as const).some((field) => student[field] !== originalForm[field])
         if (changed) {
           await studentsAPI.update(student.id, {
             firstName: student.firstName.trim(),
@@ -1565,7 +1571,9 @@ const AdminSectionView = ({
             section: student.section,
             status: student.status,
             dateOfBirth: student.dateOfBirth || null,
-            ...(student.photoData ? { photoData: student.photoData } : {}),
+            ...(student.photoData !== originalForm.photoData
+              ? { photoData: student.photoData ?? '' }
+              : {}),
           })
         }
       }
@@ -1613,6 +1621,9 @@ const AdminSectionView = ({
         phone: parentEditForm.phone.trim() || null,
         physicalAddress: parentEditForm.physicalAddress.trim() || null,
         studentIds: Array.from(new Set([...parentEditStudents.map((student) => student.id), ...createdStudentIds])),
+        ...(parentEditForm.photoData !== (editingParent.photoData ?? '')
+          ? { photoData: parentEditForm.photoData }
+          : {}),
       }, editingParent.identifierType)
       const roster = await refreshOfficialRoster()
       const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
@@ -2064,6 +2075,14 @@ const AdminSectionView = ({
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
+                  <div className="mt-3">
+                    <PhotoCaptureField
+                      label="Photo du parent"
+                      value={parentEditForm.photoData}
+                      onChange={(photoData) => setParentEditForm((current) => ({ ...current, photoData }))}
+                      onError={setParentNotice}
+                    />
+                  </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Nom
@@ -2495,8 +2514,8 @@ const AdminSectionView = ({
         )}
 
         {editingStudent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Modifier élève">
-            <section className="w-[calc(100vw-2rem)] max-w-none lg:w-[80vw] rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Modifier élève">
+            <section className="max-h-[calc(100dvh-1.5rem)] w-full max-w-none overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900 sm:max-h-[calc(100dvh-3rem)] lg:w-[80vw]">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Modification</p>
@@ -2509,6 +2528,14 @@ const AdminSectionView = ({
               <div className="space-y-4">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
+                  <div className="mt-3">
+                    <PhotoCaptureField
+                      label="Photo de l’élève"
+                      value={studentEditForm.photoData ?? ''}
+                      onChange={(photoData) => setStudentEditForm((current) => ({ ...current, photoData }))}
+                      onError={setStudentNotice}
+                    />
+                  </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Nom

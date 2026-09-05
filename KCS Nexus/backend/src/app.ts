@@ -42,7 +42,7 @@ const authRateLimit = (windowMs: number, max: number) => {
 
 app.use(helmet())
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }))
-app.use(express.json({ limit: '2mb' }))
+app.use(express.json({ limit: '8mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 
