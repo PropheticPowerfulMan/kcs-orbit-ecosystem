@@ -18,13 +18,14 @@ import {
 } from 'lucide-react'
 import { academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { printOfficialPdf } from '@/utils/officialPdf'
+import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels'
 
 type Student = {
   id: string
   studentNumber: string
   grade: string
   section?: string
-  user: { firstName: string; lastName: string }
+  user: { firstName: string; middleName?: string | null; lastName: string }
   analytics?: {
     attendanceRate?: number | null
     attendanceSummary?: {
@@ -57,6 +58,7 @@ type Course = {
   grade: string
   enrollments: Array<{ studentId: string; student: Student }>
   grades: Grade[]
+  source: 'official' | 'workspace'
 }
 
 type Submission = Grade & {
@@ -111,11 +113,183 @@ const emptyEntry = (): DraftEntry => ({
   overrideValue: '',
   overrideReason: '',
 })
+type WorkspaceCourse = {
+  id: string
+  name: string
+  abbreviation?: string
+  code?: string
+  className?: string
+  gradeLevels?: string[]
+  studentIds?: string[]
+  enrollmentMode?: 'class' | 'custom'
+}
 
-const studentName = (student: Student) =>
-  [student.user.lastName, student.user.firstName].filter(Boolean).join(' ').trim() || student.studentNumber
+type WorkspaceGradebookColumn = {
+  id: string
+  maxPoints: number
+}
 
-const letterGrade = (value: number | null) => {
+type TeacherReportWorkspace = {
+  courses?: WorkspaceCourse[]
+  teacherStudents?: Array<Record<string, any>>
+  attendanceEntries?: Array<{ studentId?: string; status?: string }>
+  gradebookColumnsByCourse?: Record<string, WorkspaceGradebookColumn[]>
+  gradebookScores?: Record<string, string>
+  reportCardWorkflow?: DraftStore
+}
+
+const normalizeStudent = (raw: Record<string, any>, fallbackIndex: number, existing?: Student): Student => {
+  const explicitName = String(raw.name ?? '').trim()
+  const rawUser = raw.user ?? {}
+  const studentNumber = String(raw.studentNumber ?? existing?.studentNumber ?? raw.id ?? `STUDENT-${fallbackIndex + 1}`)
+  return {
+    id: String(raw.id ?? existing?.id ?? studentNumber),
+    studentNumber,
+    grade: canonicalClassLabel(raw.grade ?? raw.className ?? existing?.grade, raw.section ?? existing?.section),
+    section: '',
+    user: {
+      firstName: String(rawUser.firstName ?? existing?.user.firstName ?? ''),
+      middleName: rawUser.middleName ?? existing?.user.middleName ?? null,
+      lastName: String(rawUser.lastName ?? existing?.user.lastName ?? explicitName ?? studentNumber),
+    },
+    analytics: {
+      ...(existing?.analytics ?? {}),
+      ...(raw.analytics ?? {}),
+      attendanceRate: raw.analytics?.attendanceRate ?? raw.attendance ?? existing?.analytics?.attendanceRate ?? null,
+    },
+  }
+}
+
+const normalizedScore = (value: unknown, maxPoints: number) => {
+  const entry = String(value ?? '').trim().toUpperCase()
+  if (!entry || entry === 'E' || entry === 'I') return null
+  if (entry === 'U') return 0
+  const numeric = Number(entry)
+  if (!Number.isFinite(numeric)) return null
+  return Math.max(0, Math.min(100, (numeric / Math.max(Number(maxPoints) || 1, 1)) * 100))
+}
+
+const buildReportCourses = (overview: Record<string, any>, state?: TeacherReportWorkspace): Course[] => {
+  const studentsById = new Map<string, Student>()
+  const studentsByNumber = new Map<string, Student>()
+
+  const registerStudent = (raw: Record<string, any>, index: number) => {
+    const id = String(raw.id ?? '')
+    const number = String(raw.studentNumber ?? '').trim().toLowerCase()
+    const existing = (id && studentsById.get(id)) || (number && studentsByNumber.get(number)) || undefined
+    const student = normalizeStudent(raw, index, existing)
+    studentsById.set(student.id, student)
+    if (existing && existing.id !== student.id) {
+      studentsById.set(existing.id, { ...student, id: existing.id })
+    }
+    if (student.studentNumber) studentsByNumber.set(student.studentNumber.trim().toLowerCase(), student)
+  }
+
+  const directoryRecords = (overview.studentDirectory?.length ? overview.studentDirectory : (overview.students ?? [])) as Array<Record<string, any>>
+  directoryRecords.forEach((student, index) => registerStudent(student, index))
+  ;(overview.students ?? []).forEach((student: Record<string, any>, index: number) => registerStudent(student, index))
+  ;(state?.teacherStudents ?? []).forEach((student, index) => registerStudent(student, index))
+  const directoryRoster = directoryRecords
+    .map((student) => studentsById.get(String(student.id)))
+    .filter((student): student is Student => Boolean(student))
+  const attendanceByStudent = new Map<string, string[]>()
+  ;(state?.attendanceEntries ?? []).forEach((entry) => {
+    if (!entry.studentId || !entry.status) return
+    attendanceByStudent.set(entry.studentId, [...(attendanceByStudent.get(entry.studentId) ?? []), entry.status.toUpperCase()])
+  })
+  attendanceByStudent.forEach((statuses, studentId) => {
+    const student = studentsById.get(studentId)
+    if (!student || student.analytics?.attendanceSummary?.total) return
+    const count = (status: string) => statuses.filter((item) => item === status).length
+    const attended = statuses.filter((item) => ['PRESENT', 'LATE', 'EXCUSED'].includes(item)).length
+    student.analytics = {
+      ...(student.analytics ?? {}),
+      attendanceRate: statuses.length ? Number(((attended * 100) / statuses.length).toFixed(1)) : null,
+      attendanceSummary: {
+        total: statuses.length,
+        present: count('PRESENT'),
+        absent: count('ABSENT'),
+        late: count('LATE'),
+        excused: count('EXCUSED'),
+        sick: count('SICK'),
+        suspended: count('SUSPENDED'),
+        attendanceRate: statuses.length ? Number(((attended * 100) / statuses.length).toFixed(1)) : null,
+      },
+    }
+  })
+
+  const officialCourses: Course[] = (overview.courses ?? []).map((rawCourse: Record<string, any>): Course => ({
+    id: String(rawCourse.id),
+    name: String(rawCourse.name ?? 'Subject'),
+    code: String(rawCourse.code ?? ''),
+    grade: canonicalClassLabel(rawCourse.grade),
+    enrollments: (rawCourse.enrollments ?? []).map((enrollment: Record<string, any>, index: number) => {
+      const student = normalizeStudent(enrollment.student ?? { id: enrollment.studentId }, index, studentsById.get(String(enrollment.studentId)))
+      registerStudent(student as unknown as Record<string, any>, index)
+      return { studentId: student.id, student }
+    }),
+    grades: (rawCourse.grades ?? []) as Grade[],
+    source: 'official',
+  }))
+
+  const usedOfficialIds = new Set<string>()
+  const workspaceCourses = (state?.courses ?? []).map((workspaceCourse): Course => {
+    const grade = canonicalClassLabel(workspaceCourse.className ?? workspaceCourse.gradeLevels?.[0])
+    const abbreviation = String(workspaceCourse.abbreviation ?? workspaceCourse.code ?? '').trim()
+    const officialMatch = officialCourses.find((candidate) => (
+      candidate.id === workspaceCourse.id
+      || (candidate.grade === grade && (
+        candidate.name.localeCompare(workspaceCourse.name, 'fr', { sensitivity: 'base' }) === 0
+        || (abbreviation && candidate.code.localeCompare(abbreviation, 'fr', { sensitivity: 'base' }) === 0)
+      ))
+    ))
+    if (officialMatch) usedOfficialIds.add(officialMatch.id)
+
+    const requestedIds = workspaceCourse.enrollmentMode === 'custom'
+      ? (workspaceCourse.studentIds ?? [])
+      : directoryRoster.filter((student) => canonicalClassLabel(student.grade, student.section) === grade).map((student) => student.id)
+    const enrolledStudents = [...new Set(requestedIds)]
+      .map((studentId) => studentsById.get(studentId))
+      .filter((student): student is Student => Boolean(student))
+      .sort((left, right) => studentName(left).localeCompare(studentName(right), 'fr', { sensitivity: 'base' }))
+
+    const columns = state?.gradebookColumnsByCourse?.[workspaceCourse.id] ?? []
+    const gradebookGrades = enrolledStudents.flatMap((student) => columns.flatMap((column) => {
+      const percentage = normalizedScore(state?.gradebookScores?.[`${workspaceCourse.id}-${column.id}-${student.id}`], column.maxPoints)
+      return percentage === null ? [] : [{
+        id: `workspace-${workspaceCourse.id}-${column.id}-${student.id}`,
+        studentId: student.id,
+        assignmentId: column.id,
+        percentage,
+        letterGrade: letterGrade(percentage),
+        period: 'WORKSPACE_GRADEBOOK',
+        createdAt: new Date(0).toISOString(),
+      }]
+    }))
+
+    return {
+      id: officialMatch?.id ?? workspaceCourse.id,
+      name: workspaceCourse.name,
+      code: abbreviation || officialMatch?.code || 'COURSE',
+      grade,
+      enrollments: enrolledStudents.map((student) => ({ studentId: student.id, student })),
+      grades: gradebookGrades.length ? gradebookGrades : (officialMatch?.grades ?? []),
+      source: officialMatch ? 'official' : 'workspace',
+    }
+  })
+
+  return [
+    ...workspaceCourses,
+    ...officialCourses.filter((course) => !usedOfficialIds.has(course.id)),
+  ].sort((left, right) => compareClassLabels(left.grade, right.grade)
+    || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' }))
+}
+
+function studentName(student: Student) {
+  return [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ').trim() || student.studentNumber
+}
+
+function letterGrade(value: number | null) {
   if (value === null) return 'I'
   if (value >= 97) return 'A+'
   if (value >= 93) return 'A'
@@ -172,10 +346,11 @@ export default function TeacherReportCards() {
         teacherWorkspaceAPI.get(),
         academicRecordsAPI.myFinalGrades(),
       ])
-      const nextCourses = (overviewResponse.data?.data?.courses ?? []) as Course[]
-      const state = workspaceResponse.data?.data?.state as { reportCardWorkflow?: DraftStore } | undefined
+      const overview = (overviewResponse.data?.data ?? {}) as Record<string, any>
+      const state = workspaceResponse.data?.data?.state as TeacherReportWorkspace | undefined
+      const nextCourses = buildReportCourses(overview, state)
       setCourses(nextCourses)
-      setCourseId((current) => current || nextCourses[0]?.id || '')
+      setCourseId((current) => nextCourses.some((item) => item.id === current) ? current : (nextCourses[0]?.id ?? ''))
       setDrafts(state?.reportCardWorkflow ?? {})
       setSubmissions(workflowResponse.data?.data?.submissions ?? [])
       setReportCards(workflowResponse.data?.data?.reportCards ?? [])
@@ -204,6 +379,7 @@ export default function TeacherReportCards() {
         const finalGrade = submission?.percentage ?? draftFinal
         return { student, calculated, draft, finalGrade, submission, card }
       })
+      .sort((left, right) => studentName(left.student).localeCompare(studentName(right.student), 'fr', { sensitivity: 'base' }))
   }, [academicYear, course, cycleDrafts, officialTerm, reportCards, submissions, term])
 
   const rows = useMemo(() => allRows.filter((row) => {
@@ -242,6 +418,11 @@ export default function TeacherReportCards() {
     }))
   }
 
+
+  const resetRowFilters = () => {
+    setQuery('')
+    setRowFilter('all')
+  }
 
   const applyBulkComment = () => {
     if (locked || !bulkComment || !rows.length) return
@@ -388,7 +569,8 @@ export default function TeacherReportCards() {
           <button type='button' disabled={locked || !bulkComment || !rows.length} onClick={applyBulkComment} className='self-end rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-300 disabled:cursor-not-allowed disabled:opacity-40'>Apply to {rows.length}</button>
         </div>
         <p className='mt-3 text-xs text-gray-500 dark:text-gray-400'>Quick entry provides spreadsheet-style work; detailed cards preserve conduct, recommendations, comment bank, override audit and attendance details.</p>
-      {!courses.length && <p className='mt-4 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'>No official subject is assigned to this teacher account yet.</p>}
+      {!courses.length && <p className='mt-4 rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-200'>No subject exists in My Courses or in the official teacher assignment yet.</p>}
+      {course && <p className='mt-4 flex items-center gap-2 rounded-xl bg-kcs-blue-50 px-4 py-3 text-xs font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900/40 dark:text-kcs-blue-200'><ShieldCheck size={15} />Live sources: My Courses, Orbit student registry, Teacher Gradebook and Attendance. No sample roster is used.</p>}
     </div>
 
     <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-6'>
@@ -442,7 +624,10 @@ export default function TeacherReportCards() {
             {!locked && <div className='mt-3 flex flex-wrap items-center gap-2'><span className='flex items-center gap-1 text-[10px] font-bold uppercase text-gray-400'><MessageSquareText size={13} />Comment bank</span>{commentBank.map((comment, index) => <button type='button' key={comment} title={comment} onClick={() => updateEntry(row.student.id, { teacherComment: comment })} className='rounded-lg border border-kcs-blue-100 bg-white px-2.5 py-1.5 text-xs font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-kcs-blue-200'>C{index + 1}</button>)}</div>}
           </article>
         })}
-        {!rows.length && <p className='py-10 text-center text-sm text-gray-500'>No enrolled learner matches this subject and search.</p>}
+        {!rows.length && <div className='py-10 text-center text-sm text-gray-500'>
+          <p>{allRows.length ? 'No learner matches the current search and status filter.' : 'No learner is enrolled in this subject yet.'}</p>
+          {allRows.length ? <button type='button' onClick={resetRowFilters} className='mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-bold text-white'>Reset filters</button> : <a href='/portal/teacher/courses' className='mt-3 inline-flex rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-bold text-white'>Open Subject Enrollment</a>}
+        </div>}
       </div> : (
         <div className='mt-5 overflow-hidden rounded-2xl border border-gray-200 dark:border-kcs-blue-700'>
           <div className='overflow-x-auto'>
@@ -487,7 +672,10 @@ export default function TeacherReportCards() {
                     <td className='min-w-44 px-3 py-3'><span className='inline-flex rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
                   </tr>
                 })}
-                {!rows.length && <tr><td colSpan={7} className='px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-300'>No enrolled learner matches the current search and status filter.</td></tr>}
+                {!rows.length && <tr><td colSpan={7} className='px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-300'>
+                  <p>{allRows.length ? 'No learner matches the current search and status filter.' : 'No learner is enrolled in this subject yet.'}</p>
+                  {allRows.length ? <button type='button' onClick={resetRowFilters} className='mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-bold text-white'>Reset filters</button> : <a href='/portal/teacher/courses' className='mt-3 inline-flex rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-bold text-white'>Open Subject Enrollment</a>}
+                </td></tr>}
               </tbody>
             </table>
           </div>

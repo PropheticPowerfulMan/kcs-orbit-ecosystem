@@ -20,6 +20,25 @@ const translateText = (value: string, language: string) => {
       [/^To (.+)$/, 'A $1'], [/^From (.+)$/, 'De $1'], [/^(\d+) unread$/, '$1 non lu(s)'],
       [/^Due (.+)$/, 'Echeance : $1'], [/^Max (.+) points$/, 'Maximum : $1 points'],
       [/^(\d+) student\(s\)$/, '$1 eleve(s)'],
+      [/^(\d+) enrolled$/, '$1 inscrit(s)'],
+      [/^(\d+) active students in the school$/, '$1 élève(s) actif(s) dans l’école'],
+      [/^(\d+)\/(\d+) selected$/, '$1/$2 sélectionné(s)'],
+      [/^Save (\d+) enrolled$/, 'Enregistrer $1 inscrit(s)'],
+      [/^Comment applied to (\d+) visible learner\(s\)\. Save the draft to persist it\.$/, 'Commentaire appliqué à $1 élève(s) visible(s). Enregistrez le brouillon pour le conserver.'],
+      [/^Submission blocked: (\d+) learner\(s\) have no calculated grade or approved override\.$/, 'Soumission bloquée : $1 élève(s) n’ont ni note calculée ni dérogation approuvée.'],
+      [/^Submission blocked: explain every manual override before submission \((\d+) learner\(s\)\)\.$/, 'Soumission bloquée : justifiez chaque dérogation manuelle avant la soumission ($1 élève(s)).'],
+      [/^(\d+) final grade\(s\) submitted\. The session is now read-only pending administrative review\.$/, '$1 note(s) finale(s) soumise(s). La session est maintenant en lecture seule dans l’attente de l’examen administratif.'],
+      [/^Final grade for (.+)$/, 'Note finale de $1'],
+      [/^Override reason for (.+)$/, 'Justification de la dérogation pour $1'],
+      [/^Teacher comment for (.+)$/, 'Commentaire de l’enseignant pour $1'],
+      [/^(\d+) visible of (\d+) enrolled learners$/, '$1 visibles sur $2 élèves inscrits'],
+      [/^Apply to (\d+)$/, 'Appliquer à $1'],
+      [/^(\d+) enrolled - (\d+) available$/, '$1 inscrits - $2 disponibles'],
+      [/^(\d+) credit hour\(s\) - (\d+) enrolled$/, '$1 heure(s) de crédit - $2 inscrits'],
+      [/^Verified indicators: (\d+) graded item\(s\), (\d+) attendance record\(s\), and (\d+) overdue assignment\(s\)\.$/, 'Indicateurs vérifiés : $1 élément(s) noté(s), $2 présence(s) enregistrée(s) et $3 devoir(s) en retard.'],
+      [/^(.+) updated for (.+); (\d+) official student\(s\) enrolled\.$/, '$1 mis à jour pour $2 ; $3 élève(s) officiel(s) inscrit(s).'],
+      [/^(.+) created for (.+); (\d+) official student\(s\) enrolled\.$/, '$1 créé pour $2 ; $3 élève(s) officiel(s) inscrit(s).'],
+      [/^(.+) column added and saved\. Final grades recalculated\.$/, 'Colonne $1 ajoutée et enregistrée. Notes finales recalculées.'],
     ]
     for (const [pattern, replacement] of dynamicRules) {
       if (pattern.test(trimmed)) return value.replace(trimmed, trimmed.replace(pattern, replacement))
@@ -37,6 +56,30 @@ const translateText = (value: string, language: string) => {
       return value.replace(trimmed, trimmed.replace(/\s+spots remaining$/i, ' places restantes'))
     }
   } else {
+    const reverseDynamicRules: Array<[RegExp, string]> = [
+      [/^Commentaire appliqué à (\d+) élève\(s\) visible\(s\)\. Enregistrez le brouillon pour le conserver\.$/, 'Comment applied to $1 visible learner(s). Save the draft to persist it.'],
+      [/^Soumission bloquée : (\d+) élève\(s\) n’ont ni note calculée ni dérogation approuvée\.$/, 'Submission blocked: $1 learner(s) have no calculated grade or approved override.'],
+      [/^Soumission bloquée : justifiez chaque dérogation manuelle avant la soumission \((\d+) élève\(s\)\)\.$/, 'Submission blocked: explain every manual override before submission ($1 learner(s)).'],
+      [/^(\d+) note\(s\) finale\(s\) soumise\(s\)\. La session est maintenant en lecture seule dans l’attente de l’examen administratif\.$/, '$1 final grade(s) submitted. The session is now read-only pending administrative review.'],
+      [/^(\d+) inscrit\(s\)$/, '$1 enrolled'],
+      [/^(\d+) élève\(s\) actif\(s\) dans l’école$/, '$1 active students in the school'],
+      [/^(\d+)\/(\d+) sélectionné\(s\)$/, '$1/$2 selected'],
+      [/^Enregistrer (\d+) inscrit\(s\)$/, 'Save $1 enrolled'],
+      [/^Note finale de (.+)$/, 'Final grade for $1'],
+      [/^Justification de la dérogation pour (.+)$/, 'Override reason for $1'],
+      [/^Commentaire de l’enseignant pour (.+)$/, 'Teacher comment for $1'],
+      [/^(\d+) visibles sur (\d+) élèves inscrits$/, '$1 visible of $2 enrolled learners'],
+      [/^Appliquer à (\d+)$/, 'Apply to $1'],
+      [/^(\d+) inscrits - (\d+) disponibles$/, '$1 enrolled - $2 available'],
+      [/^(\d+) heure\(s\) de crédit - (\d+) inscrits$/, '$1 credit hour(s) - $2 enrolled'],
+      [/^Indicateurs vérifiés : (\d+) élément\(s\) noté\(s\), (\d+) présence\(s\) enregistrée\(s\) et (\d+) devoir\(s\) en retard\.$/, 'Verified indicators: $1 graded item(s), $2 attendance record(s), and $3 overdue assignment(s).'],
+      [/^(.+) mis à jour pour (.+) ; (\d+) élève\(s\) officiel\(s\) inscrit\(s\)\.$/, '$1 updated for $2; $3 official student(s) enrolled.'],
+      [/^(.+) créé pour (.+) ; (\d+) élève\(s\) officiel\(s\) inscrit\(s\)\.$/, '$1 created for $2; $3 official student(s) enrolled.'],
+      [/^Colonne (.+) ajoutée et enregistrée\. Notes finales recalculées\.$/, '$1 column added and saved. Final grades recalculated.'],
+    ]
+    for (const [pattern, replacement] of reverseDynamicRules) {
+      if (pattern.test(trimmed)) return value.replace(trimmed, trimmed.replace(pattern, replacement))
+    }
     if (/^\d+\s+ans d/i.test(trimmed)) {
       return value.replace(trimmed, trimmed.replace(/\s+ans d.*$/i, ' years experience'))
     }

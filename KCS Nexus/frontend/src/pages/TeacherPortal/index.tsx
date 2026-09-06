@@ -265,6 +265,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [enrollmentDraftIds, setEnrollmentDraftIds] = useState<string[]>([])
   const [enrollmentQuery, setEnrollmentQuery] = useState('')
   const [enrollmentClassFilter, setEnrollmentClassFilter] = useState('All classes')
+  const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState<'all' | 'selected' | 'unselected'>('all')
   const [enrollmentAutoSync, setEnrollmentAutoSync] = useState(true)
   const [enrollmentSaving, setEnrollmentSaving] = useState(false)
   const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState('')
@@ -809,13 +810,17 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [officialStudentCatalog, studentClassFilter, studentQuery])
   const visibleEnrollmentStudents = useMemo(() => {
     const query = enrollmentQuery.trim().toLowerCase()
-    return superAdminStudentPool.filter((student) => {
+    return officialStudentCatalog.filter((student) => {
       const className = canonicalClassLabel(student.grade, student.section)
+      const selected = enrollmentDraftIds.includes(student.id)
       const matchesClass = enrollmentClassFilter === 'All classes' || className === enrollmentClassFilter
+      const matchesStatus = enrollmentStatusFilter === 'all'
+        || (enrollmentStatusFilter === 'selected' && selected)
+        || (enrollmentStatusFilter === 'unselected' && !selected)
       const searchable = `${student.name} ${student.studentNumber ?? ''} ${className}`.toLowerCase()
-      return matchesClass && (!query || searchable.includes(query))
+      return matchesClass && matchesStatus && (!query || searchable.includes(query))
     })
-  }, [enrollmentClassFilter, enrollmentQuery, superAdminStudentPool])
+  }, [enrollmentClassFilter, enrollmentDraftIds, enrollmentQuery, enrollmentStatusFilter, officialStudentCatalog])
   const visibleEnrollmentGroups = useMemo(() => {
     const groups = new Map<string, RegistryStudent[]>()
     visibleEnrollmentStudents.forEach((student) => {
@@ -833,6 +838,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setEnrollmentDraftIds([...course.studentIds])
     setEnrollmentQuery('')
     setEnrollmentClassFilter(canonicalClassLabel(course.className || course.gradeLevels[0]))
+    setEnrollmentStatusFilter('all')
     setEnrollmentAutoSync(course.enrollmentMode !== 'custom')
   }
 
@@ -1377,7 +1383,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>
 
-            <div className="grid gap-3 border-b border-gray-100 px-5 py-4 lg:grid-cols-[1fr_230px_auto] lg:items-center sm:px-7 dark:border-kcs-blue-800">
+            <div className="grid gap-3 border-b border-gray-100 px-5 py-4 lg:grid-cols-[minmax(240px,1fr)_190px_180px_auto] lg:items-center sm:px-7 dark:border-kcs-blue-800">
               <input
                 className={inputClass}
                 value={enrollmentQuery}
@@ -1389,12 +1395,16 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <option>All classes</option>
                 {enrollmentClasses.map((className) => <option key={className}>{className}</option>)}
               </select>
+              <select className={inputClass} value={enrollmentStatusFilter} onChange={(event) => setEnrollmentStatusFilter(event.target.value as typeof enrollmentStatusFilter)}>
+                <option value="all">All students</option>
+                <option value="selected">Enrolled only</option>
+                <option value="unselected">Not enrolled</option>
+              </select>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={selectVisibleEnrollment} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">Select visible</button>
                 <button type="button" onClick={deselectVisibleEnrollment} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">Deselect visible</button>
               </div>
             </div>
-
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
               <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-kcs-blue-700 dark:bg-kcs-blue-900/40">
                 <div>
@@ -1420,14 +1430,27 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <div className="space-y-5">
                   {visibleEnrollmentGroups.map(([className, students]) => (
                     <section key={className} className="overflow-hidden rounded-2xl border border-gray-100 dark:border-kcs-blue-800">
-                      <div className="flex items-center justify-between bg-slate-50 px-4 py-3 dark:bg-kcs-blue-900/60">
-                        <h4 className="font-bold text-kcs-blue-900 dark:text-white">{className}</h4>
-                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
-                          {students.filter((student) => enrollmentDraftIds.includes(student.id)).length}/{students.length} selected
-                        </span>
+                      <div className="flex flex-col gap-2 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:bg-kcs-blue-900/60">
+                        <div>
+                          <h4 className="font-bold text-kcs-blue-900 dark:text-white">{className}</h4>
+                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-300">
+                            {students.filter((student) => enrollmentDraftIds.includes(student.id)).length}/{students.length} selected
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => {
+                            setEnrollmentAutoSync(false)
+                            setEnrollmentDraftIds((current) => [...new Set([...current, ...students.map((student) => student.id)])])
+                          }} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-kcs-blue-700 shadow-sm hover:bg-kcs-blue-50 dark:bg-kcs-blue-950 dark:text-kcs-blue-200">Select class</button>
+                          <button type="button" onClick={() => {
+                            const classIds = new Set(students.map((student) => student.id))
+                            setEnrollmentAutoSync(false)
+                            setEnrollmentDraftIds((current) => current.filter((id) => !classIds.has(id)))
+                          }} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-red-50 hover:text-red-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300">Clear class</button>
+                        </div>
                       </div>
-                      <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {students.map((student) => {
+                      <div className="grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-3">
+                        {students.map((student, studentIndex) => {
                           const selected = enrollmentDraftIds.includes(student.id)
                           return (
                             <button
@@ -1438,6 +1461,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                                 ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900'
                                 : 'border-gray-200 bg-white hover:border-kcs-blue-300 hover:bg-slate-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60'}`}
                             >
+                              <span className="w-6 flex-shrink-0 text-right text-[10px] font-black text-gray-400">{studentIndex + 1}</span>
                               <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border text-xs font-bold ${selected ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-gray-300 text-transparent dark:border-kcs-blue-600'}`}>✓</span>
                               <span className="min-w-0">
                                 <span className="block truncate text-sm font-bold text-kcs-blue-900 dark:text-white">{student.name}</span>
