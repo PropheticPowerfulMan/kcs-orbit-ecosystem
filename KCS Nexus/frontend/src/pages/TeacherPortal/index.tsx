@@ -13,6 +13,8 @@ import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import TeacherAcademicOperations from '@/components/teacher/TeacherAcademicOperations'
 import TeacherClassAttendance from '@/components/teacher/TeacherClassAttendance'
+import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'
+import ParentCommunicationPanel from '@/pages/Admin/ParentCommunicationPanel'
 import TeacherReportCards from '@/components/teacher/TeacherReportCards'
 import { aiAPI, authAPI, messagesAPI, teacherWorkspaceAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
@@ -1116,6 +1118,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   if (segment === 'assignments') return <TeacherAcademicOperations segment={segment} />
 
   if (segment === 'report-card') return <TeacherReportCards />
+
+  if (segment === 'messages') return <ParentCommunicationPanel />
+
+  if (segment === 'discipline') return <TeacherDisciplinePanel students={teacherStudents} />
 
   if (segment === 'grades') {
     return (

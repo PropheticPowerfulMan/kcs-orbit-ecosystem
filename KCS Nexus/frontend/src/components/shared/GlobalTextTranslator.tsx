@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { globalFrenchText } from '@/i18n/globalText'
 import { useUIStore } from '@/store/uiStore'
 
-const textAttributes = ['aria-label', 'placeholder', 'title']
+const textAttributes = ['aria-label', 'placeholder', 'title', 'alt']
 const ignoredTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE'])
 const ignoredTextTags = new Set(['TEXTAREA'])
 const englishByFrench = Object.fromEntries(Object.entries(globalFrenchText).map(([english, french]) => [french, english]))
@@ -18,6 +18,8 @@ const translateText = (value: string, language: string) => {
   if (language === 'fr') {
     const dynamicRules: Array<[RegExp, string]> = [
       [/^No results found for "(.+)"$/, 'Aucun résultat trouvé pour « $1 »'],
+      [/^(\d+) assigned student\(s\)$/, '$1 \u00e9l\u00e8ve(s) assign\u00e9(s)'],
+      [/^A discipline report has been recorded for (.+): (.+)\.$/, 'Un rapport disciplinaire a \u00e9t\u00e9 enregistr\u00e9 pour $1 : $2.'],
       [/^To (.+)$/, 'A $1'], [/^From (.+)$/, 'De $1'], [/^(\d+) unread$/, '$1 non lu(s)'],
       [/^Due (.+)$/, 'Echeance : $1'], [/^Max (.+) points$/, 'Maximum : $1 points'],
       [/^(\d+) student\(s\)$/, '$1 eleve(s)'],
@@ -75,6 +77,8 @@ const translateText = (value: string, language: string) => {
       [/^(\d+) inscrits - (\d+) disponibles$/, '$1 enrolled - $2 available'],
       [/^(\d+) heure\(s\) de crédit - (\d+) inscrits$/, '$1 credit hour(s) - $2 enrolled'],
       [/^Indicateurs vérifiés : (\d+) élément\(s\) noté\(s\), (\d+) présence\(s\) enregistrée\(s\) et (\d+) devoir\(s\) en retard\.$/, 'Verified indicators: $1 graded item(s), $2 attendance record(s), and $3 overdue assignment(s).'],
+      [/^(\d+) \u00e9l\u00e8ve\(s\) assign\u00e9\(s\)$/, '$1 assigned student(s)'],
+      [/^Un rapport disciplinaire a \u00e9t\u00e9 enregistr\u00e9 pour (.+) : (.+)\.$/, 'A discipline report has been recorded for $1: $2.'],
       [/^(.+) mis à jour pour (.+) ; (\d+) élève\(s\) officiel\(s\) inscrit\(s\)\.$/, '$1 updated for $2; $3 official student(s) enrolled.'],
       [/^(.+) créé pour (.+) ; (\d+) élève\(s\) officiel\(s\) inscrit\(s\)\.$/, '$1 created for $2; $3 official student(s) enrolled.'],
       [/^Colonne (.+) ajoutée et enregistrée\. Notes finales recalculées\.$/, '$1 column added and saved. Final grades recalculated.'],

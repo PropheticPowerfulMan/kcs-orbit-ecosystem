@@ -34,6 +34,9 @@ const resolveMessageActorId = async (req: AuthenticatedRequest) => {
   if (!superAdmin) throw new ApiError(500, 'The configured superadministrator account is not synchronized with the Nexus user registry.')
   return superAdmin.id
 }
+const canManageParentCommunications = (req: AuthenticatedRequest) =>
+  req.user!.sub === 'configured-superadmin' || req.user!.role === 'teacher'
+
 
 messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const query = String(req.query.q ?? '').trim()
@@ -70,7 +73,7 @@ messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, r
 }))
 
 messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
-  if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
+  if (!canManageParentCommunications(req)) throw new ApiError(403, 'Super Administrator or Teacher permissions required')
   const parents = await prisma.user.findMany({
     where: { role: 'PARENT', id: { not: req.user!.sub } },
     select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true },
@@ -80,7 +83,7 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
 }))
 
 messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
+  if (!canManageParentCommunications(req)) throw new ApiError(403, 'Super Administrator or Teacher permissions required')
   const data = parentDeliverySchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
   const recipientIds = [...new Set(data.recipientIds)]
@@ -176,7 +179,7 @@ messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest,
 }))
 
 messagesRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedRequest, res) => {
-  if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
+  if (!canManageParentCommunications(req)) throw new ApiError(403, 'Super Administrator or Teacher permissions required')
   const ids = z.array(z.string().min(1)).min(1).max(250).parse(req.body?.ids)
   const actorId = await resolveMessageActorId(req)
   const owned = await prisma.internalMessage.findMany({

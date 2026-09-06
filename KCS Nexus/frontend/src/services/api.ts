@@ -361,6 +361,13 @@ export const incidentReportsAPI = {
   verify: (reference: string) => api.get(`/incident-reports/verify/${encodeURIComponent(reference)}`),
 }
 
+export const disciplineAPI = {
+  list: () => api.get('/school-management/discipline-cases'),
+  create: (data: object) => api.post('/school-management/discipline-cases', data),
+  updateResolution: (id: string, data: object) => api.patch(`/school-management/discipline-cases/${id}/resolution`, data),
+}
+
+
 export const academyAPI = {
   launch: () => api.post<{ data: { url: string } }>("/academy/launch"),
 }

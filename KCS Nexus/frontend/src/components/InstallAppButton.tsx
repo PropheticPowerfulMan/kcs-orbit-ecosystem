@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { useLocation } from "react-router-dom";
+import { useUIStore } from "@/store/uiStore";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -15,6 +16,19 @@ const isStandalone = () =>
 
 export default function InstallAppButton() {
   const location = useLocation();
+  const language = useUIStore((state) => state.language);
+  const installCopy = language === "fr"
+    ? {
+        label: "Installer l\u2019application",
+        ariaLabel: "Installer KCS Nexus",
+        instructions: "Installation disponible. Chrome ou Edge : utilisez Installer dans la barre d\u2019adresse ou le menu. iPhone et iPad : Partager puis Sur l\u2019ecran d\u2019accueil. Safari macOS : Fichier puis Ajouter au Dock.",
+      }
+    : {
+        label: "Install the application",
+        ariaLabel: "Install KCS Nexus",
+        instructions: "Installation is available. Chrome or Edge: use Install in the address bar or menu. iPhone and iPad: tap Share, then Add to Home Screen. Safari on macOS: choose File, then Add to Dock.",
+      };
+
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(isStandalone);
 
@@ -48,18 +62,18 @@ export default function InstallAppButton() {
       setPromptEvent(null);
       return;
     }
-    alert("Installation disponible. Chrome ou Edge : utilisez Installer dans la barre d'adresse ou le menu. iPhone et iPad : Partager puis Sur l'ecran d'accueil. Safari macOS : Fichier puis Ajouter au Dock.");
+    alert(installCopy.instructions);
   };
 
   return (
     <button
       type="button"
       onClick={() => void install()}
-      aria-label="Installer KCS Nexus"
+      aria-label={installCopy.ariaLabel}
       className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-[max(1rem,env(safe-area-inset-left))] z-40 inline-flex h-11 items-center gap-2 rounded-full border border-white/25 bg-kcs-blue-800 px-3.5 text-sm font-bold text-white shadow-xl transition hover:bg-kcs-blue-700 focus:outline-none focus:ring-2 focus:ring-kcs-gold-400 focus:ring-offset-2 sm:h-12 sm:px-4"
     >
       <Download size={17} aria-hidden="true" />
-      <span>Installer l'application</span>
+      <span>{installCopy.label}</span>
     </button>
   );
 }

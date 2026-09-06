@@ -668,7 +668,7 @@ function SubjectGradeSubmission() {
                   <th className='px-3 py-3'>Override audit reason</th>
                   <th className='px-3 py-3'>Attendance</th>
                   <th className='px-3 py-3'>Teacher comment</th>
-                  <th className='px-3 py-3'>Workflow status</th>
+                  <th className='bg-kcs-blue-800 px-3 py-3 text-white dark:bg-kcs-gold-300 dark:text-kcs-blue-950'>Workflow status</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-gray-100 dark:divide-kcs-blue-800'>
@@ -697,7 +697,7 @@ function SubjectGradeSubmission() {
                     <td className='min-w-72 px-3 py-3'>
                       <textarea aria-label={`Teacher comment for ${studentName(row.student)}`} disabled={locked} className={field} rows={2} maxLength={400} value={row.draft.teacherComment} onChange={(event) => updateEntry(row.student.id, { teacherComment: event.target.value })} placeholder='Professional academic comment' />
                     </td>
-                    <td className='min-w-44 px-3 py-3'><span className='inline-flex rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
+                    <td className='min-w-44 bg-kcs-gold-50/80 px-3 py-3 dark:bg-kcs-blue-900'><span className='inline-flex rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 ring-1 ring-kcs-gold-300 dark:bg-kcs-gold-300 dark:text-kcs-blue-950 dark:ring-kcs-gold-200'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
                   </tr>
                 })}
                 {!rows.length && <tr><td colSpan={7} className='px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-300'>

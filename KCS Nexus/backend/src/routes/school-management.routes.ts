@@ -294,6 +294,24 @@ schoolManagementRouter.post('/discipline-cases', requireRoles('admin', 'staff', 
         })]
       : []),
   ])
+  const administrators = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } })
+  const learnerName = [disciplineCase.student.user.lastName, disciplineCase.student.user.middleName, disciplineCase.student.user.firstName].filter(Boolean).join(' ')
+  const notificationMessage = `A discipline report has been recorded for ${learnerName}: ${disciplineCase.category}.`
+  const notificationRows = administrators.map((administrator) => ({
+    userId: administrator.id, title: 'New discipline report', message: notificationMessage, type: 'WARNING' as const, link: '/admin/discipline',
+  }))
+  if (payload.notifyParent) {
+    notificationRows.push(...disciplineCase.student.parentLinks.map((link: any) => ({
+      userId: link.parent.id, title: 'Student discipline update', message: payload.parentMessage ?? notificationMessage, type: 'WARNING' as const, link: '/portal/parent/notifications',
+    })))
+  }
+  if (payload.notifyStudent) {
+    notificationRows.push({
+      userId: disciplineCase.student.user.id, title: 'Discipline follow-up', message: payload.studentMessage ?? notificationMessage, type: 'WARNING' as const, link: '/portal/student/dashboard',
+    })
+  }
+  if (notificationRows.length) await prisma.notification.createMany({ data: notificationRows })
+
 
   return success(res, { disciplineCase, correspondenceLogs: logs }, 'Discipline case recorded', 201)
 }))
