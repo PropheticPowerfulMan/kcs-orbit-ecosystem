@@ -5,18 +5,53 @@ import { authenticate, requireRoles, type AuthenticatedRequest } from '../middle
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { getParentAcademicClearance } from './finance.routes.js'
+import { normalizeClassParts } from '../utils/className.js'
+import { teacherClassKey } from '../utils/teacherClassAccess.js'
 
 const submissionSchema=z.object({
  courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
  results:z.array(z.object({studentId:z.string().min(1),percentage:z.number().min(0).max(100),comment:z.string().max(1000).optional()})).min(1)
 })
 const cycleSchema=z.object({academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80)})
+const teacherReportDraftSchema=cycleSchema.extend({
+ teacherComment:z.string().trim().max(1500).default(''),
+ conduct:z.string().trim().max(500).default(''),
+})
 const letter=(value:number)=>value>=97?'A+':value>=93?'A':value>=90?'A-':value>=87?'B+':value>=83?'B':value>=80?'B-':value>=77?'C+':value>=73?'C':value>=70?'C-':value>=67?'D+':value>=63?'D':value>=60?'D-':'F'
 const periodKey=(year:string,term:string,status:'SUBMITTED'|'APPROVED')=>`${year}::${term}::${status}`
 const parsePeriod=(period:string)=>{const [academicYear,term,status]=period.split('::');return{academicYear,term,status}}
 
 const attendanceWindow=(year:string,term:string)=>{const key=term.toLowerCase();if(year==='2026-2027'){if(key.includes('trimester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2026-12-18T23:59:59Z')};if(key.includes('trimester 2'))return{gte:new Date('2027-01-05T00:00:00Z'),lte:new Date('2027-03-19T23:59:59Z')};if(key.includes('trimester 3'))return{gte:new Date('2027-04-05T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')};if(key.includes('semester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2027-01-29T23:59:59Z')};if(key.includes('semester 2'))return{gte:new Date('2027-02-01T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')}}const [start,end]=year.split('-');return{gte:new Date(`${start}-08-01T00:00:00Z`),lte:new Date(`${end}-07-31T23:59:59Z`)}}
 const summarizeAttendance=(records:Array<{status:string}>)=>{const count=(status:string)=>records.filter(item=>item.status===status).length;const attended=records.filter(item=>['PRESENT','LATE','EXCUSED'].includes(item.status)).length;return{total:records.length,present:count('PRESENT'),absent:count('ABSENT'),late:count('LATE'),excused:count('EXCUSED'),sick:count('SICK'),suspended:count('SUSPENDED'),attendanceRate:records.length?Number((attended*100/records.length).toFixed(1)):null}}
+const reportCardTerm=(academicYear:string,term:string)=>`${academicYear} · ${term}`
+const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:number}}>)=>{
+ const credits=grades.reduce((sum,item)=>sum+Math.max(item.course.credits||1,1),0)
+ return credits?Number((grades.reduce((sum,item)=>sum+(item.percentage*Math.max(item.course.credits||1,1)),0)/credits).toFixed(2)):0
+}
+const isTeacherHomeroomFor=(teacher:{homeroomGrade:string|null;homeroomSection:string|null},student:{grade:string;section:string})=>{
+ if(!teacher.homeroomGrade)return false
+ const home=normalizeClassParts(teacher.homeroomGrade,teacher.homeroomSection??'')
+ const learner=normalizeClassParts(student.grade,student.section)
+ return home.section?teacherClassKey(home)===teacherClassKey(learner):home.grade===learner.grade
+}
+const homeroomReportContext=async(userId:string,studentId:string,academicYear:string,term:string)=>{
+ const [teacher,student]=await Promise.all([
+  prisma.teacherProfile.findUnique({where:{userId},select:{id:true,homeroomGrade:true,homeroomSection:true}}),
+  prisma.studentProfile.findUnique({
+   where:{id:studentId},
+   include:{enrollments:{include:{course:true}},attendanceRecords:{where:{date:attendanceWindow(academicYear,term)},select:{status:true}}},
+  }),
+ ])
+ if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
+ if(!student)throw new ApiError(404,'Student not found')
+ if(!isTeacherHomeroomFor(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
+ const grades=await prisma.grade.findMany({
+  where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
+  include:{course:true},
+  orderBy:{createdAt:'desc'},
+ })
+ return{teacher,student,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
+}
 export const academicRecordsRouter=Router()
 academicRecordsRouter.use(authenticate)
 
@@ -53,6 +88,120 @@ academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandle
  return success(res,{submissions:grades.map(item=>({...item,cycle:parsePeriod(item.period)})),reportCards:cards},'Teacher report-card workflow loaded')
 }))
 
+academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const cycle=cycleSchema.parse({academicYear:String(req.query.academicYear||''),term:String(req.query.term||'')})
+ const teacher=await prisma.teacherProfile.findUnique({
+  where:{userId:req.user!.sub},
+  select:{id:true,status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,lastName:true}}},
+ })
+ if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
+ const termLabel=reportCardTerm(cycle.academicYear,cycle.term)
+ const submittedPeriod=periodKey(cycle.academicYear,cycle.term,'SUBMITTED')
+ const window=attendanceWindow(cycle.academicYear,cycle.term)
+ const [students,submittedGrades]=await Promise.all([
+  prisma.studentProfile.findMany({
+   where:{status:{equals:'active',mode:'insensitive'}},
+   include:{
+    user:{select:{firstName:true,middleName:true,lastName:true}},
+    enrollments:{include:{course:{select:{id:true,name:true,code:true,grade:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}}},
+    reportCards:{where:{term:termLabel},take:1},
+    attendanceRecords:{where:{date:window},select:{status:true}},
+   },
+   orderBy:[{grade:'asc'},{section:'asc'},{user:{lastName:'asc'}}],
+  }),
+  prisma.grade.findMany({
+   where:{assignmentId:null,period:submittedPeriod},
+   include:{course:{select:{id:true,name:true,code:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}},
+   orderBy:{createdAt:'desc'},
+  }),
+ ])
+ const gradeByEnrollment=new Map(submittedGrades.map(item=>[`${item.studentId}:${item.courseId}`,item]))
+ const learners=students.map(student=>{
+  const subjects=student.enrollments.map(enrollment=>{
+   const grade=gradeByEnrollment.get(`${student.id}:${enrollment.courseId}`)
+   return{
+    courseId:enrollment.course.id,
+    courseName:enrollment.course.name,
+    courseCode:enrollment.course.code,
+    credits:enrollment.course.credits,
+    teacherName:[enrollment.course.teacher.user.lastName,enrollment.course.teacher.user.firstName].filter(Boolean).join(' '),
+    percentage:grade?.percentage??null,
+    letterGrade:grade?.letterGrade??null,
+    submittedAt:grade?.createdAt??null,
+   }
+  })
+  const submitted=subjects.filter(subject=>subject.percentage!==null)
+  const expectedCourseIds=new Set(student.enrollments.map(item=>item.courseId))
+  const weightedGrades=submittedGrades.filter(item=>item.studentId===student.id&&expectedCourseIds.has(item.courseId))
+  const reportCard=student.reportCards[0]??null
+  return{
+   id:student.id,
+   studentNumber:student.studentNumber,
+   name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),
+   grade:student.grade,
+   section:student.section,
+   isHomeroomStudent:isTeacherHomeroomFor(teacher,student),
+   subjects,
+   expectedSubjectCount:subjects.length,
+   submittedSubjectCount:submitted.length,
+   allSubjectsSubmitted:subjects.length>0&&submitted.length===subjects.length,
+   average:weightedGrades.length?weightedCourseAverage(weightedGrades):null,
+   attendance:summarizeAttendance(student.attendanceRecords),
+   reportCard,
+  }
+ })
+ return success(res,{
+  cycle,
+  teacher:{status:teacher.status,homeroomGrade:teacher.homeroomGrade,homeroomSection:teacher.homeroomSection,name:[teacher.user.lastName,teacher.user.firstName].filter(Boolean).join(' ')},
+  learners,
+  hierarchy:{subjectTeachers:'Submit final course grades',homeroomTeacher:'Reviews the complete class file, writes the main comment, and submits it',superAdmin:'Approves, publishes report cards, and controls Grade 9-12 transcripts'},
+ },'Whole-school report-card workspace loaded')
+}))
+
+academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const studentId=getRouteParam(req.params.studentId)
+ const payload=teacherReportDraftSchema.parse(req.body)
+ const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term)
+ const termLabel=reportCardTerm(payload.academicYear,payload.term)
+ const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
+ if(current&&current.publicationStatus!=='DRAFT')throw new ApiError(409,'This report card was submitted and is now read-only for the main teacher')
+ const card=await prisma.$transaction(async tx=>{
+  const saved=await tx.reportCard.upsert({
+   where:{studentId_term:{studentId,term:termLabel}},
+   create:{studentId,term:termLabel,average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'DRAFT',publicationStatus:'DRAFT'},
+   update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary},
+  })
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_DRAFT_SAVED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,submittedCourseGrades:context.grades.length}}})
+  return saved
+ })
+ return success(res,card,'Main-teacher report-card draft saved')
+}))
+
+academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const studentId=getRouteParam(req.params.studentId)
+ const payload=teacherReportDraftSchema.parse(req.body)
+ if(payload.teacherComment.length<5)throw new ApiError(400,'Add the main teacher comment before submitting the report card')
+ const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term)
+ const expectedCourseIds=[...new Set(context.student.enrollments.map(item=>item.courseId))]
+ const submittedCourseIds=new Set(context.grades.map(item=>item.courseId))
+ const missingCourseIds=expectedCourseIds.filter(courseId=>!submittedCourseIds.has(courseId))
+ if(!expectedCourseIds.length)throw new ApiError(409,'This learner has no official course enrollment')
+ if(missingCourseIds.length)throw new ApiError(409,`Submission blocked: ${missingCourseIds.length} subject teacher(s) have not submitted final grades`)
+ const termLabel=reportCardTerm(payload.academicYear,payload.term)
+ const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
+ if(current&&current.publicationStatus!=='DRAFT')throw new ApiError(409,'This report card has already entered administrative review')
+ const card=await prisma.$transaction(async tx=>{
+  const saved=await tx.reportCard.upsert({
+   where:{studentId_term:{studentId,term:termLabel}},
+   create:{studentId,term:termLabel,average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
+   update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
+  })
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,courseGrades:context.grades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
+  return saved
+ })
+ return success(res,card,'Complete report card submitted to Super Administration')
+}))
+
 academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{
  const academicYear=String(req.query.academicYear||''),term=String(req.query.term||''),status=String(req.query.status||'SUBMITTED')
  const where:any={assignmentId:null,period:academicYear?{startsWith:`${academicYear}::`,contains:`::${status}`}:{contains:`::${status}`}}
@@ -74,7 +223,7 @@ academicRecordsRouter.post('/report-cards/generate',requireRoles('admin','staff'
  const attendanceRecords=await prisma.attendanceRecord.findMany({where:{studentId:{in:[...grouped.keys()]},date:window},select:{studentId:true,status:true}})
  const cards=await prisma.$transaction(async tx=>{
   const created=[]
-  for(const [studentId,items] of grouped){const average=items.reduce((sum,item)=>sum+item.percentage,0)/items.length;const attendanceSummary=summarizeAttendance(attendanceRecords.filter(item=>item.studentId===studentId));created.push(await tx.reportCard.upsert({where:{studentId_term:{studentId,term:`${payload.academicYear} · ${payload.term}`}},create:{studentId,term:`${payload.academicYear} · ${payload.term}`,average,attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},update:{average,attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'}}))}
+  for(const [studentId,items] of grouped){const average=weightedCourseAverage(items);const attendanceSummary=summarizeAttendance(attendanceRecords.filter(item=>item.studentId===studentId));created.push(await tx.reportCard.upsert({where:{studentId_term:{studentId,term:reportCardTerm(payload.academicYear,payload.term)}},create:{studentId,term:reportCardTerm(payload.academicYear,payload.term),average,attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},update:{average,attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'}}))}
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARDS_GENERATED',targetType:'ReportCardCycle',metadata:{...payload,count:created.length,sourceGradeCount:grades.length}}})
   return created
  })

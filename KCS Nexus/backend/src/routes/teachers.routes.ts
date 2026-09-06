@@ -105,6 +105,18 @@ const assignmentCreateSchema = z.object({
   type: z.enum(['HOMEWORK', 'QUIZ', 'EXAM', 'PROJECT', 'LAB']),
 })
 
+const teacherCourseSyncSchema = z.object({
+  id: z.string().min(3).max(120),
+  name: z.string().trim().min(2).max(180),
+  abbreviation: z.string().trim().max(30).optional().default(''),
+  description: z.string().trim().max(5000).optional().default('Managed from Teacher My Courses'),
+  grade: z.string().trim().min(1).max(80),
+  credits: z.coerce.number().int().min(1).max(20).default(1),
+  room: z.string().trim().max(80).optional().default(''),
+  studentIds: z.array(z.string().min(1)).max(1000).default([]),
+  studentNumbers: z.array(z.string().min(1).max(100)).max(1000).default([]),
+})
+
 const submissionGradeSchema = z.object({
   score: z.coerce.number().min(0),
   feedback: z.string().max(5000).optional(),
@@ -154,6 +166,37 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
     data: { actorId: user.id, action: 'TEACHER_WORKSPACE_SAVED', targetType: 'TeacherWorkspace', targetId: workspace.id, metadata: { revision: workspace.revision } },
   })
   return success(res, workspace, 'Teacher workspace saved')
+}))
+
+teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = teacherCourseSyncSchema.parse(req.body)
+  if (new Set(payload.studentIds).size !== payload.studentIds.length) throw new ApiError(400, 'Duplicate learner in course enrollment')
+  const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true } })
+  if (!teacher) throw new ApiError(404, 'Teacher profile synchronization pending')
+  const existing = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true } })
+  if (existing && existing.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
+  const requestedCount = Math.max(new Set(payload.studentIds).size, new Set(payload.studentNumbers.map((value) => value.toLowerCase())).size)
+  const students = requestedCount
+    ? await prisma.studentProfile.findMany({ where: { status: { equals: 'active', mode: 'insensitive' }, OR: [{ id: { in: payload.studentIds } }, { studentNumber: { in: payload.studentNumbers, mode: 'insensitive' } }] }, select: { id: true } })
+    : []
+  const resolvedStudentIds = [...new Set(students.map((student) => student.id))]
+  if (resolvedStudentIds.length !== requestedCount) throw new ApiError(400, 'One or more selected learners are not active in the official Nexus registry')
+  const codeBase = (payload.abbreviation || payload.name)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toUpperCase().slice(0, 18) || 'COURSE'
+  const classCode = payload.grade.replace(/[^a-z0-9]+/gi, '').toUpperCase().slice(0, 10)
+  let code = existing?.code ?? `${codeBase}-${classCode}`
+  const collision = await prisma.course.findFirst({ where: { code, id: { not: payload.id } }, select: { id: true } })
+  if (collision) code = `${codeBase}-${classCode}-${payload.id.slice(-6).toUpperCase()}`
+  const course = await prisma.$transaction(async (tx) => {
+    const saved = existing
+      ? await tx.course.update({ where: { id: payload.id }, data: { name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
+      : await tx.course.create({ data: { id: payload.id, teacherId: teacher.id, name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
+    await tx.enrollment.deleteMany({ where: { courseId: saved.id, studentId: { notIn: resolvedStudentIds } } })
+    if (resolvedStudentIds.length) await tx.enrollment.createMany({ data: resolvedStudentIds.map((studentId) => ({ courseId: saved.id, studentId })), skipDuplicates: true })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_COURSE_SYNCHRONIZED', targetType: 'Course', targetId: saved.id, metadata: { grade: payload.grade, credits: payload.credits, room: payload.room, enrolledStudents: resolvedStudentIds.length } } })
+    return tx.course.findUnique({ where: { id: saved.id }, include: { enrollments: { select: { studentId: true } } } })
+  })
+  return success(res, course, 'My Courses synchronized with the official academic registry')
 }))
 
 teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {

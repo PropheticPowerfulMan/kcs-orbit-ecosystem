@@ -19,6 +19,7 @@ import {
 import { academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { printOfficialPdf } from '@/utils/officialPdf'
 import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels'
+import TeacherWholeSchoolReportCards from './TeacherWholeSchoolReportCards'
 
 type Student = {
   id: string
@@ -59,6 +60,7 @@ type Course = {
   enrollments: Array<{ studentId: string; student: Student }>
   grades: Grade[]
   source: 'official' | 'workspace'
+  gradebookSnapshot?: WorkspaceGradebookSnapshot
 }
 
 type Submission = Grade & {
@@ -129,12 +131,19 @@ type WorkspaceGradebookColumn = {
   maxPoints: number
 }
 
+type WorkspaceGradebookSnapshot = {
+  assignments?: Array<WorkspaceGradebookColumn & { category: string; term: string }>
+  categories?: Array<{ id: string; weight: number }>
+  scores?: Record<string, string>
+}
+
 type TeacherReportWorkspace = {
   courses?: WorkspaceCourse[]
   teacherStudents?: Array<Record<string, any>>
   attendanceEntries?: Array<{ studentId?: string; status?: string }>
   gradebookColumnsByCourse?: Record<string, WorkspaceGradebookColumn[]>
   gradebookScores?: Record<string, string>
+  advancedGradebookByCourse?: Record<string, WorkspaceGradebookSnapshot>
   reportCardWorkflow?: DraftStore
 }
 
@@ -167,6 +176,23 @@ const normalizedScore = (value: unknown, maxPoints: number) => {
   const numeric = Number(entry)
   if (!Number.isFinite(numeric)) return null
   return Math.max(0, Math.min(100, (numeric / Math.max(Number(maxPoints) || 1, 1)) * 100))
+}
+
+const weightedSnapshotAverage = (snapshot: WorkspaceGradebookSnapshot | undefined, studentId: string, term: string) => {
+  const assignments = (snapshot?.assignments ?? []).filter((assignment) => term === 'Annual final' || assignment.term === term)
+  const categories = snapshot?.categories ?? []
+  let weightedTotal = 0
+  let activeWeight = 0
+  for (const category of categories) {
+    const values = assignments
+      .filter((assignment) => assignment.category === category.id)
+      .map((assignment) => normalizedScore(snapshot?.scores?.[`${assignment.id}:${studentId}`], assignment.maxPoints))
+      .filter((value): value is number => value !== null)
+    if (!values.length || category.weight <= 0) continue
+    weightedTotal += (values.reduce((sum, value) => sum + value, 0) / values.length) * category.weight
+    activeWeight += category.weight
+  }
+  return activeWeight ? Number((weightedTotal / activeWeight).toFixed(2)) : null
 }
 
 const buildReportCourses = (overview: Record<string, any>, state?: TeacherReportWorkspace): Course[] => {
@@ -275,6 +301,7 @@ const buildReportCourses = (overview: Record<string, any>, state?: TeacherReport
       enrollments: enrolledStudents.map((student) => ({ studentId: student.id, student })),
       grades: gradebookGrades.length ? gradebookGrades : (officialMatch?.grades ?? []),
       source: officialMatch ? 'official' : 'workspace',
+      gradebookSnapshot: state?.advancedGradebookByCourse?.[workspaceCourse.id],
     }
   })
 
@@ -314,7 +341,7 @@ const statusLabel = (card?: ReportCard, submitted = false) => {
   return submitted ? 'Submitted to administration' : 'Editable draft'
 }
 
-export default function TeacherReportCards() {
+function SubjectGradeSubmission() {
   const [courses, setCourses] = useState<Course[]>([])
   const [courseId, setCourseId] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
@@ -367,10 +394,11 @@ export default function TeacherReportCards() {
     if (!course) return []
     return course.enrollments
       .map(({ student }) => {
-        const assessmentGrades = course.grades.filter((grade) => grade.studentId === student.id && grade.assignmentId)
-        const calculated = assessmentGrades.length
+        const snapshotAverage = weightedSnapshotAverage(course.gradebookSnapshot, student.id, term)
+        const assessmentGrades = course.grades.filter((grade) => grade.studentId === student.id && grade.assignmentId && (grade.period === term || grade.period === 'CURRENT' || grade.period === 'WORKSPACE_GRADEBOOK'))
+        const calculated = snapshotAverage ?? (assessmentGrades.length
           ? Number((assessmentGrades.reduce((sum, grade) => sum + grade.percentage, 0) / assessmentGrades.length).toFixed(2))
-          : null
+          : null)
         const draft = cycleDrafts[student.id] ?? emptyEntry()
         const override = draft.overrideValue.trim() === '' ? null : Number(draft.overrideValue)
         const submission = submissions.find((item) => item.courseId === course.id && item.studentId === student.id && item.cycle.academicYear === academicYear && item.cycle.term === term)
@@ -704,4 +732,15 @@ export default function TeacherReportCards() {
       </div>
     </div>}
   </section>
+}
+
+export default function TeacherReportCards() {
+  const [mode, setMode] = useState<'learner' | 'subject'>('learner')
+  return <div className='space-y-5'>
+    <div className='inline-flex rounded-2xl border border-kcs-blue-100 bg-white p-1 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900'>
+      <button type='button' onClick={() => setMode('learner')} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode === 'learner' ? 'bg-kcs-blue-700 text-white' : 'text-kcs-blue-700 dark:text-kcs-blue-200'}`}>Complete learner report cards</button>
+      <button type='button' onClick={() => setMode('subject')} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode === 'subject' ? 'bg-kcs-blue-700 text-white' : 'text-kcs-blue-700 dark:text-kcs-blue-200'}`}>My subject grade submission</button>
+    </div>
+    {mode === 'learner' ? <TeacherWholeSchoolReportCards /> : <SubjectGradeSubmission />}
+  </div>
 }

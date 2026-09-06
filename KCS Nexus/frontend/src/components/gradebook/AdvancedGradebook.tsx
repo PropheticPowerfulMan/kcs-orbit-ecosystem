@@ -32,7 +32,7 @@ import {
   YAxis,
 } from 'recharts'
 import { printOfficialPdf } from '@/utils/officialPdf'
-import { academicRecordsAPI } from '@/services/api'
+import { academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { canonicalClassLabel } from '@/utils/classLabels'
 
 type Course = {
@@ -82,7 +82,7 @@ type Props = {
   students: GradebookStudent[]
   selectedCourseId: string
   onSelectCourse: (courseId: string) => void
-  onAction: (message: string) => void
+  onAction: (message: string, isError?: boolean) => void
   onCategoryWeightsChange?: (categories: Category[]) => void
 }
 
@@ -101,11 +101,29 @@ const defaultPointsByType: Record<AssignmentType, number> = {
 
 const defaultCategories: Category[] = [
   { id: 'homework', name: 'Homework', weight: 15 },
-  { id: 'quiz', name: 'Quiz', weight: 20 },
-  { id: 'test', name: 'Test', weight: 25 },
-  { id: 'exam', name: 'Exam', weight: 30 },
-  { id: 'participation', name: 'Participation', weight: 10 },
+  { id: 'quiz', name: 'Quiz', weight: 15 },
+  { id: 'test', name: 'Test', weight: 20 },
+  { id: 'project', name: 'Project', weight: 20 },
+  { id: 'exam', name: 'Exam', weight: 25 },
+  { id: 'participation', name: 'Participation', weight: 5 },
 ]
+
+const assignmentTypeLabels: Record<AssignmentType, { name: string; help: string }> = {
+  homework: { name: 'Homework', help: 'Practice completed outside the lesson.' },
+  quiz: { name: 'Quiz', help: 'Short knowledge or skill check.' },
+  test: { name: 'Test', help: 'Unit or chapter assessment.' },
+  exam: { name: 'Exam', help: 'Major trimester or semester assessment.' },
+  project: { name: 'Project', help: 'Extended individual or group production.' },
+  participation: { name: 'Participation', help: 'Observed engagement and classroom contribution.' },
+}
+
+type GradebookSnapshot = {
+  assignments: GradebookColumn[]
+  categories: Category[]
+  scores: Record<string, string>
+  comments: Record<string, string>
+  savedAt?: string
+}
 
 const legacyDemoAssignmentIds = new Set(['gb-lab', 'gb-quiz', 'gb-homework', 'gb-exam', 'gb-participation'])
 const sanitizeAssignments = (assignments: GradebookColumn[] | undefined) => (
@@ -185,12 +203,30 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [scores, setScores] = useState<Record<string, string>>(() => {
     try { return (JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}').scores as Record<string, string> | undefined) ?? {} } catch { return {} }
   })
-  const saveSpreadsheet = () => {
+  const saveSpreadsheet = async (silent = false) => {
     const savedAt = new Date().toISOString()
-    localStorage.setItem(`kcs-live-gradebook-${selectedCourseId}`, JSON.stringify({ scores, comments, assignments, categories, savedAt }))
-    window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt } }))
-    setSaveNotice(`Saved at ${new Date().toLocaleTimeString()}`)
-    onAction('All Live Spreadsheet scores, comments, and assignments were saved successfully.')
+    const snapshot: GradebookSnapshot = { scores, comments, assignments, categories, savedAt }
+    localStorage.setItem(`kcs-live-gradebook-${selectedCourseId}`, JSON.stringify(snapshot))
+    try {
+      const latest = await teacherWorkspaceAPI.get()
+      const workspace = latest.data?.data
+      const state = (workspace?.state ?? {}) as Record<string, any>
+      const savedWorkspace = await teacherWorkspaceAPI.save({
+        ...state,
+        advancedGradebookByCourse: {
+          ...(state.advancedGradebookByCourse ?? {}),
+          [selectedCourseId]: snapshot,
+        },
+      }, workspace?.revision)
+      window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt, revision: savedWorkspace.data?.data?.revision } }))
+      setSaveNotice(`Saved to KCS Nexus at ${new Date().toLocaleTimeString()}`)
+      if (!silent) onAction('Tasks, category weights, scores, and comments were synchronized with KCS Nexus successfully.')
+      return true
+    } catch (error: any) {
+      setSaveNotice('Server synchronization failed')
+      onAction(error?.response?.data?.message || 'The Gradebook could not be synchronized with KCS Nexus.', true)
+      return false
+    }
   }
   const [comments, setComments] = useState<Record<string, string>>({})
   const [term, setTerm] = useState('Semester 2 · Trimester 3')
@@ -214,25 +250,36 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const selectedBulkAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId)
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<{ scores: Record<string, string>; comments: Record<string, string>; assignments: GradebookColumn[]; categories: Category[] }>
+    let active = true
+    const loadGradebook = async () => {
+      let saved: Partial<GradebookSnapshot> = {}
+      try {
+        saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
+        const response = await teacherWorkspaceAPI.get()
+        const serverSnapshot = response.data?.data?.state?.advancedGradebookByCourse?.[selectedCourseId] as Partial<GradebookSnapshot> | undefined
+        if (serverSnapshot) saved = serverSnapshot
+      } catch {
+        // The browser copy remains a safe fallback while the server is temporarily unavailable.
+      }
+      if (!active) return
       const savedAssignments = sanitizeAssignments(saved.assignments)
+      const savedCategories = saved.categories?.length ? saved.categories : defaultCategories
+      const completeCategories = defaultCategories.map((category) => savedCategories.find((item) => item.id === category.id) ?? category)
       setAssignments(savedAssignments)
-      setCategories(saved.categories?.length ? saved.categories : defaultCategories)
+      setCategories(completeCategories)
       setComments(saved.comments ?? {})
       setScores(buildMissingScoreCells(savedAssignments, students, saved.scores ?? {}))
       setSelectedAssignmentId(savedAssignments[0]?.id ?? '')
-    } catch {
-      setAssignments([]); setCategories(defaultCategories); setComments({}); setScores({})
-      setSelectedAssignmentId('')
     }
+    void loadGradebook()
+    return () => { active = false }
   }, [selectedCourseId, students])
 
   useEffect(() => {
     if (!spreadsheetOpen) return
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 's' || event.key.toLowerCase() === 'c')) {
-        event.preventDefault(); saveSpreadsheet(); setSaveNotice('Saved successfully')
+        event.preventDefault(); void saveSpreadsheet()
       }
     }
     window.addEventListener('keydown', handleSaveShortcut)
@@ -313,6 +360,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   ]
 
   const addAssignment = () => {
+    if (!draft.title.trim()) return onAction('Enter a clear task title before adding it.', true)
+    if (!draft.date) return onAction('Select the assessment date before adding the task.', true)
     const nextAssignment = {
       id: `gb-${Date.now()}`,
       title: draft.title.trim() || 'New Assignment',
@@ -326,6 +375,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     setAssignments((current) => [...current, nextAssignment])
     setScores((current) => buildMissingScoreCells([nextAssignment], courseStudents, current))
     setSelectedAssignmentId(nextAssignment.id)
+    setDraft((current) => ({ ...current, title: '', date: '', description: '' }))
     onAction(`${nextAssignment.title} ${nextAssignment.type} added to ${selectedCourse?.name ?? 'Gradebook'}; averages will recalculate automatically as scores are entered.`)
   }
 
@@ -401,10 +451,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const submitFinalGrades = async () => {
     if (!selectedCourse) return onAction('Select a course before submitting final grades.')
     if (!courseStudents.length) return onAction('This course has no enrolled students.')
+    if (categories.reduce((sum, category) => sum + category.weight, 0) !== 100) return onAction('Category weights must total exactly 100% before final grades can be submitted.', true)
     const incomplete = studentAnalytics.filter((item) => item.average === null || item.missing > 0)
     if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`)
     setSubmittingFinals(true)
     try {
+      if (!await saveSpreadsheet(true)) return
       await academicRecordsAPI.submitFinalGrades({
         courseId: selectedCourse.id,
         academicYear,
@@ -431,7 +483,19 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const updateCategoryWeight = (categoryId: string, weight: number) => {
-    setCategories((current) => current.map((category) => category.id === categoryId ? { ...category, weight: Math.max(0, weight) } : category))
+    setCategories((current) => current.map((category) => category.id === categoryId ? { ...category, weight: Math.max(0, Math.min(100, weight || 0)) } : category))
+  }
+
+  const categoryWeightTotal = categories.reduce((sum, category) => sum + category.weight, 0)
+  const normalizeCategoryWeights = () => {
+    const currentTotal = categories.reduce((sum, category) => sum + category.weight, 0)
+    if (!currentTotal) return setCategories(defaultCategories)
+    let allocated = 0
+    setCategories((current) => current.map((category, index) => {
+      const weight = index === current.length - 1 ? 100 - allocated : Math.round((category.weight / currentTotal) * 100)
+      allocated += weight
+      return { ...category, weight }
+    }))
   }
 
   return (
@@ -494,53 +558,76 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex items-center justify-between gap-3">
-            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Create task</h4>
+            <div>
+              <h4 className="font-bold text-kcs-blue-900 dark:text-white">Create an assessment task</h4>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Add one real Gradebook column. The task type automatically selects its weighting category.</p>
+            </div>
             <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">RBAC: teacher classes only</span>
           </div>
           <div className="mt-4 grid gap-3">
-            <input className="input-kcs py-2 text-sm" value={draft.title} onChange={(event) => setDraft((item) => ({ ...item, title: event.target.value }))} placeholder="Title" />
-            <div className="grid gap-3 sm:grid-cols-3">
-              <select
-                className="input-kcs py-2 text-sm"
-                value={draft.type}
-                onChange={(event) => {
-                  const type = event.target.value as AssignmentType
-                  setDraft((item) => ({
-                    ...item,
-                    type,
-                    category: type,
-                    maxPoints: defaultPointsByType[type],
-                  }))
-                }}
-              >
-                {assignmentTypes.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-              <select className="input-kcs py-2 text-sm" value={draft.category} onChange={(event) => setDraft((item) => ({ ...item, category: event.target.value }))}>
-                {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <input className="input-kcs py-2 text-sm" type="number" min={1} value={draft.maxPoints} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: Number(event.target.value) }))} />
+            <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
+              Task title <span className="font-normal text-gray-500">Use a recognizable name, for example Fractions quiz 1.</span>
+              <input className="input-kcs py-2 text-sm" value={draft.title} onChange={(event) => setDraft((item) => ({ ...item, title: event.target.value }))} placeholder="Enter the assessment title" />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
+                Assessment type and category
+                <select
+                  className="input-kcs py-2 text-sm"
+                  value={draft.type}
+                  onChange={(event) => {
+                    const type = event.target.value as AssignmentType
+                    setDraft((item) => ({ ...item, type, category: type, maxPoints: defaultPointsByType[type] }))
+                  }}
+                >
+                  {assignmentTypes.map((item) => <option key={item} value={item}>{assignmentTypeLabels[item].name}</option>)}
+                </select>
+                <span className="font-normal text-gray-500">{assignmentTypeLabels[draft.type].help}</span>
+              </label>
+              <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
+                Maximum points
+                <input className="input-kcs py-2 text-sm" type="number" min={1} max={10000} value={draft.maxPoints} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: Number(event.target.value) }))} />
+                <span className="font-normal text-gray-500">Scores are converted automatically to a percentage.</span>
+              </label>
             </div>
-            <DateSelect className="input-kcs py-2 text-sm"  value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
-            <textarea className="input-kcs min-h-20 py-2 text-sm" value={draft.description} onChange={(event) => setDraft((item) => ({ ...item, description: event.target.value }))} />
+            <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
+              Assessment date
+              <DateSelect className="input-kcs py-2 text-sm" value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
+            </label>
+            <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
+              Instructions or learning objective <span className="font-normal text-gray-500">(optional)</span>
+              <textarea className="input-kcs min-h-20 py-2 text-sm" value={draft.description} onChange={(event) => setDraft((item) => ({ ...item, description: event.target.value }))} placeholder="Describe the assessed skill, chapter, or instructions." />
+            </label>
             <button onClick={addAssignment} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800"><Plus size={16} className="mr-1 inline" /> Add task</button>
           </div>
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h4 className="font-bold text-kcs-blue-900 dark:text-white">Category weighting</h4>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h4 className="font-bold text-kcs-blue-900 dark:text-white">Category weighting</h4>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">These percentages calculate every learner's final course grade and feed the official report card.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${categoryWeightTotal === 100 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200'}`}>{categoryWeightTotal}% / 100%</span>
+              {categoryWeightTotal !== 100 && <button type="button" onClick={normalizeCategoryWeights} className="rounded-lg border border-kcs-blue-200 px-2.5 py-1 text-xs font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Balance to 100%</button>}
+            </div>
+          </div>
+          {categoryWeightTotal !== 100 && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">Final-grade submission is locked until the category total equals exactly 100%.</p>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {categories.map((category) => {
               const categoryValues = studentAnalytics.map(({ student }) => getCategoryAverage(student.id, category.id)).filter((value): value is number => value !== null)
               const categoryAverage = categoryValues.length ? Math.round(categoryValues.reduce((sum, value) => sum + value, 0) / categoryValues.length) : 0
+              const taskCount = visibleAssignments.filter((assignment) => assignment.category === category.id).length
               return (
                 <div key={category.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{category.name}</p>
-                    <span className="text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-200">{categoryAverage}% avg</span>
+                    <div><p className="font-semibold text-kcs-blue-900 dark:text-white">{category.name}</p><p className="text-[11px] text-gray-500">{taskCount} task(s) in this session</p></div>
+                    <span className="text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-200">{categoryAverage}% average</span>
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <input className="h-2 flex-1 accent-kcs-blue-700" type="range" min={0} max={60} value={category.weight} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} />
-                    <input className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-right text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" type="number" value={category.weight} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} />
+                    <input aria-label={`${category.name} weighting`} className="h-2 flex-1 accent-kcs-blue-700" type="range" min={0} max={100} value={category.weight} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} />
+                    <div className="relative"><input aria-label={`${category.name} percentage`} className="w-20 rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-right text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" type="number" min={0} max={100} value={category.weight} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} /><span className="pointer-events-none absolute right-2 top-1.5 text-xs text-gray-400">%</span></div>
                   </div>
                 </div>
               )
@@ -557,7 +644,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={saveSpreadsheet} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
+            <button type="button" onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
             {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Eye size={15}/> Dedicated window</button>}
             {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white">Close</button>}
             <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>

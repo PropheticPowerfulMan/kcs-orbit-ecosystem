@@ -501,6 +501,17 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setDisciplineDraft((draft) => ({ ...draft, studentId: draft.studentId || superAdminStudentPool[1]?.id || firstStudent.id }))
     setCourseDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
   }, [superAdminStudentPool])
+
+  useEffect(() => {
+    const handleGradebookSaved = (event: Event) => {
+      const revision = (event as CustomEvent<{ revision?: number }>).detail?.revision
+      if (typeof revision === 'number') setWorkspaceRevision(revision)
+    }
+
+    window.addEventListener('kcs-gradebook-saved', handleGradebookSaved)
+    return () => window.removeEventListener('kcs-gradebook-saved', handleGradebookSaved)
+  }, [])
+
   const reportCardStudent = findStudent(reportCardStudentId)
   const reportCardAverage = useMemo(() => {
     const totalWeightedPoints = reportCardRows.reduce((sum, row) => sum + (row.points / Math.max(row.maxPoints, 1)) * 100 * row.coefficient, 0)
@@ -710,6 +721,22 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       enrollmentMode: 'class',
       status: existingCourse ? 'updated' : 'draft',
     }
+    try {
+      await teacherWorkspaceAPI.syncCourse({
+        id: nextCourse.id,
+        name: nextCourse.name,
+        abbreviation: nextCourse.abbreviation,
+        description: `${nextCourse.name} · ${selectedGrade} · synchronized from Teacher My Courses`,
+        grade: selectedGrade,
+        credits: nextCourse.creditHours,
+        room: nextCourse.room,
+        studentIds: nextCourse.studentIds,
+        studentNumbers: roster.map((student) => student.studentNumber).filter(Boolean),
+      })
+    } catch (error: any) {
+      runAction(error?.response?.data?.message || 'The subject could not be synchronized with the official academic registry.', true)
+      return
+    }
     const nextCourses = existingCourse
       ? courses.map((course) => course.id === existingCourse.id ? nextCourse : course)
       : [nextCourse, ...courses]
@@ -879,6 +906,23 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const existingIds = new Set(teacherStudents.map((student) => student.id))
     const selectedStudents = superAdminStudentPool.filter((student) => selectedIds.has(student.id) && !existingIds.has(student.id))
     const nextStudents = [...selectedStudents, ...teacherStudents]
+    try {
+      await teacherWorkspaceAPI.syncCourse({
+        id: enrollmentDialogCourse.id,
+        name: enrollmentDialogCourse.name,
+        abbreviation: enrollmentDialogCourse.abbreviation,
+        description: `${enrollmentDialogCourse.name} · ${enrollmentDialogCourse.className} · synchronized from Subject Enrollment`,
+        grade: canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0]),
+        credits: normalizeCreditHours(enrollmentDialogCourse.creditHours),
+        room: enrollmentDialogCourse.room,
+        studentIds: [...selectedIds],
+        studentNumbers: superAdminStudentPool.filter((student) => selectedIds.has(student.id)).map((student) => student.studentNumber).filter(Boolean),
+      })
+    } catch (error: any) {
+      setEnrollmentSaving(false)
+      runAction(error?.response?.data?.message || 'The official subject enrollment could not be synchronized.', true)
+      return
+    }
     const saved = await persistWorkspace(
       { courses: nextCourses, teacherStudents: nextStudents },
       `${enrollmentDialogCourse.name}: ${selectedIds.size} student(s) enrolled and saved.`,
@@ -903,6 +947,22 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const nextStudents = !enrolled && !teacherStudents.some((item) => item.id === student.id)
       ? [student, ...teacherStudents]
       : teacherStudents
+    try {
+      await teacherWorkspaceAPI.syncCourse({
+        id: course.id,
+        name: course.name,
+        abbreviation: course.abbreviation,
+        description: `${course.name} · ${course.className} · synchronized from Subject Enrollment`,
+        grade: canonicalClassLabel(course.className || course.gradeLevels[0]),
+        credits: normalizeCreditHours(course.creditHours),
+        room: course.room,
+        studentIds: nextIds,
+        studentNumbers: superAdminStudentPool.filter((candidate) => nextIds.includes(candidate.id)).map((candidate) => candidate.studentNumber).filter(Boolean),
+      })
+    } catch (error: any) {
+      runAction(error?.response?.data?.message || 'The official subject enrollment could not be synchronized.', true)
+      return
+    }
     if (!await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents })) return
     setCourses(nextCourses)
     setTeacherStudents(nextStudents)
