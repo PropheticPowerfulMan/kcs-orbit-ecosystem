@@ -175,9 +175,21 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   const teacher = await ensureTeacherProfile(req.user!.sub)
   const existing = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true } })
   if (existing && existing.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
-  const requestedCount = Math.max(new Set(payload.studentIds).size, new Set(payload.studentNumbers.map((value) => value.toLowerCase())).size)
+  const normalizedStudentNumbers = [...new Set(payload.studentNumbers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
+  const uniqueStudentIds = [...new Set(payload.studentIds)]
+  // Orbit rows can carry external ids. The student number is the stable key
+  // shared with the local Nexus registry, so prefer it whenever available.
+  const requestedCount = normalizedStudentNumbers.length || uniqueStudentIds.length
   const students = requestedCount
-    ? await prisma.studentProfile.findMany({ where: { status: { equals: 'active', mode: 'insensitive' }, OR: [{ id: { in: payload.studentIds } }, { studentNumber: { in: payload.studentNumbers, mode: 'insensitive' } }] }, select: { id: true } })
+    ? await prisma.studentProfile.findMany({
+        where: {
+          status: { equals: 'active', mode: 'insensitive' },
+          ...(normalizedStudentNumbers.length
+            ? { studentNumber: { in: normalizedStudentNumbers, mode: 'insensitive' } }
+            : { id: { in: uniqueStudentIds } }),
+        },
+        select: { id: true },
+      })
     : []
   const resolvedStudentIds = [...new Set(students.map((student) => student.id))]
   if (resolvedStudentIds.length !== requestedCount) throw new ApiError(400, 'One or more selected learners are not active in the official Nexus registry')

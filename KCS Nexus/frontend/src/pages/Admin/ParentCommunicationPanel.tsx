@@ -7,9 +7,12 @@ const fieldClass = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 
 const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-45'
 
 const displayName = (parent: any) => [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') || 'Parent'
-const messageRecipient = (message: any) => message.recipient
-  ? [message.recipient.lastName, message.recipient.middleName, message.recipient.firstName].filter(Boolean).join(' ')
-  : 'Parent'
+const messageRecipient = (message: any) => {
+  const person = message.sender?.role === 'PARENT' ? message.sender : message.recipient
+  return person
+    ? `${[person.lastName, person.middleName, person.firstName].filter(Boolean).join(' ')} — ${person.role}`
+    : 'Parent'
+}
 
 const copy = {
   fr: {
@@ -59,7 +62,7 @@ export default function ParentCommunicationPanel() {
   const load = async () => {
     const [contactsResponse, historyResponse] = await Promise.all([
       messagesAPI.getParentContacts(),
-      messagesAPI.getAll({ box: 'sent' }),
+      messagesAPI.getAll({ box: 'all' }),
     ])
     setParents(contactsResponse.data?.data ?? [])
     setHistory(historyResponse.data?.data ?? [])

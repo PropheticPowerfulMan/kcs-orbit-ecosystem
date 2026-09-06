@@ -1286,6 +1286,20 @@ html:not(.dark) .parent-portal-shell main textarea {
 }
 
 @media (max-width: 479px) {
+  .portal-shell {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .portal-shell > main {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .portal-shell :is(.text-sm, .text-xs) {
+    line-height: 1.45;
+  }
+
   .portal-shell > main > .space-y-6,
   .portal-shell > main > .p-6 {
     padding: 0.75rem;

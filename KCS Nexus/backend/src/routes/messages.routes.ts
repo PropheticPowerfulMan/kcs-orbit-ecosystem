@@ -68,7 +68,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const actorId = await resolveMessageActorId(req)
-  const contacts = await prisma.user.findMany({ where: { id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, lastName: true, role: true }, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
+  const contacts = await prisma.user.findMany({ where: { id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true }, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
   return success(res, contacts)
 }))
 

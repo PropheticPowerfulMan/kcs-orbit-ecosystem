@@ -416,7 +416,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       setMessageDraft((draft) => ({ ...draft, to: draft.to || contacts[0]?.id || '' }))
       const liveMessages = (messagesResponse.data?.data ?? []).map((message: any) => ({
         id: message.id,
-        from: message.senderId === user.id ? `To ${message.recipient?.firstName ?? ''} ${message.recipient?.lastName ?? ''}`.trim() : `${message.sender?.firstName ?? ''} ${message.sender?.lastName ?? ''}`.trim(),
+        from: message.senderId === user.id ? `To ${[message.recipient?.firstName, message.recipient?.middleName, message.recipient?.lastName].filter(Boolean).join(' ')} — ${message.recipient?.role ?? 'SCHOOL'}` : `${[message.sender?.firstName, message.sender?.middleName, message.sender?.lastName].filter(Boolean).join(' ')} — ${message.sender?.role ?? 'SCHOOL'}`,
         subject: message.subject,
         body: message.body,
         time: new Date(message.createdAt).toLocaleString(),

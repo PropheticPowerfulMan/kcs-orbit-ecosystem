@@ -272,6 +272,18 @@ export const globalFrenchText: PhraseMap = {
   Events: 'événements',
   'Stay connected with the latest happenings, achievements, and upcoming events at KCS.':
     'Restez informés des dernières nouvelles, réussites et événements à venir à KCS.',
+  'Classes begin September 7, 2026. The calendar includes official quarters, semester exams, school breaks, conferences, graduation, and closing ceremonies.':
+    'Les cours commencent le 7 septembre 2026. Le calendrier comprend les périodes officielles, les examens semestriels, les congés, les conférences, la remise des diplômes et les cérémonies de clôture.',
+  'The official first day of classes for every KCS family is Monday, September 7, 2026.':
+    'Le premier jour officiel des cours pour toutes les familles KCS est le lundi 7 septembre 2026.',
+  'Upper School students begin the year with the official High School orientation program.':
+    'Les élèves du secondaire commencent l’année avec le programme officiel d’orientation.',
+  'The official parent orientation meeting will be held online.':
+    'La réunion officielle d’orientation des parents aura lieu en ligne.',
+  'KCS parents are invited to the first official prayer meeting of the school year.':
+    'Les parents KCS sont invités à la première réunion officielle de prière de l’année scolaire.',
+  'The KCS community celebrates Legacy Day during Legacy Month.':
+    'La communauté KCS célèbre la Journée de l’héritage pendant le Mois de l’héritage.',
   'Read Full Story': 'Lire l’article complet',
   'Search news & events...': 'Rechercher des actualités et événements...',
   all: 'tout',
