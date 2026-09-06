@@ -87,6 +87,35 @@ const PortalRedirect = () => {
   return <Navigate to={user.role === 'admin' ? '/admin' : `/portal/${user.role}`} replace />
 }
 
+const TranscriptVerificationPage = () => {
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  const documentId = params.get('document') ?? ''
+  const fingerprint = params.get('fingerprint') ?? ''
+  const referenceIsValid = /^KCS-TR-\d{8}-[A-Z0-9-]+$/i.test(documentId) && /^[A-Z0-9-]{6,}$/i.test(fingerprint)
+
+  return (
+    <main className="mx-auto min-h-[70vh] w-full max-w-3xl px-4 py-12 sm:px-6">
+      <section className="overflow-hidden rounded-3xl border border-kcs-gold-300 bg-white shadow-2xl dark:bg-kcs-blue-900">
+        <div className="h-3 bg-kcs-blue-900" />
+        <div className="p-6 sm:p-10">
+          <p className="text-xs font-black uppercase tracking-[0.24em] text-kcs-gold-600">KCS Nexus · Academic Records</p>
+          <h1 className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">Transcript verification</h1>
+          <div className={`mt-6 rounded-2xl border p-5 ${referenceIsValid ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'}`}>
+            <p className="font-bold">{referenceIsValid ? 'The document reference has a valid KCS format.' : 'This document reference is incomplete or invalid.'}</p>
+            <p className="mt-2 text-sm">Final authenticity confirmation must be completed by the KCS Academic Records Office against its official registry.</p>
+          </div>
+          <dl className="mt-6 grid gap-4 text-sm">
+            <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/40"><dt className="font-bold text-gray-500">Document ID</dt><dd className="mt-1 break-all text-kcs-blue-900 dark:text-white">{documentId || 'Not supplied'}</dd></div>
+            <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/40"><dt className="font-bold text-gray-500">Integrity fingerprint</dt><dd className="mt-1 break-all text-kcs-blue-900 dark:text-white">{fingerprint || 'Not supplied'}</dd></div>
+          </dl>
+          <p className="mt-6 text-xs leading-5 text-gray-500">Security notice: this public page validates the reference format. It does not expose student grades or personal data.</p>
+        </div>
+      </section>
+    </main>
+  )
+}
+
 const RouteFallback = () => <div className="min-h-[40vh]" />
 
 const App = () => {
@@ -116,6 +145,7 @@ const App = () => {
             <Route path="/terms" element={<AboutPage />} />
             <Route path="/sitemap" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/verify/transcript" element={<TranscriptVerificationPage />} />
 
 
             <Route
