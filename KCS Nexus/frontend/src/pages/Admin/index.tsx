@@ -1776,22 +1776,18 @@ const AdminSectionView = ({
       setAdmissionApproving('')
     }
   }
-  const grade9to12 = useMemo(
-    () => officialRoster.filter((student) => ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].includes(student.grade)),
-    [officialRoster]
-  )
-
-  const transcriptClasses = useMemo(() => Array.from(new Set(grade9to12.map((student) => formatClassName(student.grade, student.section)))).sort(), [grade9to12])
+  const transcriptStudents = useMemo(() => officialRoster, [officialRoster])
+  const transcriptClasses = SCHOOL_LEVELS
   const filteredTranscriptStudents = useMemo(() => {
     const query = transcriptQuery.trim().toLowerCase()
-    return grade9to12.filter((student) => {
-      const className = formatClassName(student.grade, student.section)
-      return (transcriptClassFilter === 'All' || className === transcriptClassFilter)
+    return transcriptStudents.filter((student) => {
+      const grade = normalizeSchoolLevel(student.grade) ?? student.grade
+      return (transcriptClassFilter === 'All' || grade === transcriptClassFilter)
         && (!query || `${student.name} ${student.studentNumber ?? ''}`.toLowerCase().includes(query))
     })
-  }, [grade9to12, transcriptClassFilter, transcriptQuery])
+  }, [transcriptStudents, transcriptClassFilter, transcriptQuery])
 
-  const transcriptStudent = grade9to12.find((student) => student.id === selectedTranscriptId) ?? grade9to12[0] ?? officialRoster[0] ?? null
+  const transcriptStudent = transcriptStudents.find((student) => student.id === selectedTranscriptId) ?? transcriptStudents[0] ?? null
   const officialTranscript = transcriptStudent ? buildOfficialTranscript(transcriptStudent) : null
 
   const filteredRoster = useMemo(() => {
@@ -2633,7 +2629,7 @@ const AdminSectionView = ({
             </div>
             <div className="grid gap-2 sm:flex sm:flex-wrap">
               <button className={`${adminButton} w-full sm:w-auto`} onClick={() => window.print()}>Print official transcript</button>
-              <button className={`${adminOutlineButton} w-full sm:w-auto`} onClick={() => setSelectedTranscriptId(grade9to12[0]?.id ?? '')}>Reset selection</button>
+              <button className={`${adminOutlineButton} w-full sm:w-auto`} onClick={() => { setSelectedTranscriptId(transcriptStudents[0]?.id ?? ''); setTranscriptClassFilter('All'); setTranscriptQuery('') }}>Reset selection</button>
             </div>
           </div>
         </div>
@@ -2642,12 +2638,12 @@ const AdminSectionView = ({
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">Eligible Students</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Only Grade 9 to Grade 12 students appear here because official transcripts begin in high school.</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_11rem]">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">All students from the official Nexus registry are available, from K3 through Grade 12.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,15rem)]">
                 <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><Search size={16} className="text-gray-400" /><input value={transcriptQuery} onChange={(event) => setTranscriptQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Search by student name or ID..." /></label>
-                <select value={transcriptClassFilter} onChange={(event) => setTranscriptClassFilter(event.target.value)} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="All">All classes</option>{transcriptClasses.map((className) => <option key={className}>{className}</option>)}</select>
+                <select aria-label="Filter eligible students by class" value={transcriptClassFilter} onChange={(event) => setTranscriptClassFilter(event.target.value)} className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-kcs-blue-900 outline-none focus:border-kcs-blue-400 focus:ring-2 focus:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:focus:ring-kcs-blue-800"><option value="All">All classes (K3–Grade 12)</option>{transcriptClasses.map((className) => <option key={className} value={className}>{className}</option>)}</select>
               </div>
-              <p className="mt-3 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{filteredTranscriptStudents.length} student(s) match the current criteria.</p>
+              <p className="mt-3 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{filteredTranscriptStudents.length} of {transcriptStudents.length} official student(s) match the current criteria.</p>
             </div>
             {filteredTranscriptStudents.map((student) => {
               const transcript = transcripts.find((item) => item.student === student.name)
