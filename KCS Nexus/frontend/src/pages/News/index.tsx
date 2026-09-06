@@ -5,6 +5,7 @@ import { Calendar, ArrowRight, Clock, Search } from 'lucide-react'
 import SearchField from '@/components/shared/SearchField'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
 import { formatSchoolCalendarDate, getUpcomingSchoolEvents, schoolCalendarEvents2026_2027, schoolYear2026_2027 } from '@/data/schoolCalendar2026_2027'
+import { useUIStore } from '@/store/uiStore'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -108,6 +109,7 @@ const eventTypeColors: Record<string, string> = {
 }
 
 const NewsPage = () => {
+  const language = useUIStore((state) => state.language)
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFullCalendar, setShowFullCalendar] = useState(false)
@@ -289,7 +291,7 @@ const NewsPage = () => {
                 {filtered.length === 0 && (
                   <div className="text-center py-16 text-gray-400">
                     <Search size={40} className="mx-auto mb-3 opacity-50" />
-                    <p>No results found for "{searchQuery}"</p>
+                    <p>{language === 'fr' ? `Aucun résultat trouvé pour « ${searchQuery} »` : `No results found for "${searchQuery}"`}</p>
                   </div>
                 )}
               </AnimSection>

@@ -17,6 +17,7 @@ const translateText = (value: string, language: string) => {
 
   if (language === 'fr') {
     const dynamicRules: Array<[RegExp, string]> = [
+      [/^No results found for "(.+)"$/, 'Aucun résultat trouvé pour « $1 »'],
       [/^To (.+)$/, 'A $1'], [/^From (.+)$/, 'De $1'], [/^(\d+) unread$/, '$1 non lu(s)'],
       [/^Due (.+)$/, 'Echeance : $1'], [/^Max (.+) points$/, 'Maximum : $1 points'],
       [/^(\d+) student\(s\)$/, '$1 eleve(s)'],
@@ -57,6 +58,7 @@ const translateText = (value: string, language: string) => {
     }
   } else {
     const reverseDynamicRules: Array<[RegExp, string]> = [
+      [/^Connexion impossible à l’API KCS Nexus \((.+)\)\. Vérifiez que le service est disponible\.$/, 'Unable to connect to the KCS Nexus API ($1). Check that the service is available.'],
       [/^Commentaire appliqué à (\d+) élève\(s\) visible\(s\)\. Enregistrez le brouillon pour le conserver\.$/, 'Comment applied to $1 visible learner(s). Save the draft to persist it.'],
       [/^Soumission bloquée : (\d+) élève\(s\) n’ont ni note calculée ni dérogation approuvée\.$/, 'Submission blocked: $1 learner(s) have no calculated grade or approved override.'],
       [/^Soumission bloquée : justifiez chaque dérogation manuelle avant la soumission \((\d+) élève\(s\)\)\.$/, 'Submission blocked: explain every manual override before submission ($1 learner(s)).'],

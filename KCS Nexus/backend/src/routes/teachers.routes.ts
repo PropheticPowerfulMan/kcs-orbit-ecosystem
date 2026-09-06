@@ -7,6 +7,7 @@ import { authenticate, requireRoles, type AuthenticatedRequest } from '../middle
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
+import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 
 export const teachersRouter = Router()
 
@@ -171,8 +172,7 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
 teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = teacherCourseSyncSchema.parse(req.body)
   if (new Set(payload.studentIds).size !== payload.studentIds.length) throw new ApiError(400, 'Duplicate learner in course enrollment')
-  const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true } })
-  if (!teacher) throw new ApiError(404, 'Teacher profile synchronization pending')
+  const teacher = await ensureTeacherProfile(req.user!.sub)
   const existing = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true } })
   if (existing && existing.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
   const requestedCount = Math.max(new Set(payload.studentIds).size, new Set(payload.studentNumbers.map((value) => value.toLowerCase())).size)
@@ -230,7 +230,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
   } catch (error) {
     console.warn('[teacher-overview] Orbit student directory unavailable; using local Nexus registry.', error)
   }
-  if (!teacher) {
+  if (!teacher || !teacher.courses.length) {
     const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
     const assignedClasses = extractWorkspaceClasses(workspace?.state)
     const registry = await prisma.studentProfile.findMany({
@@ -254,7 +254,18 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
         missingAssignments: 0,
       },
     }))
-    return success(res, { profile: null, courses: [], students, studentDirectory, assignments: [], grades: [], timetable: [] }, 'Teacher roster loaded while profile synchronization is pending')
+    return success(res, {
+      profile: teacher ? {
+        id: teacher.id,
+        employeeNumber: teacher.employeeNumber,
+        department: teacher.department,
+        qualification: teacher.qualification,
+        homeroomGrade: teacher.homeroomGrade,
+        homeroomSection: teacher.homeroomSection,
+        user: teacher.user,
+      } : null,
+      courses: [], students, studentDirectory, assignments: [], grades: [], timetable: [],
+    }, teacher ? 'Teacher roster loaded while official courses synchronize' : 'Teacher roster loaded while profile synchronization is pending')
   }
   const students = new Map<string, any>()
   teacher.courses.forEach((course) => course.enrollments.forEach(({ student }) => students.set(student.id, student)))

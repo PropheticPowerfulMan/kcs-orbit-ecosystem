@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/authStore'
 import { academyAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 import type { UserRole } from '@/types'
+import { getAssetUrl } from '@/utils/assets'
 
 interface NavItem {
   to: string
@@ -173,6 +174,7 @@ const PortalSidebar = () => {
   }, [sidebarOpen, setSidebarOpen])
 
   if (!user) return null
+  const schoolLogoSrc = getAssetUrl('images/kcs.jpg')
 
   const navItems: NavItem[] = user.role === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
@@ -310,8 +312,8 @@ const PortalSidebar = () => {
       <div className="fixed inset-x-0 top-0 z-50 px-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] sm:px-4 lg:hidden">
         <div className="nexus-mobile-dashboard-bar flex min-h-14 items-center justify-between gap-2 rounded-[24px] border px-2.5 py-2 sm:rounded-[28px] sm:px-3">
         <Link to="/" onClick={() => setSidebarOpen(false)} className="flex min-w-0 flex-1 items-center gap-2.5">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full kcs-gradient shadow-kcs ring-2 ring-white/80 dark:ring-kcs-blue-900">
-            <span className="font-display text-sm font-bold text-white">KCS</span>
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white p-0.5 shadow-kcs ring-2 ring-kcs-blue-100 dark:ring-kcs-blue-800">
+            <img src={schoolLogoSrc} alt="Kinshasa Christian School" className="h-full w-full rounded-full object-contain" />
           </div>
           <div className="min-w-0">
             <p className="truncate font-display text-[13px] font-bold leading-tight text-kcs-blue-900 dark:text-white sm:text-sm">
@@ -430,8 +432,8 @@ const PortalSidebar = () => {
           className={`flex min-w-0 items-center gap-3 ${sidebarCollapsed ? 'flex-none justify-center' : 'flex-1'}`}
           title={sidebarCollapsed ? 'KCS Nexus' : undefined}
         >
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl kcs-gradient shadow-kcs">
-            <span className="text-white font-bold text-sm font-display">KCS</span>
+          <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-white bg-white p-0.5 shadow-kcs ring-1 ring-kcs-blue-100 dark:ring-kcs-blue-800">
+            <img src={schoolLogoSrc} alt="Kinshasa Christian School" className="h-full w-full rounded-lg object-contain" />
           </div>
           <AnimatePresence>
             {!sidebarCollapsed && (

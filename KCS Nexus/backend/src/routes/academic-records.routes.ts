@@ -7,6 +7,7 @@ import { getRouteParam } from '../utils/request.js'
 import { getParentAcademicClearance } from './finance.routes.js'
 import { normalizeClassParts } from '../utils/className.js'
 import { teacherClassKey } from '../utils/teacherClassAccess.js'
+import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 
 const submissionSchema=z.object({
  courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
@@ -35,6 +36,7 @@ const isTeacherHomeroomFor=(teacher:{homeroomGrade:string|null;homeroomSection:s
  return home.section?teacherClassKey(home)===teacherClassKey(learner):home.grade===learner.grade
 }
 const homeroomReportContext=async(userId:string,studentId:string,academicYear:string,term:string)=>{
+ await ensureTeacherProfile(userId)
  const [teacher,student]=await Promise.all([
   prisma.teacherProfile.findUnique({where:{userId},select:{id:true,homeroomGrade:true,homeroomSection:true}}),
   prisma.studentProfile.findUnique({
@@ -77,6 +79,7 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
 }))
 
 academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ await ensureTeacherProfile(req.user!.sub)
  const teacher=await prisma.teacherProfile.findUnique({where:{userId:req.user!.sub},select:{courses:{select:{id:true,enrollments:{select:{studentId:true}}}}}})
  if(!teacher)return success(res,{submissions:[],reportCards:[]},'Teacher profile synchronization pending')
  const courseIds=teacher.courses.map(course=>course.id)
@@ -90,6 +93,7 @@ academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandle
 
 academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const cycle=cycleSchema.parse({academicYear:String(req.query.academicYear||''),term:String(req.query.term||'')})
+ await ensureTeacherProfile(req.user!.sub)
  const teacher=await prisma.teacherProfile.findUnique({
   where:{userId:req.user!.sub},
   select:{id:true,status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,lastName:true}}},
