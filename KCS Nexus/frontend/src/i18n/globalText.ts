@@ -1769,4 +1769,8 @@ export const globalFrenchText: PhraseMap = {
   "The official register could not be loaded.": "Le registre officiel ne peut pas être chargé.",
   "Individual analysis unavailable.": "Analyse individuelle indisponible.",
   "staff member(s)": "membre(s) du personnel",
+  "Diagnostic Tests": "Tests diagnostiques",
+  "Imports Excel / CSV": "Importations Excel / CSV",
+  "final grades": "notes finales",
+  "credits": "crédits",
 }

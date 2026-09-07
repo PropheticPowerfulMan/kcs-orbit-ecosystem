@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -115,6 +115,7 @@ const PortalSidebar = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const mobileSidebarRef = useRef<HTMLElement>(null)
+  const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const { user, logout } = useAuthStore()
   const {
@@ -132,6 +133,14 @@ const PortalSidebar = () => {
   useEffect(() => {
     setSidebarOpen(false)
   }, [location.pathname, setSidebarOpen])
+
+  useLayoutEffect(() => {
+    const navigation = desktopNavigationRef.current
+    if (!navigation) return
+
+    const savedPosition = Number(sessionStorage.getItem('kcs-nexus-desktop-sidebar-scroll') || 0)
+    navigation.scrollTop = savedPosition
+  }, [location.pathname])
 
   useEffect(() => {
     return () => {
@@ -212,17 +221,23 @@ const PortalSidebar = () => {
 
   const renderNavigation = (isMobile = false) => (
     <>
-      <nav className={`${isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'min-h-0 flex-1 space-y-1 overflow-y-auto p-3'}`}>
+      <nav
+        ref={isMobile ? undefined : desktopNavigationRef}
+        onScroll={isMobile ? undefined : (event) => {
+          sessionStorage.setItem('kcs-nexus-desktop-sidebar-scroll', String(event.currentTarget.scrollTop))
+        }}
+        className={isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'min-h-0 flex-1 space-y-1 overflow-y-auto p-3'}
+      >
         {navItems.map(({ to, label, icon: Icon, badge }, index) => (
           <NavLink
             key={to}
             to={to}
             end={to === (user.role === 'admin' ? '/admin' : `/portal/${user.role}`)}
-            onClick={(event) => {
-              event.preventDefault()
-              setSidebarOpen(false)
-              document.body.style.overflow = ''
-              navigate(to)
+            onClick={() => {
+              if (isMobile) {
+                setSidebarOpen(false)
+                document.body.style.overflow = ''
+              }
             }}
             className={({ isActive }) =>
               `sidebar-link ${isMobile ? 'sidebar-link-mobile' : ''} ${isActive ? 'active' : ''} ${!isMobile && sidebarCollapsed ? 'justify-center px-0' : ''} ${!isMobile && index === 0 ? 'sticky top-0 z-10 bg-white/95 shadow-sm backdrop-blur dark:bg-kcs-blue-950/95' : ''}`
