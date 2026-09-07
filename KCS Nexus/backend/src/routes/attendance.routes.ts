@@ -289,7 +289,7 @@ attendanceRouter.post('/staff', requireRoles('admin'), asyncHandler(async (req: 
         update: { employeeNumber: entry.employeeNumber, staffName: entry.staffName, staffEmail: entry.staffEmail, department: entry.department, status: entry.status, arrivalTime: entry.arrivalTime, departureTime: entry.departureTime, note: entry.note, recordedById: recorderId },
       }))
     }
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ADMIN_STAFF_ATTENDANCE_RECORDED', targetType: 'StaffRegister', targetId: date.toISOString().slice(0, 10), metadata: { count: rows.length } } })
+    await tx.auditLog.create({ data: { actorId: recorderId, action: 'ADMIN_STAFF_ATTENDANCE_RECORDED', targetType: 'StaffRegister', targetId: date.toISOString().slice(0, 10), metadata: { count: rows.length } } })
     return rows
   })
   return success(res, { date: date.toISOString().slice(0, 10), saved: saved.length, summary: summarize(saved) }, 'Official staff attendance saved')
