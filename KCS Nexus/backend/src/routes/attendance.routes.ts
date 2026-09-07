@@ -41,6 +41,13 @@ const normalizedDay = (value: Date) => {
   return date
 }
 
+async function resolveAttendanceRecorderId(userId: string) {
+  if (userId !== 'configured-superadmin') return userId
+  const account = await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } })
+  if (!account) throw new ApiError(409, 'The Super Administrator database account is not synchronized')
+  return account.id
+}
+
 const summarize = (records: Array<{ status: string }>) => {
   const count = (status: string) => records.filter((record) => record.status === status).length
   const attended = records.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
@@ -172,15 +179,34 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
     throw new ApiError(400, 'Every student must belong to the selected teacher class')
   }
   const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
+  const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
   await prisma.$transaction(async (tx) => {
     for (const entry of payload.entries) {
       await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className, period: payload.period ?? null } })
-      await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: req.user!.sub, date, className, period: payload.period, status: entry.status, note: entry.note } })
+      await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period, status: entry.status, note: entry.note } })
     }
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
+    await tx.auditLog.create({ data: { actorId: recorderId, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
   })
   await updateStudentRates(ids)
   return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length, summary: summarize(payload.entries) }, 'Official class attendance saved')
+}))
+
+attendanceRouter.get('/students/:studentId/analytics', requireRoles('admin'), asyncHandler(async (req, res) => {
+  const student = await prisma.studentProfile.findUnique({ where: { id: String(req.params.studentId) }, include: { user: { select: { firstName: true, middleName: true, lastName: true } } } })
+  if (!student) throw new ApiError(404, 'Student not found')
+  const records = await prisma.attendanceRecord.findMany({ where: { studentId: student.id }, include: { recordedBy: { select: { firstName: true, middleName: true, lastName: true, role: true } } }, orderBy: { date: 'desc' }, take: 730 })
+  const summary = summarize(records)
+  const punctual = records.filter(record => ['PRESENT','EXCUSED'].includes(record.status)).length
+  const unexcusedAbsences = records.filter(record => record.status === 'ABSENT' && !record.note?.trim()).length
+  const sample = records.length
+  const proportion = sample ? (summary.attendanceRate ?? 0) / 100 : 0
+  const zScore = 1.96
+  const denominator = sample ? 1 + zScore * zScore / sample : 1
+  const centre = sample ? proportion + zScore * zScore / (2 * sample) : 0
+  const margin = sample ? zScore * Math.sqrt((proportion * (1 - proportion) + zScore * zScore / (4 * sample)) / sample) : 0
+  const confidence95 = sample ? { low: Number((100 * (centre - margin) / denominator).toFixed(1)), high: Number((100 * (centre + margin) / denominator).toFixed(1)) } : null
+  const riskScore = sample ? Number(Math.min(100, ((summary.absent + summary.sick + summary.suspended) * 100 + summary.late * 35) / sample).toFixed(1)) : 0
+  return success(res, { student: { id: student.id, name: [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' '), studentNumber: student.studentNumber, grade: student.grade, section: student.section }, summary, indicators: { punctualityRate: sample ? Number((punctual / sample * 100).toFixed(1)) : null, latenessRate: sample ? Number((summary.late / sample * 100).toFixed(1)) : null, absenceRate: sample ? Number((summary.absent / sample * 100).toFixed(1)) : null, unexcusedAbsences, riskScore, confidence95 }, records: records.map(record => ({ id: record.id, date: record.date, status: record.status, note: record.note, className: record.className, recordedBy: record.recordedBy ? [record.recordedBy.lastName, record.recordedBy.middleName, record.recordedBy.firstName].filter(Boolean).join(' ') : null })) }, 'Student attendance analytics loaded')
 }))
 
 attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req, res) => {
@@ -188,7 +214,7 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
   const students = await prisma.studentProfile.findMany({
     include: {
       user: { select: { firstName: true, middleName: true, lastName: true } },
-      attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' }, include: { recordedBy: { select: { id: true, firstName: true, lastName: true, role: true } } } },
+      attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' }, include: { recordedBy: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true } } } },
     },
     orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
   })
@@ -203,7 +229,7 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
       name: [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' '),
       status: student.attendanceRecords[0]?.status ?? null,
       note: student.attendanceRecords[0]?.note ?? '',
-      recordedBy: student.attendanceRecords[0]?.recordedBy ? { id: student.attendanceRecords[0].recordedBy!.id, name: [student.attendanceRecords[0].recordedBy!.lastName, student.attendanceRecords[0].recordedBy!.firstName].filter(Boolean).join(' '), role: student.attendanceRecords[0].recordedBy!.role } : null,
+      recordedBy: student.attendanceRecords[0]?.recordedBy ? { id: student.attendanceRecords[0].recordedBy!.id, name: [student.attendanceRecords[0].recordedBy!.lastName, student.attendanceRecords[0].recordedBy!.middleName, student.attendanceRecords[0].recordedBy!.firstName].filter(Boolean).join(' '), role: student.attendanceRecords[0].recordedBy!.role } : null,
     })
     classes.set(key, group)
   }
@@ -226,12 +252,13 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
     throw new ApiError(400, 'Every student must belong to the selected class')
   }
   const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
+  const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
   await prisma.$transaction(async (tx) => {
     for (const entry of payload.entries) {
       await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className, period: payload.period ?? null } })
-      await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: req.user!.sub, date, className, period: payload.period, status: entry.status, note: entry.note } })
+      await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period, status: entry.status, note: entry.note } })
     }
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ADMIN_STUDENT_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
+    await tx.auditLog.create({ data: { actorId: recorderId, action: 'ADMIN_STUDENT_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
   })
   await updateStudentRates(ids)
   return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length }, 'Official student attendance saved')
@@ -252,13 +279,14 @@ attendanceRouter.post('/staff', requireRoles('admin'), asyncHandler(async (req: 
   const date = normalizedDay(payload.date)
   const ids = payload.entries.map((entry) => entry.staffOrbitId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate staff member in attendance register')
+  const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
   const saved = await prisma.$transaction(async (tx) => {
     const rows = []
     for (const entry of payload.entries) {
       rows.push(await tx.staffAttendanceRecord.upsert({
         where: { staffOrbitId_date: { staffOrbitId: entry.staffOrbitId, date } },
-        create: { ...entry, date, recordedById: req.user!.sub },
-        update: { employeeNumber: entry.employeeNumber, staffName: entry.staffName, staffEmail: entry.staffEmail, department: entry.department, status: entry.status, arrivalTime: entry.arrivalTime, departureTime: entry.departureTime, note: entry.note, recordedById: req.user!.sub },
+        create: { ...entry, date, recordedById: recorderId },
+        update: { employeeNumber: entry.employeeNumber, staffName: entry.staffName, staffEmail: entry.staffEmail, department: entry.department, status: entry.status, arrivalTime: entry.arrivalTime, departureTime: entry.departureTime, note: entry.note, recordedById: recorderId },
       }))
     }
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ADMIN_STAFF_ATTENDANCE_RECORDED', targetType: 'StaffRegister', targetId: date.toISOString().slice(0, 10), metadata: { count: rows.length } } })

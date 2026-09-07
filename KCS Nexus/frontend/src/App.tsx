@@ -1,9 +1,10 @@
-import { Component, Suspense, lazy, type ErrorInfo, type ReactNode } from 'react'
+import { Component, Suspense, lazy, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from '@/components/layout/Layout'
 import ProtectedRoute from '@/components/shared/ProtectedRoute'
 import { useAuthStore } from '@/store/authStore'
 import GlobalTextTranslator from '@/components/shared/GlobalTextTranslator'
+import { academicRecordsAPI } from '@/services/api'
 
 const HomePage = lazy(() => import('@/pages/Home'))
 const AboutPage = lazy(() => import('@/pages/About'))
@@ -93,6 +94,9 @@ const TranscriptVerificationPage = () => {
   const documentId = params.get('document') ?? ''
   const fingerprint = params.get('fingerprint') ?? ''
   const referenceIsValid = /^KCS-TR-\d{8}-[A-Z0-9-]+$/i.test(documentId) && /^[A-Z0-9-]{6,}$/i.test(fingerprint)
+  const [verification,setVerification]=useState<any>(null)
+  const [checking,setChecking]=useState(true)
+  useEffect(()=>{if(!referenceIsValid){setChecking(false);return}academicRecordsAPI.verifyTranscript(documentId,fingerprint).then(response=>setVerification(response.data.data)).catch(()=>setVerification(null)).finally(()=>setChecking(false))},[documentId,fingerprint,referenceIsValid])
 
   return (
     <main className="mx-auto min-h-[70vh] w-full max-w-3xl px-4 py-12 sm:px-6">
@@ -102,12 +106,13 @@ const TranscriptVerificationPage = () => {
           <p className="text-xs font-black uppercase tracking-[0.24em] text-kcs-gold-600">KCS Nexus · Academic Records</p>
           <h1 className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">Transcript verification</h1>
           <div className={`mt-6 rounded-2xl border p-5 ${referenceIsValid ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'}`}>
-            <p className="font-bold">{referenceIsValid ? 'The document reference has a valid KCS format.' : 'This document reference is incomplete or invalid.'}</p>
-            <p className="mt-2 text-sm">Final authenticity confirmation must be completed by the KCS Academic Records Office against its official registry.</p>
+            <p className="font-bold">{checking ? 'Verification in progress...' : verification?.valid ? 'Authentic document: verified against the official KCS registry.' : 'This document is not registered or is invalid.'}</p>
+            <p className="mt-2 text-sm">The QR code performs a live verification against the official KCS Nexus registry.</p>
           </div>
           <dl className="mt-6 grid gap-4 text-sm">
             <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/40"><dt className="font-bold text-gray-500">Document ID</dt><dd className="mt-1 break-all text-kcs-blue-900 dark:text-white">{documentId || 'Not supplied'}</dd></div>
             <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/40"><dt className="font-bold text-gray-500">Integrity fingerprint</dt><dd className="mt-1 break-all text-kcs-blue-900 dark:text-white">{fingerprint || 'Not supplied'}</dd></div>
+          {verification?.valid&&<div className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900"><b>{verification.studentName}</b><p>{verification.studentNumber} · {verification.grade}</p><p>Issued: {new Date(verification.issuedAt).toLocaleString()}</p></div>}
           </dl>
           <p className="mt-6 text-xs leading-5 text-gray-500">Security notice: this public page validates the reference format. It does not expose student grades or personal data.</p>
         </div>

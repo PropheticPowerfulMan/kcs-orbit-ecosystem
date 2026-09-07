@@ -231,6 +231,7 @@ export const attendanceAPI = {
   teacherHomeroom: (date: string, grade?: string, section?: string) => api.get('/attendance/teacher/homeroom', { params: { date, grade, section } }),
   saveTeacherHomeroom: (data: object) => api.post('/attendance/teacher/homeroom', data),
   students: (date: string) => api.get('/attendance/students', { params: { date } }),
+  studentAnalytics: (studentId: string) => api.get('/attendance/students/' + studentId + '/analytics'),
   saveStudents: (data: object) => api.post('/attendance/students', data),
   staff: (date?: string) => api.get('/attendance/staff', { params: date ? { date } : undefined }),
   saveStaff: (data: object) => api.post('/attendance/staff', data),
@@ -389,5 +390,7 @@ export const academicRecordsAPI = {
   reportCards: (params?: object) => api.get('/academic-records/report-cards', { params }),
   approveReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/approve`),
   publishReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/publish`),
-  transcript: (studentId: string) => api.get(`/academic-records/transcripts/${studentId}`),
+  transcript: (studentId: string) => api.get('/academic-records/transcripts/' + studentId),
+  registerTranscriptVerification: (data: { documentId: string; fingerprint: string; studentId: string }) => api.post('/academic-records/transcripts/verification', data),
+  verifyTranscript: (document: string, fingerprint: string) => api.get('/academic-records/transcripts/verify', { params: { document, fingerprint } }),
 }

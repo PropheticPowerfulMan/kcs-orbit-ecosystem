@@ -1740,4 +1740,12 @@ export const globalFrenchText: PhraseMap = {
   "Secure academic document": "Document académique sécurisé",
   "Student full name": "Nom complet de l’élève",
   "Valid only with its document ID, integrity fingerprint and QR verification.": "Valide uniquement avec son identifiant, son empreinte d’intégrité et la vérification QR.",
+  "KCS is dedicated to helping students grow academically, socially, and spiritually in a nurturing Christian environment.": "KCS aide les élèves à grandir sur les plans académique, social et spirituel dans un environnement chrétien bienveillant.",
+  "Shaping the future, one student at a time": "Façonner l’avenir, un élève à la fois",
+  "We are committed to excellence, from hiring qualified Christian educators to how we measure instruction and care.": "Nous visons l’excellence, du recrutement d’éducateurs chrétiens qualifiés à l’évaluation de l’enseignement et de l’accompagnement.",
+  "We are committed to excellence": "Nous sommes engagés envers l’excellence",
+  "Our mission is to prepare children for a competitive world while helping them show compassion and mercy.": "Notre mission est de préparer les enfants à un monde compétitif tout en développant leur compassion et leur miséricorde.",
+  "Raising the next generation of leaders": "Former la prochaine génération de leaders",
+  "News & Events Publishing": "Publication des nouvelles et événements",
+  "Media & Live Broadcasts": "Médias et diffusions en direct",
 }

@@ -88,6 +88,12 @@ const disciplineSchema = z.object({
 })
 
 const getActorId = (req: AuthenticatedRequest) => req.user?.sub
+const resolveActorId = async (req: AuthenticatedRequest) => {
+  if (req.user?.sub !== 'configured-superadmin') return req.user?.sub
+  const account = await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } })
+  if (!account) throw new ApiError(409, 'The Super Administrator database account is not synchronized')
+  return account.id
+}
 
 const buildInquiryNumber = () => `INQ-${Date.now().toString().slice(-7)}`
 const asPrismaData = <T extends object>(value: T) => value as any
@@ -237,13 +243,15 @@ schoolManagementRouter.get('/discipline-cases', requireRoles('admin', 'staff', '
   return success(res, cases)
 }))
 
-schoolManagementRouter.post('/discipline-cases', requireRoles('admin', 'staff', 'teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const payload = disciplineSchema.parse(req.body)
-  const now = new Date()
+
+  schoolManagementRouter.post("/discipline-cases", requireRoles("admin", "staff", "teacher"), asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const payload = disciplineSchema.parse(req.body)
+    const now = new Date()
+  const actorId = await resolveActorId(req)
   const disciplineCase = await prisma.disciplineCase.create({
     data: asPrismaData({
       studentId: payload.studentId,
-      reportedById: getActorId(req),
+      reportedById: actorId,
       incidentDate: payload.incidentDate,
       category: payload.category,
       severity: payload.severity,
@@ -267,7 +275,7 @@ schoolManagementRouter.post('/discipline-cases', requireRoles('admin', 'staff', 
             status: 'SENT',
             subject: `Discipline update - ${disciplineCase.category}`,
             body: payload.parentMessage ?? disciplineCase.incident,
-            senderId: getActorId(req),
+            senderId: actorId,
             recipientName: parent ? `${parent.firstName} ${parent.lastName}` : undefined,
             recipientEmail: parent?.email,
             recipientPhone: parent?.phone ?? undefined,
@@ -284,7 +292,7 @@ schoolManagementRouter.post('/discipline-cases', requireRoles('admin', 'staff', 
             status: 'SENT',
             subject: `Discipline update - ${disciplineCase.category}`,
             body: payload.studentMessage ?? disciplineCase.incident,
-            senderId: getActorId(req),
+            senderId: actorId,
             recipientName: `${disciplineCase.student.user.firstName} ${disciplineCase.student.user.lastName}`,
             recipientEmail: disciplineCase.student.user.email,
             studentId: disciplineCase.studentId,
@@ -321,11 +329,12 @@ schoolManagementRouter.patch('/discipline-cases/:id/resolution', requireRoles('a
   const payload = disciplineSchema.partial().extend({
     status: enumValue(['OPEN', 'INVESTIGATING', 'PARENT_CONTACTED', 'RESOLVED', 'ESCALATED']),
   }).parse(req.body)
+  const actorId = await resolveActorId(req)
 
   const disciplineCase = await prisma.disciplineCase.update({
     where: { id: disciplineCaseId },
     data: asPrismaData({
-      resolvedById: payload.status === 'RESOLVED' ? getActorId(req) : undefined,
+      resolvedById: payload.status === 'RESOLVED' ? actorId : undefined,
       resolution: payload.resolution,
       actionTaken: payload.actionTaken,
       gradeImpact: payload.gradeImpact,

@@ -22,9 +22,10 @@ import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenter'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
+import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'
 import { useAuthStore } from '@/store/authStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
-import { adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
+import { academicRecordsAPI, adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
 import { normalizeSchoolLevel, SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -411,7 +412,8 @@ const printOfficialTranscript = async (transcript: ReturnType<typeof buildOffici
   if (!printWindow) return
   const generatedIso = new Date().toISOString()
   const fingerprint = buildAuthenticityCode([transcript.student.id, transcript.student.studentNumber ?? '', transcript.student.name, generatedIso, ...transcript.rows.flatMap((year) => year.courses.map((course) => `${year.grade}:${course.course}:${course.average}`))].join('|'))
-  const documentId = `KCS-TR-${generatedIso.slice(0, 10).replace(/-/g, '')}-${fingerprint}`
+  const documentId = 'KCS-TR-' + generatedIso.slice(0, 10).replace(/-/g, '') + '-' + fingerprint
+  await academicRecordsAPI.registerTranscriptVerification({ documentId, fingerprint, studentId: transcript.student.id })
   const currentOrigin = window.location.origin
   const canonicalOrigin = /^https?:\/\/staging\./i.test(currentOrigin) ? currentOrigin.replace(/^(https?:\/\/)staging\./i, '$1') : /^https?:\/\/localhost(?::\d+)?$/i.test(currentOrigin) ? 'https://nexus.kcs.school' : currentOrigin
   const verificationUrl = `${canonicalOrigin}/verify/transcript?document=${encodeURIComponent(documentId)}&fingerprint=${encodeURIComponent(fingerprint)}`
@@ -428,6 +430,8 @@ table{width:100%;border-collapse:collapse;font-size:7.3pt}th{padding:2.4mm;backg
 @media print{body{background:white}.sheet{width:auto;min-height:279mm;margin:0;padding:9mm 10mm 7mm;box-shadow:none}.sheet:before{inset:2mm}}
 </style></head><body><main class="sheet"><img class="watermark" src="${escapeHtml(logoUrl)}" alt=""><div class="content"><header><div class="logo-box"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"></div><div><h2 class="school">${escapeHtml(SCHOOL_NAME)}</h2><p class="motto">Knowledge · Character · Service</p></div><div class="official"><b>OFFICIAL RECORD</b><span>Secure academic document</span></div></header><section class="title"><p>Office of Academic Records</p><h1>Official Academic Transcript</h1></section><section class="identity"><div class="field"><span>Student full name</span><b>${escapeHtml(transcript.student.name)}</b></div><div class="field"><span>Student ID</span><b>${escapeHtml(transcript.student.studentNumber ?? transcript.student.id)}</b></div><div class="field"><span>Current class</span><b>${escapeHtml(formatClassName(transcript.student.grade, transcript.student.section))}</b></div></section><section class="metrics"><div class="metric"><span>Cumulative GPA</span><b>${transcript.student.gpa == null ? '—' : transcript.cumulativeGpa}</b></div><div class="metric"><span>Average</span><b>${transcript.cumulativeAverage}%</b></div><div class="metric"><span>Credits earned</span><b>${transcript.totalCredits}</b></div><div class="metric"><span>Class standing</span><b>${escapeHtml(transcript.classRank)}</b></div></section><table><thead><tr><th>Academic year / Grade</th><th>Course title</th><th class="num">Credit</th><th class="num">Average</th><th class="num">Grade</th><th class="num">GPA</th></tr></thead><tbody>${rows}</tbody></table><div class="status">${escapeHtml(transcript.graduationStatus)}</div><section class="auth"><img class="qr" src="${qrCode}" alt="QR verification code"><div><h3>International digital authentication</h3><div class="auth-grid"><span><b>Document ID:</b> ${escapeHtml(documentId)}</span><span><b>Generated:</b> ${escapeHtml(generatedIso)}</span><span><b>Integrity fingerprint:</b> ${escapeHtml(fingerprint)}</span><span><b>QR standard:</b> ISO/IEC 18004 · Level H</span><span><b>Issuer:</b> KCS Nexus Academic Records</span><span><b>Policy:</b> Approved records only</span><span class="url"><b>Canonical production verification:</b> ${escapeHtml(verificationUrl)}</span></div></div></section><section class="signatures"><div class="signature">Registrar / Academic Records Officer</div><div class="signature">School Director / Authorized Signature</div></section><footer><span>Valid only with its document ID, integrity fingerprint and QR verification.</span><span><b>${escapeHtml(documentId)}</b> · Page 1/1</span></footer></div></main><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`)
   printWindow.document.close()
+  printWindow.focus()
+  window.setTimeout(() => printWindow.print(), 550)
 }
 
 const admissionSeed: AdminAdmissionRequest[] = []
@@ -2853,46 +2857,7 @@ const AdminSectionView = ({
   }
 
   if (segment === 'discipline') {
-    return (
-      <>
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">Discipline Reports</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Aligned with teacher reports, parent contact, actions, and follow-up dates.</p>
-            </div>
-            <button className={adminButton}>Create report</button>
-          </div>
-          <div className="space-y-3">
-            {disciplineReports.map((report) => (
-              <button key={report.id} type="button" onClick={() => setDetailDialog({ title: `${report.student} - ${report.category}`, subtitle: `Discipline report · ${report.date}`, details: [['Status', report.status], ['Incident', report.incident], ['Context', report.context], ['Action taken', report.actionTaken], ['Follow-up', report.followUp], ['Parent contact', report.parentContact]] })} className="w-full rounded-xl bg-gray-50 p-4 text-left hover:bg-kcs-blue-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="font-semibold text-kcs-blue-900 dark:text-white">{report.student}</p>
-                  <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(report.status)}`}>{report.status}</span>
-                </div>
-                <p className="mt-2 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-300">{report.category} - {report.date}</p>
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{report.incident}</p>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Parent contact: {report.parentContact}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Detailed Report Builder</h2>
-          <div className="grid gap-3">
-            <select className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              {officialRoster.map((student) => <option key={student.id}>{student.name}</option>)}
-            </select>
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Incident category" />
-            <textarea className="min-h-28 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Incident details, context, action taken, follow-up..." />
-            <button className={adminButton}>Save discipline report</button>
-          </div>
-        </div>
-      </div>
-      {detailModal}
-      </>
-    )
+    return <TeacherDisciplinePanel students={officialRoster} />
   }
 
   const filteredEmployees = (sharedDirectory?.teachers || []).filter((employee) => {

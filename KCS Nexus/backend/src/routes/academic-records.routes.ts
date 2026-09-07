@@ -55,7 +55,27 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  return{teacher,student,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
 }
 export const academicRecordsRouter=Router()
+academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) => {
+ const documentId = z.string().regex(new RegExp('^KCS-TR-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
+ const fingerprint = z.string().min(6).max(100).parse(req.query.fingerprint)
+ const record = await prisma.auditLog.findFirst({ where: { action: 'TRANSCRIPT_VERIFICATION_ISSUED', targetType: 'OfficialTranscript', targetId: documentId }, orderBy: { createdAt: 'desc' } })
+ const metadata = (record?.metadata ?? {}) as Record<string, unknown>
+ if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Transcript authenticity record not found')
+ return success(res, { valid: true, documentId, fingerprint, studentName: metadata.studentName, studentNumber: metadata.studentNumber, grade: metadata.grade, issuedAt: record.createdAt }, 'Authentic KCS transcript verified')
+}))
+
 academicRecordsRouter.use(authenticate)
+
+academicRecordsRouter.post('/transcripts/verification', requireRoles('admin','staff'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+ const payload = z.object({ documentId: z.string().regex(new RegExp('^KCS-TR-[0-9]{8}-[A-Z0-9-]+$','i')), fingerprint: z.string().min(6).max(100), studentId: z.string().min(1) }).parse(req.body)
+ const student = await prisma.studentProfile.findUnique({ where: { id: payload.studentId }, include: { user: true } })
+ if (!student) throw new ApiError(404, 'Student not found')
+ const studentName = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
+ const configuredActor = req.user!.sub === 'configured-superadmin' ? await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } }) : null
+ const actorId = configuredActor?.id ?? (req.user!.sub === 'configured-superadmin' ? null : req.user!.sub)
+ await prisma.auditLog.create({ data: { actorId, action: 'TRANSCRIPT_VERIFICATION_ISSUED', targetType: 'OfficialTranscript', targetId: payload.documentId, metadata: { fingerprint: payload.fingerprint, studentId: student.id, studentName, studentNumber: student.studentNumber, grade: student.grade } } })
+ return success(res, { registered: true, documentId: payload.documentId, fingerprint: payload.fingerprint }, 'Transcript registered for public verification')
+}))
 
 academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=submissionSchema.parse(req.body)
