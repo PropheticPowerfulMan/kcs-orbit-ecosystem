@@ -20,16 +20,17 @@ export default function TeacherClassAttendance() {
   const [summary, setSummary] = useState<any>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [saveConfirmation, setSaveConfirmation] = useState<any>(null)
 
   const load = async () => {
     setBusy(true)
     setNotice('')
     try {
       const [grade, section = ''] = selectedClass ? selectedClass.split('::') : []
-      const [register, own] = await Promise.all([attendanceAPI.teacherHomeroom(date, grade, section), attendanceAPI.mine()])
+      const register = await attendanceAPI.teacherHomeroom(date, grade, section)
       const next = register.data.data
       setData(next)
-      setSummary(own.data.data?.summary)
+      setSummary(next.summary)
       if (!selectedClass && next.class) setSelectedClass(classKey(next.class))
       setStates(Object.fromEntries((next.students ?? []).map((student: any) => [student.id, student.status ?? 'PRESENT'])))
       setNotes(Object.fromEntries((next.students ?? []).map((student: any) => [student.id, student.note ?? ''])))
@@ -46,11 +47,14 @@ export default function TeacherClassAttendance() {
     if (!data.class || !data.students.length) return
     setBusy(true)
     try {
-      await attendanceAPI.saveTeacherHomeroom({
+      const response = await attendanceAPI.saveTeacherHomeroom({
         date, grade: data.class.grade, section: data.class.section, period: 'Daily',
         entries: data.students.map((student: any) => ({ studentId: student.id, status: states[student.id] ?? 'PRESENT', note: notes[student.id] || undefined })),
       })
-      setNotice(`Présence officielle enregistrée pour ${data.students.length} élève(s).`)
+      const saved = response.data.data
+      setSummary(saved.summary)
+      setSaveConfirmation({ ...saved, grade: data.class.grade, section: data.class.section })
+      setNotice('Présence officielle enregistrée pour ' + saved.saved + ' élève(s).')
       await load()
     } catch (error: any) {
       setNotice(error?.response?.data?.message ?? 'Impossible d’enregistrer la présence.')
@@ -71,7 +75,7 @@ export default function TeacherClassAttendance() {
           <button disabled={busy || !data.class || !data.students.length} onClick={() => void save()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><Save size={16} />Enregistrer</button>
         </div>
       </div>
-      {summary && <p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:text-white">Ma présence personnelle : {summary.present} présent(s), {summary.absent} absence(s), {summary.late} retard(s) · taux {summary.attendanceRate ?? '—'}%</p>}
+      {summary && <p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800/30 dark:text-white">Présence journalière de la classe : {summary.present} présent(s), {summary.absent} absence(s), {summary.late} retard(s) · taux {summary.attendanceRate ?? '—'}%</p>}
     </section>
     {notice && <p className="rounded-xl bg-kcs-blue-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white">{notice}</p>}
     {data.class && <>
@@ -84,5 +88,6 @@ export default function TeacherClassAttendance() {
         <tbody>{data.students.map((student: any) => <tr key={student.id} className="border-b dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white">{student.name}</td><td>{student.studentNumber}</td><td><select className={field} value={states[student.id] ?? 'PRESENT'} onChange={(event) => setStates((current) => ({ ...current, [student.id]: event.target.value as Status }))}>{statuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select></td><td><input className={field} value={notes[student.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [student.id]: event.target.value }))} placeholder="Note vérifiée" /></td></tr>)}</tbody>
       </table></div></section>
     </>}
+    {saveConfirmation && <div className="fixed inset-0 z-[150] flex items-center justify-center bg-kcs-blue-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="attendance-confirmation-title"><section className="w-full max-w-lg rounded-3xl border border-sky-200 bg-white p-6 text-center shadow-2xl dark:border-sky-700 dark:bg-kcs-blue-900 sm:p-8"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"><CheckCircle2 size={34} /></div><h3 id="attendance-confirmation-title" className="mt-4 text-2xl font-bold text-kcs-blue-950 dark:text-white">Présence journalière enregistrée</h3><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{[saveConfirmation.grade, saveConfirmation.section].filter(Boolean).join(' ')} · {saveConfirmation.date} · {saveConfirmation.saved} élève(s)</p><div className="mt-5 grid grid-cols-3 gap-2"><div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30"><b className="block text-xl text-emerald-700 dark:text-emerald-300">{saveConfirmation.summary?.present ?? 0}</b><span className="text-xs text-gray-600 dark:text-gray-300">Présents</span></div><div className="rounded-xl bg-rose-50 p-3 dark:bg-rose-950/30"><b className="block text-xl text-rose-700 dark:text-rose-300">{saveConfirmation.summary?.absent ?? 0}</b><span className="text-xs text-gray-600 dark:text-gray-300">Absents</span></div><div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-950/30"><b className="block text-xl text-amber-700 dark:text-amber-300">{saveConfirmation.summary?.late ?? 0}</b><span className="text-xs text-gray-600 dark:text-gray-300">Retards</span></div></div><p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">Taux de présence : {saveConfirmation.summary?.attendanceRate ?? '—'}%</p><button type="button" onClick={() => setSaveConfirmation(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-5 py-3 font-bold text-white hover:bg-kcs-blue-800">Compris</button></section></div>}
   </div>
 }

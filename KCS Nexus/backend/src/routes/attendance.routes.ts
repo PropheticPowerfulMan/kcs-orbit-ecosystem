@@ -124,7 +124,7 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
   }
   const classes = [...classesByKey.values()].sort(compareClassParts)
   if (!classes.length) {
-    return success(res, { date: date.toISOString().slice(0, 10), class: null, classes: [], students: [] }, 'No students are currently available in the teacher registry')
+    return success(res, { date: date.toISOString().slice(0, 10), class: null, classes: [], students: [], summary: summarize([]) }, 'No students are currently available in the teacher registry')
   }
   const requestedClass = req.query.grade
     ? normalizeClassParts(String(req.query.grade), String(req.query.section ?? ''))
@@ -140,6 +140,7 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
     date: date.toISOString().slice(0, 10),
     class: { grade: requestedClass.grade, section: requestedClass.section },
     classes,
+    summary: summarize(students.flatMap((student) => student.attendanceRecords.slice(0, 1))),
     students: students.map((student) => ({
       id: student.id,
       studentNumber: student.studentNumber,
@@ -179,7 +180,7 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
   })
   await updateStudentRates(ids)
-  return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length }, 'Official class attendance saved')
+  return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length, summary: summarize(payload.entries) }, 'Official class attendance saved')
 }))
 
 attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req, res) => {
@@ -187,7 +188,7 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
   const students = await prisma.studentProfile.findMany({
     include: {
       user: { select: { firstName: true, middleName: true, lastName: true } },
-      attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' } },
+      attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' }, include: { recordedBy: { select: { id: true, firstName: true, lastName: true, role: true } } } },
     },
     orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
   })
@@ -202,6 +203,7 @@ attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req
       name: [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' '),
       status: student.attendanceRecords[0]?.status ?? null,
       note: student.attendanceRecords[0]?.note ?? '',
+      recordedBy: student.attendanceRecords[0]?.recordedBy ? { id: student.attendanceRecords[0].recordedBy!.id, name: [student.attendanceRecords[0].recordedBy!.lastName, student.attendanceRecords[0].recordedBy!.firstName].filter(Boolean).join(' '), role: student.attendanceRecords[0].recordedBy!.role } : null,
     })
     classes.set(key, group)
   }
