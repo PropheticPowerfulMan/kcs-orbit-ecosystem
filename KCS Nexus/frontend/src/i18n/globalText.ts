@@ -1748,4 +1748,8 @@ export const globalFrenchText: PhraseMap = {
   "Raising the next generation of leaders": "Former la prochaine génération de leaders",
   "News & Events Publishing": "Publication des nouvelles et événements",
   "Media & Live Broadcasts": "Médias et diffusions en direct",
+  "Search by name, student ID or class...": "Rechercher par nom, matricule ou classe...",
+  "No ID": "Sans matricule",
+  "student(s) match the search.": "élève(s) correspondent à la recherche.",
+  "Notify linked parent(s) via Nexus, email and SMS": "Notifier le(s) parent(s) lié(s) via Nexus, e-mail et SMS",
 }

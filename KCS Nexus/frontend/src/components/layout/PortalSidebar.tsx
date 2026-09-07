@@ -131,9 +131,6 @@ const PortalSidebar = () => {
 
   useEffect(() => {
     setSidebarOpen(false)
-    window.requestAnimationFrame(() => {
-      document.querySelectorAll<HTMLElement>('.sidebar-link.active').forEach((item) => item.scrollIntoView({ block: 'nearest' }))
-    })
   }, [location.pathname, setSidebarOpen])
 
   useEffect(() => {

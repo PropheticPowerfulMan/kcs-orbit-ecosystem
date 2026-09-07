@@ -46,6 +46,7 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
   const [followUpStatus, setFollowUpStatus] = useState('OPEN')
   const [followUpResolution, setFollowUpResolution] = useState('')
   const [followUpAction, setFollowUpAction] = useState('')
+  const [studentQuery, setStudentQuery] = useState('')
   const [draft, setDraft] = useState({
     studentId: '',
     incidentDate: new Date().toISOString().slice(0, 16),
@@ -81,6 +82,15 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
     }
   }, [draft.studentId, students])
 
+  const filteredStudents = useMemo(() => {
+    const terms = studentQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean)
+    if (!terms.length) return students
+    return students.filter((student) => {
+      const haystack = [studentName(student), student.studentNumber, student.email, canonicalClassLabel(student.grade, student.section)].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      return terms.every((term) => haystack.includes(term))
+    })
+  }, [studentQuery, students])
+
   const studentIds = useMemo(() => new Set(students.map((student) => student.id)), [students])
   const visibleCases = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -96,6 +106,7 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
       ].filter(Boolean).join(' ').toLowerCase()
       return (!normalizedQuery || haystack.includes(normalizedQuery))
         && (statusFilter === 'ALL' || disciplineCase.status === statusFilter)
+
         && (severityFilter === 'ALL' || disciplineCase.severity === severityFilter)
     })
   }, [allCases, query, severityFilter, statusFilter, studentIds])
@@ -209,10 +220,12 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
           </div>
           <div className="grid gap-3">
             <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Student
+              <span className="relative mt-1 block"><Search size={17} className="pointer-events-none absolute left-3 top-3.5 text-gray-400"/><input className={fieldClass + ' pl-10'} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search by name, student ID or class..." /></span>
               <select className={fieldClass + ' mt-1'} value={draft.studentId} onChange={(event) => setDraft((current) => ({ ...current, studentId: event.target.value }))}>
                 <option value="">Select a student...</option>
-                {students.map((student) => <option key={student.id} value={student.id}>{student.name} - {canonicalClassLabel(student.grade, student.section)}</option>)}
+                {filteredStudents.map((student) => <option key={student.id} value={student.id}>{studentName(student)} - {student.studentNumber || 'No ID'} - {canonicalClassLabel(student.grade, student.section)}</option>)}
               </select>
+              <span className="mt-1 block text-xs font-normal text-gray-500">{filteredStudents.length} of {students.length} student(s) match the search.</span>
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Incident date and time
@@ -244,7 +257,7 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
               </label>
             </div>
             <div className="grid gap-2 rounded-xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-800/40 dark:text-white">
-              <label className="flex items-center gap-3"><input type="checkbox" checked={draft.notifyParent} onChange={(event) => setDraft((current) => ({ ...current, notifyParent: event.target.checked }))} /> Notify linked parent(s) in Nexus</label>
+              <label className="flex items-center gap-3"><input type="checkbox" checked={draft.notifyParent} onChange={(event) => setDraft((current) => ({ ...current, notifyParent: event.target.checked }))} /> Notify linked parent(s) via Nexus, email and SMS</label>
               <label className="flex items-center gap-3"><input type="checkbox" checked={draft.notifyStudent} onChange={(event) => setDraft((current) => ({ ...current, notifyStudent: event.target.checked }))} /> Notify the student in Nexus</label>
             </div>
             <button type="button" className={primaryButton} disabled={saving || !students.length} onClick={() => void createReport()}><Send size={18} />{saving ? 'Submitting...' : 'Submit official report'}</button>

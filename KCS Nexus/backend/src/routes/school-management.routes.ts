@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
+import { sendSchoolSms } from '../utils/sms.js'
 
 const enumValue = <T extends readonly [string, ...string[]]>(values: T) => z.enum(values)
 
@@ -319,6 +320,34 @@ schoolManagementRouter.get('/discipline-cases', requireRoles('admin', 'staff', '
     })
   }
   if (notificationRows.length) await prisma.notification.createMany({ data: notificationRows })
+  if (payload.notifyParent) {
+    const subject = `KCS discipline update - ${disciplineCase.category}`
+    const body = payload.parentMessage ?? notificationMessage
+    for (const link of disciplineCase.student.parentLinks as any[]) {
+      const linkedParent = link.parent
+      const recipientName = [linkedParent.lastName, linkedParent.middleName, linkedParent.firstName].filter(Boolean).join(' ')
+      await prisma.correspondenceLog.create({
+        data: asPrismaData({
+          channel: 'EMAIL', status: linkedParent.email ? 'QUEUED' : 'FAILED', subject, body,
+          senderId: actorId, recipientName, recipientEmail: linkedParent.email,
+          recipientPhone: linkedParent.phone ?? undefined, studentId: disciplineCase.studentId,
+          disciplineCaseId: disciplineCase.id,
+          failureReason: linkedParent.email ? undefined : 'RECIPIENT_EMAIL_MISSING',
+          metadata: linkedParent.email ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: now.toISOString(), recipientId: linkedParent.id } : undefined,
+        }),
+      })
+      const sms = await sendSchoolSms(linkedParent.phone, `${subject}\n\n${body}`, { brand: false })
+      await prisma.correspondenceLog.create({
+        data: asPrismaData({
+          channel: 'TEXT', status: sms.sent ? 'SENT' : 'FAILED', subject, body,
+          senderId: actorId, recipientName, recipientEmail: linkedParent.email,
+          recipientPhone: linkedParent.phone ?? undefined, studentId: disciplineCase.studentId,
+          disciplineCaseId: disciplineCase.id, sentAt: sms.sent ? now : undefined,
+          failureReason: sms.sent ? undefined : (sms.reason ?? 'SMS_DELIVERY_FAILED'),
+        }),
+      })
+    }
+  }
 
 
   return success(res, { disciplineCase, correspondenceLogs: logs }, 'Discipline case recorded', 201)
