@@ -320,21 +320,33 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
 }
 
 async function authenticateWithSharedProviders(identifier: string, password: string) {
-  const [savanexResult, edupayResult] = await Promise.allSettled([
+  const providers = [
     authenticateWithSavanex(identifier, password),
     authenticateWithEduPay(identifier, password),
-  ])
-  if (savanexResult.status === 'fulfilled' && savanexResult.value) return savanexResult.value
-  if (edupayResult.status === 'fulfilled' && edupayResult.value) return edupayResult.value
-  if (savanexResult.status === 'rejected') console.warn('[auth] SAVANEX shared authentication unavailable.', savanexResult.reason)
-  if (edupayResult.status === 'rejected') console.warn('[auth] EduPay shared authentication unavailable.', edupayResult.reason)
-  if (savanexResult.status === 'rejected' && edupayResult.status === 'rejected') {
-    throw new ApiError(503, 'Le service authentification de l ecosysteme est temporairement indisponible.')
-  }
-  if (savanexResult.status === 'rejected' && edupayResult.status === 'fulfilled' && !edupayResult.value) {
-    throw new ApiError(503, 'Le service authentification SAVANEX est temporairement indisponible.')
-  }
-  return null
+  ]
+  return new Promise<ExternalUserProfile | null>((resolve, reject) => {
+    let completed = 0
+    let unavailable = 0
+    const finish = () => {
+      completed += 1
+      if (completed !== providers.length) return
+      if (unavailable === providers.length) {
+        reject(new ApiError(503, 'Le service authentification de l ecosysteme est temporairement indisponible.'))
+      } else {
+        resolve(null)
+      }
+    }
+    providers.forEach((provider, index) => {
+      provider.then((user) => {
+        if (user) resolve(user)
+        else finish()
+      }).catch((reason) => {
+        unavailable += 1
+        console.warn(index === 0 ? '[auth] SAVANEX shared authentication unavailable.' : '[auth] EduPay shared authentication unavailable.', reason)
+        finish()
+      })
+    })
+  })
 }
 
 async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true): Promise<PrismaUser> {

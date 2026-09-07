@@ -28,17 +28,25 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [readFilter, setReadFilter] = useState<'all' | 'unread' | 'read'>('all')
+  const [typeFilter, setTypeFilter] = useState('')
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
-    if (!needle) return notices
     return notices.filter((notice) =>
-      [notice.title, notice.message, notice.type, formatDate(notice.createdAt)]
+      (!needle || [notice.title, notice.message, notice.type, formatDate(notice.createdAt)]
         .join(' ')
         .toLocaleLowerCase()
-        .includes(needle),
+        .includes(needle)) &&
+      (!dateFrom || notice.createdAt.slice(0, 10) >= dateFrom) &&
+      (!dateTo || notice.createdAt.slice(0, 10) <= dateTo) &&
+      (!typeFilter || notice.type === typeFilter) &&
+      (readFilter === 'all' || (readFilter === 'read' ? notice.isRead : !notice.isRead)),
     )
-  }, [notices, query])
+  }, [notices, query, dateFrom, dateTo, readFilter, typeFilter])
+  const noticeTypes = useMemo(() => [...new Set(notices.map((notice) => notice.type).filter(Boolean))].sort(), [notices])
   const activeNotice = notices.find((notice) => notice.id === activeId) ?? null
   const selectedVisible = filtered.length > 0 && filtered.every((notice) => selectedIds.includes(notice.id))
 
@@ -125,10 +133,14 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
               </button>
             </div>
           </div>
-          <div className="relative mt-5">
-            <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Rechercher par titre, contenu, type ou date…" />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="relative sm:col-span-2 xl:col-span-1"><Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Titre, contenu, type ou date…" /></div>
+            <label className="text-xs font-semibold text-gray-500">Du<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
+            <label className="text-xs font-semibold text-gray-500">Au<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
+            <select value={readFilter} onChange={(event) => setReadFilter(event.target.value as typeof readFilter)} className="self-end rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="all">Toutes les lectures</option><option value="unread">Non lues</option><option value="read">Déjà lues</option></select>
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="self-end rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="">Tous les types</option>{noticeTypes.map((type) => <option key={type} value={type}>{type}</option>)}</select>
           </div>
+          {(query || dateFrom || dateTo || readFilter !== 'all' || typeFilter) && <button type="button" onClick={() => { setQuery(''); setDateFrom(''); setDateTo(''); setReadFilter('all'); setTypeFilter('') }} className="mt-3 text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-200">Réinitialiser les filtres</button>}
           {feedback && <p className="mt-4 rounded-xl bg-kcs-blue-50 p-3 text-sm text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{feedback}</p>}
         </div>
 

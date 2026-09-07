@@ -62,11 +62,13 @@ const getOrbitStudentDirectory = async () => {
     .filter((student) => (student.status ?? 'active').toLowerCase() === 'active')
     .map((student) => {
       const name = orbitStudentName(student)
+      const nexusExternalId = student.externalIds?.find((item) => item.appSlug.toUpperCase() === 'KCS_NEXUS')?.externalId
       const studentNumber = student.studentNumber
         || student.externalIds?.find((item) => item.appSlug === 'SAVANEX')?.externalId
         || student.id
       return {
-        id: student.id,
+        // Course enrollment foreign keys belong to Nexus; Orbit ids are federation ids.
+        id: nexusExternalId || student.id,
         studentNumber,
         grade: student.className?.trim() || 'Unassigned',
         section: '',
@@ -177,16 +179,17 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   if (existing && existing.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
   const normalizedStudentNumbers = [...new Set(payload.studentNumbers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
   const uniqueStudentIds = [...new Set(payload.studentIds)]
-  // Orbit rows can carry external ids. The student number is the stable key
-  // shared with the local Nexus registry, so prefer it whenever available.
-  const requestedCount = normalizedStudentNumbers.length || uniqueStudentIds.length
+  // Accept the Nexus profile id and the federated student number together.
+  // This keeps Orbit directory rows resolvable without weakening active-status checks.
+  const requestedCount = uniqueStudentIds.length || normalizedStudentNumbers.length
   const students = requestedCount
     ? await prisma.studentProfile.findMany({
         where: {
           status: { equals: 'active', mode: 'insensitive' },
-          ...(normalizedStudentNumbers.length
-            ? { studentNumber: { in: normalizedStudentNumbers, mode: 'insensitive' } }
-            : { id: { in: uniqueStudentIds } }),
+          OR: [
+            ...(uniqueStudentIds.length ? [{ id: { in: uniqueStudentIds } }] : []),
+            ...(normalizedStudentNumbers.length ? [{ studentNumber: { in: normalizedStudentNumbers, mode: 'insensitive' as const } }] : []),
+          ],
         },
         select: { id: true },
       })
@@ -201,7 +204,7 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   if (collision) code = `${codeBase}-${classCode}-${payload.id.slice(-6).toUpperCase()}`
   const course = await prisma.$transaction(async (tx) => {
     const saved = existing
-      ? await tx.course.update({ where: { id: payload.id }, data: { name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
+    ? await tx.course.update({ where: { id: payload.id }, data: { name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
       : await tx.course.create({ data: { id: payload.id, teacherId: teacher.id, name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
     await tx.enrollment.deleteMany({ where: { courseId: saved.id, studentId: { notIn: resolvedStudentIds } } })
     if (resolvedStudentIds.length) await tx.enrollment.createMany({ data: resolvedStudentIds.map((studentId) => ({ courseId: saved.id, studentId })), skipDuplicates: true })
@@ -252,7 +255,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
       },
       orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
     })
-    const students = registry.filter((student) => belongsToTeacherClasses(student, assignedClasses)).map((student) => ({
+  const students = registry.filter((student) => belongsToTeacherClasses(student, assignedClasses)).map((student) => ({
       ...student,
       analytics: {
         average: student.gpa ?? null,
