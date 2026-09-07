@@ -5,7 +5,7 @@ import { env } from '../config/env.js'
 
 const toJwtDuration = (value: string): SignOptions['expiresIn'] => value as SignOptions['expiresIn']
 
-export const buildSafeUser = (user: User) => ({
+export const buildSafeUser = (user: User, includeAvatar = true) => ({
   id: user.id,
   email: user.email,
   accessCode: user.accessCode,
@@ -13,7 +13,7 @@ export const buildSafeUser = (user: User) => ({
   middleName: user.middleName,
   lastName: user.lastName,
   role: user.role.toLowerCase(),
-  avatar: user.avatar,
+  avatar: includeAvatar ? user.avatar : null,
   phone: user.phone,
   twoFactorEnabled: user.twoFactorEnabled,
   createdAt: user.createdAt,

@@ -550,7 +550,7 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(user), token, refreshToken }, 'User registered', 201)
+  return success(res, { user: buildSafeUser(user, false), token, refreshToken }, 'User registered', 201)
 }))
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
@@ -582,7 +582,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
         },
       })
 
-      return success(res, { user: buildSafeUser(user), token, refreshToken }, 'Login successful')
+      return success(res, { user: buildSafeUser(user, false), token, refreshToken }, 'Login successful')
     }
   }
 
@@ -608,7 +608,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(resolvedUser), token, refreshToken }, 'Connexion réussie')
+  return success(res, { user: buildSafeUser(resolvedUser, false), token, refreshToken }, 'Connexion réussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -644,7 +644,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
 
   const synchronizedUser = await refreshCanonicalIdentity(storedToken.user)
   const token = signAccessToken(synchronizedUser)
-  return success(res, { token, user: buildSafeUser(synchronizedUser) }, 'Token refreshed')
+  return success(res, { token, user: buildSafeUser(synchronizedUser, false) }, 'Token refreshed')
 }))
 
 async function forwardPasswordRecovery(email: string, channel: 'email' | 'sms', sources: string[] = []) {
