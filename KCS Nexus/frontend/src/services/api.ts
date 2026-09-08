@@ -2,7 +2,10 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
 import { getRouteUrl } from '@/utils/assets'
 
-export const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api')
+const configuredApiBase = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : '/api')
+export const API_BASE = configuredApiBase.replace(/\/$/, '').endsWith('/api')
+  ? configuredApiBase.replace(/\/$/, '')
+  : `${configuredApiBase.replace(/\/$/, '')}/api`
 
 export const api = axios.create({
   baseURL: API_BASE,
