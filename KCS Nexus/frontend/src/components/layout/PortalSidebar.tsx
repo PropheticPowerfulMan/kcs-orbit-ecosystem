@@ -37,6 +37,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/student/timetable', label: t('portalNav.timetable'), icon: Calendar },
         { to: '/portal/student/ai-tutor', label: t('portalNav.aiTutor'), icon: Brain },
         { to: '/portal/student/diagnostics', label: 'Diagnostic Tests', icon: ClipboardCheck },
+        { to: '/portal/parent/forum', label: t('portalNav.parentForum'), icon: MessageSquare },
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/portal/student/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/student/profile', label: t('portalNav.myProfile'), icon: UserCheck },

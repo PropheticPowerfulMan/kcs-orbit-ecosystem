@@ -3,7 +3,8 @@ import { prisma } from '../config/prisma.js'
 import { sendSchoolMail } from '../utils/mail.js'
 
 export const MAIL_QUEUE_VERSION = 1
-export const MAIL_QUEUE_INTERVAL_MS = 45_000
+// 16 seconds keeps the sustained rate at 225/hour, below the LWS 240/hour ceiling.
+export const MAIL_QUEUE_INTERVAL_MS = 16_000
 
 type QueueMetadata = {
   mailQueueVersion?: number
@@ -15,7 +16,7 @@ type QueueMetadata = {
 }
 
 const queueMetadata = (value: unknown): QueueMetadata => value && typeof value === 'object' && !Array.isArray(value) ? value as QueueMetadata : {}
-const rateLimited = (detail = '') => /max\s*120|rate.?limit|too many messages|sender.*(?:limit|rate)|4\.7\.1/i.test(detail)
+const rateLimited = (detail = '') => /max\s*(?:120|240)|rate.?limit|too many messages|sender.*(?:limit|rate)|4\.7\.1/i.test(detail)
 const connectionLimited = (detail = '') => /too many connections|4\.7\.0/i.test(detail)
 
 export function isRetryableMailFailure(reason?: string, detail?: string) {

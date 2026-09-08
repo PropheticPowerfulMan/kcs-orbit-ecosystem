@@ -116,17 +116,56 @@ adminRouter.get('/stats', asyncHandler(async (_req, res) => {
   })
 }))
 
-adminRouter.get('/analytics', asyncHandler(async (_req, res) => {
-  const [recentApplications, recentNews, riskRecommendations] = await Promise.all([
-    prisma.admissionApplication.findMany({ take: 5, orderBy: { submittedAt: 'desc' } }),
-    prisma.newsPost.findMany({ take: 5, orderBy: { publishedAt: 'desc' } }),
-    prisma.aIRecommendation.findMany({ take: 5, orderBy: { createdAt: 'desc' } }),
+adminRouter.get('/analytics', asyncHandler(async (req, res) => {
+  const period = String(req.query.period || '30d')
+  const days = period === '7d' ? 7 : period === '90d' ? 90 : period === '365d' ? 365 : 30
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  const [
+    students, parents, teachers, staff, courses, grades, attendance, applications,
+    forumPosts, forumComments, studentForumPosts, messages, notifications,
+    correspondence, recommendations, incidents, audits,
+  ] = await Promise.all([
+    prisma.studentProfile.count(),
+    prisma.user.count({ where: { role: 'PARENT' } }),
+    prisma.user.count({ where: { role: 'TEACHER' } }),
+    prisma.user.count({ where: { role: { in: ['STAFF', 'ADMIN'] } } }),
+    prisma.course.count(),
+    prisma.grade.aggregate({ where: { createdAt: { gte: since } }, _count: true, _avg: { percentage: true } }),
+    prisma.attendanceRecord.groupBy({ by: ['status'], where: { date: { gte: since } }, _count: true }),
+    prisma.admissionApplication.groupBy({ by: ['status'], where: { submittedAt: { gte: since } }, _count: true }),
+    prisma.parentForumPost.count({ where: { createdAt: { gte: since } } }),
+    prisma.parentForumComment.count({ where: { createdAt: { gte: since } } }),
+    prisma.studentForumPost.count({ where: { createdAt: { gte: since } } }),
+    prisma.internalMessage.count({ where: { createdAt: { gte: since } } }),
+    prisma.notification.count({ where: { createdAt: { gte: since } } }),
+    prisma.correspondenceLog.groupBy({ by: ['channel', 'status'], where: { createdAt: { gte: since } }, _count: true }),
+    prisma.aIRecommendation.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, title: true, description: true, riskLevel: true, createdAt: true, student: { select: { studentNumber: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } } }),
+    prisma.incidentReport.count({ where: { createdAt: { gte: since }, status: { not: 'CLOSED' } } }),
+    prisma.auditLog.count({ where: { createdAt: { gte: since } } }),
   ])
-
+  const attendanceMap = Object.fromEntries(attendance.map((row) => [row.status, row._count]))
+  const attendanceTotal = attendance.reduce((sum, row) => sum + row._count, 0)
+  const present = (attendanceMap.PRESENT || 0) + (attendanceMap.LATE || 0) + (attendanceMap.EXCUSED || 0)
+  const delivery = correspondence.map((row) => ({ channel: row.channel, status: row.status, count: row._count }))
+  const emailQueued = delivery.filter((row) => row.channel === 'EMAIL' && row.status === 'QUEUED').reduce((sum, row) => sum + row.count, 0)
+  const emailSent = delivery.filter((row) => row.channel === 'EMAIL' && ['SENT','DELIVERED'].includes(row.status)).reduce((sum, row) => sum + row.count, 0)
+  const emailFailed = delivery.filter((row) => row.channel === 'EMAIL' && row.status === 'FAILED').reduce((sum, row) => sum + row.count, 0)
+  const risks = [
+    ...(attendanceTotal && present / attendanceTotal < 0.85 ? [{ level: 'high', title: 'Attendance below target', detail: Math.round(present / attendanceTotal * 100) + '% attendance over the selected period.' }] : []),
+    ...(emailFailed ? [{ level: 'medium', title: 'Email delivery failures', detail: emailFailed + ' email delivery failure(s) require review.' }] : []),
+    ...(incidents ? [{ level: 'medium', title: 'Open incidents', detail: incidents + ' open incident(s) in the selected period.' }] : []),
+    ...recommendations.slice(0, 5).map((item) => ({ level: item.riskLevel, title: item.title, detail: item.description })),
+  ]
   return success(res, {
-    recentApplications,
-    recentNews,
-    riskRecommendations,
+    period: { key: period, days, from: since.toISOString(), to: new Date().toISOString() },
+    population: { students, parents, teachers, staff, courses },
+    academics: { gradedItems: grades._count, averagePercentage: grades._avg.percentage == null ? null : Number(grades._avg.percentage.toFixed(1)) },
+    attendance: { total: attendanceTotal, present: attendanceMap.PRESENT || 0, absent: attendanceMap.ABSENT || 0, late: attendanceMap.LATE || 0, excused: attendanceMap.EXCUSED || 0, rate: attendanceTotal ? Number((present / attendanceTotal * 100).toFixed(1)) : null },
+    engagement: { parentForumPosts: forumPosts, parentForumComments: forumComments, studentForumPosts, internalMessages: messages, notifications },
+    communications: { delivery, emailQueued, emailSent, emailFailed, workerCapacityPerHour: 225 },
+    admissions: applications.map((row) => ({ status: row.status, count: row._count })),
+    risks,
+    evidence: { auditEvents: audits, openIncidents: incidents, recommendations: recommendations.length },
     generatedAt: new Date().toISOString(),
   })
 }))

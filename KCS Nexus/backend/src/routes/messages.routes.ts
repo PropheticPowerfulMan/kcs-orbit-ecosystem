@@ -169,13 +169,41 @@ messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest,
     where: data.audience === 'GRADE_9_12_FAMILIES'
       ? { role: 'PARENT', parentLinks: { some: { student: { grade: { in: ['Grade 9','Grade 10','Grade 11','Grade 12'] } } } } }
       : { role: { in: [...roleMap[data.audience as keyof typeof roleMap]] }, id: { not: req.user!.sub } },
-    select: { id: true, role: true },
+    select: { id: true, role: true, email: true, firstName: true, middleName: true, lastName: true },
   })
-  await prisma.$transaction([
-    prisma.internalMessage.createMany({ data: users.map((user) => ({ senderId, recipientId: user.id, subject: data.subject, body: data.body })) }),
-    prisma.notification.createMany({ data: users.map((user) => ({ userId: user.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(user.role) })) }),
-  ])
-  return success(res, { recipients: users.length, audience: data.audience }, 'Communication delivered', 201)
+  const now = new Date()
+  const emailRecipients = users.filter((user) => Boolean(user.email?.trim()))
+  await prisma.$transaction(async (tx) => {
+    const messages = await Promise.all(users.map((user) => tx.internalMessage.create({
+      data: { senderId, recipientId: user.id, subject: data.subject, body: data.body },
+      select: { id: true, recipientId: true },
+    })))
+    const messageIds = new Map(messages.map((message) => [message.recipientId, message.id]))
+    await tx.notification.createMany({ data: users.map((user) => ({ userId: user.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(user.role) })) })
+    if (emailRecipients.length) {
+      await tx.correspondenceLog.createMany({
+        data: emailRecipients.map((user) => ({
+          channel: 'EMAIL' as const,
+          status: 'QUEUED' as const,
+          subject: data.subject,
+          body: data.body,
+          senderId,
+          recipientName: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '),
+          recipientEmail: user.email,
+          sentAt: null,
+          failureReason: null,
+          metadata: { internalMessageId: messageIds.get(user.id), recipientId: user.id, mailQueueVersion: 1, attempts: 0, nextAttemptAt: now.toISOString(), audience: data.audience },
+        })),
+      })
+    }
+  })
+  return success(res, {
+    recipients: users.length,
+    audience: data.audience,
+    emailQueued: emailRecipients.length,
+    emailMissing: users.length - emailRecipients.length,
+    estimatedMinutes: Math.ceil(emailRecipients.length * 16 / 60),
+  }, 'Communication recorded and email delivery safely queued', 201)
 }))
 
 messagesRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedRequest, res) => {
