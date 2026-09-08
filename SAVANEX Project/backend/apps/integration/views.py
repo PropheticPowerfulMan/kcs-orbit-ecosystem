@@ -194,7 +194,12 @@ def authenticate_ecosystem_identity_view(request):
     if user.role not in {User.ROLE_PARENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE, User.ROLE_STUDENT}:
         return Response({'detail': 'Identity is not federated.'}, status=403)
 
-    return Response({'user': UserMeSerializer(user).data})
+    identity = UserMeSerializer(user).data
+    if hasattr(user, 'teacher_profile'):
+        identity['employee_type'] = user.teacher_profile.employee_type
+        if user.teacher_profile.employee_type == 'teacher':
+            identity['role'] = User.ROLE_TEACHER
+    return Response({'user': identity})
 
 
 @api_view(['POST'])

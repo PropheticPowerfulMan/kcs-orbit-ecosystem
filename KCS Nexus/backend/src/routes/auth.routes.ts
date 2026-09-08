@@ -67,7 +67,8 @@ function splitFullName(fullName: string) {
   }
 }
 
-function mapSavanexRole(role: string | undefined) {
+function mapSavanexRole(role: string | undefined, employeeType?: string) {
+  if ((employeeType || '').trim().toLowerCase() === 'teacher') return 'TEACHER' as const
   const normalized = (role || '').trim().toLowerCase()
   if (normalized === 'admin') return 'ADMIN' as const
   if (['employee', 'staff', 'administrative staff', 'administrative_staff', 'administrative-staff'].includes(normalized)) return 'STAFF' as const
@@ -228,7 +229,10 @@ async function authenticateWithSavanex(identifier: string, password: string) {
 
   const payload = await response.json().catch(() => ({} as Record<string, unknown>))
   const externalUser = (payload as { user?: Record<string, unknown> }).user || {}
-  const mappedRole = mapSavanexRole(typeof externalUser.role === 'string' ? externalUser.role : undefined)
+  const employeeType = typeof externalUser.employee_type === 'string'
+    ? externalUser.employee_type
+    : typeof externalUser.employeeType === 'string' ? externalUser.employeeType : undefined
+  const mappedRole = mapSavanexRole(typeof externalUser.role === 'string' ? externalUser.role : undefined, employeeType)
   if (!mappedRole) {
     return null
   }
@@ -320,33 +324,23 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
 }
 
 async function authenticateWithSharedProviders(identifier: string, password: string) {
-  const providers = [
+  const results = await Promise.allSettled([
     authenticateWithSavanex(identifier, password),
     authenticateWithEduPay(identifier, password),
-  ]
-  return new Promise<ExternalUserProfile | null>((resolve, reject) => {
-    let completed = 0
-    let unavailable = 0
-    const finish = () => {
-      completed += 1
-      if (completed !== providers.length) return
-      if (unavailable === providers.length) {
-        reject(new ApiError(503, 'Le service authentification de l ecosysteme est temporairement indisponible.'))
-      } else {
-        resolve(null)
-      }
+  ])
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.warn(index === 0 ? '[auth] SAVANEX shared authentication unavailable.' : '[auth] EduPay shared authentication unavailable.', result.reason)
     }
-    providers.forEach((provider, index) => {
-      provider.then((user) => {
-        if (user) resolve(user)
-        else finish()
-      }).catch((reason) => {
-        unavailable += 1
-        console.warn(index === 0 ? '[auth] SAVANEX shared authentication unavailable.' : '[auth] EduPay shared authentication unavailable.', reason)
-        finish()
-      })
-    })
   })
+  const savanexUser = results[0].status === 'fulfilled' ? results[0].value : null
+  const eduPayUser = results[1].status === 'fulfilled' ? results[1].value : null
+  if (savanexUser) return savanexUser
+  if (eduPayUser) return eduPayUser
+  if (results.every((result) => result.status === 'rejected')) {
+    throw new ApiError(503, 'Le service authentification de l ecosysteme est temporairement indisponible.')
+  }
+  return null
 }
 
 async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true): Promise<PrismaUser> {

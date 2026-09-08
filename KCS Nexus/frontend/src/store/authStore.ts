@@ -2,25 +2,15 @@ import { create } from 'zustand'
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
 import type { User, UserRole } from '@/types'
 
-if (typeof window !== 'undefined' && localStorage.getItem('kcs-auth')?.includes('demo-access-token')) {
-  localStorage.removeItem('kcs-auth')
-}
+// Authentication is scoped to one browser tab so concurrent accounts cannot collide.
+if (typeof window !== 'undefined') localStorage.removeItem('kcs-auth')
 
-const resilientAuthStorage: StateStorage = {
-  getItem: (name) => sessionStorage.getItem(name) ?? localStorage.getItem(name),
+const tabScopedAuthStorage: StateStorage = {
+  getItem: (name) => sessionStorage.getItem(name),
   setItem: (name, value) => {
-    try {
-      localStorage.setItem(name, value)
-      sessionStorage.removeItem(name)
-    } catch {
-      localStorage.removeItem(name)
-      sessionStorage.setItem(name, value)
-    }
+    try { sessionStorage.setItem(name, value) } catch { sessionStorage.removeItem(name) }
   },
-  removeItem: (name) => {
-    localStorage.removeItem(name)
-    sessionStorage.removeItem(name)
-  },
+  removeItem: (name) => sessionStorage.removeItem(name),
 }
 
 interface AuthState {
@@ -59,10 +49,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false })
-        // Clear any cached data
-        if (typeof window !== 'undefined') {
-          sessionStorage.clear()
-        }
+        if (typeof window !== 'undefined') sessionStorage.removeItem('kcs-auth')
       },
 
       updateUser: (updates) => {
@@ -85,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'kcs-auth',
-      storage: createJSONStorage(() => resilientAuthStorage),
+      storage: createJSONStorage(() => tabScopedAuthStorage),
       partialize: (state) => ({
         user: state.user ? { ...state.user, avatar: undefined } : null,
         token: state.token,
