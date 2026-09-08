@@ -202,10 +202,12 @@ const sameRegistryStudent = (left: RegistryStudent, right: RegistryStudent) => {
 
 const TeacherSectionView = ({ segment }: { segment: string }) => {
   const { user, updateUser } = useAuthStore()
+  const language = useUIStore((state) => state.language)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const sectionTitles: Record<string, { title: string; subtitle: string; icon: React.ElementType }> = {
     courses: { title: 'My Courses', subtitle: 'Assigned classes, rooms, schedules, and teaching load.', icon: BookOpen },
     students: { title: 'Students', subtitle: 'Academic profile, risk level, strengths, and support needs for each learner.', icon: Users },
-    attendance: { title: 'Attendance', subtitle: 'Daily attendance records, class trends, and follow-up signals.', icon: ClipboardCheck },
+    attendance: { title: tr('Présence', 'Attendance'), subtitle: tr('Registre journalier, tendances de la classe et indicateurs de suivi.', 'Daily attendance records, class trends, and follow-up signals.'), icon: ClipboardCheck },
     assignments: { title: 'Assignments', subtitle: 'Homework status, priorities, missing work, and LMS resources.', icon: FileText },
     grades: { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
     'report-card': { title: 'Report Cards', subtitle: 'Official Gradebook synthesis, attendance, comments, controlled submission, and publication status.', icon: GraduationCap },
