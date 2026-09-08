@@ -121,14 +121,15 @@ adminRouter.get('/analytics', asyncHandler(async (req, res) => {
   const days = period === '7d' ? 7 : period === '90d' ? 90 : period === '365d' ? 365 : 30
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
   const [
-    students, parents, teachers, staff, courses, grades, attendance, applications,
+    students, parents, teachers, staff, administrators, courses, grades, attendance, applications,
     forumPosts, forumComments, studentForumPosts, messages, notifications,
     correspondence, recommendations, incidents, audits,
   ] = await Promise.all([
     prisma.studentProfile.count(),
     prisma.user.count({ where: { role: 'PARENT' } }),
     prisma.user.count({ where: { role: 'TEACHER' } }),
-    prisma.user.count({ where: { role: { in: ['STAFF', 'ADMIN'] } } }),
+    prisma.user.count({ where: { role: 'STAFF' } }),
+    prisma.user.count({ where: { role: 'ADMIN' } }),
     prisma.course.count(),
     prisma.grade.aggregate({ where: { createdAt: { gte: since } }, _count: true, _avg: { percentage: true } }),
     prisma.attendanceRecord.groupBy({ by: ['status'], where: { date: { gte: since } }, _count: true }),
@@ -158,7 +159,7 @@ adminRouter.get('/analytics', asyncHandler(async (req, res) => {
   ]
   return success(res, {
     period: { key: period, days, from: since.toISOString(), to: new Date().toISOString() },
-    population: { students, parents, teachers, staff, courses },
+    population: { students, parents, teachers, staff, administrators, courses },
     academics: { gradedItems: grades._count, averagePercentage: grades._avg.percentage == null ? null : Number(grades._avg.percentage.toFixed(1)) },
     attendance: { total: attendanceTotal, present: attendanceMap.PRESENT || 0, absent: attendanceMap.ABSENT || 0, late: attendanceMap.LATE || 0, excused: attendanceMap.EXCUSED || 0, rate: attendanceTotal ? Number((present / attendanceTotal * 100).toFixed(1)) : null },
     engagement: { parentForumPosts: forumPosts, parentForumComments: forumComments, studentForumPosts, internalMessages: messages, notifications },

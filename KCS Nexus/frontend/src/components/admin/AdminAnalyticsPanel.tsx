@@ -16,6 +16,7 @@ export default function AdminAnalyticsPanel() {
 
   const load = async () => {
     setLoading(true)
+    setData(null)
     setError('')
     try {
       const response = await adminAPI.getAnalytics(period)
@@ -30,11 +31,11 @@ export default function AdminAnalyticsPanel() {
   useEffect(() => { void load() }, [period])
 
   const metrics = data ? [
-    [tr('Élèves', 'Students'), data.population.students, Users],
-    [tr('Parents', 'Parents'), data.population.parents, Users],
-    [tr('Enseignants', 'Teachers'), data.population.teachers, BookOpen],
-    [tr('Moyenne académique', 'Academic average'), data.academics.averagePercentage == null ? '—' : data.academics.averagePercentage + '%', BarChart3],
-    [tr('Taux de présence', 'Attendance rate'), data.attendance.rate == null ? '—' : data.attendance.rate + '%', Activity],
+    [tr('Notes saisies', 'Recorded grades'), data.academics.gradedItems, BarChart3],
+    [tr('Présences analysées', 'Attendance records'), data.attendance.total, Activity],
+    [tr('Activité forums', 'Forum activity'), data.engagement.parentForumPosts + data.engagement.parentForumComments + data.engagement.studentForumPosts, Users],
+    [tr('Messages internes', 'Internal messages'), data.engagement.internalMessages, Mail],
+    [tr('Notifications', 'Notifications'), data.engagement.notifications, Activity],
     [tr('E-mails envoyés', 'Emails sent'), data.communications.emailSent, Mail],
   ] : []
 
@@ -48,13 +49,15 @@ export default function AdminAnalyticsPanel() {
         </div>
         <button onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>{tr('Actualiser','Refresh')}</button>
       </div>
-      <div className="mt-5 flex flex-wrap gap-2">{periods.map((item) => <button key={item} onClick={() => setPeriod(item)} className={period === item ? 'rounded-full bg-cyan-600 px-4 py-2 text-sm font-bold text-white' : 'rounded-full border border-cyan-200 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-cyan-200'}>{item === '365d' ? tr('Annuel','Annual') : item}</button>)}</div>
+      <div className="mt-5 flex flex-wrap gap-2">{periods.map((item) => <button key={item} onClick={() => setPeriod(item)} className={period === item ? 'rounded-full bg-cyan-600 px-4 py-2 text-sm font-bold text-white' : 'rounded-full border border-cyan-200 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-cyan-200'}>{{'7d':tr('7 jours','7 days'),'30d':tr('30 jours','30 days'),'90d':tr('90 jours','90 days'),'365d':tr('Annuel','Annual')}[item]}</button>)}</div>
+      {data?.period && <p className="mt-3 text-xs font-medium text-gray-500 dark:text-gray-300">{tr('Période réellement appliquée','Applied date range')}: {new Date(data.period.from).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} — {new Date(data.period.to).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}</p>}
     </div>
 
     {error && <p className="rounded-xl bg-red-50 p-4 text-red-700 dark:bg-red-950/40 dark:text-red-200">{error}</p>}
     {loading && !data && <p className={card}>{tr('Calcul des indicateurs réels…','Calculating verified indicators…')}</p>}
 
     {data && <>
+      <article className={card}><h3 className="font-bold text-kcs-blue-950 dark:text-white">{tr('Registre actuel (non filtré par période)','Current registry (not period-filtered)')}</h3><div className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-6"><span>{tr('Élèves','Students')}: <b>{data.population.students}</b></span><span>{tr('Parents','Parents')}: <b>{data.population.parents}</b></span><span>{tr('Enseignants','Teachers')}: <b>{data.population.teachers}</b></span><span>{tr('Personnel','Staff')}: <b>{data.population.staff}</b></span><span>{tr('Administrateurs','Administrators')}: <b>{data.population.administrators}</b></span><span>{tr('Cours','Courses')}: <b>{data.population.courses}</b></span></div></article>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{metrics.map(([label,value,Icon]: any) => <article key={label} className={card}><Icon size={20} className="text-cyan-600 dark:text-cyan-300"/><b className="mt-3 block text-3xl text-kcs-blue-950 dark:text-white">{value}</b><span className="text-sm text-gray-500 dark:text-gray-300">{label}</span></article>)}</div>
       <div className="grid gap-5 xl:grid-cols-2">
         <article className={card}>
