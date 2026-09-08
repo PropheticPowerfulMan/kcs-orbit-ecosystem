@@ -115,13 +115,17 @@ const NewsPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFullCalendar, setShowFullCalendar] = useState(false)
   const [livePosts, setLivePosts] = useState<any[]>([])
+  const [liveEvents, setLiveEvents] = useState<any[]>([])
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([newsAPI.getAll(), eventsAPI.getAll()])
-      .then(([news]) => setLivePosts(Array.isArray(news.data?.data) ? news.data.data : []))
+      .then(([news, events]) => {
+        setLivePosts(Array.isArray(news.data?.data) ? news.data.data : [])
+        setLiveEvents(Array.isArray(events.data?.data) ? events.data.data : [])
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -131,6 +135,14 @@ const NewsPage = () => {
     rawDate: post.publishedAt || post.createdAt, author: [post.author?.lastName, post.author?.firstName].filter(Boolean).join(' ') || 'KCS Administration',
     image: post.coverImage || kcsPublicImages.campusGlory, readTime: Math.max(1, Math.ceil(String(post.content || '').split(/\s+/).length / 220)) + ' min',
   })) : fallbackPosts, [language, livePosts])
+
+  const displayedUpcomingEvents = liveEvents.length ? liveEvents.map((event) => ({
+    ...event,
+    date: event.startDate,
+    type: String(event.type || 'academic').toLowerCase(),
+    description: event.description || '',
+    location: event.location || '',
+  })) : upcomingEvents
 
   const filtered = allPosts.filter((p) => {
     const terms = searchQuery.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim().split(/\\s+/).filter(Boolean)
@@ -329,7 +341,7 @@ const NewsPage = () => {
                     </h3>
                   </div>
                   <div className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
-                    {upcomingEvents.length ? upcomingEvents.map((event) => (
+                    {displayedUpcomingEvents.length ? displayedUpcomingEvents.map((event) => (
                       <article key={`${event.date}-${event.title}`} className="p-4 transition-colors hover:bg-white dark:hover:bg-kcs-blue-800/50">
                         <p className="text-xs font-bold text-kcs-gold-700 dark:text-kcs-gold-300">{formatSchoolCalendarDate(event)}</p>
                         <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p>
