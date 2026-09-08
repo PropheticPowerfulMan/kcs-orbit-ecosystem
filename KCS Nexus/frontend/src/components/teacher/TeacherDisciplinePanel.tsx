@@ -42,6 +42,9 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [severityFilter, setSeverityFilter] = useState('ALL')
+  const [periodFilter, setPeriodFilter] = useState('ALL')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [selectedCase, setSelectedCase] = useState<any | null>(null)
   const [followUpStatus, setFollowUpStatus] = useState('OPEN')
   const [followUpResolution, setFollowUpResolution] = useState('')
@@ -104,12 +107,22 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
         disciplineCase.actionTaken,
         disciplineCase.resolution,
       ].filter(Boolean).join(' ').toLowerCase()
+      const incidentDate = new Date(disciplineCase.incidentDate || disciplineCase.createdAt)
+      const now = new Date()
+      const periodStart = periodFilter === 'TODAY' ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        : periodFilter === '7_DAYS' ? new Date(now.getTime() - 7 * 86400000)
+        : periodFilter === '30_DAYS' ? new Date(now.getTime() - 30 * 86400000)
+        : periodFilter === 'TERM' ? new Date(now.getFullYear(), now.getMonth() - 4, 1)
+        : null
+      const from = dateFrom ? new Date(dateFrom + 'T00:00:00') : periodStart
+      const to = dateTo ? new Date(dateTo + 'T23:59:59.999') : null
       return (!normalizedQuery || haystack.includes(normalizedQuery))
+        && (!from || incidentDate >= from)
+        && (!to || incidentDate <= to)
         && (statusFilter === 'ALL' || disciplineCase.status === statusFilter)
-
         && (severityFilter === 'ALL' || disciplineCase.severity === severityFilter)
     })
-  }, [allCases, query, severityFilter, statusFilter, studentIds])
+  }, [allCases, dateFrom, dateTo, periodFilter, query, severityFilter, statusFilter, studentIds])
 
   const counts = useMemo(() => ({
     total: allCases.filter((item) => studentIds.has(item.studentId)).length,
@@ -275,6 +288,11 @@ export default function TeacherDisciplinePanel({ students }: TeacherDisciplinePa
               <select className={fieldClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                 <option value="ALL">All statuses</option><option value="OPEN">Open</option><option value="INVESTIGATING">Investigating</option><option value="PARENT_CONTACTED">Parent contacted</option><option value="ESCALATED">Escalated</option><option value="RESOLVED">Resolved</option>
               </select>
+              <select className={fieldClass} value={periodFilter} onChange={(event) => { setPeriodFilter(event.target.value); if (event.target.value !== 'ALL') { setDateFrom(''); setDateTo('') } }}>
+                <option value="ALL">All periods</option><option value="TODAY">Today</option><option value="7_DAYS">Last 7 days</option><option value="30_DAYS">Last 30 days</option><option value="TERM">Current four-month period</option>
+              </select>
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-300">From<input type="date" className={fieldClass + ' mt-1'} value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPeriodFilter('ALL') }} /></label>
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-300">To<input type="date" className={fieldClass + ' mt-1'} value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPeriodFilter('ALL') }} /></label>
               <select className={fieldClass} value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}>
                 <option value="ALL">All severity levels</option><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="CRITICAL">Critical</option>
               </select>

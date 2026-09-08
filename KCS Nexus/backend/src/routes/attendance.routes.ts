@@ -5,6 +5,7 @@ import { authenticate, requireRoles, type AuthenticatedRequest } from '../middle
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { compareClassParts, normalizeClassParts } from '../utils/className.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses, mergeTeacherClasses, teacherClassKey } from '../utils/teacherClassAccess.js'
+import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 
 export const attendanceRouter = Router()
 
@@ -83,16 +84,6 @@ async function assignedTeacherClasses(userId: string) {
   return mergeTeacherClasses(profileClasses, extractWorkspaceClasses(workspace?.state))
 }
 
-async function updateStudentRates(studentIds: string[]) {
-  const records = await prisma.attendanceRecord.findMany({
-    where: { studentId: { in: studentIds } },
-    select: { studentId: true, status: true },
-  })
-  await prisma.$transaction(studentIds.map((studentId) => prisma.studentProfile.update({
-    where: { id: studentId },
-    data: { attendanceRate: summarize(records.filter((record) => record.studentId === studentId)).attendanceRate },
-  })))
-}
 
 attendanceRouter.use(authenticate)
 
@@ -186,8 +177,8 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
       await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period, status: entry.status, note: entry.note } })
     }
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
+    await synchronizeStudentAcademicMetrics(tx, ids)
   })
-  await updateStudentRates(ids)
   return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length, summary: summarize(payload.entries) }, 'Official class attendance saved')
 }))
 
@@ -259,8 +250,8 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
       await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period, status: entry.status, note: entry.note } })
     }
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'ADMIN_STUDENT_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
+    await synchronizeStudentAcademicMetrics(tx, ids)
   })
-  await updateStudentRates(ids)
   return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length }, 'Official student attendance saved')
 }))
 

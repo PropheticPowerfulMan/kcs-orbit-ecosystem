@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
 import { Calendar, ArrowRight, Clock, Search } from 'lucide-react'
@@ -6,6 +6,7 @@ import SearchField from '@/components/shared/SearchField'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
 import { formatSchoolCalendarDate, getUpcomingSchoolEvents, schoolCalendarEvents2026_2027, schoolYear2026_2027 } from '@/data/schoolCalendar2026_2027'
 import { useUIStore } from '@/store/uiStore'
+import { eventsAPI, newsAPI } from '@/services/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -24,7 +25,7 @@ const AnimSection = ({ children, className = '' }: { children: React.ReactNode; 
   )
 }
 
-const allPosts = [
+const fallbackPosts = [
   {
     id: 'official-calendar-2026-2027',
     category: 'announcement',
@@ -113,15 +114,35 @@ const NewsPage = () => {
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [showFullCalendar, setShowFullCalendar] = useState(false)
+  const [livePosts, setLivePosts] = useState<any[]>([])
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([newsAPI.getAll(), eventsAPI.getAll()])
+      .then(([news]) => setLivePosts(Array.isArray(news.data?.data) ? news.data.data : []))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const allPosts = useMemo(() => livePosts.length ? livePosts.map((post) => ({
+    id: post.slug || post.id, category: String(post.category || 'news').toLowerCase(), title: post.title, excerpt: post.excerpt,
+    date: new Date(post.publishedAt || post.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { dateStyle: 'long' }),
+    rawDate: post.publishedAt || post.createdAt, author: [post.author?.lastName, post.author?.firstName].filter(Boolean).join(' ') || 'KCS Administration',
+    image: post.coverImage || kcsPublicImages.campusGlory, readTime: Math.max(1, Math.ceil(String(post.content || '').split(/\s+/).length / 220)) + ' min',
+  })) : fallbackPosts, [language, livePosts])
 
   const filtered = allPosts.filter((p) => {
-    const matchCategory = activeCategory === 'all' || p.category === activeCategory
-    const matchSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.excerpt.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchCategory && matchSearch
+    const terms = searchQuery.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim().split(/\\s+/).filter(Boolean)
+    const haystack = [p.title, p.excerpt, p.author, p.category, p.date].filter(Boolean).join(' ').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()
+    const published = (p as any).rawDate ? new Date((p as any).rawDate) : null
+    const from = dateFrom ? new Date(dateFrom + 'T00:00:00') : null
+    const to = dateTo ? new Date(dateTo + 'T23:59:59.999') : null
+    return (activeCategory === 'all' || p.category === activeCategory) && terms.every((term) => haystack.includes(term))
+      && (!from || !published || published >= from) && (!to || !published || published <= to)
   })
 
-  const featured = allPosts[0]
+  const featured = allPosts[0] || fallbackPosts[0]
 
   return (
     <div className="pt-20">

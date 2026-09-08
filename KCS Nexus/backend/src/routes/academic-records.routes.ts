@@ -8,6 +8,7 @@ import { getParentAcademicClearance } from './finance.routes.js'
 import { normalizeClassParts } from '../utils/className.js'
 import { teacherClassKey } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
+import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 
 const submissionSchema=z.object({
  courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
@@ -93,6 +94,7 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
   const created=[]
   for(const item of payload.results)created.push(await tx.grade.create({data:{courseId:course.id,studentId:item.studentId,assignmentId:null,score:item.percentage,maxScore:100,percentage:item.percentage,letterGrade:letter(item.percentage),period}}))
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,results:payload.results}}})
+  await synchronizeStudentAcademicMetrics(tx,payload.results.map(item=>item.studentId))
   return created
  })
  return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.length},'Final grades submitted for administrative review',201)
@@ -269,6 +271,7 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
   if(!source.length)throw new ApiError(409,'The report card has no submitted source grades')
   await tx.grade.deleteMany({where:{studentId:current.studentId,assignmentId:null,period:approved}})
   for(const grade of source)await tx.grade.create({data:{studentId:grade.studentId,courseId:grade.courseId,assignmentId:null,score:grade.score,maxScore:grade.maxScore,percentage:grade.percentage,letterGrade:grade.letterGrade,period:approved}})
+  await synchronizeStudentAcademicMetrics(tx,[current.studentId])
   const updated=await tx.reportCard.update({where:{id},data:{principalStatus:'APPROVED',publicationStatus:'APPROVED',approvedById:req.user!.sub,approvedAt:new Date()}})
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{previousStatus:current.publicationStatus,academicYear,term,sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade}))}}})
   return updated

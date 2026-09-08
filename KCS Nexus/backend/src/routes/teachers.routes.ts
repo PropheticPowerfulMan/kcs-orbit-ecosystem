@@ -8,6 +8,7 @@ import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
+import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 
 export const teachersRouter = Router()
 
@@ -372,6 +373,7 @@ teachersRouter.post('/me/attendance/bulk', authenticate, requireRoles('teacher')
       saved.push(await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: req.user!.sub, date, className: course.grade, period: payload.period, subject: course.name, status: entry.status, note: entry.note } }))
     }
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ATTENDANCE_RECORDED', targetType: 'Course', targetId: course.id, metadata: { date: date.toISOString(), period: payload.period, count: saved.length } } })
+    await synchronizeStudentAcademicMetrics(tx, payload.entries.map((entry) => entry.studentId))
     return saved
   })
   return success(res, records, 'Official attendance saved')
@@ -402,6 +404,7 @@ teachersRouter.patch('/me/assignments/:assignmentId/submissions/:studentId', aut
     const submission = await tx.assignmentSubmission.update({ where: { assignmentId_studentId: { assignmentId, studentId } }, data: { score: payload.score, feedback: payload.feedback, status: 'GRADED' } })
     await tx.grade.deleteMany({ where: { assignmentId, studentId, courseId: assignment.courseId } })
     const grade = await tx.grade.create({ data: { assignmentId, studentId, courseId: assignment.courseId, score: payload.score, maxScore: assignment.maxScore, percentage, letterGrade, period: 'CURRENT' } })
+    await synchronizeStudentAcademicMetrics(tx, [studentId])
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_SUBMISSION_GRADED', targetType: 'AssignmentSubmission', targetId: submission.id, metadata: { assignmentId, studentId, percentage } } })
     return { submission, grade }
   })
