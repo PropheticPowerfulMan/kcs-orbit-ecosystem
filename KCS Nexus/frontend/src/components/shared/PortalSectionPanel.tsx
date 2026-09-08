@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
+import ForumInsightsPanel from './ForumInsightsPanel'
 import { Bell, BookOpen, Brain, Calendar, ClipboardList, FileText, MessageSquare, Settings, Shield, UserCheck, Users } from 'lucide-react'
 
 type SectionConfig = {
@@ -44,6 +45,9 @@ const PortalSectionPanel = () => {
   }, [location.pathname])
 
   if (!section) return null
+  const segment = getSegment(location.pathname)
+  if (segment === 'forum-insights') return <ForumInsightsPanel kind="parent" />
+  if (segment === 'student-forum-insights') return <ForumInsightsPanel kind="student" />
   const Icon = section.icon
 
   return (

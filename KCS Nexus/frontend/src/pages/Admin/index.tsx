@@ -24,6 +24,7 @@ import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsCont
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
 import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import { academicRecordsAPI, adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
 import { normalizeSchoolLevel, SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
@@ -553,10 +554,9 @@ const reportCategoryLabels: Record<AdminReportCategory, string> = {
 const buildReportWindow = (cadence: AdminReportCadence) => {
   const end = new Date()
   const start = new Date(end)
-  if (cadence === 'daily') start.setDate(end.getDate() - 1)
-  if (cadence === 'weekly') start.setDate(end.getDate() - 7)
-  if (cadence === 'monthly') start.setMonth(end.getMonth() - 1)
-  if (cadence === 'annual') start.setFullYear(end.getFullYear() - 1)
+  if (cadence === 'weekly') start.setDate(end.getDate() - 6)
+  if (cadence === 'monthly') start.setDate(1)
+  if (cadence === 'annual') { start.setMonth(0); start.setDate(1) }
   return {
     start,
     end,
@@ -1044,10 +1044,10 @@ const buildAdminReportDocument = (
       <thead>
         <tr>
           <th>Section</th>
-          <th>Indicateur</th>
-          <th>Valeur</th>
+          <th>{tr('Indicateur','Indicator')}</th>
+          <th>{tr('Valeur','Value')}</th>
           <th>Detail</th>
-          <th>Action recommandee</th>
+          <th>{tr('Action recommandée','Recommended action')}</th>
         </tr>
       </thead>
       <tbody>${escapedRows}</tbody>
@@ -1138,6 +1138,8 @@ const AdminSectionView = ({
   admissionRequests: AdminAdmissionRequest[]
   setAdmissionRequests: Dispatch<SetStateAction<AdminAdmissionRequest[]>>
 }) => {
+  const language = useUIStore((state) => state.language)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [selectedStudent, setSelectedStudent] = useState<AdminStudentRecord | null>(officialRoster[0] ?? null)
   const [viewingStudent, setViewingStudent] = useState<AdminStudentRecord | null>(null)
   const [selectedStaff, setSelectedStaff] = useState<(typeof staffSeed)[number] | null>(staffSeed[0] ?? null)
@@ -2964,11 +2966,14 @@ const AdminSectionView = ({
   if (segment === 'reports') {
     const reportRows = buildReportRows(reportCategory, reportCadence, officialRoster, admissionRequests)
     const reportWindow = buildReportWindow(reportCadence)
+    reportWindow.label = `${reportWindow.start.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} - ${reportWindow.end.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}`
+    const cadenceLabels: Record<AdminReportCadence, string> = { daily: tr('Journalier','Daily'), weekly: tr('Hebdomadaire','Weekly'), monthly: tr('Mensuel','Monthly'), annual: tr('Annuel','Annual') }
+    const categoryLabels: Record<AdminReportCategory, string> = { enrollment: tr('Inscriptions','Enrollment'), academic: tr('Académique','Academic'), operations: tr('Opérations','Operations'), executive: tr('Rapport complet','Full report') }
     const reportStats = [
-      { label: 'Periode', value: reportCadenceLabels[reportCadence], detail: reportWindow.label, icon: CalendarDays },
-      { label: 'Indicateurs', value: String(reportRows.length), detail: reportCategoryLabels[reportCategory], icon: BarChart3 },
-      { label: 'Eleves a risque', value: String(officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length), detail: 'academique, presence ou discipline', icon: AlertTriangle },
-      { label: 'Exports', value: 'PDF XLS CSV', detail: 'telechargement ou impression', icon: Download },
+      { label: tr('Période','Period'), value: cadenceLabels[reportCadence], detail: reportWindow.label, icon: CalendarDays },
+      { label: tr('Indicateurs','Indicators'), value: String(reportRows.length), detail: categoryLabels[reportCategory], icon: BarChart3 },
+      { label: tr('Élèves à risque','At-risk students'), value: String(officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length), detail: tr('académique, présence ou discipline','academic, attendance or discipline'), icon: AlertTriangle },
+      { label: tr('Exports','Exports'), value: 'PDF XLS CSV', detail: tr('téléchargement ou impression','download or print'), icon: Download },
     ]
 
     return (
@@ -2978,24 +2983,24 @@ const AdminSectionView = ({
             <div>
               <div className="flex items-center gap-2 text-kcs-blue-700 dark:text-kcs-blue-300">
                 <FileText size={20} />
-                <span className="text-xs font-bold uppercase tracking-wide">Super Admin Reports</span>
+                <span className="text-xs font-bold uppercase tracking-wide">{tr('Rapports du super administrateur','Super Admin Reports')}</span>
               </div>
-              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Rapports detailles exportables</h2>
+              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports détaillés exportables','Detailed exportable reports')}</h2>
               <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
-                Generer des rapports journaliers, hebdomadaires, mensuels ou annuels avec les donnees d'inscriptions, d'academique, d'operations, de finances, de discipline et d'alertes IA.
+                {tr("Générer des rapports journaliers, hebdomadaires, mensuels ou annuels avec les données d’inscription, académiques, opérationnelles, financières, disciplinaires et les alertes IA.", "Generate daily, weekly, monthly or annual reports using enrollment, academic, operations, finance, discipline and AI-alert data.")}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
               <label className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Frequence
+                {tr('Fréquence','Frequency')}
                 <select value={reportCadence} onChange={(event) => setReportCadence(event.target.value as AdminReportCadence)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold normal-case tracking-normal text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                  {Object.entries(reportCadenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {Object.entries(cadenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
               <label className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Type de rapport
+                {tr('Type de rapport','Report type')}
                 <select value={reportCategory} onChange={(event) => setReportCategory(event.target.value as AdminReportCategory)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold normal-case tracking-normal text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                  {Object.entries(reportCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {Object.entries(categoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
             </div>
@@ -3022,10 +3027,10 @@ const AdminSectionView = ({
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="font-bold text-kcs-blue-900 dark:text-white">{reportCategoryLabels[reportCategory]} - {reportCadenceLabels[reportCadence]}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Periode couverte: {reportWindow.label}</p>
+                <h3 className="font-bold text-kcs-blue-900 dark:text-white">{categoryLabels[reportCategory]} - {cadenceLabels[reportCadence]}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{tr('Période couverte','Covered period')}: {reportWindow.label}</p>
               </div>
-              <span className="w-fit rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200">Pret pour audit</span>
+              <span className="w-fit rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200">{tr('Prêt pour audit','Audit-ready')}</span>
             </div>
             <div className="-mx-1 overflow-x-auto px-1">
               <table className="min-w-full divide-y divide-gray-100 text-left text-sm dark:divide-kcs-blue-800">
@@ -3053,8 +3058,8 @@ const AdminSectionView = ({
 
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h3 className="font-bold text-kcs-blue-900 dark:text-white">Exporter le rapport</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Le PDF s'ouvre en impression afin de choisir "Enregistrer en PDF"; Excel et CSV sont telecharges directement.</p>
+              <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Exporter le rapport','Export report')}</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr("Le PDF ouvre la fenêtre d’impression; Excel et CSV sont téléchargés directement.", "PDF opens the print dialog; Excel and CSV download directly.")}</p>
               <div className="mt-4 grid gap-3">
                 <button className={`${adminButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'pdf', officialRoster, admissionRequests)}>
                   <FileText size={16} /> PDF
@@ -3069,7 +3074,7 @@ const AdminSectionView = ({
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h3 className="font-bold text-kcs-blue-900 dark:text-white">Contenu inclus</h3>
+              <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Contenu inclus','Included content')}</h3>
               <div className="mt-3 space-y-3">
                 {['Registre officiel des eleves', 'Admissions et decisions', 'Notes, presences et risques', 'Finances, discipline et audit IA'].map((item) => (
                   <div key={item} className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
