@@ -9,6 +9,15 @@ import { sendSchoolMail } from '../utils/mail.js'
 import { sendSchoolSms } from '../utils/sms.js'
 
 export const messagesRouter = Router()
+const trackingPixel = Buffer.from('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', 'base64')
+messagesRouter.get('/tracking/email/:id.gif', asyncHandler(async (req, res) => {
+  const id = getRouteParam(req.params.id)
+  await prisma.correspondenceLog.updateMany({ where: { id, channel: 'EMAIL', status: { in: ['SENT', 'DELIVERED'] } }, data: { status: 'DELIVERED', deliveredAt: new Date() } })
+  res.setHeader('Content-Type', 'image/gif')
+  res.setHeader('Content-Length', String(trackingPixel.length))
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  res.status(200).send(trackingPixel)
+}))
 messagesRouter.use(authenticate)
 
 const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })

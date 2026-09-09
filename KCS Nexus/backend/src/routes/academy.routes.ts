@@ -11,7 +11,7 @@ academyRouter.post("/launch", authenticate, requireRoles("teacher", "student"), 
     ? await prisma.user.findUnique({ where: { email: (process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase() }, select: { orbitUserId: true, orbitOrganizationId: true, role: true } })
     : await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { orbitUserId: true, orbitOrganizationId: true, role: true } });
   if (!user || !["STUDENT", "TEACHER", "ADMIN"].includes(user.role)) throw new ApiError(403, "Academy access is not enabled for this role");
-  if (!user.orbitUserId || user.orbitOrganizationId !== env.KCS_ORBIT_ORGANIZATION_ID) throw new ApiError(409, "This account is not linked to a verified Orbit identity");
+  if (!user.orbitUserId) throw new ApiError(409, "This account is not linked to a verified Orbit identity");
   const response = await fetch(env.KCS_ORBIT_API_URL.replace(/\/$/, "") + "/api/academy/sso/service-tickets", {
     method: "POST", headers: { "content-type": "application/json", "x-api-key": env.ACADEMY_INTEGRATION_KEY },
     body: JSON.stringify({ userId: user.orbitUserId }), signal: AbortSignal.timeout(10_000)
