@@ -241,6 +241,7 @@ export const attendanceAPI = {
   studentAnalytics: (studentId: string) => api.get('/attendance/students/' + studentId + '/analytics'),
   saveStudents: (data: object) => api.post('/attendance/students', data),
   staff: (date?: string) => api.get('/attendance/staff', { params: date ? { date } : undefined }),
+  staffHistory: (from?: string, to?: string) => api.get('/attendance/staff/history', { params: { from, to } }),
   saveStaff: (data: object) => api.post('/attendance/staff', data),
   mine: () => api.get('/attendance/staff/me'),
 }

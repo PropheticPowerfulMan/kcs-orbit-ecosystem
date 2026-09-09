@@ -68,7 +68,8 @@ function splitFullName(fullName: string) {
 }
 
 function mapSavanexRole(role: string | undefined, employeeType?: string) {
-  if ((employeeType || '').trim().toLowerCase() === 'teacher') return 'TEACHER' as const
+  const normalizedEmployeeType = (employeeType || '').trim().toLowerCase().replace(/[ _-]+/g, ' ')
+  if (['teacher', 'enseignant', 'teaching staff', 'faculty', 'academic'].includes(normalizedEmployeeType)) return 'TEACHER' as const
   const normalized = (role || '').trim().toLowerCase()
   if (normalized === 'admin') return 'ADMIN' as const
   if (['employee', 'staff', 'administrative staff', 'administrative_staff', 'administrative-staff'].includes(normalized)) return 'STAFF' as const
@@ -422,9 +423,11 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       : null
     const canAdoptCanonicalEmail = Boolean(canonicalEmail && (!canonicalEmailOwner || canonicalEmailOwner.id === user.id))
 
+    const hasTeacherProfile = user.role === 'STAFF' ? Boolean(await prisma.teacherProfile.findUnique({ where: { userId: user.id }, select: { id: true } })) : false
     return prisma.user.update({
       where: { id: user.id },
       data: {
+        ...(hasTeacherProfile ? { role: 'TEACHER' } : {}),
         ...(typeof entity.firstName === 'string' && entity.firstName.trim() ? { firstName: entity.firstName.trim() } : {}),
         ...(entity.middleName === null || typeof entity.middleName === 'string' ? { middleName: entity.middleName ? String(entity.middleName).trim() : null } : {}),
         ...(typeof entity.lastName === 'string' && entity.lastName.trim() ? { lastName: entity.lastName.trim() } : {}),
@@ -623,7 +626,9 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true'
-  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password, user?.permissions ?? [])
+  const hasTeacherProfile = user ? Boolean(await prisma.teacherProfile.findUnique({ where: { userId: user.id }, select: { id: true } })) : false
+  const providerPermissions = hasTeacherProfile ? ['ecosystem:savanex'] : (user?.permissions ?? [])
+  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password, providerPermissions)
   if (!externalUser) {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }

@@ -322,6 +322,30 @@ attendanceRouter.get('/staff', requireRoles('admin'), asyncHandler(async (req, r
   return success(res, { records, summary: summarize(records) }, 'Staff attendance register loaded')
 }))
 
+attendanceRouter.get('/staff/history', requireRoles('admin'), asyncHandler(async (req, res) => {
+  const today = normalizedDay(new Date())
+  const defaultFrom = new Date(today)
+  defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 89)
+  const from = normalizedDay(z.coerce.date().parse(String(req.query.from ?? defaultFrom.toISOString().slice(0, 10))))
+  const to = normalizedDay(z.coerce.date().parse(String(req.query.to ?? today.toISOString().slice(0, 10))))
+  if (from > to) throw new ApiError(400, 'The history start date must be before the end date')
+  const maximumTo = new Date(from)
+  maximumTo.setUTCDate(maximumTo.getUTCDate() + 366)
+  if (to > maximumTo) throw new ApiError(400, 'Attendance history is limited to 366 days per request')
+  const records = await prisma.staffAttendanceRecord.findMany({
+    where: { date: { gte: from, lte: to } },
+    include: { recordedBy: { select: { firstName: true, middleName: true, lastName: true } } },
+    orderBy: [{ date: 'desc' }, { staffName: 'asc' }],
+    take: 10000,
+  })
+  return success(res, {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+    records: records.map(record => ({ ...record, date: record.date.toISOString().slice(0, 10), recordedBy: record.recordedBy ? [record.recordedBy.lastName, record.recordedBy.middleName, record.recordedBy.firstName].filter(Boolean).join(' ') : null })),
+    summary: summarize(records),
+  }, 'Official staff attendance history loaded')
+}))
+
 attendanceRouter.post('/staff', requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = staffAttendanceSchema.parse(req.body)
   const date = normalizedDay(payload.date)
