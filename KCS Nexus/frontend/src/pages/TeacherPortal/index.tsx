@@ -1235,7 +1235,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             {courseTab === 'setup' && (
               <div className="grid gap-6 p-5 xl:grid-cols-[0.8fr_1.2fr]">
                 <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? 'Edit subject' : 'Add a subject that you teach'}</h4>
+                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? 'Edit class' : 'Create a class'}</h4>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill in the fields below. Grades can be selected in bulk like a school SIS.</p>
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1288,7 +1288,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={createCourse} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">{editingCourseId ? 'Save subject' : 'Add subject'}</button>
+                      <button type="button" onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">{editingCourseId ? 'Save class' : 'Create a class'}</button>
                       {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>

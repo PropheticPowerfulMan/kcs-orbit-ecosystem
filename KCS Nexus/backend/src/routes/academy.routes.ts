@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { env } from "../config/env.js";
 import { authenticate, requireRoles, type AuthenticatedRequest } from "../middleware/auth.js";
@@ -40,4 +41,29 @@ academyRouter.post("/launch", authenticate, requireRoles("teacher", "student", "
   const url = new URL("/api/auth/callback", env.ACADEMY_PUBLIC_URL);
   url.searchParams.set("ticket", payload.ticket);
   return success(res, { url: url.toString() });
+}));
+
+function validAcademyKey(provided: string | undefined) {
+  const expected = env.ACADEMY_INTEGRATION_KEY;
+  if (!provided || !expected) return false;
+  const left = Buffer.from(provided); const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+academyRouter.post("/context", asyncHandler(async (req, res) => {
+  if (!validAcademyKey(req.header("x-api-key"))) throw new ApiError(401, "Unauthorized Academy service");
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const requestedRole = String(req.body?.role || "").toUpperCase();
+  if (!email || !["TEACHER", "STUDENT", "ADMIN", "SUPER_ADMIN"].includes(requestedRole)) throw new ApiError(400, "Invalid Academy identity");
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, role: true, firstName: true, middleName: true, lastName: true, teacherProfile: { select: { id: true, courses: { select: { id: true, name: true, code: true, description: true, grade: true, credits: true, updatedAt: true, schedules: { select: { id: true, day: true, startTime: true, endTime: true, room: true } }, enrollments: { select: { studentId: true } }, assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true }, orderBy: { dueDate: "asc" } } } } } }, studentProfile: { select: { id: true, studentNumber: true, grade: true, section: true, enrollments: { select: { course: { select: { id: true, name: true, code: true, description: true, grade: true, credits: true, updatedAt: true, teacher: { select: { user: { select: { firstName: true, middleName: true, lastName: true } } } }, schedules: { select: { id: true, day: true, startTime: true, endTime: true, room: true } }, assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true }, orderBy: { dueDate: "asc" } } } } } } } } } });
+  if (!user) throw new ApiError(404, "Nexus institutional identity not found");
+  const isTeacher = Boolean(user.teacherProfile) && ["TEACHER", "STAFF"].includes(user.role);
+  if (requestedRole === "TEACHER" && !isTeacher) throw new ApiError(403, "Teacher identity mismatch");
+  if (requestedRole === "STUDENT" && (user.role !== "STUDENT" || !user.studentProfile)) throw new ApiError(403, "Student identity mismatch");
+  if (["ADMIN", "SUPER_ADMIN"].includes(requestedRole) && user.role !== "ADMIN") throw new ApiError(403, "Administrator identity mismatch");
+  const displayName = [user.lastName, user.middleName, user.firstName].filter(Boolean).join(" ");
+  if (requestedRole === "TEACHER") return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, courses: (user.teacherProfile?.courses || []).map(course => ({ ...course, enrolledStudents: course.enrollments.length })) });
+  if (requestedRole === "STUDENT") return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, profile: user.studentProfile ? { id: user.studentProfile.id, studentNumber: user.studentProfile.studentNumber, grade: user.studentProfile.grade, section: user.studentProfile.section } : null, courses: (user.studentProfile?.enrollments || []).map(item => ({ ...item.course, teacherName: [item.course.teacher.user.lastName, item.course.teacher.user.middleName, item.course.teacher.user.firstName].filter(Boolean).join(" ") })) });
+  const [students, parents, teachers, courses] = await Promise.all([prisma.studentProfile.count(), prisma.user.count({ where: { role: "PARENT" } }), prisma.teacherProfile.count(), prisma.course.count()]);
+  return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, population: { students, parents, teachers, courses } });
 }));
