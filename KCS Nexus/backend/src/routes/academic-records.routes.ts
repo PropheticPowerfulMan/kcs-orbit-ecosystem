@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { getParentAcademicClearance } from './finance.routes.js'
@@ -291,13 +291,23 @@ academicRecordsRouter.patch('/report-cards/:id/publish',requireRoles('admin','st
  return success(res,card,'Approved report card published to the portal')
 }))
 
+academicRecordsRouter.patch('/transcripts/:studentId/visibility', requireSuperAdmin(), asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const studentId=getRouteParam(req.params.studentId)
+ const visible=z.object({visible:z.boolean()}).parse(req.body).visible
+ const student=await prisma.studentProfile.update({where:{id:studentId},data:{transcriptVisible:visible},select:{id:true,studentNumber:true,transcriptVisible:true}}).catch(()=>null)
+ if(!student)throw new ApiError(404,'Student not found')
+ const actorId=req.user!.sub==='configured-superadmin'?(await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}))?.id:req.user!.sub
+ await prisma.auditLog.create({data:{actorId:actorId||null,action:visible?'STUDENT_TRANSCRIPT_ACCESS_GRANTED':'STUDENT_TRANSCRIPT_ACCESS_REVOKED',targetType:'StudentProfile',targetId:studentId,metadata:{studentNumber:student.studentNumber}}})
+ return success(res,student,visible?'Student transcript access granted':'Student transcript access revoked')
+}))
+
 academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff','teacher','student','parent'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const studentId=getRouteParam(req.params.studentId)
- if(req.user!.role==='student'){const own=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub},select:{id:true}});if(own?.id!==studentId)throw new ApiError(403,'Transcript access denied')}
- if(req.user!.role==='parent'){const link=await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}});if(!link)throw new ApiError(403,'Transcript access denied');const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
  const student=await prisma.studentProfile.findUnique({where:{id:studentId},include:{user:true}});if(!student)throw new ApiError(404,'Student not found')
+ if(req.user!.role==='student'){const own=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub},select:{id:true}});if(own?.id!==studentId)throw new ApiError(403,'Transcript access denied');if(!student.transcriptVisible)throw new ApiError(403,'Le relevé de notes n’est pas encore autorisé par la Super Administration.')}
+ if(req.user!.role==='parent'){const link=await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}});if(!link)throw new ApiError(403,'Transcript access denied');if(!student.transcriptVisible)throw new ApiError(403,'Le relevé de notes n’est pas encore autorisé par la Super Administration.');const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
  const grades=await prisma.grade.findMany({where:{studentId,assignmentId:null,period:{endsWith:'::APPROVED'}},include:{course:true},orderBy:{period:'asc'}})
  const rows=grades.map(item=>({...item,cycle:parsePeriod(item.period),credits:item.course.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.course.credits}))
  const credits=rows.reduce((sum,item)=>sum+item.credits,0),points=rows.reduce((sum,item)=>sum+item.qualityPoints,0)
- return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
+ return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,transcriptVisible:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
 }))

@@ -399,6 +399,7 @@ export const academicRecordsAPI = {
   approveReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/approve`),
   publishReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/publish`),
   transcript: (studentId: string) => api.get('/academic-records/transcripts/' + studentId),
+  setTranscriptVisibility: (studentId: string, visible: boolean) => api.patch('/academic-records/transcripts/' + studentId + '/visibility', { visible }),
   registerTranscriptVerification: (data: { documentId: string; fingerprint: string; studentId: string }) => api.post('/academic-records/transcripts/verification', data),
   verifyTranscript: (document: string, fingerprint: string) => api.get('/academic-records/transcripts/verify', { params: { document, fingerprint } }),
 }

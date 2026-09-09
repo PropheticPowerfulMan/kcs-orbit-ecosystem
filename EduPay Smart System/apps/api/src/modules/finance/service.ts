@@ -834,7 +834,7 @@ function calculateBehaviorScore(input: { expected: number; paid: number; overdue
   )));
 }
 
-export const TUITION_REMINDER_WEEKDAYS = ["Mon", "Wed", "Fri"] as const;
+export const TUITION_REMINDER_MONTH_DAYS = [1, 15] as const;
 export const TUITION_REMINDER_LOOKAHEAD_DAYS = 7;
 export const KCS_TEST_FAMILY_NAME = "LOKALA LOMBOTO JONATHAN";
 
@@ -848,11 +848,8 @@ function kinshasaDateKey(value: Date) {
 }
 
 export function isTuitionReminderRunDay(value: Date) {
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Africa/Kinshasa",
-    weekday: "short"
-  }).format(value);
-  return TUITION_REMINDER_WEEKDAYS.includes(weekday as typeof TUITION_REMINDER_WEEKDAYS[number]);
+  const day = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Africa/Kinshasa", day: "numeric" }).format(value));
+  return TUITION_REMINDER_MONTH_DAYS.includes(day as typeof TUITION_REMINDER_MONTH_DAYS[number]);
 }
 
 export function buildTuitionReminderMarker(installmentId: string, value: Date) {
@@ -898,7 +895,7 @@ function buildRecurringTuitionReminderMessages(input: {
       "Paid: " + formatAlertCurrency(input.amountPaid),
       "Balance: " + amount,
       "",
-      "Reminders are sent Monday, Wednesday and Friday until the account is settled.",
+      "Financial reminders are sent only twice monthly, on the 1st and 15th, until the account is settled.",
       "EduPay reference: " + input.marker
     ].join(String.fromCharCode(10));
     return {
@@ -920,7 +917,7 @@ function buildRecurringTuitionReminderMessages(input: {
     "Deja paye : " + formatAlertCurrency(input.amountPaid),
     "Solde : " + amount,
     "",
-    "Les rappels sont envoyes lundi, mercredi et vendredi jusqu a regularisation complete.",
+    "Les rappels financiers sont envoyes seulement deux fois par mois, le 1er et le 15, jusqu a regularisation complete.",
     "Reference EduPay : " + input.marker
   ].join(String.fromCharCode(10));
   return {
@@ -1391,7 +1388,7 @@ export async function runOverdueTuitionReminderSweep(input: {
 
 export async function runAutomaticTuitionReminderSweeps(referenceDate = new Date()) {
   if (isTuitionReminderRunDay(referenceDate) === false) {
-    return { schools: 0, ran: false, reason: "OUTSIDE_MONDAY_WEDNESDAY_FRIDAY_SCHEDULE" };
+    return { schools: 0, ran: false, reason: "OUTSIDE_FIRST_AND_FIFTEENTH_SCHEDULE" };
   }
   const schools = await prisma.school.findMany({ select: { id: true } });
   const results = [];

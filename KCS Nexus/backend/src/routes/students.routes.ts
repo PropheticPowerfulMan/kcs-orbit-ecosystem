@@ -555,7 +555,8 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     timetable,
     attendance: student.attendanceRecords,
     reportCards: student.reportCards,
-    transcripts: student.transcripts,
+    transcripts: student.transcriptVisible ? student.transcripts : [],
+    transcriptVisible: student.transcriptVisible,
   }, 'Student dashboard loaded')
 }))
 studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {

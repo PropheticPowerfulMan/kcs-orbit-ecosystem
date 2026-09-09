@@ -2520,7 +2520,7 @@ const TeacherPortal = () => {
     <div className="portal-shell flex">
       <PortalSidebar />
 
-      <main>
+      <main className="min-w-0 flex-1 overflow-x-hidden">
         <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -2532,17 +2532,17 @@ const TeacherPortal = () => {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <Link to="/portal/teacher/messages" className="btn-primary text-sm py-2">
+              <Link to="/portal/teacher/messages" className="btn-primary w-full justify-center py-2 text-sm sm:w-auto">
                 Inbox
               </Link>
-              <Link to="/portal/teacher/assignments" className="btn-gold text-sm py-2 flex items-center gap-2">
+              <Link to="/portal/teacher/assignments" className="btn-gold flex w-full items-center justify-center gap-2 py-2 text-sm sm:w-auto">
                 <Brain size={16} /> AI Insights
               </Link>
             </div>
           </div>
         </div>
 
-        <div className="space-y-6 p-6">
+        <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6">
           {isDashboard && <PortalSectionPanel />}
           {isDashboard && <SuggestionBox />}
 

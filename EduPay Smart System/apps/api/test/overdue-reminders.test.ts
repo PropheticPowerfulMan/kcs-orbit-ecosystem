@@ -5,7 +5,7 @@ import {
   isKcsTestFamily,
   isTuitionReminderRunDay,
   OVERDUE_REMINDER_STAGES,
-  TUITION_REMINDER_WEEKDAYS
+  TUITION_REMINDER_MONTH_DAYS
 } from "../src/modules/finance/service";
 
 describe("overdue tuition reminder cadence", () => {
@@ -40,17 +40,16 @@ describe("overdue tuition reminder cadence", () => {
 });
 
 describe("permanent KCS tuition reminder policy", () => {
-  it("runs exactly Monday, Wednesday and Friday in Kinshasa", () => {
-    expect(TUITION_REMINDER_WEEKDAYS).toEqual(["Mon", "Wed", "Fri"]);
-    expect(isTuitionReminderRunDay(new Date("2026-09-07T10:00:00.000Z"))).toBe(true);
-    expect(isTuitionReminderRunDay(new Date("2026-09-09T10:00:00.000Z"))).toBe(true);
-    expect(isTuitionReminderRunDay(new Date("2026-09-11T10:00:00.000Z"))).toBe(true);
-    expect(isTuitionReminderRunDay(new Date("2026-09-08T10:00:00.000Z"))).toBe(false);
+  it("runs exactly on the 1st and 15th in Kinshasa", () => {
+    expect(TUITION_REMINDER_MONTH_DAYS).toEqual([1, 15]);
+    expect(isTuitionReminderRunDay(new Date("2026-09-01T10:00:00.000Z"))).toBe(true);
+    expect(isTuitionReminderRunDay(new Date("2026-09-15T10:00:00.000Z"))).toBe(true);
+    expect(isTuitionReminderRunDay(new Date("2026-09-14T10:00:00.000Z"))).toBe(false);
   });
 
   it("deduplicates a reminder by installment and Kinshasa calendar date", () => {
-    expect(buildTuitionReminderMarker("inst-1", new Date("2026-09-07T10:00:00.000Z")))
-      .toBe("[TUITION_REMINDER:inst-1:DATE:2026-09-07]");
+    expect(buildTuitionReminderMarker("inst-1", new Date("2026-09-01T10:00:00.000Z")))
+      .toBe("[TUITION_REMINDER:inst-1:DATE:2026-09-01]");
   });
 
   it("protects the permanent test-family exemption regardless of name order", () => {

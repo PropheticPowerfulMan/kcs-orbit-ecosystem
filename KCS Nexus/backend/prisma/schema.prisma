@@ -398,6 +398,7 @@ model StudentProfile {
   dateOfBirth           DateTime?
   enrollmentDate        DateTime               @default(now())
   status                String                 @default("active")
+  transcriptVisible     Boolean                @default(false)
   gpa                   Float?
   attendanceRate        Float?
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
