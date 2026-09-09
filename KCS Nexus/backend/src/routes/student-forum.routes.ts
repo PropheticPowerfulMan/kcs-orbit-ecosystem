@@ -32,15 +32,22 @@ const analyzeTone = (text: string) => {
   return { sentiment: 'neutral', priority: 'normal' }
 }
 
-studentForumRouter.get('/posts', authenticate, requireRoles('admin', 'teacher', 'student'), asyncHandler(async (_req, res) => {
+studentForumRouter.get('/posts', authenticate, requireRoles('admin', 'teacher', 'student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (!req.user) throw new ApiError(401, 'Authentication required')
   const posts = await prisma.studentForumPost.findMany({
     include: {
       author: true,
       comments: { include: { author: true }, orderBy: { createdAt: 'asc' } },
+      likes: { where: { userId: req.user.sub }, select: { id: true } },
+      _count: { select: { likes: true } },
     },
     orderBy: { updatedAt: 'desc' },
   })
-  return success(res, posts)
+  return success(res, posts.map(({ likes, _count, ...post }) => ({
+    ...post,
+    likeCount: _count.likes,
+    likedByMe: likes.length > 0,
+  })))
 }))
 
 studentForumRouter.post('/posts', authenticate, requireRoles('student', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -85,6 +92,23 @@ studentForumRouter.post('/posts/:id/comments', authenticate, requireRoles('stude
   }
 
   return success(res, comment, 'Student forum comment created', 201)
+}))
+
+studentForumRouter.post('/posts/:id/likes', authenticate, requireRoles('student', 'teacher', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (!req.user) throw new ApiError(401, 'Authentication required')
+  const postId = getRouteParam(req.params.id)
+  const post = await prisma.studentForumPost.findUnique({ where: { id: postId }, select: { id: true } })
+  if (!post) throw new ApiError(404, 'Student forum post not found')
+
+  const key = { postId_userId: { postId, userId: req.user.sub } }
+  const existing = await prisma.studentForumLike.findUnique({ where: key })
+  if (existing) {
+    await prisma.studentForumLike.delete({ where: key })
+  } else {
+    await prisma.studentForumLike.create({ data: { postId, userId: req.user.sub } })
+  }
+  const likeCount = await prisma.studentForumLike.count({ where: { postId } })
+  return success(res, { liked: !existing, likeCount })
 }))
 
 studentForumRouter.get('/ai-report', authenticate, requireRoles('admin', 'teacher'), asyncHandler(async (_req, res) => {

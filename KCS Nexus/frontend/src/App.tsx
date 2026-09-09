@@ -123,9 +123,31 @@ const TranscriptVerificationPage = () => {
 
 const RouteFallback = () => <div className="min-h-[40vh]" />
 
+const RouteScrollReset = () => {
+  const location = useLocation()
+
+  useEffect(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    const reset = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      document.documentElement.scrollTop = 0
+      document.body.scrollTop = 0
+      document.querySelectorAll<HTMLElement>('.portal-shell > main').forEach((container) => {
+        container.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      })
+    }
+    reset()
+    const frame = window.requestAnimationFrame(reset)
+    return () => window.cancelAnimationFrame(frame)
+  }, [location.pathname])
+
+  return null
+}
+
 const App = () => {
   return (
     <>
+      <RouteScrollReset />
       <GlobalTextTranslator />
       <Suspense fallback={<RouteFallback />}>
         <Routes>

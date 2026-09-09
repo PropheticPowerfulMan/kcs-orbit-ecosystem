@@ -3,9 +3,10 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles } from '../middleware/auth.js'
-import { asyncHandler, success } from '../utils/api.js'
+import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
+import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
+import { resolveStudentProfileId } from '../services/studentIdentity.js'
 
 const openai = env.OPENAI_API_KEY ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null
 const openaiModel = env.OPENAI_MODEL
@@ -266,12 +267,15 @@ aiRouter.post('/teacher-assistant', authenticate, requireRoles('teacher', 'staff
   }
 }))
 
-aiRouter.post('/tutor', authenticate, asyncHandler(async (req, res) => {
+aiRouter.post('/tutor', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  if (!req.user) throw new ApiError(401, 'Authentication required')
+  if (!openai) throw new ApiError(503, 'AI Tutor requires an active AI provider configuration.')
   const schema = z.object({ subject: z.string(), question: z.string(), studentId: z.string().optional() })
-  const { subject, question, studentId } = schema.parse(req.body)
+  const { subject, question } = schema.parse(req.body)
+  const studentId = await resolveStudentProfileId(req.user.sub)
+  if (!studentId) throw new ApiError(409, 'Student academic profile synchronization is required before using AI Tutor.')
 
-  const response = openai
-    ? await openai.chat.completions.create({
+  const response = await openai.chat.completions.create({
         model: openaiModel,
         messages: [
           { role: 'system', content: `You are an expert ${subject} tutor for an American international school in Kinshasa. Explain clearly and step by step.` },
@@ -279,7 +283,6 @@ aiRouter.post('/tutor', authenticate, asyncHandler(async (req, res) => {
         ],
         temperature: 0.5,
       })
-    : null
 
   if (studentId) {
     await prisma.aITutorSession.create({
@@ -290,14 +293,14 @@ aiRouter.post('/tutor', authenticate, asyncHandler(async (req, res) => {
         messages: {
           create: [
             { role: 'user', content: question },
-            { role: 'assistant', content: response?.choices[0]?.message?.content ?? 'AI key not configured. Backend scaffold ready.' },
+            { role: 'assistant', content: response.choices[0]?.message?.content ?? 'The AI provider returned no answer.' },
           ],
         },
       },
     })
   }
 
-  return success(res, { response: response?.choices[0]?.message?.content ?? `AI Tutor scaffold ready for ${subject}. Add OPENAI_API_KEY for live responses.` })
+  return success(res, { response: response.choices[0]?.message?.content ?? 'The AI provider returned no answer.', source: 'openai', model: openaiModel })
 }))
 
 aiRouter.post('/quiz', authenticate, asyncHandler(async (req, res) => {

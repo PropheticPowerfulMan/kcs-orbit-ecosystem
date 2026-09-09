@@ -202,13 +202,13 @@ const AIChat = () => {
         {chatOpen && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0, height: minimized ? 'auto' : 540 }}
+            animate={{ opacity: 1, scale: 1, y: 0, height: minimized ? 'auto' : 'min(500px, 72dvh)' }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.3, type: 'spring', stiffness: 300, damping: 30 }}
-            className="nexus-glass-card fixed bottom-4 right-4 z-50 flex w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl sm:bottom-6 sm:right-6"
-            style={{ maxHeight: minimized ? undefined : 'min(540px, calc(100dvh - 2rem))' }}
+            className="nexus-glass-card fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3 z-50 flex w-[calc(100vw-1.5rem)] max-w-[380px] flex-col overflow-hidden rounded-2xl sm:bottom-6 sm:right-6 sm:w-[380px]"
+            style={{ maxHeight: minimized ? undefined : 'min(500px, 72dvh)' }}
           >
-            <div className="flex flex-shrink-0 items-center justify-between p-4 kcs-gradient">
+            <div className="flex min-w-0 flex-shrink-0 items-center justify-between gap-2 p-3 sm:p-4 kcs-gradient">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
                   <Bot size={20} className="text-white" />

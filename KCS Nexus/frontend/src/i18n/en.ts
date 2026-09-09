@@ -12,6 +12,7 @@ const en = {
     login: 'Sign In',
     logout: 'Sign Out',
     dashboard: 'Dashboard',
+    incidentReport: 'Incident Report',
     applyNow: 'Apply Now',
     visitSchool: 'Visit School',
   },

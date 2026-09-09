@@ -158,9 +158,9 @@ const AITutorPage = () => {
     <div className="portal-shell flex">
       <PortalSidebar />
 
-      <main className="flex flex-col !overflow-hidden">
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-white dark:bg-kcs-blue-950 border-b border-gray-100 dark:border-kcs-blue-800 px-6 py-4">
+        <div className="bg-white dark:bg-kcs-blue-950 border-b border-gray-100 dark:border-kcs-blue-800 px-3 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl kcs-gradient flex items-center justify-center">
@@ -189,7 +189,7 @@ const AITutorPage = () => {
         {/* Content */}
         {!sessionStarted ? (
           /* Subject Selection */
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-6">
             <div className="max-w-2xl mx-auto">
               <div className="text-center mb-8">
                 <div className="text-6xl mb-4">🧠</div>
@@ -240,7 +240,7 @@ const AITutorPage = () => {
         ) : (
           /* Chat Interface */
           <>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-4 p-3 sm:p-6">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -318,7 +318,7 @@ const AITutorPage = () => {
             )}
 
             {/* Input */}
-            <div className="p-4 bg-white dark:bg-kcs-blue-950 border-t border-gray-100 dark:border-kcs-blue-800">
+            <div className="p-3 sm:p-4 bg-white dark:bg-kcs-blue-950 border-t border-gray-100 dark:border-kcs-blue-800">
               <div className="flex gap-3 items-end">
                 <textarea
                   ref={inputRef}

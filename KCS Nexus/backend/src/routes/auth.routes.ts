@@ -195,7 +195,9 @@ function buildConfiguredSuperAdminUser(account: PrismaUser) {
     middleName: account.middleName,
     lastName: account.lastName,
     role: configuredSuperAdmin.role,
-    avatar: account.avatar,
+    // Keep authentication responses small: a base64 photo can exceed 1 MB
+    // and used to make sign-in time out on mobile connections.
+    avatar: null,
     phone: account.phone,
     createdAt: account.createdAt,
     updatedAt: account.updatedAt,
@@ -213,7 +215,7 @@ async function authenticateWithSavanex(identifier: string, password: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY! },
       body: JSON.stringify({ identifier, password }),
-      signal: AbortSignal.timeout(Math.min(env.SAVANEX_TIMEOUT_SECONDS * 1000, 8_000)),
+      signal: AbortSignal.timeout(Math.min(env.SAVANEX_TIMEOUT_SECONDS * 1000, 5_000)),
     })
   } catch (error) {
     throw new ApiError(503, 'Shared authentication is temporarily unavailable')
@@ -281,7 +283,7 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier, password }),
-      signal: AbortSignal.timeout(Math.min(env.EDUPAY_TIMEOUT_SECONDS * 1000, 8_000)),
+      signal: AbortSignal.timeout(Math.min(env.EDUPAY_TIMEOUT_SECONDS * 1000, 5_000)),
     })
   } catch {
     throw new ApiError(503, 'EduPay shared authentication is temporarily unavailable')
@@ -323,16 +325,23 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
   }
 }
 
-async function authenticateWithSharedProviders(identifier: string, password: string) {
+async function authenticateWithSharedProviders(identifier: string, password: string, permissions: string[] = []) {
   type ProviderResult = { source: 'SAVANEX' | 'EduPay'; user: ExternalUserProfile | null; error?: unknown }
-  const attempts: Array<Promise<ProviderResult>> = [
-    authenticateWithSavanex(identifier, password)
-      .then((user) => ({ source: 'SAVANEX' as const, user }))
-      .catch((error) => ({ source: 'SAVANEX' as const, user: null, error })),
-    authenticateWithEduPay(identifier, password)
-      .then((user) => ({ source: 'EduPay' as const, user }))
-      .catch((error) => ({ source: 'EduPay' as const, user: null, error })),
-  ]
+  const knownSources = new Set(
+    permissions
+      .filter((permission) => permission.startsWith('ecosystem:'))
+      .map((permission) => permission.slice('ecosystem:'.length).toLowerCase()),
+  )
+  const hasRecognizedSource = knownSources.has('savanex') || knownSources.has('edupay')
+  const trySavanex = !hasRecognizedSource || knownSources.has('savanex')
+  const tryEduPay = !hasRecognizedSource || knownSources.has('edupay')
+  const attempts: Array<Promise<ProviderResult>> = []
+  if (trySavanex) attempts.push(authenticateWithSavanex(identifier, password)
+    .then((user) => ({ source: 'SAVANEX' as const, user }))
+    .catch((error) => ({ source: 'SAVANEX' as const, user: null, error })))
+  if (tryEduPay) attempts.push(authenticateWithEduPay(identifier, password)
+    .then((user) => ({ source: 'EduPay' as const, user }))
+    .catch((error) => ({ source: 'EduPay' as const, user: null, error })))
 
   return new Promise<ExternalUserProfile | null>((resolve, reject) => {
     let remaining = attempts.length
@@ -614,7 +623,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true'
-  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password)
+  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password, user?.permissions ?? [])
   if (!externalUser) {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
@@ -809,7 +818,7 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
   // the signed session without turning a transient Orbit mirror miss into a
   // logout. Canonical enforcement remains on the refresh-token path.
   const synchronizedUser = await refreshCanonicalIdentity(user, false)
-  return success(res, buildSafeUser(synchronizedUser))
+  return success(res, buildSafeUser(synchronizedUser, false))
 }))
 
 authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {

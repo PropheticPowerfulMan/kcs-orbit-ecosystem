@@ -1312,6 +1312,21 @@ html:not(.dark) .parent-portal-shell main textarea {
   .portal-shell .flex-wrap {
     row-gap: 0.5rem;
   }
+
+  .portal-shell :is(input, select, textarea, label, button) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .portal-shell input[type='file'] {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .portal-shell button {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Custom scrollbar */

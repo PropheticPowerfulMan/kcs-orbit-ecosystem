@@ -200,6 +200,7 @@ export const studentForumAPI = {
   getPosts: () => api.get('/student-forum/posts'),
   createPost: (data: object) => api.post('/student-forum/posts', data),
   addComment: (postId: string, data: object) => api.post(`/student-forum/posts/${postId}/comments`, data),
+  toggleLike: (postId: string) => api.post('/student-forum/posts/' + postId + '/likes'),
   getAIReport: () => api.get('/student-forum/ai-report'),
 }
 

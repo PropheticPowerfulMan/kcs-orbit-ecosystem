@@ -10,7 +10,7 @@ const fr = {
     portal: 'Portail',
     login: 'Se connecter',
     logout: 'Se déconnecter',
-    dashboard: 'Tableau de bord',
+    dashboard: 'Tableau de bord', incidentReport: 'Rapport dâincident',
     applyNow: 'Postuler maintenant',
     visitSchool: "Visiter l'école",
   },

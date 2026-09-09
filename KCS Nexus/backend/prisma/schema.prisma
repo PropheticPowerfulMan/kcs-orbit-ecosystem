@@ -307,6 +307,7 @@ model User {
   aiForumReports         AIForumReport[]        @relation("AIForumReportReviewer")
   studentForumPosts      StudentForumPost[]     @relation("StudentForumPostAuthor")
   studentForumComments   StudentForumComment[]  @relation("StudentForumCommentAuthor")
+  studentForumLikes      StudentForumLike[]     @relation("StudentForumLikeUser")
   aiStudentForumReports  AIStudentForumReport[] @relation("AIStudentForumReportReviewer")
   auditLogs              AuditLog[]             @relation("AuditActor")
   staffProfile           StaffProfile?
@@ -864,6 +865,7 @@ model StudentForumPost {
   updatedAt      DateTime              @updatedAt
   author         User                  @relation("StudentForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   comments       StudentForumComment[]
+  likes          StudentForumLike[]
 
   @@index([category])
   @@index([createdAt])
@@ -880,6 +882,19 @@ model StudentForumComment {
   author    User             @relation("StudentForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([postId])
+}
+
+model StudentForumLike {
+  id        String           @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime         @default(now())
+  post      StudentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User             @relation("StudentForumLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
 }
 
 model AIStudentForumReport {

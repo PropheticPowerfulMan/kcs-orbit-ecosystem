@@ -28,13 +28,14 @@ interface UIStore {
 }
 
 const initialTheme = getStoredTheme()
+const initialLanguage = getInitialLanguage()
 applyTheme(initialTheme)
 
 export const useUIStore = create<UIStore>()(
   persist(
     (set, get) => ({
       theme: initialTheme,
-      language: 'en',
+      language: initialLanguage,
       sidebarOpen: false,
       sidebarCollapsed: false,
       notifications: [],
@@ -113,6 +114,20 @@ function getStoredTheme(): Theme {
   } catch {
     return 'light'
   }
+}
+
+function getInitialLanguage(): Language {
+  if (typeof window === 'undefined') return 'en'
+  try {
+    const persisted = JSON.parse(window.localStorage.getItem('kcs-ui') ?? '{}')
+    const stored = persisted?.state?.language
+    if (stored === 'fr' || stored === 'en') return stored
+  } catch {
+    // Fall through to the device language when no valid preference is stored.
+  }
+
+  const systemLanguage = window.navigator.languages?.[0] || window.navigator.language
+  return systemLanguage?.toLowerCase().startsWith('fr') ? 'fr' : 'en'
 }
 
 function applyTheme(theme: Theme) {
