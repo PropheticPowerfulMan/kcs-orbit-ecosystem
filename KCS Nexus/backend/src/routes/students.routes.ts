@@ -11,6 +11,7 @@ import { sendSchoolMail } from '../utils/mail.js'
 import { sendSchoolSms } from '../utils/sms.js'
 import { getParentAcademicClearance } from './finance.routes.js'
 import { KCS_ACADEMIC_PASSING_SCORE_PERCENT, meetsKcsAcademicPassingScore } from '@ecosystem/shared-contracts'
+import { resolveStudentProfileId } from '../services/studentIdentity.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -113,6 +114,7 @@ async function getSharedDirectoryFromOrbit() {
         'x-api-key': env.KCS_ORBIT_API_KEY!,
         'x-app-slug': 'KCS_NEXUS',
       },
+      signal: AbortSignal.timeout(8_000),
     }
   )
 
@@ -501,18 +503,19 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
 }))
 
 studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const student = await prisma.studentProfile.findUnique({
-    where: { userId: req.user!.sub },
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  const student = studentProfileId ? await prisma.studentProfile.findUnique({
+    where: { id: studentProfileId },
     include: {
       user: true,
       grades: { include: { course: true }, orderBy: { createdAt: 'desc' } },
       submissions: { include: { assignment: { include: { course: true } } }, orderBy: { assignment: { dueDate: 'asc' } } },
       enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } },
-      attendanceRecords: { orderBy: { date: 'desc' }, take: 120 },
+      attendanceRecords: { orderBy: { date: 'desc' } },
       reportCards: { where: { publicationStatus: 'POSTED_TO_PORTAL' }, orderBy: { createdAt: 'desc' } },
       transcripts: { where: { status: { in: ['APPROVED', 'PUBLISHED', 'ISSUED'] } }, orderBy: { createdAt: 'desc' } },
     },
-  })
+  }) : null
   if (!student) {
     return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
   }
@@ -524,6 +527,20 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
   const completedAssignments = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
   const assignmentCompletion = student.submissions.length ? Number(((completedAssignments / student.submissions.length) * 100).toFixed(1)) : null
   const academicSummary = { average, attendanceRate, publishedGrades: student.grades.length, attendanceRecords: student.attendanceRecords.length, pendingAssignments, overdueAssignments, assignmentCompletion, enrolledCourses: student.enrollments.length }
+  const activityDates = [
+    ...student.grades.map((record) => record.createdAt),
+    ...student.attendanceRecords.map((record) => record.updatedAt),
+    ...student.submissions.map((record) => record.submittedAt ?? record.assignment.updatedAt),
+    ...student.reportCards.map((record) => record.updatedAt),
+    ...student.transcripts.map((record) => record.updatedAt),
+  ]
+  const dataIntegrity = {
+    identityVerified: true,
+    profileId: student.id,
+    source: 'KCS_NEXUS_INSTITUTIONAL_RECORDS',
+    lastAcademicUpdate: activityDates.length ? new Date(Math.max(...activityDates.map((date) => date.getTime()))).toISOString() : null,
+    officialOnly: true,
+  }
   const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({
     ...slot,
     course: { id: course.id, name: course.name, code: course.code, description: course.description },
@@ -532,6 +549,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
   return success(res, {
     profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.gpa, attendanceRate: student.attendanceRate, status: student.status, user: student.user },
     academicSummary,
+    dataIntegrity,
     grades: student.grades,
     assignments: student.submissions,
     timetable,
@@ -827,10 +845,10 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
 }))
 
 studentsRouter.get('/me/assignments', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub } })
-  if (!student) throw new ApiError(404, 'Student profile not found')
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  if (!studentProfileId) throw new ApiError(404, 'Student profile not found')
   const submissions = await prisma.assignmentSubmission.findMany({
-    where: { studentId: student.id },
+    where: { studentId: studentProfileId },
     include: { assignment: { include: { course: true } } },
     orderBy: { assignment: { dueDate: 'asc' } },
   })
@@ -838,10 +856,11 @@ studentsRouter.get('/me/assignments', authenticate, requireRoles('student'), asy
 }))
 
 studentsRouter.get('/me/timetable', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const student = await prisma.studentProfile.findUnique({
-    where: { userId: req.user!.sub },
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  const student = studentProfileId ? await prisma.studentProfile.findUnique({
+    where: { id: studentProfileId },
     include: { enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } } },
-  })
+  }) : null
   if (!student) throw new ApiError(404, 'Student profile not found')
   const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({ ...slot, course: { id: course.id, name: course.name, code: course.code, description: course.description }, teacher: `${course.teacher.user.firstName} ${course.teacher.user.lastName}` })))
   return success(res, timetable)
@@ -850,9 +869,9 @@ studentsRouter.get('/me/timetable', authenticate, requireRoles('student'), async
 studentsRouter.patch('/me/assignments/:submissionId/submit', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const submissionId = getRouteParam(req.params.submissionId)
   const payload = assignmentSubmissionSchema.parse(req.body)
-  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub } })
-  if (!student) throw new ApiError(404, 'Student profile not found')
-  const existing = await prisma.assignmentSubmission.findFirst({ where: { id: submissionId, studentId: student.id } })
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  if (!studentProfileId) throw new ApiError(404, 'Student profile not found')
+  const existing = await prisma.assignmentSubmission.findFirst({ where: { id: submissionId, studentId: studentProfileId } })
   if (!existing) throw new ApiError(404, 'Assignment submission not found')
   const updated = await prisma.assignmentSubmission.update({
     where: { id: submissionId },
@@ -871,7 +890,7 @@ async function assertStudentAccess(req: AuthenticatedRequest, studentId: string,
     select: { userId: true, parentLinks: { select: { parentId: true } } },
   })
   if (!student) throw new ApiError(404, 'Student not found')
-  if (role === 'student' && student.userId === req.user!.sub) return
+  if (role === 'student' && await resolveStudentProfileId(req.user!.sub) === studentId) return
   if (role === 'parent' && student.parentLinks.some((link) => link.parentId === req.user!.sub)) {
     if (options.requireFinancialClearance) {
       const clearance = await getParentAcademicClearance(req.user!.sub)

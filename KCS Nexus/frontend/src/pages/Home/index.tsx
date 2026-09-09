@@ -265,14 +265,13 @@ const HomePage = () => {
         <div className="container-custom">
           <AnimatedSection>
             <motion.div variants={fadeUp} className="text-center mb-16">
-              <span className="badge-blue text-sm mb-3">Academic Excellence</span>
+              <span className="badge-blue text-sm mb-3">{t('homePrograms.badge')}</span>
               <h2 className="text-4xl md:text-5xl font-bold font-display text-kcs-blue-900 dark:text-white mb-4">
-                World-Class Academic{' '}
-                <span className="text-gradient-blue">Programs</span>
+                {t('homePrograms.titlePrefix')}{' '}
+                <span className="text-gradient-blue">{t('homePrograms.titleHighlight')}</span>
               </h2>
               <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl mx-auto">
-                A comprehensive Christian education from K3 through Grade 12,
-                designed for academic growth, spiritual maturity, and strong moral character.
+                {t('homePrograms.description')}
               </p>
             </motion.div>
 

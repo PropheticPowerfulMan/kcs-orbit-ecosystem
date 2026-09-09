@@ -13,6 +13,7 @@ import { authenticate, requireRoles } from '../middleware/auth.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
+import { resolveStudentProfileId } from '../services/studentIdentity.js'
 import {
   buildDiagnosticAiRecommendation,
   buildDiagnosticReport,
@@ -182,10 +183,10 @@ diagnosticRouter.post('/diagnostic-tests/:id/assign', requireRoles('teacher', 's
 }))
 
 diagnosticRouter.get('/diagnostic-assignments/me', requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true } })
-  if (!student) return success(res, [], 'Academic profile synchronization pending')
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  if (!studentProfileId) return success(res, [], 'Academic profile synchronization pending')
   const assignments = await prisma.diagnosticAssignment.findMany({
-    where: { studentId: student.id },
+    where: { studentId: studentProfileId },
     include: {
       test: { include: { questions: { orderBy: { order: 'asc' } } } },
       submission: { select: { id: true, status: true, percentage: true, submittedAt: true, approvedAt: true, finalComment: true } },
@@ -215,16 +216,16 @@ diagnosticRouter.post('/diagnostic-submissions/start', requireRoles('student', '
   const payload = startSchema.parse(req.body)
   let studentId = payload.studentId
   if (req.user?.role === 'student') {
-    const student = await prisma.studentProfile.findUnique({ where: { userId: req.user.sub }, select: { id: true } })
-    if (!student) throw new ApiError(403, 'Academic profile is not linked')
+    const studentProfileId = await resolveStudentProfileId(req.user.sub)
+    if (!studentProfileId) throw new ApiError(403, 'Academic profile is not linked')
     if (!payload.assignmentId) throw new ApiError(403, 'An official diagnostic assignment is required')
     const assignment = await prisma.diagnosticAssignment.findFirst({
-      where: { id: payload.assignmentId, studentId: student.id, testId: payload.testId },
+      where: { id: payload.assignmentId, studentId: studentProfileId, testId: payload.testId },
       include: { submission: { select: { id: true } } },
     })
     if (!assignment) throw new ApiError(403, 'This diagnostic assignment does not belong to the current student')
     if (assignment.submission) throw new ApiError(409, 'This diagnostic assignment has already been started')
-    studentId = student.id
+    studentId = studentProfileId
   }
   const submission = await prisma.diagnosticSubmission.create({
     data: {

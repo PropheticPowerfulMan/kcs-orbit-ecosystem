@@ -55,6 +55,13 @@ const en = {
     },
   },
 
+  homePrograms: {
+    badge: 'Academic Excellence',
+    titlePrefix: 'World-Class Academic',
+    titleHighlight: 'Programs',
+    description: 'A comprehensive Christian education from K3 through Grade 12, designed for academic growth, spiritual maturity, and strong moral character.',
+  },
+
   // Academics
   academics: {
     title: 'Academic Programs',

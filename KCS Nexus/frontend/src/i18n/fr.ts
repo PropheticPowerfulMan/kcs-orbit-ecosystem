@@ -53,6 +53,13 @@ const fr = {
     },
   },
 
+  homePrograms: {
+    badge: 'Excellence académique',
+    titlePrefix: 'Des programmes académiques',
+    titleHighlight: "d’excellence",
+    description: 'Une éducation chrétienne complète, de K3 à la terminale, conçue pour favoriser la réussite scolaire, la maturité spirituelle et un caractère moral solide.',
+  },
+
   academics: {
     title: 'Programmes académiques',
     subtitle: 'Un programme international, un cœur africain',
