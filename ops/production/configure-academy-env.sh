@@ -21,6 +21,7 @@ set_key "$ETC_DIR/nexus-api.env" ACADEMY_INTEGRATION_KEY "$integration_key"
 cat > "$ETC_DIR/academy.env" <<EOF
 NODE_ENV=production
 ORBIT_API_URL=http://orbit_api:4500
+NEXUS_API_URL=http://nexus_api:5000
 ACADEMY_INTEGRATION_KEY=$integration_key
 ACADEMY_ORGANIZATION_ID=$organization_id
 NEXUS_ACADEMY_LAUNCH_URL=https://kinshasachristianschool.org/login

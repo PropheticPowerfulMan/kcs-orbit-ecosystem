@@ -9,7 +9,7 @@ const router = Router();
 const registryMutationScopes: Partial<Record<AppSlug, readonly string[]>> = {
   [AppSlug.SAVANEX]: ['family', 'parent', 'student', 'teacher'],
   [AppSlug.EDUPAY]: ['family', 'parent', 'student', 'teacher'],
-  [AppSlug.KCS_NEXUS]: ['family', 'parent', 'student'],
+  [AppSlug.KCS_NEXUS]: ['family', 'parent', 'student', 'teacher'],
 };
 
 function restrictRegistryEntityScope(req: Request, res: Response, next: NextFunction) {

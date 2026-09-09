@@ -34,26 +34,44 @@ router.post("/service-tickets", async (req, res, next) => {
   try {
     if (!requireAcademyService(req, res)) return;
     const parsed = z.object({ userId: z.string().min(1).max(128) }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ message: "Invalid Orbit user" });
-    const user = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
-    if (!user || !user.organizationId) return res.status(404).json({ message: "Orbit user not found" });
+    if (!parsed.success) return res.status(400).json({ message: "Invalid Orbit identity" });
+
+    let user = await prisma.user.findUnique({ where: { id: parsed.data.userId } });
+    if (!user) {
+      const [student, teacher] = await Promise.all([
+        prisma.student.findUnique({ where: { id: parsed.data.userId }, select: { id: true, firstName: true, middleName: true, lastName: true, email: true, organizationId: true } }),
+        prisma.teacher.findUnique({ where: { id: parsed.data.userId }, select: { id: true, fullName: true, email: true, organizationId: true } }),
+      ]);
+      const source = student
+        ? { fullName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(" "), email: student.email, organizationId: student.organizationId, role: "STUDENT" as const }
+        : teacher
+          ? { fullName: teacher.fullName, email: teacher.email, organizationId: teacher.organizationId, role: "TEACHER" as const }
+          : null;
+      if (!source) return res.status(404).json({ message: "Orbit identity not found" });
+      const email = source.email || `academy-${parsed.data.userId}@sso.invalid`;
+      const existing = await prisma.user.findUnique({ where: { email } });
+      user = existing || await prisma.user.create({
+        data: { fullName: source.fullName, email, passwordHash: "!academy-sso-only!", role: source.role, organizationId: source.organizationId },
+      });
+    }
+
+    if (!user.organizationId) return res.status(404).json({ message: "Orbit organization not found" });
     const role = user.role === "STUDENT" ? "STUDENT" : user.role === "TEACHER" ? "TEACHER" : user.role === "ADMIN" ? "ADMIN" : user.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : null;
     if (!role || !isAcademyRole(role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && user.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
     const ticket = randomBytes(32).toString("base64url"); const expiresAt = new Date(Date.now() + 60_000);
     await prisma.academyLaunchTicket.create({ data: { tokenHash: hashToken(ticket), userId: user.id, organizationId: user.organizationId, role, expiresAt } });
-    await prisma.auditLog.create({ data: { organizationId: user.organizationId, userId: user.id, action: "ACADEMY_SERVICE_TICKET_CREATED", entityType: "AcademySession", metadata: { role } } });
+    await prisma.auditLog.create({ data: { organizationId: user.organizationId, userId: user.id, action: "ACADEMY_SERVICE_TICKET_CREATED", entityType: "AcademySession", metadata: { role, sourceIdentityId: parsed.data.userId } } });
     return res.status(201).json({ ticket, expiresAt: expiresAt.toISOString() });
   } catch (error) { return next(error); }
 });
-
 router.post("/exchange", async (req, res, next) => {
   try {
     if (!requireAcademyService(req, res)) return;
     const parsed = z.object({ ticket: tokenSchema.shape.token }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid launch ticket" });
-    const record = await prisma.academyLaunchTicket.findUnique({ where: { tokenHash: hashToken(parsed.data.ticket) } });
+    const record = await prisma.academyLaunchTicket.findUnique({ where: { tokenHash: hashToken(parsed.data.ticket) }, include: { user: { select: { fullName: true } } } });
     if (!record || record.usedAt || record.expiresAt <= new Date()) return res.status(401).json({ message: "Launch ticket expired or already used" });
     if (!isAcademyRole(record.role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
@@ -63,7 +81,7 @@ router.post("/exchange", async (req, res, next) => {
     const sessionToken = randomBytes(32).toString("base64url"); const sessionExpiresAt = new Date(Date.now() + 8 * 60 * 60_000);
     await prisma.academySession.create({ data: { tokenHash: hashToken(sessionToken), userId: record.userId, organizationId: record.organizationId, role: record.role, expiresAt: sessionExpiresAt } });
     await prisma.auditLog.create({ data: { organizationId: record.organizationId, userId: record.userId, action: "ACADEMY_LOGIN", entityType: "AcademySession", metadata: { role: record.role } } });
-    return res.json({ sessionToken, expiresAt: sessionExpiresAt.toISOString(), identity: { userId: record.userId, orbitId: record.userId, organizationId: record.organizationId, role: record.role } });
+    return res.json({ sessionToken, expiresAt: sessionExpiresAt.toISOString(), identity: { userId: record.userId, orbitId: record.userId, organizationId: record.organizationId, role: record.role, displayName: record.user.fullName } });
   } catch (error) { return next(error); }
 });
 router.post("/validate", async (req, res, next) => {
@@ -71,13 +89,13 @@ router.post("/validate", async (req, res, next) => {
     if (!requireAcademyService(req, res)) return;
     const parsed = tokenSchema.safeParse(req.body);
     if (!parsed.success) return res.status(401).json({ message: "Invalid Academy session" });
-    const session = await prisma.academySession.findUnique({ where: { tokenHash: hashToken(parsed.data.token) } });
+    const session = await prisma.academySession.findUnique({ where: { tokenHash: hashToken(parsed.data.token) }, include: { user: { select: { fullName: true } } } });
     if (!session || session.revokedAt || session.expiresAt <= new Date()) return res.status(401).json({ message: "Academy session expired or revoked" });
     if (!isAcademyRole(session.role)) return res.status(403).json({ message: "Academy role denied" });
     const requiredOrganization = process.env.ACADEMY_ORGANIZATION_ID;
     if (requiredOrganization && session.organizationId !== requiredOrganization) return res.status(403).json({ message: "Academy organization denied" });
     await prisma.academySession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
-    return res.json({ userId: session.userId, orbitId: session.userId, organizationId: session.organizationId, role: session.role, expiresAt: session.expiresAt.toISOString() });
+    return res.json({ userId: session.userId, orbitId: session.userId, organizationId: session.organizationId, role: session.role, displayName: session.user.fullName, expiresAt: session.expiresAt.toISOString() });
   } catch (error) { return next(error); }
 });
 router.post("/revoke", async (req, res, next) => {
@@ -85,7 +103,7 @@ router.post("/revoke", async (req, res, next) => {
     if (!requireAcademyService(req, res)) return;
     const parsed = tokenSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid Academy session" });
-    const session = await prisma.academySession.findUnique({ where: { tokenHash: hashToken(parsed.data.token) } });
+    const session = await prisma.academySession.findUnique({ where: { tokenHash: hashToken(parsed.data.token) }, include: { user: { select: { fullName: true } } } });
     if (session && !session.revokedAt) {
       await prisma.academySession.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
       await prisma.auditLog.create({ data: { organizationId: session.organizationId, userId: session.userId, action: "ACADEMY_LOGOUT", entityType: "AcademySession", entityId: session.id } });

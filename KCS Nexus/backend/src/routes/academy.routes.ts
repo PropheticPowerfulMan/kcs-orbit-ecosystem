@@ -5,13 +5,32 @@ import { asyncHandler, ApiError, success } from "../utils/api.js";
 import { prisma } from "../config/prisma.js";
 
 export const academyRouter = Router();
-academyRouter.post("/launch", authenticate, requireRoles("teacher", "student"), asyncHandler(async (req: AuthenticatedRequest, res) => {
+academyRouter.post("/launch", authenticate, requireRoles("teacher", "student", "staff", "admin"), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!env.KCS_ORBIT_API_URL || !env.ACADEMY_INTEGRATION_KEY || !env.ACADEMY_PUBLIC_URL) throw new ApiError(503, "Academy integration is not configured");
-  const user = req.user!.sub === "configured-superadmin"
-    ? await prisma.user.findUnique({ where: { email: (process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase() }, select: { orbitUserId: true, orbitOrganizationId: true, role: true } })
-    : await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { orbitUserId: true, orbitOrganizationId: true, role: true } });
-  if (!user || !["STUDENT", "TEACHER", "ADMIN"].includes(user.role)) throw new ApiError(403, "Academy access is not enabled for this role");
-  if (!user.orbitUserId) throw new ApiError(409, "This account is not linked to a verified Orbit identity");
+  let user = req.user!.sub === "configured-superadmin"
+    ? await prisma.user.findUnique({ where: { email: (process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase() }, include: { teacherProfile: true, studentProfile: true } })
+    : await prisma.user.findUnique({ where: { id: req.user!.sub }, include: { teacherProfile: true, studentProfile: true } });
+  const isTeacher = user?.role === "TEACHER" || (user?.role === "STAFF" && Boolean(user.teacherProfile));
+  if (!user || (!isTeacher && !["STUDENT", "ADMIN"].includes(user.role))) throw new ApiError(403, "Academy access is not enabled for this role");
+
+  if (!user.orbitUserId) {
+    if (!env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) throw new ApiError(503, "Orbit identity synchronization is not configured");
+    const entityType = isTeacher ? "teacher" : user.role === "STUDENT" ? "student" : null;
+    if (!entityType) throw new ApiError(409, "This administrator account is not linked to a verified Orbit identity");
+    const body = entityType === "teacher"
+      ? { organizationId: env.KCS_ORBIT_ORGANIZATION_ID, firstName: user.firstName, middleName: user.middleName || undefined, lastName: user.lastName, email: user.email, phone: user.phone || undefined, accessCode: user.accessCode || undefined, subject: user.teacherProfile?.department || undefined }
+      : { organizationId: env.KCS_ORBIT_ORGANIZATION_ID, firstName: user.firstName, middleName: user.middleName || undefined, lastName: user.lastName, email: user.email, phone: user.phone || undefined, accessCode: user.accessCode || undefined, studentNumber: user.studentProfile?.studentNumber || undefined, gender: "UNSPECIFIED", className: [user.studentProfile?.grade, user.studentProfile?.section].filter(Boolean).join(" ") || undefined };
+    const synced = await fetch(env.KCS_ORBIT_API_URL.replace(/\/$/, "") + "/api/integration/registry/" + entityType, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": env.KCS_ORBIT_API_KEY, "x-app-slug": "KCS_NEXUS" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const syncPayload = await synced.json().catch(() => ({})) as { orbitId?: string; message?: string };
+    if (![201, 409].includes(synced.status) || !syncPayload.orbitId) throw new ApiError(synced.status, syncPayload.message || "Orbit identity synchronization failed");
+    user = await prisma.user.update({ where: { id: user.id }, data: { orbitUserId: syncPayload.orbitId, orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID, ...(isTeacher ? { role: "TEACHER" as const } : {}) }, include: { teacherProfile: true, studentProfile: true } });
+  }
+
   const response = await fetch(env.KCS_ORBIT_API_URL.replace(/\/$/, "") + "/api/academy/sso/service-tickets", {
     method: "POST", headers: { "content-type": "application/json", "x-api-key": env.ACADEMY_INTEGRATION_KEY },
     body: JSON.stringify({ userId: user.orbitUserId }), signal: AbortSignal.timeout(10_000)
