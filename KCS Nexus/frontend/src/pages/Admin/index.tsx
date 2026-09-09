@@ -10,7 +10,7 @@ import { useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowUpRight, BookOpen, Brain,
-  AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, GraduationCap, Mail, Megaphone, MessageSquare, Phone, Radio, Search, Shield, Trash2, UserPlus, Users, Video, X
+  AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Clock3, Download, FileSpreadsheet, FileText, GraduationCap, Mail, Megaphone, MessageSquare, Phone, Radio, RefreshCw, Search, Shield, Trash2, UserPlus, Users, Video, X
 } from 'lucide-react'
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer,
@@ -1475,6 +1475,7 @@ const AdminSectionView = ({
     const identifier = entityType === 'parent'
       ? entity.id
       : ((entity as AdminStudentRecord).studentNumber || entity.id)
+    setFamilyCredentials({ loading: true, reset: { entityType, identifier }, parent: null, students: [] })
     try {
       const response = await registryAPI.resetAccess(entityType, identifier)
       const credential = response.data?.data
@@ -1486,6 +1487,7 @@ const AdminSectionView = ({
       const message = extractStudentApiMessage(error, 'Impossible de réinitialiser cet accès.')
       if (entityType === 'parent') setParentNotice(message)
       else setStudentNotice(message)
+      setFamilyCredentials({ error: true, message, reset: { entityType, identifier }, parent: null, students: [] })
     }
   }
 
@@ -1920,9 +1922,11 @@ const AdminSectionView = ({
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
             <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl dark:border-emerald-900 dark:bg-kcs-blue-950">
               <button type="button" onClick={() => setFamilyCredentials(null)} className="float-right rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button>
-              <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.reset ? 'Réinitialisation terminée' : 'Nouvel enfant enregistré'}</p>
-              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Identifiants générés et propagés'}</h3>
+              <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Nouvel enfant enregistré'}</p>
+              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Identifiants générés et propagés'}</h3>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Conservez ces informations dans un canal sûr. Le mot de passe devra être changé à la première connexion.</p>
+              {familyCredentials.loading ? <div className="mt-6 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
+              {familyCredentials.error ? <p className="mt-6 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}
               <div className="mt-6 grid gap-3 md:grid-cols-2">
                 {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-2xl bg-emerald-50 p-5 text-kcs-blue-950 dark:bg-emerald-950/30 dark:text-white"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{credential.studentId ? `Élève ${credential.studentId}` : 'Parent'}</p><p className="mt-3 font-bold">{credential.displayName || credential.studentId}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d’accès : <strong>{credential.accessCode || 'Non défini'}</strong></p><p className="mt-2 text-sm">Mot de passe temporaire : <strong>{credential.temporaryPassword}</strong></p></article>)}
               </div>
@@ -2283,7 +2287,9 @@ const AdminSectionView = ({
           {familyCredentials && createPortal((
             <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
               <section className="relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-[0_30px_100px_rgba(0,0,0,0.45)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
+                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
+                {familyCredentials.loading ? <div className="mt-5 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
+                {familyCredentials.error ? <p className="mt-5 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-base font-bold text-kcs-blue-950 dark:text-white">{credential.displayName || credential.studentId || (index === 0 ? 'Parent' : 'Élève')}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
                 </div>
