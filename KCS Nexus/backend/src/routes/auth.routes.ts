@@ -213,7 +213,7 @@ async function authenticateWithSavanex(identifier: string, password: string) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': env.SAVANEX_AUTH_API_KEY! },
       body: JSON.stringify({ identifier, password }),
-      signal: AbortSignal.timeout(env.SAVANEX_TIMEOUT_SECONDS * 1000),
+      signal: AbortSignal.timeout(Math.min(env.SAVANEX_TIMEOUT_SECONDS * 1000, 8_000)),
     })
   } catch (error) {
     throw new ApiError(503, 'Shared authentication is temporarily unavailable')
@@ -281,7 +281,7 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier, password }),
-      signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
+      signal: AbortSignal.timeout(Math.min(env.EDUPAY_TIMEOUT_SECONDS * 1000, 8_000)),
     })
   } catch {
     throw new ApiError(503, 'EduPay shared authentication is temporarily unavailable')
@@ -324,23 +324,40 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
 }
 
 async function authenticateWithSharedProviders(identifier: string, password: string) {
-  const results = await Promise.allSettled([
-    authenticateWithSavanex(identifier, password),
-    authenticateWithEduPay(identifier, password),
-  ])
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.warn(index === 0 ? '[auth] SAVANEX shared authentication unavailable.' : '[auth] EduPay shared authentication unavailable.', result.reason)
-    }
+  type ProviderResult = { source: 'SAVANEX' | 'EduPay'; user: ExternalUserProfile | null; error?: unknown }
+  const attempts: Array<Promise<ProviderResult>> = [
+    authenticateWithSavanex(identifier, password)
+      .then((user) => ({ source: 'SAVANEX' as const, user }))
+      .catch((error) => ({ source: 'SAVANEX' as const, user: null, error })),
+    authenticateWithEduPay(identifier, password)
+      .then((user) => ({ source: 'EduPay' as const, user }))
+      .catch((error) => ({ source: 'EduPay' as const, user: null, error })),
+  ]
+
+  return new Promise<ExternalUserProfile | null>((resolve, reject) => {
+    let remaining = attempts.length
+    let unavailable = 0
+    let settled = false
+    attempts.forEach((attempt) => {
+      void attempt.then((result) => {
+        if (result.error) {
+          unavailable += 1
+          console.warn(`[auth] ${result.source} shared authentication unavailable.`, result.error)
+        }
+        if (result.user && !settled) {
+          settled = true
+          resolve(result.user)
+          return
+        }
+        remaining -= 1
+        if (remaining === 0 && !settled) {
+          settled = true
+          if (unavailable === attempts.length) reject(new ApiError(503, 'Le service authentification de l ecosysteme est temporairement indisponible.'))
+          else resolve(null)
+        }
+      })
+    })
   })
-  const savanexUser = results[0].status === 'fulfilled' ? results[0].value : null
-  const eduPayUser = results[1].status === 'fulfilled' ? results[1].value : null
-  if (savanexUser) return savanexUser
-  if (eduPayUser) return eduPayUser
-  if (results.every((result) => result.status === 'rejected')) {
-    throw new ApiError(503, 'Le service authentification de l ecosysteme est temporairement indisponible.')
-  }
-  return null
 }
 
 async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true): Promise<PrismaUser> {
@@ -561,12 +578,15 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
   const payload = loginSchema.parse(req.body)
+  const identifier = (payload.identifier ?? payload.email ?? '').trim()
   const configuredLogin = await loginConfiguredSuperAdmin(payload)
   if (configuredLogin) {
     return success(res, configuredLogin, 'Login successful')
   }
+  if (identifier.toLowerCase() === configuredSuperAdmin.email.toLowerCase()) {
+    throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
+  }
 
-  const identifier = (payload.identifier ?? payload.email ?? '').trim()
   const user = await findLocalUserByIdentifier(identifier)
   const isFederatedUser = Boolean(user?.permissions?.some((permission) => permission.startsWith('ecosystem:')))
   if (user?.passwordHash && !isFederatedUser) {
@@ -590,6 +610,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
 
       return success(res, { user: buildSafeUser(user, false), token, refreshToken }, 'Login successful')
     }
+    throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
   const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true'
