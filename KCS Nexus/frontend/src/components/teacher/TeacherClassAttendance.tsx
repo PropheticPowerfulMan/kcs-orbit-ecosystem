@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardCheck, Save } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ClipboardCheck, Save } from 'lucide-react'
 import { attendanceAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 
@@ -28,6 +28,8 @@ export default function TeacherClassAttendance() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [saveConfirmation, setSaveConfirmation] = useState<any>(null)
+  const [history, setHistory] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const load = async () => {
     setBusy(true)
@@ -47,6 +49,17 @@ export default function TeacherClassAttendance() {
   }
 
   useEffect(() => { void load() }, [date, selectedClass])
+  const loadHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const to = new Date().toISOString().slice(0, 10)
+      const fromDate = new Date()
+      fromDate.setDate(fromDate.getDate() - 29)
+      const response = await attendanceAPI.history(fromDate.toISOString().slice(0, 10), to)
+      setHistory(response.data.data?.registers ?? [])
+    } catch { setHistory([]) } finally { setHistoryLoading(false) }
+  }
+  useEffect(() => { void loadHistory() }, [])
 
   const counts = useMemo(() => statuses.map((status) => ({ status, count: data.students.filter((student: any) => (states[student.id] ?? 'PRESENT') === status).length })), [data.students, states])
 
@@ -63,6 +76,7 @@ export default function TeacherClassAttendance() {
       setSaveConfirmation({ ...saved, grade: data.class.grade, section: data.class.section })
       setNotice(tr(`Présence officielle enregistrée pour ${saved.saved} élève(s).`, `Official attendance saved for ${saved.saved} student(s).`))
       await load()
+      await loadHistory()
     } catch (error: any) {
       setNotice(error?.response?.data?.message ?? tr('Impossible d’enregistrer la présence.', 'Unable to save attendance.'))
     } finally { setBusy(false) }
@@ -95,6 +109,11 @@ export default function TeacherClassAttendance() {
         <tbody>{data.students.map((student: any) => <tr key={student.id} className="border-b dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white">{student.name}</td><td>{student.studentNumber}</td><td><select className={field} value={states[student.id] ?? 'PRESENT'} onChange={(event) => setStates((current) => ({ ...current, [student.id]: event.target.value as Status }))}>{statuses.map((status) => <option key={status} value={status}>{labels[status][language]}</option>)}</select></td><td><input className={field} value={notes[student.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [student.id]: event.target.value }))} placeholder={tr('Note vérifiée', 'Verified note')} /></td></tr>)}</tbody>
       </table></div></section>
     </>}
+    <section className={panel}>
+      <div className="flex items-center gap-2"><CalendarDays className="text-kcs-blue-600"/><div><h3 className="font-bold dark:text-white">{tr('Historique officiel des présences','Official attendance history')}</h3><p className="text-xs text-gray-500">{tr('Registres que vous avez enregistrés durant les 30 derniers jours.','Registers you saved during the last 30 days.')}</p></div></div>
+      {historyLoading?<p className="mt-4 text-sm text-gray-500">{tr('Chargement de l’historique…','Loading history…')}</p>:history.length===0?<p className="mt-4 text-sm text-gray-500">{tr('Aucune présence passée enregistrée.','No past attendance has been saved.')}</p>:<div className="mt-4 overflow-x-auto"><table className="min-w-[720px] w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-gray-400"><th className="pb-3">{tr('Date','Date')}</th><th>{tr('Classe','Class')}</th><th>{tr('Élèves','Students')}</th><th>{tr('Présents','Present')}</th><th>{tr('Absents','Absent')}</th><th>{tr('Retards','Late')}</th><th>{tr('Taux','Rate')}</th></tr></thead><tbody>{history.map((register:any)=><tr key={`${register.date}-${register.className}-${register.period}`} className="border-b dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white"><button type="button" className="text-kcs-blue-700 underline dark:text-sky-300" onClick={()=>setDate(register.date)}>{new Date(`${register.date}T00:00:00`).toLocaleDateString(language==='fr'?'fr-FR':'en-US')}</button></td><td>{register.className}</td><td>{register.summary.total}</td><td>{register.summary.present}</td><td>{register.summary.absent}</td><td>{register.summary.late}</td><td>{register.summary.attendanceRate??'—'}%</td></tr>)}</tbody></table></div>}
+      <p className="mt-3 text-xs text-gray-500">{tr('Cliquez sur une date pour rouvrir le registre détaillé et vérifier chaque élève.','Click a date to reopen the detailed register and verify every student.')}</p>
+    </section>
     {saveConfirmation && <div className="fixed inset-0 z-[150] flex items-center justify-center bg-kcs-blue-950/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="attendance-confirmation-title"><section className="w-full max-w-lg rounded-3xl border border-sky-200 bg-white p-6 text-center shadow-2xl dark:border-sky-700 dark:bg-kcs-blue-900 sm:p-8"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"><CheckCircle2 size={34} /></div><h3 id="attendance-confirmation-title" className="mt-4 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Présence journalière enregistrée','Daily attendance saved')}</h3><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{[saveConfirmation.grade, saveConfirmation.section].filter(Boolean).join(' ')} · {saveConfirmation.date} · {saveConfirmation.saved} {tr('élève(s)','student(s)')}</p><div className="mt-5 grid grid-cols-3 gap-2"><div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/30"><b className="block text-xl text-emerald-700 dark:text-emerald-300">{saveConfirmation.summary?.present ?? 0}</b><span className="text-xs text-gray-600 dark:text-gray-300">{tr('Présents','Present')}</span></div><div className="rounded-xl bg-rose-50 p-3 dark:bg-rose-950/30"><b className="block text-xl text-rose-700 dark:text-rose-300">{saveConfirmation.summary?.absent ?? 0}</b><span className="text-xs text-gray-600 dark:text-gray-300">{tr('Absents','Absent')}</span></div><div className="rounded-xl bg-amber-50 p-3 dark:bg-amber-950/30"><b className="block text-xl text-amber-700 dark:text-amber-300">{saveConfirmation.summary?.late ?? 0}</b><span className="text-xs text-gray-600 dark:text-gray-300">{tr('Retards','Late')}</span></div></div><p className="mt-4 rounded-xl bg-sky-50 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{tr('Taux de présence','Attendance rate')} : {saveConfirmation.summary?.attendanceRate ?? '—'}%</p><button type="button" onClick={() => setSaveConfirmation(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-5 py-3 font-bold text-white hover:bg-kcs-blue-800">{tr('Compris','Done')}</button></section></div>}
   </div>
 }

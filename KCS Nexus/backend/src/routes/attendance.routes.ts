@@ -173,13 +173,67 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
   await prisma.$transaction(async (tx) => {
     for (const entry of payload.entries) {
-      await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className, period: payload.period ?? null } })
-      await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period, status: entry.status, note: entry.note } })
+      await tx.attendanceRecord.upsert({
+        where: { studentId_date_className_period: { studentId: entry.studentId, date, className, period: payload.period ?? 'Daily' } },
+        create: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period ?? 'Daily', status: entry.status, note: entry.note },
+        update: { recordedById: recorderId, status: entry.status, note: entry.note },
+      })
     }
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
     await synchronizeStudentAcademicMetrics(tx, ids)
   })
   return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length, summary: summarize(payload.entries) }, 'Official class attendance saved')
+}))
+
+attendanceRouter.get('/history', requireRoles('admin', 'teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const today = normalizedDay(new Date())
+  const defaultFrom = new Date(today)
+  defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 29)
+  const from = normalizedDay(z.coerce.date().parse(String(req.query.from ?? defaultFrom.toISOString().slice(0, 10))))
+  const to = normalizedDay(z.coerce.date().parse(String(req.query.to ?? today.toISOString().slice(0, 10))))
+  if (from > to) throw new ApiError(400, 'The history start date must be before the end date')
+  const maximumTo = new Date(from)
+  maximumTo.setUTCDate(maximumTo.getUTCDate() + 366)
+  if (to > maximumTo) throw new ApiError(400, 'Attendance history is limited to 366 days per request')
+
+  const records = await prisma.attendanceRecord.findMany({
+    where: {
+      date: { gte: from, lte: to },
+      ...(req.user!.role === 'teacher' ? { recordedById: await resolveAttendanceRecorderId(req.user!.sub) } : {}),
+    },
+    include: {
+      student: { include: { user: { select: { firstName: true, middleName: true, lastName: true } } } },
+      recordedBy: { select: { firstName: true, middleName: true, lastName: true } },
+    },
+    orderBy: [{ date: 'desc' }, { className: 'asc' }, { student: { user: { lastName: 'asc' } } }],
+    take: 10000,
+  })
+  const grouped = new Map<string, { date: string; className: string; period: string | null; recordedBy: string | null; records: typeof records }>()
+  for (const record of records) {
+    const recordDate = record.date.toISOString().slice(0, 10)
+    const key = `${recordDate}::${record.className}::${record.period ?? ''}::${record.recordedById ?? ''}`
+    const recorderName = record.recordedBy
+      ? [record.recordedBy.lastName, record.recordedBy.middleName, record.recordedBy.firstName].filter(Boolean).join(' ')
+      : null
+    const group = grouped.get(key) ?? { date: recordDate, className: record.className, period: record.period, recordedBy: recorderName, records: [] }
+    group.records.push(record)
+    grouped.set(key, group)
+  }
+  const registers = [...grouped.values()].map((group) => ({
+    date: group.date,
+    className: group.className,
+    period: group.period,
+    recordedBy: group.recordedBy,
+    summary: summarize(group.records),
+    students: group.records.map((record) => ({
+      id: record.student.id,
+      studentNumber: record.student.studentNumber,
+      name: [record.student.user.lastName, record.student.user.middleName, record.student.user.firstName].filter(Boolean).join(' '),
+      status: record.status,
+      note: record.note,
+    })),
+  }))
+  return success(res, { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), registers }, 'Official attendance history loaded')
 }))
 
 attendanceRouter.get('/students/:studentId/analytics', requireRoles('admin'), asyncHandler(async (req, res) => {
@@ -246,8 +300,11 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
   await prisma.$transaction(async (tx) => {
     for (const entry of payload.entries) {
-      await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className, period: payload.period ?? null } })
-      await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period, status: entry.status, note: entry.note } })
+      await tx.attendanceRecord.upsert({
+        where: { studentId_date_className_period: { studentId: entry.studentId, date, className, period: payload.period ?? 'Daily' } },
+        create: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period ?? 'Daily', status: entry.status, note: entry.note },
+        update: { recordedById: recorderId, status: entry.status, note: entry.note },
+      })
     }
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'ADMIN_STUDENT_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
     await synchronizeStudentAcademicMetrics(tx, ids)
