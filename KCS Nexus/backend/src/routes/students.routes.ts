@@ -530,7 +530,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     teacher: [course.teacher.user.firstName, course.teacher.user.lastName].filter(Boolean).join(' '),
   })))
   return success(res, {
-    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: null, attendanceRate: null, status: student.status, user: student.user },
+    profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.gpa, attendanceRate: student.attendanceRate, status: student.status, user: student.user },
     academicSummary,
     grades: student.grades,
     assignments: student.submissions,

@@ -117,6 +117,12 @@ diagnosticRouter.get('/diagnostic-tests/:id', requireRoles('teacher', 'staff', '
     include: { questions: { orderBy: { order: 'asc' } }, assignments: true, submissions: true },
   })
   if (!test) throw new ApiError(404, 'Diagnostic test not found')
+  const currentUser = (req as AuthenticatedRequest).user
+  if (currentUser?.role === 'student') {
+    const assigned = await prisma.diagnosticAssignment.findFirst({ where: { testId: id, student: { userId: currentUser.sub } }, select: { id: true } })
+    if (!assigned) throw new ApiError(403, 'This diagnostic test is not assigned to the current student')
+    return success(res, { ...test, questions: test.questions.map(({ correctAnswer: _correctAnswer, explanation: _explanation, ...question }) => question), assignments: [], submissions: [] })
+  }
   return success(res, test)
 }))
 
@@ -175,6 +181,23 @@ diagnosticRouter.post('/diagnostic-tests/:id/assign', requireRoles('teacher', 's
   return success(res, assignment, 'Diagnostic test assigned', 201)
 }))
 
+diagnosticRouter.get('/diagnostic-assignments/me', requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true } })
+  if (!student) return success(res, [], 'Academic profile synchronization pending')
+  const assignments = await prisma.diagnosticAssignment.findMany({
+    where: { studentId: student.id },
+    include: {
+      test: { include: { questions: { orderBy: { order: 'asc' } } } },
+      submission: { select: { id: true, status: true, percentage: true, submittedAt: true, approvedAt: true, finalComment: true } },
+    },
+    orderBy: { assignedAt: 'desc' },
+  })
+  return success(res, assignments.map((assignment) => ({
+    ...assignment,
+    test: { ...assignment.test, questions: assignment.test.questions.map(({ correctAnswer: _correctAnswer, explanation: _explanation, ...question }) => question) },
+  })), 'Student diagnostic assignments loaded')
+}))
+
 diagnosticRouter.get('/diagnostic-submissions', requireRoles('teacher', 'staff', 'admin', 'student'), asyncHandler(async (req, res) => {
   const user = (req as AuthenticatedRequest).user
   const submissions = await prisma.diagnosticSubmission.findMany({
@@ -188,13 +211,26 @@ diagnosticRouter.get('/diagnostic-submissions', requireRoles('teacher', 'staff',
   return success(res, submissions)
 }))
 
-diagnosticRouter.post('/diagnostic-submissions/start', requireRoles('student', 'staff', 'admin'), asyncHandler(async (req, res) => {
+diagnosticRouter.post('/diagnostic-submissions/start', requireRoles('student', 'staff', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = startSchema.parse(req.body)
+  let studentId = payload.studentId
+  if (req.user?.role === 'student') {
+    const student = await prisma.studentProfile.findUnique({ where: { userId: req.user.sub }, select: { id: true } })
+    if (!student) throw new ApiError(403, 'Academic profile is not linked')
+    if (!payload.assignmentId) throw new ApiError(403, 'An official diagnostic assignment is required')
+    const assignment = await prisma.diagnosticAssignment.findFirst({
+      where: { id: payload.assignmentId, studentId: student.id, testId: payload.testId },
+      include: { submission: { select: { id: true } } },
+    })
+    if (!assignment) throw new ApiError(403, 'This diagnostic assignment does not belong to the current student')
+    if (assignment.submission) throw new ApiError(409, 'This diagnostic assignment has already been started')
+    studentId = student.id
+  }
   const submission = await prisma.diagnosticSubmission.create({
     data: {
       testId: payload.testId,
       assignmentId: payload.assignmentId,
-      studentId: payload.studentId,
+      studentId,
       enrollmentApplicationId: payload.enrollmentApplicationId,
       applicantName: payload.applicantName,
       status: DiagnosticTestStatus.IN_PROGRESS,
@@ -203,6 +239,12 @@ diagnosticRouter.post('/diagnostic-submissions/start', requireRoles('student', '
   })
   if (payload.assignmentId) {
     await prisma.diagnosticAssignment.update({ where: { id: payload.assignmentId }, data: { status: DiagnosticTestStatus.IN_PROGRESS } })
+  }
+  if (req.user?.role === 'student') {
+    return success(res, {
+      ...submission,
+      test: { ...submission.test, questions: submission.test.questions.map(({ correctAnswer: _correctAnswer, explanation: _explanation, ...question }) => question) },
+    }, 'Diagnostic submission started', 201)
   }
   return success(res, submission, 'Diagnostic submission started', 201)
 }))
@@ -215,6 +257,12 @@ diagnosticRouter.post('/diagnostic-submissions/:id/submit', requireRoles('studen
     include: { test: { include: { questions: { orderBy: { order: 'asc' } } } } },
   })
   if (!submission) throw new ApiError(404, 'Diagnostic submission not found')
+  const currentUser = (req as AuthenticatedRequest).user
+  if (currentUser?.role === 'student') {
+    const owner = await prisma.studentProfile.findFirst({ where: { id: submission.studentId ?? undefined, userId: currentUser.sub }, select: { id: true } })
+    if (!owner) throw new ApiError(403, 'This diagnostic submission does not belong to the current student')
+  }
+  if (submission.status !== DiagnosticTestStatus.IN_PROGRESS) throw new ApiError(409, 'This diagnostic submission is no longer open')
   const cohortRows = await prisma.diagnosticSubmission.findMany({
     where: { testId: submission.testId, status: { in: [DiagnosticTestStatus.AUTO_GRADED, DiagnosticTestStatus.PENDING_SUPER_ADMIN_APPROVAL, DiagnosticTestStatus.APPROVED] } },
     select: { percentage: true },
@@ -272,8 +320,17 @@ diagnosticRouter.post('/diagnostic-submissions/:id/submit', requireRoles('studen
   return success(res, updated, 'Diagnostic submission auto-graded')
 }))
 
-diagnosticRouter.get('/diagnostic-submissions/:id/report', requireRoles('teacher', 'staff', 'admin', 'student', 'parent'), asyncHandler(async (req, res) => {
-  const report = await buildDiagnosticReport(getRouteParam(req.params.id))
+diagnosticRouter.get('/diagnostic-submissions/:id/report', requireRoles('teacher', 'staff', 'admin', 'student', 'parent'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const submissionId = getRouteParam(req.params.id)
+  if (req.user?.role === 'student') {
+    const owned = await prisma.diagnosticSubmission.findFirst({ where: { id: submissionId, student: { userId: req.user.sub } }, select: { id: true } })
+    if (!owned) throw new ApiError(403, 'This diagnostic report does not belong to the current student')
+  }
+  if (req.user?.role === 'parent') {
+    const owned = await prisma.diagnosticSubmission.findFirst({ where: { id: submissionId, student: { parentLinks: { some: { parentId: req.user.sub } } } }, select: { id: true } })
+    if (!owned) throw new ApiError(403, 'This diagnostic report is not linked to this family')
+  }
+  const report = await buildDiagnosticReport(submissionId)
   if (!report) throw new ApiError(404, 'Diagnostic report not found')
   return success(res, report)
 }))
