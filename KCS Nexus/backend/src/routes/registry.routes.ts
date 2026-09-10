@@ -592,7 +592,17 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     })
     const resetData = await resetResponse.json().catch(() => ({})) as Record<string, unknown>
     if (resetResponse.ok) {
-      return success(res, resetData, entityType === 'student' ? 'Acces temporaire regenere dans SAVANEX et transmis par email' : 'Acces temporaire regenere dans SAVANEX et transmis par email/SMS')
+      const upstreamDelivery = Array.isArray(resetData.delivery) ? resetData.delivery as Array<Record<string, unknown>> : []
+      const emailDelivery = upstreamDelivery.find((item) => item.channel === 'email')
+      const emailSent = emailDelivery?.status === 'sent'
+      await prisma.correspondenceLog.create({ data: {
+        channel: 'EMAIL', status: emailSent ? 'SENT' : 'FAILED', subject: 'Nouveaux identifiants temporaires KCS',
+        body: 'Réinitialisation des accès institutionnels demandée depuis KCS Nexus.',
+        recipientName: entity.fullName, recipientEmail: entity.email, sentAt: emailSent ? new Date() : null,
+        failureReason: emailSent ? null : String(emailDelivery?.detail || emailDelivery?.status || 'UPSTREAM_EMAIL_NOT_CONFIRMED'),
+        metadata: { kind: 'RESET_ACCESS', entityType, provider: 'SAVANEX', identifier },
+      } })
+      return success(res, resetData, emailSent ? 'Acces temporaire regenere et courriel confirme par le serveur SMTP' : 'Acces temporaire regenere, mais le courriel n a pas ete confirme')
     }
     if (resetResponse.status !== 404) {
       throw new ApiError(resetResponse.status, String(resetData.detail || 'La réinitialisation SAVANEX a échoué.'))
@@ -633,11 +643,13 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
   const subject = 'Nouveaux identifiants temporaires KCS Nexus'
   const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a été réinitialisé par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accès: ${user.accessCode || 'non défini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
   const [emailDelivery, smsDelivery] = await Promise.all([
-    sendSchoolMail({ to: entity.email || user.email, subject, text: message, html: `<p>${message.replace(/\n/g, '<br>')}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+    sendSchoolMail({ to: user.email || entity.email, replyTo: env.SMTP_USER, subject, text: message, html: `<p>${message.replace(/\n/g, '<br>')}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
     entityType === 'student'
       ? Promise.resolve({ sent: false as const, reason: 'STUDENT_EMAIL_ONLY' as const })
       : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non défini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
   ])
+  const emailFailureDetail = emailDelivery.sent ? null : (('providerDetail' in emailDelivery ? emailDelivery.providerDetail : undefined) || emailDelivery.reason)
+  await prisma.correspondenceLog.create({ data: { channel: 'EMAIL', status: emailDelivery.sent ? 'SENT' : 'FAILED', subject, body: message, recipientName: entity.fullName || [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '), recipientEmail: user.email || entity.email, sentAt: emailDelivery.sent ? new Date() : null, failureReason: emailFailureDetail, metadata: { kind: 'RESET_ACCESS', entityType, recipientId: user.id } } })
   await prisma.notification.create({
     data: { userId: user.id, title: subject, message, type: 'MESSAGE', link: entityType === 'parent' ? '/parent/messages' : entityType === 'student' ? '/student/messages' : '/teacher/messages' },
   })
@@ -647,7 +659,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     temporaryPassword,
     mustChangePassword: true,
     delivery: [
-      { channel: 'email', status: emailDelivery.sent ? 'sent' : 'failed', detail: emailDelivery.sent ? entity.email || user.email : emailDelivery.reason },
+      { channel: 'email', status: emailDelivery.sent ? 'sent' : 'failed', detail: emailDelivery.sent ? user.email || entity.email : emailFailureDetail },
       { channel: 'sms', status: smsDelivery.sent ? 'sent' : 'failed', detail: smsDelivery.sent ? entity.phone : smsDelivery.reason },
     ],
   }, 'Acces temporaire regenere et transmis')

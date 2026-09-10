@@ -83,12 +83,38 @@ messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, r
 
 messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!canManageParentCommunications(req)) throw new ApiError(403, 'Super Administrator or Teacher permissions required')
-  const parents = await prisma.user.findMany({
-    where: { role: 'PARENT', id: { not: req.user!.sub } },
-    select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true },
-    orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+  const actorId = await resolveMessageActorId(req)
+  const superAdmin = req.user!.sub === 'configured-superadmin'
+  const recipients = await prisma.user.findMany({
+    where: { id: { not: actorId }, ...(superAdmin ? {} : { role: 'PARENT' as const }) },
+    select: {
+      id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true, role: true,
+      studentProfile: { select: { grade: true, section: true } },
+      parentLinks: { select: { student: { select: { grade: true, section: true, studentNumber: true } } } },
+      teacherProfile: { select: { employeeNumber: true, department: true, courses: { select: { grade: true } } } },
+      staffProfile: { select: { employeeNumber: true, department: true, function: true } },
+    },
+    orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }],
   })
-  return success(res, parents)
+  return success(res, recipients.map((person) => {
+    const gradeValues = [
+      person.studentProfile?.grade,
+      ...person.parentLinks.map((link) => link.student.grade),
+      ...(person.teacherProfile?.courses.map((course) => course.grade) ?? []),
+    ].filter((value): value is string => Boolean(value))
+    const sectionValues = [
+      person.studentProfile ? [person.studentProfile.grade, person.studentProfile.section].filter(Boolean).join(' ') : null,
+      ...person.parentLinks.map((link) => [link.student.grade, link.student.section].filter(Boolean).join(' ')),
+    ].filter((value): value is string => Boolean(value))
+    return {
+      id: person.id, firstName: person.firstName, middleName: person.middleName, lastName: person.lastName,
+      email: person.email, phone: person.phone, accessCode: person.accessCode, role: person.role,
+      grades: [...new Set(gradeValues)], classes: [...new Set(sectionValues)],
+      department: person.teacherProfile?.department || person.staffProfile?.department || null,
+      function: person.staffProfile?.function || null,
+      employeeNumber: person.teacherProfile?.employeeNumber || person.staffProfile?.employeeNumber || null,
+    }
+  }), superAdmin ? 'All communication recipients loaded' : 'Parent communication recipients loaded')
 }))
 
 messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -97,17 +123,17 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   const senderId = await resolveMessageActorId(req)
   const recipientIds = [...new Set(data.recipientIds)]
   const parents = await prisma.user.findMany({
-    where: { id: { in: recipientIds }, role: 'PARENT' },
-    select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true },
+    where: { id: { in: recipientIds }, ...(req.user!.sub === 'configured-superadmin' ? {} : { role: 'PARENT' as const }) },
+    select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, role: true },
   })
-  if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid parent accounts.')
+  if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid communication accounts.')
 
   const createdMessages = await prisma.$transaction(async (tx) => {
     const rows = []
     for (const parent of parents) {
       rows.push(await tx.internalMessage.create({ data: { senderId, recipientId: parent.id, subject: data.subject, body: data.body, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, select: { id: true, recipientId: true } }))
     }
-    await tx.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink('PARENT') })) })
+    await tx.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(parent.role) })) })
     return rows
   })
   const messageIdByRecipient = new Map(createdMessages.map((message) => [message.recipientId, message.id]))

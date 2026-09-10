@@ -6,7 +6,7 @@ import { messagesAPI } from '../../services/api'
 const fieldClass = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-45'
 
-const displayName = (parent: any) => [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') || 'Parent'
+const displayName = (parent: any) => [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') || 'Destinataire'
 const messageRecipient = (message: any) => {
   const person = message.sender?.role === 'PARENT' ? message.sender : message.recipient
   return person
@@ -16,21 +16,21 @@ const messageRecipient = (message: any) => {
 
 const copy = {
   fr: {
-    loadFailed: 'Chargement impossible.', selectParent: 'Sélectionnez au moins un parent.', selectChannel: 'Sélectionnez Email ou SMS.', enterMessage: 'Saisissez un sujet et un message.',
-    confirmSend: (count: number) => 'Confirmer l’envoi à ' + count + ' parent(s) ?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message enregistré pour ' + count + ' parent(s). Emails placés dans la file sécurisée : ' + es + ', erreurs immédiates : ' + ef + '. SMS envoyés : ' + ss + ', échecs : ' + sf + '.',
+    loadFailed: 'Chargement impossible.', selectParent: 'Sélectionnez au moins un destinataire.', selectChannel: 'Sélectionnez Email ou SMS.', enterMessage: 'Saisissez un sujet et un message.',
+    confirmSend: (count: number) => 'Confirmer l’envoi à ' + count + ' destinataire(s) ?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message enregistré pour ' + count + ' destinataire(s). Emails placés dans la file sécurisée : ' + es + ', erreurs immédiates : ' + ef + '. SMS envoyés : ' + ss + ', échecs : ' + sf + '.',
     sendFailed: 'Échec de l’envoi.', confirmDelete: (count: number) => 'Supprimer définitivement ' + count + ' ancien(s) message(s) ?', deleted: (count: number) => count + ' message(s) supprimé(s).', deleteFailed: 'Suppression impossible.',
-    recipients: 'Destinataires', families: 'Parents et familles', selected: 'sélectionné(s)', parentSearch: 'Nom complet, email, téléphone ou code d’accès...', deselect: 'Désélectionner', selectResults: 'Sélectionner les résultats', clear: 'Effacer', noEmail: 'Email absent', noPhone: 'Téléphone absent',
-    official: 'Communication officielle', channels: 'Email, SMS et boîte Nexus', subject: 'Sujet', exactMessage: 'Message exact à envoyer...', copyStored: 'Sans préfixe applicatif ; une copie est conservée dans Nexus.', sending: 'Envoi...', sendTo: (count: number) => 'Envoyer à ' + count + ' parent(s)',
+    recipients: 'Destinataires', families: 'Toutes les entités de l’écosystème', selected: 'sélectionné(s)', parentSearch: 'Nom, email, téléphone, identifiant, classe ou département...', deselect: 'Désélectionner', selectResults: 'Sélectionner les résultats', clear: 'Effacer', noEmail: 'Email absent', noPhone: 'Téléphone absent',
+    official: 'Communication officielle', channels: 'Email, SMS et boîte Nexus', subject: 'Sujet', exactMessage: 'Message exact à envoyer...', copyStored: 'Sans préfixe applicatif ; une copie est conservée dans Nexus.', sending: 'Envoi...', sendTo: (count: number) => 'Envoyer à ' + count + ' destinataire(s)',
     history: 'Historique', oldMessages: 'Anciens messages envoyés', historySearch: 'Parent, sujet, contenu, email, téléphone ou date...', startDate: 'Date de début', endDate: 'Date de fin', results: 'résultat(s)', deleting: 'Suppression...', deleteSelection: 'Supprimer la sélection',
     choice: 'Choix', parent: 'Parent', date: 'Date', action: 'Action', view: 'Voir', sentMessage: 'Message envoyé', close: 'Fermer', nexus: 'Nexus', sent: 'Envoyé', failed: 'Échec', logged: 'Enregistré', deliveryTitle: 'Résultat de l’envoi', deliveryIntro: 'Résultat technique reçu pour chaque destinataire.', providerAccepted: 'Accepté par le fournisseur', notSent: 'Non envoyé', finalPending: 'Réception finale à confirmer', deliveryNote: 'Un statut accepté confirme la prise en charge par le serveur email ou l’opérateur SMS. La réception finale dans la boîte mail ou sur le téléphone dépend ensuite du fournisseur.', emailLabel: 'E-mail', smsLabel: 'SMS',
     attachDocument: 'Joindre un document', fileTooLarge: 'Le document ne doit pas dépasser 10 Mo.', removeAttachment: 'Retirer la pièce jointe', download: 'Télécharger'
   },
   en: {
-    loadFailed: 'Unable to load communications.', selectParent: 'Select at least one parent.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
-    confirmSend: (count: number) => 'Confirm delivery to ' + count + ' parent(s)?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message recorded for ' + count + ' parent(s). Emails placed in the secure queue: ' + es + ', immediate errors: ' + ef + '. SMS sent: ' + ss + ', failed: ' + sf + '.',
+    loadFailed: 'Unable to load communications.', selectParent: 'Select at least one recipient.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
+    confirmSend: (count: number) => 'Confirm delivery to ' + count + ' recipient(s)?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message recorded for ' + count + ' recipient(s). Emails placed in the secure queue: ' + es + ', immediate errors: ' + ef + '. SMS sent: ' + ss + ', failed: ' + sf + '.',
     sendFailed: 'Delivery failed.', confirmDelete: (count: number) => 'Permanently delete ' + count + ' old message(s)?', deleted: (count: number) => count + ' message(s) deleted.', deleteFailed: 'Unable to delete messages.',
-    recipients: 'Recipients', families: 'Parents and families', selected: 'selected', parentSearch: 'Full name, email, phone number or access code...', deselect: 'Deselect', selectResults: 'Select results', clear: 'Clear', noEmail: 'No email', noPhone: 'No phone number',
-    official: 'Official communication', channels: 'Email, SMS and Nexus inbox', subject: 'Subject', exactMessage: 'Exact message to send...', copyStored: 'No application prefix; a copy is retained in Nexus.', sending: 'Sending...', sendTo: (count: number) => 'Send to ' + count + ' parent(s)',
+    recipients: 'Recipients', families: 'All ecosystem entities', selected: 'selected', parentSearch: 'Name, email, phone, ID, class or department...', deselect: 'Deselect', selectResults: 'Select results', clear: 'Clear', noEmail: 'No email', noPhone: 'No phone number',
+    official: 'Official communication', channels: 'Email, SMS and Nexus inbox', subject: 'Subject', exactMessage: 'Exact message to send...', copyStored: 'No application prefix; a copy is retained in Nexus.', sending: 'Sending...', sendTo: (count: number) => 'Send to ' + count + ' recipient(s)',
     history: 'History', oldMessages: 'Previously sent messages', historySearch: 'Parent, subject, content, email, phone number or date...', startDate: 'Start date', endDate: 'End date', results: 'result(s)', deleting: 'Deleting...', deleteSelection: 'Delete selection',
     choice: 'Select', parent: 'Parent', date: 'Date', action: 'Action', view: 'View', sentMessage: 'Sent message', close: 'Close', nexus: 'Nexus', sent: 'Sent', failed: 'Failed', logged: 'Recorded', deliveryTitle: 'Delivery result', deliveryIntro: 'Technical result received for each recipient.', providerAccepted: 'Accepted by provider', notSent: 'Not sent', finalPending: 'Final receipt pending confirmation', deliveryNote: 'An accepted status confirms processing by the email server or SMS operator. Final arrival in the inbox or on the phone then depends on the provider.', emailLabel: 'Email', smsLabel: 'SMS',
     attachDocument: 'Attach a document', fileTooLarge: 'The document must not exceed 10 MB.', removeAttachment: 'Remove attachment', download: 'Download'
@@ -44,6 +44,10 @@ export default function ParentCommunicationPanel() {
   const [parents, setParents] = useState<any[]>([])
   const [selectedParents, setSelectedParents] = useState<string[]>([])
   const [parentQuery, setParentQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState('ALL')
+  const [gradeFilter, setGradeFilter] = useState('ALL')
+  const [classFilter, setClassFilter] = useState('ALL')
+  const [contactFilter, setContactFilter] = useState('ALL')
   const [channels, setChannels] = useState<Array<'email' | 'sms'>>(['email', 'sms'])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -72,13 +76,20 @@ export default function ParentCommunicationPanel() {
     void load().catch(() => setNotice(c.loadFailed))
   }, [])
 
+  const gradeOptions = useMemo(() => [...new Set(parents.flatMap((person) => person.grades ?? []))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), [parents])
+  const classOptions = useMemo(() => [...new Set(parents.flatMap((person) => person.classes ?? []))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), [parents])
+
   const parentRows = useMemo(() => {
     const tokens = parentQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
     return parents.filter((parent) => {
-      const haystack = [displayName(parent), parent.email, parent.phone, parent.accessCode].filter(Boolean).join(' ').toLowerCase()
-      return tokens.every((token) => haystack.includes(token))
+      const haystack = [displayName(parent), parent.email, parent.phone, parent.accessCode, parent.role, parent.department, parent.function, ...(parent.grades ?? []), ...(parent.classes ?? [])].filter(Boolean).join(' ').toLowerCase()
+      return (roleFilter === 'ALL' || parent.role === roleFilter)
+        && (gradeFilter === 'ALL' || (parent.grades ?? []).includes(gradeFilter))
+        && (classFilter === 'ALL' || (parent.classes ?? []).includes(classFilter))
+        && (contactFilter === 'ALL' || (contactFilter === 'EMAIL' ? Boolean(parent.email) : contactFilter === 'SMS' ? Boolean(parent.phone) : Boolean(parent.email && parent.phone)))
+        && tokens.every((token) => haystack.includes(token))
     })
-  }, [parentQuery, parents])
+  }, [parentQuery, parents, roleFilter, gradeFilter, classFilter, contactFilter])
 
   const historyRows = useMemo(() => {
     const tokens = historyQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -163,7 +174,7 @@ export default function ParentCommunicationPanel() {
             <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.recipients}</p><h2 className="text-2xl font-bold dark:text-white">{c.families}</h2></div>
             <b className="text-kcs-blue-700 dark:text-white">{selectedParents.length} {c.selected}</b>
           </div>
-          <input className={fieldClass + ' mt-4'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><select className={fieldClass} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={classFilter} onChange={(event) => setClassFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les classes' : 'All classes'}</option>{classOptions.map((item) => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
           <div className="mt-3 flex flex-wrap gap-2">
             <button className={primaryButton} onClick={() => setSelectedParents((current) => allParentsSelected ? current.filter((id) => !parentRows.some((parent) => parent.id === id)) : Array.from(new Set([...current, ...parentRows.map((parent) => parent.id)])))}>
               {allParentsSelected ? <CheckSquare size={17} /> : <Square size={17} />} {allParentsSelected ? c.deselect : c.selectResults}
@@ -176,7 +187,7 @@ export default function ParentCommunicationPanel() {
               return <button key={parent.id} onClick={() => toggle(setSelectedParents, parent.id)} className={`w-full rounded-xl border p-4 text-left transition ${selected ? 'border-kcs-gold-400 bg-kcs-gold-50 shadow-[inset_4px_0_0_#eab308] dark:bg-kcs-gold-900/20' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
                 <b className="flex items-center gap-2 dark:text-white">{selected ? <CheckSquare size={18} /> : <Square size={18} />}{displayName(parent)}</b>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">{parent.email || c.noEmail} · {parent.phone || c.noPhone}</p>
-                <p className="text-xs text-kcs-blue-600 dark:text-kcs-blue-300">{parent.accessCode}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-kcs-blue-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white">{parent.role}</span>{(parent.grades ?? []).map((grade: string) => <span key={grade} className="rounded-full bg-kcs-gold-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-900">{grade}</span>)}{parent.department ? <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700">{parent.department}</span> : null}</div><p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-300">{parent.accessCode}</p>
               </button>
             })}
           </div>
