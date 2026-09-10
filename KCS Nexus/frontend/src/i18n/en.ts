@@ -11,8 +11,6 @@ const en = {
     portal: 'Portal',
     login: 'Sign In',
     logout: 'Sign Out',
-    dashboard: 'Dashboard',
-    incidentReport: 'Incident Report',
     applyNow: 'Apply Now',
     visitSchool: 'Visit School',
   },
@@ -199,9 +197,12 @@ const en = {
     parent: 'Parent',
   },
 
+
   portalNav: {
     employees: 'Employees',
     dashboard: 'Dashboard',
+    incidentReport: 'Incident Report',
+    electives: 'Elective Selection',
     myGrades: 'My Grades',
     assignments: 'Assignments',
     timetable: 'Timetable',

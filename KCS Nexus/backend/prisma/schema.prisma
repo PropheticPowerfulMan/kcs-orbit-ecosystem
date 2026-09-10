@@ -327,6 +327,9 @@ model User {
   twoFactorEnabled       Boolean                @default(false)
   twoFactorSecret        String?
   twoFactorVerifiedAt    DateTime?
+  electiveCyclesCreated  ElectiveCycle[] @relation("ElectiveCycleCreator")
+  electiveOfferingsTaught ElectiveOffering[] @relation("ElectiveOfferingTeacher")
+  electiveOfferingsProposed ElectiveOffering[] @relation("ElectiveOfferingProposer")
 }
 
 model TeacherWorkspace {
@@ -415,6 +418,8 @@ model StudentProfile {
   diagnosticAssignments DiagnosticAssignment[]
   diagnosticSubmissions DiagnosticSubmission[]
   disciplineCases       DisciplineCase[]
+  electiveChoices        ElectiveChoice[]
+  electiveAllocations    ElectiveAllocation[]
 }
 
 model ParentStudentLink {
@@ -1220,4 +1225,85 @@ model IncidentReport {
   updatedAt DateTime @updatedAt
   @@index([authorId, createdAt])
   @@index([status, createdAt])
+}
+
+model ElectiveCycle {
+  id                String               @id @default(cuid())
+  title             String
+  academicYear      String
+  semester          Int
+  eligibleGrades    String[]
+  choicesPerStudent Int                  @default(6)
+  defaultCapacity   Int                  @default(24)
+  status            String               @default("DRAFT")
+  opensAt           DateTime?
+  closesAt          DateTime?
+  publishedAt       DateTime?
+  createdById       String?
+  createdBy         User?                @relation("ElectiveCycleCreator", fields: [createdById], references: [id])
+  offerings         ElectiveOffering[]
+  choices           ElectiveChoice[]
+  allocations       ElectiveAllocation[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([academicYear, semester])
+  @@index([status, academicYear])
+}
+
+model ElectiveOffering {
+  id             String               @id @default(cuid())
+  cycleId        String
+  code           String
+  name           String
+  description    String
+  eligibleGrades String[]
+  capacity       Int                  @default(24)
+  teacherUserId  String?
+  proposedById   String?
+  status         String               @default("APPROVED")
+  cycle          ElectiveCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  teacher        User?                @relation("ElectiveOfferingTeacher", fields: [teacherUserId], references: [id])
+  proposedBy     User?                @relation("ElectiveOfferingProposer", fields: [proposedById], references: [id])
+  choices        ElectiveChoice[]
+  allocations    ElectiveAllocation[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([cycleId, code])
+  @@index([cycleId, status])
+  @@index([teacherUserId])
+}
+
+model ElectiveChoice {
+  id               String           @id @default(cuid())
+  cycleId          String
+  studentProfileId String
+  offeringId       String
+  rank             Int
+  submittedAt      DateTime         @default(now())
+  cycle            ElectiveCycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  student          StudentProfile   @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  offering         ElectiveOffering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, studentProfileId, rank])
+  @@unique([cycleId, studentProfileId, offeringId])
+  @@index([offeringId, rank])
+}
+
+model ElectiveAllocation {
+  id               String           @id @default(cuid())
+  cycleId          String
+  studentProfileId String
+  offeringId       String
+  preferenceRank   Int
+  published        Boolean          @default(false)
+  cycle            ElectiveCycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  student          StudentProfile   @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  offering         ElectiveOffering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+
+  @@unique([cycleId, studentProfileId, offeringId])
+  @@index([cycleId, studentProfileId])
+  @@index([offeringId])
 }

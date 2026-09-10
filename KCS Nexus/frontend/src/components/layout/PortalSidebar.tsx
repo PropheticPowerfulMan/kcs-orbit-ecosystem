@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
   GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe
+  Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { academyAPI } from '@/services/api'
@@ -24,10 +24,10 @@ interface NavItem {
 const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
-    { to: dashboardPath, label: t('portalNav.dashboard'), icon: LayoutDashboard },
-    { to: '/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
+    { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
+    { to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList },
+    ...(["student", "teacher", "admin"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
   ]
-
   switch (role) {
     case 'student':
       return [

@@ -383,6 +383,20 @@ export const incidentReportsAPI = {
   verify: (reference: string) => api.get(`/incident-reports/verify/${encodeURIComponent(reference)}`),
 }
 
+export const electivesAPI = {
+  list: () => api.get('/electives'),
+  teachers: () => api.get('/electives/teachers'),
+  createCycle: (data: object) => api.post('/electives', data),
+  setStatus: (id: string, status: string) => api.patch('/electives/' + id + '/status', { status }),
+  addOffering: (id: string, data: object) => api.post('/electives/' + id + '/offerings', data),
+  updateOffering: (id: string, data: object) => api.patch('/electives/offerings/' + id, data),
+  removeOffering: (id: string) => api.delete('/electives/offerings/' + id),
+  submitChoices: (id: string, offeringIds: string[]) => api.put('/electives/' + id + '/choices', { offeringIds }),
+  allocate: (id: string) => api.post('/electives/' + id + '/allocate'),
+  publish: (id: string) => api.post('/electives/' + id + '/publish'),
+  report: (id: string) => api.get('/electives/' + id + '/report'),
+}
+
 export const disciplineAPI = {
   list: () => api.get('/school-management/discipline-cases'),
   create: (data: object) => api.post('/school-management/discipline-cases', data),
