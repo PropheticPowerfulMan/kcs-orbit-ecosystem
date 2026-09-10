@@ -92,6 +92,7 @@ class UserMeSerializer(serializers.ModelSerializer):
                   'photo_data', 'photo_source', 'has_photo',
                   'left_fingerprint_data', 'right_fingerprint_data', 'has_biometrics',
                   'language', 'dark_mode', 'must_change_password',
+                  'family_contacts',
                   'password_generated_by_system']
         read_only_fields = ['id', 'username', 'role', 'email']
 
@@ -114,6 +115,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'email', 'first_name', 'middle_name', 'last_name',
                   'password', 'role', 'phone', 'address', 'kcs_card_id', 'access_code', 'photo_data',
                   'photo_source', 'left_fingerprint_data', 'right_fingerprint_data',
+                  'family_contacts',
                   'language', 'must_change_password', 'password_generated_by_system',
                   'generated_password']
         extra_kwargs = {
@@ -183,6 +185,7 @@ class UserListSerializer(serializers.ModelSerializer):
             'kcs_card_id', 'access_code', 'photo_data', 'photo_source',
             'left_fingerprint_data', 'right_fingerprint_data',
             'has_photo', 'has_biometrics', 'is_active',
+            'family_contacts',
             'must_change_password', 'password_generated_by_system',
         ]
 

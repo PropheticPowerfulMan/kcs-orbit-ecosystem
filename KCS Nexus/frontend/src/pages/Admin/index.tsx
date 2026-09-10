@@ -104,6 +104,20 @@ type AdminStudentRecord = {
   photoData?: string | null
 }
 
+type FamilyContactDraft = {
+  kind: 'MOTHER' | 'RELATIVE' | 'HOUSEHOLD_AGENT'
+  firstName: string
+  middleName: string
+  lastName: string
+  relationship: string
+  role: string
+  email: string
+  phone: string
+  physicalAddress: string
+  authorizedPickup: boolean
+  emergencyContact: boolean
+}
+
 type AdminParentRecord = {
   id: string
   displayId?: string
@@ -118,6 +132,7 @@ type AdminParentRecord = {
   status: string
   identifierType: 'orbitId' | 'externalId'
   photoData?: string | null
+  familyContacts: FamilyContactDraft[]
 }
 
 type SharedDirectoryParent = {
@@ -130,6 +145,7 @@ type SharedDirectoryParent = {
   photoData?: string | null
   studentIds?: string[]
   externalIds?: Array<{ appSlug?: string; externalId?: string }>
+  familyContacts?: FamilyContactDraft[]
 }
 
 type SharedDirectoryTeacher = {
@@ -181,6 +197,7 @@ type AdminParentEditForm = {
   phone: string
   physicalAddress: string
   photoData: string
+  familyContacts: FamilyContactDraft[]
 }
 
 type AdminStudentDraft = {
@@ -259,7 +276,46 @@ const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParen
   phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
   physicalAddress: parent?.physicalAddress ?? '',
   photoData: parent?.photoData ?? '',
+  familyContacts: parent?.familyContacts ?? [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')],
 })
+
+const createFamilyContactDraft = (kind: FamilyContactDraft['kind']): FamilyContactDraft => ({
+  kind, firstName: '', middleName: '', lastName: '',
+  relationship: kind === 'MOTHER' ? 'Mere' : '',
+  role: kind === 'HOUSEHOLD_AGENT' ? 'Nounou' : '',
+  email: '', phone: '', physicalAddress: '',
+  authorizedPickup: false, emergencyContact: kind === 'MOTHER',
+})
+
+const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactDraft[]; onChange: (contacts: FamilyContactDraft[]) => void }) => {
+  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: 'Mere de eleve', RELATIVE: 'Membre de la famille', HOUSEHOLD_AGENT: 'Agent de la famille' }
+  const update = (index: number, values: Partial<FamilyContactDraft>) => onChange(contacts.map((contact, itemIndex) => itemIndex === index ? { ...contact, ...values } : contact))
+  return (
+    <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Contacts familiaux complementaires</p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Renseignez au moins un email ou un telephone pour chaque personne ajoutee.</p>
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        {contacts.map((contact, index) => (
+          <article key={contact.kind} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900">
+            <p className="mb-3 text-sm font-bold text-kcs-blue-900 dark:text-white">{labels[contact.kind]}</p>
+            <div className="grid gap-3">
+              <input value={contact.lastName} onChange={(event) => update(index, { lastName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom" />
+              <input value={contact.middleName} onChange={(event) => update(index, { middleName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom" />
+              <input value={contact.firstName} onChange={(event) => update(index, { firstName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom" />
+              <input value={contact.relationship} onChange={(event) => update(index, { relationship: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parente (mere, tante, oncle...)" />
+              {contact.kind === 'HOUSEHOLD_AGENT' ? <input value={contact.role} onChange={(event) => update(index, { role: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Fonction (nounou, chauffeur, garde...)" /> : null}
+              <input type="email" value={contact.email} onChange={(event) => update(index, { email: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email" />
+              <InternationalPhoneInput value={contact.phone} onChange={(phone) => update(index, { phone })} />
+              <input value={contact.physicalAddress} onChange={(event) => update(index, { physicalAddress: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse physique" />
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" checked={contact.authorizedPickup} onChange={(event) => update(index, { authorizedPickup: event.target.checked })} />Autorise a recuperer eleve</label>
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" checked={contact.emergencyContact} onChange={(event) => update(index, { emergencyContact: event.target.checked })} />Contact urgence</label>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 type AdminAdmissionRequest = {
   id: string
@@ -667,6 +723,7 @@ const buildAdminParentRecords = (roster: AdminStudentRecord[]): AdminParentRecor
       status: needsAction ? 'Suivi requis' : 'Actif',
       identifierType,
       photoData: undefined,
+      familyContacts: [],
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -703,6 +760,7 @@ const buildAdminParentRecordsFromDirectory = (
       status: linkedStudents.length === 0 ? 'Sans enfant rattache' : needsAction ? 'Suivi requis' : 'Actif',
       identifierType,
       photoData: parent.photoData ?? null,
+      familyContacts: parent.familyContacts ?? [],
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
 }
@@ -1204,6 +1262,7 @@ const AdminSectionView = ({
     parentPhone: '',
     parentPhotoData: '',
     advisor: '',
+    familyContacts: [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')],
     students: [createAdminStudentDraft()],
   })
 
@@ -1423,6 +1482,7 @@ const AdminSectionView = ({
           phone: parentPhone,
           relationship: 'Parent',
           photoData: newFamily.parentPhotoData || undefined,
+          familyContacts: newFamily.familyContacts.filter((contact) => contact.firstName.trim() && contact.lastName.trim() && (contact.email.trim() || contact.phone.trim())).map((contact) => ({ ...contact, email: contact.email.trim() || undefined, phone: contact.phone.trim() || undefined, physicalAddress: contact.physicalAddress.trim() || undefined, role: contact.role.trim() || undefined })),
         },
         students: readyStudents.map((student) => {
           return {
@@ -1461,7 +1521,7 @@ const AdminSectionView = ({
     setDivisionFilter(getDivisionForGrade(focusStudent.grade).id)
     setGradeFilter(focusStudent.grade)
     setClassSuffixFilter(focusStudent.section as typeof SEARCH_CLASS_SUFFIXES[number] || 'All')
-    setNewFamily({ parentFirstName: '', parentMiddleName: '', parentLastName: '', parent: '', parentAddress: '', parentEmail: '', parentPhone: '', parentPhotoData: '', advisor: '', students: [createAdminStudentDraft()] })
+    setNewFamily({ parentFirstName: '', parentMiddleName: '', parentLastName: '', parent: '', parentAddress: '', parentEmail: '', parentPhone: '', parentPhotoData: '', advisor: '', familyContacts: [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')], students: [createAdminStudentDraft()] })
   }
 
   const openEditStudent = (student: AdminStudentRecord) => {
@@ -1662,6 +1722,7 @@ const AdminSectionView = ({
         phone: parentEditForm.phone.trim() || null,
         physicalAddress: parentEditForm.physicalAddress.trim() || null,
         studentIds: Array.from(new Set([...parentEditStudents.map((student) => student.id), ...createdStudentIds])),
+        familyContacts: parentEditForm.familyContacts.filter((contact) => contact.firstName.trim() && contact.lastName.trim() && (contact.email.trim() || contact.phone.trim())).map((contact) => ({ ...contact, email: contact.email.trim() || undefined, phone: contact.phone.trim() || undefined, physicalAddress: contact.physicalAddress.trim() || undefined, role: contact.role.trim() || undefined })),
         ...(parentEditForm.photoData !== (editingParent.photoData ?? '')
           ? { photoData: parentEditForm.photoData }
           : {}),
@@ -2156,6 +2217,7 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
                   </div>
+                <FamilyContactsEditor contacts={parentEditForm.familyContacts} onChange={(familyContacts) => setParentEditForm((current) => ({ ...current, familyContacts }))} />
                 </section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2320,6 +2382,7 @@ const AdminSectionView = ({
                 <InternationalPhoneInput value={newFamily.parentPhone} onChange={(value) => setNewFamily((item) => ({ ...item, parentPhone: value }))} />
                 <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
                 <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Advisor, optional" />
+              <div className="mt-4"><FamilyContactsEditor contacts={newFamily.familyContacts} onChange={(familyContacts) => setNewFamily((item) => ({ ...item, familyContacts }))} /></div>
               </div>
               <div className="mt-4"><PhotoCaptureField label="Photo du parent" value={newFamily.parentPhotoData} onChange={parentPhotoData=>setNewFamily(item=>({...item,parentPhotoData}))} onError={setStudentNotice}/></div>
               <div className="mt-5 space-y-3">

@@ -86,6 +86,8 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    family_contacts = models.JSONField(default=list, blank=True, verbose_name=_('Family contacts'))
+
     class Meta:
         db_table = 'users'
         verbose_name = _('User')

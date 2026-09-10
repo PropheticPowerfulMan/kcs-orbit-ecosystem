@@ -306,6 +306,7 @@ def sync_parent(parent) -> None:
             "mustChangePassword": parent.must_change_password,
             "photoData": parent.photo_data or None,
             "photoSource": parent.photo_source or None,
+            "familyContacts": parent.family_contacts or [],
         }),
     }
     _post_json("/api/integration/ingest/savanex/parents", payload)

@@ -1,6 +1,6 @@
 const orbitUrl = (process.env.KCS_ORBIT_API_URL || "http://localhost:4500").replace(/\/$/, "");
 const organizationId = process.env.KCS_ORBIT_ORGANIZATION_ID;
-const apiKey = process.env.SAVANEX_INTEGRATION_KEY || "savanex-dev-key";
+const apiKey = process.env.KCS_ORBIT_API_KEY || process.env.SAVANEX_INTEGRATION_KEY || "savanex-dev-key";
 
 if (!organizationId) {
   console.error("KCS_ORBIT_ORGANIZATION_ID is required. This check compares live records, not source-code tokens.");

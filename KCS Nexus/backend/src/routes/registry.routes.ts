@@ -49,6 +49,7 @@ type SharedDirectoryResponse = {
     phone?: string | null
     email?: string | null
     photoData?: string | null
+    familyContacts?: Array<{ email?: string | null; phone?: string | null }>
     mustChangePassword?: boolean
     organizationId?: string | null
     studentIds: string[]
@@ -127,7 +128,8 @@ async function getSharedDirectoryFromOrbit() {
         'x-api-key': env.KCS_ORBIT_API_KEY!,
         'x-app-slug': 'KCS_NEXUS',
       },
-    }
+      signal: AbortSignal.timeout(8_000),
+    },
   )
 
   if (!response.ok) {
@@ -135,6 +137,46 @@ async function getSharedDirectoryFromOrbit() {
   }
 
   return response.json() as Promise<SharedDirectoryResponse>
+}
+
+type ChangeDeliveryEntity = {
+  id?: string
+  fullName?: string
+  email?: string | null
+  phone?: string | null
+  parentId?: string | null
+  familyContacts?: Array<{ email?: string | null; phone?: string | null }>
+}
+
+function findDirectoryEntity(directory: SharedDirectoryResponse, entityType: RegistryEntityType, identifier: string) {
+  const entries = entityType === 'parent' ? directory.parents : entityType === 'student' ? directory.students : directory.teachers
+  return entries.find((entry) => entry.id === identifier || entry.externalIds?.some((link) => link.externalId === identifier)) as ChangeDeliveryEntity | undefined
+}
+
+async function deliverEntityChange(directory: SharedDirectoryResponse | null, entityType: RegistryEntityType, entity: ChangeDeliveryEntity | undefined, action: 'created' | 'updated' | 'deleted') {
+  if (!entity) return { email: [], sms: [], dashboard: false }
+  const parent = entityType === 'student' && entity.parentId ? directory?.parents.find((candidate) => candidate.id === entity.parentId) : undefined
+  const contacts = [...(entity.familyContacts ?? []), ...(parent?.familyContacts ?? [])]
+  const emails = [...new Set([entity.email, parent?.email, ...contacts.map((contact) => contact.email)].filter(Boolean) as string[])]
+  const phones = [...new Set([entity.phone, parent?.phone, ...contacts.map((contact) => contact.phone)].filter(Boolean) as string[])]
+  const labels = { created: 'cree', updated: 'modifie', deleted: 'supprime' }
+  const subject = `Dossier institutionnel ${labels[action]}`
+  const body = `Le dossier de ${entity.fullName || 'votre famille'} a ete ${labels[action]} dans le registre officiel KCS.`
+  const [emailResults, smsResults] = await Promise.all([
+    Promise.all(emails.map(async (to) => {
+      const result = await sendSchoolMail({ to, subject, text: body, html: `<p>${body}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const }))
+      await prisma.correspondenceLog.create({ data: { channel: 'EMAIL', status: result.sent ? 'SENT' : 'FAILED', subject, body, recipientName: entity.fullName || null, recipientEmail: to, sentAt: result.sent ? new Date() : null, failureReason: result.sent ? null : result.reason, metadata: { kind: 'ENTITY_CHANGE', entityType, action } } })
+      return { to, ...result }
+    })),
+    Promise.all(phones.map(async (phone) => {
+      const result = await sendSchoolSms(phone, `KCS: ${body}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const }))
+      await prisma.correspondenceLog.create({ data: { channel: 'TEXT', status: result.sent ? 'SENT' : 'FAILED', subject, body, recipientName: entity.fullName || null, recipientPhone: phone, sentAt: result.sent ? new Date() : null, failureReason: result.sent ? null : result.reason, metadata: { kind: 'ENTITY_CHANGE', entityType, action } } })
+      return { phone, ...result }
+    })),
+  ])
+  const localUsers = emails.length ? await prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true } }) : []
+  if (localUsers.length) await prisma.notification.createMany({ data: localUsers.map(({ id }) => ({ userId: id, title: subject, message: body, type: 'MESSAGE' as const, link: '/messages' })) })
+  return { email: emailResults, sms: smsResults, dashboard: localUsers.length > 0 }
 }
 
 async function sendRegistryEntityToOrbit(entityType: RegistryEntityType, payload: object) {
@@ -482,16 +524,21 @@ registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), 
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const payload = { ...req.body, organizationId: env.KCS_ORBIT_ORGANIZATION_ID }
   const created = await createRegistryEntityInOrbit(entityType, payload)
-  return success(res, created, 'Shared entity created through Orbit', 201)
+  const directory = await getSharedDirectoryFromOrbit()
+  const notificationDelivery = await deliverEntityChange(directory, entityType, findDirectoryEntity(directory, entityType, String((created as any).orbitId)), 'created')
+  return success(res, { ...(created as object), notificationDelivery }, 'Shared entity created through Orbit', 201)
 }))
 
 registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
 
   if (orbitRegistryIsEnabled()) {
     const updated = await updateRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
-    return success(res, updated, 'Shared entity updated through Orbit')
+    const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
+    const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, { ...before, ...(req.body ?? {}) }, 'updated')
+    return success(res, { ...(updated as object), notificationDelivery }, 'Shared entity updated through Orbit')
   }
 
   if (entityType !== 'parent') {
@@ -669,6 +716,8 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
 
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
+  const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
   if (!orbitRegistryIsEnabled()) {
     if (entityType !== 'parent') {
       throw new ApiError(409, 'Local registry deletion is currently enabled for parent entities only.')
@@ -679,7 +728,8 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   }
 
   const deleted = await deleteRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, identifierType)
-  return success(res, deleted, 'Shared entity deleted through Orbit')
+  const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, before, 'deleted')
+  return success(res, { ...(deleted as object), notificationDelivery }, 'Shared entity deleted through Orbit')
 }))
 
 registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {

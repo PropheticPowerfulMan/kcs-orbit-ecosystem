@@ -13,6 +13,22 @@ const canonicalNameShape = {
   lastName: z.string().min(1).optional(),
 };
 
+const familyContactSchema = z.object({
+  kind: z.enum(["MOTHER", "RELATIVE", "HOUSEHOLD_AGENT"]),
+  firstName: z.string().trim().min(1),
+  middleName: z.string().trim().optional(),
+  lastName: z.string().trim().min(1),
+  relationship: z.string().trim().min(1),
+  role: z.string().trim().optional(),
+  email: z.string().trim().email().optional(),
+  phone: z.string().trim().min(6).optional(),
+  physicalAddress: z.string().trim().optional(),
+  authorizedPickup: z.boolean().default(false),
+  emergencyContact: z.boolean().default(false),
+}).refine((contact) => Boolean(contact.email || contact.phone), {
+  message: "A family contact requires an email address or phone number",
+});
+
 function withCanonicalNameValidation<T extends z.ZodRawShape>(shape: T) {
   return z.object({
     ...canonicalNameShape,
@@ -36,6 +52,7 @@ const createParentSchema = withCanonicalNameValidation({
   phone: z.string().min(6).optional(),
   physicalAddress: z.string().min(1).optional(),
   mustChangePassword: z.boolean().optional(),
+  familyContacts: z.array(familyContactSchema).max(20).optional(),
 });
 
 const createTeacherSchema = withCanonicalNameValidation({
@@ -73,6 +90,7 @@ const createFamilySchema = z.object({
     phone: z.string().min(6).optional(),
     physicalAddress: z.string().min(1).optional(),
     mustChangePassword: z.boolean().optional(),
+    familyContacts: z.array(familyContactSchema).max(20).optional(),
   }),
   students: z.array(createStudentSchema.omit({ organizationId: true, parentOrbitId: true })).min(1),
 });
@@ -95,6 +113,7 @@ const updateParentSchema = z.object({
   photoData: z.string().nullable().optional(),
   photoSource: z.string().nullable().optional(),
   studentIds: z.array(z.string().min(1)).max(100).optional(),
+  familyContacts: z.array(familyContactSchema).max(20).optional(),
 }).refine((value) => Object.values(value).some((item) => item !== undefined), {
   message: "At least one field must be provided",
 });
@@ -513,6 +532,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(parentPayload.mustChangePassword !== undefined ? { mustChangePassword: parentPayload.mustChangePassword } : {}),
           ...(parentPayload.photoData !== undefined ? { photoData: parentPayload.photoData } : {}),
           ...(parentPayload.photoSource !== undefined ? { photoSource: parentPayload.photoSource } : {}),
+          ...(parentPayload.familyContacts !== undefined ? { familyContacts: parentPayload.familyContacts as never } : {}),
         },
       });
 
@@ -731,6 +751,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           phone: payload.parent.phone,
           physicalAddress: payload.parent.physicalAddress ? normalizeText(payload.parent.physicalAddress) : undefined,
           mustChangePassword: payload.parent.mustChangePassword,
+          familyContacts: (payload.parent.familyContacts ?? []) as never,
         },
       });
 
@@ -810,6 +831,7 @@ export async function createRegistryEntity(req: Request, res: Response) {
           phone: payload.phone,
           physicalAddress: payload.physicalAddress ? normalizeText(payload.physicalAddress) : undefined,
           mustChangePassword: payload.mustChangePassword,
+          familyContacts: (payload.familyContacts ?? []) as never,
         },
       });
 

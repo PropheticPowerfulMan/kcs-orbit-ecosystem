@@ -145,7 +145,22 @@ export const ParentPayloadSchema = z.object({
   physicalAddress: TrimmedStringSchema.optional(),
   mustChangePassword: z.boolean().optional(),
   photoData: z.string().optional(),
-  photoSource: TrimmedStringSchema.optional()
+  photoSource: TrimmedStringSchema.optional(),
+  familyContacts: z.array(z.object({
+    kind: z.enum(["MOTHER", "RELATIVE", "HOUSEHOLD_AGENT"]),
+    firstName: TrimmedStringSchema,
+    middleName: TrimmedStringSchema.optional(),
+    lastName: TrimmedStringSchema,
+    relationship: TrimmedStringSchema,
+    role: TrimmedStringSchema.optional(),
+    email: z.string().email().optional(),
+    phone: TrimmedStringSchema.optional(),
+    physicalAddress: TrimmedStringSchema.optional(),
+    authorizedPickup: z.boolean().default(false),
+    emergencyContact: z.boolean().default(false),
+  }).refine((contact) => Boolean(contact.email || contact.phone), {
+    message: "A family contact requires an email address or phone number",
+  })).max(20).optional()
 }).superRefine((value, ctx) => {
   if (value.fullName || (value.firstName && value.lastName)) {
     return;

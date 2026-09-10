@@ -277,6 +277,7 @@ model Parent {
   photoData      String?
   photoSource    String?
   mustChangePassword Boolean   @default(false)
+  familyContacts Json          @default("[]")
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   students       Student[]

@@ -41,6 +41,22 @@ const schoolLevels = [
   'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6',
   'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12',
 ] as const
+const familyContactSchema = z.object({
+  kind: z.enum(['MOTHER', 'RELATIVE', 'HOUSEHOLD_AGENT']),
+  firstName: z.string().trim().min(1),
+  middleName: z.string().trim().optional(),
+  lastName: z.string().trim().min(1),
+  relationship: z.string().trim().min(1),
+  role: z.string().trim().optional(),
+  email: z.string().trim().email().optional(),
+  phone: z.string().trim().min(6).optional(),
+  physicalAddress: z.string().trim().optional(),
+  authorizedPickup: z.boolean().default(false),
+  emergencyContact: z.boolean().default(false),
+}).refine((contact) => Boolean(contact.email || contact.phone), {
+  message: 'A family contact requires an email address or phone number',
+})
+
 
 type OrbitPerson = {
   id: string
@@ -55,6 +71,7 @@ type OrbitPerson = {
   accessCode?: string | null
   studentIds?: string[]
   externalIds?: Array<{ appSlug: string; externalId: string }>
+  familyContacts?: Array<z.infer<typeof familyContactSchema>>
 }
 
 type OrbitStudent = {
@@ -287,6 +304,7 @@ const createStudentSchema = z.object({
     physicalAddress: z.string().trim().min(1).optional(),
     photoData: z.string().max(8_000_000).optional(),
     existingParentId: z.string().trim().min(1).optional(),
+    familyContacts: z.array(familyContactSchema).max(20).optional(),
   }),
   student: z.object({
     firstName: z.string().min(1),
@@ -615,6 +633,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
           physicalAddress: parent.physicalAddress || undefined,
           photoData: parent.photoData || undefined,
           mustChangePassword: true,
+          familyContacts: parent.familyContacts || undefined,
         })
     const parentOrbitId = parentResult.orbitId
     if (!parentOrbitId) {
@@ -1030,8 +1049,8 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       studentEmail: payload.email || target.email,
       studentName: [payload.firstName ?? target.firstName, payload.middleName ?? target.middleName, payload.lastName ?? target.lastName].filter(Boolean).join(' '),
       parentUserIds: localUsers.filter((user) => user.role === 'PARENT').map((user) => user.id),
-      parentEmails: parent?.email ? [parent.email] : [],
-      parentPhones: parent?.phone ? [parent.phone] : [],
+      parentEmails: [parent?.email, ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[],
+      parentPhones: [parent?.phone, ...(parent?.familyContacts?.map((contact) => contact.phone) ?? [])].filter(Boolean) as string[],
     })
 
     return success(res, { ...(updated as object), notificationDelivery }, 'Student updated through Orbit')
