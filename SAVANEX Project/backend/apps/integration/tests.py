@@ -115,7 +115,7 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
         parent = User.objects.get(email='rachel.parent@example.com')
         self.assertEqual(parent.role, User.ROLE_PARENT)
         self.assertEqual(parent.username, 'parent-imported')
-        reset_credentials.assert_called_once_with(parent, defer_side_effects=True)
+        reset_credentials.assert_called_once_with(parent, defer_side_effects=False)
 
 
 @override_settings(KCS_NEXUS_AUTH_KEY='nexus-test-key')

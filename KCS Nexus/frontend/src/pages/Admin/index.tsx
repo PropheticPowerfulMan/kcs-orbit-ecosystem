@@ -1480,7 +1480,11 @@ const AdminSectionView = ({
       const response = await registryAPI.resetAccess(entityType, identifier)
       const credential = response.data?.data
       setFamilyCredentials(entityType === 'parent' ? { parent: credential, students: [], reset: { entityType, identifier } } : { parent: null, students: [{ ...credential, studentId: identifier }], reset: { entityType, identifier } })
-      const message = `Accès temporaire régénéré pour ${identifier}.`
+      const emailDelivery = Array.isArray(credential?.delivery) ? credential.delivery.find((item: any) => item.channel === 'email') : null
+      const emailConfirmed = emailDelivery?.status === 'sent'
+      const message = emailConfirmed
+        ? 'Acces temporaire regenere pour ' + identifier + '. Le serveur SMTP a confirme l envoi du courriel.'
+        : 'Acces temporaire regenere pour ' + identifier + ', mais le courriel n a pas ete confirme (' + (emailDelivery?.detail || emailDelivery?.status || 'statut indisponible') + ').'
       if (entityType === 'parent') setParentNotice(message)
       else setStudentNotice(message)
     } catch (error) {
