@@ -10,6 +10,7 @@ import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
 import SuggestionBox from '@/components/shared/SuggestionBox'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
+import WeeklyTimetable from '@/components/shared/WeeklyTimetable'
 import AdvancedGradebook from '@/components/gradebook/AdvancedGradebook'
 import TeacherAcademicOperations from '@/components/teacher/TeacherAcademicOperations'
 import TeacherClassAttendance from '@/components/teacher/TeacherClassAttendance'
@@ -36,7 +37,6 @@ import {
   lmsResources,
   messages as ecosystemMessages,
   reportCards,
-  schedules as ecosystemSchedules,
   students as ecosystemStudents,
   subjects,
 } from '@/data/schoolEcosystem'
@@ -233,7 +233,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [actionIsError, setActionIsError] = useState(false)
   const [resourceQuery, setResourceQuery] = useState('')
   const [selectedResource, setSelectedResource] = useState<(typeof lmsResources)[number] | null>(null)
-  const [selectedSchedule, setSelectedSchedule] = useState<(typeof ecosystemSchedules)[number] | null>(null)
+  const [officialTimetable, setOfficialTimetable] = useState<any[]>([])
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => ({ firstName: user?.firstName ?? '', middleName: user?.middleName ?? '', lastName: user?.lastName ?? '', email: user?.email ?? '', phone: user?.phone ?? '', avatar: user?.avatar ?? '' }))
   const [profileDialog, setProfileDialog] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
@@ -441,6 +441,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       try {
         const response = await teacherWorkspaceAPI.overview()
         const overview = response.data?.data ?? {}
+        setOfficialTimetable(overview.timetable ?? [])
         const assignedStudents = (overview.students ?? []).map(mapRegistryStudent)
         const registryStudents = (overview.studentDirectory ?? overview.students ?? []).map(mapRegistryStudent)
         const officialCourses = (overview.courses ?? []).map((course: any) => ({
@@ -2051,15 +2052,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'timetable' && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {ecosystemSchedules.filter((item) => item.role === 'teacher').map((item) => (
-            <button type="button" key={`${item.time}-${item.title}`} onClick={() => setSelectedSchedule(item)} className={`${panelClass} text-left transition hover:-translate-y-0.5 hover:border-kcs-blue-300 hover:shadow-lg`}>
-              <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{item.time}</p><h3 className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{item.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{item.room} · {item.teacher}</p></div><Calendar className="text-kcs-blue-600 dark:text-kcs-blue-300"/></div>
-              <p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">Open class window →</p>
-            </button>
-          ))}
-          {selectedSchedule && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">Teaching period</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedSchedule.title}</h3></div><button type="button" onClick={() => setSelectedSchedule(null)} aria-label="Close"><X/></button></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{[['Time', selectedSchedule.time], ['Room', selectedSchedule.room], ['Teacher', selectedSchedule.teacher], ['Synchronization', 'Administrative timetable']].map(([label,value]) => <div key={label} className="rounded-xl bg-white/80 p-4 dark:bg-kcs-blue-800/50"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div></div></div>}
-        </div>
+        <WeeklyTimetable entries={officialTimetable.map((item: any) => ({ id: item.id, day: item.day, startTime: item.startTime, endTime: item.endTime, title: item.courseName, courseName: item.courseName, courseCode: item.courseCode, room: item.room, teacher: item.teacherName, className: item.className || item.grade, studentCount: item.studentCount, description: item.description }))} language={language} audience="teacher"/>
       )}
 
       {segment === 'resources' && (
@@ -2648,13 +2641,8 @@ const TeacherPortal = () => {
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Schedule Alerts</h2>
               <div className="space-y-3">
-                {ecosystemSchedules.filter((item) => item.role === 'teacher').map((item) => (
-                  <div key={`${item.time}-${item.title}`} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                    <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.time} • {item.room}</p>
-                  </div>
-                ))}
-              </div>
+                <p className="text-sm text-gray-500 dark:text-gray-300">Official timetable alerts are displayed in the live dashboard above.</p>
+            </div>
             </div>
           </div>
 
