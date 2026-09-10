@@ -314,12 +314,33 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
 
 attendanceRouter.get('/staff', requireRoles('admin'), asyncHandler(async (req, res) => {
   const date = req.query.date ? normalizedDay(z.coerce.date().parse(String(req.query.date))) : null
-  const records = await prisma.staffAttendanceRecord.findMany({
-    where: date ? { date } : {},
-    orderBy: [{ date: 'desc' }, { staffName: 'asc' }],
-    take: date ? 1000 : 500,
-  })
-  return success(res, { records, summary: summarize(records) }, 'Staff attendance register loaded')
+  const [records, nexusStaff] = await Promise.all([
+    prisma.staffAttendanceRecord.findMany({
+      where: date ? { date } : {},
+      orderBy: [{ date: 'desc' }, { staffName: 'asc' }],
+      take: date ? 1000 : 500,
+    }),
+    prisma.user.findMany({
+      where: { role: { in: ['STAFF', 'TEACHER'] } },
+      select: { id: true, orbitUserId: true, accessCode: true, firstName: true, middleName: true, lastName: true, email: true, role: true, phone: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    }),
+  ])
+  const roster = nexusStaff.map((person) => ({
+    id: person.orbitUserId || person.id,
+    nexusUserId: person.id,
+    accessCode: person.accessCode,
+    fullName: [person.lastName, person.middleName, person.firstName].filter(Boolean).join(' '),
+    firstName: person.firstName,
+    middleName: person.middleName,
+    lastName: person.lastName,
+    email: person.email,
+    phone: person.phone,
+    employeeId: person.accessCode,
+    jobTitle: person.role === 'TEACHER' ? 'Teacher' : 'Staff',
+    source: 'nexus',
+  }))
+  return success(res, { records, roster, summary: summarize(records) }, 'Staff attendance register loaded')
 }))
 
 attendanceRouter.get('/staff/history', requireRoles('admin'), asyncHandler(async (req, res) => {

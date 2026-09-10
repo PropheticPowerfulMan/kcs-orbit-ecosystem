@@ -65,22 +65,22 @@ export default function WeeklyTimetable({ entries, language = 'en', audience }: 
   const empty = fr ? "Aucun cours officiel n'a encore ete publie dans cet horaire." : 'No official class has been published in this timetable yet.'
   if (!normalized.length) return <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-slate-300">{empty}</div>
 
-  const Details = ({ entry, index, compact = false }: { entry: typeof normalized[number]; index: number; compact?: boolean }) => <article className={'rounded-2xl border p-3 shadow-sm ' + tone(index)}>
+  const Details = ({ entry, index, compact = false }: { entry: typeof normalized[number]; index: number; compact?: boolean }) => <article className={'rounded-2xl border p-4 shadow-sm antialiased [text-rendering:optimizeLegibility] ' + tone(index)}>
     <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0"><p className="break-words font-black leading-tight">{titleOf(entry)}</p>{codeOf(entry) && <p className="mt-1 text-[11px] font-bold uppercase opacity-65">{codeOf(entry)}</p>}</div>
+      <div className="min-w-0"><p className="break-words text-[15px] font-extrabold leading-snug tracking-normal sm:text-base">{titleOf(entry)}</p>{codeOf(entry) && <p className="mt-1 text-xs font-bold uppercase tracking-wide opacity-80">{codeOf(entry)}</p>}</div>
       {!compact && <CalendarDays size={17} className="shrink-0 opacity-60"/>}
     </div>
-    <p className="mt-2 flex items-center gap-1.5 text-xs font-bold"><Clock3 size={14}/>{entry.start}-{entry.end}</p>
-    <div className="mt-2 space-y-1 text-xs opacity-80">
+    <p className="mt-3 flex items-center gap-1.5 text-sm font-extrabold"><Clock3 size={14}/>{entry.start}-{entry.end}</p>
+    <div className="mt-2 space-y-1.5 text-[13px] font-medium leading-relaxed opacity-95">
       {entry.room && <p className="flex items-center gap-1.5"><MapPin size={13}/>{entry.room}</p>}
       {entry.teacher && <p className="flex items-center gap-1.5"><UserRound size={13}/>{entry.teacher}</p>}
       {entry.className && <p className="flex items-center gap-1.5"><UsersRound size={13}/>{entry.className}</p>}
       {audience === 'teacher' && entry.studentCount != null && <p className="flex items-center gap-1.5"><UsersRound size={13}/>{entry.studentCount} {fr ? 'eleves' : 'students'}</p>}
     </div>
-    {entry.description && !compact && <p className="mt-3 border-t border-current/10 pt-2 text-xs leading-relaxed opacity-75">{entry.description}</p>}
+    {entry.description && !compact && <p className="mt-3 border-t border-current/15 pt-3 text-[13px] font-medium leading-relaxed opacity-90">{entry.description}</p>}
   </article>
 
-  return <section className="space-y-5">
+  return <section className="space-y-5 antialiased [text-rendering:optimizeLegibility]">
     <div className="grid gap-3 sm:grid-cols-3">
       <div className="rounded-2xl bg-kcs-blue-950 p-4 text-white"><p className="text-xs uppercase text-blue-200">{fr ? 'Cours programmes' : 'Scheduled classes'}</p><b className="mt-1 block text-2xl">{normalized.length}</b></div>
       <div className="rounded-2xl bg-kcs-blue-700 p-4 text-white"><p className="text-xs uppercase text-blue-100">{fr ? 'Jours de cours' : 'School days'}</p><b className="mt-1 block text-2xl">{days.length}</b></div>
@@ -95,7 +95,7 @@ export default function WeeklyTimetable({ entries, language = 'en', audience }: 
     </div>
 
     <div className="hidden overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900 lg:block">
-      <table className="w-full min-w-[980px] table-fixed">
+      <table className="w-full min-w-[980px] table-fixed text-[15px]">
         <thead><tr className="bg-kcs-blue-950 text-left text-sm text-white"><th className="w-32 p-4">{fr ? 'Heure' : 'Time'}</th>{days.map((day) => <th key={day} className="p-4">{dayLabel(day)}</th>)}</tr></thead>
         <tbody>{slots.map((slot, rowIndex) => {
           const [start, end] = slot.split('-')
