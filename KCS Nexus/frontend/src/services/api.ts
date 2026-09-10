@@ -97,8 +97,21 @@ api.interceptors.response.use(
 
 // --- Auth API ---
 export const authAPI = {
-  login: (identifier: string, password: string, twoFactorCode?: string) =>
-    api.post('/auth/login', { email: identifier, password, ...(twoFactorCode ? { twoFactorCode } : {}) }),
+  login: async (identifier: string, password: string, twoFactorCode?: string) => {
+    const payload = { email: identifier, password, ...(twoFactorCode ? { twoFactorCode } : {}) }
+    try {
+      return await api.post('/auth/login', payload)
+    } catch (error) {
+      const status = (error as AxiosError)?.response?.status
+      // Older installed bundles could briefly resolve authentication against
+      // the SPA origin during an update. Retry the canonical API URL once.
+      if (status !== 405 && status !== 502 && status !== 503 && status !== 504) throw error
+      return axios.post(window.location.origin + getRouteUrl('api/auth/login'), payload, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 15_000,
+      })
+    }
+  },
   register: (data: object) =>
     api.post('/auth/register', data),
   googleAuth: (token: string) =>

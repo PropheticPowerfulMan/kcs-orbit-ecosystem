@@ -11,6 +11,7 @@ RUN npm ci
 COPY ["KCS Nexus/backend/prisma", "./prisma"]
 COPY ["KCS Nexus/backend/tsconfig.json", "./tsconfig.json"]
 COPY ["KCS Nexus/backend/src", "./src"]
+COPY ["KCS Nexus/backend/scripts", "./scripts"]
 RUN npx prisma generate && npm run build
 
 FROM node:20-alpine AS runtime
@@ -21,6 +22,7 @@ COPY --from=build ["/workspace/KCS Nexus/backend/package.json", "/workspace/KCS 
 COPY --from=build ["/workspace/KCS Nexus/backend/node_modules", "./node_modules"]
 COPY --from=build ["/workspace/KCS Nexus/backend/prisma", "./prisma"]
 COPY --from=build ["/workspace/KCS Nexus/backend/dist", "./dist"]
+COPY --from=build ["/workspace/KCS Nexus/backend/scripts", "./scripts"]
 COPY --from=build /workspace/packages/shared-contracts /workspace/packages/shared-contracts
 EXPOSE 5000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]

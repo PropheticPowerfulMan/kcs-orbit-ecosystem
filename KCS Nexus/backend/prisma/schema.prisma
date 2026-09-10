@@ -463,6 +463,29 @@ model Course {
   updatedAt   DateTime         @updatedAt
 }
 
+model AcademicScheduleEntry {
+  id             String   @id @default(cuid())
+  sourceKey      String   @unique
+  academicYear   String
+  semester       Int
+  grade          String
+  classGroup     String?
+  day            String
+  period         Int
+  startTime      String
+  endTime        String
+  subject        String
+  teacherName    String?
+  room           String?
+  sourceDocument String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([academicYear, semester, grade, day])
+  @@index([teacherName, day])
+}
+
 model CourseSchedule {
   id        String @id @default(cuid())
   courseId  String

@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { authenticate, requireRoles, type AuthenticatedRequest } from "../middleware/auth.js";
 import { asyncHandler, ApiError, success } from "../utils/api.js";
 import { prisma } from "../config/prisma.js";
+import { academicScheduleForGrade, academicScheduleForTeacher, fullAcademicSchedule } from "../utils/academicSchedule.js";
 
 export const academyRouter = Router();
 academyRouter.post("/launch", authenticate, requireRoles("teacher", "student", "staff", "admin"), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -62,8 +63,8 @@ academyRouter.post("/context", asyncHandler(async (req, res) => {
   if (requestedRole === "STUDENT" && (user.role !== "STUDENT" || !user.studentProfile)) throw new ApiError(403, "Student identity mismatch");
   if (["ADMIN", "SUPER_ADMIN"].includes(requestedRole) && user.role !== "ADMIN") throw new ApiError(403, "Administrator identity mismatch");
   const displayName = [user.lastName, user.middleName, user.firstName].filter(Boolean).join(" ");
-  if (requestedRole === "TEACHER") return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, courses: (user.teacherProfile?.courses || []).map(course => ({ ...course, enrolledStudents: course.enrollments.length })) });
-  if (requestedRole === "STUDENT") return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, profile: user.studentProfile ? { id: user.studentProfile.id, studentNumber: user.studentProfile.studentNumber, grade: user.studentProfile.grade, section: user.studentProfile.section } : null, courses: (user.studentProfile?.enrollments || []).map(item => ({ ...item.course, teacherName: [item.course.teacher.user.lastName, item.course.teacher.user.middleName, item.course.teacher.user.firstName].filter(Boolean).join(" ") })) });
+  if (requestedRole === "TEACHER") return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, dailySchedule: await academicScheduleForTeacher(user), courses: (user.teacherProfile?.courses || []).map(course => ({ ...course, enrolledStudents: course.enrollments.length })) });
+  if (requestedRole === "STUDENT") return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, dailySchedule: user.studentProfile ? await academicScheduleForGrade(user.studentProfile.grade, user.studentProfile.section) : [], profile: user.studentProfile ? { id: user.studentProfile.id, studentNumber: user.studentProfile.studentNumber, grade: user.studentProfile.grade, section: user.studentProfile.section } : null, courses: (user.studentProfile?.enrollments || []).map(item => ({ ...item.course, teacherName: [item.course.teacher.user.lastName, item.course.teacher.user.middleName, item.course.teacher.user.firstName].filter(Boolean).join(" ") })) });
   const [students, parents, teachers, courses] = await Promise.all([prisma.studentProfile.count(), prisma.user.count({ where: { role: "PARENT" } }), prisma.teacherProfile.count(), prisma.course.count()]);
-  return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, population: { students, parents, teachers, courses } });
+  return success(res, { source: "KCS_NEXUS_INSTITUTIONAL_RECORDS", displayName, dailySchedule: await fullAcademicSchedule(), population: { students, parents, teachers, courses } });
 }));

@@ -6,6 +6,7 @@ RUN npm ci
 COPY prisma ./prisma
 COPY tsconfig.json ./tsconfig.json
 COPY src ./src
+COPY scripts ./scripts
 RUN npx prisma generate && npm run build
 
 FROM node:20-alpine AS runtime
@@ -16,5 +17,6 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/scripts ./scripts
 EXPOSE 5000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]

@@ -9,6 +9,7 @@ import { getRouteParam } from '../utils/request.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
+import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
 
 export const teachersRouter = Router()
 
@@ -280,7 +281,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
         homeroomSection: teacher.homeroomSection,
         user: teacher.user,
       } : null,
-      courses: [], students, studentDirectory, assignments: [], grades: [], timetable: [],
+      courses: [], students, studentDirectory, assignments: [], grades: [], timetable: await academicScheduleForTeacher(teacher?.user),
     }, teacher ? 'Teacher roster loaded while official courses synchronize' : 'Teacher roster loaded while profile synchronization is pending')
   }
   const students = new Map<string, any>()
@@ -338,7 +339,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     studentDirectory,
     assignments: teacher.courses.flatMap((course) => course.assignments.map((assignment) => ({ ...assignment, courseId: course.id, courseName: course.name }))),
     grades: teacher.courses.flatMap((course) => course.grades.map((grade) => ({ ...grade, courseId: course.id, courseName: course.name }))),
-    timetable: teacher.courses.flatMap((course) => course.schedules.map((schedule) => ({ ...schedule, courseId: course.id, courseName: course.name, studentCount: course.enrollments.length }))),
+    timetable: (await academicScheduleForTeacher(teacher.user)).length ? await academicScheduleForTeacher(teacher.user) : teacher.courses.flatMap((course) => course.schedules.map((schedule) => ({ ...schedule, courseId: course.id, courseName: course.name, studentCount: course.enrollments.length }))),
   }, 'Teacher dashboard loaded')
 }))
 

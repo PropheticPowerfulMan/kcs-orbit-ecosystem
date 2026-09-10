@@ -12,6 +12,7 @@ import { sendSchoolSms } from '../utils/sms.js'
 import { getParentAcademicClearance } from './finance.routes.js'
 import { KCS_ACADEMIC_PASSING_SCORE_PERCENT, meetsKcsAcademicPassingScore } from '@ecosystem/shared-contracts'
 import { resolveStudentProfileId } from '../services/studentIdentity.js'
+import { academicScheduleForGrade } from '../utils/academicSchedule.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -541,7 +542,8 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     lastAcademicUpdate: activityDates.length ? new Date(Math.max(...activityDates.map((date) => date.getTime()))).toISOString() : null,
     officialOnly: true,
   }
-  const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({
+  const officialTimetable = await academicScheduleForGrade(student.grade, student.section)
+  const timetable = officialTimetable.length ? officialTimetable : student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({
     ...slot,
     course: { id: course.id, name: course.name, code: course.code, description: course.description },
     teacher: [course.teacher.user.firstName, course.teacher.user.lastName].filter(Boolean).join(' '),
@@ -863,7 +865,8 @@ studentsRouter.get('/me/timetable', authenticate, requireRoles('student'), async
     include: { enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } } },
   }) : null
   if (!student) throw new ApiError(404, 'Student profile not found')
-  const timetable = student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({ ...slot, course: { id: course.id, name: course.name, code: course.code, description: course.description }, teacher: `${course.teacher.user.firstName} ${course.teacher.user.lastName}` })))
+  const officialTimetable = await academicScheduleForGrade(student.grade, student.section)
+  const timetable = officialTimetable.length ? officialTimetable : student.enrollments.flatMap(({ course }) => course.schedules.map((slot) => ({ ...slot, course: { id: course.id, name: course.name, code: course.code, description: course.description }, teacher: `${course.teacher.user.firstName} ${course.teacher.user.lastName}` })))
   return success(res, timetable)
 }))
 
@@ -955,7 +958,8 @@ studentsRouter.get('/:id/timetable', authenticate, asyncHandler(async (req: Auth
     },
   })
   if (!student) throw new ApiError(404, 'Student not found')
-  const timetable = student.enrollments.flatMap((enrollment) => enrollment.course.schedules)
+  const officialTimetable = await academicScheduleForGrade(student.grade, student.section)
+  const timetable = officialTimetable.length ? officialTimetable : student.enrollments.flatMap((enrollment) => enrollment.course.schedules)
   return success(res, timetable)
 }))
 
