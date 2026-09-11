@@ -11,6 +11,7 @@ const en = {
     portal: 'Portal',
     login: 'Sign In',
     logout: 'Sign Out',
+    dashboard: 'Dashboard',
     applyNow: 'Apply Now',
     visitSchool: 'Visit School',
   },

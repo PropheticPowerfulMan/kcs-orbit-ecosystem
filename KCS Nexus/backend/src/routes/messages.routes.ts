@@ -123,12 +123,16 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
   ])
   const seenIdentities = new Set<string>()
   const canonicalRecipients = recipients.flatMap((person) => {
-    if (!superAdmin || person.role === 'ADMIN' || person.role === 'STAFF') return [person]
-    const official = findOfficialContact(directory, person)
-    if (!official) return []
-    const key = identityKey(contactName(official))
+    const official = superAdmin && person.role !== 'ADMIN' && person.role !== 'STAFF'
+      ? findOfficialContact(directory, person)
+      : undefined
+    const source = official || person
+    const key = source.email?.trim().toLowerCase() || identityKey(contactName(source))
     if (key && seenIdentities.has(key)) return []
     if (key) seenIdentities.add(key)
+    // Nexus remains a valid source when an Orbit record has not been linked yet.
+    // Matched Orbit data stays authoritative for the displayed identity and contacts.
+    if (!official) return [person]
     return [{ ...person, firstName: official.firstName || person.firstName, middleName: official.middleName || null, lastName: official.lastName || person.lastName, email: official.email || person.email, phone: official.phone || person.phone, accessCode: official.accessCode || person.accessCode }]
   })
   return success(res, canonicalRecipients.map((person) => {

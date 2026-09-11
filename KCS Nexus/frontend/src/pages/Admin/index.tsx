@@ -102,6 +102,7 @@ type AdminStudentRecord = {
   isDeletable?: boolean
   dateOfBirth?: string | null
   photoData?: string | null
+  responsibleParents?: Array<{ id: string; name: string; email: string; phone: string; relationship: string }>
 }
 
 type FamilyContactDraft = {
@@ -405,6 +406,13 @@ const getAdminRoster = () => studentsAPI.getAll(undefined, {
 const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
   const parentLink = profile.parentLinks?.[0]
   const parent = parentLink?.parent
+  const responsibleParents = (profile.parentLinks ?? []).map((link: any) => ({
+    id: String(link.parent?.id ?? link.parentId ?? ''),
+    name: [link.parent?.lastName, link.parent?.middleName, link.parent?.firstName].filter(Boolean).join(' '),
+    email: String(link.parent?.email ?? ''),
+    phone: String(link.parent?.phone ?? ''),
+    relationship: String(link.relationship ?? link.relation ?? 'Parent responsable'),
+  })).filter((item: { id: string; name: string }) => item.id && item.name)
   const fullName = [profile.user?.lastName, profile.user?.middleName, profile.user?.firstName].filter(Boolean).join(' ') || profile.studentNumber || 'Unnamed student'
   const managingApp = typeof profile.managingApp === 'string'
     ? profile.managingApp
@@ -431,6 +439,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     managingApp,
     isEditable: true,
     isDeletable: typeof profile.isDeletable === 'boolean' ? profile.isDeletable : true,
+    responsibleParents,
   }
 }
 
@@ -2539,7 +2548,7 @@ const AdminSectionView = ({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche individuelle élève</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Identité, classe, parent responsable et suivi administratif.</p>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Identité, classe, parents responsables et suivi administratif.</p>
                 </div>
                 <button type="button" onClick={() => setViewingStudent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
                   <X size={16} />
@@ -2557,7 +2566,7 @@ const AdminSectionView = ({
                       : 'Non renseignée'],
                     ['Classe', formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'],
                     ['Statut', viewingStudent.status],
-                    ['Parent responsable', viewingStudent.parent || 'Aucun parent lié'],
+                    ['Parent titulaire', viewingStudent.parent || 'Aucun parent lié'],
                     ['Email parent', viewingStudent.parentEmail || 'Non renseigné'],
                     ['Téléphone parent', viewingStudent.parentPhone || 'Non renseigné'],
                     ['Conseiller', viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assigné'],
@@ -2571,6 +2580,25 @@ const AdminSectionView = ({
                       <p className="mt-2 break-words text-sm font-semibold text-kcs-blue-900 dark:text-white">{value}</p>
                     </div>
                   ))}
+                  <section className="md:col-span-2 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50/70 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Tous les parents responsables</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {(viewingStudent.responsibleParents?.length ? viewingStudent.responsibleParents : [{
+                        id: 'primary-parent',
+                        name: viewingStudent.parent || 'Aucun parent lié',
+                        email: viewingStudent.parentEmail || '',
+                        phone: viewingStudent.parentPhone || '',
+                        relationship: 'Parent titulaire',
+                      }]).map((parent, index) => (
+                        <article key={parent.id || index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
+                          <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{index === 0 ? 'Parent titulaire' : parent.relationship}</p>
+                          <p className="mt-2 break-words font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
+                          <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-300">{parent.email || 'Email non renseigné'}</p>
+                          <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{parent.phone || 'Téléphone non renseigné'}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
                 </div>
 
                 <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
