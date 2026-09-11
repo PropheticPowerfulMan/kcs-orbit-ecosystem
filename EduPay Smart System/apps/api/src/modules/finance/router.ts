@@ -105,9 +105,14 @@ financeRouter.get("/overview", authorize("ADMIN", "ACCOUNTANT"), async (req: Aut
 
 financeRouter.get("/parents/:parentId/profile", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   try {
+    const parent = await prisma.parent.findFirst({
+      where: { schoolId: req.user!.schoolId, OR: [{ id: req.params.parentId }, { orbitId: req.params.parentId }] },
+      select: { id: true }
+    });
+    if (!parent) return res.status(404).json({ message: "Parent finance profile not found." });
     const snapshot = await getParentFinancialSnapshot({
       schoolId: req.user!.schoolId,
-      parentId: req.params.parentId,
+      parentId: parent.id,
       academicYearName: typeof req.query.academicYear === "string" ? req.query.academicYear : undefined
     });
     return res.json(snapshot);

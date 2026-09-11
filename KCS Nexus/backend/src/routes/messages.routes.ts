@@ -2,6 +2,7 @@ import { Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
+import { env } from '../config/env.js'
 import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
@@ -46,6 +47,27 @@ const resolveMessageActorId = async (req: AuthenticatedRequest) => {
 const canManageParentCommunications = (req: AuthenticatedRequest) =>
   req.user!.sub === 'configured-superadmin' || req.user!.role === 'teacher'
 
+type OrbitContact = { id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; accessCode?: string | null; familyContacts?: Array<{ kind?: string; firstName?: string; middleName?: string; lastName?: string; email?: string | null; phone?: string | null }> }
+type OrbitDirectory = { parents?: OrbitContact[]; students?: OrbitContact[]; teachers?: OrbitContact[] }
+let orbitDirectoryCache: { expiresAt: number; value: OrbitDirectory } | null = null
+const identityKey = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join('|')
+const contactName = (person: Partial<OrbitContact>) => [person.lastName, person.middleName, person.firstName].filter(Boolean).join(' ').trim() || String(person.fullName || '').trim()
+const getOrbitDirectory = async () => {
+  if (orbitDirectoryCache && orbitDirectoryCache.expiresAt > Date.now()) return orbitDirectoryCache.value
+  if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return {} as OrbitDirectory
+  const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(8_000) })
+  if (!response.ok) throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
+  const value = await response.json() as OrbitDirectory
+  orbitDirectoryCache = { expiresAt: Date.now() + 5 * 60_000, value }
+  return value
+}
+const findOfficialContact = (directory: OrbitDirectory, person: { firstName?: string | null; middleName?: string | null; lastName?: string | null; email?: string | null }) => {
+  const entries = [...(directory.parents || []), ...(directory.teachers || []), ...(directory.students || [])]
+  const email = person.email?.trim().toLowerCase()
+  const name = identityKey([person.lastName, person.middleName, person.firstName].filter(Boolean).join(' '))
+  return entries.find((entry) => email && entry.email?.trim().toLowerCase() === email) || entries.find((entry) => name && identityKey(contactName(entry)) === name)
+}
+
 
 messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const query = String(req.query.q ?? '').trim()
@@ -85,7 +107,8 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
   if (!canManageParentCommunications(req)) throw new ApiError(403, 'Super Administrator or Teacher permissions required')
   const actorId = await resolveMessageActorId(req)
   const superAdmin = req.user!.sub === 'configured-superadmin'
-  const recipients = await prisma.user.findMany({
+  const [recipients, directory] = await Promise.all([
+    prisma.user.findMany({
     where: { id: { not: actorId }, ...(superAdmin ? {} : { role: 'PARENT' as const }) },
     select: {
       id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true, role: true,
@@ -95,8 +118,20 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
       staffProfile: { select: { employeeNumber: true, department: true, function: true } },
     },
     orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }],
+    }),
+    superAdmin ? getOrbitDirectory() : Promise.resolve({} as OrbitDirectory),
+  ])
+  const seenIdentities = new Set<string>()
+  const canonicalRecipients = recipients.flatMap((person) => {
+    if (!superAdmin || person.role === 'ADMIN' || person.role === 'STAFF') return [person]
+    const official = findOfficialContact(directory, person)
+    if (!official) return []
+    const key = identityKey(contactName(official))
+    if (key && seenIdentities.has(key)) return []
+    if (key) seenIdentities.add(key)
+    return [{ ...person, firstName: official.firstName || person.firstName, middleName: official.middleName || null, lastName: official.lastName || person.lastName, email: official.email || person.email, phone: official.phone || person.phone, accessCode: official.accessCode || person.accessCode }]
   })
-  return success(res, recipients.map((person) => {
+  return success(res, canonicalRecipients.map((person) => {
     const gradeValues = [
       person.studentProfile?.grade,
       ...person.parentLinks.map((link) => link.student.grade),
@@ -122,10 +157,13 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   const data = parentDeliverySchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
   const recipientIds = [...new Set(data.recipientIds)]
-  const parents = await prisma.user.findMany({
-    where: { id: { in: recipientIds }, ...(req.user!.sub === 'configured-superadmin' ? {} : { role: 'PARENT' as const }) },
-    select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, role: true },
-  })
+  const [parents, directory] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: recipientIds }, ...(req.user!.sub === 'configured-superadmin' ? {} : { role: 'PARENT' as const }) },
+      select: { id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, role: true },
+    }),
+    getOrbitDirectory(),
+  ])
   if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid communication accounts.')
 
   const createdMessages = await prisma.$transaction(async (tx) => {
@@ -169,8 +207,26 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     }))
     delivery.push(...results)
   }
+
+  for (const parent of parents.filter((person) => person.role === 'PARENT')) {
+    const officialParent = findOfficialContact(directory, parent)
+    const mothers = (officialParent?.familyContacts || []).filter((contact) => contact.kind === 'MOTHER' && (contact.email || contact.phone))
+    for (const mother of mothers) {
+      if (mother.email?.trim().toLowerCase() === parent.email?.trim().toLowerCase() && mother.phone?.trim() === parent.phone?.trim()) continue
+      const motherName = [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Mère de l’élève'
+      const row: Record<string, unknown> = { userId: parent.id, relationship: 'MOTHER', name: motherName }
+      if (data.channels.includes('email')) row.email = mother.email ? { sent: true, queued: true, reason: 'QUEUED' } : { sent: false, reason: 'MISSING_EMAIL' }
+      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(mother.phone, `${data.subject}\n\n${data.body}`, { brand: false })
+      await prisma.correspondenceLog.createMany({ data: data.channels.map((channel) => {
+        const result = row[channel] as { sent: boolean; queued?: boolean; reason?: string }
+        const queued = channel === 'email' && Boolean(result.queued)
+        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const, subject: data.subject, body: data.body, senderId, recipientName: motherName, recipientEmail: mother.email || null, recipientPhone: mother.phone || null, sentAt: queued ? null : result.sent ? new Date() : null, failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'), metadata: { recipientId: parent.id, relationship: 'MOTHER', ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString() } : {}) } }
+      }) })
+      delivery.push(row)
+    }
+  }
   const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => { const result = row[channel] as { sent?: boolean; queued?: boolean } | undefined; return Boolean(result?.sent || result?.queued) }))
-  return success(res, { recipients: parents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
+  return success(res, { recipients: delivery.length, primaryRecipients: parents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
 }))
 
 messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {

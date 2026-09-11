@@ -13,7 +13,7 @@ const employeeSections = [
   { number:'06', title:'Situation familiale', icon:Building2, fields:[['État civil','marital_status'],['Nom du conjoint','spouse_full_name'],['Téléphone du conjoint','spouse_phone'],['Profession du conjoint','spouse_occupation']] },
 ];
 const basic = {
- student:[['ID élève','student_id'],['Nom complet','full_name'],['Email','email'],['Classe','class_name'],['Parent responsable','parent_name'],['Date de naissance','date_of_birth'],['Genre','gender'],['Carte KCS','kcs_card_id'],['Statut','is_active']],
+ student:[['ID élève / Student ID','student_id'],['Nom complet / Full name','full_name'],['E-mail','email'],['Classe / Class','class_name'],['Parent responsable / Primary parent','parent_name'],['Mère / Mother','mother_contact'],['Autres contacts familiaux / Other family contacts','family_contacts_label'],['Date de naissance / Date of birth','date_of_birth'],['Genre / Gender','gender'],['Carte KCS / KCS card','kcs_card_id'],['Statut / Status','is_active']],
  parent:[['ID parent','parent_external_id'],['Famille / parent','family_name'],['Email','email'],['Téléphone','phone'],['Adresse','address'],['Élèves liés','students_label'],['Classes','classes_label'],['Effectif','student_count'],['Carte KCS','kcs_card_id']],
 };
 const DetailGrid=({fields,entity})=><div className="grid gap-2 sm:grid-cols-2">{fields.map(([label,key])=><div key={key} className="min-w-0 border-l-2 border-cyan-400/40 bg-slate-950/35 px-3 py-2"><p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-medium text-slate-100">{value(entity[key])}</p></div>)}</div>;

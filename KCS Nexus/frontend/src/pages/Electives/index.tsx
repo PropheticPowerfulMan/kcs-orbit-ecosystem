@@ -9,7 +9,7 @@ const grades=['Grade 9','Grade 10','Grade 11','Grade 12']
 const field='w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const tn=(t:any)=>t?[t.lastName,t.middleName,t.firstName].filter(Boolean).join(' '):'À attribuer'
 export default function ElectivesPage(){
- const {user}=useAuthStore(),admin=user?.id==='configured-superadmin',teacher=user?.role==='teacher',student=user?.role==='student'
+ const {user}=useAuthStore(),admin=user?.role==='admin'&&user.id!=='configured-superadmin',teacher=user?.role==='teacher',student=user?.role==='student'
  const [data,setData]=useState<any>({cycles:[]}),[teachers,setTeachers]=useState<any[]>([]),[selected,setSelected]=useState(''),[choices,setChoices]=useState<string[]>(Array(6).fill('')),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[report,setReport]=useState<any>(null)
  const [cf,setCf]=useState({title:'Sélection des cours électifs',academicYear:'2026-2027',semester:1,eligibleGrades:grades})
  const [of,setOf]=useState({code:'',name:'',description:'',eligibleGrades:grades,capacity:24,teacherUserId:''})

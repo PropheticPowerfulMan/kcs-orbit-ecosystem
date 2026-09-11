@@ -281,34 +281,34 @@ const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParen
 
 const createFamilyContactDraft = (kind: FamilyContactDraft['kind']): FamilyContactDraft => ({
   kind, firstName: '', middleName: '', lastName: '',
-  relationship: kind === 'MOTHER' ? 'Mere' : '',
+  relationship: kind === 'MOTHER' ? 'Mère' : '',
   role: kind === 'HOUSEHOLD_AGENT' ? 'Nounou' : '',
   email: '', phone: '', physicalAddress: '',
   authorizedPickup: false, emergencyContact: kind === 'MOTHER',
 })
 
 const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactDraft[]; onChange: (contacts: FamilyContactDraft[]) => void }) => {
-  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: 'Mere de eleve', RELATIVE: 'Membre de la famille', HOUSEHOLD_AGENT: 'Agent de la famille' }
+  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: 'Mère de l’élève', RELATIVE: 'Membre de la famille', HOUSEHOLD_AGENT: 'Agent de la famille' }
   const update = (index: number, values: Partial<FamilyContactDraft>) => onChange(contacts.map((contact, itemIndex) => itemIndex === index ? { ...contact, ...values } : contact))
   return (
-    <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Contacts familiaux complementaires</p>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Renseignez au moins un email ou un telephone pour chaque personne ajoutee.</p>
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+    <section className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40 sm:p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Contacts familiaux complémentaires</p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Renseignez au moins un e-mail ou un téléphone pour chaque personne ajoutée.</p>
+      <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {contacts.map((contact, index) => (
-          <article key={contact.kind} className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900">
+          <article key={contact.kind} className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:p-4">
             <p className="mb-3 text-sm font-bold text-kcs-blue-900 dark:text-white">{labels[contact.kind]}</p>
-            <div className="grid gap-3">
+            <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
               <input value={contact.lastName} onChange={(event) => update(index, { lastName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom" />
               <input value={contact.middleName} onChange={(event) => update(index, { middleName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom" />
-              <input value={contact.firstName} onChange={(event) => update(index, { firstName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom" />
-              <input value={contact.relationship} onChange={(event) => update(index, { relationship: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parente (mere, tante, oncle...)" />
+              <input value={contact.firstName} onChange={(event) => update(index, { firstName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom" />
+              <input value={contact.relationship} onChange={(event) => update(index, { relationship: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parenté (mère, tante, oncle…)" />
               {contact.kind === 'HOUSEHOLD_AGENT' ? <input value={contact.role} onChange={(event) => update(index, { role: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Fonction (nounou, chauffeur, garde...)" /> : null}
               <input type="email" value={contact.email} onChange={(event) => update(index, { email: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email" />
               <InternationalPhoneInput value={contact.phone} onChange={(phone) => update(index, { phone })} />
-              <input value={contact.physicalAddress} onChange={(event) => update(index, { physicalAddress: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse physique" />
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" checked={contact.authorizedPickup} onChange={(event) => update(index, { authorizedPickup: event.target.checked })} />Autorise a recuperer eleve</label>
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300"><input type="checkbox" checked={contact.emergencyContact} onChange={(event) => update(index, { emergencyContact: event.target.checked })} />Contact urgence</label>
+              <input value={contact.physicalAddress} onChange={(event) => update(index, { physicalAddress: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white sm:col-span-2" placeholder="Adresse physique" />
+              <label className="flex items-start gap-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300"><input className="mt-1 shrink-0" type="checkbox" checked={contact.authorizedPickup} onChange={(event) => update(index, { authorizedPickup: event.target.checked })} />Autorisé(e) à récupérer l’élève</label>
+              <label className="flex items-start gap-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300"><input className="mt-1 shrink-0" type="checkbox" checked={contact.emergencyContact} onChange={(event) => update(index, { emergencyContact: event.target.checked })} />Contact d’urgence</label>
             </div>
           </article>
         ))}
@@ -2377,12 +2377,12 @@ const AdminSectionView = ({
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <input value={newFamily.parentLastName} onChange={(event) => setNewFamily((item) => ({ ...item, parentLastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent *" required />
                 <input value={newFamily.parentMiddleName} onChange={(event) => setNewFamily((item) => ({ ...item, parentMiddleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
-                <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom du parent *" required />
-                <input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parent email" />
+                <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent *" required />
+                <input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail du parent" />
                 <InternationalPhoneInput value={newFamily.parentPhone} onChange={(value) => setNewFamily((item) => ({ ...item, parentPhone: value }))} />
                 <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
-                <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Advisor, optional" />
-              <div className="mt-4"><FamilyContactsEditor contacts={newFamily.familyContacts} onChange={(familyContacts) => setNewFamily((item) => ({ ...item, familyContacts }))} /></div>
+                <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:max-w-sm" placeholder="Conseiller pédagogique (facultatif)" />
+                <div className="min-w-0 md:col-span-2"><FamilyContactsEditor contacts={newFamily.familyContacts} onChange={(familyContacts) => setNewFamily((item) => ({ ...item, familyContacts }))} /></div>
               </div>
               <div className="mt-4"><PhotoCaptureField label="Photo du parent" value={newFamily.parentPhotoData} onChange={parentPhotoData=>setNewFamily(item=>({...item,parentPhotoData}))} onError={setStudentNotice}/></div>
               <div className="mt-5 space-y-3">

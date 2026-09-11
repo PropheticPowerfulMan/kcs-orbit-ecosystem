@@ -301,6 +301,13 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     (typeof student?.studentNumber === 'string' && student.studentNumber.trim())
     || externalIds[0]?.externalId
     || `ORBIT-${student?.id}`;
+  const familyContacts = Array.isArray(parent?.familyContacts) ? parent.familyContacts : [];
+  const describeFamilyContact = (contact) => {
+    const name = [contact?.lastName, contact?.middleName, contact?.firstName].filter(Boolean).join(' ');
+    const role = contact?.relationship || contact?.role || contact?.kind || 'Contact';
+    const channels = [contact?.email, contact?.phone].filter(Boolean).join(' · ');
+    return [role, name, channels].filter(Boolean).join(' — ');
+  };
 
   return {
     id: `orbit:${student.id}`,
@@ -326,6 +333,9 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     class_name: normalizeClassDisplay(student?.className) || null,
     parent: parent?.id || null,
     parent_name: parent?.fullName || '',
+    family_contacts: familyContacts,
+    mother_contact: describeFamilyContact(familyContacts.find((contact) => contact?.kind === 'MOTHER')),
+    family_contacts_label: familyContacts.map(describeFamilyContact).filter(Boolean).join(' | '),
     parent_email: parent?.email || '',
     parent_phone: parent?.phone || '',
     parent_address: parent?.physicalAddress || '',
@@ -434,6 +444,7 @@ const mergeLocalAndSharedStudents = (localStudents, sharedDirectory) => {
           parent_email: sharedStudent.parent_email || student.parent_email,
           parent_phone: sharedStudent.parent_phone || student.parent_phone,
           parent_address: sharedStudent.parent_address || student.parent_address,
+          family_contacts: sharedStudent.family_contacts || student.family_contacts || [],
           parent_external_id: sharedStudent.parent_external_id || student.parent_external_id,
           savanex_external_id: sharedStudent.savanex_external_id || student.student_id,
           orbit_id: sharedStudent.orbit_id || student.orbit_id,

@@ -26,7 +26,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
     { to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList },
-    ...(["student", "teacher", "admin"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
+    ...(["student", "teacher"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
   ]
   switch (role) {
     case 'student':
@@ -190,6 +190,7 @@ const PortalSidebar = () => {
   const navItems: NavItem[] = user.role === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
     { to: '/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
+    { to: '/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
     { to: '/admin/records', label: t('portalNav.records'), icon: LibraryBig },
     { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
     { to: '/admin/announcements', label: t('portalNav.announcements'), icon: Megaphone },

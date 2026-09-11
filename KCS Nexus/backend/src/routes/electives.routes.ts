@@ -1,7 +1,7 @@
-import { Router } from 'express'
+import { Router, type NextFunction, type Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 
 export const electivesRouter = Router()
@@ -25,8 +25,9 @@ const offeringSchema = z.object({
 const statusSchema = z.object({ status: z.enum(['DRAFT','OPEN','CLOSED']) })
 const choiceSchema = z.object({ offeringIds: z.array(z.string()).length(6) })
 
-const assertSuperAdmin = (req: AuthenticatedRequest) => {
-  if (req.user?.sub !== 'configured-superadmin') throw new ApiError(403, 'Superadministrator access required')
+const requireAdministrator = () => (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+  if (!req.user || req.user.role !== 'admin' || req.user.sub === 'configured-superadmin') return next(new ApiError(403, 'Administrator access required'))
+  next()
 }
 const cycleOr404 = async (id: string) => {
   const cycle = await prisma.electiveCycle.findUnique({ where: { id } })
@@ -57,18 +58,18 @@ electivesRouter.get('/', authenticate, requireRoles('admin','teacher','student')
   return success(res, { eligible:true, cycles })
 }))
 
-electivesRouter.get('/teachers', authenticate, requireSuperAdmin(), asyncHandler(async (_req, res) => {
+electivesRouter.get('/teachers', authenticate, requireAdministrator(), asyncHandler(async (_req, res) => {
   const teachers = await prisma.user.findMany({ where:{ teacherProfile:{isNot:null} }, select:{id:true,firstName:true,middleName:true,lastName:true,email:true}, orderBy:[{lastName:'asc'},{firstName:'asc'}] })
   return success(res, teachers)
 }))
 
-electivesRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+electivesRouter.post('/', authenticate, requireAdministrator(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = cycleSchema.parse(req.body)
-  const cycle = await prisma.electiveCycle.create({ data:{...data, opensAt:data.opensAt?new Date(data.opensAt):null, closesAt:data.closesAt?new Date(data.closesAt):null, createdById:req.user!.sub==='configured-superadmin'?null:req.user!.sub} })
+  const cycle = await prisma.electiveCycle.create({ data:{...data, opensAt:data.opensAt?new Date(data.opensAt):null, closesAt:data.closesAt?new Date(data.closesAt):null, createdById:req.user!.sub} })
   return success(res, cycle, 'Elective cycle created', 201)
 }))
 
-electivesRouter.patch('/:cycleId/status', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+electivesRouter.patch('/:cycleId/status', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const cycleId=String(req.params.cycleId); await cycleOr404(cycleId)
   const {status}=statusSchema.parse(req.body)
   if(status==='OPEN'){
@@ -88,11 +89,11 @@ electivesRouter.post('/:cycleId/offerings', authenticate, requireRoles('admin','
     const teacher=await prisma.user.findFirst({where:{id:teacherUserId,teacherProfile:{isNot:null}},select:{id:true}})
     if(!teacher)throw new ApiError(400,'Assigned teacher was not found')
   }
-  const offering=await prisma.electiveOffering.create({data:{...data,cycleId,teacherUserId,proposedById:req.user!.sub==='configured-superadmin'?null:req.user!.sub,status:req.user!.role==='teacher'?'PROPOSED':'APPROVED'}})
+  const offering=await prisma.electiveOffering.create({data:{...data,cycleId,teacherUserId,proposedById:req.user!.sub,status:req.user!.role==='teacher'?'PROPOSED':'APPROVED'}})
   return success(res,offering,req.user!.role==='teacher'?'Proposal submitted for approval':'Elective added',201)
 }))
 
-electivesRouter.patch('/offerings/:offeringId', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+electivesRouter.patch('/offerings/:offeringId', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const offeringId=String(req.params.offeringId)
   const data=offeringSchema.partial().extend({status:z.enum(['PROPOSED','APPROVED','REJECTED']).optional()}).parse(req.body)
   if(data.capacity && data.capacity>24)throw new ApiError(400,'Capacity cannot exceed 24')
@@ -100,7 +101,7 @@ electivesRouter.patch('/offerings/:offeringId', authenticate, requireSuperAdmin(
   return success(res,offering,'Elective updated')
 }))
 
-electivesRouter.delete('/offerings/:offeringId', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+electivesRouter.delete('/offerings/:offeringId', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const offeringId=String(req.params.offeringId)
   const used=await prisma.electiveChoice.count({where:{offeringId}})
   if(used)throw new ApiError(409,'This elective already has student choices; reject it instead of deleting it')
@@ -126,7 +127,7 @@ electivesRouter.put('/:cycleId/choices', authenticate, requireRoles('student'), 
   return success(res,{submitted:true,count:6},'Six ranked elective choices submitted')
 }))
 
-electivesRouter.post('/:cycleId/allocate', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+electivesRouter.post('/:cycleId/allocate', authenticate, requireAdministrator(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const cycleId=String(req.params.cycleId); const cycle=await cycleOr404(cycleId)
   if(!['CLOSED','ALLOCATED'].includes(cycle.status))throw new ApiError(409,'Close student choices before allocation')
   const [offerings,choices]=await Promise.all([
@@ -155,7 +156,7 @@ electivesRouter.post('/:cycleId/allocate', authenticate, requireSuperAdmin(), as
   return success(res,{students:students.size,allocations:rows.length,complete:students.size-incomplete.length,incomplete:incomplete.length,remainingCapacity:Object.fromEntries(capacity)},'Allocation completed')
 }))
 
-electivesRouter.post('/:cycleId/publish', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+electivesRouter.post('/:cycleId/publish', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const cycleId=String(req.params.cycleId); const cycle=await cycleOr404(cycleId)
   if(cycle.status!=='ALLOCATED')throw new ApiError(409,'Run allocation before publication')
   const result=await prisma.$transaction(async tx=>{
@@ -165,7 +166,7 @@ electivesRouter.post('/:cycleId/publish', authenticate, requireSuperAdmin(), asy
   return success(res,result,'Final elective lists published')
 }))
 
-electivesRouter.get('/:cycleId/report', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+electivesRouter.get('/:cycleId/report', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const cycleId=String(req.params.cycleId); const cycle=await cycleOr404(cycleId)
   const [offerings,allocations,studentCount]=await Promise.all([
     prisma.electiveOffering.findMany({where:{cycleId},include:{teacher:{select:{firstName:true,middleName:true,lastName:true}},_count:{select:{choices:true,allocations:true}}},orderBy:{name:'asc'}}),
