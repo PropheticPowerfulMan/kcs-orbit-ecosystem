@@ -208,7 +208,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
           recipientPhone: parent.phone,
           sentAt: queued ? null : result.sent ? new Date() : null,
           failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'),
-          metadata: { internalMessageId, recipientId: parent.id, ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString() } : {}) },
+          metadata: { internalMessageId, recipientId: parent.id, ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: parents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) },
         }
       })
       await prisma.correspondenceLog.createMany({ data: deliveryRows })
@@ -229,7 +229,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
       await prisma.correspondenceLog.createMany({ data: data.channels.map((channel) => {
         const result = row[channel] as { sent: boolean; queued?: boolean; reason?: string }
         const queued = channel === 'email' && Boolean(result.queued)
-        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const, subject: data.subject, body: data.body, senderId, recipientName: motherName, recipientEmail: mother.email || null, recipientPhone: mother.phone || null, sentAt: queued ? null : result.sent ? new Date() : null, failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'), metadata: { recipientId: parent.id, relationship: 'MOTHER', ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString() } : {}) } }
+        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const, subject: data.subject, body: data.body, senderId, recipientName: motherName, recipientEmail: mother.email || null, recipientPhone: mother.phone || null, sentAt: queued ? null : result.sent ? new Date() : null, failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'), metadata: { recipientId: parent.id, relationship: 'MOTHER', ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: parents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) } }
       }) })
       delivery.push(row)
     }
@@ -292,7 +292,7 @@ messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest,
           recipientEmail: user.email,
           sentAt: null,
           failureReason: null,
-          metadata: { internalMessageId: messageIds.get(user.id), recipientId: user.id, mailQueueVersion: 1, attempts: 0, nextAttemptAt: now.toISOString(), audience: data.audience },
+          metadata: { internalMessageId: messageIds.get(user.id), recipientId: user.id, mailQueueVersion: 1, attempts: 0, nextAttemptAt: now.toISOString(), audience: data.audience, priority: 'BULK' },
         })),
       })
     }

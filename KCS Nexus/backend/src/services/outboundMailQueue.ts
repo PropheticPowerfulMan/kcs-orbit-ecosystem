@@ -13,6 +13,7 @@ type QueueMetadata = {
   attempts?: number
   nextAttemptAt?: string
   lastAttemptAt?: string
+  priority?: 'HIGH' | 'NORMAL' | 'BULK'
 }
 
 const queueMetadata = (value: unknown): QueueMetadata => value && typeof value === 'object' && !Array.isArray(value) ? value as QueueMetadata : {}
@@ -36,11 +37,10 @@ export async function processOutboundMailQueue() {
   if (processing) return
   processing = true
   try {
-    const rows = await prisma.correspondenceLog.findMany({
-      where: { channel: 'EMAIL', status: 'QUEUED' },
-      orderBy: { createdAt: 'asc' },
-      take: 100,
-    })
+    const [oldestRows, newestRows] = await Promise.all([prisma.correspondenceLog.findMany({ where: { channel: 'EMAIL', status: 'QUEUED' }, orderBy: { createdAt: 'asc' }, take: 100 }), prisma.correspondenceLog.findMany({ where: { channel: 'EMAIL', status: 'QUEUED' }, orderBy: { createdAt: 'desc' }, take: 100 })])
+    const rows = [...new Map([...oldestRows, ...newestRows].map(row => [row.id, row])).values()]
+    const rank = (row: typeof rows[number]) => ({ HIGH: 0, NORMAL: 1, BULK: 2 }[queueMetadata(row.metadata).priority ?? 'BULK'])
+    rows.sort((left, right) => rank(left) - rank(right) || left.createdAt.getTime() - right.createdAt.getTime())
     const now = new Date()
     const row = rows.find((candidate) => {
       const metadata = queueMetadata(candidate.metadata)
