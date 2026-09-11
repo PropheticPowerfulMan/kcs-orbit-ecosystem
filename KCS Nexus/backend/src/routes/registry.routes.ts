@@ -539,8 +539,10 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
 
   if (orbitRegistryIsEnabled()) {
     const updated = await updateRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
+    const directoryAfter = await getSharedDirectoryFromOrbit()
     const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
-    const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, { ...before, ...(req.body ?? {}) }, 'updated')
+    const canonicalEntity = findDirectoryEntity(directoryAfter, entityType, before?.id || String(req.params.identifier))
+    const notificationDelivery = await deliverEntityChange(directoryAfter, entityType, canonicalEntity || { ...before, ...(req.body ?? {}) }, 'updated')
     return success(res, { ...(updated as object), notificationDelivery }, 'Shared entity updated through Orbit')
   }
 
@@ -558,7 +560,8 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
   }).parse(req.body ?? {})
 
   const updated = await updateLocalParentEntity(String(req.params.identifier), payload)
-  return success(res, updated, 'Parent updated in local registry')
+  const notificationDelivery = await deliverEntityChange(null, entityType, { ...updated, fullName: composeAdministrativeName(updated) }, 'updated')
+  return success(res, { ...updated, notificationDelivery }, 'Parent updated in local registry')
 }))
 
 registryRouter.post('/entities/:entityType/:identifier/reset-access', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
