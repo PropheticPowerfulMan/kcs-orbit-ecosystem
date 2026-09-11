@@ -3,8 +3,8 @@ import { prisma } from '../config/prisma.js'
 import { sendSchoolMail } from '../utils/mail.js'
 
 export const MAIL_QUEUE_VERSION = 1
-// 16 seconds keeps the sustained rate at 225/hour, below the LWS 240/hour ceiling.
-export const MAIL_QUEUE_INTERVAL_MS = 16_000
+// 20 seconds keeps the queue at 180/hour and reserves 60/hour for password resets and other transactional messages under the LWS 240/hour ceiling.
+export const MAIL_QUEUE_INTERVAL_MS = 20_000
 
 type QueueMetadata = {
   mailQueueVersion?: number

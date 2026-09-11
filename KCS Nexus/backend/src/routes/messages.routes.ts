@@ -302,7 +302,7 @@ messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest,
     audience: data.audience,
     emailQueued: emailRecipients.length,
     emailMissing: users.length - emailRecipients.length,
-    estimatedMinutes: Math.ceil(emailRecipients.length * 16 / 60),
+    estimatedMinutes: Math.ceil(emailRecipients.length * 20 / 60),
   }, 'Communication recorded and email delivery safely queued', 201)
 }))
 

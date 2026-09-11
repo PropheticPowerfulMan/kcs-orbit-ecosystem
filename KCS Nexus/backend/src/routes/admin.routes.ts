@@ -163,7 +163,7 @@ adminRouter.get('/analytics', asyncHandler(async (req, res) => {
     academics: { gradedItems: grades._count, averagePercentage: grades._avg.percentage == null ? null : Number(grades._avg.percentage.toFixed(1)) },
     attendance: { total: attendanceTotal, present: attendanceMap.PRESENT || 0, absent: attendanceMap.ABSENT || 0, late: attendanceMap.LATE || 0, excused: attendanceMap.EXCUSED || 0, rate: attendanceTotal ? Number((present / attendanceTotal * 100).toFixed(1)) : null },
     engagement: { parentForumPosts: forumPosts, parentForumComments: forumComments, studentForumPosts, internalMessages: messages, notifications },
-    communications: { delivery, emailQueued, emailSent, emailFailed, workerCapacityPerHour: 225 },
+    communications: { delivery, emailQueued, emailSent, emailFailed, workerCapacityPerHour: 180 },
     admissions: applications.map((row) => ({ status: row.status, count: row._count })),
     risks,
     evidence: { auditEvents: audits, openIncidents: incidents, recommendations: recommendations.length },

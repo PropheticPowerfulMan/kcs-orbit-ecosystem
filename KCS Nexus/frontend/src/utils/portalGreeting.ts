@@ -9,7 +9,7 @@ export function getLocalizedGreeting(language: Language, date = new Date()) {
 
   if (language === 'fr') {
     if (hour < 12) return 'Bonjour'
-    if (hour < 18) return 'Bon apres-midi'
+    if (hour < 18) return 'Bon après-midi'
     return 'Bonsoir'
   }
 
