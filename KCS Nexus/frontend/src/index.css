@@ -1424,3 +1424,5 @@ html:not(.dark) .parent-portal-shell main textarea {
 .prose-kcs {
   @apply prose prose-blue dark:prose-invert max-w-none;
 }
+
+.theme-switching, .theme-switching * { transition: none !important; animation-duration: 0s !important; }

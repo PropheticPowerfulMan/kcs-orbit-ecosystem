@@ -103,6 +103,7 @@ type AdminStudentRecord = {
   dateOfBirth?: string | null
   photoData?: string | null
   responsibleParents?: Array<{ id: string; name: string; email: string; phone: string; relationship: string }>
+  familyContacts?: FamilyContactDraft[]
 }
 
 type FamilyContactDraft = {
@@ -443,6 +444,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     isEditable: true,
     isDeletable: typeof profile.isDeletable === 'boolean' ? profile.isDeletable : true,
     responsibleParents,
+    familyContacts: parent?.familyContacts ?? [],
   }
 }
 
@@ -777,6 +779,13 @@ const buildAdminParentRecordsFromDirectory = (
     }
   }).sort((left, right) => left.name.localeCompare(right.name))
 }
+
+
+const attachFamilyContacts = (roster: AdminStudentRecord[], directory?: SharedDirectoryPayload | null) => roster.map((student) => {
+  const key = student.parentEmail?.trim().toLowerCase()
+  const parent = directory?.parents?.find((item) => (key && item.email?.trim().toLowerCase() === key) || item.fullName === student.parent)
+  return parent ? { ...student, familyContacts: parent.familyContacts ?? [] } : student
+})
 
 const buildAdminReportDocument = (
   title: string,
@@ -1361,7 +1370,7 @@ const AdminSectionView = ({
       setApiSynced(false)
       return [] as AdminStudentRecord[]
     }
-    const apiRoster = profiles.map(apiProfileToRosterRecord)
+    const apiRoster = attachFamilyContacts(profiles.map(apiProfileToRosterRecord), directory ?? sharedDirectory)
     setOfficialRoster(apiRoster)
     saveRoster(apiRoster)
     setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? null)
@@ -1397,7 +1406,7 @@ const AdminSectionView = ({
           setApiSynced(false)
           return
         }
-        const apiRoster = profiles.map(apiProfileToRosterRecord)
+        const apiRoster = attachFamilyContacts(profiles.map(apiProfileToRosterRecord), directory ?? sharedDirectory)
         setOfficialRoster(apiRoster)
         saveRoster(apiRoster)
         setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? null)
@@ -2603,6 +2612,10 @@ const AdminSectionView = ({
                       ))}
                     </div>
                   </section>
+                  <section className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux compl\u00e9mentaires</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => <article key={contact.kind + index} className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70"><p className="font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p><p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-200">{contact.relationship || contact.role || contact.kind}</p><p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseign\u00e9'}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'T\u00e9l\u00e9phone non renseign\u00e9'}</p></article>) : <p className="text-sm text-gray-500">Aucun contact compl\u00e9mentaire enregistr\u00e9.</p>}</div>
+                  </section>
                 </div>
 
                 <aside className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/55">
@@ -2728,6 +2741,7 @@ const AdminSectionView = ({
                     </label>
                   </div>
                 </section>
+                <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40"><FamilyContactsEditor contacts={editingStudent.familyContacts ?? []} onChange={(familyContacts) => setEditingStudent((current) => current ? { ...current, familyContacts } : current)} /></section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liée</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
