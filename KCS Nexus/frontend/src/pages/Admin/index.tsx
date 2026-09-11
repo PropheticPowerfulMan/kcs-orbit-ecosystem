@@ -140,6 +140,9 @@ type SharedDirectoryParent = {
   id: string
   displayId?: string
   fullName: string
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   email?: string | null
   phone?: string | null
   physicalAddress?: string | null
@@ -758,7 +761,8 @@ const buildAdminParentRecordsFromDirectory = (
     return {
       id: parent.id,
       displayId,
-      name: parent.fullName || 'Parent record pending',
+      name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ').trim()
+        || parent.fullName || 'Parent record pending',
       email: parent.email || 'Email non renseigne',
       phone: parent.phone || 'Telephone non renseigne',
       physicalAddress: parent.physicalAddress || 'Adresse non renseignee',
@@ -1302,10 +1306,10 @@ const AdminSectionView = ({
       setCommunicationHistory(rows.map((message: any) => ({
         id: message.id,
         direction: 'Sent',
-        audience: message.recipient ? [message.recipient.firstName, message.recipient.lastName].filter(Boolean).join(' ') + ' (' + message.recipient.role + ')' : message.targetRole ?? 'Audience',
+        audience: message.recipient ? [message.recipient.lastName, message.recipient.middleName, message.recipient.firstName].filter(Boolean).join(' ') + ' (' + message.recipient.role + ')' : message.targetRole ?? 'Audience',
         subject: message.subject,
         body: message.body,
-        sender: message.sender ? [message.sender.firstName, message.sender.lastName].filter(Boolean).join(' ') : 'Administration',
+        sender: message.sender ? [message.sender.lastName, message.sender.middleName, message.sender.firstName].filter(Boolean).join(' ') : 'Administration',
         timestamp: new Date(message.createdAt).toLocaleString(),
         status: message.readAt ? 'Read' : 'Delivered',
       })))
@@ -1324,7 +1328,7 @@ const AdminSectionView = ({
       setSentNotice(language === 'fr' ? 'Communication enregistrée pour ' + count + ' destinataire(s) ; ' + emailQueued + ' e-mail(s) mis en file (~' + estimatedMinutes + ' min).' : 'Communication recorded for ' + count + ' recipient(s); ' + emailQueued + ' email(s) queued (~' + estimatedMinutes + ' min).')
       const history = await messagesAPI.getAll({ box: 'sent' })
       const rows = history.data?.data ?? []
-      setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.firstName,message.recipient.lastName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.firstName,message.sender.lastName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(), status: message.readAt ? 'Read' : 'Delivered' })))
+      setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.lastName,message.recipient.middleName,message.recipient.firstName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.lastName,message.sender.middleName,message.sender.firstName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(), status: message.readAt ? 'Read' : 'Delivered' })))
     } catch (error: any) { setSentNotice(error?.response?.data?.message ?? 'The communication could not be delivered.') }
     finally { setCommunicationSending(false) }
   }

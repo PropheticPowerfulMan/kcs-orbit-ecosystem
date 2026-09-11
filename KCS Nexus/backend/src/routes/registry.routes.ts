@@ -313,6 +313,9 @@ function composeAdministrativeName(person: { firstName?: string | null; middleNa
   return [person.lastName, person.middleName, person.firstName].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
 
+function administrativeIdentityKey(value: string) {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join('|')
+}
 const registerFamilySchema = z.object({
   parent: z.object({
     firstName: z.string().min(1),
@@ -568,7 +571,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       || item.externalIds?.some((link: any) => link.externalId === identifier)
   ) as any
 
-  if (!entity && entityType === 'parent') {
+  if (entityType === 'parent') {
     const localParent = await prisma.user.findFirst({
       where: {
         role: 'PARENT',
@@ -580,18 +583,20 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
         ],
       },
     })
-    if (localParent) {
-      entity = {
-        id: localParent.orbitUserId || localParent.id,
-        fullName: composeAdministrativeName(localParent),
-        firstName: localParent.firstName,
-        middleName: localParent.middleName,
-        lastName: localParent.lastName,
-        email: localParent.email,
-        phone: localParent.phone,
-        displayId: localParent.accessCode,
-        externalIds: [],
-      }
+    if (!entity && localParent) {
+      const localIdentity = administrativeIdentityKey(composeAdministrativeName(localParent))
+      entity = directory.parents.find((candidate) => administrativeIdentityKey(candidate.fullName) === localIdentity)
+        || {
+          id: localParent.orbitUserId || localParent.id,
+          fullName: composeAdministrativeName(localParent),
+          firstName: localParent.firstName,
+          middleName: localParent.middleName,
+          lastName: localParent.lastName,
+          email: localParent.email,
+          phone: localParent.phone,
+          displayId: localParent.accessCode,
+          externalIds: [],
+        }
     }
   }
 
@@ -613,6 +618,32 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
   }
 
   if (!entity) throw new ApiError(404, 'Entite introuvable dans le registre partage ou dans KCS Nexus.')
+
+  if (entityType === 'parent') {
+    const officialIdentity = administrativeIdentityKey(entity.fullName || composeAdministrativeName(entity))
+    const parentAccounts = await prisma.user.findMany({ where: { role: 'PARENT' } })
+    const localAccount = parentAccounts.find((candidate) =>
+      candidate.orbitUserId === entity.id
+      || (entity.email && candidate.email?.toLowerCase() === entity.email.toLowerCase())
+      || administrativeIdentityKey(composeAdministrativeName(candidate)) === officialIdentity
+    )
+    if (localAccount) {
+      const officialEmail = typeof entity.email === 'string' && !entity.email.toLowerCase().endsWith('.local') ? entity.email : null
+      const emailOwner = officialEmail ? await prisma.user.findFirst({ where: { email: { equals: officialEmail, mode: 'insensitive' }, id: { not: localAccount.id } }, select: { id: true } }) : null
+      await prisma.user.update({
+        where: { id: localAccount.id },
+        data: {
+          orbitUserId: entity.id,
+          firstName: entity.firstName || localAccount.firstName,
+          middleName: entity.middleName || null,
+          lastName: entity.lastName || localAccount.lastName,
+          email: officialEmail && !emailOwner ? officialEmail : localAccount.email,
+          phone: entity.phone || localAccount.phone,
+          avatar: entity.photoData || localAccount.avatar,
+        },
+      })
+    }
+  }
 
   const linkedSavanexExternalId = entity.externalIds?.find((link: any) => String(link.appSlug).toUpperCase() === 'SAVANEX')?.externalId
   const savanexExternalId = entityType === 'student'

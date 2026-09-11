@@ -28,7 +28,7 @@ const AccountSettingsPanel = ({ roleLabel }: AccountSettingsPanelProps) => {
     })
   }, [user?.id])
 
-  const displayName = [profile.firstName, profile.middleName, profile.lastName].filter(Boolean).join(' ') || 'Portal user'
+  const displayName = [profile.lastName, profile.middleName, profile.firstName].filter(Boolean).join(' ') || 'Portal user'
   const initials = `${profile.firstName[0] ?? 'K'}${profile.lastName[0] ?? 'C'}`.toUpperCase()
 
   const choosePhoto = (file?: File) => {
