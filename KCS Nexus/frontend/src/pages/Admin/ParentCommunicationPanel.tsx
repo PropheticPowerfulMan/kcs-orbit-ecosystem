@@ -71,12 +71,16 @@ export default function ParentCommunicationPanel() {
   const [notice, setNotice] = useState('')
 
   const load = async () => {
-    const [contactsResponse, historyResponse] = await Promise.all([
-      messagesAPI.getParentContacts(),
-      messagesAPI.getAll({ box: 'all' }),
+    const retryOnce = async <T,>(request: () => Promise<T>) => {
+      try { return await request() } catch { return request() }
+    }
+    const [contactsResult, historyResult] = await Promise.allSettled([
+      retryOnce(() => messagesAPI.getParentContacts()),
+      retryOnce(() => messagesAPI.getAll({ box: 'all' })),
     ])
-    setParents(contactsResponse.data?.data ?? [])
-    setHistory(historyResponse.data?.data ?? [])
+    if (contactsResult.status === 'fulfilled') setParents(contactsResult.value.data?.data ?? [])
+    if (historyResult.status === 'fulfilled') setHistory(historyResult.value.data?.data ?? [])
+    if (contactsResult.status === 'rejected') throw contactsResult.reason
   }
 
   useEffect(() => {

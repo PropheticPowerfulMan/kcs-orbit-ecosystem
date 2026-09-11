@@ -363,9 +363,9 @@ export const financeAPI = {
 }
 
 export const messagesAPI = {
-  getAll: (params?: { q?: string; box?: string }) => api.get('/messages', { params }),
+  getAll: (params?: { q?: string; box?: string }) => api.get('/messages', { params, timeout: 30_000 }),
   getContacts: () => api.get('/messages/contacts'),
-  getParentContacts: () => api.get('/messages/parent-contacts'),
+  getParentContacts: () => api.get('/messages/parent-contacts', { timeout: 30_000 }),
   deliverToParents: (data: FormData) => api.post('/messages/parent-delivery', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   attachment: (id: string) => api.get(`/messages/${id}/attachment`, { responseType: 'blob' }),
   send: (data: { recipientId: string; subject: string; body: string }) => api.post('/messages', data),
