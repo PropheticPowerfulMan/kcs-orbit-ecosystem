@@ -54,7 +54,6 @@ export default function ParentCommunicationPanel() {
   const [parentQuery, setParentQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [gradeFilter, setGradeFilter] = useState('ALL')
-  const [classFilter, setClassFilter] = useState('ALL')
   const [contactFilter, setContactFilter] = useState('ALL')
   const [channels, setChannels] = useState<Array<'email' | 'sms'>>(['email', 'sms'])
   const [subject, setSubject] = useState('')
@@ -88,7 +87,6 @@ export default function ParentCommunicationPanel() {
     const available = new Set<string>(parents.flatMap((person) => person.grades ?? []).map(normalizeGrade).filter(Boolean))
     return [...requiredGradeOptions, ...[...available].filter((grade) => !requiredGradeOptions.includes(grade))]
   }, [parents])
-  const classOptions = useMemo(() => [...new Set(parents.flatMap((person) => person.classes ?? []))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), [parents])
 
   const parentRows = useMemo(() => {
     const tokens = parentQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -96,11 +94,10 @@ export default function ParentCommunicationPanel() {
       const haystack = [displayName(parent), parent.email, parent.phone, parent.accessCode, parent.role, parent.department, parent.function, ...(parent.grades ?? []), ...(parent.classes ?? [])].filter(Boolean).join(' ').toLowerCase()
       return (roleFilter === 'ALL' || parent.role === roleFilter)
         && (gradeFilter === 'ALL' || (parent.grades ?? []).map(normalizeGrade).includes(gradeFilter))
-        && (classFilter === 'ALL' || (parent.classes ?? []).includes(classFilter))
         && (contactFilter === 'ALL' || (contactFilter === 'EMAIL' ? Boolean(parent.email) : contactFilter === 'SMS' ? Boolean(parent.phone) : Boolean(parent.email && parent.phone)))
         && tokens.every((token) => haystack.includes(token))
     })
-  }, [parentQuery, parents, roleFilter, gradeFilter, classFilter, contactFilter])
+  }, [parentQuery, parents, roleFilter, gradeFilter, contactFilter])
 
   const historyRows = useMemo(() => {
     const tokens = historyQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -185,7 +182,7 @@ export default function ParentCommunicationPanel() {
             <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.recipients}</p><h2 className="text-2xl font-bold dark:text-white">{c.families}</h2></div>
             <b className="text-kcs-blue-700 dark:text-white">{selectedParents.length} {c.selected}</b>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4"><select className={fieldClass} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={classFilter} onChange={(event) => setClassFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les classes' : 'All classes'}</option>{classOptions.map((item) => <option key={String(item)} value={String(item)}>{String(item)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select className={fieldClass} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
           <div className="mt-3 flex flex-wrap gap-2">
             <button className={primaryButton} onClick={() => setSelectedParents((current) => allParentsSelected ? current.filter((id) => !parentRows.some((parent) => parent.id === id)) : Array.from(new Set([...current, ...parentRows.map((parent) => parent.id)])))}>
               {allParentsSelected ? <CheckSquare size={17} /> : <Square size={17} />} {allParentsSelected ? c.deselect : c.selectResults}
