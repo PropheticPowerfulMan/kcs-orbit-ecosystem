@@ -174,24 +174,37 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     getOrbitDirectory(),
   ])
   if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid communication accounts.')
+  const deliveryParents = parents.map((parent) => {
+    const official = findOfficialContact(directory, parent)
+    const officialEmail = official?.email?.trim()
+    const nexusEmail = parent.email?.trim()
+    return {
+      ...parent,
+      firstName: official?.firstName || parent.firstName,
+      middleName: official?.middleName || parent.middleName,
+      lastName: official?.lastName || parent.lastName,
+      email: officialEmail && !officialEmail.toLowerCase().endsWith('.local') ? officialEmail : nexusEmail && !nexusEmail.toLowerCase().endsWith('.local') ? nexusEmail : null,
+      phone: official?.phone || parent.phone,
+    }
+  })
 
   const createdMessages = await prisma.$transaction(async (tx) => {
     const rows = []
-    for (const parent of parents) {
+    for (const parent of deliveryParents) {
       rows.push(await tx.internalMessage.create({ data: { senderId, recipientId: parent.id, subject: data.subject, body: data.body, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, select: { id: true, recipientId: true } }))
     }
-    await tx.notification.createMany({ data: parents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(parent.role) })) })
+    await tx.notification.createMany({ data: deliveryParents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(parent.role) })) })
     return rows
   })
   const messageIdByRecipient = new Map(createdMessages.map((message) => [message.recipientId, message.id]))
 
   const delivery: Array<Record<string, unknown>> = []
-  for (let index = 0; index < parents.length; index += 10) {
-    const batch = parents.slice(index, index + 10)
+  for (let index = 0; index < deliveryParents.length; index += 10) {
+    const batch = deliveryParents.slice(index, index + 10)
     const results = await Promise.all(batch.map(async (parent) => {
       const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
       const attachmentNote = req.file ? `\n\nDocument joint : ${req.file.originalname}. Disponible aussi dans votre boîte Nexus.` : ''
-      if (data.channels.includes('email')) row.email = { sent: true, queued: true, reason: 'QUEUED' }
+      if (data.channels.includes('email')) row.email = parent.email ? { sent: true, queued: true, reason: 'QUEUED' } : { sent: false, reason: 'MISSING_OFFICIAL_EMAIL' }
       if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}${attachmentNote}`, { brand: false })
       const internalMessageId = messageIdByRecipient.get(parent.id)
       const deliveryRows = data.channels.map((channel) => {
@@ -208,7 +221,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
           recipientPhone: parent.phone,
           sentAt: queued ? null : result.sent ? new Date() : null,
           failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'),
-          metadata: { internalMessageId, recipientId: parent.id, ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: parents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) },
+          metadata: { internalMessageId, recipientId: parent.id, ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: deliveryParents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) },
         }
       })
       await prisma.correspondenceLog.createMany({ data: deliveryRows })
@@ -217,7 +230,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     delivery.push(...results)
   }
 
-  for (const parent of parents.filter((person) => person.role === 'PARENT')) {
+  for (const parent of deliveryParents.filter((person) => person.role === 'PARENT')) {
     const officialParent = findOfficialContact(directory, parent)
     const mothers = (officialParent?.familyContacts || []).filter((contact) => contact.kind === 'MOTHER' && (contact.email || contact.phone))
     for (const mother of mothers) {
@@ -229,13 +242,13 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
       await prisma.correspondenceLog.createMany({ data: data.channels.map((channel) => {
         const result = row[channel] as { sent: boolean; queued?: boolean; reason?: string }
         const queued = channel === 'email' && Boolean(result.queued)
-        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const, subject: data.subject, body: data.body, senderId, recipientName: motherName, recipientEmail: mother.email || null, recipientPhone: mother.phone || null, sentAt: queued ? null : result.sent ? new Date() : null, failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'), metadata: { recipientId: parent.id, relationship: 'MOTHER', ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: parents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) } }
+        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const, subject: data.subject, body: data.body, senderId, recipientName: motherName, recipientEmail: mother.email || null, recipientPhone: mother.phone || null, sentAt: queued ? null : result.sent ? new Date() : null, failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'), metadata: { recipientId: parent.id, relationship: 'MOTHER', ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: deliveryParents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) } }
       }) })
       delivery.push(row)
     }
   }
   const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => { const result = row[channel] as { sent?: boolean; queued?: boolean } | undefined; return Boolean(result?.sent || result?.queued) }))
-  return success(res, { recipients: delivery.length, primaryRecipients: parents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
+  return success(res, { recipients: delivery.length, primaryRecipients: deliveryParents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
 }))
 
 messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
