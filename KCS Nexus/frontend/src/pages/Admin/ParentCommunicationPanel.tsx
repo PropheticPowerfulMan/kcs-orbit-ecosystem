@@ -5,6 +5,14 @@ import { messagesAPI } from '../../services/api'
 
 const fieldClass = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-45'
+const requiredGradeOptions = ['K3', 'K4', 'K5', ...Array.from({ length: 12 }, (_, index) => `Grade ${index + 1}`)]
+const normalizeGrade = (value: unknown) => {
+  const grade = String(value ?? '').trim()
+  const kindergarten = grade.match(/(?:kindergarten\s*)?(?:k|grade)?\s*([3-5])\b/i)
+  if (kindergarten && /kindergarten|\bk\s*[3-5]\b/i.test(grade)) return `K${kindergarten[1]}`
+  const numbered = grade.match(/(?:grade\s*)?(1[0-2]|[1-9])\b/i)
+  return numbered ? `Grade ${Number(numbered[1])}` : grade
+}
 
 const displayName = (parent: any) => [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') || 'Destinataire'
 const messageRecipient = (message: any) => {
@@ -76,7 +84,10 @@ export default function ParentCommunicationPanel() {
     void load().catch(() => setNotice(c.loadFailed))
   }, [])
 
-  const gradeOptions = useMemo(() => [...new Set(parents.flatMap((person) => person.grades ?? []))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), [parents])
+  const gradeOptions = useMemo(() => {
+    const available = new Set<string>(parents.flatMap((person) => person.grades ?? []).map(normalizeGrade).filter(Boolean))
+    return [...requiredGradeOptions, ...[...available].filter((grade) => !requiredGradeOptions.includes(grade))]
+  }, [parents])
   const classOptions = useMemo(() => [...new Set(parents.flatMap((person) => person.classes ?? []))].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })), [parents])
 
   const parentRows = useMemo(() => {
@@ -84,7 +95,7 @@ export default function ParentCommunicationPanel() {
     return parents.filter((parent) => {
       const haystack = [displayName(parent), parent.email, parent.phone, parent.accessCode, parent.role, parent.department, parent.function, ...(parent.grades ?? []), ...(parent.classes ?? [])].filter(Boolean).join(' ').toLowerCase()
       return (roleFilter === 'ALL' || parent.role === roleFilter)
-        && (gradeFilter === 'ALL' || (parent.grades ?? []).includes(gradeFilter))
+        && (gradeFilter === 'ALL' || (parent.grades ?? []).map(normalizeGrade).includes(gradeFilter))
         && (classFilter === 'ALL' || (parent.classes ?? []).includes(classFilter))
         && (contactFilter === 'ALL' || (contactFilter === 'EMAIL' ? Boolean(parent.email) : contactFilter === 'SMS' ? Boolean(parent.phone) : Boolean(parent.email && parent.phone)))
         && tokens.every((token) => haystack.includes(token))
