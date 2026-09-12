@@ -277,9 +277,11 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
         parent: {
           id: parent.id,
           email: parent.email ?? null,
-          firstName: parentName.firstName,
-          lastName: parentName.lastName,
+          firstName: parent.firstName || parentName.firstName,
+          middleName: parent.middleName ?? null,
+          lastName: parent.lastName || parentName.lastName,
           phone: parent.phone ?? null,
+          familyContacts: parent.familyContacts ?? [],
           avatar: parent.photoData ?? null,
           role: 'PARENT',
         },

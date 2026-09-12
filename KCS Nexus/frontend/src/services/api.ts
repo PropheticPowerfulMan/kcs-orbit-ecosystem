@@ -158,7 +158,7 @@ export const eventsAPI = {
 // --- Students API ---
 export const studentsAPI = {
   getAll: (params?: object, config?: object) => api.get('/students', { params, ...config }),
-  getMyChildren: () => api.get('/students/me/children'),
+  getMyChildren: () => api.get('/students/me/children', { timeout: 30_000 }),
   getMyOverview: () => api.get('/students/me/overview'),
   getById: (id: string) => api.get(`/students/${id}`),
   create: (data: object) => api.post('/students', data),

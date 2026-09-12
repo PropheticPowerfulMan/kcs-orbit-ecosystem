@@ -783,7 +783,7 @@ const buildAdminParentRecordsFromDirectory = (
 
 const attachFamilyContacts = (roster: AdminStudentRecord[], directory?: SharedDirectoryPayload | null) => roster.map((student) => {
   const key = student.parentEmail?.trim().toLowerCase()
-  const parent = directory?.parents?.find((item) => (key && item.email?.trim().toLowerCase() === key) || item.fullName === student.parent)
+  const parent = directory?.parents?.find((item) => item.studentIds?.includes(student.id) || (key && item.email?.trim().toLowerCase() === key) || item.fullName === student.parent)
   return parent ? { ...student, familyContacts: parent.familyContacts ?? [] } : student
 })
 

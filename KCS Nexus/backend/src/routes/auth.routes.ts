@@ -386,9 +386,12 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
     if (!response.ok) return user
     const directory = await response.json() as Record<string, Array<Record<string, unknown>>>
     const accessCode = (user.accessCode || '').trim().toUpperCase()
+    const orbitUserId = (user.orbitUserId || '').trim().toUpperCase()
     const email = user.email.trim().toLowerCase()
     const entity = (directory[collection] || []).find((item) => {
       const identifiers = [
+        item.id,
+        item.userId,
         item.accessCode,
         item.email,
         item.displayId,
@@ -400,7 +403,8 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
         .map((value) => String(value || '').trim().toUpperCase())
         .filter(Boolean)
 
-      return (accessCode && identifiers.includes(accessCode))
+      return (orbitUserId && identifiers.includes(orbitUserId))
+        || (accessCode && identifiers.includes(accessCode))
         || (email && identifiers.includes(email.toUpperCase()))
     })
     if (!entity) {
@@ -489,15 +493,20 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
   const user = accessCodeUser || emailUser
 
   if (user) {
+    // Orbit remains the identity authority after an account has been linked.
+    // A secondary login provider must not reorder canonical identity fields.
+    const preserveCanonicalIdentity = Boolean(user.orbitUserId)
     return prisma.user.update({
       where: { id: user.id },
       data: {
-        email: emailUser && emailUser.id !== user.id ? user.email : externalUser.email,
+        ...(!preserveCanonicalIdentity ? {
+          email: emailUser && emailUser.id !== user.id ? user.email : externalUser.email,
+          firstName: externalUser.firstName,
+          middleName: externalUser.middleName,
+          lastName: externalUser.lastName,
+        } : {}),
         accessCode: externalUser.accessCode,
         role: externalUser.role,
-        firstName: externalUser.firstName,
-        middleName: externalUser.middleName,
-        lastName: externalUser.lastName,
         permissions: externalUser.permissions ?? [],
         staffFunction: externalUser.staffFunction ?? null,
         passwordHash,
