@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import type { Attachment } from 'nodemailer/lib/mailer/index.js'
 import { env } from '../config/env.js'
+import { kcsBrandedEmailHtml } from './emailTemplate.js'
 
 type MailPayload = {
   to?: string
@@ -56,7 +57,7 @@ export const sendSchoolMail = async ({ to = env.SCHOOL_EMAIL, replyTo = env.SMTP
   const normalizedText = text.normalize('NFC')
   const normalizedHtml = html?.normalize('NFC')
   try {
-    await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? brandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
+    await transporter.sendMail({ from: env.SMTP_FROM || env.SMTP_USER, to, replyTo, subject: normalizedSubject, text: normalizedText, html: branded ? kcsBrandedEmailHtml(normalizedSubject, normalizedText, normalizedHtml) : normalizedHtml, attachments, textEncoding: 'base64', headers: { 'Content-Language': 'fr' } })
     return { sent: true as const, provider: 'smtp' as const }
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown SMTP error'
