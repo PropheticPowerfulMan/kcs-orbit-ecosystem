@@ -3,8 +3,10 @@ import { prisma } from '../config/prisma.js'
 import { sendSchoolMail } from '../utils/mail.js'
 
 export const MAIL_QUEUE_VERSION = 1
-// 20 seconds keeps the queue at 180/hour and reserves 60/hour for password resets and other transactional messages under the LWS 240/hour ceiling.
-export const MAIL_QUEUE_INTERVAL_MS = 20_000
+// LWS currently enforces 120 messages per sender/hour. Keep bulk traffic at 90/hour
+// so password resets and other transactional messages retain a safe allowance.
+export const MAIL_QUEUE_INTERVAL_MS = 40_000
+export const MAIL_RATE_LIMIT_DELAY_MS = 66 * 60_000
 
 type QueueMetadata = {
   mailQueueVersion?: number
@@ -26,7 +28,7 @@ export function isRetryableMailFailure(reason?: string, detail?: string) {
 }
 
 export function mailRetryDelayMs(detail: string | undefined, attempts: number) {
-  if (rateLimited(detail)) return 66 * 60_000
+  if (rateLimited(detail)) return MAIL_RATE_LIMIT_DELAY_MS
   if (connectionLimited(detail)) return 5 * 60_000
   return Math.min(60 * 60_000, Math.max(5 * 60_000, 5 * 60_000 * 2 ** Math.max(0, attempts - 1)))
 }
@@ -39,6 +41,19 @@ export async function processOutboundMailQueue() {
   try {
     const [oldestRows, newestRows] = await Promise.all([prisma.correspondenceLog.findMany({ where: { channel: 'EMAIL', status: 'QUEUED' }, orderBy: { createdAt: 'asc' }, take: 100 }), prisma.correspondenceLog.findMany({ where: { channel: 'EMAIL', status: 'QUEUED' }, orderBy: { createdAt: 'desc' }, take: 100 })])
     const rows = [...new Map([...oldestRows, ...newestRows].map(row => [row.id, row])).values()]
+    // A sender-hour rejection applies to the whole SMTP account, not only to the
+    // rejected recipient. Honour the longest active rate-limit delay globally so
+    // the worker does not hammer LWS for every remaining campaign recipient.
+    const globalRateLimitUntil = rows.reduce<Date | null>((latest, candidate) => {
+      if (!rateLimited(candidate.failureReason ?? '')) return latest
+      const nextAttemptAtValue = queueMetadata(candidate.metadata).nextAttemptAt
+      if (!nextAttemptAtValue) return latest
+      const nextAttemptAt = new Date(nextAttemptAtValue)
+      const now = new Date()
+      if (Number.isNaN(nextAttemptAt.getTime()) || nextAttemptAt <= now) return latest
+      return !latest || nextAttemptAt > latest ? nextAttemptAt : latest
+    }, null)
+    if (globalRateLimitUntil) return
     const rank = (row: typeof rows[number]) => ({ HIGH: 0, NORMAL: 1, BULK: 2 }[queueMetadata(row.metadata).priority ?? 'BULK'])
     rows.sort((left, right) => rank(left) - rank(right) || left.createdAt.getTime() - right.createdAt.getTime())
     const now = new Date()

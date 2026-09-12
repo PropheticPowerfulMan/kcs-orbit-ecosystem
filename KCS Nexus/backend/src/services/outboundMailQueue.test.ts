@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isRetryableMailFailure, mailRetryDelayMs } from './outboundMailQueue.js'
+import { MAIL_QUEUE_INTERVAL_MS, MAIL_RATE_LIMIT_DELAY_MS, isRetryableMailFailure, mailRetryDelayMs } from './outboundMailQueue.js'
+
+test('keeps bulk delivery below the effective LWS sender-hour limit', () => {
+  assert.ok(3_600_000 / MAIL_QUEUE_INTERVAL_MS <= 90)
+  assert.equal(MAIL_RATE_LIMIT_DELAY_MS, 66 * 60_000)
+})
 
 test('retries temporary LWS SMTP connection and hourly rate limits', () => {
   assert.equal(isRetryableMailFailure('SMTP_SEND_FAILED', '421 4.7.0 too many connections'), true)
