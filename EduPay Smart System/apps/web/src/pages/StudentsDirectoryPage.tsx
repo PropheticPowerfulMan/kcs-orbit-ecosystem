@@ -56,11 +56,26 @@ type SharedDirectoryStudent = {
   tuitionPlanName?: string;
 };
 
+type SharedFamilyContact = {
+  kind: "MOTHER" | "RELATIVE" | "HOUSEHOLD_AGENT";
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  relationship: string;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  physicalAddress?: string | null;
+  authorizedPickup?: boolean;
+  emergencyContact?: boolean;
+};
+
 type SharedDirectoryParent = {
   id: string;
   fullName: string;
   phone?: string;
   email?: string;
+  familyContacts?: SharedFamilyContact[];
   students?: SharedDirectoryStudent[];
 };
 
@@ -1025,6 +1040,25 @@ function StudentDetailModal({ student, parent, resettingAccess, onResetAccess, o
             <p className="mt-1 text-sm text-slate-300">{financeStudent?.overdueInstallments ?? 0} {L("échéance(s) en retard", "overdue installment(s)")}</p>
           </div>
         </div>
+
+        <section className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-500/5 p-4 sm:p-5">
+          <h3 className="text-sm font-black uppercase tracking-[0.16em] text-cyan-200">{L("Contacts familiaux complémentaires", "Additional family contacts")}</h3>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {parent?.familyContacts?.length ? parent.familyContacts.map((contact, index) => (
+              <article key={`${contact.kind}-${contact.email || contact.phone || index}`} className="min-w-0 rounded-xl border border-white/10 bg-slate-950/45 p-4">
+                <p className="break-words font-bold text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(" ")}</p>
+                <p className="mt-1 text-xs font-semibold text-cyan-200">{contact.relationship || contact.role || contact.kind}</p>
+                <p className="mt-3 break-all text-xs text-slate-300">{contact.email || L("E-mail non renseigné", "Email not provided")}</p>
+                <p className="mt-1 break-words text-xs text-slate-300">{contact.phone || L("Téléphone non renseigné", "Phone not provided")}</p>
+                {contact.physicalAddress ? <p className="mt-1 break-words text-xs text-slate-400">{contact.physicalAddress}</p> : null}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {contact.authorizedPickup ? <span className="rounded-full bg-emerald-400/15 px-2 py-1 text-[10px] font-bold text-emerald-200">{L("Retrait autorisé", "Authorized pickup")}</span> : null}
+                  {contact.emergencyContact ? <span className="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-bold text-amber-200">{L("Contact d’urgence", "Emergency contact")}</span> : null}
+                </div>
+              </article>
+            )) : <p className="text-sm text-slate-400">{L("Aucun contact familial complémentaire enregistré.", "No additional family contact is registered.")}</p>}
+          </div>
+        </section>
 
         <div className="mt-5 space-y-5">
           {financeLoading ? (

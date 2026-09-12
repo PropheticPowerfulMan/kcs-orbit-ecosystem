@@ -166,6 +166,28 @@ function orbitManagingApp(student: OrbitStudent) {
   return student.externalIds?.[0]?.appSlug ?? null
 }
 
+async function updateRegistryParentInOrbit(identifier: string, organizationId: string, payload: object) {
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/parent/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=orbitId`,
+    {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.KCS_ORBIT_API_KEY!,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new ApiError(response.status, typeof data?.message === 'string' ? data.message : `Orbit parent update failed with status ${response.status}`)
+  }
+
+  return data
+}
+
 async function updateRegistryEntityInOrbit(identifier: string, organizationId: string, payload: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') {
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/registry/student/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(organizationId)}&identifierType=${encodeURIComponent(identifierType)}`,
@@ -627,7 +649,16 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
     }
 
     const parentResult = existingParent
-      ? { orbitId: existingParent.id, entity: existingParent }
+      ? await updateRegistryParentInOrbit(existingParent.id, env.KCS_ORBIT_ORGANIZATION_ID!, {
+          firstName: parent.firstName,
+          middleName: parent.middleName || null,
+          lastName: parent.lastName,
+          email: parent.email,
+          phone: parent.phone || null,
+          physicalAddress: parent.physicalAddress || null,
+          photoData: parent.photoData || undefined,
+          familyContacts: parent.familyContacts ?? existingParent.familyContacts ?? [],
+        })
       : await createRegistryEntityInOrbit('parent', {
           firstName: parent.firstName,
           middleName: parent.middleName,
@@ -639,7 +670,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
           mustChangePassword: true,
           familyContacts: parent.familyContacts || undefined,
         })
-    const parentOrbitId = parentResult.orbitId
+    const parentOrbitId = parentResult.orbitId || existingParent?.id
     if (!parentOrbitId) {
       throw new ApiError(502, 'Orbit parent creation did not return an id')
     }

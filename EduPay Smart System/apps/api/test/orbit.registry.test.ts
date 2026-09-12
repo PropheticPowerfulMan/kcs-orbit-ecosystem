@@ -18,6 +18,19 @@ describe("mapOrbitDirectoryToSharedOptions", () => {
           email: "mireille@example.com",
           studentIds: ["student-1", "student-2"],
           externalIds: [{ appSlug: "SAVANEX", externalId: "PAR-EXT-001" }],
+          familyContacts: [{
+            kind: "MOTHER",
+            firstName: "Clarisse",
+            middleName: "Mbuyi",
+            lastName: "Tshisekedi",
+            relationship: "Mère",
+            role: "Maman",
+            email: "clarisse@example.com",
+            phone: "+243000000222",
+            physicalAddress: "Ngaliema",
+            authorizedPickup: true,
+            emergencyContact: true,
+          }],
         },
       ],
       students: [
@@ -46,6 +59,12 @@ describe("mapOrbitDirectoryToSharedOptions", () => {
     expect(mapped.classes).toEqual(["Grade 2 - B", "Grade 4 - A"]);
     expect(mapped.parents).toHaveLength(1);
     expect(mapped.parents[0].fullName).toBe("Tshisekedi Mukendi Mireille");
+    expect(mapped.parents[0].familyContacts).toMatchObject([
+      {
+        kind: "MOTHER",
+        email: "clarisse@example.com",
+      },
+    ]);
     expect(mapped.parents[0].students).toMatchObject([
       {
         id: "student-1",

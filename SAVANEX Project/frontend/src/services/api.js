@@ -306,7 +306,9 @@ const mapSharedStudentToSavanexStudent = (student, parentMap) => {
     const name = [contact?.lastName, contact?.middleName, contact?.firstName].filter(Boolean).join(' ');
     const role = contact?.relationship || contact?.role || contact?.kind || 'Contact';
     const channels = [contact?.email, contact?.phone].filter(Boolean).join(' · ');
-    return [role, name, channels].filter(Boolean).join(' — ');
+    const permissions = [contact?.authorizedPickup ? 'Retrait autorisé' : '', contact?.emergencyContact ? 'Contact d’urgence' : ''].filter(Boolean).join(' · ');
+    const location = contact?.physicalAddress || '';
+    return [role, name, channels, location, permissions].filter(Boolean).join(' — ');
   };
 
   return {

@@ -2614,7 +2614,19 @@ const AdminSectionView = ({
                   </section>
                   <section className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
                     <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux compl\u00e9mentaires</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => <article key={contact.kind + index} className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70"><p className="font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p><p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-200">{contact.relationship || contact.role || contact.kind}</p><p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseign\u00e9'}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'T\u00e9l\u00e9phone non renseign\u00e9'}</p></article>) : <p className="text-sm text-gray-500">Aucun contact compl\u00e9mentaire enregistr\u00e9.</p>}</div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => (
+                      <article key={contact.kind + index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
+                        <p className="break-words font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p>
+                        <p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-200">{contact.relationship || contact.role || contact.kind}</p>
+                        <p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseign\u00e9'}</p>
+                        <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'T\u00e9l\u00e9phone non renseign\u00e9'}</p>
+                        {contact.physicalAddress ? <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.physicalAddress}</p> : null}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {contact.authorizedPickup ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Retrait autoris\u00e9</span> : null}
+                          {contact.emergencyContact ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Contact d’urgence</span> : null}
+                        </div>
+                      </article>
+                    )) : <p className="text-sm text-gray-500">Aucun contact compl\u00e9mentaire enregistr\u00e9.</p>}</div>
                   </section>
                 </div>
 

@@ -1,6 +1,20 @@
 import { prisma } from "../prisma";
 import { syncAutomaticFamilyTuitionPlan } from "../modules/finance/service";
 
+export type SharedFamilyContact = {
+  kind: "MOTHER" | "RELATIVE" | "HOUSEHOLD_AGENT";
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  relationship: string;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  physicalAddress?: string | null;
+  authorizedPickup?: boolean;
+  emergencyContact?: boolean;
+};
+
 type OrbitSharedDirectory = {
   source: "orbit";
   visibility: "shared-directory";
@@ -33,6 +47,7 @@ type OrbitSharedDirectory = {
     accessCode?: string | null;
     mustChangePassword?: boolean;
     studentIds: string[];
+    familyContacts?: SharedFamilyContact[];
     externalIds: Array<{ appSlug: string; externalId: string }>;
   }>;
   students: Array<{
@@ -112,6 +127,7 @@ export type SharedParentOption = {
   phone: string;
   email: string;
   physicalAddress?: string | null;
+  familyContacts: SharedFamilyContact[];
   students: SharedStudentOption[];
 };
 
@@ -248,6 +264,7 @@ export function mapOrbitDirectoryToSharedOptions(directory: OrbitSharedDirectory
       phone: parent.phone || "",
       email: parent.email || "",
       physicalAddress: parent.physicalAddress || "",
+      familyContacts: Array.isArray(parent.familyContacts) ? parent.familyContacts : [],
       students,
     };
   });
