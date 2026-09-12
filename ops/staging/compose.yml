@@ -82,15 +82,17 @@ services:
       ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID: ${KCS_ORBIT_ORGANIZATION_ID}
       SAVANEX_API_URL: ""
       KCS_NEXUS_API_URL: ""
-      SMTP_HOST: ""
-      SMTP_USER: ""
-      SMTP_PASS: CHANGE_ME
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       AFRIKTALK_USERNAME: ""
       AFRIKTALK_API_KEY: CHANGE_ME
       AFRICASTALKING_USERNAME: ""
       AFRICASTALKING_API_KEY: ""
     volumes: [staging_edupay_proof_storage:/app/storage/payment-proofs]
-    networks: [staging_internal]
+    networks: [staging_internal, staging_egress]
     depends_on: { edupay_db: { condition: service_healthy } }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -150,11 +152,14 @@ services:
       SAVANEX_AUTH_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       SAVANEX_INTELLIGENCE_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       ACADEMY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
-      SMTP_HOST: ""
-      SMTP_USER: ""
-      SMTP_PASS: ""
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes: [staging_nexus_uploads:/app/uploads]
-    networks: [staging_internal]
+    networks: [staging_internal, staging_egress]
     depends_on:
       nexus_db: { condition: service_healthy }
       savanex_api: { condition: service_healthy }
@@ -239,6 +244,7 @@ services:
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
 networks:
   staging_internal: { internal: true }
+  staging_egress:
   staging_ingress:
     external: true
     name: kcs-orbit-production_kcs_staging
