@@ -13,6 +13,7 @@ import { getParentAcademicClearance } from './finance.routes.js'
 import { KCS_ACADEMIC_PASSING_SCORE_PERCENT, meetsKcsAcademicPassingScore } from '@ecosystem/shared-contracts'
 import { resolveStudentProfileId } from '../services/studentIdentity.js'
 import { academicScheduleForGrade } from '../utils/academicSchedule.js'
+import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -482,6 +483,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
       ),
     }
     const orbitProfiles = orbitStudentsToProfiles(familyDirectory)
+    await Promise.all(familyDirectory.students.map((student) => ensureOrbitStudentProfile(student)))
     const localProfiles = await prisma.studentProfile.findMany({
       where: { studentNumber: { in: orbitProfiles.map((student) => student.studentNumber) } },
       select: { id: true, studentNumber: true, grades: { select: { percentage: true } }, attendanceRecords: { select: { status: true } }, submissions: { select: { status: true, assignment: { select: { dueDate: true } } } }, _count: { select: { enrollments: true } } },

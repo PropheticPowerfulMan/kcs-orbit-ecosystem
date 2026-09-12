@@ -21,6 +21,8 @@ interface NavItem {
   badge?: number
 }
 
+type PortalSidebarProps = { badges?: Record<string, number> }
+
 const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
@@ -112,7 +114,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   }
 }
 
-const PortalSidebar = () => {
+const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const { t, i18n } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
@@ -200,6 +202,7 @@ const PortalSidebar = () => {
     { to: '/admin/permissions', label: t('portalNav.permissions'), icon: Shield },
     { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
   ] : getNavItems(user.role, t)
+  const navItemsWithBadges = navItems.map((item) => ({ ...item, badge: badges[item.to] ?? item.badge }))
   const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
   const toggleLanguage = () => {
@@ -231,7 +234,7 @@ const PortalSidebar = () => {
         }}
         className={isMobile ? 'min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-2' : 'min-h-0 flex-1 space-y-1 overflow-y-auto p-3'}
       >
-        {navItems.map(({ to, label, icon: Icon, badge }, index) => (
+        {navItemsWithBadges.map(({ to, label, icon: Icon, badge }, index) => (
           <NavLink
             key={to}
             to={to}
@@ -251,8 +254,8 @@ const PortalSidebar = () => {
             {(isMobile || !sidebarCollapsed) && (
               <span className="min-w-0 flex-1 truncate">{label}</span>
             )}
-            {badge && badge > 0 && (isMobile || !sidebarCollapsed) && (
-              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+            {badge && badge > 0 && (
+              <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
                 {badge > 99 ? '99+' : badge}
               </span>
             )}

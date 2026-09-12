@@ -10,6 +10,7 @@ import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teach
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
+import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 
 export const teachersRouter = Router()
 
@@ -71,7 +72,14 @@ const getOrbitStudentDirectory = async () => {
       return {
         // Course enrollment foreign keys belong to Nexus; Orbit ids are federation ids.
         id: nexusExternalId || student.id,
+        orbitId: student.id,
+        fullName: student.fullName,
+        firstName: name.firstName,
+        middleName: name.middleName,
+        lastName: name.lastName,
         studentNumber,
+        className: student.className,
+        externalIds: student.externalIds,
         grade: student.className?.trim() || 'Unassigned',
         section: '',
         status: 'active',
@@ -181,6 +189,13 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   if (existing && existing.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
   const normalizedStudentNumbers = [...new Set(payload.studentNumbers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
   const uniqueStudentIds = [...new Set(payload.studentIds)]
+  if (uniqueStudentIds.length || normalizedStudentNumbers.length) {
+    const orbitStudents = await getOrbitStudentDirectory()
+    const selectedOrbitStudents = (orbitStudents ?? []).filter((student) =>
+      uniqueStudentIds.includes(student.id) || normalizedStudentNumbers.includes(student.studentNumber.toLowerCase()),
+    )
+    await Promise.all(selectedOrbitStudents.map((student) => ensureOrbitStudentProfile({ ...student, id: student.orbitId })))
+  }
   // Accept the Nexus profile id and the federated student number together.
   // This keeps Orbit directory rows resolvable without weakening active-status checks.
   const requestedCount = uniqueStudentIds.length || normalizedStudentNumbers.length

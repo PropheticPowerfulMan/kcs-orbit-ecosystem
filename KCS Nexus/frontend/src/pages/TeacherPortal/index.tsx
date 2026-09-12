@@ -1289,7 +1289,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">{editingCourseId ? 'Save class' : 'Create a class'}</button>
+                      <button type="button" onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{editingCourseId ? 'Save class' : 'Create a class'}</button>
                       {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>
