@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { MAIL_QUEUE_INTERVAL_MS, MAIL_RATE_LIMIT_DELAY_MS, isRetryableMailFailure, mailRetryDelayMs } from './outboundMailQueue.js'
+import { MAIL_QUEUE_BATCH_SIZE, MAIL_QUEUE_INTERVAL_MS, MAIL_RATE_LIMIT_DELAY_MS, isRetryableMailFailure, mailRetryDelayMs } from './outboundMailQueue.js'
 
-test('keeps bulk delivery below the effective LWS sender-hour limit', () => {
-  assert.ok(3_600_000 / MAIL_QUEUE_INTERVAL_MS <= 90)
+test('processes Brevo campaign traffic in controlled batches', () => {
+  assert.equal(MAIL_QUEUE_INTERVAL_MS, 5_000)
+  assert.equal(MAIL_QUEUE_BATCH_SIZE, 20)
+  assert.ok(MAIL_QUEUE_BATCH_SIZE <= 30)
   assert.equal(MAIL_RATE_LIMIT_DELAY_MS, 66 * 60_000)
 })
 

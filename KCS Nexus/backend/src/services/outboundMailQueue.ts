@@ -3,9 +3,9 @@ import { prisma } from '../config/prisma.js'
 import { sendSchoolMail } from '../utils/mail.js'
 
 export const MAIL_QUEUE_VERSION = 1
-// LWS currently enforces 120 messages per sender/hour. Keep bulk traffic at 90/hour
-// so password resets and other transactional messages retain a safe allowance.
-export const MAIL_QUEUE_INTERVAL_MS = 40_000
+// Brevo handles campaign traffic; process a controlled batch on each worker pass.
+export const MAIL_QUEUE_INTERVAL_MS = 5_000
+export const MAIL_QUEUE_BATCH_SIZE = 20
 export const MAIL_RATE_LIMIT_DELAY_MS = 66 * 60_000
 
 type QueueMetadata = {
@@ -57,17 +57,18 @@ export async function processOutboundMailQueue() {
     const rank = (row: typeof rows[number]) => ({ HIGH: 0, NORMAL: 1, BULK: 2 }[queueMetadata(row.metadata).priority ?? 'BULK'])
     rows.sort((left, right) => rank(left) - rank(right) || left.createdAt.getTime() - right.createdAt.getTime())
     const now = new Date()
-    const row = rows.find((candidate) => {
+    const eligibleRows = rows.filter((candidate) => {
       const metadata = queueMetadata(candidate.metadata)
       if (metadata.mailQueueVersion !== MAIL_QUEUE_VERSION) return false
       const nextAttemptAt = metadata.nextAttemptAt ? new Date(metadata.nextAttemptAt) : null
       return !nextAttemptAt || Number.isNaN(nextAttemptAt.getTime()) || nextAttemptAt <= now
-    })
-    if (!row) return
+    }).slice(0, MAIL_QUEUE_BATCH_SIZE)
+    if (!eligibleRows.length) return
+    for (const row of eligibleRows) {
     const metadata = queueMetadata(row.metadata)
     if (!row.recipientEmail) {
       await prisma.correspondenceLog.update({ where: { id: row.id }, data: { status: 'FAILED', failureReason: 'RECIPIENT_EMAIL_MISSING' } })
-      return
+      continue
     }
     const message = metadata.internalMessageId ? await prisma.internalMessage.findUnique({
       where: { id: metadata.internalMessageId },
@@ -91,7 +92,7 @@ export async function processOutboundMailQueue() {
         where: { id: row.id },
         data: { status: 'SENT', sentAt: new Date(), failureReason: null, metadata: { ...metadata, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: null } as Prisma.InputJsonValue },
       })
-      return
+      continue
     }
     const retryable = isRetryableMailFailure(result.reason, result.providerDetail)
     const delay = mailRetryDelayMs(result.providerDetail, attempts)
@@ -103,6 +104,7 @@ export async function processOutboundMailQueue() {
         metadata: { ...metadata, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: retryable ? new Date(now.getTime() + delay).toISOString() : null } as Prisma.InputJsonValue,
       },
     })
+    }
   } catch (error) {
     console.error('[mail-queue] Worker iteration failed', error)
   } finally {
@@ -115,5 +117,5 @@ export function startOutboundMailQueue() {
   initial.unref()
   const timer = setInterval(() => void processOutboundMailQueue(), MAIL_QUEUE_INTERVAL_MS)
   timer.unref()
-  console.log(`[mail-queue] Persistent worker started (${MAIL_QUEUE_INTERVAL_MS / 1000}s interval, one message per interval)`)
+  console.log(`[mail-queue] Persistent worker started (${MAIL_QUEUE_INTERVAL_MS / 1000}s interval, up to ${MAIL_QUEUE_BATCH_SIZE} messages per batch)`)
 }
