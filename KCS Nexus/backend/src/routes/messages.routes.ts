@@ -24,8 +24,8 @@ messagesRouter.use(authenticate)
 const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const jsonArray = (value: unknown) => typeof value === 'string' ? JSON.parse(value) : value
 const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(250)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
-const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp'])
-const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10485760, files: 1 }, fileFilter: (_req, file, cb) => attachmentTypes.has(file.mimetype) ? cb(null, true) : cb(new ApiError(400, 'Unsupported attachment type')) })
+const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp','audio/mpeg','audio/mp4','audio/ogg','audio/webm','audio/wav','audio/x-wav','video/mp4','video/webm','video/quicktime','video/ogg'])
+const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 26214400, files: 1 }, fileFilter: (_req, file, cb) => attachmentTypes.has(file.mimetype) ? cb(null, true) : cb(new ApiError(400, 'Unsupported attachment type')) })
 const broadcastSchema = z.object({ audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messages' : role === 'STUDENT' ? '/portal/student/messages' : role === 'TEACHER' ? '/portal/teacher/messages' : role === 'STAFF' ? '/portal/staff/messages' : '/admin/communications'
 
@@ -114,7 +114,7 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
   const superAdmin = req.user!.sub === 'configured-superadmin'
   const [recipients, directory] = await Promise.all([
     prisma.user.findMany({
-    where: { id: { not: actorId }, ...(superAdmin ? {} : { role: 'PARENT' as const }) },
+    where: { id: { not: actorId } },
     select: {
       id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true, role: true,
       studentProfile: { select: { grade: true, section: true } },
@@ -203,7 +203,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     const batch = deliveryParents.slice(index, index + 10)
     const results = await Promise.all(batch.map(async (parent) => {
       const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
-      const attachmentNote = req.file ? `\n\nDocument joint : ${req.file.originalname}. Disponible aussi dans votre boîte Nexus.` : ''
+      const attachmentNote = req.file ? `\n\nPièce jointe : ${req.file.originalname}. Disponible aussi dans votre boîte Nexus.` : ''
       if (data.channels.includes('email')) row.email = parent.email ? { sent: true, queued: true, reason: 'QUEUED' } : { sent: false, reason: 'MISSING_OFFICIAL_EMAIL' }
       if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}${attachmentNote}`, { brand: false })
       const internalMessageId = messageIdByRecipient.get(parent.id)
@@ -251,7 +251,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
   return success(res, { recipients: delivery.length, primaryRecipients: deliveryParents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
 }))
 
-messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
+messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = messageSchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
   const recipient = await prisma.user.findUnique({ where: { id: data.recipientId }, select: { role: true, email: true, phone: true } })
@@ -260,7 +260,7 @@ messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => 
     throw new ApiError(403, 'Parents and students may only contact authorized school staff.')
   }
   const message = await prisma.$transaction(async (tx) => {
-    const created = await tx.internalMessage.create({ data: { ...data, senderId }, include: { sender: true, recipient: true } })
+    const created = await tx.internalMessage.create({ data: { ...data, senderId, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, include: { sender: true, recipient: true } })
     await tx.notification.create({ data: { userId: data.recipientId, title: data.subject, message: data.body, type: 'MESSAGE', link: messageLink(recipient.role) } })
     return created
   })
@@ -270,7 +270,8 @@ messagesRouter.post('/', asyncHandler(async (req: AuthenticatedRequest, res) => 
         sendSchoolSms(recipient.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
       ])
     : []
-  return success(res, { ...message, delivery }, 'Message sent', 201)
+  const { attachmentData: _attachmentData, ...safeMessage } = message
+  return success(res, { ...safeMessage, hasAttachment: Boolean(message.attachmentName), delivery }, 'Message sent', 201)
 }))
 
 messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -356,6 +357,7 @@ messagesRouter.get('/:id/attachment', asyncHandler(async (req: AuthenticatedRequ
   if (!message) throw new ApiError(404, 'Message not found')
   if (message.senderId !== actorId && message.recipientId !== actorId) throw new ApiError(403, 'Access denied')
   if (!message.attachmentData || !message.attachmentName || !message.attachmentMime) throw new ApiError(404, 'No attachment')
-  res.type(message.attachmentMime).set('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(message.attachmentName)}`).set('X-Content-Type-Options', 'nosniff')
+  const disposition = message.attachmentMime.startsWith("audio/") || message.attachmentMime.startsWith("video/") || message.attachmentMime.startsWith("image/") ? "inline" : "attachment"
+  res.type(message.attachmentMime).set("Content-Disposition", disposition + "; filename*=UTF-8''" + encodeURIComponent(message.attachmentName)).set("Content-Length", String(message.attachmentSize || message.attachmentData.length)).set("Cache-Control", "private, max-age=300").set("X-Content-Type-Options", "nosniff")
   return res.send(Buffer.from(message.attachmentData))
 }))
