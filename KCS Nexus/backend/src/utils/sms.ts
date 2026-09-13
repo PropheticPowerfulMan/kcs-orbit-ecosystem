@@ -10,7 +10,7 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
   const outboundMessage = options.brand === false
     ? cleanMessage
     : (/^\s*(?:\[?KCS Nexus\]?\s*[:—-])/i.test(cleanMessage) ? cleanMessage : `KCS Nexus : ${cleanMessage}`)
-  const apiUrl = env.AFRICASTALKING_API_URL || env.SMS_API_URL
+  const apiUrl = env.AFRICASTALKING_API_URL || env.SMS_API_URL || ((env.AFRICASTALKING_API_KEY || env.SMS_API_KEY) && (env.AFRICASTALKING_USERNAME || env.SMS_USERNAME) ? 'https://api.africastalking.com/version1/messaging' : undefined)
   const apiKey = env.AFRICASTALKING_API_KEY || env.SMS_API_KEY
   const username = env.AFRICASTALKING_USERNAME || env.SMS_USERNAME
   const isAfricasTalkingApi = /africastalking/i.test(apiUrl || '')

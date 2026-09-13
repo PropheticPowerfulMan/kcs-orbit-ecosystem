@@ -5,6 +5,8 @@ import {
   RefreshCw, ThumbsUp, Copy, ChevronDown
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import { aiAPI } from '@/services/api'
 
@@ -68,6 +70,8 @@ interface Message {
 
 const AITutorPage = () => {
   const { user } = useAuthStore()
+  const language = useUIStore((state) => state.language)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -159,6 +163,10 @@ const AITutorPage = () => {
       <PortalSidebar />
 
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden flex flex-col">
+        <div className="portal-dashboard-topbar border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+          <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
+          <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {tr('Un accompagnement pédagogique personnalisé, sécurisé et alimenté par l’intelligence artificielle.', 'Secure, personalized learning support powered by artificial intelligence.')}</p>
+        </div>
         {/* Header */}
         <div className="bg-white dark:bg-kcs-blue-950 border-b border-gray-100 dark:border-kcs-blue-800 px-3 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
