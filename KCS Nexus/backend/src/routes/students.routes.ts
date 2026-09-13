@@ -125,7 +125,10 @@ function orbitStudentKeys(student: OrbitStudent) {
   ].filter((key): key is string => Boolean(key))
 }
 
-async function getSharedDirectoryFromOrbit() {
+let sharedDirectoryCache: { value: OrbitSharedDirectory; expiresAt: number } | null = null
+
+async function getSharedDirectoryFromOrbit(force = false) {
+  if (!force && sharedDirectoryCache && sharedDirectoryCache.expiresAt > Date.now()) return sharedDirectoryCache.value
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
     {
@@ -133,7 +136,7 @@ async function getSharedDirectoryFromOrbit() {
         'x-api-key': env.KCS_ORBIT_API_KEY!,
         'x-app-slug': 'KCS_NEXUS',
       },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(3_000),
     }
   )
 
@@ -141,7 +144,9 @@ async function getSharedDirectoryFromOrbit() {
     throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
   }
 
-  return response.json() as Promise<OrbitSharedDirectory>
+  const value = await response.json() as OrbitSharedDirectory
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 5 * 60_000 }
+  return value
 }
 
 function splitName(person: { fullName?: string | null; firstName?: string | null; lastName?: string | null }) {
@@ -619,7 +624,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
   }
 
   if (orbitRegistryIsEnabled()) {
-    const directoryBeforeCreate = await getSharedDirectoryFromOrbit()
+    const directoryBeforeCreate = await getSharedDirectoryFromOrbit(true)
     const localSchoolEmails = await prisma.user.findMany({
       where: { email: { endsWith: '@ourkcs.org', mode: 'insensitive' } },
       select: { email: true },

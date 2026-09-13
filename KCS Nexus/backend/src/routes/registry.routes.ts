@@ -120,7 +120,10 @@ async function getFamiliesFromOrbit() {
   return response.json() as Promise<{ families: unknown[]; source: 'orbit' }>
 }
 
-async function getSharedDirectoryFromOrbit() {
+let sharedDirectoryCache: { value: SharedDirectoryResponse; expiresAt: number } | null = null
+
+async function getSharedDirectoryFromOrbit(force = false) {
+  if (!force && sharedDirectoryCache && sharedDirectoryCache.expiresAt > Date.now()) return sharedDirectoryCache.value
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
     {
@@ -128,7 +131,7 @@ async function getSharedDirectoryFromOrbit() {
         'x-api-key': env.KCS_ORBIT_API_KEY!,
         'x-app-slug': 'KCS_NEXUS',
       },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(3_000),
     },
   )
 
@@ -136,7 +139,9 @@ async function getSharedDirectoryFromOrbit() {
     throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
   }
 
-  return response.json() as Promise<SharedDirectoryResponse>
+  const value = await response.json() as SharedDirectoryResponse
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 5 * 60_000 }
+  return value
 }
 
 type ChangeDeliveryEntity = {
@@ -535,11 +540,11 @@ registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), 
 registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
-  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit(true) : null
 
   if (orbitRegistryIsEnabled()) {
     const updated = await updateRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
-    const directoryAfter = await getSharedDirectoryFromOrbit()
+    const directoryAfter = await getSharedDirectoryFromOrbit(true)
     const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
     const canonicalEntity = findDirectoryEntity(directoryAfter, entityType, before?.id || String(req.params.identifier))
     const notificationDelivery = await deliverEntityChange(directoryAfter, entityType, canonicalEntity || { ...before, ...(req.body ?? {}) }, 'updated')
@@ -750,7 +755,7 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
 
-  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit(true) : null
   const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
   if (!orbitRegistryIsEnabled()) {
     if (entityType !== 'parent') {

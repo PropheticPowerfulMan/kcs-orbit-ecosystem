@@ -56,7 +56,7 @@ const getOrbitDirectory = async () => {
   if (orbitDirectoryCache && orbitDirectoryCache.expiresAt > Date.now()) return orbitDirectoryCache.value
   if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return {} as OrbitDirectory
   try {
-    const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(8_000) })
+    const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(3_000) })
     if (!response.ok) throw new Error(`status ${response.status}`)
     const value = await response.json() as OrbitDirectory
     orbitDirectoryCache = { expiresAt: Date.now() + 5 * 60_000, value }
@@ -104,7 +104,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const allowedRoles = req.user!.role === 'parent' || req.user!.role === 'student' ? ['ADMIN', 'STAFF', 'TEACHER'] as const : undefined
   const actorId = await resolveMessageActorId(req)
-  const contacts = await prisma.user.findMany({ where: { id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true }, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
+  const contacts = await prisma.user.findMany({ where: { id: { not: actorId }, ...(allowedRoles ? { role: { in: [...allowedRoles] } } : {}) }, select: { id: true, firstName: true, middleName: true, lastName: true, role: true, accessCode: true, staffProfile: { select: { function: true, department: true } }, teacherProfile: { select: { department: true } } }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
   return success(res, contacts)
 }))
 

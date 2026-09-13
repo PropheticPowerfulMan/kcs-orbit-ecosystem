@@ -49,13 +49,9 @@ export const useUIStore = create<UIStore>()(
       },
 
       toggleTheme: () => {
-        const current = get().theme
-        const next = current === 'light' ? 'dark' : 'light'
-        const root = typeof document === 'undefined' ? null : document.documentElement
-        root?.classList.add('theme-switching')
+        const next = get().theme === 'light' ? 'dark' : 'light'
         applyTheme(next)
         set({ theme: next })
-        if (root) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')))
       },
 
       setLanguage: (language) => {
