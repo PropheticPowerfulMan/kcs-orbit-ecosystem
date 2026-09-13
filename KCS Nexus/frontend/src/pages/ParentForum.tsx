@@ -55,7 +55,7 @@ export default function ParentForumPage() {
   return <div className="portal-shell flex min-h-screen bg-slate-50 dark:bg-kcs-blue-950">
     <PortalSidebar/>
     <main className="min-w-0 flex-1 p-4 pt-24 sm:p-6 sm:pt-24 lg:p-8">
-      <div className="mx-auto max-w-7xl space-y-5">
+      <div className="w-full max-w-none space-y-5">
         <header className="flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm dark:bg-kcs-blue-900 sm:flex-row sm:items-center sm:justify-between">
           <div><p className="text-xs font-bold uppercase text-cyan-700 dark:text-cyan-300">{user?.role === 'admin' ? tr('Vue de modération Superadmin','Superadmin moderation view') : tr('Espace familial vérifié','Verified family space')}</p><h1 className="mt-1 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Forum des parents','Parent Forum')}</h1><p className="text-sm text-gray-500 dark:text-gray-300">{tr('Toutes les discussions ci-dessous proviennent de la base Nexus.','Every discussion below comes from the Nexus database.')}</p></div>
           <button onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white"><RefreshCw size={16} className={loading?'animate-spin':''}/>{tr('Actualiser','Refresh')}</button>
