@@ -31,15 +31,8 @@ export default function ParentForumPage() {
     let lastError: any
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const token = useAuthStore.getState().token
-        const response = await fetch('/api/forum/posts', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          signal: AbortSignal.timeout(12_000),
-          cache: 'no-store',
-        })
-        const payload = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(payload?.message || `Forum HTTP ${response.status}`)
-        setPosts(Array.isArray(payload?.data) ? payload.data : [])
+        const response = await forumAPI.getPosts()
+        setPosts(Array.isArray(response.data?.data) ? response.data.data : [])
         setLoading(false)
         return
       } catch (reason: any) {
@@ -47,7 +40,7 @@ export default function ParentForumPage() {
         if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)))
       }
     }
-    setError(lastError?.message ?? tr('Impossible de charger le forum. Réessayez avec Actualiser.','Unable to load the forum. Try Refresh.'))
+    setError(lastError?.response?.data?.message ?? lastError?.message ?? tr('Impossible de charger le forum. Réessayez avec Actualiser.','Unable to load the forum. Try Refresh.'))
     setLoading(false)
   }
   useEffect(() => { void load() }, [])
