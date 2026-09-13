@@ -9,7 +9,7 @@ import {
   Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { academyAPI } from '@/services/api'
+import { academyAPI, authAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 import type { UserRole } from '@/types'
 import { getAssetUrl } from '@/utils/assets'
@@ -121,7 +121,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const mobileSidebarRef = useRef<HTMLElement>(null)
   const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
-  const { user, logout } = useAuthStore()
+  const { user, logout, updateUser } = useAuthStore()
   const {
     sidebarCollapsed,
     sidebarOpen,
@@ -137,6 +137,18 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   useEffect(() => {
     setSidebarOpen(false)
   }, [location.pathname, setSidebarOpen])
+
+  useEffect(() => {
+    if (!user?.id || user.avatar) return
+    let active = true
+    let objectUrl = ""
+    authAPI.avatar(user.id).then((response) => {
+      if (!active || !(response.data instanceof Blob) || response.data.size === 0) return
+      objectUrl = URL.createObjectURL(response.data)
+      updateUser({ avatar: objectUrl })
+    }).catch(() => undefined)
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
+  }, [user?.id, updateUser])
 
   useLayoutEffect(() => {
     const navigation = desktopNavigationRef.current

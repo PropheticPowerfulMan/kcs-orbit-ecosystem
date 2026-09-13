@@ -124,6 +124,8 @@ export const authAPI = {
     api.put('/auth/change-password', { currentPassword, newPassword }),
   me: () =>
     api.get('/auth/me'),
+  avatar: (id: string) =>
+    api.get('/auth/avatar/' + encodeURIComponent(id), { responseType: 'blob' }),
   updateProfile: (data: { firstName?: string; middleName?: string | null; lastName?: string; phone?: string; avatar?: string; bio?: string }) =>
     api.put('/auth/profile', data),
   updateEmail: (data: { newEmail: string; currentPassword?: string }) =>

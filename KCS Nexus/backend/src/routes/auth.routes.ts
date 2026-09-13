@@ -818,6 +818,21 @@ authRouter.post('/reset-password', asyncHandler(async (req, res) => {
   return success(res, null, 'Password reset completed')
 }))
 
+authRouter.get('/avatar/:id', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const requestedId = String(req.params.id || '')
+  if (requestedId !== req.user!.sub && req.user!.role !== 'admin') throw new ApiError(403, 'Access denied')
+  const account = isConfiguredSuperAdminUser(req.user!.sub) && requestedId === req.user!.sub
+    ? await getConfiguredSuperAdminAccount()
+    : await prisma.user.findUnique({ where: { id: requestedId }, select: { avatar: true } })
+  const avatar = account?.avatar
+  if (!avatar) throw new ApiError(404, 'Profile photo not found')
+  const match = avatar.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s)
+  if (!match) throw new ApiError(404, 'Profile photo format is unavailable')
+  const image = Buffer.from(match[2], 'base64')
+  res.type(match[1]).set('Content-Length', String(image.length)).set('Cache-Control', 'private, max-age=86400').set('X-Content-Type-Options', 'nosniff')
+  return res.send(image)
+}))
+
 authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
     return success(res, buildConfiguredSuperAdminUser(await getConfiguredSuperAdminAccount()))
