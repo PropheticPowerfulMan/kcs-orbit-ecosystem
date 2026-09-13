@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { Brain, Camera, Heart, MessageCircle, Mic, Plus, Send, ShieldCheck, Users, Video, X } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import { useAuthStore } from '@/store/authStore'
+import { useUIStore } from '@/store/uiStore'
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { studentForumAPI } from '@/services/api'
 
 type StudentForumPost = {
@@ -23,6 +25,8 @@ type StudentForumPost = {
 
 const StudentForumPage = () => {
   const { user } = useAuthStore()
+  const language = useUIStore((state) => state.language)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [posts, setPosts] = useState<StudentForumPost[]>([])
   const [draft, setDraft] = useState({ title: '', category: 'Academics', content: '' })
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
@@ -86,12 +90,16 @@ const StudentForumPage = () => {
     <div className="portal-shell flex">
       <PortalSidebar />
       <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 dark:bg-kcs-blue-950">
-        <div className="sticky top-0 z-20 border-b border-gray-100 bg-white/85 px-6 py-4 backdrop-blur-md dark:border-kcs-blue-800 dark:bg-kcs-blue-950/85">
-          <h1 className="font-display text-xl font-bold text-kcs-blue-900 dark:text-white">Student Forum</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">A moderated student voice space with AI monitoring for wellbeing, learning support, and leadership decisions.</p>
+        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+          <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
+          <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {tr('Un espace sécurisé pour échanger, commenter et faire entendre la voix des élèves.', 'A secure space to discuss, comment, and amplify student voice.')}</p>
         </div>
 
         <div className="grid min-w-0 gap-5 p-3 sm:p-6 xl:grid-cols-[0.85fr_1.35fr]">
+          <header className="xl:col-span-2">
+            <h2 className="font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{tr('Forum des élèves', 'Student Forum')}</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{tr('Discussions réelles modérées avec suivi IA du bien-être.', 'Real moderated discussions with AI-assisted wellbeing monitoring.')}</p>
+          </header>
           <div className="space-y-6">
             <form onSubmit={createPost} className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center gap-3">

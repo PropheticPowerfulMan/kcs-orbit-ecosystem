@@ -269,34 +269,47 @@ financeRouter.get('/student-clearance', asyncHandler(async (req: AuthenticatedRe
   if (!student) throw new ApiError(404, 'Student profile not found')
 
   const serviceToken = await getEduPayServiceToken()
-  const response = await fetch(`${env.EDUPAY_API_URL.replace(/\/$/, '')}/api/finance/overview`, {
-    headers: { Authorization: `Bearer ${serviceToken}` },
-    signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
-  })
-  if (!response.ok) throw new ApiError(502, `EduPay finance synchronization failed with status ${response.status}.`)
+  const parentIdentifiers = Array.from(new Set(
+    student.parentLinks.flatMap(({ parent }) => [parent.orbitUserId, parent.id]).filter(Boolean),
+  )) as string[]
+  type EduPayProfileSnapshot = {
+    parent?: { fullName?: string }
+    profile?: { totalDebt?: number; totalPaid?: number; overdueInstallments?: number }
+  }
+  let snapshot: EduPayProfileSnapshot | null = null
 
-  const overview = await response.json() as { parentDebtAnalytics?: Array<Record<string, unknown>> }
-  const accounts = Array.isArray(overview.parentDebtAnalytics) ? overview.parentDebtAnalytics : []
-  const normalize = (value: unknown) => String(value ?? '').trim().toLocaleLowerCase()
-  const parentNames = student.parentLinks.map(({ parent }) => normalize(`${parent.firstName} ${parent.lastName}`))
-  const account = accounts.find((candidate) => parentNames.includes(normalize(candidate.parentName)))
-  const balance = Number(account?.totalDebt ?? 0)
-  const overdueInstallments = Number(account?.overdueInstallments ?? 0)
-  const eligible = Boolean(account) && balance <= 0 && overdueInstallments <= 0
+  for (const parentIdentifier of parentIdentifiers) {
+    const response = await fetch(
+      `${env.EDUPAY_API_URL.replace(/\/$/, '')}/api/finance/parents/${encodeURIComponent(parentIdentifier)}/profile`,
+      {
+        headers: { Authorization: `Bearer ${serviceToken}` },
+        signal: AbortSignal.timeout(env.EDUPAY_TIMEOUT_SECONDS * 1000),
+      },
+    )
+    if (response.status === 404) continue
+    if (!response.ok) throw new ApiError(502, `EduPay finance synchronization failed with status ${response.status}.`)
+    snapshot = await response.json() as EduPayProfileSnapshot
+    break
+  }
+
+  const accountMatched = Boolean(snapshot?.parent && snapshot.profile)
+  const balance = Number(snapshot?.profile?.totalDebt ?? 0)
+  const overdueInstallments = Number(snapshot?.profile?.overdueInstallments ?? 0)
+  const eligible = accountMatched && balance <= 0 && overdueInstallments <= 0
 
   return success(res, {
     source: 'EduPay',
     synchronizedAt: new Date().toISOString(),
     student: { id: student.id, name: `${student.user.firstName} ${student.user.lastName}` },
-    accountMatched: Boolean(account),
-    parentName: account?.parentName ?? null,
+    accountMatched,
+    parentName: snapshot?.parent?.fullName ?? null,
     balance,
-    totalPaid: Number(account?.totalPaid ?? 0),
+    totalPaid: Number(snapshot?.profile?.totalPaid ?? 0),
     overdueInstallments,
     eligible,
     reason: eligible
       ? 'Financial account is current. Report card download is authorized.'
-      : !account
+      : !accountMatched
         ? 'No matching family account was found in EduPay.'
         : 'The report card is held until the outstanding balance and overdue installments are cleared.',
   }, 'Student financial clearance synchronized from EduPay')
