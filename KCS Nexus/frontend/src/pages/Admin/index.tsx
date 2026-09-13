@@ -783,8 +783,10 @@ const buildAdminParentRecordsFromDirectory = (
 
 const attachFamilyContacts = (roster: AdminStudentRecord[], directory?: SharedDirectoryPayload | null) => roster.map((student) => {
   const key = student.parentEmail?.trim().toLowerCase()
-  const parent = directory?.parents?.find((item) => item.studentIds?.includes(student.id) || (key && item.email?.trim().toLowerCase() === key) || item.fullName === student.parent)
-  return parent ? { ...student, familyContacts: parent.familyContacts ?? [] } : student
+  const responsibleParentIds = new Set((student.responsibleParents ?? []).map((item) => item.id))
+  const parent = directory?.parents?.find((item) => responsibleParentIds.has(item.id) || item.studentIds?.includes(student.id) || (key && item.email?.trim().toLowerCase() === key) || item.fullName === student.parent)
+  const directoryContacts = parent?.familyContacts ?? []
+  return parent ? { ...student, familyContacts: directoryContacts.length ? directoryContacts : (student.familyContacts ?? []) } : student
 })
 
 const buildAdminReportDocument = (
@@ -1548,7 +1550,12 @@ const AdminSectionView = ({
 
   const openEditStudent = (student: AdminStudentRecord) => {
     setViewingStudent(null)
-    setEditingStudent(student)
+    const existingContacts = student.familyContacts ?? []
+    const contactKinds: FamilyContactDraft['kind'][] = ['MOTHER', 'RELATIVE', 'HOUSEHOLD_AGENT']
+    setEditingStudent({
+      ...student,
+      familyContacts: contactKinds.map((kind) => existingContacts.find((contact) => contact.kind === kind) ?? createFamilyContactDraft(kind)),
+    })
     setStudentEditForm(createAdminStudentEditForm(student))
     setStudentNotice('')
   }
@@ -1607,6 +1614,23 @@ const AdminSectionView = ({
           ? { photoData: studentEditForm.photoData ?? '' }
           : {}),
       })
+      const parentId = editingStudent.responsibleParents?.[0]?.id
+      const familyContacts = (editingStudent.familyContacts ?? [])
+        .filter((contact) => contact.firstName.trim() && contact.lastName.trim() && (contact.email.trim() || contact.phone.trim()))
+        .map((contact) => ({
+          ...contact,
+          middleName: contact.middleName.trim() || undefined,
+          relationship: contact.relationship.trim() || (contact.kind === 'MOTHER' ? 'Mère' : contact.kind === 'RELATIVE' ? 'Membre de la famille' : 'Agent de la famille'),
+          role: contact.role.trim() || undefined,
+          email: contact.email.trim() || undefined,
+          phone: contact.phone.trim() || undefined,
+          physicalAddress: contact.physicalAddress.trim() || undefined,
+        }))
+      if (parentId) {
+        await registryAPI.updateEntity('parent', parentId, { familyContacts }, 'orbitId')
+      } else if (familyContacts.length > 0) {
+        throw new Error('Aucun parent responsable officiel ne permet d’enregistrer ces contacts familiaux.')
+      }
       const roster = await refreshOfficialRoster()
       const updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
       if (updatedStudent) {
@@ -2613,20 +2637,20 @@ const AdminSectionView = ({
                     </div>
                   </section>
                   <section className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux compl\u00e9mentaires</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux complémentaires</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => (
                       <article key={contact.kind + index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                         <p className="break-words font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p>
                         <p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-200">{contact.relationship || contact.role || contact.kind}</p>
-                        <p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseign\u00e9'}</p>
-                        <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'T\u00e9l\u00e9phone non renseign\u00e9'}</p>
+                        <p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseigné'}</p>
+                        <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'Téléphone non renseigné'}</p>
                         {contact.physicalAddress ? <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.physicalAddress}</p> : null}
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {contact.authorizedPickup ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Retrait autoris\u00e9</span> : null}
+                          {contact.authorizedPickup ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Retrait autorisé</span> : null}
                           {contact.emergencyContact ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Contact d’urgence</span> : null}
                         </div>
                       </article>
-                    )) : <p className="text-sm text-gray-500">Aucun contact compl\u00e9mentaire enregistr\u00e9.</p>}</div>
+                    )) : <p className="text-sm text-gray-500">Aucun contact complémentaire enregistré.</p>}</div>
                   </section>
                 </div>
 
