@@ -34,7 +34,7 @@ export default function MessageAttachment({ message, compact = false }: { messag
       {url && <button type="button" onClick={() => { URL.revokeObjectURL(url); setUrl('') }} className="rounded-lg border p-2 dark:border-kcs-blue-700" aria-label={tr('Fermer', 'Close')}><X size={16}/></button>}
       <button type="button" onClick={() => void download()} className="rounded-lg border p-2 dark:border-kcs-blue-700" aria-label={tr('Télécharger', 'Download')}><Download size={16}/></button></div>
     {error && <p className="mt-2 text-xs font-semibold text-red-600">{error}</p>}
-    {url && isAudio && <audio className="mt-3 w-full" controls preload="metadata" src={url}/>}
+    {url && isAudio && <audio className="mt-3 w-full" controls autoPlay preload="auto" src={url} onError={() => setError(tr("Lecture audio impossible sur ce navigateur.", "Audio playback is unavailable in this browser."))}/>}
     {url && isVideo && <video className="mt-3 max-h-[55vh] w-full rounded-lg bg-black object-contain" controls playsInline preload="metadata" src={url}/>}
     {url && isImage && <img className="mt-3 max-h-[55vh] w-full rounded-lg object-contain" src={url} alt={message.attachmentName || tr('Image jointe', 'Attached image')}/>}
   </div>

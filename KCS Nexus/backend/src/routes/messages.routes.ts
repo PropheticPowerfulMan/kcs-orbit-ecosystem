@@ -349,7 +349,8 @@ messagesRouter.patch('/:id/read', asyncHandler(async (req: AuthenticatedRequest,
   const existing = await prisma.internalMessage.findFirst({ where: { id, recipientId: req.user!.sub } })
   if (!existing) throw new ApiError(404, 'Message not found')
   const message = await prisma.internalMessage.update({ where: { id }, data: { readAt: existing.readAt ?? new Date() }, include: { sender: true, recipient: true } })
-  return success(res, message)
+  const { attachmentData: _attachmentData, ...safeMessage } = message
+  return success(res, { ...safeMessage, hasAttachment: Boolean(message.attachmentName) })
 }))
 messagesRouter.get('/:id/attachment', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const actorId = await resolveMessageActorId(req)
