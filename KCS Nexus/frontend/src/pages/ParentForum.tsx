@@ -28,9 +28,20 @@ export default function ParentForumPage() {
 
   const load = async () => {
     setLoading(true); setError('')
-    try { const response = await forumAPI.getPosts(); setPosts(response.data?.data ?? []) }
-    catch (reason: any) { setError(reason?.response?.data?.message ?? tr('Impossible de charger le forum.','Unable to load the forum.')) }
-    finally { setLoading(false) }
+    let lastError: any
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await forumAPI.getPosts()
+        setPosts(response.data?.data ?? [])
+        setLoading(false)
+        return
+      } catch (reason: any) {
+        lastError = reason
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)))
+      }
+    }
+    setError(lastError?.response?.data?.message ?? tr('Impossible de charger le forum. Réessayez avec Actualiser.','Unable to load the forum. Try Refresh.'))
+    setLoading(false)
   }
   useEffect(() => { void load() }, [])
 
