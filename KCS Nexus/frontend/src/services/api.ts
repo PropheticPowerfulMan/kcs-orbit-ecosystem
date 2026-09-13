@@ -105,7 +105,7 @@ export const authAPI = {
       const status = (error as AxiosError)?.response?.status
       // Older installed bundles could briefly resolve authentication against
       // the SPA origin during an update. Retry the canonical API URL once.
-      if (status !== 405 && status !== 502 && status !== 503 && status !== 504) throw error
+      if (status !== 405 && status !== 502 && status !== 503 && status !== 504 && (error as AxiosError)?.code !== 'ERR_NETWORK' && (error as AxiosError)?.code !== 'ECONNABORTED') throw error
       return axios.post(window.location.origin + getRouteUrl('api/auth/login'), payload, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 15_000,

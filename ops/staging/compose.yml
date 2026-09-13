@@ -176,7 +176,7 @@ services:
       context: ../..
       dockerfile: ops/staging/docker/nexus-web.Dockerfile
       args:
-        VITE_API_URL: https://${STAGING_DOMAIN}/nexus/api
+        VITE_API_URL: /nexus/api
         VITE_BASE_PATH: /nexus/
     image: kcs/nexus-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
     container_name: kcs-nexus-web-staging
