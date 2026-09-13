@@ -207,6 +207,8 @@ export const forumAPI = {
   getPosts: () => api.get('/forum/posts'),
   createPost: (data: object) => api.post('/forum/posts', data),
   addComment: (postId: string, data: object) => api.post(`/forum/posts/${postId}/comments`, data),
+  getPostAttachment: (id: string) => api.get(`/forum/posts/${id}/attachment`, { responseType: 'blob' }),
+  getCommentAttachment: (id: string) => api.get(`/forum/comments/${id}/attachment`, { responseType: 'blob' }),
   getAIReport: () => api.get('/forum/ai-report'),
 }
 
@@ -215,6 +217,8 @@ export const studentForumAPI = {
   getPosts: () => api.get('/student-forum/posts'),
   createPost: (data: object) => api.post('/student-forum/posts', data),
   addComment: (postId: string, data: object) => api.post(`/student-forum/posts/${postId}/comments`, data),
+  getPostAttachment: (id: string) => api.get(`/student-forum/posts/${id}/attachment`, { responseType: 'blob' }),
+  getCommentAttachment: (id: string) => api.get(`/student-forum/comments/${id}/attachment`, { responseType: 'blob' }),
   toggleLike: (postId: string) => api.post('/student-forum/posts/' + postId + '/likes'),
   getAIReport: () => api.get('/student-forum/ai-report'),
 }

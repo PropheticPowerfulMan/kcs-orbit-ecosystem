@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Brain, Camera, Heart, MessageCircle, Mic, Plus, Send, ShieldCheck, Users, Video, X } from 'lucide-react'
+import { Brain, Camera, Heart, MessageCircle, Mic, Paperclip, Plus, Send, ShieldCheck, Users, Video, X } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { studentForumAPI } from '@/services/api'
+import AudioRecorder from '@/components/shared/AudioRecorder'
+import ForumMedia from '@/components/shared/ForumMedia'
 
 type StudentForumPost = {
   id: string
@@ -15,10 +17,11 @@ type StudentForumPost = {
   sentiment: string
   priority: string
   author: string
-  comments: { id: string; author: string; content: string }[]
+  comments: { id: string; author: string; content: string; attachmentType?: string; attachmentName?: string; hasAttachment?: boolean }[]
   attachmentType?: 'image' | 'video' | 'audio'
   attachmentData?: string
   attachmentName?: string
+  hasAttachment?: boolean
   likeCount: number
   likedByMe: boolean
 }
@@ -30,7 +33,9 @@ const StudentForumPage = () => {
   const [posts, setPosts] = useState<StudentForumPost[]>([])
   const [draft, setDraft] = useState({ title: '', category: 'Academics', content: '' })
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({})
-  const [attachment, setAttachment] = useState<{ type: 'image' | 'video' | 'audio'; data: string; name: string } | null>(null)
+  const [attachment, setAttachment] = useState<{ type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string } | null>(null)
+  const [commentAttachments, setCommentAttachments] = useState<Record<string, { type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string } | null>>({})
+  const [recordingFor, setRecordingFor] = useState('')
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -53,7 +58,7 @@ const StudentForumPage = () => {
 
   const createPost = async (event: FormEvent) => {
     event.preventDefault()
-    if (!draft.title || !draft.content) return
+    if (!draft.title || (!draft.content && !attachment)) return
     const response = await studentForumAPI.createPost({ ...draft, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
     const created = response.data.data
     setPosts((current) => [{ ...created, likeCount: 0, likedByMe: false, author: `${user?.firstName ?? 'Student'} ${user?.lastName?.[0] ?? ''}.`.trim(), comments: [] }, ...current])
@@ -62,13 +67,16 @@ const StudentForumPage = () => {
   }
 
   const addComment = async (postId: string) => {
-    const content = commentDrafts[postId]
-    if (!content) return
-    const response = await studentForumAPI.addComment(postId, { content })
+    const content = commentDrafts[postId] ?? ''
+    const media = commentAttachments[postId]
+    if (!content.trim() && !media) return
+    const response = await studentForumAPI.addComment(postId, { content, ...(media ? { attachmentType: media.type, attachmentData: media.data, attachmentName: media.name } : {}) })
     setPosts((current) => current.map((post) => post.id === postId
       ? { ...post, comments: [...post.comments, { ...response.data.data, author: user?.firstName ?? 'Student' }] }
       : post))
     setCommentDrafts((current) => ({ ...current, [postId]: '' }))
+    setCommentAttachments((current) => ({ ...current, [postId]: null }))
+    setRecordingFor('')
   }
 
   const readMedia = (file: File | undefined, type: 'image' | 'video' | 'audio') => {
@@ -78,6 +86,14 @@ const StudentForumPage = () => {
     const reader = new FileReader()
     reader.onload = () => setAttachment({ type, data: String(reader.result), name: file.name })
     reader.readAsDataURL(file)
+  }
+
+  const readAnyMedia = (file: File | undefined, done: (media: { type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string }) => void) => {
+    if (!file) return
+    if (file.size > 8_000_000) { alert(tr('Le fichier doit faire 8 Mo maximum.','The file must be 8 MB or less.')); return }
+    const family = file.type.split('/')[0]
+    const type = (['image','video','audio'].includes(family) ? family : 'document') as 'image' | 'video' | 'audio' | 'document'
+    const reader = new FileReader(); reader.onload = () => done({ type, data: String(reader.result), name: file.name }); reader.readAsDataURL(file)
   }
 
   const toggleLike = async (postId: string) => {
@@ -119,6 +135,7 @@ const StudentForumPage = () => {
               <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => readMedia(event.target.files?.[0], 'image')} /><input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={(event) => readMedia(event.target.files?.[0], 'video')} /><input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(event) => readMedia(event.target.files?.[0], 'audio')} />
               <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Camera size={16}/> Photo</button><button type="button" onClick={() => videoInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Video size={16}/> Video</button><button type="button" onClick={() => audioInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Mic size={16}/> Audio</button></div>
               {attachment && <div className="mt-3 flex items-center justify-between rounded-xl bg-kcs-blue-50 p-3 text-sm"><span>{attachment.name}</span><button type="button" onClick={() => setAttachment(null)}><X size={16}/></button></div>}
+              <AudioRecorder language={language} onRecorded={(file) => readAnyMedia(file, (media) => setAttachment(media))}/>
               <button className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2">
                 <Send size={16} /> Publish
               </button>
@@ -155,7 +172,7 @@ const StudentForumPage = () => {
                   </span>
                 </div>
                 <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">{post.content}</p>
-                {post.attachmentData && <div className="mt-4 overflow-hidden rounded-2xl bg-black/5">{post.attachmentType === 'image' ? <img src={post.attachmentData} alt={post.attachmentName ?? post.title} className="max-h-[520px] w-full object-contain"/> : post.attachmentType === 'video' ? <video src={post.attachmentData} controls className="max-h-[520px] w-full"/> : <audio src={post.attachmentData} controls className="w-full p-4"/>}</div>}
+                <ForumMedia type={post.attachmentType} name={post.attachmentName} hasAttachment={post.hasAttachment} load={() => studentForumAPI.getPostAttachment(post.id)} language={language}/>
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
                   <button type="button" onClick={() => void toggleLike(post.id)} className={`flex items-center gap-1.5 ${post.likedByMe ? 'font-bold text-red-500' : ''}`}><Heart size={15} fill={post.likedByMe ? 'currentColor' : 'none'}/> {post.likeCount} {post.likeCount === 1 ? 'Like' : 'Likes'}</button>
                   <span className="flex items-center gap-1.5"><MessageCircle size={14} /> {post.comments.length} comments</span>
@@ -167,14 +184,17 @@ const StudentForumPage = () => {
                     <div key={comment.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30">
                       <span className="font-semibold text-kcs-blue-900 dark:text-white">{comment.author}: </span>
                       <span className="text-gray-600 dark:text-gray-300">{comment.content}</span>
+                      <ForumMedia compact type={comment.attachmentType} name={comment.attachmentName} hasAttachment={comment.hasAttachment} load={() => studentForumAPI.getCommentAttachment(comment.id)} language={language}/>
                     </div>
                   ))}
-                  <div className="flex gap-2">
-                    <input value={commentDrafts[post.id] ?? ''} onChange={(event) => setCommentDrafts({ ...commentDrafts, [post.id]: event.target.value })} placeholder="Reply to this discussion" className="input-kcs" />
-                    <button onClick={() => addComment(post.id)} className="rounded-xl bg-kcs-blue-700 px-4 text-white hover:bg-kcs-blue-800">
-                      <Send size={16} />
-                    </button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input value={commentDrafts[post.id] ?? ''} onChange={(event) => setCommentDrafts({ ...commentDrafts, [post.id]: event.target.value })} placeholder={tr('Répondre à cette discussion','Reply to this discussion')} className="input-kcs" />
+                    <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-4 dark:text-white" title={tr('Joindre un média','Attach media')}><Paperclip size={17}/><input type="file" accept="image/*,audio/*,video/*,.pdf,.txt" className="hidden" onChange={(event)=>readAnyMedia(event.target.files?.[0],media=>setCommentAttachments(current=>({...current,[post.id]:media})))}/></label>
+                    <button type="button" onClick={()=>setRecordingFor(recordingFor===post.id?'':post.id)} className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 dark:text-white" title={tr('Enregistrer un audio','Record audio')}><Mic size={17}/></button>
+                    <button onClick={() => void addComment(post.id)} className="min-h-11 rounded-xl bg-kcs-blue-700 px-4 text-white hover:bg-kcs-blue-800"><Send size={16}/></button>
                   </div>
+                  {commentAttachments[post.id] && <div className="flex items-center justify-between rounded-xl bg-cyan-50 p-3 text-sm dark:bg-kcs-blue-950 dark:text-white"><span className="truncate">{commentAttachments[post.id]?.name}</span><button type="button" onClick={()=>setCommentAttachments(current=>({...current,[post.id]:null}))}><X size={16}/></button></div>}
+                  {recordingFor===post.id && <AudioRecorder language={language} onRecorded={(file)=>readAnyMedia(file,media=>setCommentAttachments(current=>({...current,[post.id]:media})))}/>}
                 </div>
               </motion.article>
             ))}

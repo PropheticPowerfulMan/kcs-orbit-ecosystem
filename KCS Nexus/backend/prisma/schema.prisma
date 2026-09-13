@@ -841,6 +841,9 @@ model ParentForumPost {
   status    String               @default("open")
   sentiment String               @default("neutral")
   priority  String               @default("normal")
+  attachmentType String?
+  attachmentData String?
+  attachmentName String?
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
   author    User                 @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
@@ -856,6 +859,9 @@ model ParentForumComment {
   authorId  String
   content   String
   sentiment String          @default("neutral")
+  attachmentType String?
+  attachmentData String?
+  attachmentName String?
   createdAt DateTime        @default(now())
   post      ParentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   author    User            @relation("ForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
@@ -906,6 +912,9 @@ model StudentForumComment {
   authorId  String
   content   String
   sentiment String           @default("neutral")
+  attachmentType String?
+  attachmentData String?
+  attachmentName String?
   createdAt DateTime         @default(now())
   post      StudentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   author    User             @relation("StudentForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
