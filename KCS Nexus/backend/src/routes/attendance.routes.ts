@@ -1,11 +1,13 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
+import { env } from '../config/env.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
-import { compareClassParts, normalizeClassParts } from '../utils/className.js'
+import { compareClassParts, normalizeClassParts, splitClassName } from '../utils/className.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses, mergeTeacherClasses, teacherClassKey } from '../utils/teacherClassAccess.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
+import { ensureOrbitStudentProfile, type OrbitStudentIdentity } from '../services/orbitStudentMaterialization.js'
 
 export const attendanceRouter = Router()
 
@@ -84,6 +86,21 @@ async function assignedTeacherClasses(userId: string) {
   return mergeTeacherClasses(profileClasses, extractWorkspaceClasses(workspace?.state))
 }
 
+async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: string; section: string }>) {
+  if (!assignedClasses.length || !env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`,
+    { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(10_000) },
+  )
+  if (!response.ok) throw new Error(`Orbit student directory request failed with status ${response.status}`)
+  const directory = await response.json() as { students?: OrbitStudentIdentity[] }
+  const students = (directory.students ?? []).filter((student) => {
+    if ((student.status ?? 'active').toLowerCase() !== 'active') return false
+    const classParts = splitClassName(student.className)
+    return belongsToTeacherClasses(classParts, assignedClasses)
+  })
+  await Promise.all(students.map((student) => ensureOrbitStudentProfile(student)))
+}
 
 attendanceRouter.use(authenticate)
 
@@ -105,6 +122,11 @@ attendanceRouter.get('/staff/me', requireRoles('admin', 'staff', 'teacher'), asy
 attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const date = normalizedDay(z.coerce.date().parse(String(req.query.date ?? new Date().toISOString().slice(0, 10))))
   const assignedClasses = await assignedTeacherClasses(req.user!.sub)
+  try {
+    await synchronizeAssignedOrbitStudents(assignedClasses)
+  } catch (error) {
+    console.warn('[teacher-attendance] Orbit roster synchronization unavailable; using the verified local Nexus register.', error)
+  }
   const registryStudents = await prisma.studentProfile.findMany({
     include: {
       user: { select: { firstName: true, middleName: true, lastName: true } },
@@ -156,18 +178,22 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
   if (assignedClasses.length && !assignedClasses.some((value) => teacherClassKey(value) === teacherClassKey(selectedClass))) {
     throw new ApiError(403, 'Attendance is limited to a class assigned to this teacher')
   }
+  try {
+    await synchronizeAssignedOrbitStudents(assignedClasses)
+  } catch (error) {
+    console.warn('[teacher-attendance] Orbit roster synchronization unavailable during submission; validating against Nexus.', error)
+  }
   const date = normalizedDay(payload.date)
   const ids = payload.entries.map((entry) => entry.studentId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate student in attendance register')
-  const students = await prisma.studentProfile.findMany({
-    where: { id: { in: ids } },
+  const activeStudents = await prisma.studentProfile.findMany({
+    where: { status: { equals: 'active', mode: 'insensitive' } },
     select: { id: true, grade: true, section: true },
   })
-  if (students.length !== ids.length || students.some((student) => {
-    const value = normalizeClassParts(student.grade, student.section)
-    return teacherClassKey(value) !== teacherClassKey(selectedClass)
-  })) {
-    throw new ApiError(400, 'Every student must belong to the selected teacher class')
+  const students = activeStudents.filter((student) => teacherClassKey(normalizeClassParts(student.grade, student.section)) === teacherClassKey(selectedClass))
+  const officialIds = new Set(students.map((student) => student.id))
+  if (students.length !== ids.length || ids.some((id) => !officialIds.has(id))) {
+    throw new ApiError(409, 'The official class roster changed. Reload attendance before submitting so every active learner is included.')
   }
   const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)

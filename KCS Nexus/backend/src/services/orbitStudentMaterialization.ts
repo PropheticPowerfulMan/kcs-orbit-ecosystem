@@ -38,12 +38,13 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
   const keys = studentKeys(student)
   const existingProfile = await prisma.studentProfile.findFirst({
     where: { OR: [{ studentNumber: { in: keys } }, { user: { orbitUserId: student.id } }] },
-    select: { id: true, studentNumber: true },
+    select: { id: true, studentNumber: true, userId: true },
   })
-  if (existingProfile) return existingProfile
 
   const normalizedEmail = student.email?.trim().toLowerCase() || null
-  let user = await prisma.user.findFirst({
+  let user = existingProfile
+    ? await prisma.user.findUnique({ where: { id: existingProfile.userId }, select: { id: true, email: true, accessCode: true, role: true } })
+    : await prisma.user.findFirst({
     where: { OR: [{ orbitUserId: student.id }, ...(normalizedEmail ? [{ email: normalizedEmail }] : [])] },
     select: { id: true, email: true, accessCode: true, role: true },
   })
@@ -90,15 +91,22 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
     || student.externalIds?.find((item) => item.appSlug.toUpperCase() === 'SAVANEX')?.externalId
     || student.id
   const classParts = splitClassName(student.className)
+  const profileData = {
+    userId: user.id,
+    studentNumber: canonicalNumber,
+    ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim(), section: classParts.section } : {}),
+    status: (student.status || 'active').toLowerCase(),
+    ...(student.dateOfBirth ? { dateOfBirth: new Date(student.dateOfBirth) } : {}),
+  }
+  if (existingProfile) {
+    return prisma.studentProfile.update({
+      where: { id: existingProfile.id },
+      data: profileData,
+      select: { id: true, studentNumber: true },
+    })
+  }
   return prisma.studentProfile.create({
-    data: {
-      userId: user.id,
-      studentNumber: canonicalNumber,
-      grade: classParts.grade || student.className?.trim() || 'Unassigned',
-      section: classParts.section,
-      status: (student.status || 'active').toLowerCase(),
-      dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth) : null,
-    },
+    data: { ...profileData, grade: classParts.grade || student.className?.trim() || 'Unassigned', section: classParts.section },
     select: { id: true, studentNumber: true },
   })
 }
