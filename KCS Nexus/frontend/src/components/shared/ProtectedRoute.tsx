@@ -19,7 +19,10 @@ const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: Prote
     if (!hasSession || !user) return
     let active = true
     const synchronizeProfile = () => void authAPI.me().then((response) => {
-      if (active && response.data?.data) updateUser(response.data.data)
+      if (active && response.data?.data) {
+        const { avatar, ...profile } = response.data.data
+        updateUser(typeof avatar === 'string' && avatar.trim() ? { ...profile, avatar } : profile)
+      }
     }).catch(() => undefined)
     synchronizeProfile()
     const timer = window.setInterval(synchronizeProfile, 30_000)

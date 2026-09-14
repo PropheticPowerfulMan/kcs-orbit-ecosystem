@@ -4,6 +4,7 @@ import { messagesAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 
 export type MessageWithAttachment = { id: string; attachmentName?: string | null; attachmentMime?: string | null; attachmentSize?: number | null; hasAttachment?: boolean }
+const isIncompleteMp4=async(blob:Blob)=>{if(!blob.type.includes("mp4"))return false;const header=new Uint8Array(await blob.slice(0,64).arrayBuffer());const signature=Array.from(header,(byte)=>String.fromCharCode(byte)).join("");return !signature.includes("ftyp")}
 const readableSize = (size?: number | null) => !size ? '' : size < 1048576 ? `${Math.ceil(size / 1024)} KB` : `${(size / 1048576).toFixed(1)} MB`
 
 export default function MessageAttachment({ message, compact = false }: { message: MessageWithAttachment; compact?: boolean }) {
@@ -22,7 +23,7 @@ export default function MessageAttachment({ message, compact = false }: { messag
   const load = async () => {
     if (url) return url
     setLoading(true); setError('')
-    try { const response = await messagesAPI.attachment(message.id); const nextUrl = URL.createObjectURL(response.data); setUrl(nextUrl); return nextUrl }
+    try { const response = await messagesAPI.attachment(message.id); const mediaBlob = response.data as Blob; if (isAudio && await isIncompleteMp4(mediaBlob)) { setError(tr('Cet ancien enregistrement audio est incomplet et ne peut pas être décodé. Veuillez demander un nouvel enregistrement.', 'This older audio recording is incomplete and cannot be decoded. Please request a new recording.')); return '' } const nextUrl = URL.createObjectURL(mediaBlob); setUrl(nextUrl); return nextUrl }
     catch (reason: any) { setError(reason?.response?.data?.message || tr('Média indisponible.', 'Media unavailable.')); return '' }
     finally { setLoading(false) }
   }

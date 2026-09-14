@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CheckCircle2, ClipboardCheck, Save, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ClipboardCheck, Save, Search, X } from 'lucide-react'
 import { attendanceAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 
@@ -44,6 +44,7 @@ export default function TeacherClassAttendance() {
   const [history, setHistory] = useState<any[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [selectedHistory, setSelectedHistory] = useState<any>(null)
+  const [historyQuery, setHistoryQuery] = useState('')
 
   const load = async () => {
     setBusy(true)
@@ -76,6 +77,12 @@ export default function TeacherClassAttendance() {
   useEffect(() => { void loadHistory() }, [])
 
   const counts = useMemo(() => statuses.map((status) => ({ status, count: data.students.filter((student: any) => (states[student.id] ?? 'PRESENT') === status).length })), [data.students, states])
+  const filteredHistory = useMemo(() => {
+    const locale = language === 'fr' ? 'fr-FR' : 'en-US'
+    const query = historyQuery.trim().toLocaleLowerCase(locale)
+    if (query.length === 0) return history
+    return history.filter((register: any) => [register.date, register.className, register.period, ...((register.students ?? []).flatMap((student: any) => [student.name, student.studentNumber, student.status, student.note]))].filter(Boolean).join(' ').toLocaleLowerCase(locale).includes(query))
+  }, [history, historyQuery, language])
 
   const save = async () => {
     if (!data.class || !data.students.length) return
@@ -125,7 +132,8 @@ export default function TeacherClassAttendance() {
     </>}
     <section className={panel}>
       <div className="flex items-center gap-2"><CalendarDays className="text-kcs-blue-600"/><div><h3 className="font-bold dark:text-white">{tr('Historique officiel des présences','Official attendance history')}</h3><p className="text-xs text-gray-500">{tr('Registres que vous avez enregistrés durant les 30 derniers jours.','Registers you saved during the last 30 days.')}</p></div></div>
-      {historyLoading?<p className="mt-4 text-sm text-gray-500">{tr('Chargement de l’historique…','Loading history…')}</p>:history.length===0?<p className="mt-4 text-sm text-gray-500">{tr('Aucune présence passée enregistrée.','No past attendance has been saved.')}</p>:<div className="mt-4 overflow-x-auto"><table className="min-w-[720px] w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-gray-400"><th className="pb-3">{tr('Date','Date')}</th><th>{tr('Classe','Class')}</th><th>{tr('Élèves','Students')}</th><th>{tr('Présents','Present')}</th><th>{tr('Absents','Absent')}</th><th>{tr('Retards','Late')}</th><th>{tr('Taux','Rate')}</th></tr></thead><tbody>{history.map((register:any)=><tr key={`${register.date}-${register.className}-${register.period}`} className="border-b dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white"><button type="button" className="text-kcs-blue-700 underline dark:text-sky-300" onClick={()=>setSelectedHistory(register)}>{new Date(`${register.date}T00:00:00`).toLocaleDateString(language==='fr'?'fr-FR':'en-US')}</button></td><td>{register.className}</td><td>{register.summary.total}</td><td>{register.summary.present}</td><td>{register.summary.absent}</td><td>{register.summary.late}</td><td>{register.summary.attendanceRate??'—'}%</td></tr>)}</tbody></table></div>}
+      <label className="mt-4 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><Search size={17} className="shrink-0 text-gray-400"/><input value={historyQuery} onChange={(event)=>setHistoryQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder={tr('Rechercher par date, classe, période, élève, matricule, statut ou note...','Search by date, class, period, student, ID, status or note...')} /></label>
+      {historyLoading?<p className="mt-4 text-sm text-gray-500">{tr('Chargement de l’historique…','Loading history…')}</p>:filteredHistory.length===0?<p className="mt-4 text-sm text-gray-500">{history.length===0?tr('Aucune présence passée enregistrée.','No past attendance has been saved.'):tr('Aucune présence ne correspond à cette recherche.','No attendance matches this search.')}</p>:<div className="mt-4 overflow-x-auto"><table className="min-w-[720px] w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-gray-400"><th className="pb-3">{tr('Date','Date')}</th><th>{tr('Classe','Class')}</th><th>{tr('Élèves','Students')}</th><th>{tr('Présents','Present')}</th><th>{tr('Absents','Absent')}</th><th>{tr('Retards','Late')}</th><th>{tr('Taux','Rate')}</th></tr></thead><tbody>{filteredHistory.map((register:any)=><tr key={`${register.date}-${register.className}-${register.period}`} className="border-b dark:border-kcs-blue-800"><td className="py-3 font-semibold dark:text-white"><button type="button" className="text-kcs-blue-700 underline dark:text-sky-300" onClick={()=>setSelectedHistory(register)}>{new Date(`${register.date}T00:00:00`).toLocaleDateString(language==='fr'?'fr-FR':'en-US')}</button></td><td>{register.className}</td><td>{register.summary.total}</td><td>{register.summary.present}</td><td>{register.summary.absent}</td><td>{register.summary.late}</td><td>{register.summary.attendanceRate??'—'}%</td></tr>)}</tbody></table></div>}
       <p className="mt-3 text-xs text-gray-500">{tr('Cliquez sur une date pour rouvrir le registre détaillé et vérifier chaque élève.','Click a date to reopen the detailed register and verify every student.')}</p>
     </section>
     {selectedHistory && <HistoryDetail register={selectedHistory} language={language} close={()=>setSelectedHistory(null)}/>}
