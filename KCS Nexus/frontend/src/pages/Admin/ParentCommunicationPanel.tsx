@@ -92,6 +92,15 @@ export default function ParentCommunicationPanel() {
     void load().catch(() => setNotice(c.loadFailed))
   }, [])
 
+  useEffect(() => {
+    setSelectedParents([])
+  }, [roleFilter, gradeFilter, contactFilter, parentQuery])
+
+  useEffect(() => {
+    const availableIds = new Set(parents.map((parent) => parent.id))
+    setSelectedParents((current) => current.filter((id) => availableIds.has(id)))
+  }, [parents])
+
   const gradeOptions = useMemo(() => {
     const available = new Set<string>(parents.flatMap((person) => person.grades ?? []).map(normalizeGrade).filter(Boolean))
     return [...requiredGradeOptions, ...[...available].filter((grade) => !requiredGradeOptions.includes(grade))]
@@ -193,7 +202,7 @@ export default function ParentCommunicationPanel() {
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select className={fieldClass} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
           <div className="mt-3 flex flex-wrap gap-2">
-            <button className={primaryButton} onClick={() => setSelectedParents((current) => allParentsSelected ? current.filter((id) => !parentRows.some((parent) => parent.id === id)) : Array.from(new Set([...current, ...parentRows.map((parent) => parent.id)])))}>
+            <button className={primaryButton} onClick={() => setSelectedParents(allParentsSelected ? [] : parentRows.map((parent) => parent.id))}>
               {allParentsSelected ? <CheckSquare size={17} /> : <Square size={17} />} {allParentsSelected ? c.deselect : c.selectResults}
             </button>
             <button className={primaryButton} onClick={() => setSelectedParents([])}>{c.clear}</button>

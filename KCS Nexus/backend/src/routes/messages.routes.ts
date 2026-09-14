@@ -173,7 +173,8 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     }),
     getOrbitDirectory(),
   ])
-  if (parents.length !== recipientIds.length) throw new ApiError(400, 'One or more selected recipients are not valid communication accounts.')
+  const skippedRecipientIds = recipientIds.filter((id) => !parents.some((parent) => parent.id === id))
+  if (!parents.length) throw new ApiError(400, 'No selected recipient is a valid communication account.')
   const deliveryParents = parents.map((parent) => {
     const official = findOfficialContact(directory, parent)
     const officialEmail = official?.email?.trim()
@@ -248,7 +249,7 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     }
   }
   const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => { const result = row[channel] as { sent?: boolean; queued?: boolean } | undefined; return Boolean(result?.sent || result?.queued) }))
-  return success(res, { recipients: delivery.length, primaryRecipients: deliveryParents.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
+  return success(res, { recipients: delivery.length, requestedRecipients: recipientIds.length, primaryRecipients: deliveryParents.length, skippedRecipients: skippedRecipientIds.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
 }))
 
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
