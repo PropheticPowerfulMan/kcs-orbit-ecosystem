@@ -482,16 +482,26 @@ const buildOfficialTranscript = (student: AdminStudentRecord) => {
 const printOfficialTranscript = async (transcript: ReturnType<typeof buildOfficialTranscript>) => {
   const printWindow = window.open('', '_blank', 'width=1000,height=900')
   if (!printWindow) return
+  printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing official transcript</title><style>body{margin:0;display:grid;min-height:100vh;place-items:center;background:#eef3f8;color:#073b70;font:600 16px Arial}.status{padding:28px 34px;border-radius:18px;background:white;box-shadow:0 18px 50px #073b7020}</style></head><body><p class="status">Preparing the verified official transcript...</p></body></html>')
+  printWindow.document.close()
   const generatedIso = new Date().toISOString()
   const fingerprint = buildAuthenticityCode([transcript.student.id, transcript.student.studentNumber ?? '', transcript.student.name, generatedIso, ...transcript.rows.flatMap((year) => year.courses.map((course) => `${year.grade}:${course.course}:${course.average}`))].join('|'))
   const documentId = 'KCS-TR-' + generatedIso.slice(0, 10).replace(/-/g, '') + '-' + fingerprint
-  await academicRecordsAPI.registerTranscriptVerification({ documentId, fingerprint, studentId: transcript.student.id })
+  try {
+    await academicRecordsAPI.registerTranscriptVerification({ documentId, fingerprint, studentId: transcript.student.id })
+  } catch {
+    printWindow.document.open()
+    printWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Transcript unavailable</title><style>body{margin:0;display:grid;min-height:100vh;place-items:center;background:#eef3f8;color:#7f1d1d;font:600 16px Arial}.error{max-width:620px;padding:28px 34px;border-radius:18px;background:white;border-left:6px solid #dc2626;box-shadow:0 18px 50px #073b7020}</style></head><body><p class="error">The official transcript could not be verified. Please close this window and try again.</p></body></html>')
+    printWindow.document.close()
+    return
+  }
   const currentOrigin = window.location.origin
   const canonicalOrigin = /^https?:\/\/staging\./i.test(currentOrigin) ? currentOrigin.replace(/^(https?:\/\/)staging\./i, '$1') : /^https?:\/\/localhost(?::\d+)?$/i.test(currentOrigin) ? 'https://nexus.kcs.school' : currentOrigin
   const verificationUrl = `${canonicalOrigin}/verify/transcript?document=${encodeURIComponent(documentId)}&fingerprint=${encodeURIComponent(fingerprint)}`
   const qrCode = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 1, width: 240, color: { dark: '#073b70', light: '#ffffff' } })
   const logoUrl = new URL(SCHOOL_SEAL_SRC, window.location.origin).href
   const rows = transcript.rows.flatMap((year) => year.courses.map((course, index) => `<tr><td>${index === 0 ? `<b>${escapeHtml(year.year)}</b><small>${escapeHtml(year.grade)}</small>` : ''}</td><td>${escapeHtml(course.course)}</td><td class="num">${course.credit}</td><td class="num">${course.average}%</td><td class="grade">${escapeHtml(course.letter)}</td><td class="num">${course.gpa}</td></tr>`)).join('') || '<tr><td colspan="6" class="empty">No approved academic results are available for this student yet.</td></tr>'
+  printWindow.document.open()
   printWindow.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(documentId)} — Official Transcript</title><style>
 @page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}:root{--navy:#0f2352;--blue:#004080;--cyan:#12bde3;--pale:#f4f8fc;--line:#cfdae7}
 body{margin:0;background:#eaf0f6;color:#17233b;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{position:relative;width:210mm;min-height:297mm;margin:15px auto;padding:12mm 13mm 10mm;background:#fff;border-top:5mm solid var(--navy);box-shadow:0 20px 60px #10255225;overflow:hidden}.sheet:before{content:"";position:absolute;inset:4mm;border:1px solid #12bde377}.watermark{position:absolute;left:50%;top:50%;width:135mm;height:135mm;object-fit:contain;opacity:.04;transform:translate(-50%,-50%) rotate(-9deg);filter:grayscale(1)}.content{position:relative;z-index:1}
@@ -2808,173 +2818,7 @@ const AdminSectionView = ({
     )
   }
 
-  if (segment === 'transcripts') {
-    if (!transcriptStudent) return <div>Aucun eleve reel disponible pour generer un releve de notes.</div>
-    if (!officialTranscript) return <div>Le releve officiel ne peut pas encore etre genere.</div>
-    return (
-      <div className="space-y-6">
-        <AcademicRecordsControlCenter />
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <img src={SCHOOL_SEAL_SRC} alt={`${SCHOOL_NAME} official seal`} className="h-28 w-28 rounded-2xl border border-kcs-blue-100 bg-white p-1 object-contain shadow-md dark:border-kcs-blue-800" />
-              <div>
-              <h2 className="font-bold text-kcs-blue-900 dark:text-white">{SCHOOL_NAME} Transcript Center</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Official high-school transcript generated from Grade 9-12 bulletin averages, credits, GPA, rank, and graduation status.</p>
-              </div>
-            </div>
-            <div className="grid gap-2 sm:flex sm:flex-wrap">
-              <button className={`${adminButton} w-full sm:w-auto`} onClick={() => void printOfficialTranscript(officialTranscript)}>Print official transcript</button>
-              <button className={`${adminOutlineButton} w-full sm:w-auto`} onClick={() => { setSelectedTranscriptId(transcriptStudents[0]?.id ?? ''); setTranscriptClassFilter('All'); setTranscriptQuery('') }}>Reset selection</button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <h3 className="font-bold text-kcs-blue-900 dark:text-white">Eligible Students</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">All students from the official Nexus registry are available, from K3 through Grade 12.</p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,15rem)]">
-                <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2.5 dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><Search size={16} className="text-gray-400" /><input value={transcriptQuery} onChange={(event) => setTranscriptQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Search by student name or ID..." /></label>
-                <select aria-label="Filter eligible students by class" value={transcriptClassFilter} onChange={(event) => setTranscriptClassFilter(event.target.value)} className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-kcs-blue-900 outline-none focus:border-kcs-blue-400 focus:ring-2 focus:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:focus:ring-kcs-blue-800"><option value="All">All classes (K3–Grade 12)</option>{transcriptClasses.map((className) => <option key={className} value={className}>{className}</option>)}</select>
-              </div>
-              <p className="mt-3 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{filteredTranscriptStudents.length} of {transcriptStudents.length} official student(s) match the current criteria.</p>
-            </div>
-            {paginatedTranscriptStudents.map((student) => {
-              const transcript = transcripts.find((item) => item.student === student.name)
-              const generated = buildOfficialTranscript(student)
-              return (
-                <button key={student.id} className={`w-full rounded-2xl border bg-white p-5 text-left transition-colors hover:border-kcs-blue-200 hover:bg-kcs-blue-50 dark:bg-kcs-blue-900/50 dark:hover:bg-kcs-blue-900 ${transcriptStudent?.id === student.id ? 'border-kcs-blue-400 ring-2 ring-kcs-blue-100 dark:border-kcs-blue-400 dark:ring-kcs-blue-900' : 'border-gray-100 dark:border-kcs-blue-800'}`} onClick={() => setSelectedTranscriptId(student.id)}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{formatClassName(student.grade, student.section)} - {student.studentNumber ?? 'No student number'}</p>
-                    </div>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${pillTone(transcript?.status ?? generated.graduationStatus)}`}>{transcript?.status ?? generated.graduationStatus}</span>
-                  </div>
-                  <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.student.gpa == null ? 'Aucune donnée' : generated.cumulativeGpa}</p><p className="text-xs text-gray-400">Cum. GPA</p></div>
-                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.totalCredits}</p><p className="text-xs text-gray-400">Credits</p></div>
-                    <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30"><p className="font-bold text-kcs-blue-900 dark:text-white">{generated.student.gpa == null ? 'Aucune donnée' : `${generated.cumulativeAverage}%`}</p><p className="text-xs text-gray-400">Average</p></div>
-                  </div>
-                  <span className="mt-4 inline-flex w-full justify-center rounded-xl bg-kcs-gold-500 px-4 py-2.5 text-sm font-bold text-kcs-blue-950 hover:bg-kcs-gold-400">Generate transcript</span>
-                </button>
-              )
-            })}
-            {filteredTranscriptStudents.length > 0 ? <nav aria-label="Eligible students pagination" className="sticky bottom-2 z-10 flex flex-col gap-2 rounded-2xl border border-kcs-blue-100 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:items-center sm:justify-between"><p className="text-center text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200 sm:text-left">Page {transcriptPage} of {transcriptPageCount} · {filteredTranscriptStudents.length} students</p><div className="grid grid-cols-2 gap-2"><button type="button" disabled={transcriptPage === 1} onClick={() => setTranscriptPage((page) => Math.max(1, page - 1))} className="rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-kcs-blue-600 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">Previous</button><button type="button" disabled={transcriptPage === transcriptPageCount} onClick={() => setTranscriptPage((page) => Math.min(transcriptPageCount, page + 1))} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-40">Next</button></div></nav> : null}
-            {filteredTranscriptStudents.length === 0 ? <p className="rounded-xl border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-kcs-blue-700 dark:text-gray-300">No eligible student matches these criteria.</p> : null}
-          </div>
-
-          <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-            <img src={SCHOOL_SEAL_SRC} alt="" aria-hidden="true" className="pointer-events-none absolute right-6 top-28 hidden h-64 w-64 object-contain opacity-[0.055] sm:block" />
-            <div className="border-b border-gray-100 pb-5 dark:border-kcs-blue-800">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl border border-kcs-blue-100 bg-white p-1 shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:h-28 sm:w-28">
-                    <img src={SCHOOL_SEAL_SRC} alt={`${SCHOOL_NAME} official seal`} className="h-full w-full object-contain" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">Official Academic Transcript</p>
-                    <h3 className="mt-1 font-display text-xl font-bold text-kcs-blue-900 dark:text-white sm:text-2xl">{SCHOOL_NAME}</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Grade 9-12 cumulative high-school record</p>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-kcs-blue-50 p-4 text-sm dark:bg-kcs-blue-800/30">
-                  <p className="font-bold text-kcs-blue-900 dark:text-white">{officialTranscript.student.name}</p>
-                  <p className="mt-1 text-gray-600 dark:text-gray-300">ID: {officialTranscript.student.studentNumber ?? officialTranscript.student.id}</p>
-                  <p className="text-gray-600 dark:text-gray-300">Generated: {officialTranscript.generatedAt}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
-              {[
-                ['Cumulative GPA', officialTranscript.student.gpa == null ? 'Aucune donnée' : officialTranscript.cumulativeGpa],
-                ['Cumulative Average', `${officialTranscript.cumulativeAverage}%`],
-                ['Credits Earned', `${officialTranscript.totalCredits}/24`],
-                ['Class Standing', officialTranscript.classRank],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-                  <p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 space-y-4 md:hidden">
-              {officialTranscript.rows.map((year) => (
-                <div key={year.grade} className="rounded-xl border border-gray-100 bg-gray-50 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-kcs-blue-900 dark:text-white">{year.grade}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{year.year} - {year.status}</p>
-                    </div>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-kcs-blue-200">GPA {year.annualGpa}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {year.courses.map((course) => (
-                      <div key={`${year.grade}-${course.course}`} className="rounded-lg bg-white p-3 text-sm dark:bg-kcs-blue-900/60">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="font-semibold text-kcs-blue-900 dark:text-white">{course.course}</p>
-                          <span className="font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{course.letter}</span>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Credit {course.credit} - Average {course.average}% - GPA {course.gpa}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 hidden overflow-x-auto md:block">
-              <table className="min-w-[760px] w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-gray-400">
-                  <tr className="border-b border-gray-100 dark:border-kcs-blue-800">
-                    <th className="py-3 font-semibold">Year / Grade</th>
-                    <th className="py-3 font-semibold">Course</th>
-                    <th className="py-3 text-right font-semibold">Credit</th>
-                    <th className="py-3 text-right font-semibold">Average</th>
-                    <th className="py-3 text-right font-semibold">Letter</th>
-                    <th className="py-3 text-right font-semibold">GPA</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-kcs-blue-800/60">
-                  {officialTranscript.rows.flatMap((year) => year.courses.map((course, courseIndex) => (
-                    <tr key={`${year.grade}-${course.course}`}>
-                      <td className="py-3 font-semibold text-kcs-blue-900 dark:text-white">{courseIndex === 0 ? `${year.year} - ${year.grade}` : ''}</td>
-                      <td className="py-3 text-gray-600 dark:text-gray-300">{course.course}</td>
-                      <td className="py-3 text-right text-gray-600 dark:text-gray-300">{course.credit}</td>
-                      <td className="py-3 text-right font-semibold text-kcs-blue-900 dark:text-white">{course.average}%</td>
-                      <td className="py-3 text-right font-semibold text-kcs-blue-900 dark:text-white">{course.letter}</td>
-                      <td className="py-3 text-right text-gray-600 dark:text-gray-300">{course.gpa}</td>
-                    </tr>
-                  )))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {officialTranscript.rows.map((year) => (
-                <div key={year.grade} className="rounded-xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{year.grade}</p>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(year.status)}`}>{year.status}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Bulletin average: <strong>{year.average}%</strong> - Annual GPA: <strong>{year.annualGpa}</strong> - Credits: <strong>{year.credits}</strong></p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 dark:border-green-900/40 dark:bg-green-900/10">
-              <p className="font-semibold text-green-800 dark:text-green-300">{officialTranscript.graduationStatus}</p>
-              <p className="mt-1 text-xs text-green-700 dark:text-green-400">Standard calculation: annual bulletin average to letter grade to 4.0 GPA conversion, weighted by high-school credits from Grade 9 through Grade 12.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (segment === 'transcripts') return <AcademicRecordsControlCenter />
 
   if (segment === 'attendance' || segment === 'staff-attendance') return <AttendanceManagementPanel />
 

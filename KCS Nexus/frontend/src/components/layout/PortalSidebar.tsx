@@ -23,6 +23,11 @@ interface NavItem {
 
 type PortalSidebarProps = { badges?: Record<string, number> }
 
+// Keep one efficient blob URL per authenticated identity for the lifetime of the
+// page. Revoking it when a sidebar instance unmounts makes the same stored URL
+// invalid and causes the profile photo to disappear during portal navigation.
+const sessionAvatarUrls = new Map<string, string>()
+
 const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
@@ -140,15 +145,20 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   useEffect(() => {
     if (!user?.id || user.avatar) return
+    const cachedAvatar = sessionAvatarUrls.get(user.id)
+    if (cachedAvatar) {
+      updateUser({ avatar: cachedAvatar })
+      return
+    }
     let active = true
-    let objectUrl = ""
     authAPI.avatar(user.id).then((response) => {
       if (!active || !(response.data instanceof Blob) || response.data.size === 0) return
-      objectUrl = URL.createObjectURL(response.data)
+      const objectUrl = URL.createObjectURL(response.data)
+      sessionAvatarUrls.set(user.id, objectUrl)
       updateUser({ avatar: objectUrl })
     }).catch(() => undefined)
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
-  }, [user?.id, updateUser])
+    return () => { active = false }
+  }, [user?.id, user?.avatar, updateUser])
 
   useLayoutEffect(() => {
     const navigation = desktopNavigationRef.current
