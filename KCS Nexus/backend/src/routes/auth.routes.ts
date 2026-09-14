@@ -438,7 +438,11 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
         ...(canAdoptCanonicalEmail ? { email: canonicalEmail! } : {}),
         ...(typeof entity.phone === 'string' ? { phone: entity.phone.trim() || null } : {}),
         ...(typeof entity.userId === 'string' && entity.userId.trim() ? { orbitUserId: entity.userId.trim(), orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID } : {}),
-        avatar: typeof entity.photoData === 'string' ? entity.photoData : null,
+        // Compact directory responses intentionally omit the heavy photo payload.
+        // Preserve the last verified avatar unless Orbit explicitly returns photoData.
+        ...(Object.prototype.hasOwnProperty.call(entity, 'photoData')
+          ? { avatar: typeof entity.photoData === 'string' ? entity.photoData : null }
+          : {}),
       },
     })
   } catch (error) {
