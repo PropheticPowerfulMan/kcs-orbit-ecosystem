@@ -47,7 +47,7 @@ const resolveMessageActorId = async (req: AuthenticatedRequest) => {
 const canManageParentCommunications = (req: AuthenticatedRequest) =>
   req.user!.sub === 'configured-superadmin' || req.user!.role === 'teacher'
 
-type OrbitContact = { id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; accessCode?: string | null; familyContacts?: Array<{ kind?: string; firstName?: string; middleName?: string; lastName?: string; email?: string | null; phone?: string | null }> }
+type OrbitContact = { id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; accessCode?: string | null; studentIds?: string[]; parentId?: string | null; className?: string | null; familyContacts?: Array<{ kind?: string; firstName?: string; middleName?: string; lastName?: string; email?: string | null; phone?: string | null }> }
 type OrbitDirectory = { parents?: OrbitContact[]; students?: OrbitContact[]; teachers?: OrbitContact[] }
 let orbitDirectoryCache: { expiresAt: number; value: OrbitDirectory } | null = null
 const identityKey = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).sort().join('|')
@@ -83,7 +83,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const search = query ? { OR: [{ subject: { contains: query, mode: 'insensitive' as const } }, { body: { contains: query, mode: 'insensitive' as const } }] } : {}
   const messages = await prisma.internalMessage.findMany({
     where: { AND: [direction, search] },
-    include: { sender: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } }, recipient: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } } },
+    select: { id: true, senderId: true, recipientId: true, subject: true, body: true, attachmentName: true, attachmentMime: true, attachmentSize: true, targetRole: true, readAt: true, priority: true, channel: true, createdAt: true, sender: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } }, recipient: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } } },
     orderBy: { createdAt: 'desc' }, take: 250,
   })
   const correspondence = messages.length ? await prisma.correspondenceLog.findMany({
@@ -98,7 +98,7 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!messageId) return
     deliveryByMessage.set(messageId, [...(deliveryByMessage.get(messageId) || []), entry])
   })
-  return success(res, messages.map(({ attachmentData: _data, ...message }) => ({ ...message, hasAttachment: Boolean(message.attachmentName), deliveries: deliveryByMessage.get(message.id) || [] })))
+  return success(res, messages.map((message) => ({ ...message, hasAttachment: Boolean(message.attachmentName), deliveries: deliveryByMessage.get(message.id) || [] })))
 }))
 
 messagesRouter.get('/contacts', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -126,6 +126,7 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
     }),
     superAdmin ? getOrbitDirectory() : Promise.resolve({} as OrbitDirectory),
   ])
+  const orbitStudentsById = new Map((directory.students || []).map((student) => [student.id, student]))
   const seenIdentities = new Set<string>()
   const canonicalRecipients = recipients.flatMap((person) => {
     const official = superAdmin && person.role !== 'ADMIN' && person.role !== 'STAFF'
@@ -137,12 +138,13 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
     if (key) seenIdentities.add(key)
     // Nexus remains a valid source when an Orbit record has not been linked yet.
     // Matched Orbit data stays authoritative for the displayed identity and contacts.
-    if (!official) return [person]
-    return [{ ...person, firstName: official.firstName || person.firstName, middleName: official.middleName || null, lastName: official.lastName || person.lastName, email: official.email || person.email, phone: official.phone || person.phone, accessCode: official.accessCode || person.accessCode }]
+    if (!official) return [{ ...person, orbitStudentIds: [] as string[] }]
+    return [{ ...person, firstName: official.firstName || person.firstName, middleName: official.middleName || null, lastName: official.lastName || person.lastName, email: official.email || person.email, phone: official.phone || person.phone, accessCode: official.accessCode || person.accessCode, orbitStudentIds: official.studentIds || [] }]
   })
   return success(res, canonicalRecipients.map((person) => {
     const gradeValues = [
       person.studentProfile?.grade,
+      ...person.orbitStudentIds.map((studentId) => orbitStudentsById.get(studentId)?.className),
       ...person.parentLinks.map((link) => link.student.grade),
       ...(person.teacherProfile?.courses.map((course) => course.grade) ?? []),
     ].filter((value): value is string => Boolean(value))
