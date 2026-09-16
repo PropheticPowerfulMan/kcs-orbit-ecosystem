@@ -140,7 +140,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
   }
 
   const value = await response.json() as SharedDirectoryResponse
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 5 * 60_000 }
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 10_000 }
   return value
 }
 
@@ -532,7 +532,8 @@ registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), 
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const payload = { ...req.body, organizationId: env.KCS_ORBIT_ORGANIZATION_ID }
   const created = await createRegistryEntityInOrbit(entityType, payload)
-  const directory = await getSharedDirectoryFromOrbit()
+  sharedDirectoryCache = null
+  const directory = await getSharedDirectoryFromOrbit(true)
   const notificationDelivery = await deliverEntityChange(directory, entityType, findDirectoryEntity(directory, entityType, String((created as any).orbitId)), 'created')
   return success(res, { ...(created as object), notificationDelivery }, 'Shared entity created through Orbit', 201)
 }))
@@ -540,14 +541,15 @@ registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), 
 registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
-  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit(true) : null
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
 
   if (orbitRegistryIsEnabled()) {
     const updated = await updateRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
-    const directoryAfter = await getSharedDirectoryFromOrbit(true)
+    sharedDirectoryCache = null
     const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
-    const canonicalEntity = findDirectoryEntity(directoryAfter, entityType, before?.id || String(req.params.identifier))
-    const notificationDelivery = await deliverEntityChange(directoryAfter, entityType, canonicalEntity || { ...before, ...(req.body ?? {}) }, 'updated')
+    const updatedEntity = (updated as { entity?: ChangeDeliveryEntity }).entity
+    const canonicalEntity = updatedEntity || { ...before, ...(req.body ?? {}) }
+    const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, canonicalEntity, 'updated')
     return success(res, { ...(updated as object), notificationDelivery }, 'Shared entity updated through Orbit')
   }
 
@@ -755,7 +757,7 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
 
-  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit(true) : null
+  const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
   const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
   if (!orbitRegistryIsEnabled()) {
     if (entityType !== 'parent') {
@@ -767,6 +769,7 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   }
 
   const deleted = await deleteRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, identifierType)
+  sharedDirectoryCache = null
   const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, before, 'deleted')
   return success(res, { ...(deleted as object), notificationDelivery }, 'Shared entity deleted through Orbit')
 }))

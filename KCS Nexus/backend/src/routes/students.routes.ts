@@ -145,7 +145,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
   }
 
   const value = await response.json() as OrbitSharedDirectory
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 5 * 60_000 }
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 10_000 }
   return value
 }
 
@@ -431,9 +431,11 @@ async function deliverStudentUpdate(input: {
   parentUserIds: string[]
   parentEmails: string[]
   parentPhones: string[]
-}) {
-  const title = 'Dossier élève modifié'
-  const message = `Le dossier de ${input.studentName} a été modifié par le superadministrateur KCS Nexus.`
+}, action: 'updated' | 'deleted' = 'updated') {
+  const title = action === 'deleted' ? 'Dossier élève supprimé' : 'Dossier élève modifié'
+  const message = action === 'deleted'
+    ? `Le dossier de ${input.studentName} a été supprimé du registre officiel par le superadministrateur KCS Nexus.`
+    : `Le dossier de ${input.studentName} a été modifié par le superadministrateur KCS Nexus.`
   const userIds = Array.from(new Set([...(input.studentUserId ? [input.studentUserId] : []), ...input.parentUserIds]))
   if (userIds.length) {
     await prisma.notification.createMany({ data: userIds.map((userId) => ({ userId, title, message, type: 'MESSAGE' as const, link: '/messages' })) })
@@ -1073,6 +1075,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
         ? { className: `${payload.grade ?? currentClass.grade} ${payload.section ?? currentClass.section}`.trim() }
         : {}),
     })
+    sharedDirectoryCache = null
     const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
     if (payload.photoData !== undefined) {
       await prisma.user.updateMany({
@@ -1178,8 +1181,16 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
     const directory = await getSharedDirectoryFromOrbit()
     const target = directory.students.find((student) => student.id === studentId)
     if (!target) throw new ApiError(404, 'Student not found')
+    const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
+    const parentEmails = [parent?.email, ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[]
+    const parentPhones = [parent?.phone, ...(parent?.familyContacts?.map((contact) => contact.phone) ?? [])].filter(Boolean) as string[]
+    const localParents = parentEmails.length ? await prisma.user.findMany({
+      where: { role: 'PARENT', email: { in: parentEmails } },
+      select: { id: true },
+    }) : []
 
     await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
+    sharedDirectoryCache = null
     await prisma.user.deleteMany({
       where: {
         role: 'STUDENT',
@@ -1189,7 +1200,14 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
         ],
       },
     })
-    return success(res, { id: studentId, deleted: true }, 'Student deleted through Orbit')
+    const notificationDelivery = await deliverStudentUpdate({
+      studentEmail: target.email,
+      studentName: target.fullName,
+      parentUserIds: localParents.map((user) => user.id),
+      parentEmails,
+      parentPhones,
+    }, 'deleted')
+    return success(res, { id: studentId, deleted: true, notificationDelivery }, 'Student deleted through Orbit')
   }
 
   const student = await prisma.studentProfile.findUnique({ where: { id: studentId } })

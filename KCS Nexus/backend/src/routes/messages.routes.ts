@@ -59,7 +59,7 @@ const getOrbitDirectory = async () => {
     const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(3_000) })
     if (!response.ok) throw new Error(`status ${response.status}`)
     const value = await response.json() as OrbitDirectory
-    orbitDirectoryCache = { expiresAt: Date.now() + 5 * 60_000, value }
+    orbitDirectoryCache = { expiresAt: Date.now() + 10_000, value }
     return value
   } catch (error) {
     console.warn('Orbit shared directory unavailable; using Nexus recipient fallback', error)
