@@ -27,7 +27,7 @@ import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import SuggestionBox from '@/components/shared/SuggestionBox'
-import { academicRecordsAPI, adminAPI, admissionsAPI, financeAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
+import { academicRecordsAPI, adminAPI, admissionsAPI, financeAPI, mainTeacherAPI, messagesAPI, registryAPI, studentsAPI } from '@/services/api'
 import { normalizeSchoolLevel, SCHOOL_DIVISIONS, SCHOOL_LEVELS } from '@/constants/schoolLevels'
 import { getAssetUrl } from '@/utils/assets'
 import {
@@ -1216,6 +1216,61 @@ const exportAdminReport = (
   if (!printWindow) return
   printWindow.document.write(html)
   printWindow.document.close()
+}
+
+const MainTeacherAssignmentPanel = () => {
+  const language = useUIStore((state) => state.language)
+  const tr = (fr: string, en: string) => language === "fr" ? fr : en
+  const [teachers, setTeachers] = useState<any[]>([])
+  const [teacherId, setTeacherId] = useState("")
+  const [grade, setGrade] = useState<string>(SCHOOL_LEVELS[0])
+  const [section, setSection] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState("")
+  const load = async () => {
+    setBusy(true)
+    try {
+      const response = await mainTeacherAPI.list()
+      setTeachers(response.data?.data || [])
+      setNotice("")
+    } catch (error: any) {
+      setNotice(error?.response?.data?.message || tr("Impossible de charger les enseignants.", "Unable to load teachers."))
+    } finally { setBusy(false) }
+  }
+  useEffect(() => { void load() }, [])
+  const assign = async () => {
+    if (!teacherId || !grade) { setNotice(tr("Choisissez un enseignant et une classe.", "Choose a teacher and a class.")); return }
+    setBusy(true)
+    try {
+      await mainTeacherAPI.assign(teacherId, { status: "HOMEROOM_TEACHER", homeroomGrade: grade, homeroomSection: section })
+      setNotice(tr("Main Teacher affecté. Ses autres cours et son statut employé sont conservés.", "Main Teacher assigned. Other courses and employee status remain unchanged."))
+      await load()
+    } catch (error: any) { setNotice(error?.response?.data?.message || tr("Affectation impossible.", "Assignment failed.")); setBusy(false) }
+  }
+  const release = async (id: string) => {
+    setBusy(true)
+    try { await mainTeacherAPI.assign(id, { status: "TEACHER" }); setNotice(tr("Affectation Main Teacher retirée; le compte enseignant et employé reste actif.", "Main Teacher assignment removed; teacher and employee account stays active.")); await load() }
+    catch (error: any) { setNotice(error?.response?.data?.message || tr("Modification impossible.", "Update failed.")); setBusy(false) }
+  }
+  const name = (item: any) => [item.user?.lastName, item.user?.middleName, item.user?.firstName].filter(Boolean).join(" ")
+  return <div className="space-y-6">
+    <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr("Responsabilité de classe", "Class responsibility")}</p>
+      <h2 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr("Affectation des Main Teachers", "Main Teacher Assignment")}</h2>
+      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr("Réservé à l Administrator. Le Main Teacher fait la présence quotidienne de sa classe, contrôle le dossier du bulletin, rédige seul le commentaire général et soumet le bulletin à l administration. Il demeure employé et peut enseigner plusieurs autres cours et classes.", "Reserved for the operational Administrator. The Main Teacher records daily attendance for the assigned class, reviews the report-card file, is the only teacher who writes its general comment, and submits it to administration. The teacher remains an employee and may teach other courses and classes.")}</p>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <select value={teacherId} onChange={(event) => setTeacherId(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="">{tr("Choisir un enseignant", "Choose a teacher")}</option>{teachers.map((item) => <option key={item.id} value={item.id}>{name(item)}</option>)}</select>
+        <select value={grade} onChange={(event) => setGrade(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((item) => <option key={item}>{item}</option>)}</select>
+        <select value={section} onChange={(event) => setSection(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((item) => <option key={item || "all"} value={item}>{item ? tr("Section ", "Section ") + item : tr("Sans section", "No section")}</option>)}</select>
+      </div>
+      <button type="button" disabled={busy} onClick={() => void assign()} className="mt-4 rounded-xl bg-kcs-blue-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? tr("Traitement...", "Processing...") : tr("Affecter comme Main Teacher", "Assign as Main Teacher")}</button>
+      {notice && <p className="mt-3 rounded-xl bg-white/80 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950/70 dark:text-kcs-blue-100">{notice}</p>}
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-bold text-kcs-blue-950 dark:text-white">{tr("Affectations actuelles", "Current assignments")}</h3><p className="text-sm text-slate-500">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").length} Main Teacher(s)</p></div><button type="button" onClick={() => void load()} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr("Actualiser", "Refresh")}</button></div>
+      <div className="mt-4 space-y-3">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").map((item) => <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-slate-100 p-4 dark:border-kcs-blue-800 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-sm text-slate-500">{item.homeroomGrade}{item.homeroomSection ? " · " + item.homeroomSection : ""} · {item._count?.courses || 0} {tr("cours enseigné(s)", "course(s) taught")}</p></div><button type="button" disabled={busy} onClick={() => void release(item.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 dark:border-red-800 dark:text-red-300">{tr("Retirer cette responsabilité", "Remove this responsibility")}</button></article>)}{!busy && !teachers.some((item) => item.status === "HOMEROOM_TEACHER") && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-kcs-blue-950/50">{tr("Aucune affectation enregistrée.", "No assignment recorded.")}</p>}</div>
+    </section>
+  </div>
 }
 
 const AdminSectionView = ({
@@ -2871,6 +2926,8 @@ const AdminSectionView = ({
     const haystack = [employee.fullName, employee.employeeId, employee.email, employee.phone, employee.department, employee.jobTitle, employee.employeeType].filter(Boolean).join(' ').toLowerCase()
     return tokens.every((token) => haystack.includes(token))
   })
+
+  if (segment === 'main-teachers') return <MainTeacherAssignmentPanel />
 
   if (segment === 'teachers' || segment === 'employees') return <EmployeesPanel />
 

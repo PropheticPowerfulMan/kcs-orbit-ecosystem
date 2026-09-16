@@ -403,6 +403,11 @@ export const electivesAPI = {
   report: (id: string) => api.get('/electives/' + id + '/report'),
 }
 
+export const mainTeacherAPI = {
+  list: () => api.get('/school-management/teachers/main-assignments'),
+  assign: (teacherId: string, data: { status: 'HOMEROOM_TEACHER' | 'TEACHER'; homeroomGrade?: string; homeroomSection?: string }) => api.patch('/school-management/teachers/' + teacherId + '/status', data),
+}
+
 export const disciplineAPI = {
   list: () => api.get('/school-management/discipline-cases'),
   create: (data: object) => api.post('/school-management/discipline-cases', data),

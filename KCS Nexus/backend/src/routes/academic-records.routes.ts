@@ -30,7 +30,8 @@ const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:num
  const credits=grades.reduce((sum,item)=>sum+Math.max(item.course.credits||1,1),0)
  return credits?Number((grades.reduce((sum,item)=>sum+(item.percentage*Math.max(item.course.credits||1,1)),0)/credits).toFixed(2)):0
 }
-const isTeacherHomeroomFor=(teacher:{homeroomGrade:string|null;homeroomSection:string|null},student:{grade:string;section:string})=>{
+const isTeacherHomeroomFor=(teacher:{status?:string;homeroomGrade:string|null;homeroomSection:string|null},student:{grade:string;section:string})=>{
+ if(teacher.status !== undefined && teacher.status !== 'HOMEROOM_TEACHER')return false
  if(!teacher.homeroomGrade)return false
  const home=normalizeClassParts(teacher.homeroomGrade,teacher.homeroomSection??'')
  const learner=normalizeClassParts(student.grade,student.section)
@@ -39,7 +40,7 @@ const isTeacherHomeroomFor=(teacher:{homeroomGrade:string|null;homeroomSection:s
 const homeroomReportContext=async(userId:string,studentId:string,academicYear:string,term:string)=>{
  await ensureTeacherProfile(userId)
  const [teacher,student]=await Promise.all([
-  prisma.teacherProfile.findUnique({where:{userId},select:{id:true,homeroomGrade:true,homeroomSection:true}}),
+  prisma.teacherProfile.findUnique({where:{userId},select:{id:true,status:true,homeroomGrade:true,homeroomSection:true}}),
   prisma.studentProfile.findUnique({
    where:{id:studentId},
    include:{enrollments:{include:{course:true}},attendanceRecords:{where:{date:attendanceWindow(academicYear,term)},select:{status:true}}},

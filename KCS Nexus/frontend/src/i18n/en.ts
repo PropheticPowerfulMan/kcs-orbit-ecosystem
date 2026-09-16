@@ -204,6 +204,7 @@ const en = {
     dashboard: 'Dashboard',
     incidentReport: 'Incident Report',
     electives: 'Elective Selection',
+    mainTeacherAssignment: 'Main Teacher Assignment',
     myGrades: 'My Grades',
     assignments: 'Assignments',
     timetable: 'Timetable',

@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type NextFunction, type Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
@@ -92,6 +92,13 @@ const disciplineSchema = z.object({
   studentMessage: z.string().optional(),
 })
 
+const requireOperationalAdministrator = (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+  if (!req.user || req.user.role !== 'admin' || req.user.sub === 'configured-superadmin') {
+    return next(new ApiError(403, 'Operational Administrator permissions required'))
+  }
+  next()
+}
+
 const getActorId = (req: AuthenticatedRequest) => req.user?.sub
 const resolveActorId = async (req: AuthenticatedRequest) => {
   if (req.user?.sub !== 'configured-superadmin') return req.user?.sub
@@ -140,7 +147,19 @@ schoolManagementRouter.patch('/admission-inquiries/:id/status', requireRoles('ad
   return success(res, inquiry, 'Admission inquiry status updated')
 }))
 
-schoolManagementRouter.patch('/teachers/:id/status', requireRoles('admin'), asyncHandler(async (req, res) => {
+schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdministrator, asyncHandler(async (_req, res) => {
+  const teachers = await prisma.teacherProfile.findMany({
+    orderBy: { user: { lastName: 'asc' } },
+    select: {
+      id: true, status: true, homeroomGrade: true, homeroomSection: true,
+      user: { select: { firstName: true, middleName: true, lastName: true, email: true } },
+      _count: { select: { courses: true } },
+    },
+  })
+  return success(res, teachers, 'Main teacher assignments loaded')
+}))
+
+schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministrator, asyncHandler(async (req, res) => {
   const teacherId = getRouteParam(req.params.id)
   const payload = teacherStatusSchema.parse(req.body)
 

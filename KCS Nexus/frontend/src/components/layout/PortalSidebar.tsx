@@ -215,6 +215,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
     { to: '/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
     { to: '/electives', label: t('portalNav.electives'), icon: BookOpenCheck },
+    { to: '/admin/main-teachers', label: t('portalNav.mainTeacherAssignment'), icon: UserCheck },
     { to: '/admin/records', label: t('portalNav.records'), icon: LibraryBig },
     { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
     { to: '/admin/announcements', label: t('portalNav.announcements'), icon: Megaphone },
