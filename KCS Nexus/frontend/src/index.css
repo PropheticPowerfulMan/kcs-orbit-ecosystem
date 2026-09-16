@@ -1426,3 +1426,13 @@ html:not(.dark) .parent-portal-shell main textarea {
 }
 
 .theme-switching, .theme-switching * { transition: none !important; animation-duration: 0s !important; }
+
+/* Calm daylight palette shared by every authenticated Nexus dashboard. */
+html:not(.dark) .portal-shell { background: #eaf2f8; color: #16324a; }
+html:not(.dark) .portal-shell main { background-color: #eaf2f8 !important; background-image: radial-gradient(circle at 14% 0%, rgba(18,174,232,.08), transparent 28rem), linear-gradient(180deg,#edf5fa 0%,#e7f0f7 100%); }
+html:not(.dark) .portal-shell [class~="bg-white"] { background-color: #f4f8fb !important; }
+html:not(.dark) .portal-shell [class~="bg-gray-50"], html:not(.dark) .portal-shell [class~="bg-slate-50"], html:not(.dark) .portal-shell [class~="bg-slate-100"] { background-color: #e7f0f7 !important; }
+html:not(.dark) .portal-shell :is(input,textarea,select) { background-color: #f7fafc; border-color: #bfd1df; }
+html:not(.dark) .portal-shell :is(input,textarea,select):focus { background-color: #fbfdff; border-color: #4d91c6; box-shadow: 0 0 0 3px rgba(77,145,198,.15); }
+html:not(.dark) .portal-shell [class~="shadow"], html:not(.dark) .portal-shell [class~="shadow-sm"], html:not(.dark) .portal-shell [class~="shadow-lg"], html:not(.dark) .portal-shell [class~="shadow-xl"] { box-shadow: 0 12px 32px rgba(26,73,110,.09) !important; }
+.field-error { color: #b42318; font-size: .75rem; font-weight: 700; line-height: 1.35; }

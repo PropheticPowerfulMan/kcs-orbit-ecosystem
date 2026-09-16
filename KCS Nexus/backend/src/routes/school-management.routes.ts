@@ -37,6 +37,10 @@ const teacherStatusSchema = z.object({
   status: enumValue(['HOMEROOM_TEACHER', 'TEACHER', 'ASSISTANT_TEACHER']),
   homeroomGrade: z.string().optional(),
   homeroomSection: z.string().optional(),
+}).superRefine((value, context) => {
+  if (value.status === 'HOMEROOM_TEACHER' && !value.homeroomGrade?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['homeroomGrade'], message: 'Select the main teacher class.' })
+  }
 })
 
 const teacherReviewSchema = z.object({
@@ -139,9 +143,34 @@ schoolManagementRouter.patch('/admission-inquiries/:id/status', requireRoles('ad
 schoolManagementRouter.patch('/teachers/:id/status', requireRoles('admin'), asyncHandler(async (req, res) => {
   const teacherId = getRouteParam(req.params.id)
   const payload = teacherStatusSchema.parse(req.body)
+
+  if (payload.status === 'HOMEROOM_TEACHER') {
+    const sameGrade = await prisma.teacherProfile.findMany({
+      where: {
+        id: { not: teacherId },
+        status: 'HOMEROOM_TEACHER',
+        homeroomGrade: { equals: payload.homeroomGrade!.trim(), mode: 'insensitive' },
+      },
+      select: {
+        homeroomSection: true,
+        user: { select: { firstName: true, lastName: true } },
+      },
+    })
+    const requestedSection = (payload.homeroomSection || '').trim().toLowerCase()
+    const conflict = sameGrade.find((entry) => (entry.homeroomSection || '').trim().toLowerCase() === requestedSection)
+    if (conflict) {
+      const conflictName = [conflict.user.lastName, conflict.user.firstName].filter(Boolean).join(' ')
+      throw new ApiError(409, 'This class already has a main teacher: ' + conflictName)
+    }
+  }
+
   const teacher = await prisma.teacherProfile.update({
     where: { id: teacherId },
-    data: asPrismaData(payload),
+    data: asPrismaData({
+      ...payload,
+      homeroomGrade: payload.status === 'HOMEROOM_TEACHER' ? payload.homeroomGrade!.trim() : null,
+      homeroomSection: payload.status === 'HOMEROOM_TEACHER' ? (payload.homeroomSection?.trim() || null) : null,
+    }),
     include: { user: true, courses: true, reviews: true },
   })
   return success(res, teacher, 'Teacher status updated')

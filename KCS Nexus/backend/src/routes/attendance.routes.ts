@@ -5,7 +5,7 @@ import { env } from '../config/env.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { compareClassParts, normalizeClassParts, splitClassName } from '../utils/className.js'
-import { belongsToTeacherClasses, extractWorkspaceClasses, mergeTeacherClasses, teacherClassKey } from '../utils/teacherClassAccess.js'
+import { belongsToTeacherClasses, teacherClassKey } from '../utils/teacherClassAccess.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { ensureOrbitStudentProfile, type OrbitStudentIdentity } from '../services/orbitStudentMaterialization.js'
 
@@ -67,23 +67,12 @@ const summarize = (records: Array<{ status: string }>) => {
 }
 
 async function assignedTeacherClasses(userId: string) {
-  const [teacher, workspace] = await Promise.all([
-    prisma.teacherProfile.findUnique({
-      where: { userId },
-      select: {
-        status: true,
-        homeroomGrade: true,
-        homeroomSection: true,
-        courses: { select: { grade: true } },
-      },
-    }),
-    prisma.teacherWorkspace.findUnique({ where: { userId }, select: { state: true } }),
-  ])
-  const profileClasses = teacher?.courses.map((course) => normalizeClassParts(course.grade, '')) ?? []
-  if (teacher?.status === 'HOMEROOM_TEACHER' && teacher.homeroomGrade) {
-    profileClasses.push(normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection))
-  }
-  return mergeTeacherClasses(profileClasses, extractWorkspaceClasses(workspace?.state))
+  const teacher = await prisma.teacherProfile.findUnique({
+    where: { userId },
+    select: { status: true, homeroomGrade: true, homeroomSection: true },
+  })
+  if (teacher?.status !== "HOMEROOM_TEACHER" || !teacher.homeroomGrade) return []
+  return [normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection)]
 }
 
 async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: string; section: string }>) {
@@ -175,7 +164,7 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
   const payload = studentAttendanceSchema.parse(req.body)
   const selectedClass = normalizeClassParts(payload.grade, payload.section)
   const assignedClasses = await assignedTeacherClasses(req.user!.sub)
-  if (assignedClasses.length && !assignedClasses.some((value) => teacherClassKey(value) === teacherClassKey(selectedClass))) {
+  if (!assignedClasses.some((value) => teacherClassKey(value) === teacherClassKey(selectedClass))) {
     throw new ApiError(403, 'Attendance is limited to a class assigned to this teacher')
   }
   try {

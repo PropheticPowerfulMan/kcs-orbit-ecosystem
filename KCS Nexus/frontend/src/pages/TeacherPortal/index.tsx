@@ -1,5 +1,5 @@
 import DateSelect from '@/components/shared/DateSelect'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -316,6 +316,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     gradeLevels: [] as string[],
     studentId: '',
   })
+  const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string }>({})
+  const courseNameRef = useRef<HTMLInputElement>(null)
+  const courseGradeRef = useRef<HTMLDivElement>(null)
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [attendanceDraft, setAttendanceDraft] = useState({
     studentId: '',
@@ -658,11 +661,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const toggleCourseGrade = (grade: string) => {
     setCourseDraft((draft) => ({ ...draft, gradeLevels: [grade], className: grade }))
+    setCourseErrors((current) => ({ ...current, grade: undefined }))
   }
 
   const resetCourseDraft = () => {
     const firstStudentId = superAdminStudentPool[0]?.id ?? ''
     setEditingCourseId(null)
+    setCourseErrors({})
     setCourseDraft({
       name: '',
       abbreviation: '',
@@ -704,8 +709,15 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const createCourse = async () => {
     const selectedGrade = canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
-    if (!courseDraft.name.trim()) return runAction('Enter the subject name before saving.', true)
-    if (!courseDraft.gradeLevels[0]) return runAction('Select the class taught for this subject.', true)
+    const errors: { name?: string; grade?: string } = {}
+    if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
+    if (!courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
+    if (errors.name || errors.grade) {
+      setCourseErrors(errors)
+      window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : courseGradeRef.current?.focus())
+      return
+    }
+    setCourseErrors({})
     const existingCourse = editingCourseId ? courses.find((course) => course.id === editingCourseId) : undefined
     if (editingCourseId && !existingCourse) {
       runAction('The subject being edited is no longer available. Reload My Courses and try again.', true)
@@ -1241,7 +1253,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                       Subject name
-                      <input className={inputClass} value={courseDraft.name} onChange={(event) => setCourseDraft((draft) => ({ ...draft, name: event.target.value }))} />
+                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => { setCourseDraft((draft) => ({ ...draft, name: event.target.value })); if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined })) }} />
+                      {courseErrors.name && <p className="field-error" role="alert">{courseErrors.name}</p>}
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1277,7 +1290,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Which class do you teach the subject for?</p>
-                      <div className="mt-2 rounded-xl border border-gray-100 bg-white p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/30">
+                      <div ref={courseGradeRef} tabIndex={-1} aria-invalid={Boolean(courseErrors.grade)} className={courseErrors.grade ? "mt-2 rounded-xl border border-red-500 bg-white p-3 ring-2 ring-red-100 dark:bg-kcs-blue-950/30" : "mt-2 rounded-xl border border-gray-100 bg-white p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/30"}>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                         {gradeOptions.map((grade) => (
                           <label key={grade} className="flex min-w-0 items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
@@ -1287,6 +1300,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         ))}
                         </div>
                       </div>
+                      {courseErrors.grade && <p className="field-error mt-1" role="alert">{courseErrors.grade}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{editingCourseId ? 'Save class' : 'Create a class'}</button>
