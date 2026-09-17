@@ -434,7 +434,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const findStudent = (studentId: string) => teacherStudents.find((student) => student.id === studentId)
     ?? superAdminStudentPool.find((student) => student.id === studentId)
-  const runAction = (message: string, isError = false) => { setActionMessage(message); setActionIsError(isError) }
+  const runAction = (message: string, isError = false) => {
+    setActionMessage(message)
+    setActionIsError(isError)
+    window.dispatchEvent(new CustomEvent(isError ? 'ecosystem:mutation-error' : 'ecosystem:mutation-success', { detail: { message } }))
+  }
 
   useEffect(() => {
     let active = true

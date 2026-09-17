@@ -29,6 +29,34 @@ const refreshSession = async () => {
   return refreshSessionPromise
 }
 
+const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+const feedbackExcludedPaths = ['/auth/login', '/auth/refresh']
+
+const expectsMutationFeedback = (config?: InternalAxiosRequestConfig) => {
+  const method = config?.method?.toUpperCase()
+  const path = config?.url || ''
+  const silent = config?.headers?.['x-silent-feedback'] === 'true'
+  return Boolean(method && mutationMethods.has(method) && !silent && !feedbackExcludedPaths.some((entry) => path.includes(entry)))
+}
+
+const dispatchMutationFeedback = (type: 'success' | 'error', message: string) => {
+  window.dispatchEvent(new CustomEvent(`ecosystem:mutation-${type}`, { detail: { message } }))
+}
+
+const defaultSuccessMessage = (method?: string) => {
+  if (method === 'POST') return 'Opération créée et enregistrée avec succès.'
+  if (method === 'DELETE') return 'Suppression effectuée avec succès.'
+  return 'Modification enregistrée avec succès.'
+}
+
+const mutationErrorMessage = (error: AxiosError) => {
+  const payload = error.response?.data as { message?: string; error?: string } | undefined
+  if (payload?.message) return payload.message
+  if (payload?.error) return payload.error
+  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps à répondre. Veuillez réessayer.'
+  if (!error.response) return 'Connexion au service impossible. Vérifiez votre connexion puis réessayez.'
+  return 'L’opération n’a pas pu être effectuée. Veuillez réessayer.'
+}
 // Request interceptor — attach JWT token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -48,8 +76,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toUpperCase()
-    if (method && ['PUT', 'PATCH', 'DELETE'].includes(method)) {
-      window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: response.data?.message || (method === 'DELETE' ? 'Entité supprimée dans le registre partagé.' : 'Modification répercutée dans le registre partagé.') } }))
+    if (expectsMutationFeedback(response.config)) {
+      dispatchMutationFeedback('success', response.data?.message || defaultSuccessMessage(method))
     }
     return response
   },
@@ -64,6 +92,7 @@ api.interceptors.response.use(
     const identityNeedsRevalidation = error.response?.status === 410
       && requestPath.includes('/auth/me')
     if (error.response?.status === 401 && skipAuthLogout) {
+      if (expectsMutationFeedback(originalRequest)) dispatchMutationFeedback('error', mutationErrorMessage(error))
       return Promise.reject(error)
     }
 
@@ -91,6 +120,7 @@ api.interceptors.response.use(
       }
     }
 
+    if (expectsMutationFeedback(originalRequest)) dispatchMutationFeedback('error', mutationErrorMessage(error))
     return Promise.reject(error)
   }
 )
