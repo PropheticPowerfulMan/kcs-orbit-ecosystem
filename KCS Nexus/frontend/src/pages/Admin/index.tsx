@@ -2663,6 +2663,7 @@ const AdminSectionView = ({
                   {[
                     ['ID élève', viewingStudent.studentNumber ?? 'Non renseigné'],
                     ['Nom complet', viewingStudent.name],
+                    ['E-mail scolaire', viewingStudent.email || 'Non renseigné'],
                     ['Date de naissance', viewingStudent.dateOfBirth
                       ? new Date(viewingStudent.dateOfBirth).toLocaleDateString('fr-FR', { timeZone: 'UTC' })
                       : 'Non renseignée'],

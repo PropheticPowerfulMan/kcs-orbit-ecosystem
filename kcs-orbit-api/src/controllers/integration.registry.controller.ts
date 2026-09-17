@@ -191,6 +191,11 @@ function normalizeAccessCode(value: string) {
   return normalizeText(value).toUpperCase();
 }
 
+function isTeachingEmployeeType(value?: string | null) {
+  const normalized = normalizeText(value || "").toLowerCase().replace(/[ _-]+/g, " ");
+  return ["teacher", "teaching", "enseignant", "enseignante", "professeur", "academic teacher"].includes(normalized);
+}
+
 function generateAccessCode(entityType: AccessCodeEntityType) {
   return `ACC-${accessCodePrefixByEntityType[entityType]}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
@@ -553,7 +558,18 @@ export async function updateRegistryEntity(req: Request, res: Response) {
 
   if (entityType === "teacher") {
     const teacherPayload = payload as z.infer<typeof updateTeacherSchema>;
-    const normalizedAccessCode = teacherPayload.accessCode ? normalizeAccessCode(teacherPayload.accessCode) : null;
+    const currentTeacher = await prisma.teacher.findUnique({
+      where: { id: target.orbitId },
+      select: { accessCode: true, employeeType: true },
+    });
+    let normalizedAccessCode = teacherPayload.accessCode ? normalizeAccessCode(teacherPayload.accessCode) : null;
+    if (
+      teacherPayload.accessCode === undefined
+      && isTeachingEmployeeType(teacherPayload.employeeType)
+      && currentTeacher?.accessCode?.toUpperCase().startsWith("ACC-EMP-")
+    ) {
+      normalizedAccessCode = await ensureAccessCode(prisma, "teacher", undefined, target.orbitId);
+    }
     if (normalizedAccessCode) {
       const conflict = await findAccessCodeConflict(prisma, normalizedAccessCode);
       if (conflict && (conflict.entityType !== "teacher" || conflict.id !== target.orbitId)) {
@@ -602,7 +618,7 @@ export async function updateRegistryEntity(req: Request, res: Response) {
           ...(teacherPayload.firstName !== undefined ? { firstName: teacherPayload.firstName ? normalizeText(teacherPayload.firstName) : null } : {}),
           ...(teacherPayload.middleName !== undefined ? { middleName: teacherPayload.middleName ? normalizeText(teacherPayload.middleName) : null } : {}),
           ...(teacherPayload.lastName !== undefined ? { lastName: teacherPayload.lastName ? normalizeText(teacherPayload.lastName) : null } : {}),
-          ...(teacherPayload.accessCode !== undefined ? { accessCode: normalizedAccessCode } : {}),
+          ...(teacherPayload.accessCode !== undefined || normalizedAccessCode !== null ? { accessCode: normalizedAccessCode } : {}),
           ...(teacherPayload.email !== undefined ? { email: teacherPayload.email } : {}),
           ...(teacherPayload.phone !== undefined ? { phone: teacherPayload.phone } : {}),
           ...(teacherPayload.physicalAddress !== undefined ? { physicalAddress: teacherPayload.physicalAddress ? normalizeText(teacherPayload.physicalAddress) : null } : {}),

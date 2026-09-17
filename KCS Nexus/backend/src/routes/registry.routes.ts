@@ -147,6 +147,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
 type ChangeDeliveryEntity = {
   id?: string
   fullName?: string
+  accessCode?: string | null
   email?: string | null
   phone?: string | null
   parentId?: string | null
@@ -548,6 +549,24 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
     sharedDirectoryCache = null
     const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
     const updatedEntity = (updated as { entity?: ChangeDeliveryEntity }).entity
+    if (entityType === 'teacher' && updatedEntity?.accessCode) {
+      const localTeacher = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { orbitUserId: String(req.params.identifier) },
+            ...(updatedEntity.email ? [{ email: { equals: updatedEntity.email, mode: 'insensitive' as const } }] : []),
+            ...(before?.accessCode ? [{ accessCode: before.accessCode }] : []),
+          ],
+        },
+        select: { id: true, accessCode: true },
+      })
+      if (localTeacher && localTeacher.accessCode !== updatedEntity.accessCode) {
+        const codeOwner = await prisma.user.findUnique({ where: { accessCode: updatedEntity.accessCode }, select: { id: true } })
+        if (!codeOwner || codeOwner.id === localTeacher.id) {
+          await prisma.user.update({ where: { id: localTeacher.id }, data: { accessCode: updatedEntity.accessCode } })
+        }
+      }
+    }
     const canonicalEntity = updatedEntity || { ...before, ...(req.body ?? {}) }
     const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, canonicalEntity, 'updated')
     return success(res, { ...(updated as object), notificationDelivery }, 'Shared entity updated through Orbit')
