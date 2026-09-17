@@ -29,6 +29,7 @@ import { academicRecordsRouter } from './academic-records.routes.js'
 import { attendanceRouter } from './attendance.routes.js'
 import { electivesRouter } from './electives.routes.js'
 import { shiningStudentsRouter } from './shining-students.routes.js'
+import { syllabiRouter } from './syllabi.routes.js'
 
 export const router = Router()
 
@@ -60,6 +61,7 @@ router.use('/academic-records', academicRecordsRouter)
 router.use('/attendance', attendanceRouter)
 router.use('/electives', electivesRouter)
 router.use('/shining-students', shiningStudentsRouter)
+router.use('/syllabi', syllabiRouter)
 
 router.use('/employees', employeesRouter)
 router.use('/', diagnosticRouter)

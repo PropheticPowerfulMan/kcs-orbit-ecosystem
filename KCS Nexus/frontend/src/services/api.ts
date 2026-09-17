@@ -44,20 +44,20 @@ const dispatchMutationFeedback = (type: 'success' | 'error', message: string) =>
 }
 
 const defaultSuccessMessage = (method?: string) => {
-  if (method === 'POST') return 'Opération créée et enregistrée avec succès.'
-  if (method === 'DELETE') return 'Suppression effectuée avec succès.'
-  return 'Modification enregistrée avec succès.'
+  if (method === 'POST') return 'OpÃ©ration crÃ©Ã©e et enregistrÃ©e avec succÃ¨s.'
+  if (method === 'DELETE') return 'Suppression effectuÃ©e avec succÃ¨s.'
+  return 'Modification enregistrÃ©e avec succÃ¨s.'
 }
 
 const mutationErrorMessage = (error: AxiosError) => {
   const payload = error.response?.data as { message?: string; error?: string } | undefined
   if (payload?.message) return payload.message
   if (payload?.error) return payload.error
-  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps à répondre. Veuillez réessayer.'
-  if (!error.response) return 'Connexion au service impossible. Vérifiez votre connexion puis réessayez.'
-  return 'L’opération n’a pas pu être effectuée. Veuillez réessayer.'
+  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps Ã  rÃ©pondre. Veuillez rÃ©essayer.'
+  if (!error.response) return 'Connexion au service impossible. VÃ©rifiez votre connexion puis rÃ©essayez.'
+  return 'Lâ€™opÃ©ration nâ€™a pas pu Ãªtre effectuÃ©e. Veuillez rÃ©essayer.'
 }
-// Request interceptor — attach JWT token
+// Request interceptor â€” attach JWT token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().token
@@ -72,7 +72,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor — handle token refresh
+// Response interceptor â€” handle token refresh
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toUpperCase()
@@ -478,4 +478,13 @@ export const academicRecordsAPI = {
   setTranscriptVisibility: (studentId: string, visible: boolean) => api.patch('/academic-records/transcripts/' + studentId + '/visibility', { visible }),
   registerTranscriptVerification: (data: { documentId: string; fingerprint: string; studentId: string }) => api.post('/academic-records/transcripts/verification', data),
   verifyTranscript: (document: string, fingerprint: string) => api.get('/academic-records/transcripts/verify', { params: { document, fingerprint } }),
+}
+
+
+export const syllabiAPI = {
+  list: () => api.get('/syllabi'),
+  teacherCourses: () => api.get('/syllabi/teacher-courses'),
+  publish: (courseId: string, data: FormData) => api.post('/syllabi/' + courseId, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  download: (courseId: string) => api.get('/syllabi/' + courseId + '/download', { responseType: 'blob' }),
+  remove: (courseId: string) => api.delete('/syllabi/' + courseId),
 }
