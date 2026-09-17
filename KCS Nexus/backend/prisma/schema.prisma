@@ -330,6 +330,7 @@ model User {
   electiveCyclesCreated  ElectiveCycle[] @relation("ElectiveCycleCreator")
   electiveOfferingsTaught ElectiveOffering[] @relation("ElectiveOfferingTeacher")
   electiveOfferingsProposed ElectiveOffering[] @relation("ElectiveOfferingProposer")
+  shiningStudentSchedulesCreated ShiningStudentSchedule[] @relation("ShiningStudentScheduleCreator")
 }
 
 model TeacherWorkspace {
@@ -420,6 +421,39 @@ model StudentProfile {
   disciplineCases       DisciplineCase[]
   electiveChoices        ElectiveChoice[]
   electiveAllocations    ElectiveAllocation[]
+  shiningStudentSchedules ShiningStudentSchedule[]
+}
+
+enum ShiningStudentDivision {
+  LOWER
+  MIDDLE_UPPER
+}
+
+enum ShiningStudentStatus {
+  SCHEDULED
+  TOPIC_SUBMITTED
+  PRESENTED
+  EXCUSED
+}
+
+model ShiningStudentSchedule {
+  id          String                 @id @default(cuid())
+  date        DateTime
+  division    ShiningStudentDivision
+  studentId   String
+  topic       String?
+  topicNotes  String?
+  status      ShiningStudentStatus   @default(SCHEDULED)
+  notifiedAt  DateTime?
+  createdById String
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  student     StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy   User                   @relation("ShiningStudentScheduleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([date, division])
+  @@index([studentId, date])
+  @@index([date, status])
 }
 
 model ParentStudentLink {

@@ -455,6 +455,14 @@ export const academicCalendarAPI = {
   save: (data: object) => api.put('/academic-calendar', data),
 }
 
+export const shiningStudentsAPI = {
+  list: (params?: { from?: string; to?: string }) => api.get('/shining-students', { params }),
+  generate: (data: { startDate: string; endDate: string; excludedDates: string[] }) => api.post('/shining-students/generate', data),
+  saveTopic: (id: string, data: { topic: string; topicNotes?: string | null }) => api.patch(`/shining-students/${id}/topic`, data),
+  updateStatus: (id: string, status: 'SCHEDULED' | 'TOPIC_SUBMITTED' | 'PRESENTED' | 'EXCUSED') => api.patch(`/shining-students/${id}/status`, { status }),
+  remove: (id: string) => api.delete(`/shining-students/${id}`),
+}
+
 export const academicRecordsAPI = {
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
   myFinalGrades: () => api.get('/academic-records/final-grades/me'),

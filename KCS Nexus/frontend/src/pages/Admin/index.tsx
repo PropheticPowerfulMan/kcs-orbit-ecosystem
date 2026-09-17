@@ -18,6 +18,7 @@ import {
 } from 'recharts'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import PortalSectionPanel from '@/components/shared/PortalSectionPanel'
+import ShiningStudentWeekWidget from '@/components/shared/ShiningStudentWeekWidget'
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
@@ -3350,6 +3351,7 @@ const AdminDashboard = () => {
           ) : (
             <>
           <PortalSectionPanel />
+          <ShiningStudentWeekWidget />
           <SuggestionBox />
           <section className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Super Admin quick actions</p><h2 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Communication and reporting</h2></div><div className="grid grid-cols-3 gap-2"><button type="button" onClick={openEmailAction} className={`${adminButton} flex items-center justify-center gap-2`}><Mail size={16}/> Email</button><button type="button" onClick={openSmsAction} className={`${adminButton} flex items-center justify-center gap-2`}><Phone size={16}/> SMS</button><button type="button" onClick={() => { exportAdminReport('executive', 'weekly', 'pdf', officialRoster, admissionRequests); setDashboardAction('The official weekly Super Admin report was generated.') }} className={`${adminButton} flex items-center justify-center gap-2`}><FileSpreadsheet size={16}/> Report</button></div></div>

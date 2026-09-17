@@ -23,6 +23,7 @@ const TeacherPortal = lazy(() => import('@/pages/TeacherPortal'))
 const StaffPortal = lazy(() => import('@/pages/StaffPortal'))
 const IncidentReportsPage = lazy(() => import('@/pages/IncidentReports'))
 const ElectivesPage = lazy(() => import('@/pages/Electives'))
+const ShiningStudentsPage = lazy(() => import('@/pages/ShiningStudents'))
 const AdminDashboard = lazy(() => import('@/pages/Admin'))
 const DataMigrationCenter = lazy(() => import('@/pages/Admin/DataMigrationCenter'))
 
@@ -152,6 +153,7 @@ const App = () => {
       <GlobalTextTranslator />
       <Suspense fallback={<RouteFallback />}>
         <Routes>
+          <Route path="/shining-students" element={<ProtectedRoute allowedRoles={['admin','staff','student','parent']}><ShiningStudentsPage /></ProtectedRoute>} />
           <Route path="/electives" element={<ProtectedRoute allowedRoles={['admin','teacher','student']}><ElectivesPage /></ProtectedRoute>} />
           <Route
             path="/incident-reports"
