@@ -1436,3 +1436,60 @@ html:not(.dark) .portal-shell :is(input,textarea,select) { background-color: #f7
 html:not(.dark) .portal-shell :is(input,textarea,select):focus { background-color: #fbfdff; border-color: #4d91c6; box-shadow: 0 0 0 3px rgba(77,145,198,.15); }
 html:not(.dark) .portal-shell [class~="shadow"], html:not(.dark) .portal-shell [class~="shadow-sm"], html:not(.dark) .portal-shell [class~="shadow-lg"], html:not(.dark) .portal-shell [class~="shadow-xl"] { box-shadow: 0 12px 32px rgba(26,73,110,.09) !important; }
 .field-error { color: #b42318; font-size: .75rem; font-weight: 700; line-height: 1.35; }
+
+/* Unified low-glare daylight surfaces for every authenticated Nexus dashboard,
+   including dialogs and popovers rendered outside .portal-shell. */
+html:not(.dark) body:has(.portal-shell) {
+  --nexus-day-canvas: #e7f0f7;
+  --nexus-day-surface: #f1f7fb;
+  --nexus-day-surface-raised: #f5f9fc;
+  --nexus-day-surface-muted: #e4eef6;
+  --nexus-day-border: #bfd3e2;
+}
+
+html:not(.dark) body:has(.portal-shell) :is([class~="bg-white"], [class~="bg-white/95"], [class~="bg-white/90"], [class~="bg-white/85"], [class~="bg-white/80"], [class~="bg-white/70"], [class~="bg-white/65"], [class~="bg-white/60"], [class~="bg-white/55"], [class~="bg-white/50"], [class~="bg-white/45"], [class~="bg-white/42"]) {
+  background-color: var(--nexus-day-surface) !important;
+  border-color: var(--nexus-day-border);
+}
+
+html:not(.dark) body:has(.portal-shell) :is([class~="bg-gray-50"], [class~="bg-gray-100"], [class~="bg-gray-200"], [class~="bg-slate-50"], [class~="bg-slate-100"], [class~="bg-slate-200"]) {
+  background-color: var(--nexus-day-surface-muted) !important;
+}
+
+html:not(.dark) body:has(.portal-shell) :is([class~="from-white"], [class~="from-white/95"], [class~="from-white/90"]) {
+  --tw-gradient-from: #f3f8fc var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(243 248 252 / 0) var(--tw-gradient-to-position) !important;
+}
+
+html:not(.dark) body:has(.portal-shell) :is([class~="via-white"], [class~="via-white/95"], [class~="via-white/90"], [class~="via-white/20"]) {
+  --tw-gradient-via: #eaf3f9 var(--tw-gradient-via-position) !important;
+}
+
+html:not(.dark) body:has(.portal-shell) :is([class~="to-white"], [class~="to-white/95"], [class~="to-white/90"]) {
+  --tw-gradient-to: #edf5fa var(--tw-gradient-to-position) !important;
+}
+
+html:not(.dark) body:has(.portal-shell) :is([class~="border-gray-100"], [class~="border-gray-200"], [class~="border-slate-100"], [class~="border-slate-200"], [class~="border-white/60"]) {
+  border-color: var(--nexus-day-border) !important;
+}
+
+html:not(.dark) body:has(.portal-shell) :is(input, textarea, select, [role="dialog"], [role="menu"], [role="listbox"]) {
+  color-scheme: light;
+}
+
+html:not(.dark) body:has(.portal-shell) :is(input, textarea, select):not([class*="bg-kcs-blue"]):not([class*="bg-kcs-red"]) {
+  background-color: var(--nexus-day-surface-raised) !important;
+  border-color: var(--nexus-day-border) !important;
+}
+
+html:not(.dark) body:has(.portal-shell) table thead:not([class*="bg-kcs-blue"]) {
+  background-color: #dceaf4;
+}
+
+html:not(.dark) body:has(.portal-shell) table tbody tr:nth-child(even):not([class*="bg-"]) {
+  background-color: rgba(226, 238, 247, 0.55);
+}
+
+html:not(.dark) body:has(.portal-shell) :is([role="dialog"], [role="menu"], [role="listbox"]) {
+  box-shadow: 0 24px 70px rgba(24, 67, 101, 0.18) !important;
+}
