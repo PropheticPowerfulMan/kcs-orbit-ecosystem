@@ -14,10 +14,11 @@ export default function ElectivesPage(){
  const [data,setData]=useState<any>({cycles:[]}),[teachers,setTeachers]=useState<any[]>([]),[selected,setSelected]=useState(''),[choices,setChoices]=useState<string[]>(Array(6).fill('')),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[report,setReport]=useState<any>(null)
  const [cf,setCf]=useState({title:'Sélection des cours électifs',academicYear:'2026-2027',semester:1,eligibleGrades:grades,opensAt:'',closesAt:''})
  const [of,setOf]=useState({code:'',name:'',description:'',eligibleGrades:grades,capacity:24,teacherUserId:''})
- const load=async()=>{const r=await electivesAPI.list(),d=r.data.data||{cycles:[]};setData(d);if(!selected&&d.cycles?.[0])setSelected(d.cycles[0].id);if(student&&d.choices){const x=[...d.choices].sort((a:any,b:any)=>a.rank-b.rank).map((a:any)=>a.offeringId);setChoices([...x,...Array(6).fill('')].slice(0,6))}}
+ const load=async()=>{const r=await electivesAPI.list(),d=r.data.data||{cycles:[]};setData(d);if(!selected&&d.cycles?.[0])setSelected(d.cycles[0].id)}
  useEffect(()=>{void load();if(admin)electivesAPI.teachers().then(r=>setTeachers(r.data.data||[]))},[])
  const cycles:C[]=data.cycles||[],cycle=cycles.find(c=>c.id===selected)||cycles[0]
  const approved=cycle?.offerings.filter(o=>o.status==='APPROVED'&&(!data.grade||o.eligibleGrades.includes(data.grade)))||[]
+ useEffect(()=>{if(!student||!cycle)return;const current=(data.choices||[]).filter((item:any)=>item.cycleId===cycle.id).sort((a:any,b:any)=>a.rank-b.rank).map((item:any)=>item.offeringId);setChoices([...current,...Array(6).fill('')].slice(0,6))},[student,cycle?.id,data.choices])
  const act=async(fn:()=>Promise<any>)=>{setBusy(true);setMessage('');try{const r=await fn();setMessage(r.data.message);await load();return r}catch(e:any){setMessage(e?.response?.data?.message||'Opération impossible')}finally{setBusy(false)}}
  const add=(e:FormEvent)=>{e.preventDefault();if(cycle)void act(()=>electivesAPI.addOffering(cycle.id,{...of,teacherUserId:of.teacherUserId||null}))}
  const toggle=(g:string,current:string[],set:(v:string[])=>void)=>set(current.includes(g)?current.filter(x=>x!==g):[...current,g])

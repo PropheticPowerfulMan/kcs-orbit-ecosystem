@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { Router, type NextFunction, type Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
@@ -13,6 +14,10 @@ const cycleSchema = z.object({
   eligibleGrades: z.array(z.enum(['Grade 9','Grade 10','Grade 11','Grade 12'])).min(1).default(['Grade 9','Grade 10','Grade 11','Grade 12']),
   opensAt: z.string().datetime().optional().nullable(),
   closesAt: z.string().datetime().optional().nullable(),
+}).superRefine((value, context) => {
+  if (value.opensAt && value.closesAt && new Date(value.closesAt) <= new Date(value.opensAt)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['closesAt'], message: 'Choice closing must be after choice opening' })
+  }
 })
 const offeringSchema = z.object({
   code: z.string().trim().min(2).max(30).transform(v => v.toUpperCase()),
@@ -38,6 +43,12 @@ const cycleOr404 = async (id: string) => {
   if (!cycle) throw new ApiError(404, 'Elective cycle not found')
   return cycle
 }
+
+const fairKey = (cycleId: string, studentId: string) => createHash('sha256').update(cycleId + ':' + studentId).digest('hex')
+const activeEligibleStudents = (grades: string[]) => prisma.studentProfile.findMany({
+  where: { status: { equals: 'active', mode: 'insensitive' }, grade: { in: grades } },
+  select: { id: true, grade: true },
+})
 
 electivesRouter.get('/', authenticate, requireRoles('admin','teacher','student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const role = req.user!.role
@@ -69,20 +80,29 @@ electivesRouter.get('/teachers', authenticate, requireAdministrator(), asyncHand
 
 electivesRouter.post('/', authenticate, requireAdministrator(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const data = cycleSchema.parse(req.body)
+  const duplicate=await prisma.electiveCycle.findUnique({where:{academicYear_semester:{academicYear:data.academicYear,semester:data.semester}},select:{id:true}})
+  if(duplicate)throw new ApiError(409,'An elective cycle already exists for this academic year and semester')
   const cycle = await prisma.electiveCycle.create({ data:{...data, opensAt:data.opensAt?new Date(data.opensAt):null, closesAt:data.closesAt?new Date(data.closesAt):null, createdById:req.user!.sub} })
   return success(res, cycle, 'Elective cycle created', 201)
 }))
 
 electivesRouter.patch('/:cycleId/status', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
-  const cycleId=String(req.params.cycleId); await cycleOr404(cycleId)
+  const cycleId=String(req.params.cycleId); const current=await cycleOr404(cycleId)
   const {status}=statusSchema.parse(req.body)
+  const allowedTransitions: Record<string,string[]> = { DRAFT:['OPEN'], OPEN:['CLOSED'], CLOSED:['OPEN'] }
+  if(!(allowedTransitions[current.status]||[]).includes(status))throw new ApiError(409, 'Invalid elective cycle transition: '+current.status+' to '+status)
   if(status==='OPEN'){
-    const cycle=await cycleOr404(cycleId)
+    const cycle=current
     const approved=await prisma.electiveOffering.findMany({where:{cycleId,status:'APPROVED'}})
+    if(approved.some(item=>item.capacity<1||item.capacity>24))throw new ApiError(409,'Every approved elective must have a capacity between 1 and 24')
     const missingTeacher=approved.filter(item=>!item.teacherUserId)
     if(missingTeacher.length)throw new ApiError(409,'Every approved elective must have an assigned teacher before opening choices')
+    const students=await activeEligibleStudents(cycle.eligibleGrades)
     const insufficient=cycle.eligibleGrades.filter(grade=>approved.filter(item=>item.eligibleGrades.includes(grade)).length<cycle.choicesPerStudent)
     if(insufficient.length)throw new ApiError(409,'At least six approved electives are required for every eligible grade: '+insufficient.join(', '))
+    const capacityShortages=cycle.eligibleGrades.filter(grade=>approved.filter(item=>item.eligibleGrades.includes(grade)).reduce((sum,item)=>sum+item.capacity,0)<students.filter(student=>student.grade===grade).length*cycle.choicesPerStudent)
+    if(capacityShortages.length)throw new ApiError(409,'Insufficient capacity for every active student in: '+capacityShortages.join(', '))
+    if(approved.reduce((sum,item)=>sum+item.capacity,0)<students.length*cycle.choicesPerStudent)throw new ApiError(409,'The catalogue does not contain enough total seats for all eligible students')
   }
   const cycle=await prisma.electiveCycle.update({where:{id:cycleId},data:{status}})
   return success(res,cycle,'Elective cycle status updated')
@@ -92,6 +112,7 @@ electivesRouter.post('/:cycleId/offerings', authenticate, requireRoles('admin','
   const cycleId=String(req.params.cycleId); const cycle=await cycleOr404(cycleId)
   if(cycle.status!=='DRAFT')throw new ApiError(409,'Course creation and teacher proposals are only allowed while the catalogue is in draft')
   const data=offeringSchema.parse(req.body)
+  if(data.eligibleGrades.some(grade=>!cycle.eligibleGrades.includes(grade)))throw new ApiError(400,'Every course grade must belong to the elective cycle')
   const teacherUserId=req.user!.role==='teacher'?req.user!.sub:data.teacherUserId||null
   if(teacherUserId){
     const teacher=await prisma.user.findFirst({where:{id:teacherUserId,teacherProfile:{isNot:null}},select:{id:true}})
@@ -103,7 +124,11 @@ electivesRouter.post('/:cycleId/offerings', authenticate, requireRoles('admin','
 
 electivesRouter.patch('/offerings/:offeringId', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const offeringId=String(req.params.offeringId)
+  const existing=await prisma.electiveOffering.findUnique({where:{id:offeringId},include:{cycle:{select:{status:true,eligibleGrades:true}}}})
+  if(!existing)throw new ApiError(404,'Elective offering not found')
+  if(existing.cycle.status!=='DRAFT')throw new ApiError(409,'The catalogue is locked after choices open')
   const data=offeringSchema.partial().extend({status:z.enum(['PROPOSED','APPROVED','REJECTED']).optional()}).parse(req.body)
+  if(data.eligibleGrades?.some(grade=>!existing.cycle.eligibleGrades.includes(grade)))throw new ApiError(400,'Every course grade must belong to the elective cycle')
   if(data.capacity && data.capacity>24)throw new ApiError(400,'Capacity cannot exceed 24')
   const offering=await prisma.electiveOffering.update({where:{id:offeringId},data})
   return success(res,offering,'Elective updated')
@@ -111,8 +136,10 @@ electivesRouter.patch('/offerings/:offeringId', authenticate, requireAdministrat
 
 electivesRouter.delete('/offerings/:offeringId', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const offeringId=String(req.params.offeringId)
-  const used=await prisma.electiveChoice.count({where:{offeringId}})
-  if(used)throw new ApiError(409,'This elective already has student choices; reject it instead of deleting it')
+  const existing=await prisma.electiveOffering.findUnique({where:{id:offeringId},include:{cycle:{select:{status:true}},_count:{select:{choices:true,allocations:true}}}})
+  if(!existing)throw new ApiError(404,'Elective offering not found')
+  if(existing.cycle.status!=='DRAFT')throw new ApiError(409,'The catalogue is locked after choices open')
+  if(existing._count.choices||existing._count.allocations)throw new ApiError(409,'This elective already has student choices or allocations and cannot be deleted')
   await prisma.electiveOffering.delete({where:{id:offeringId}})
   return success(res,{id:offeringId},'Elective removed')
 }))
@@ -122,7 +149,7 @@ electivesRouter.put('/:cycleId/choices', authenticate, requireRoles('student'), 
   if(cycle.status!=='OPEN')throw new ApiError(409,'Elective choices are not open')
   if(!cycleWindowIsOpen(cycle))throw new ApiError(409,'The elective choice window is not currently active')
   const student=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub}})
-  if(!student||!cycle.eligibleGrades.includes(student.grade))throw new ApiError(403,'Student is not eligible for this elective cycle')
+  if(!student||student.status.toLowerCase()!=='active'||!cycle.eligibleGrades.includes(student.grade))throw new ApiError(403,'Student is not eligible for this elective cycle')
   const {offeringIds}=choiceSchema.parse(req.body)
   if(cycle.choicesPerStudent!==6)throw new ApiError(409,'This cycle is not configured for six choices')
   if(new Set(offeringIds).size!==6)throw new ApiError(400,'Six different electives are required')
@@ -139,15 +166,20 @@ electivesRouter.put('/:cycleId/choices', authenticate, requireRoles('student'), 
 electivesRouter.post('/:cycleId/allocate', authenticate, requireAdministrator(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const cycleId=String(req.params.cycleId); const cycle=await cycleOr404(cycleId)
   if(!['CLOSED','ALLOCATED'].includes(cycle.status))throw new ApiError(409,'Close student choices before allocation')
-  const [offerings,choices]=await Promise.all([
+  const [offerings,choices,students]=await Promise.all([
     prisma.electiveOffering.findMany({where:{cycleId,status:'APPROVED'}}),
-    prisma.electiveChoice.findMany({where:{cycleId},orderBy:[{rank:'asc'},{submittedAt:'asc'},{studentProfileId:'asc'}]}),
+    prisma.electiveChoice.findMany({where:{cycleId},orderBy:[{rank:'asc'},{studentProfileId:'asc'}]}),
+    activeEligibleStudents(cycle.eligibleGrades),
   ])
+  const participantIds=new Set(choices.map(choice=>choice.studentProfileId))
+  const participants=students.filter(student=>participantIds.has(student.id))
+  const grades=new Map(participants.map(student=>[student.id,student.grade]))
   const capacity=new Map(offerings.map(o=>[o.id,o.capacity]))
   const assigned=new Map<string,Set<string>>()
   const rows:{cycleId:string;studentProfileId:string;offeringId:string;preferenceRank:number;published:boolean}[]=[]
   for(let rank=1;rank<=cycle.choicesPerStudent;rank++){
-    for(const choice of choices.filter(c=>c.rank===rank)){
+    const round=choices.filter(c=>c.rank===rank).sort((a,b)=>fairKey(cycleId,a.studentProfileId).localeCompare(fairKey(cycleId,b.studentProfileId)))
+    for(const choice of round){
       const own=assigned.get(choice.studentProfileId)??new Set<string>()
       if(own.size>=cycle.choicesPerStudent||own.has(choice.offeringId)||(capacity.get(choice.offeringId)??0)<=0)continue
       own.add(choice.offeringId);assigned.set(choice.studentProfileId,own)
@@ -155,25 +187,41 @@ electivesRouter.post('/:cycleId/allocate', authenticate, requireAdministrator(),
       rows.push({cycleId,studentProfileId:choice.studentProfileId,offeringId:choice.offeringId,preferenceRank:rank,published:false})
     }
   }
+  for(const student of participants.sort((a,b)=>fairKey(cycleId,a.id).localeCompare(fairKey(cycleId,b.id)))){
+    const own=assigned.get(student.id)??new Set<string>()
+    const fallbacks=offerings.filter(item=>item.eligibleGrades.includes(grades.get(student.id)??'')&&!own.has(item.id)&&(capacity.get(item.id)??0)>0).sort((a,b)=>(capacity.get(b.id)??0)-(capacity.get(a.id)??0)||a.code.localeCompare(b.code))
+    for(const offering of fallbacks){
+      if(own.size>=cycle.choicesPerStudent)break
+      own.add(offering.id);capacity.set(offering.id,(capacity.get(offering.id)??0)-1)
+      rows.push({cycleId,studentProfileId:student.id,offeringId:offering.id,preferenceRank:cycle.choicesPerStudent+1,published:false})
+    }
+    assigned.set(student.id,own)
+  }
   await prisma.$transaction(async tx=>{
     await tx.electiveAllocation.deleteMany({where:{cycleId}})
     if(rows.length)await tx.electiveAllocation.createMany({data:rows})
     await tx.electiveCycle.update({where:{id:cycleId},data:{status:'ALLOCATED',publishedAt:null}})
   })
-  const students=new Set(choices.map(c=>c.studentProfileId))
-  const incomplete=[...students].filter(id=>(assigned.get(id)?.size??0)<cycle.choicesPerStudent)
-  return success(res,{students:students.size,allocations:rows.length,complete:students.size-incomplete.length,incomplete:incomplete.length,remainingCapacity:Object.fromEntries(capacity)},'Allocation completed')
+  const studentIds=new Set(choices.map(c=>c.studentProfileId))
+  const incomplete=[...studentIds].filter(id=>(assigned.get(id)?.size??0)<cycle.choicesPerStudent)
+  const fallbacks=rows.filter(row=>row.preferenceRank>cycle.choicesPerStudent).length
+  return success(res,{students:studentIds.size,allocations:rows.length,complete:studentIds.size-incomplete.length,incomplete:incomplete.length,fallbacks,remainingCapacity:Object.fromEntries(capacity)},'Allocation completed')
 }))
 
 electivesRouter.post('/:cycleId/publish', authenticate, requireAdministrator(), asyncHandler(async (req, res) => {
   const cycleId=String(req.params.cycleId); const cycle=await cycleOr404(cycleId)
   if(cycle.status!=='ALLOCATED')throw new ApiError(409,'Run allocation before publication')
-  const [participants,allocations]=await Promise.all([
+  const [participants,allocations,eligibleStudents]=await Promise.all([
     prisma.electiveChoice.findMany({where:{cycleId},distinct:['studentProfileId'],select:{studentProfileId:true}}),
-    prisma.electiveAllocation.findMany({where:{cycleId},select:{studentProfileId:true}}),
+    prisma.electiveAllocation.findMany({where:{cycleId},select:{studentProfileId:true,offeringId:true}}),
+    activeEligibleStudents(cycle.eligibleGrades),
   ])
+  if(participants.length!==eligibleStudents.length)throw new ApiError(409,'Publication blocked: '+(eligibleStudents.length-participants.length)+' eligible student(s) have not submitted six choices')
   const incomplete=participants.filter(item=>allocations.filter(row=>row.studentProfileId===item.studentProfileId).length!==cycle.choicesPerStudent)
   if(incomplete.length)throw new ApiError(409,'Publication blocked: '+incomplete.length+' student allocation(s) are incomplete. Review the final report, adjust the catalogue, reopen choices if necessary, then calculate again.')
+  const offerings=await prisma.electiveOffering.findMany({where:{cycleId},select:{id:true,capacity:true}})
+  const overCapacity=offerings.filter(offering=>allocations.filter(row=>row.offeringId===offering.id).length>offering.capacity)
+  if(overCapacity.length)throw new ApiError(409,'Publication blocked: one or more electives exceed the strict capacity of 24 students')
   const result=await prisma.$transaction(async tx=>{
     await tx.electiveAllocation.updateMany({where:{cycleId},data:{published:true}})
     return tx.electiveCycle.update({where:{id:cycleId},data:{status:'PUBLISHED',publishedAt:new Date()}})
@@ -193,5 +241,5 @@ electivesRouter.get('/:cycleId/report', authenticate, requireAdministrator(), as
   const incomplete=studentCount.filter(s=>allocations.filter(a=>a.studentProfileId===s.studentProfileId).length<cycle.choicesPerStudent).length
   const submittedIds=new Set(studentCount.map(item=>item.studentProfileId))
   const missingStudents=eligibleStudents.filter(item=>!submittedIds.has(item.id))
-  return success(res,{cycle,offerings,allocations,rankedChoices,missingStudents,summary:{eligible:eligibleStudents.length,participants:studentCount.length,missing:missingStudents.length,allocations:allocations.length,complete:studentCount.length-incomplete,incomplete}})
+  return success(res,{cycle,offerings,allocations,rankedChoices,missingStudents,summary:{eligible:eligibleStudents.length,participants:studentCount.length,missing:missingStudents.length,allocations:allocations.length,complete:studentCount.length-incomplete,incomplete,fallbacks:allocations.filter(item=>item.preferenceRank>cycle.choicesPerStudent).length}})
 }))
