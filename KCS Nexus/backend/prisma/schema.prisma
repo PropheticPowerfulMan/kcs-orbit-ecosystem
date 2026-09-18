@@ -137,10 +137,31 @@ enum NotificationType {
 
 enum AssignmentType {
   HOMEWORK
+  CLASSWORK
   QUIZ
+  TEST
   EXAM
   PROJECT
   LAB
+  PRESENTATION
+  RESEARCH
+  PRACTICAL
+}
+
+enum AssignmentCadence {
+  ONE_TIME
+  DAILY
+  WEEKLY
+  MONTHLY
+  TERM
+  ANNUAL
+}
+
+enum TeacherReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+  RETURNED
 }
 
 enum SubmissionStatus {
@@ -485,6 +506,7 @@ model TeacherProfile {
   homeroomSection   String?
   diagnosticTests   DiagnosticTest[]
   reviews           TeacherReview[]
+  activityReports   TeacherActivityReport[]
 }
 
 model Course {
@@ -557,10 +579,37 @@ model Assignment {
   dueDate     DateTime
   maxScore    Float
   type        AssignmentType
+  cadence     AssignmentCadence @default(ONE_TIME)
+  estimatedMinutes Int?
+  resourceUrl String?
+  resourceName String?
+  publishedAt DateTime @default(now())
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
   course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
   submissions AssignmentSubmission[]
+}
+
+model TeacherActivityReport {
+  id            String              @id @default(cuid())
+  teacherId     String
+  periodStart   DateTime
+  periodEnd     DateTime
+  title         String
+  content       String              @db.Text
+  evidence      Json
+  aiSource      String
+  recipientRole String
+  status        TeacherReportStatus @default(DRAFT)
+  submittedAt   DateTime?
+  reviewedAt    DateTime?
+  reviewerNote  String?             @db.Text
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  teacher       TeacherProfile      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId, periodStart, periodEnd])
+  @@index([status, submittedAt])
 }
 
 model AssignmentSubmission {

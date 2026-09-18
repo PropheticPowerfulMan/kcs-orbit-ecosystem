@@ -18,6 +18,9 @@ for tool in pg_restore sha256sum tar flock; do
 done
 
 mkdir -p "$BACKUP_ROOT" "$BACKUP_ROOT/daily" "$BACKUP_ROOT/weekly" "$BACKUP_ROOT/monthly"
+FREE_KB="$(df -Pk "$BACKUP_ROOT" | awk 'NR==2 {print $4}')"
+MIN_FREE_KB=$(( ${BACKUP_MIN_FREE_MB:-5120} * 1024 ))
+(( FREE_KB >= MIN_FREE_KB )) || { echo "Insufficient backup disk space: require at least ${BACKUP_MIN_FREE_MB:-5120} MB free" >&2; exit 1; }
 exec 9>"$BACKUP_ROOT/.backup.lock"
 flock -n 9 || { echo "Another ecosystem backup is already running" >&2; exit 1; }
 
@@ -99,8 +102,10 @@ EOF
 (cd "$WORK_DIR" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
 
 ARCHIVE="$BACKUP_ROOT/daily/kcs-orbit-${HOST}-${STAMP}.tar.gz"
-tar -C "$WORK_DIR" -czf "$ARCHIVE" .
-tar -tzf "$ARCHIVE" >/dev/null
+PARTIAL="$BACKUP_ROOT/.kcs-orbit-${HOST}-${STAMP}.tar.gz.partial"
+tar -C "$WORK_DIR" -czf "$PARTIAL" .
+tar -tzf "$PARTIAL" >/dev/null
+mv -- "$PARTIAL" "$ARCHIVE"
 
 if [[ -n "${BACKUP_AGE_RECIPIENT:-}" ]]; then
   command -v age >/dev/null || { echo "age is required while BACKUP_AGE_RECIPIENT is set" >&2; exit 1; }

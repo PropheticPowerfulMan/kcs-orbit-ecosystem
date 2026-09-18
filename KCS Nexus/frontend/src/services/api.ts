@@ -282,6 +282,11 @@ export const teacherWorkspaceAPI = {
   createAssignment: (data: object) => api.post('/teachers/me/assignments', data),
   gradeSubmission: (assignmentId: string, studentId: string, data: object) => api.patch(`/teachers/me/assignments/${assignmentId}/submissions/${studentId}`, data),
   deleteAssignment: (assignmentId: string) => api.delete(`/teachers/me/assignments/${assignmentId}`),
+  generateActivityReport: (data: object) => api.post('/teachers/me/activity-reports/generate', data),
+  activityReports: () => api.get('/teachers/me/activity-reports'),
+  updateActivityReport: (reportId: string, data: object) => api.patch(`/teachers/me/activity-reports/${reportId}`, data),
+  submitActivityReport: (reportId: string) => api.post(`/teachers/me/activity-reports/${reportId}/submit`),
+  submittedActivityReports: () => api.get('/teachers/activity-reports/submitted'),
 }
 
 export const attendanceAPI = {

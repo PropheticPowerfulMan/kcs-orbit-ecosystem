@@ -108,6 +108,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
         { to: '/admin/finance', label: t('portalNav.finance'), icon: WalletCards },
         { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
+        { to: '/admin/teacher-reports', label: 'Teacher Activity Reports', icon: FileSpreadsheet },
         { to: '/admin/news', label: t('portalNav.newsEvents'), icon: FileText },
         { to: '/admin/forum-insights', label: t('portalNav.parentAiReport'), icon: Brain },
         { to: '/admin/student-forum-insights', label: t('portalNav.studentAiReport'), icon: Shield },

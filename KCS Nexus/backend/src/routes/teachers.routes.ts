@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import OpenAI from 'openai'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { env } from '../config/env.js'
@@ -93,6 +94,41 @@ const getOrbitStudentDirectory = async () => {
     })
 }
 
+const activityReportPeriodSchema = z.object({
+  periodStart: z.coerce.date(),
+  periodEnd: z.coerce.date(),
+  recipientRole: z.enum(['ADMINISTRATOR', 'SUPER_ADMINISTRATOR', 'ADMINISTRATIVE_STAFF']).default('ADMINISTRATOR'),
+}).superRefine((value, ctx) => {
+  if (value.periodEnd < value.periodStart) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['periodEnd'], message: 'Period end must be on or after period start.' })
+  const days = (value.periodEnd.getTime() - value.periodStart.getTime()) / 86400000
+  if (days > 366) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['periodEnd'], message: 'A report period cannot exceed one year.' })
+})
+
+const activityReportEditSchema = z.object({
+  title: z.string().trim().min(3).max(180),
+  content: z.string().trim().min(40).max(30000),
+  recipientRole: z.enum(['ADMINISTRATOR', 'SUPER_ADMINISTRATOR', 'ADMINISTRATIVE_STAFF']),
+})
+
+const reportFallback = (evidence: any, start: Date, end: Date) => [
+  `TEACHER ACTIVITY REPORT`,
+  `Period: ${start.toLocaleDateString()} - ${end.toLocaleDateString()}`,
+  '',
+  '1. Teaching activity',
+  `${evidence.courses} course(s) taught; ${evidence.assignments.total} learning activity/activities published for ${evidence.students} enrolled learner(s).`,
+  '',
+  '2. Assessment and feedback',
+  `${evidence.assignments.gradedSubmissions} submission(s) graded out of ${evidence.assignments.submissions}; ${evidence.grades} verified grade record(s) created.`,
+  '',
+  '3. Attendance follow-up',
+  `${evidence.attendance.total} attendance record(s): ${evidence.attendance.present} present, ${evidence.attendance.absent} absent and ${evidence.attendance.late} late.`,
+  '',
+  '4. Distribution of work',
+  ...Object.entries(evidence.assignments.byType).map(([key, value]) => `- ${key}: ${value}`),
+  '',
+  '5. Teacher review and next steps',
+  'Review the verified figures above, add qualitative observations and planned actions, then submit this draft to the selected school authority.',
+].join('\n')
 const workspaceSchema = z.object({
   state: z.record(z.unknown()),
   revision: z.number().int().nonnegative().optional(),
@@ -115,7 +151,11 @@ const assignmentCreateSchema = z.object({
   description: z.string().min(2).max(5000),
   dueDate: z.coerce.date(),
   maxScore: z.coerce.number().positive().max(10000),
-  type: z.enum(['HOMEWORK', 'QUIZ', 'EXAM', 'PROJECT', 'LAB']),
+  type: z.enum(['HOMEWORK', 'CLASSWORK', 'QUIZ', 'TEST', 'EXAM', 'PROJECT', 'LAB', 'PRESENTATION', 'RESEARCH', 'PRACTICAL']),
+  cadence: z.enum(['ONE_TIME', 'DAILY', 'WEEKLY', 'MONTHLY', 'TERM', 'ANNUAL']).default('ONE_TIME'),
+  estimatedMinutes: z.coerce.number().int().min(1).max(10080).optional(),
+  resourceUrl: z.string().url().max(2000).optional().or(z.literal('')),
+  resourceName: z.string().trim().max(180).optional(),
 })
 
 const teacherCourseSyncSchema = z.object({
@@ -139,7 +179,7 @@ const ownedCourse = async (userId: string, courseId: string) => {
   const course = await prisma.course.findFirst({
     where: { id: courseId, teacher: { userId } },
     include: {
-      enrollments: { include: { student: { include: { user: true } } } },
+      enrollments: { include: { student: { include: { user: true, parentLinks: { select: { parentId: true } } } } } },
       assignments: {
         include: { submissions: { include: { student: { include: { user: true } } } } },
         orderBy: { dueDate: 'desc' },
@@ -150,6 +190,85 @@ const ownedCourse = async (userId: string, courseId: string) => {
   return course
 }
 
+teachersRouter.post('/me/activity-reports/generate', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = activityReportPeriodSchema.parse(req.body)
+  const periodEnd = new Date(payload.periodEnd)
+  periodEnd.setUTCHours(23, 59, 59, 999)
+  const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true, user: { select: { firstName: true, middleName: true, lastName: true } }, courses: { select: { id: true, name: true, enrollments: { select: { studentId: true } }, assignments: { where: { createdAt: { gte: payload.periodStart, lte: periodEnd } }, select: { id: true, title: true, type: true, cadence: true, submissions: { select: { status: true } } } } } } } })
+  if (!teacher) throw new ApiError(409, 'The authenticated account is not linked to a teacher profile.')
+  const courseIds = teacher.courses.map((course) => course.id)
+  const [grades, attendance] = await Promise.all([
+    prisma.grade.findMany({ where: { courseId: { in: courseIds }, createdAt: { gte: payload.periodStart, lte: periodEnd } }, select: { id: true } }),
+    prisma.attendanceRecord.findMany({ where: { recordedById: req.user!.sub, date: { gte: payload.periodStart, lte: periodEnd } }, select: { status: true } }),
+  ])
+  const assignments = teacher.courses.flatMap((course) => course.assignments)
+  const byType = assignments.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.type]: (acc[item.type] ?? 0) + 1 }), {})
+  const byCadence = assignments.reduce<Record<string, number>>((acc, item) => ({ ...acc, [item.cadence]: (acc[item.cadence] ?? 0) + 1 }), {})
+  const submissions = assignments.flatMap((item) => item.submissions)
+  const evidence = {
+    courses: teacher.courses.length,
+    students: new Set(teacher.courses.flatMap((course) => course.enrollments.map((item) => item.studentId))).size,
+    assignments: { total: assignments.length, submissions: submissions.length, gradedSubmissions: submissions.filter((item) => item.status === 'GRADED').length, byType, byCadence },
+    grades: grades.length,
+    attendance: { total: attendance.length, present: attendance.filter((item) => item.status === 'PRESENT').length, absent: attendance.filter((item) => item.status === 'ABSENT').length, late: attendance.filter((item) => item.status === 'LATE').length, excused: attendance.filter((item) => item.status === 'EXCUSED').length },
+  }
+  const fallback = reportFallback(evidence, payload.periodStart, periodEnd)
+  let content = fallback
+  let aiSource = 'verified-local-summary'
+  if (env.OPENAI_API_KEY) {
+    try {
+      const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY })
+      const completion = await openai.chat.completions.create({ model: env.OPENAI_MODEL, temperature: 0.2, max_tokens: 1000, messages: [
+        { role: 'system', content: 'You draft formal KCS teacher activity reports. Use only the supplied verified evidence. Never invent names, events, outcomes, grades, attendance, or actions. Clearly label areas where the teacher should add qualitative context. Return a professional editable report with concise sections and recommendations.' },
+        { role: 'user', content: `Period ${payload.periodStart.toISOString()} to ${payload.periodEnd.toISOString()}. Verified evidence:\n${JSON.stringify(evidence)}` },
+      ] })
+      content = completion.choices[0]?.message?.content?.trim() || fallback
+      aiSource = `openai:${env.OPENAI_MODEL}`
+    } catch (error) {
+      console.error('[teacher-activity-report] AI generation failed; verified fallback used.', error)
+    }
+  }
+  const teacherName = [teacher.user.lastName, teacher.user.middleName, teacher.user.firstName].filter(Boolean).join(' ')
+  const report = await prisma.teacherActivityReport.create({ data: { teacherId: teacher.id, periodStart: payload.periodStart, periodEnd, title: `Activity report - ${teacherName} - ${payload.periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}`, content, evidence, aiSource, recipientRole: payload.recipientRole } })
+  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ACTIVITY_REPORT_GENERATED', targetType: 'TeacherActivityReport', targetId: report.id, metadata: { periodStart: payload.periodStart, periodEnd, aiSource } } })
+  return success(res, report, 'A verified, editable activity report draft was generated.', 201)
+}))
+
+teachersRouter.get('/me/activity-reports', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const reports = await prisma.teacherActivityReport.findMany({ where: { teacher: { userId: req.user!.sub } }, orderBy: { createdAt: 'desc' } })
+  return success(res, reports, 'Teacher activity reports loaded.')
+}))
+
+teachersRouter.patch('/me/activity-reports/:reportId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const reportId = getRouteParam(req.params.reportId)
+  const payload = activityReportEditSchema.parse(req.body)
+  const existing = await prisma.teacherActivityReport.findFirst({ where: { id: reportId, teacher: { userId: req.user!.sub } } })
+  if (!existing) throw new ApiError(404, 'Activity report not found.')
+  if (existing.status !== 'DRAFT' && existing.status !== 'RETURNED') throw new ApiError(409, 'A submitted report can no longer be edited unless it is returned for revision.')
+  const report = await prisma.teacherActivityReport.update({ where: { id: reportId }, data: payload })
+  return success(res, report, 'Activity report draft saved.')
+}))
+
+teachersRouter.post('/me/activity-reports/:reportId/submit', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const reportId = getRouteParam(req.params.reportId)
+  const existing = await prisma.teacherActivityReport.findFirst({ where: { id: reportId, teacher: { userId: req.user!.sub } }, include: { teacher: { include: { user: true } } } })
+  if (!existing) throw new ApiError(404, 'Activity report not found.')
+  if (existing.status !== 'DRAFT' && existing.status !== 'RETURNED') throw new ApiError(409, 'This report has already been submitted.')
+  const report = await prisma.$transaction(async (tx) => {
+    const saved = await tx.teacherActivityReport.update({ where: { id: reportId }, data: { status: 'SUBMITTED', submittedAt: new Date() } })
+    const targetRoles = existing.recipientRole === 'ADMINISTRATIVE_STAFF' ? ['STAFF'] : ['ADMIN']
+    const recipients = await tx.user.findMany({ where: { role: { in: targetRoles as any } }, select: { id: true } })
+    if (recipients.length) await tx.notification.createMany({ data: recipients.map(({ id: userId }) => ({ userId, title: 'Teacher activity report submitted', message: `${existing.teacher.user.lastName} ${existing.teacher.user.firstName} submitted ${existing.title}.`, type: 'INFO', link: '/portal/admin/teacher-reports' })) })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ACTIVITY_REPORT_SUBMITTED', targetType: 'TeacherActivityReport', targetId: reportId, metadata: { recipientRole: existing.recipientRole } } })
+    return saved
+  })
+  return success(res, report, 'Activity report submitted to the selected school authority.')
+}))
+
+teachersRouter.get('/activity-reports/submitted', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
+  const reports = await prisma.teacherActivityReport.findMany({ where: { status: { in: ['SUBMITTED', 'REVIEWED', 'RETURNED'] } }, include: { teacher: { include: { user: { select: { firstName: true, middleName: true, lastName: true, email: true } } } } }, orderBy: { submittedAt: 'desc' } })
+  return success(res, reports, 'Submitted teacher activity reports loaded.')
+}))
 teachersRouter.get('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub } })
   return success(res, workspace)
@@ -242,7 +361,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
           id: true, name: true, code: true, description: true, grade: true, credits: true,
           schedules: { select: { id: true, day: true, startTime: true, endTime: true, room: true } },
           enrollments: { select: { studentId: true, student: { select: { id: true, studentNumber: true, grade: true, section: true, status: true, gpa: true, attendanceRate: true, user: { select: { id: true, firstName: true, middleName: true, lastName: true } } } } } },
-          assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true, submissions: { select: { id: true, studentId: true, submittedAt: true, score: true, status: true } } }, orderBy: { dueDate: 'asc' } },
+          assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true, cadence: true, estimatedMinutes: true, resourceUrl: true, resourceName: true, publishedAt: true, submissions: { select: { id: true, studentId: true, submittedAt: true, score: true, status: true } } }, orderBy: { dueDate: 'asc' } },
           grades: { select: { id: true, studentId: true, assignmentId: true, score: true, maxScore: true, percentage: true, letterGrade: true, period: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
         },
       },
@@ -399,9 +518,16 @@ teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), as
   const payload = assignmentCreateSchema.parse(req.body)
   const course = await ownedCourse(req.user!.sub, payload.courseId)
   const assignment = await prisma.$transaction(async (tx) => {
-    const created = await tx.assignment.create({ data: { courseId: course.id, title: payload.title, description: payload.description, dueDate: payload.dueDate, maxScore: payload.maxScore, type: payload.type } })
+    const created = await tx.assignment.create({ data: { courseId: course.id, title: payload.title, description: payload.description, dueDate: payload.dueDate, maxScore: payload.maxScore, type: payload.type, cadence: payload.cadence, estimatedMinutes: payload.estimatedMinutes, resourceUrl: payload.resourceUrl || null, resourceName: payload.resourceName || null } })
     if (course.enrollments.length) await tx.assignmentSubmission.createMany({ data: course.enrollments.map(({ studentId }) => ({ assignmentId: created.id, studentId })), skipDuplicates: true })
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_CREATED', targetType: 'Assignment', targetId: created.id, metadata: { courseId: course.id, recipients: course.enrollments.length } } })
+    const studentUserIds = course.enrollments.map(({ student }) => student.user.id)
+    const parentUserIds = [...new Set(course.enrollments.flatMap(({ student }) => student.parentLinks.map(({ parentId }) => parentId)))]
+    const notificationRows = [
+      ...studentUserIds.map((userId) => ({ userId, title: `New ${payload.type.toLowerCase()}: ${payload.title}`, message: `${course.name} - due ${payload.dueDate.toLocaleDateString()}. Open Assignments for the teacher's full instructions.`, type: 'INFO' as const, link: '/portal/student/assignments' })),
+      ...parentUserIds.map((userId) => ({ userId, title: `New work published: ${payload.title}`, message: `A ${payload.type.toLowerCase()} for ${course.name} is due ${payload.dueDate.toLocaleDateString()}. Open your child's Performance page for details.`, type: 'INFO' as const, link: '/portal/parent/performance' })),
+    ]
+    if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_CREATED', targetType: 'Assignment', targetId: created.id, metadata: { courseId: course.id, students: studentUserIds.length, parents: parentUserIds.length, cadence: payload.cadence } } })
     return tx.assignment.findUnique({ where: { id: created.id }, include: { submissions: { include: { student: { include: { user: true } } } } } })
   })
   return success(res, assignment, 'Assignment published to enrolled students', 201)

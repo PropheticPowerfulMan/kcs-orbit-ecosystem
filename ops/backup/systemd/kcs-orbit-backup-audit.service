@@ -1,0 +1,12 @@
+[Unit]
+Description=Audit KCS ecosystem backup freshness and restorability
+After=network-online.target kcs-orbit-backup.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+Environment=BACKUP_CONFIG_FILE=/etc/kcs-orbit/backup.env
+ExecStart=/opt/kcs-orbit/app/ops/backup/audit.sh
+NoNewPrivileges=true
+PrivateTmp=true

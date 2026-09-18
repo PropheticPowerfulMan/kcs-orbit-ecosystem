@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily audit of KCS ecosystem backups
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=kcs-orbit-backup-audit.service
+
+[Install]
+WantedBy=timers.target

@@ -24,6 +24,7 @@ import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSetting
 import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenter'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
+import TeacherActivityReportsInbox from '@/components/admin/TeacherActivityReportsInbox'
 import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -2904,6 +2905,8 @@ const AdminSectionView = ({
   if (segment === 'attendance' || segment === 'staff-attendance') return <AttendanceManagementPanel />
 
   if (segment === 'communications') return <ParentCommunicationPanel />
+
+  if (segment === 'teacher-reports') return <TeacherActivityReportsInbox />
 
   if (segment === 'staff-attendance') {
     if (!selectedStaff) return <div>Aucune donnee reelle de presence du personnel disponible.</div>

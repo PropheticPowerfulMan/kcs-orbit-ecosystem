@@ -41,3 +41,9 @@ pg_restore --no-owner --dbname=kcs_restore_test /var/tmp/kcs-restore-test/postgr
 Le pipeline doit appeler `pre-deploy-backup.sh`; son echec bloque le deploiement. Les schemas utilisent des migrations versionnees et aucune option acceptant une perte de donnees.
 
 Une sauvegarde serveur ne protege jamais les preferences d'interface conservees dans `localStorage`. Les paiements, allocations, echeanciers, depenses, recus et autres donnees financieres officielles d'EduPay sont persistants dans PostgreSQL; seuls les jetons de session, caches de lecture et preferences d'interface restent dans le navigateur.
+
+## Audit automatique et resilience
+
+`audit.sh` controle chaque jour la fraicheur de la derniere archive, l'espace disque, la lecture du tar, les sommes SHA-256, les catalogues `pg_restore` et la presence de la copie hors site. Installer egalement `kcs-orbit-backup-audit.service` et `.timer` pour rendre ce controle independant du job de creation.
+
+Une archive locale verifiee protege contre une erreur applicative, mais pas contre la perte complete du VPS. Pour cette raison, `BACKUP_RCLONE_DESTINATION` et, de preference, `BACKUP_AGE_RECIPIENT` doivent etre configures avant de considerer le plan de reprise comme complet. Une restauration d'essai dans une base isolee doit etre executee au minimum chaque trimestre.
