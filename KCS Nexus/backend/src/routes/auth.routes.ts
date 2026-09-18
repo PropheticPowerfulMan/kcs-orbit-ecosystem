@@ -70,9 +70,13 @@ function splitFullName(fullName: string) {
 function mapSavanexRole(role: string | undefined, employeeType?: string) {
   const normalizedEmployeeType = (employeeType || '').trim().toLowerCase().replace(/[ _-]+/g, ' ')
   if (['teacher', 'enseignant', 'teaching staff', 'faculty', 'academic'].includes(normalizedEmployeeType)) return 'TEACHER' as const
+  if (['administrative', 'administrative staff', 'leadership'].includes(normalizedEmployeeType)) return 'STAFF' as const
   const normalized = (role || '').trim().toLowerCase()
   if (normalized === 'admin') return 'ADMIN' as const
-  if (['employee', 'staff', 'administrative staff', 'administrative_staff', 'administrative-staff'].includes(normalized)) return 'STAFF' as const
+  // Generic support/specialist employees remain valid ecosystem identities,
+  // but must never receive a Nexus dashboard implicitly.
+  if (['staff', 'administrative staff', 'administrative_staff', 'administrative-staff'].includes(normalized)) return 'STAFF' as const
+  if (normalized === 'employee') return null
   if (normalized === 'teacher') return 'TEACHER' as const
   if (normalized === 'student') return 'STUDENT' as const
   if (normalized === 'parent') return 'PARENT' as const

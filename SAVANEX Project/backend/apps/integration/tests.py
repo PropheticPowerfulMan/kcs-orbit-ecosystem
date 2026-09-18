@@ -117,6 +117,30 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
         self.assertEqual(parent.username, 'parent-imported')
         reset_credentials.assert_called_once_with(parent, defer_side_effects=False)
 
+    @patch('apps.integration.views.sync_parent')
+    def test_ecosystem_password_change_updates_authority_and_orbit(self, sync_parent):
+        parent = User.objects.create_user(
+            username='password-parent',
+            email='password.parent@example.com',
+            password='OldPassword123!',
+            role=User.ROLE_PARENT,
+            access_code='ACC-PAR-PASSWORD',
+            must_change_password=True,
+            password_generated_by_system=True,
+        )
+        response = self.client.post(
+            '/api/integration/entities/parent/ACC-PAR-PASSWORD/change-password/',
+            {'currentPassword': 'OldPassword123!', 'newPassword': 'NewPassword456!'},
+            format='json',
+            HTTP_X_API_KEY='nexus-test-key',
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        parent.refresh_from_db()
+        self.assertFalse(parent.check_password('OldPassword123!'))
+        self.assertTrue(parent.check_password('NewPassword456!'))
+        self.assertFalse(parent.must_change_password)
+        self.assertFalse(parent.password_generated_by_system)
+        sync_parent.assert_called_once_with(parent)
 
 @override_settings(KCS_NEXUS_AUTH_KEY='nexus-test-key')
 class EcosystemEmployeeIntegrationTests(TestCase):

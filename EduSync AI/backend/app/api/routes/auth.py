@@ -1,7 +1,7 @@
 import json
 import random
 import string
-from urllib import error, request
+from urllib import error, parse, request
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, or_
@@ -52,13 +52,14 @@ def generate_unique_access_code(db: Session, role: Role) -> str:
     return f"ACC-{role.value[:3].upper()}-{int(random.random() * 1_000_000):06d}"
 
 
-def map_savanex_role(role: str | None) -> Role | None:
+def map_savanex_role(role: str | None, employee_type: str | None = None) -> Role | None:
     normalized = (role or "").strip().lower()
+    normalized_employee_type = (employee_type or "").strip().lower().replace("_", " ").replace("-", " ")
     if normalized == "admin":
         return Role.ADMIN
-    if normalized == "teacher":
+    if normalized == "teacher" or normalized_employee_type == "teacher":
         return Role.TEACHER
-    if normalized == "employee":
+    if normalized_employee_type in {"administrative", "administrative staff", "leadership"}:
         return Role.STAFF
     return None
 
@@ -99,6 +100,26 @@ def is_shared_orbit_identity(identifier: str) -> bool:
             if (normalized_email and email == normalized_email) or (normalized_code and access_code == normalized_code):
                 return True
     return False
+
+def change_shared_identity_password(user: User, current_password: str, new_password: str) -> None:
+    if not savanex_auth_is_enabled() or not settings.kcs_orbit_api_key:
+        raise HTTPException(status_code=503, detail="Shared password authority is unavailable")
+    identifier = user.access_code or user.email
+    entity_type = "teacher" if user.role in {Role.TEACHER, Role.STAFF} else user.role.value
+    url = f"{settings.savanex_api_url.rstrip('/')}/api/integration/entities/{entity_type}/{parse.quote(identifier, safe='')}/change-password/"
+    body = json.dumps({"currentPassword": current_password, "newPassword": new_password}).encode("utf-8")
+    req = request.Request(url, data=body, headers={"Content-Type": "application/json", "x-api-key": settings.kcs_orbit_api_key}, method="POST")
+    try:
+        with request.urlopen(req, timeout=settings.savanex_timeout_seconds):
+            return
+    except error.HTTPError as exc:
+        try:
+            detail = json.loads(exc.read().decode("utf-8")).get("detail")
+        except Exception:
+            detail = None
+        raise HTTPException(status_code=exc.code, detail=detail or "Shared password change failed") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Shared password authority is unavailable") from exc
 
 def authenticate_with_edupay(identifier: str, password: str) -> dict | None:
     if not edupay_auth_is_enabled():
@@ -161,7 +182,7 @@ def authenticate_with_savanex(identifier: str, password: str) -> dict | None:
         raise HTTPException(status_code=503, detail="External shared authentication is temporarily unavailable") from exc
 
     external_user = payload.get("user") or {}
-    mapped_role = map_savanex_role(external_user.get("role"))
+    mapped_role = map_savanex_role(external_user.get("role"), external_user.get("employee_type"))
     if mapped_role is None:
         return None
 
@@ -196,7 +217,7 @@ def authenticate_with_nexus(identifier: str, password: str) -> dict | None:
     except Exception:
         return None
     external_user = (payload.get("data") or {}).get("user") or {}
-    mapped_role = map_savanex_role(external_user.get("role"))
+    mapped_role = map_savanex_role(external_user.get("role"), external_user.get("employee_type"))
     if mapped_role is None:
         return None
     access_code = normalize_access_code(external_user.get("accessCode")) or normalize_access_code(identifier)
@@ -331,7 +352,10 @@ def change_password(
         raise HTTPException(status_code=422, detail="The new password must contain at least 8 characters")
     if payload.current_password == payload.new_password:
         raise HTTPException(status_code=400, detail="The new password must be different")
-    if not verify_password(payload.current_password, current_user.hashed_password):
+    identifier = current_user.access_code or current_user.email
+    if is_shared_orbit_identity(identifier):
+        change_shared_identity_password(current_user, payload.current_password, payload.new_password)
+    elif not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.hashed_password = get_password_hash(payload.new_password)
     db.add(ActivityLog(actor_id=current_user.id, event_type="password_changed", department=current_user.department))

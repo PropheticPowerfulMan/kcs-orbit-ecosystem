@@ -14,7 +14,7 @@ from apps.teachers.views import finalize_teacher_creation
 from apps.communication.models import Notification
 from apps.communication.services import deliver_employee_communication
 from apps.teachers.services import deactivate_teacher
-from apps.integration.orbit import sync_teacher
+from apps.integration.orbit import sync_parent, sync_student, sync_teacher
 from apps.users.models import User
 from apps.users.authentication import authenticate_user_identifier
 from apps.users.serializers import UserMeSerializer
@@ -235,6 +235,12 @@ def change_ecosystem_identity_password_view(request, entity_type, identifier):
     user.must_change_password = False
     user.password_generated_by_system = False
     user.save(update_fields=['password', 'must_change_password', 'password_generated_by_system', 'updated_at'])
+    if user.role == User.ROLE_PARENT:
+        sync_parent(user)
+    elif user.role == User.ROLE_STUDENT and hasattr(user, 'student_profile'):
+        sync_student(user.student_profile)
+    elif user.role in (User.ROLE_TEACHER, User.ROLE_EMPLOYEE) and hasattr(user, 'teacher_profile'):
+        sync_teacher(user.teacher_profile)
     return Response({'detail': 'Mot de passe modifie dans l ecosystem.', 'accessCode': user.access_code})
 
 @api_view(['POST'])
