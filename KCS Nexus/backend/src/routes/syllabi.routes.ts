@@ -5,10 +5,8 @@ import { Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
-import { asyncHandler } from '../middleware/error.js'
-import { prisma } from '../lib/prisma.js'
-import { ApiError } from '../utils/ApiError.js'
-import { success } from '../utils/response.js'
+import { ApiError, asyncHandler, success } from '../utils/api.js'
+import { prisma } from '../config/prisma.js'
 
 export const syllabiRouter = Router()
 const root = path.resolve(process.env.UPLOAD_ROOT || '/app/uploads', 'syllabi')

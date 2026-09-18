@@ -4,7 +4,7 @@ import { randomInt } from 'node:crypto'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
-import { authenticate, requireRoles, requireSuperAdmin } from '../middleware/auth.js'
+import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { sendSchoolMail } from '../utils/mail.js'
 import { sendSchoolSms } from '../utils/sms.js'
@@ -350,7 +350,7 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
     return success(res, orbitData, 'Families loaded from Orbit')
   }
 
-  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout lâ€™Ã©cosystÃ¨me.')
 
   const students = await prisma.studentProfile.findMany({
     include: {
@@ -432,7 +432,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
     return success(res, orbitData, 'Shared directory loaded from Orbit')
   }
 
-  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout lâ€™Ã©cosystÃ¨me.')
 
   const [students, teachers] = await Promise.all([
     prisma.studentProfile.findMany({
@@ -523,6 +523,39 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
       externalIds: [],
     })),
   }, 'Shared directory loaded locally')
+}))
+
+registryRouter.get('/parents/access-statuses', authenticate, requireSuperAdmin(), asyncHandler(async (_req, res) => {
+  const parents = await prisma.user.findMany({
+    where: { role: 'PARENT' },
+    select: { id: true, orbitUserId: true, email: true, accessCode: true, accountBlockedAt: true, accountBlockedReason: true, accountBlockedBy: true },
+    orderBy: { lastName: 'asc' },
+  })
+  return success(res, parents, 'Parent access statuses loaded')
+}))
+
+registryRouter.patch('/parents/:identifier/account-access', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const identifier = String(req.params.identifier)
+  const payload = z.object({ blocked: z.boolean(), reason: z.string().trim().max(500).optional() }).parse(req.body ?? {})
+  if (payload.blocked && !payload.reason) throw new ApiError(400, 'A reason is required to block a parent account.')
+  const parent = await prisma.user.findFirst({
+    where: { role: 'PARENT', OR: [
+      { id: identifier },
+      { orbitUserId: identifier },
+      { email: { equals: identifier, mode: 'insensitive' } },
+      { accessCode: identifier },
+    ] },
+    select: { id: true, firstName: true, middleName: true, lastName: true, orbitUserId: true, email: true, accessCode: true, accountBlockedAt: true },
+  })
+  if (!parent) throw new ApiError(404, 'Parent account not found in KCS Nexus.')
+  const now = payload.blocked ? new Date() : null
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.user.update({ where: { id: parent.id }, data: { accountBlockedAt: now, accountBlockedReason: payload.blocked ? payload.reason : null, accountBlockedBy: payload.blocked ? req.user!.sub : null }, select: { id: true, orbitUserId: true, email: true, accessCode: true, accountBlockedAt: true, accountBlockedReason: true } })
+    await tx.refreshToken.deleteMany({ where: { userId: parent.id } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: payload.blocked ? 'PARENT_ACCOUNT_BLOCKED' : 'PARENT_ACCOUNT_UNBLOCKED', targetType: 'User', targetId: parent.id, metadata: { reason: payload.reason || null, previousBlockedAt: parent.accountBlockedAt?.toISOString() || null } } })
+    return saved
+  })
+  return success(res, updated, payload.blocked ? 'Parent account blocked and active sessions revoked' : 'Parent account unblocked')
 }))
 
 registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
@@ -704,7 +737,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       const emailSent = emailDelivery?.status === 'sent'
       await prisma.correspondenceLog.create({ data: {
         channel: 'EMAIL', status: emailSent ? 'SENT' : 'FAILED', subject: 'Nouveaux identifiants temporaires KCS',
-        body: 'Réinitialisation des accès institutionnels demandée depuis KCS Nexus.',
+        body: 'RÃ©initialisation des accÃ¨s institutionnels demandÃ©e depuis KCS Nexus.',
         recipientName: entity.fullName, recipientEmail: entity.email, sentAt: emailSent ? new Date() : null,
         failureReason: emailSent ? null : String(emailDelivery?.detail || emailDelivery?.status || 'UPSTREAM_EMAIL_NOT_CONFIRMED'),
         metadata: { kind: 'RESET_ACCESS', entityType, provider: 'SAVANEX', identifier },
@@ -712,7 +745,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       return success(res, resetData, emailSent ? 'Acces temporaire regenere et courriel confirme par le serveur SMTP' : 'Acces temporaire regenere, mais le courriel n a pas ete confirme')
     }
     if (resetResponse.status !== 404) {
-      throw new ApiError(resetResponse.status, String(resetData.detail || 'La réinitialisation SAVANEX a échoué.'))
+      throw new ApiError(resetResponse.status, String(resetData.detail || 'La rÃ©initialisation SAVANEX a Ã©chouÃ©.'))
     }
   }
 
@@ -748,12 +781,12 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     await updateRegistryEntityInOrbit(entityType, entity.id, env.KCS_ORBIT_ORGANIZATION_ID!, { mustChangePassword: true }, 'orbitId')
   }
   const subject = 'Nouveaux identifiants temporaires KCS Nexus'
-  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a été réinitialisé par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accès: ${user.accessCode || 'non défini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
+  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a Ã©tÃ© rÃ©initialisÃ© par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accÃ¨s: ${user.accessCode || 'non dÃ©fini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
   const [emailDelivery, smsDelivery] = await Promise.all([
     sendSchoolMail({ to: user.email || entity.email, replyTo: env.SMTP_USER, subject, text: message, html: `<p>${message.replace(/\n/g, '<br>')}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
     entityType === 'student'
       ? Promise.resolve({ sent: false as const, reason: 'STUDENT_EMAIL_ONLY' as const })
-      : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non défini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+      : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non dÃ©fini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
   ])
   const emailFailureDetail = emailDelivery.sent ? null : (('providerDetail' in emailDelivery ? emailDelivery.providerDetail : undefined) || emailDelivery.reason)
   await prisma.correspondenceLog.create({ data: { channel: 'EMAIL', status: emailDelivery.sent ? 'SENT' : 'FAILED', subject, body: message, recipientName: entity.fullName || [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '), recipientEmail: user.email || entity.email, sentAt: emailDelivery.sent ? new Date() : null, failureReason: emailFailureDetail, metadata: { kind: 'RESET_ACCESS', entityType, recipientId: user.id } } })

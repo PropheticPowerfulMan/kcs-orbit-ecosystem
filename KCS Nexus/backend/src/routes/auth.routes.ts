@@ -415,7 +415,7 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       const federationGracePeriodMs = 30 * 60 * 1000
       const identityWasJustVerified = isFederated && Date.now() - user.updatedAt.getTime() < federationGracePeriodMs
       if (identityWasJustVerified) return user
-      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identité a été supprimée ou désactivée dans l’écosystème.')
+      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identitÃ© a Ã©tÃ© supprimÃ©e ou dÃ©sactivÃ©e dans lâ€™Ã©cosystÃ¨me.')
       return user
     }
 
@@ -618,6 +618,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   if (user?.passwordHash && !isFederatedUser) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
     if (isValid) {
+      if (user.role === 'PARENT' && user.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
       if (user.twoFactorEnabled) {
         if (!user.twoFactorSecret || !payload.twoFactorCode || !verifyTotp(user.twoFactorSecret, payload.twoFactorCode)) {
           throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
@@ -652,6 +653,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
+  if (resolvedUser.role === 'PARENT' && resolvedUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
+
   const token = signAccessToken(resolvedUser)
   const refreshToken = signRefreshToken(resolvedUser)
 
@@ -663,7 +666,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(resolvedUser, false), token, refreshToken }, 'Connexion réussie')
+  return success(res, { user: buildSafeUser(resolvedUser, false), token, refreshToken }, 'Connexion rÃ©ussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -698,6 +701,10 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   }
 
   const synchronizedUser = await refreshCanonicalIdentity(storedToken.user)
+  if (synchronizedUser.role === 'PARENT' && synchronizedUser.accountBlockedAt) {
+    await prisma.refreshToken.deleteMany({ where: { userId: synchronizedUser.id } })
+    throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
+  }
   const token = signAccessToken(synchronizedUser)
   return success(res, { token, user: buildSafeUser(synchronizedUser, false) }, 'Token refreshed')
 }))
@@ -742,12 +749,12 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
     const message = [
       `Bonjour ${user.firstName},`,
       '',
-      'Une demande de récupération a été reçue pour votre compte KCS Nexus.',
+      'Une demande de rÃ©cupÃ©ration a Ã©tÃ© reÃ§ue pour votre compte KCS Nexus.',
       `Identifiant: ${user.email}`,
       `Nouveau mot de passe temporaire: ${temporaryPassword}`,
       '',
-      'Pour votre sécurité, changez ce mot de passe après votre prochaine connexion.',
-      "Si vous n'êtes pas à l'origine de cette demande, contactez l'administration.",
+      'Pour votre sÃ©curitÃ©, changez ce mot de passe aprÃ¨s votre prochaine connexion.',
+      "Si vous n'Ãªtes pas Ã  l'origine de cette demande, contactez l'administration.",
     ].join('\n')
 
     const result = channel === 'sms'

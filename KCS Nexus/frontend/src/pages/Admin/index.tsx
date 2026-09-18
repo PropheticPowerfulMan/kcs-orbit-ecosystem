@@ -73,7 +73,7 @@ const ProfilePhoto = ({ src, name, size = 'large' }: { src?: string | null; name
     <div className={`${sizeClass} shrink-0 overflow-hidden rounded-2xl border-4 border-white bg-gradient-to-br from-kcs-blue-700 to-kcs-blue-950 shadow-lg ring-1 ring-kcs-blue-200 dark:border-kcs-blue-900 dark:ring-kcs-blue-700`} aria-label={`Photo de ${name}`}>
       {src
         ? <img src={src} alt={`Photo de ${name}`} className="h-full w-full object-cover" />
-        : <div className="flex h-full w-full items-center justify-center font-display font-black tracking-wide text-white" title="Photo non renseignée">{initials}</div>}
+        : <div className="flex h-full w-full items-center justify-center font-display font-black tracking-wide text-white" title="Photo non renseignÃ©e">{initials}</div>}
     </div>
   )
 }
@@ -287,19 +287,19 @@ const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParen
 
 const createFamilyContactDraft = (kind: FamilyContactDraft['kind']): FamilyContactDraft => ({
   kind, firstName: '', middleName: '', lastName: '',
-  relationship: kind === 'MOTHER' ? 'Mère' : '',
+  relationship: kind === 'MOTHER' ? 'MÃ¨re' : '',
   role: kind === 'HOUSEHOLD_AGENT' ? 'Nounou' : '',
   email: '', phone: '', physicalAddress: '',
   authorizedPickup: false, emergencyContact: kind === 'MOTHER',
 })
 
 const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactDraft[]; onChange: (contacts: FamilyContactDraft[]) => void }) => {
-  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: 'Mère de l’élève', RELATIVE: 'Membre de la famille', HOUSEHOLD_AGENT: 'Agent de la famille' }
+  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: 'MÃ¨re de lâ€™Ã©lÃ¨ve', RELATIVE: 'Membre de la famille', HOUSEHOLD_AGENT: 'Agent de la famille' }
   const update = (index: number, values: Partial<FamilyContactDraft>) => onChange(contacts.map((contact, itemIndex) => itemIndex === index ? { ...contact, ...values } : contact))
   return (
     <section className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40 sm:p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Contacts familiaux complémentaires</p>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Renseignez au moins un e-mail ou un téléphone pour chaque personne ajoutée.</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Contacts familiaux complÃ©mentaires</p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Renseignez au moins un e-mail ou un tÃ©lÃ©phone pour chaque personne ajoutÃ©e.</p>
       <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {contacts.map((contact, index) => (
           <article key={contact.kind} className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:p-4">
@@ -307,14 +307,14 @@ const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactD
             <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
               <input value={contact.lastName} onChange={(event) => update(index, { lastName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom" />
               <input value={contact.middleName} onChange={(event) => update(index, { middleName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom" />
-              <input value={contact.firstName} onChange={(event) => update(index, { firstName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom" />
-              <input value={contact.relationship} onChange={(event) => update(index, { relationship: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Parenté (mère, tante, oncle…)" />
+              <input value={contact.firstName} onChange={(event) => update(index, { firstName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="PrÃ©nom" />
+              <input value={contact.relationship} onChange={(event) => update(index, { relationship: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="ParentÃ© (mÃ¨re, tante, oncleâ€¦)" />
               {contact.kind === 'HOUSEHOLD_AGENT' ? <input value={contact.role} onChange={(event) => update(index, { role: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Fonction (nounou, chauffeur, garde...)" /> : null}
               <input type="email" value={contact.email} onChange={(event) => update(index, { email: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email" />
               <InternationalPhoneInput value={contact.phone} onChange={(phone) => update(index, { phone })} />
               <input value={contact.physicalAddress} onChange={(event) => update(index, { physicalAddress: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white sm:col-span-2" placeholder="Adresse physique" />
-              <label className="flex items-start gap-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300"><input className="mt-1 shrink-0" type="checkbox" checked={contact.authorizedPickup} onChange={(event) => update(index, { authorizedPickup: event.target.checked })} />Autorisé(e) à récupérer l’élève</label>
-              <label className="flex items-start gap-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300"><input className="mt-1 shrink-0" type="checkbox" checked={contact.emergencyContact} onChange={(event) => update(index, { emergencyContact: event.target.checked })} />Contact d’urgence</label>
+              <label className="flex items-start gap-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300"><input className="mt-1 shrink-0" type="checkbox" checked={contact.authorizedPickup} onChange={(event) => update(index, { authorizedPickup: event.target.checked })} />AutorisÃ©(e) Ã  rÃ©cupÃ©rer lâ€™Ã©lÃ¨ve</label>
+              <label className="flex items-start gap-2 text-xs font-semibold leading-5 text-gray-600 dark:text-gray-300"><input className="mt-1 shrink-0" type="checkbox" checked={contact.emergencyContact} onChange={(event) => update(index, { emergencyContact: event.target.checked })} />Contact dâ€™urgence</label>
             </div>
           </article>
         ))}
@@ -474,9 +474,9 @@ const buildOfficialTranscript = (student: AdminStudentRecord) => {
     totalCredits: 0,
     cumulativeGpa: 0,
     cumulativeAverage: 0,
-    classRank: 'Aucune donnée officielle',
+    classRank: 'Aucune donnÃ©e officielle',
     generatedAt: new Date().toLocaleDateString(),
-    graduationStatus: 'Aucune note approuvée : le transcript officiel ne peut pas encore être généré.',
+    graduationStatus: 'Aucune note approuvÃ©e : le transcript officiel ne peut pas encore Ãªtre gÃ©nÃ©rÃ©.',
   }
 }
 
@@ -503,7 +503,7 @@ const printOfficialTranscript = async (transcript: ReturnType<typeof buildOffici
   const logoUrl = new URL(SCHOOL_SEAL_SRC, window.location.origin).href
   const rows = transcript.rows.flatMap((year) => year.courses.map((course, index) => `<tr><td>${index === 0 ? `<b>${escapeHtml(year.year)}</b><small>${escapeHtml(year.grade)}</small>` : ''}</td><td>${escapeHtml(course.course)}</td><td class="num">${course.credit}</td><td class="num">${course.average}%</td><td class="grade">${escapeHtml(course.letter)}</td><td class="num">${course.gpa}</td></tr>`)).join('') || '<tr><td colspan="6" class="empty">No approved academic results are available for this student yet.</td></tr>'
   printWindow.document.open()
-  printWindow.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(documentId)} — Official Transcript</title><style>
+  printWindow.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(documentId)} â€” Official Transcript</title><style>
 @page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}:root{--navy:#0f2352;--blue:#004080;--cyan:#12bde3;--pale:#f4f8fc;--line:#cfdae7}
 body{margin:0;background:#eaf0f6;color:#17233b;font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.sheet{position:relative;width:210mm;min-height:297mm;margin:15px auto;padding:12mm 13mm 10mm;background:#fff;border-top:5mm solid var(--navy);box-shadow:0 20px 60px #10255225;overflow:hidden}.sheet:before{content:"";position:absolute;inset:4mm;border:1px solid #12bde377}.watermark{position:absolute;left:50%;top:50%;width:135mm;height:135mm;object-fit:contain;opacity:.04;transform:translate(-50%,-50%) rotate(-9deg);filter:grayscale(1)}.content{position:relative;z-index:1}
 header{display:grid;grid-template-columns:26mm 1fr auto;align-items:center;gap:6mm;padding-bottom:5mm;border-bottom:1.5mm solid var(--cyan)}.logo-box{width:25mm;height:25mm;padding:1.5mm;border:1mm solid var(--cyan);border-radius:50%;background:white;box-shadow:0 0 0 1mm #edf4fb}.logo{width:100%;height:100%;object-fit:contain;border-radius:50%}.school{margin:0;color:var(--blue);font:700 18pt Georgia,serif}.motto{margin:1mm 0 0;color:#64748b;font-size:7pt;font-weight:800;letter-spacing:.16em;text-transform:uppercase}.official{padding:3mm 4mm;background:var(--navy);color:white;border-bottom:1.5mm solid var(--cyan);text-align:right}.official b{display:block;color:#75ddf4;font-size:8pt;letter-spacing:.12em}.official span{font-size:6.5pt}
@@ -511,7 +511,7 @@ header{display:grid;grid-template-columns:26mm 1fr auto;align-items:center;gap:6
 table{width:100%;border-collapse:collapse;font-size:7.3pt}th{padding:2.4mm;background:var(--blue);color:white;text-align:left;font-size:6pt;letter-spacing:.08em;text-transform:uppercase}td{padding:2.1mm;border-bottom:1px solid var(--line)}tbody tr:nth-child(even) td{background:#f6f9fc}td small{display:block;margin-top:.5mm;color:#718096}.num{text-align:right}.grade{color:var(--blue);font-weight:900;text-align:right}.empty{text-align:center;padding:9mm;color:#65758a}.status{margin-top:4mm;padding:3mm 4mm;border:1px solid #b8d5c2;border-left:1.5mm solid #278552;background:#f0faf4;color:#1d633e;font-size:7pt;font-weight:700}
 .auth{display:grid;grid-template-columns:27mm 1fr;gap:4mm;align-items:center;margin-top:4mm;padding:3.5mm;border:1px solid var(--line);background:var(--pale)}.qr{width:25mm;height:25mm;padding:1mm;background:white;border:1px solid var(--cyan)}.auth h3{margin:0;color:var(--navy);font-size:8pt;letter-spacing:.1em;text-transform:uppercase}.auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:1mm 4mm;margin-top:1.5mm;font-size:6pt}.auth-grid b{color:var(--blue)}.url{grid-column:1/-1;overflow-wrap:anywhere;color:#526477}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:8mm;align-items:end;margin-top:9mm}.signature{padding-top:2mm;border-top:1px solid #78879a;color:#526477;font-size:6.5pt;font-weight:700}.seal{display:flex;align-items:center;justify-content:center;height:23mm;border:1mm double var(--cyan);border-radius:50%;color:var(--blue);font-size:6pt;font-weight:900;text-align:center;transform:rotate(-5deg)}footer{display:flex;justify-content:space-between;gap:5mm;margin-top:5mm;padding-top:2mm;border-top:1px solid var(--cyan);color:#68788c;font-size:5.5pt}footer b{color:var(--navy)}
 @media print{body{background:white}.sheet{width:auto;min-height:279mm;margin:0;padding:9mm 10mm 7mm;box-shadow:none}.sheet:before{inset:2mm}}
-</style></head><body><main class="sheet"><img class="watermark" src="${escapeHtml(logoUrl)}" alt=""><div class="content"><header><div class="logo-box"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"></div><div><h2 class="school">${escapeHtml(SCHOOL_NAME)}</h2><p class="motto">Knowledge · Character · Service</p></div><div class="official"><b>OFFICIAL RECORD</b><span>Secure academic document</span></div></header><section class="title"><p>Office of Academic Records</p><h1>Official Academic Transcript</h1></section><section class="identity"><div class="field"><span>Student full name</span><b>${escapeHtml(transcript.student.name)}</b></div><div class="field"><span>Student ID</span><b>${escapeHtml(transcript.student.studentNumber ?? transcript.student.id)}</b></div><div class="field"><span>Current class</span><b>${escapeHtml(formatClassName(transcript.student.grade, transcript.student.section))}</b></div></section><section class="metrics"><div class="metric"><span>Cumulative GPA</span><b>${transcript.student.gpa == null ? '—' : transcript.cumulativeGpa}</b></div><div class="metric"><span>Average</span><b>${transcript.cumulativeAverage}%</b></div><div class="metric"><span>Credits earned</span><b>${transcript.totalCredits}</b></div><div class="metric"><span>Class standing</span><b>${escapeHtml(transcript.classRank)}</b></div></section><table><thead><tr><th>Academic year / Grade</th><th>Course title</th><th class="num">Credit</th><th class="num">Average</th><th class="num">Grade</th><th class="num">GPA</th></tr></thead><tbody>${rows}</tbody></table><div class="status">${escapeHtml(transcript.graduationStatus)}</div><section class="auth"><img class="qr" src="${qrCode}" alt="QR verification code"><div><h3>International digital authentication</h3><div class="auth-grid"><span><b>Document ID:</b> ${escapeHtml(documentId)}</span><span><b>Generated:</b> ${escapeHtml(generatedIso)}</span><span><b>Integrity fingerprint:</b> ${escapeHtml(fingerprint)}</span><span><b>QR standard:</b> ISO/IEC 18004 · Level H</span><span><b>Issuer:</b> KCS Nexus Academic Records</span><span><b>Policy:</b> Approved records only</span><span class="url"><b>Canonical production verification:</b> ${escapeHtml(verificationUrl)}</span></div></div></section><section class="signatures"><div class="signature">Registrar / Academic Records Officer</div><div class="signature">School Director / Authorized Signature</div></section><footer><span>Valid only with its document ID, integrity fingerprint and QR verification.</span><span><b>${escapeHtml(documentId)}</b> · Page 1/1</span></footer></div></main><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`)
+</style></head><body><main class="sheet"><img class="watermark" src="${escapeHtml(logoUrl)}" alt=""><div class="content"><header><div class="logo-box"><img class="logo" src="${escapeHtml(logoUrl)}" alt="KCS logo"></div><div><h2 class="school">${escapeHtml(SCHOOL_NAME)}</h2><p class="motto">Knowledge Â· Character Â· Service</p></div><div class="official"><b>OFFICIAL RECORD</b><span>Secure academic document</span></div></header><section class="title"><p>Office of Academic Records</p><h1>Official Academic Transcript</h1></section><section class="identity"><div class="field"><span>Student full name</span><b>${escapeHtml(transcript.student.name)}</b></div><div class="field"><span>Student ID</span><b>${escapeHtml(transcript.student.studentNumber ?? transcript.student.id)}</b></div><div class="field"><span>Current class</span><b>${escapeHtml(formatClassName(transcript.student.grade, transcript.student.section))}</b></div></section><section class="metrics"><div class="metric"><span>Cumulative GPA</span><b>${transcript.student.gpa == null ? 'â€”' : transcript.cumulativeGpa}</b></div><div class="metric"><span>Average</span><b>${transcript.cumulativeAverage}%</b></div><div class="metric"><span>Credits earned</span><b>${transcript.totalCredits}</b></div><div class="metric"><span>Class standing</span><b>${escapeHtml(transcript.classRank)}</b></div></section><table><thead><tr><th>Academic year / Grade</th><th>Course title</th><th class="num">Credit</th><th class="num">Average</th><th class="num">Grade</th><th class="num">GPA</th></tr></thead><tbody>${rows}</tbody></table><div class="status">${escapeHtml(transcript.graduationStatus)}</div><section class="auth"><img class="qr" src="${qrCode}" alt="QR verification code"><div><h3>International digital authentication</h3><div class="auth-grid"><span><b>Document ID:</b> ${escapeHtml(documentId)}</span><span><b>Generated:</b> ${escapeHtml(generatedIso)}</span><span><b>Integrity fingerprint:</b> ${escapeHtml(fingerprint)}</span><span><b>QR standard:</b> ISO/IEC 18004 Â· Level H</span><span><b>Issuer:</b> KCS Nexus Academic Records</span><span><b>Policy:</b> Approved records only</span><span class="url"><b>Canonical production verification:</b> ${escapeHtml(verificationUrl)}</span></div></div></section><section class="signatures"><div class="signature">Registrar / Academic Records Officer</div><div class="signature">School Director / Authorized Signature</div></section><footer><span>Valid only with its document ID, integrity fingerprint and QR verification.</span><span><b>${escapeHtml(documentId)}</b> Â· Page 1/1</span></footer></div></main><script>window.addEventListener('load',()=>setTimeout(()=>window.print(),350));<\/script></body></html>`)
   printWindow.document.close()
   printWindow.focus()
   window.setTimeout(() => printWindow.print(), 550)
@@ -695,8 +695,8 @@ const buildReportRows = (
 
   if (category === 'academic' || category === 'executive') {
     rows.push(
-      { section: 'Academique', metric: 'GPA moyen', value: averageGpa ?? 'Aucune donnée', detail: `Moyenne academique globale calculee sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matieres sous la moyenne.' },
-      { section: 'Academique', metric: 'Assiduite moyenne', value: averageAttendance == null ? 'Aucune donnée' : `${averageAttendance}%`, detail: averageAttendance == null ? 'Aucune présence réelle n’a encore été saisie.' : `Presence moyenne pour le rapport ${cadenceNote}.`, action: 'Declencher un suivi parent pour les presences inferieures a 88%.' },
+      { section: 'Academique', metric: 'GPA moyen', value: averageGpa ?? 'Aucune donnÃ©e', detail: `Moyenne academique globale calculee sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matieres sous la moyenne.' },
+      { section: 'Academique', metric: 'Assiduite moyenne', value: averageAttendance == null ? 'Aucune donnÃ©e' : `${averageAttendance}%`, detail: averageAttendance == null ? 'Aucune prÃ©sence rÃ©elle nâ€™a encore Ã©tÃ© saisie.' : `Presence moyenne pour le rapport ${cadenceNote}.`, action: 'Declencher un suivi parent pour les presences inferieures a 88%.' },
       { section: 'Academique', metric: 'Eleves a risque', value: needsAction, detail: `${needsAction} eleves combinent risque academique, presence ou discipline.`, action: 'Assigner un plan de soutien et une date de suivi.' },
     )
   }
@@ -1141,7 +1141,7 @@ const buildAdminReportDocument = (
           <th>{tr('Indicateur','Indicator')}</th>
           <th>{tr('Valeur','Value')}</th>
           <th>Detail</th>
-          <th>{tr('Action recommandée','Recommended action')}</th>
+          <th>{tr('Action recommandÃ©e','Recommended action')}</th>
         </tr>
       </thead>
       <tbody>${escapedRows}</tbody>
@@ -1244,21 +1244,21 @@ const MainTeacherAssignmentPanel = () => {
     setBusy(true)
     try {
       await mainTeacherAPI.assign(teacherId, { status: "HOMEROOM_TEACHER", homeroomGrade: grade, homeroomSection: section })
-      setNotice(tr("Main Teacher affecté. Ses autres cours et son statut employé sont conservés.", "Main Teacher assigned. Other courses and employee status remain unchanged."))
+      setNotice(tr("Main Teacher affectÃ©. Ses autres cours et son statut employÃ© sont conservÃ©s.", "Main Teacher assigned. Other courses and employee status remain unchanged."))
       await load()
     } catch (error: any) { setNotice(error?.response?.data?.message || tr("Affectation impossible.", "Assignment failed.")); setBusy(false) }
   }
   const release = async (id: string) => {
     setBusy(true)
-    try { await mainTeacherAPI.assign(id, { status: "TEACHER" }); setNotice(tr("Affectation Main Teacher retirée; le compte enseignant et employé reste actif.", "Main Teacher assignment removed; teacher and employee account stays active.")); await load() }
+    try { await mainTeacherAPI.assign(id, { status: "TEACHER" }); setNotice(tr("Affectation Main Teacher retirÃ©e; le compte enseignant et employÃ© reste actif.", "Main Teacher assignment removed; teacher and employee account stays active.")); await load() }
     catch (error: any) { setNotice(error?.response?.data?.message || tr("Modification impossible.", "Update failed.")); setBusy(false) }
   }
   const name = (item: any) => [item.user?.lastName, item.user?.middleName, item.user?.firstName].filter(Boolean).join(" ")
   return <div className="space-y-6">
     <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr("Responsabilité de classe", "Class responsibility")}</p>
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr("ResponsabilitÃ© de classe", "Class responsibility")}</p>
       <h2 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr("Affectation des Main Teachers", "Main Teacher Assignment")}</h2>
-      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr("Réservé à l Administrator. Le Main Teacher fait la présence quotidienne de sa classe, contrôle le dossier du bulletin, rédige seul le commentaire général et soumet le bulletin à l administration. Il demeure employé et peut enseigner plusieurs autres cours et classes.", "Reserved for the operational Administrator. The Main Teacher records daily attendance for the assigned class, reviews the report-card file, is the only teacher who writes its general comment, and submits it to administration. The teacher remains an employee and may teach other courses and classes.")}</p>
+      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr("RÃ©servÃ© Ã  l Administrator. Le Main Teacher fait la prÃ©sence quotidienne de sa classe, contrÃ´le le dossier du bulletin, rÃ©dige seul le commentaire gÃ©nÃ©ral et soumet le bulletin Ã  l administration. Il demeure employÃ© et peut enseigner plusieurs autres cours et classes.", "Reserved for the operational Administrator. The Main Teacher records daily attendance for the assigned class, reviews the report-card file, is the only teacher who writes its general comment, and submits it to administration. The teacher remains an employee and may teach other courses and classes.")}</p>
       <div className="mt-5 grid gap-3 md:grid-cols-3">
         <select value={teacherId} onChange={(event) => setTeacherId(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="">{tr("Choisir un enseignant", "Choose a teacher")}</option>{teachers.map((item) => <option key={item.id} value={item.id}>{name(item)}</option>)}</select>
         <select value={grade} onChange={(event) => setGrade(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((item) => <option key={item}>{item}</option>)}</select>
@@ -1269,7 +1269,7 @@ const MainTeacherAssignmentPanel = () => {
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
       <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-bold text-kcs-blue-950 dark:text-white">{tr("Affectations actuelles", "Current assignments")}</h3><p className="text-sm text-slate-500">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").length} Main Teacher(s)</p></div><button type="button" onClick={() => void load()} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr("Actualiser", "Refresh")}</button></div>
-      <div className="mt-4 space-y-3">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").map((item) => <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-slate-100 p-4 dark:border-kcs-blue-800 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-sm text-slate-500">{item.homeroomGrade}{item.homeroomSection ? " · " + item.homeroomSection : ""} · {item._count?.courses || 0} {tr("cours enseigné(s)", "course(s) taught")}</p></div><button type="button" disabled={busy} onClick={() => void release(item.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 dark:border-red-800 dark:text-red-300">{tr("Retirer cette responsabilité", "Remove this responsibility")}</button></article>)}{!busy && !teachers.some((item) => item.status === "HOMEROOM_TEACHER") && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-kcs-blue-950/50">{tr("Aucune affectation enregistrée.", "No assignment recorded.")}</p>}</div>
+      <div className="mt-4 space-y-3">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").map((item) => <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-slate-100 p-4 dark:border-kcs-blue-800 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-sm text-slate-500">{item.homeroomGrade}{item.homeroomSection ? " Â· " + item.homeroomSection : ""} Â· {item._count?.courses || 0} {tr("cours enseignÃ©(s)", "course(s) taught")}</p></div><button type="button" disabled={busy} onClick={() => void release(item.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 dark:border-red-800 dark:text-red-300">{tr("Retirer cette responsabilitÃ©", "Remove this responsibility")}</button></article>)}{!busy && !teachers.some((item) => item.status === "HOMEROOM_TEACHER") && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-kcs-blue-950/50">{tr("Aucune affectation enregistrÃ©e.", "No assignment recorded.")}</p>}</div>
     </section>
   </div>
 }
@@ -1320,6 +1320,8 @@ const AdminSectionView = ({
   const [admissionApproving, setAdmissionApproving] = useState('')
   const [admissionNotice, setAdmissionNotice] = useState('')
   const [parentNotice, setParentNotice] = useState('')
+  const [parentAccess, setParentAccess] = useState<Record<string, any>>({})
+  const [parentAccessBusy, setParentAccessBusy] = useState('')
   const [apiSynced, setApiSynced] = useState(false)
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
   const [showCreateStudent, setShowCreateStudent] = useState(false)
@@ -1402,7 +1404,7 @@ const AdminSectionView = ({
       const emailQueued = response.data?.data?.emailQueued ?? 0
       const estimatedMinutes = response.data?.data?.estimatedMinutes ?? 0
       setCommunicationSubject(''); setCommunicationBody('')
-      setSentNotice(language === 'fr' ? 'Communication enregistrée pour ' + count + ' destinataire(s) ; ' + emailQueued + ' e-mail(s) mis en file (~' + estimatedMinutes + ' min).' : 'Communication recorded for ' + count + ' recipient(s); ' + emailQueued + ' email(s) queued (~' + estimatedMinutes + ' min).')
+      setSentNotice(language === 'fr' ? 'Communication enregistrÃ©e pour ' + count + ' destinataire(s) ; ' + emailQueued + ' e-mail(s) mis en file (~' + estimatedMinutes + ' min).' : 'Communication recorded for ' + count + ' recipient(s); ' + emailQueued + ' email(s) queued (~' + estimatedMinutes + ' min).')
       const history = await messagesAPI.getAll({ box: 'sent' })
       const rows = history.data?.data ?? []
       setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.lastName,message.recipient.middleName,message.recipient.firstName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.lastName,message.sender.middleName,message.sender.firstName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(), status: message.readAt ? 'Read' : 'Delivered' })))
@@ -1497,7 +1499,7 @@ const AdminSectionView = ({
       try {
         await refreshOfficialRoster()
       } catch {
-        // Le prochain cycle retentera sans vider le registre affiché.
+        // Le prochain cycle retentera sans vider le registre affichÃ©.
       } finally {
         refreshInFlight = false
       }
@@ -1517,7 +1519,7 @@ const AdminSectionView = ({
     const parentName = [newFamily.parentLastName, newFamily.parentMiddleName, newFamily.parentFirstName].filter(Boolean).join(' ').trim()
     const readyStudents = newFamily.students.map((student) => ({ ...student, name: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ').trim() })).filter((student) => student.lastName.trim() && student.firstName.trim())
     if (readyStudents.length === 0 || !newFamily.parentLastName.trim() || !newFamily.parentFirstName.trim()) {
-      setStudentNotice('Le parent et au moins un élève sont requis avant l’enregistrement.')
+      setStudentNotice('Le parent et au moins un Ã©lÃ¨ve sont requis avant lâ€™enregistrement.')
       return
     }
 
@@ -1526,7 +1528,7 @@ const AdminSectionView = ({
       .filter(Boolean)
       .filter((studentNumber, index, values) => values.indexOf(studentNumber) !== index)
     if (duplicateStudentNumbers.length > 0) {
-      setStudentNotice(`Doublon détecté dans la saisie. Numéro d’élève répété: ${Array.from(new Set(duplicateStudentNumbers)).join(', ')}`)
+      setStudentNotice(`Doublon dÃ©tectÃ© dans la saisie. NumÃ©ro dâ€™Ã©lÃ¨ve rÃ©pÃ©tÃ©: ${Array.from(new Set(duplicateStudentNumbers)).join(', ')}`)
       return
     }
 
@@ -1535,7 +1537,7 @@ const AdminSectionView = ({
       .filter(Boolean)
       .filter((email, index, values) => values.indexOf(email) !== index)
     if (duplicateStudentEmails.length > 0) {
-      setStudentNotice(`Doublon détecté dans la saisie. Email élève répété: ${Array.from(new Set(duplicateStudentEmails)).join(', ')}`)
+      setStudentNotice(`Doublon dÃ©tectÃ© dans la saisie. Email Ã©lÃ¨ve rÃ©pÃ©tÃ©: ${Array.from(new Set(duplicateStudentEmails)).join(', ')}`)
       return
     }
 
@@ -1595,14 +1597,14 @@ const AdminSectionView = ({
       const temporaryCredentials = response.data?.data?.temporaryCredentials
       if (temporaryCredentials) setFamilyCredentials(temporaryCredentials)
       const credentialSummary = [
-        temporaryCredentials?.parent?.temporaryPassword ? `Parent: ${temporaryCredentials.parent.username} · Code: ${temporaryCredentials.parent.accessCode || 'non défini'} · Mot de passe: ${temporaryCredentials.parent.temporaryPassword}` : null,
+        temporaryCredentials?.parent?.temporaryPassword ? `Parent: ${temporaryCredentials.parent.username} Â· Code: ${temporaryCredentials.parent.accessCode || 'non dÃ©fini'} Â· Mot de passe: ${temporaryCredentials.parent.temporaryPassword}` : null,
         ...(temporaryCredentials?.students ?? [])
           .filter((credential: { temporaryPassword?: string }) => credential.temporaryPassword)
-          .map((credential: { studentId: string; username: string; accessCode?: string; temporaryPassword: string }) => `${credential.studentId}: ${credential.username} · Code: ${credential.accessCode || 'non défini'} · Mot de passe: ${credential.temporaryPassword}`),
+          .map((credential: { studentId: string; username: string; accessCode?: string; temporaryPassword: string }) => `${credential.studentId}: ${credential.username} Â· Code: ${credential.accessCode || 'non dÃ©fini'} Â· Mot de passe: ${credential.temporaryPassword}`),
       ].filter(Boolean).join(' | ')
-      setStudentNotice(`Famille enregistrée avec ${finalRecords.length} élève(s). Accès temporaires: ${credentialSummary || 'déjà définis'}. Format commun: KCS-123456, à changer à la première connexion.`)
+      setStudentNotice(`Famille enregistrÃ©e avec ${finalRecords.length} Ã©lÃ¨ve(s). AccÃ¨s temporaires: ${credentialSummary || 'dÃ©jÃ  dÃ©finis'}. Format commun: KCS-123456, Ã  changer Ã  la premiÃ¨re connexion.`)
     } catch (error) {
-      setStudentNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cette famille pour le moment.'))
+      setStudentNotice(extractStudentApiMessage(error, 'Impossible dâ€™enregistrer cette famille pour le moment.'))
       return
     }
     const refreshedRoster = await refreshOfficialRoster()
@@ -1626,6 +1628,28 @@ const AdminSectionView = ({
     setStudentNotice('')
   }
 
+  const loadParentAccessStatuses = async () => {
+    try {
+      const response = await registryAPI.parentAccessStatuses()
+      const map: Record<string, any> = {}
+      for (const item of response.data?.data ?? []) for (const key of [item.id, item.orbitUserId, item.email, item.accessCode].filter(Boolean)) map[String(key)] = item
+      setParentAccess(map)
+    } catch (error) { setParentNotice(extractStudentApiMessage(error, 'Unable to load parent access status.')) }
+  }
+
+  useEffect(() => { if (segment === 'parents') void loadParentAccessStatuses() }, [segment])
+
+  const toggleParentAccess = async (parent: AdminParentRecord) => {
+    const blocked = Boolean(parentAccess[parent.id]?.accountBlockedAt)
+    const reason = blocked ? undefined : window.prompt('Reason for blocking this parent account:')?.trim()
+    if (!blocked && !reason) return
+    if (!window.confirm((blocked ? 'Unblock ' : 'Block immediately and revoke sessions for ') + parent.name + '?')) return
+    setParentAccessBusy(parent.id)
+    try { await registryAPI.setParentAccess(parent.id, !blocked, reason); setParentNotice(blocked ? 'Parent account unblocked.' : 'Parent account blocked and sessions revoked.'); await loadParentAccessStatuses() }
+    catch (error) { setParentNotice(extractStudentApiMessage(error, 'Unable to update parent access.')) }
+    finally { setParentAccessBusy('') }
+  }
+
   const resetEntityAccess = async (entityType: 'parent' | 'student', entity: AdminParentRecord | AdminStudentRecord) => {
     const identifier = entityType === 'parent'
       ? entity.id
@@ -1643,7 +1667,7 @@ const AdminSectionView = ({
       if (entityType === 'parent') setParentNotice(message)
       else setStudentNotice(message)
     } catch (error) {
-      const message = extractStudentApiMessage(error, 'Impossible de réinitialiser cet accès.')
+      const message = extractStudentApiMessage(error, 'Impossible de rÃ©initialiser cet accÃ¨s.')
       if (entityType === 'parent') setParentNotice(message)
       else setStudentNotice(message)
       setFamilyCredentials({ error: true, message, reset: { entityType, identifier }, parent: null, students: [] })
@@ -1655,12 +1679,12 @@ const AdminSectionView = ({
 
     const normalizedName = `${studentEditForm.lastName} ${studentEditForm.middleName} ${studentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
     if (!normalizedName) {
-      setStudentNotice('Le prénom et le nom de l’élève sont obligatoires pour enregistrer les modifications.')
+      setStudentNotice('Le prÃ©nom et le nom de lâ€™Ã©lÃ¨ve sont obligatoires pour enregistrer les modifications.')
       return
     }
 
     if (!studentEditForm.studentNumber.trim()) {
-      setStudentNotice('Le numéro d’élève est obligatoire pour empêcher les doublons.')
+      setStudentNotice('Le numÃ©ro dâ€™Ã©lÃ¨ve est obligatoire pour empÃªcher les doublons.')
       return
     }
 
@@ -1686,7 +1710,7 @@ const AdminSectionView = ({
         .map((contact) => ({
           ...contact,
           middleName: contact.middleName.trim() || undefined,
-          relationship: contact.relationship.trim() || (contact.kind === 'MOTHER' ? 'Mère' : contact.kind === 'RELATIVE' ? 'Membre de la famille' : 'Agent de la famille'),
+          relationship: contact.relationship.trim() || (contact.kind === 'MOTHER' ? 'MÃ¨re' : contact.kind === 'RELATIVE' ? 'Membre de la famille' : 'Agent de la famille'),
           role: contact.role.trim() || undefined,
           email: contact.email.trim() || undefined,
           phone: contact.phone.trim() || undefined,
@@ -1695,7 +1719,7 @@ const AdminSectionView = ({
       if (parentId) {
         await registryAPI.updateEntity('parent', parentId, { familyContacts }, 'orbitId')
       } else if (familyContacts.length > 0) {
-        throw new Error('Aucun parent responsable officiel ne permet d’enregistrer ces contacts familiaux.')
+        throw new Error('Aucun parent responsable officiel ne permet dâ€™enregistrer ces contacts familiaux.')
       }
       const roster = await refreshOfficialRoster()
       const updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
@@ -1707,20 +1731,20 @@ const AdminSectionView = ({
       }
       setEditingStudent(null)
       const delivery = response.data?.data?.notificationDelivery
-      const successMessage = response.data?.message || `${normalizedName} a été mis à jour avec succès.`
+      const successMessage = response.data?.message || `${normalizedName} a Ã©tÃ© mis Ã  jour avec succÃ¨s.`
       setStudentNotice(successMessage)
       setDetailDialog({
-        title: 'Modification enregistrée',
+        title: 'Modification enregistrÃ©e',
         subtitle: normalizedName,
         details: [
-          ['Résultat', successMessage],
-          ['Dashboard', delivery?.dashboard ? 'Message ajouté aux tableaux de bord concernés' : 'Notification interne en attente'],
-          ['E-mail', delivery?.email?.sent ? 'E-mail envoyé' : `Non envoyé (${delivery?.email?.reason || 'configuration indisponible'})`],
-          ['SMS', delivery?.sms?.sent ? 'SMS envoyé' : `Non envoyé (${delivery?.sms?.reason || 'configuration indisponible'})`],
+          ['RÃ©sultat', successMessage],
+          ['Dashboard', delivery?.dashboard ? 'Message ajoutÃ© aux tableaux de bord concernÃ©s' : 'Notification interne en attente'],
+          ['E-mail', delivery?.email?.sent ? 'E-mail envoyÃ©' : `Non envoyÃ© (${delivery?.email?.reason || 'configuration indisponible'})`],
+          ['SMS', delivery?.sms?.sent ? 'SMS envoyÃ©' : `Non envoyÃ© (${delivery?.sms?.reason || 'configuration indisponible'})`],
         ],
       })
     } catch (error) {
-      setStudentNotice(extractStudentApiMessage(error, 'Impossible de modifier cet élève pour le moment.'))
+      setStudentNotice(extractStudentApiMessage(error, 'Impossible de modifier cet Ã©lÃ¨ve pour le moment.'))
     } finally {
       setSavingStudentEdit(false)
     }
@@ -1728,7 +1752,7 @@ const AdminSectionView = ({
 
   const deleteOfficialStudent = async (student: AdminStudentRecord) => {
     if (!student.isDeletable) {
-      setStudentNotice(`L’élève ${student.name} est géré par ${student.managingApp || 'une autre application'} et doit être supprimé dans son système source.`)
+      setStudentNotice(`Lâ€™Ã©lÃ¨ve ${student.name} est gÃ©rÃ© par ${student.managingApp || 'une autre application'} et doit Ãªtre supprimÃ© dans son systÃ¨me source.`)
       return
     }
 
@@ -1737,7 +1761,7 @@ const AdminSectionView = ({
     try {
       const response = await studentsAPI.delete(student.id)
       await refreshOfficialRoster()
-      setStudentNotice(response.data?.message || `${student.name} a été supprimé du registre officiel.`)
+      setStudentNotice(response.data?.message || `${student.name} a Ã©tÃ© supprimÃ© du registre officiel.`)
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${student.name} pour le moment.`))
       return
@@ -1759,7 +1783,7 @@ const AdminSectionView = ({
 
     const normalizedName = `${parentEditForm.lastName} ${parentEditForm.middleName} ${parentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
     if (!normalizedName) {
-      setParentNotice('Le prénom et le nom du parent sont obligatoires pour enregistrer les modifications.')
+      setParentNotice('Le prÃ©nom et le nom du parent sont obligatoires pour enregistrer les modifications.')
       return
     }
 
@@ -1767,7 +1791,7 @@ const AdminSectionView = ({
     try {
       for (const student of parentEditStudents) {
         if (!student.firstName.trim() || !student.lastName.trim() || !student.studentNumber.trim()) {
-          throw new Error('Chaque enfant lié doit avoir un nom, un prénom et un identifiant.')
+          throw new Error('Chaque enfant liÃ© doit avoir un nom, un prÃ©nom et un identifiant.')
         }
         const original = editingParent.students.find((item) => item.id === student.id)
         const originalForm = createAdminStudentEditForm(original ?? null)
@@ -1793,10 +1817,10 @@ const AdminSectionView = ({
 
       const readyNewStudents = parentNewStudents.filter((student) => student.firstName.trim() || student.lastName.trim())
       if (readyNewStudents.some((student) => !student.firstName.trim() || !student.lastName.trim() || !student.dateOfBirth)) {
-        throw new Error('Complétez le nom, le prénom et la date de naissance de chaque nouvel enfant.')
+        throw new Error('ComplÃ©tez le nom, le prÃ©nom et la date de naissance de chaque nouvel enfant.')
       }
       if (readyNewStudents.length > 0 && !parentEditForm.email.trim()) {
-        throw new Error('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
+        throw new Error('Lâ€™e-mail du parent est requis pour crÃ©er et transmettre les accÃ¨s du nouvel enfant.')
       }
       let createdStudentIds: string[] = []
       if (readyNewStudents.length > 0) {
@@ -1892,7 +1916,7 @@ const AdminSectionView = ({
 
   const saveTeacherRecord = async () => {
     if (!teacherForm.firstName.trim() || !teacherForm.lastName.trim()) {
-      setTeacherNotice('Le prénom et le nom de l’employé sont obligatoires.')
+      setTeacherNotice('Le prÃ©nom et le nom de lâ€™employÃ© sont obligatoires.')
       return
     }
     const payload = {
@@ -1912,19 +1936,19 @@ const AdminSectionView = ({
         : await registryAPI.createEntity('teacher', payload)
       clearTeacherForm()
       await refreshOfficialRoster()
-      setTeacherNotice(response.data?.message || (editingTeacherId ? 'Employé modifié et propagé.' : 'Employé ajouté et propagé.'))
+      setTeacherNotice(response.data?.message || (editingTeacherId ? 'EmployÃ© modifiÃ© et propagÃ©.' : 'EmployÃ© ajoutÃ© et propagÃ©.'))
     } catch (error) {
-      setTeacherNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cet employé.'))
+      setTeacherNotice(extractStudentApiMessage(error, 'Impossible dâ€™enregistrer cet employÃ©.'))
     }
   }
 
   const deleteTeacherRecord = async (teacher: SharedDirectoryTeacher) => {
-    if (!window.confirm(`Supprimer ${teacher.fullName} du registre partagé ?`)) return
+    if (!window.confirm(`Supprimer ${teacher.fullName} du registre partagÃ© ?`)) return
     try {
       const response = await registryAPI.deleteEntity('teacher', teacher.id)
       if (editingTeacherId === teacher.id) clearTeacherForm()
       await refreshOfficialRoster()
-      setTeacherNotice(response.data?.message || `${teacher.fullName} a été supprimé et la suppression a été propagée.`)
+      setTeacherNotice(response.data?.message || `${teacher.fullName} a Ã©tÃ© supprimÃ© et la suppression a Ã©tÃ© propagÃ©e.`)
     } catch (error) {
       setTeacherNotice(extractStudentApiMessage(error, `Impossible de supprimer ${teacher.fullName}.`))
     }
@@ -2019,7 +2043,7 @@ const AdminSectionView = ({
       .filter((student) => familyFilter === 'All' || student.parent === familyFilter)
       .filter((student) => {
         if (!query) return true
-        const className = formatClassName(student.grade, student.section) || 'Non assignée'
+        const className = formatClassName(student.grade, student.section) || 'Non assignÃ©e'
         const divisionTitle = getDivisionForGrade(student.grade).title
         return [student.name, student.studentNumber, student.email, student.grade, student.section, className, divisionTitle, student.parent, student.parentEmail, student.parentPhone, student.status]
           .filter(Boolean)
@@ -2096,16 +2120,16 @@ const AdminSectionView = ({
     return (
       <div className="space-y-6">
         {familyCredentials && createPortal((
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants gÃ©nÃ©rÃ©s">
             <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl dark:border-emerald-900 dark:bg-kcs-blue-950">
               <button type="button" onClick={() => setFamilyCredentials(null)} className="float-right rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button>
-              <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Nouvel enfant enregistré'}</p>
-              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Identifiants générés et propagés'}</h3>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Conservez ces informations dans un canal sûr. Le mot de passe devra être changé à la première connexion.</p>
-              {familyCredentials.loading ? <div className="mt-6 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
+              <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.loading ? 'RÃ©initialisation en cours' : familyCredentials.error ? 'RÃ©initialisation impossible' : familyCredentials.reset ? 'RÃ©initialisation terminÃ©e' : 'Nouvel enfant enregistrÃ©'}</p>
+              <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'PrÃ©paration du nouvel accÃ¨sâ€¦' : familyCredentials.error ? 'Le nouvel accÃ¨s nâ€™a pas pu Ãªtre gÃ©nÃ©rÃ©' : familyCredentials.reset ? `Nouvel accÃ¨s de ${familyCredentials.reset.identifier}` : 'Identifiants gÃ©nÃ©rÃ©s et propagÃ©s'}</h3>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-300">Conservez ces informations dans un canal sÃ»r. Le mot de passe devra Ãªtre changÃ© Ã  la premiÃ¨re connexion.</p>
+              {familyCredentials.loading ? <div className="mt-6 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accÃ¨s et des notificationsâ€¦</div> : null}
               {familyCredentials.error ? <p className="mt-6 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}
               <div className="mt-6 grid gap-3 md:grid-cols-2">
-                {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-2xl bg-emerald-50 p-5 text-kcs-blue-950 dark:bg-emerald-950/30 dark:text-white"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{credential.studentId ? `Élève ${credential.studentId}` : 'Parent'}</p><p className="mt-3 font-bold">{credential.displayName || credential.studentId}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d’accès : <strong>{credential.accessCode || 'Non défini'}</strong></p><p className="mt-2 text-sm">Mot de passe temporaire : <strong>{credential.temporaryPassword}</strong></p></article>)}
+                {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-2xl bg-emerald-50 p-5 text-kcs-blue-950 dark:bg-emerald-950/30 dark:text-white"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{credential.studentId ? `Ã‰lÃ¨ve ${credential.studentId}` : 'Parent'}</p><p className="mt-3 font-bold">{credential.displayName || credential.studentId}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code dâ€™accÃ¨s : <strong>{credential.accessCode || 'Non dÃ©fini'}</strong></p><p className="mt-2 text-sm">Mot de passe temporaire : <strong>{credential.temporaryPassword}</strong></p></article>)}
               </div>
             </section>
           </div>
@@ -2150,9 +2174,9 @@ const AdminSectionView = ({
               <option value="All">Tous les suffixes</option><option value="">Sans suffixe</option>
               {CLASS_SECTIONS.filter(Boolean).map((section) => <option key={section} value={section}>Suffixe {section}</option>)}
             </select>
-            <select value={parentStudentFilter} onChange={(event) => setParentStudentFilter(event.target.value)} aria-label="Filtrer par enfant lié" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-              <option value="All">Tous les enfants liés</option>
-              {parentStudentDirectory.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.studentNumber || 'Sans ID'}</option>)}
+            <select value={parentStudentFilter} onChange={(event) => setParentStudentFilter(event.target.value)} aria-label="Filtrer par enfant liÃ©" className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+              <option value="All">Tous les enfants liÃ©s</option>
+              {parentStudentDirectory.map((student) => <option key={student.id} value={student.id}>{student.name} Â· {student.studentNumber || 'Sans ID'}</option>)}
             </select>
           </div>
           {parentNotice ? <p className="mt-3 rounded-xl bg-kcs-blue-50 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{parentNotice}</p> : null}
@@ -2180,7 +2204,7 @@ const AdminSectionView = ({
                   <tr key={parent.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-kcs-blue-800/20">
                     <td className="px-5 py-4">
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{parent.status}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{parent.status} {parentAccess[parent.id]?.accountBlockedAt ? '· Compte bloqué' : '· Compte actif'}</p>
                     </td>
                     <td className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{parent.displayId || parent.id}</td>
                     <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
@@ -2193,7 +2217,7 @@ const AdminSectionView = ({
                       <div className="flex justify-end gap-2">
                         <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setSelectedParent(parent)}>Voir</button>
                         <button type="button" className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20" onClick={() => openEditParent(parent)}>Modifier</button>
-                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)}>Reset accès</button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('parent', parent)}>Reset accÃ¨s</button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteParentRecord(parent)} aria-label={`Delete ${parent.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -2292,7 +2316,7 @@ const AdminSectionView = ({
 
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">IdentitÃ© du parent</p>
                   <div className="mt-3">
                     <PhotoCaptureField
                       label="Photo du parent"
@@ -2311,48 +2335,48 @@ const AdminSectionView = ({
                       <input value={parentEditForm.middleName} onChange={(event) => setParentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Prénom
-                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent" />
+                      PrÃ©nom
+                      <input value={parentEditForm.firstName} onChange={(event) => setParentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="PrÃ©nom du parent" />
                     </label>
                   </div>
                 </section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Coordonnées</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">CoordonnÃ©es</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Email
                       <input value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email du parent" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Téléphone
+                      TÃ©lÃ©phone
                       <InternationalPhoneInput value={parentEditForm.phone} onChange={(value) => setParentEditForm((current) => ({ ...current, phone: value }))} />
                     </label>
-                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complÃ¨te du parent" /></label>
                   </div>
                 <FamilyContactsEditor contacts={parentEditForm.familyContacts} onChange={(familyContacts) => setParentEditForm((current) => ({ ...current, familyContacts }))} />
                 </section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Enfants liés</p>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Modifiez les dossiers liés, retirez un rattachement ou créez un nouvel élève complet.</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Enfants liÃ©s</p>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Modifiez les dossiers liÃ©s, retirez un rattachement ou crÃ©ez un nouvel Ã©lÃ¨ve complet.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{parentEditStudents.length} enfant(s) lié(s)</span>
+                      <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold text-kcs-blue-800 dark:bg-kcs-blue-800 dark:text-white">{parentEditStudents.length} enfant(s) liÃ©(s)</span>
                       <button type="button" onClick={() => { setShowParentNewStudent(true); setParentNewStudents((current) => current.length ? current : [createAdminStudentDraft(parentEditStudents[0]?.grade || 'K3', parentEditStudents[0]?.section || '')]) }} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950"><UserPlus size={16} /> Ajouter un enfant</button>
                     </div>
                   </div>
                   <div className="mt-4 space-y-4">
-                    {parentEditStudents.length === 0 ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Aucun enfant n’est lié. Utilisez « Ajouter un enfant » pour compléter cette famille.</p> : null}
+                    {parentEditStudents.length === 0 ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Aucun enfant nâ€™est liÃ©. Utilisez Â« Ajouter un enfant Â» pour complÃ©ter cette famille.</p> : null}
                     {parentEditStudents.map((student, index) => (
                       <article key={student.id} className="rounded-2xl border border-kcs-blue-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant lié {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">Retirer de cette famille</button></div>
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant liÃ© {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">Retirer de cette famille</button></div>
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo de l’enfant ${index + 1}`} value={student.photoData || ''} onChange={(photoData) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
-                          <input value={student.lastName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
-                          <input value={student.middleName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
-                          <input value={student.firstName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
-                          <input value={student.studentNumber} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, studentNumber: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Identifiant élève *" required />
+                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo de lâ€™enfant ${index + 1}`} value={student.photoData || ''} onChange={(photoData) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
+                          <input value={student.lastName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de lâ€™Ã©lÃ¨ve *" required />
+                          <input value={student.middleName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de lâ€™Ã©lÃ¨ve" />
+                          <input value={student.firstName} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="PrÃ©nom de lâ€™Ã©lÃ¨ve *" required />
+                          <input value={student.studentNumber} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, studentNumber: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Identifiant Ã©lÃ¨ve *" required />
                           <input type="email" value={student.email} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, email: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail scolaire" />
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
                           <select value={student.grade} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
@@ -2361,17 +2385,17 @@ const AdminSectionView = ({
                       </article>
                     ))}
                     {showParentNewStudent ? <section className="rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50/60 p-4 dark:border-emerald-700 dark:bg-emerald-950/20">
-                      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Nouveaux enfants</p><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Leurs accès seront générés et propagés dans l’écosystème à l’enregistrement.</p></div><button type="button" onClick={() => setParentNewStudents((current) => [...current, createAdminStudentDraft(current[0]?.grade || parentEditStudents[0]?.grade || 'K3', current[0]?.section || '')])} className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-700 dark:bg-kcs-blue-950 dark:text-emerald-200">Ajouter encore</button></div>
+                      <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Nouveaux enfants</p><p className="mt-1 text-sm text-gray-600 dark:text-gray-300">Leurs accÃ¨s seront gÃ©nÃ©rÃ©s et propagÃ©s dans lâ€™Ã©cosystÃ¨me Ã  lâ€™enregistrement.</p></div><button type="button" onClick={() => setParentNewStudents((current) => [...current, createAdminStudentDraft(current[0]?.grade || parentEditStudents[0]?.grade || 'K3', current[0]?.section || '')])} className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 dark:border-emerald-700 dark:bg-kcs-blue-950 dark:text-emerald-200">Ajouter encore</button></div>
                       <div className="mt-4 space-y-4">{parentNewStudents.map((student, index) => <article key={`parent-new-student-${index}`} className="rounded-xl border border-emerald-200 bg-white p-4 dark:border-emerald-800 dark:bg-kcs-blue-900">
-                        <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Nouvel élève {index + 1}</p><button type="button" onClick={() => setParentNewStudents((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="text-xs font-bold text-red-700 dark:text-red-300">Retirer</button></div>
+                        <div className="mb-3 flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">Nouvel Ã©lÃ¨ve {index + 1}</p><button type="button" onClick={() => setParentNewStudents((current) => current.filter((_item, itemIndex) => itemIndex !== index))} className="text-xs font-bold text-red-700 dark:text-red-300">Retirer</button></div>
                         <div className="grid gap-3 md:grid-cols-2">
-                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo du nouvel élève ${index + 1}`} value={student.photoData} onChange={(photoData) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
-                          <input value={student.lastName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève *" required />
-                          <input value={student.middleName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
-                          <input value={student.firstName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève *" required />
-                          <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200"><strong>ID :</strong> généré automatiquement</div>
+                          <div className="md:col-span-2"><PhotoCaptureField label={`Photo du nouvel Ã©lÃ¨ve ${index + 1}`} value={student.photoData} onChange={(photoData) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, photoData } : item))} onError={setParentNotice} /></div>
+                          <input value={student.lastName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, lastName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de lâ€™Ã©lÃ¨ve *" required />
+                          <input value={student.middleName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, middleName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de lâ€™Ã©lÃ¨ve" />
+                          <input value={student.firstName} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, firstName: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="PrÃ©nom de lâ€™Ã©lÃ¨ve *" required />
+                          <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200"><strong>ID :</strong> gÃ©nÃ©rÃ© automatiquement</div>
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance *<DateSelect value={student.dateOfBirth} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
-                          <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement" />
+                          <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300" placeholder="E-mail scolaire gÃ©nÃ©rÃ© automatiquement" />
                           <select value={student.grade} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
                           <select value={student.section} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}</select>
                         </div>
@@ -2411,22 +2435,22 @@ const AdminSectionView = ({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">SAVANEX shared registry</p>
-              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Élèves</h2>
-              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Liste officielle lisible par classe et par famille, alimentée par SAVANEX via Orbit.</p>
+              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Ã‰lÃ¨ves</h2>
+              <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Liste officielle lisible par classe et par famille, alimentÃ©e par SAVANEX via Orbit.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{apiSynced ? 'Synchronisé Orbit' : 'Mode local'}</span>
-              <button className={`${adminButton} inline-flex items-center gap-2`} onClick={openCreateStudentForm}><UserPlus size={16} /> Ajouter un élève</button>
+              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{apiSynced ? 'SynchronisÃ© Orbit' : 'Mode local'}</span>
+              <button className={`${adminButton} inline-flex items-center gap-2`} onClick={openCreateStudentForm}><UserPlus size={16} /> Ajouter un Ã©lÃ¨ve</button>
             </div>
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { label: 'Élèves visibles', value: filteredRoster.length, detail: `${activeStudents} actifs`, icon: GraduationCap },
+            { label: 'Ã‰lÃ¨ves visibles', value: filteredRoster.length, detail: `${activeStudents} actifs`, icon: GraduationCap },
             { label: 'Classes couvertes', value: classesCovered, detail: 'selon les filtres', icon: BookOpen },
-            { label: 'Familles liées', value: familiesCovered, detail: 'parents responsables', icon: Users },
-            { label: 'À suivre', value: filteredRoster.filter((student) => getStudentRisk(student) !== 'On track').length, detail: 'présence, discipline ou moyenne', icon: AlertTriangle },
+            { label: 'Familles liÃ©es', value: familiesCovered, detail: 'parents responsables', icon: Users },
+            { label: 'Ã€ suivre', value: filteredRoster.filter((student) => getStudentRisk(student) !== 'On track').length, detail: 'prÃ©sence, discipline ou moyenne', icon: AlertTriangle },
           ].map(({ label, value, detail, icon: Icon }) => (
             <div key={label} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <Icon size={18} className="mb-3 text-kcs-blue-600 dark:text-kcs-blue-300" />
@@ -2441,7 +2465,7 @@ const AdminSectionView = ({
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_180px_180px_220px] lg:items-center">
             <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
               <Search size={16} className="text-gray-400" />
-              <input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher élève, ID, parent ou classe..." />
+              <input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none dark:text-white" placeholder="Rechercher Ã©lÃ¨ve, ID, parent ou classe..." />
             </label>
             <select value={gradeFilter} onChange={(event) => {
               setGradeFilter(event.target.value)
@@ -2463,13 +2487,13 @@ const AdminSectionView = ({
             </select>
           </div>
           {familyCredentials && createPortal((
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants gÃ©nÃ©rÃ©s">
               <section className="relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-[0_30px_100px_rgba(0,0,0,0.45)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
-                {familyCredentials.loading ? <div className="mt-5 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
+                <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.loading ? 'RÃ©initialisation en cours' : familyCredentials.error ? 'RÃ©initialisation impossible' : familyCredentials.reset ? 'RÃ©initialisation terminÃ©e' : 'Identifiants gÃ©nÃ©rÃ©s'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'PrÃ©paration du nouvel accÃ¨sâ€¦' : familyCredentials.error ? 'Le nouvel accÃ¨s nâ€™a pas pu Ãªtre gÃ©nÃ©rÃ©' : familyCredentials.reset ? `Nouvel accÃ¨s de ${familyCredentials.reset.identifier}` : 'AccÃ¨s de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sÃ»r. Le mot de passe doit Ãªtre changÃ© Ã  la prochaine connexion.' : 'Le parent accÃ¨de aux portails autorisÃ©s sauf SAVANEX. Les Ã©lÃ¨ves nâ€™accÃ¨dent ni Ã  SAVANEX ni Ã  EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
+                {familyCredentials.loading ? <div className="mt-5 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accÃ¨s et des notificationsâ€¦</div> : null}
                 {familyCredentials.error ? <p className="mt-5 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Élève ${credential.studentId || index}`}</p><p className="mt-3 text-base font-bold text-kcs-blue-950 dark:text-white">{credential.displayName || credential.studentId || (index === 0 ? 'Parent' : 'Élève')}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accès : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
+                  {[familyCredentials.parent, ...(familyCredentials.students || [])].filter(Boolean).map((credential: any, index: number) => <article key={`${credential.username}-${index}`} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-300">{index === 0 && familyCredentials.parent ? 'Parent' : `Ã‰lÃ¨ve ${credential.studentId || index}`}</p><p className="mt-3 text-base font-bold text-kcs-blue-950 dark:text-white">{credential.displayName || credential.studentId || (index === 0 ? 'Parent' : 'Ã‰lÃ¨ve')}</p><p className="mt-3 text-sm">Identifiant : <strong>{credential.username}</strong></p><p className="mt-2 text-sm">Code d'accÃ¨s : <strong>{credential.accessCode}</strong></p><p className="mt-2 text-sm">Mot de passe : <strong>{credential.temporaryPassword}</strong></p></article>)}
                 </div>
               </section>
             </div>
@@ -2482,44 +2506,44 @@ const AdminSectionView = ({
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="font-bold text-kcs-blue-900 dark:text-white">Nouvelle famille</h3>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Même logique que SAVANEX : un parent, un ou plusieurs élèves, et les accès temporaires générés ensemble.</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">MÃªme logique que SAVANEX : un parent, un ou plusieurs Ã©lÃ¨ves, et les accÃ¨s temporaires gÃ©nÃ©rÃ©s ensemble.</p>
                 </div>
                 <button type="button" className="w-fit rounded-lg px-3 py-1.5 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setShowCreateStudent(false)}>Close</button>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <input value={newFamily.parentLastName} onChange={(event) => setNewFamily((item) => ({ ...item, parentLastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom du parent *" required />
                 <input value={newFamily.parentMiddleName} onChange={(event) => setNewFamily((item) => ({ ...item, parentMiddleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom du parent" />
-                <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom du parent *" required />
+                <input value={newFamily.parentFirstName} onChange={(event) => setNewFamily((item) => ({ ...item, parentFirstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="PrÃ©nom du parent *" required />
                 <input value={newFamily.parentEmail} onChange={(event) => setNewFamily((item) => ({ ...item, parentEmail: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail du parent" />
                 <InternationalPhoneInput value={newFamily.parentPhone} onChange={(value) => setNewFamily((item) => ({ ...item, parentPhone: value }))} />
                 <input value={newFamily.parentAddress} onChange={(event) => setNewFamily((item) => ({ ...item, parentAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:col-span-2" placeholder="Adresse physique du parent" />
-                <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:max-w-sm" placeholder="Conseiller pédagogique (facultatif)" />
+                <input value={newFamily.advisor} onChange={(event) => setNewFamily((item) => ({ ...item, advisor: event.target.value }))} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white md:max-w-sm" placeholder="Conseiller pÃ©dagogique (facultatif)" />
                 <div className="min-w-0 md:col-span-2"><FamilyContactsEditor contacts={newFamily.familyContacts} onChange={(familyContacts) => setNewFamily((item) => ({ ...item, familyContacts }))} /></div>
               </div>
               <div className="mt-4"><PhotoCaptureField label="Photo du parent" value={newFamily.parentPhotoData} onChange={parentPhotoData=>setNewFamily(item=>({...item,parentPhotoData}))} onError={setStudentNotice}/></div>
               <div className="mt-5 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h4 className="text-sm font-bold text-kcs-blue-900 dark:text-white">Élèves liés</h4>
+                  <h4 className="text-sm font-bold text-kcs-blue-900 dark:text-white">Ã‰lÃ¨ves liÃ©s</h4>
                   <button type="button" className="rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-bold text-kcs-blue-700 hover:bg-white dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800" onClick={() => setNewFamily((item) => ({ ...item, students: [...item.students, createAdminStudentDraft(item.students[0]?.grade, item.students[0]?.section)] }))}>Ajouter un enfant</button>
                 </div>
                 {newFamily.students.map((student, index) => (
                   <div key={`new-family-student-${index}`} className="rounded-xl border border-white/70 bg-white/70 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Élève {index + 1}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Ã‰lÃ¨ve {index + 1}</p>
                       {newFamily.students.length > 1 ? (
                         <button type="button" className="text-xs font-bold text-red-600 dark:text-red-300" onClick={() => setNewFamily((item) => ({ ...item, students: item.students.filter((_student, studentIndex) => studentIndex !== index) }))}>Retirer</button>
                       ) : null}
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                     <div className="md:col-span-2">
-                      <PhotoCaptureField label={`Photo de l’élève ${index + 1}`} value={student.photoData} onChange={photoData => setNewFamily(item => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, photoData } : draft) }))} onError={setStudentNotice} />
+                      <PhotoCaptureField label={`Photo de lâ€™Ã©lÃ¨ve ${index + 1}`} value={student.photoData} onChange={photoData => setNewFamily(item => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, photoData } : draft) }))} onError={setStudentNotice} />
                     </div>
                       <input value={student.lastName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, lastName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l'eleve *" required />
                       <input value={student.middleName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, middleName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l'eleve" />
                       <input value={student.firstName} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, firstName: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prenom de l'eleve *" required />
                       <div className="rounded-xl border border-dashed border-kcs-blue-200 bg-kcs-blue-50 px-4 py-3 text-sm text-kcs-blue-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-kcs-blue-200"><strong>ID eleve :</strong> genere automatiquement par le systeme</div>
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, dateOfBirth: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
-                      <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement : prenom.nom@ourkcs.org" />
+                      <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-gray-300" placeholder="E-mail scolaire gÃ©nÃ©rÃ© automatiquement : prenom.nom@ourkcs.org" />
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
                       </select>
@@ -2532,7 +2556,7 @@ const AdminSectionView = ({
               </div>
               <div className="mt-4 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
                 <button type="submit" className={`${adminButton} w-full sm:w-auto`}><UserPlus size={16} className="inline" /> Enregistrer la famille</button>
-                <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">Élèves prêts: {newFamily.students.filter((student) => student.lastName.trim() && student.firstName.trim()).length}</span>
+                <span className="text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">Ã‰lÃ¨ves prÃªts: {newFamily.students.filter((student) => student.lastName.trim() && student.firstName.trim()).length}</span>
               </div>
               {studentNotice && <p className="mt-3 rounded-xl bg-white p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">{studentNotice}</p>}
             </form>
@@ -2541,15 +2565,15 @@ const AdminSectionView = ({
 
         <div className="rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="border-b border-gray-100 px-5 py-4 dark:border-kcs-blue-800">
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Liste officielle des élèves</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Même logique que SAVANEX : élève, ID, classe, parent responsable, statut et action.</p>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Liste officielle des Ã©lÃ¨ves</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">MÃªme logique que SAVANEX : Ã©lÃ¨ve, ID, classe, parent responsable, statut et action.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-[980px] w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-kcs-blue-950 dark:text-gray-400">
                 <tr>
-                  <th className="px-5 py-3 font-semibold">Élève</th>
-                  <th className="px-5 py-3 font-semibold">ID élève</th>
+                  <th className="px-5 py-3 font-semibold">Ã‰lÃ¨ve</th>
+                  <th className="px-5 py-3 font-semibold">ID Ã©lÃ¨ve</th>
                   <th className="px-5 py-3 font-semibold">Classe</th>
                   <th className="px-5 py-3 font-semibold">Parent responsable</th>
                   <th className="px-5 py-3 font-semibold">Contact</th>
@@ -2569,12 +2593,12 @@ const AdminSectionView = ({
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{student.status}</p>
                       </button>
                     </td>
-                    <td className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{student.studentNumber ?? 'Non renseigné'}</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{formatClassName(student.grade, student.section) || 'Non assignée'}</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{student.parent || 'Aucun parent lié'}</td>
+                    <td className="px-5 py-4 font-mono text-xs text-gray-600 dark:text-gray-300">{student.studentNumber ?? 'Non renseignÃ©'}</td>
+                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{formatClassName(student.grade, student.section) || 'Non assignÃ©e'}</td>
+                    <td className="px-5 py-4 text-gray-700 dark:text-gray-200">{student.parent || 'Aucun parent liÃ©'}</td>
                     <td className="px-5 py-4 text-xs text-gray-500 dark:text-gray-400">
-                      <p>{student.parentEmail || 'Email non renseigné'}</p>
-                      <p className="mt-1">{student.parentPhone || 'Téléphone non renseigné'}</p>
+                      <p>{student.parentEmail || 'Email non renseignÃ©'}</p>
+                      <p className="mt-1">{student.parentPhone || 'TÃ©lÃ©phone non renseignÃ©'}</p>
                     </td>
                     <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(student))}`}>{getStudentRisk(student)}</span></td>
                     <td className="px-5 py-4">
@@ -2584,7 +2608,7 @@ const AdminSectionView = ({
                           setViewingStudent(student)
                         }}>Voir</button>
                         <button type="button" className={`rounded-lg px-3 py-2 text-xs font-bold ${student.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(student)}>Modifier</button>
-                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)}>Reset accès</button>
+                        <button type="button" className="rounded-lg border border-violet-200 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-200" onClick={() => void resetEntityAccess('student', student)}>Reset accÃ¨s</button>
                         <button type="button" className="rounded-lg border border-red-100 px-3 py-2 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => deleteOfficialStudent(student)} aria-label={`Delete ${student.name}`}><Trash2 size={15} /></button>
                       </div>
                     </td>
@@ -2593,7 +2617,7 @@ const AdminSectionView = ({
               </tbody>
             </table>
             {filteredRoster.length === 0 && (
-              <div className="p-5 text-sm font-semibold text-yellow-800 dark:text-yellow-300">Aucun élève ne correspond aux filtres en cours.</div>
+              <div className="p-5 text-sm font-semibold text-yellow-800 dark:text-yellow-300">Aucun Ã©lÃ¨ve ne correspond aux filtres en cours.</div>
             )}
           </div>
         </div>
@@ -2609,10 +2633,10 @@ const AdminSectionView = ({
             </div>
             <div className="mt-4 space-y-3">
               {Object.entries(rosterByClass).map(([className, classStudents]) => (
-                <button type="button" onClick={() => setDetailDialog({ title: className || 'Unassigned class', subtitle: 'Official class grouping', details: classStudents.map((student) => [student.name, `${student.studentNumber ?? student.id} · ${student.parent} · ${student.status}`]) })} key={className} className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-kcs-blue-300 hover:shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                <button type="button" onClick={() => setDetailDialog({ title: className || 'Unassigned class', subtitle: 'Official class grouping', details: classStudents.map((student) => [student.name, `${student.studentNumber ?? student.id} Â· ${student.parent} Â· ${student.status}`]) })} key={className} className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-kcs-blue-300 hover:shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{className || 'Non assignée'}</p>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{classStudents.length} élève(s)</span>
+                    <p className="font-semibold text-kcs-blue-900 dark:text-white">{className || 'Non assignÃ©e'}</p>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{classStudents.length} Ã©lÃ¨ve(s)</span>
                   </div>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Familles : {Array.from(new Set(classStudents.map((student) => student.parent))).join(', ')}</p>
                   <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">{classStudents.map((student) => student.name).join(', ')}</p>
@@ -2631,10 +2655,10 @@ const AdminSectionView = ({
             </div>
             <div className="mt-4 space-y-3">
               {Object.entries(rosterByFamily).map(([familyName, familyStudents]) => (
-                <button type="button" onClick={() => setDetailDialog({ title: familyName, subtitle: 'Official family grouping', details: familyStudents.map((student) => [student.name, `${formatClassName(student.grade, student.section)} · ${student.studentNumber ?? student.id} · ${student.status}`]) })} key={familyName} className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-kcs-blue-300 hover:shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
+                <button type="button" onClick={() => setDetailDialog({ title: familyName, subtitle: 'Official family grouping', details: familyStudents.map((student) => [student.name, `${formatClassName(student.grade, student.section)} Â· ${student.studentNumber ?? student.id} Â· ${student.status}`]) })} key={familyName} className="w-full rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-kcs-blue-300 hover:shadow-md dark:border-kcs-blue-800 dark:bg-kcs-blue-800/20">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{familyName}</p>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{familyStudents.length} élève(s)</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{familyStudents.length} Ã©lÃ¨ve(s)</span>
                   </div>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Classes : {Array.from(new Set(familyStudents.map((student) => formatClassName(student.grade, student.section)))).join(', ')}</p>
                   <p className="mt-3 text-sm text-gray-700 dark:text-gray-200">{familyStudents.map((student) => student.name).join(', ')}</p>
@@ -2645,13 +2669,13 @@ const AdminSectionView = ({
         </div>
 
         {viewingStudent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche élève">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Fiche Ã©lÃ¨ve">
             <section className="max-h-[92vh] w-full max-w-none lg:w-[80vw] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Consultation</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche individuelle élève</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Identité, classe, parents responsables et suivi administratif.</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Fiche individuelle Ã©lÃ¨ve</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">IdentitÃ©, classe, parents responsables et suivi administratif.</p>
                 </div>
                 <button type="button" onClick={() => setViewingStudent(null)} className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">
                   <X size={16} />
@@ -2662,19 +2686,19 @@ const AdminSectionView = ({
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="grid gap-3 md:grid-cols-2">
                   {[
-                    ['ID élève', viewingStudent.studentNumber ?? 'Non renseigné'],
+                    ['ID Ã©lÃ¨ve', viewingStudent.studentNumber ?? 'Non renseignÃ©'],
                     ['Nom complet', viewingStudent.name],
-                    ['E-mail scolaire', viewingStudent.email || 'Non renseigné'],
+                    ['E-mail scolaire', viewingStudent.email || 'Non renseignÃ©'],
                     ['Date de naissance', viewingStudent.dateOfBirth
                       ? new Date(viewingStudent.dateOfBirth).toLocaleDateString('fr-FR', { timeZone: 'UTC' })
-                      : 'Non renseignée'],
-                    ['Classe', formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'],
+                      : 'Non renseignÃ©e'],
+                    ['Classe', formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignÃ©e'],
                     ['Statut', viewingStudent.status],
-                    ['Parent titulaire', viewingStudent.parent || 'Aucun parent lié'],
-                    ['Email parent', viewingStudent.parentEmail || 'Non renseigné'],
-                    ['Téléphone parent', viewingStudent.parentPhone || 'Non renseigné'],
-                    ['Conseiller', viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assigné'],
-                    ['Présence', `${viewingStudent.attendance}%`],
+                    ['Parent titulaire', viewingStudent.parent || 'Aucun parent liÃ©'],
+                    ['Email parent', viewingStudent.parentEmail || 'Non renseignÃ©'],
+                    ['TÃ©lÃ©phone parent', viewingStudent.parentPhone || 'Non renseignÃ©'],
+                    ['Conseiller', viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assignÃ©'],
+                    ['PrÃ©sence', `${viewingStudent.attendance}%`],
                     ['GPA', String(viewingStudent.gpa)],
                     ['Discipline', viewingStudent.discipline],
                     ['Suivi', getStudentRisk(viewingStudent)],
@@ -2689,7 +2713,7 @@ const AdminSectionView = ({
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       {(viewingStudent.responsibleParents?.length ? viewingStudent.responsibleParents : [{
                         id: 'primary-parent',
-                        name: viewingStudent.parent || 'Aucun parent lié',
+                        name: viewingStudent.parent || 'Aucun parent liÃ©',
                         email: viewingStudent.parentEmail || '',
                         phone: viewingStudent.parentPhone || '',
                         relationship: 'Parent titulaire',
@@ -2697,27 +2721,27 @@ const AdminSectionView = ({
                         <article key={parent.id || index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                           <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{index === 0 ? 'Parent titulaire' : parent.relationship}</p>
                           <p className="mt-2 break-words font-semibold text-kcs-blue-900 dark:text-white">{parent.name}</p>
-                          <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-300">{parent.email || 'Email non renseigné'}</p>
-                          <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{parent.phone || 'Téléphone non renseigné'}</p>
+                          <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-300">{parent.email || 'Email non renseignÃ©'}</p>
+                          <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{parent.phone || 'TÃ©lÃ©phone non renseignÃ©'}</p>
                         </article>
                       ))}
                     </div>
                   </section>
                   <section className="md:col-span-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/45">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux complémentaires</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Contacts familiaux complÃ©mentaires</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(viewingStudent.familyContacts ?? []).length ? viewingStudent.familyContacts!.map((contact, index) => (
                       <article key={contact.kind + index} className="min-w-0 rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                         <p className="break-words font-bold text-kcs-blue-950 dark:text-white">{[contact.lastName, contact.middleName, contact.firstName].filter(Boolean).join(' ')}</p>
                         <p className="mt-1 text-xs text-kcs-blue-600 dark:text-kcs-blue-200">{contact.relationship || contact.role || contact.kind}</p>
-                        <p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseigné'}</p>
-                        <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'Téléphone non renseigné'}</p>
+                        <p className="mt-2 break-all text-xs text-gray-500 dark:text-gray-300">{contact.email || 'Email non renseignÃ©'}</p>
+                        <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.phone || 'TÃ©lÃ©phone non renseignÃ©'}</p>
                         {contact.physicalAddress ? <p className="mt-1 break-words text-xs text-gray-500 dark:text-gray-300">{contact.physicalAddress}</p> : null}
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {contact.authorizedPickup ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Retrait autorisé</span> : null}
-                          {contact.emergencyContact ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Contact d’urgence</span> : null}
+                          {contact.authorizedPickup ? <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Retrait autorisÃ©</span> : null}
+                          {contact.emergencyContact ? <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Contact dâ€™urgence</span> : null}
                         </div>
                       </article>
-                    )) : <p className="text-sm text-gray-500">Aucun contact complémentaire enregistré.</p>}</div>
+                    )) : <p className="text-sm text-gray-500">Aucun contact complÃ©mentaire enregistrÃ©.</p>}</div>
                   </section>
                 </div>
 
@@ -2725,9 +2749,9 @@ const AdminSectionView = ({
                   <ProfilePhoto src={viewingStudent.photoData} name={viewingStudent.name} />
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">Résumé</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-kcs-blue-600 dark:text-kcs-blue-300">RÃ©sumÃ©</p>
                       <h4 className="mt-2 font-display text-xl font-bold text-kcs-blue-900 dark:text-white">{viewingStudent.name}</h4>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{viewingStudent.studentNumber ?? 'ID non renseigné'}</p>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{viewingStudent.studentNumber ?? 'ID non renseignÃ©'}</p>
                     </div>
                     <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${pillTone(getStudentRisk(viewingStudent))}`}>{getStudentRisk(viewingStudent)}</span>
                   </div>
@@ -2735,19 +2759,19 @@ const AdminSectionView = ({
                   <div className="mt-5 space-y-3">
                     <div className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Famille</p>
-                      <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{viewingStudent.parent || 'Aucun parent lié'}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentEmail || 'Email non renseigné'}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentPhone || 'Téléphone non renseigné'}</p>
+                      <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{viewingStudent.parent || 'Aucun parent liÃ©'}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentEmail || 'Email non renseignÃ©'}</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{viewingStudent.parentPhone || 'TÃ©lÃ©phone non renseignÃ©'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-4 dark:bg-kcs-blue-900/70">
                       <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Classe</p>
-                      <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignée'}</p>
+                      <p className="mt-2 font-semibold text-kcs-blue-900 dark:text-white">{formatClassName(viewingStudent.grade, viewingStudent.section) || 'Non assignÃ©e'}</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{getDivisionForGrade(viewingStudent.grade).title}</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
                         <p className={`font-display text-xl font-bold ${scoreTone(viewingStudent.attendance, 'attendance')}`}>{viewingStudent.attendance}%</p>
-                        <p className="mt-1 text-xs text-gray-400">Présence</p>
+                        <p className="mt-1 text-xs text-gray-400">PrÃ©sence</p>
                       </div>
                       <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
                         <p className={`font-display text-xl font-bold ${scoreTone(viewingStudent.gpa, 'gpa')}`}>{viewingStudent.gpa}</p>
@@ -2757,7 +2781,7 @@ const AdminSectionView = ({
                   </div>
 
                   <div className="mt-5 flex flex-wrap gap-2">
-                    <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800" onClick={() => setViewingStudent(null)}>Retour à la liste</button>
+                    <button type="button" className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800" onClick={() => setViewingStudent(null)}>Retour Ã  la liste</button>
                     <button type="button" className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${viewingStudent.isEditable ? 'border border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/20' : 'cursor-not-allowed border border-gray-200 text-gray-400 dark:border-kcs-blue-800 dark:text-gray-500'}`} onClick={() => openEditStudent(viewingStudent)}>Modifier</button>
                     <button type="button" className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20" onClick={() => {
                       const target = viewingStudent
@@ -2772,23 +2796,23 @@ const AdminSectionView = ({
         )}
 
         {editingStudent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Modifier élève">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Modifier Ã©lÃ¨ve">
             <section className="max-h-[calc(100dvh-1.5rem)] w-full max-w-none overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900 sm:max-h-[calc(100dvh-3rem)] lg:w-[80vw]">
               <div className="mb-5 flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Modification</p>
-                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier l’élève</h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Le système bloque les doublons de numéro et d’email avant d’enregistrer.</p>
+                  <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier lâ€™Ã©lÃ¨ve</h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Le systÃ¨me bloque les doublons de numÃ©ro et dâ€™email avant dâ€™enregistrer.</p>
                 </div>
                 <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">Fermer</button>
               </div>
 
               <div className="space-y-4">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">IdentitÃ© de lâ€™Ã©lÃ¨ve</p>
                   <div className="mt-3">
                     <PhotoCaptureField
-                      label="Photo de l’élève"
+                      label="Photo de lâ€™Ã©lÃ¨ve"
                       value={studentEditForm.photoData ?? ''}
                       onChange={(photoData) => setStudentEditForm((current) => ({ ...current, photoData }))}
                       onError={setStudentNotice}
@@ -2797,23 +2821,23 @@ const AdminSectionView = ({
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Nom
-                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de l’élève" />
+                      <input value={studentEditForm.lastName} onChange={(event) => setStudentEditForm((current) => ({ ...current, lastName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom de lâ€™Ã©lÃ¨ve" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Postnom
-                      <input value={studentEditForm.middleName} onChange={(event) => setStudentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de l’élève" />
+                      <input value={studentEditForm.middleName} onChange={(event) => setStudentEditForm((current) => ({ ...current, middleName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Postnom de lâ€™Ã©lÃ¨ve" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Prénom
-                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Prénom de l’élève" />
+                      PrÃ©nom
+                      <input value={studentEditForm.firstName} onChange={(event) => setStudentEditForm((current) => ({ ...current, firstName: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="PrÃ©nom de lâ€™Ã©lÃ¨ve" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Date de naissance
                       <DateSelect value={studentEditForm.dateOfBirth} onChange={(event) => setStudentEditForm((current) => ({ ...current, dateOfBirth: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
-                      Email élève
-                      <input value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email élève, optionnel" />
+                      Email Ã©lÃ¨ve
+                      <input value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email Ã©lÃ¨ve, optionnel" />
                     </label>
                   </div>
                 </section>
@@ -2821,8 +2845,8 @@ const AdminSectionView = ({
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Classe et dossier</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
-                      Numéro d’élève
-                      <input value={studentEditForm.studentNumber} onChange={(event) => setStudentEditForm((current) => ({ ...current, studentNumber: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Numéro d’élève" />
+                      NumÃ©ro dâ€™Ã©lÃ¨ve
+                      <input value={studentEditForm.studentNumber} onChange={(event) => setStudentEditForm((current) => ({ ...current, studentNumber: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="NumÃ©ro dâ€™Ã©lÃ¨ve" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Statut
@@ -2846,19 +2870,19 @@ const AdminSectionView = ({
                 </section>
                 <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40"><FamilyContactsEditor contacts={editingStudent.familyContacts ?? []} onChange={(familyContacts) => setEditingStudent((current) => current ? { ...current, familyContacts } : current)} /></section>
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
-                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liée</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liÃ©e</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
                       <p className="text-xs text-gray-400">Parent responsable</p>
-                      <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parent || 'Aucun parent lié'}</p>
+                      <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parent || 'Aucun parent liÃ©'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
-                      <p className="text-xs text-gray-400">Téléphone</p>
-                      <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentPhone || 'Non renseigné'}</p>
+                      <p className="text-xs text-gray-400">TÃ©lÃ©phone</p>
+                      <p className="mt-1 font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentPhone || 'Non renseignÃ©'}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
                       <p className="text-xs text-gray-400">Email</p>
-                      <p className="mt-1 break-words font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentEmail || 'Non renseigné'}</p>
+                      <p className="mt-1 break-words font-semibold text-kcs-blue-900 dark:text-white">{editingStudent.parentEmail || 'Non renseignÃ©'}</p>
                     </div>
                   </div>
                 </section>
@@ -2950,7 +2974,7 @@ const AdminSectionView = ({
 
   if (segment === 'diagnostics') {
     const pendingDiagnostics = diagnosticTests.filter((test) => diagnosticStatuses[test.id] !== 'Approved')
-    return <>{detailModal}<div className="space-y-6"><div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">Administrator review</p><h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Diagnostic Approval Center</h2><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Centralized diagnostic-test reports submitted by every teacher. Approve a report only after reviewing its results and recommended follow-up.</p></div><div className="grid gap-4 md:grid-cols-3">{[['Total reports', diagnosticTests.length], ['Pending approval', pendingDiagnostics.length], ['Approved', diagnosticTests.length - pendingDiagnostics.length]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p></div>)}</div><div className="space-y-3">{diagnosticTests.map((test) => { const status = diagnosticStatuses[test.id]; return <article key={test.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><button type="button" onClick={() => setDetailDialog({ title: test.title, subtitle: `${test.subject} · ${test.className}`, details: [['Submitted by', test.teacher], ['Submitted at', test.submittedAt], ['Class mastery', test.score], ['Teacher summary', test.summary], ['Approval status', status]] })} className="text-left"><p className="font-semibold text-kcs-blue-900 dark:text-white">{test.title}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{test.teacher} · {test.subject} · {test.className}</p><p className="mt-2 text-sm text-kcs-blue-700 dark:text-kcs-blue-300">{test.score}</p></button><div className="flex items-center gap-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${pillTone(status)}`}>{status}</span>{status !== 'Approved' ? <button type="button" className={adminButton} onClick={() => setDiagnosticStatuses((items) => ({ ...items, [test.id]: 'Approved' }))}>Approve report</button> : null}</div></div></article> })}</div></div></>
+    return <>{detailModal}<div className="space-y-6"><div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600 dark:text-kcs-gold-300">Administrator review</p><h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Diagnostic Approval Center</h2><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Centralized diagnostic-test reports submitted by every teacher. Approve a report only after reviewing its results and recommended follow-up.</p></div><div className="grid gap-4 md:grid-cols-3">{[['Total reports', diagnosticTests.length], ['Pending approval', pendingDiagnostics.length], ['Approved', diagnosticTests.length - pendingDiagnostics.length]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p></div>)}</div><div className="space-y-3">{diagnosticTests.map((test) => { const status = diagnosticStatuses[test.id]; return <article key={test.id} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><button type="button" onClick={() => setDetailDialog({ title: test.title, subtitle: `${test.subject} Â· ${test.className}`, details: [['Submitted by', test.teacher], ['Submitted at', test.submittedAt], ['Class mastery', test.score], ['Teacher summary', test.summary], ['Approval status', status]] })} className="text-left"><p className="font-semibold text-kcs-blue-900 dark:text-white">{test.title}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{test.teacher} Â· {test.subject} Â· {test.className}</p><p className="mt-2 text-sm text-kcs-blue-700 dark:text-kcs-blue-300">{test.score}</p></button><div className="flex items-center gap-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${pillTone(status)}`}>{status}</span>{status !== 'Approved' ? <button type="button" className={adminButton} onClick={() => setDiagnosticStatuses((items) => ({ ...items, [test.id]: 'Approved' }))}>Approve report</button> : null}</div></div></article> })}</div></div></>
   }
 
   if (segment === 'admissions') {
@@ -2980,7 +3004,7 @@ const AdminSectionView = ({
               <div className="mt-4 space-y-2 rounded-xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-800/30">
                 <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.parentName}</p>
                 <p className="text-gray-500 dark:text-gray-400">{item.parentEmail} - {item.parentPhone}</p>
-                {item.children.map((child, index) => <p key={index} className="text-gray-500 dark:text-gray-400">{child.lastName} {child.middleName || ''} {child.firstName} · {child.gradeApplying}</p>)}
+                {item.children.map((child, index) => <p key={index} className="text-gray-500 dark:text-gray-400">{child.lastName} {child.middleName || ''} {child.firstName} Â· {child.gradeApplying}</p>)}
                 <p className="text-gray-500 dark:text-gray-400">Docs: {item.documents?.length ? item.documents.join(', ') : 'Pending document review'}</p>
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -2998,10 +3022,10 @@ const AdminSectionView = ({
             <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950">
               <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-green-600">Family created successfully</p><h2 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Institutional login credentials</h2><p className="mt-1 text-sm text-gray-500">Copy or print these one-time credentials before closing.</p></div><button type="button" onClick={() => setAdmissionCredentials(null)} className="rounded-xl border px-3 py-2 text-sm font-semibold">Close</button></div>
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {admissionCredentials.temporaryCredentials?.parent ? <div className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40"><p className="font-bold text-kcs-blue-900 dark:text-white">Parent / family</p><p className="mt-3 text-sm">Username: <strong>{admissionCredentials.temporaryCredentials.parent.username}</strong></p><p className="text-sm">Access code: <strong>{admissionCredentials.temporaryCredentials.parent.accessCode || '—'}</strong></p><p className="text-sm">Temporary password: <strong>{admissionCredentials.temporaryCredentials.parent.temporaryPassword}</strong></p></div> : null}
-                {admissionCredentials.temporaryCredentials?.students?.map((student: any, index: number) => <div key={student.studentId || index} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-800"><p className="font-bold text-kcs-blue-900 dark:text-white">{student.displayName || `Child ${index + 1}`}</p><p className="mt-3 text-sm">Student ID: <strong>{student.studentId}</strong></p><p className="text-sm">Username: <strong>{student.username}</strong></p><p className="text-sm">Access code: <strong>{student.accessCode || '—'}</strong></p><p className="text-sm">Temporary password: <strong>{student.temporaryPassword}</strong></p></div>)}
+                {admissionCredentials.temporaryCredentials?.parent ? <div className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40"><p className="font-bold text-kcs-blue-900 dark:text-white">Parent / family</p><p className="mt-3 text-sm">Username: <strong>{admissionCredentials.temporaryCredentials.parent.username}</strong></p><p className="text-sm">Access code: <strong>{admissionCredentials.temporaryCredentials.parent.accessCode || 'â€”'}</strong></p><p className="text-sm">Temporary password: <strong>{admissionCredentials.temporaryCredentials.parent.temporaryPassword}</strong></p></div> : null}
+                {admissionCredentials.temporaryCredentials?.students?.map((student: any, index: number) => <div key={student.studentId || index} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-800"><p className="font-bold text-kcs-blue-900 dark:text-white">{student.displayName || `Child ${index + 1}`}</p><p className="mt-3 text-sm">Student ID: <strong>{student.studentId}</strong></p><p className="text-sm">Username: <strong>{student.username}</strong></p><p className="text-sm">Access code: <strong>{student.accessCode || 'â€”'}</strong></p><p className="text-sm">Temporary password: <strong>{student.temporaryPassword}</strong></p></div>)}
               </div>
-              <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-900/40"><p className="font-semibold text-kcs-blue-900 dark:text-white">Delivery</p><p className="mt-1 text-gray-600 dark:text-gray-300">Email: {admissionCredentials.credentialDelivery?.email?.sent ? 'sent' : 'not sent'} · SMS: {admissionCredentials.credentialDelivery?.sms?.sent ? 'sent' : 'not sent'} · Dashboard notifications: created</p></div>
+              <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm dark:bg-kcs-blue-900/40"><p className="font-semibold text-kcs-blue-900 dark:text-white">Delivery</p><p className="mt-1 text-gray-600 dark:text-gray-300">Email: {admissionCredentials.credentialDelivery?.email?.sent ? 'sent' : 'not sent'} Â· SMS: {admissionCredentials.credentialDelivery?.sms?.sent ? 'sent' : 'not sent'} Â· Dashboard notifications: created</p></div>
               <button type="button" onClick={() => window.print()} className="mt-5 rounded-xl bg-kcs-blue-700 px-5 py-3 text-sm font-bold text-white">Print credentials</button>
             </div>
           </div>
@@ -3019,7 +3043,7 @@ const AdminSectionView = ({
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[['Expected revenue', totals?.expectedRevenue ?? 0], ['Collected revenue', totals?.collectedRevenue ?? 0], ['Outstanding debt', totals?.outstandingDebt ?? 0], ['Reductions', totals?.totalReduction ?? 0]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{currency.format(Number(value))}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p></div>)}
         </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex items-center justify-between gap-3"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Family finance follow-up</h3><span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">Collection rate: {totals?.paymentCompletionRate ?? 0}%</span></div><div className="mt-4 grid gap-3 md:grid-cols-2">{financeSummary?.parentAccounts.map((account, index) => <div key={`${account.parentName}-${index}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? 'Parent account'}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Paid {currency.format(account.totalPaid ?? 0)} · Debt {currency.format(account.totalDebt ?? 0)} · {account.studentCount ?? 0} student(s)</p></div>) ?? <p className="text-sm text-gray-500 dark:text-gray-400">No EduPay family account is available yet.</p>}</div></div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"><div className="flex items-center justify-between gap-3"><h3 className="font-bold text-kcs-blue-900 dark:text-white">Family finance follow-up</h3><span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">Collection rate: {totals?.paymentCompletionRate ?? 0}%</span></div><div className="mt-4 grid gap-3 md:grid-cols-2">{financeSummary?.parentAccounts.map((account, index) => <div key={`${account.parentName}-${index}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? 'Parent account'}</p><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Paid {currency.format(account.totalPaid ?? 0)} Â· Debt {currency.format(account.totalDebt ?? 0)} Â· {account.studentCount ?? 0} student(s)</p></div>) ?? <p className="text-sm text-gray-500 dark:text-gray-400">No EduPay family account is available yet.</p>}</div></div>
       </div>
     )
   }
@@ -3029,12 +3053,12 @@ const AdminSectionView = ({
     const reportWindow = buildReportWindow(reportCadence)
     reportWindow.label = `${reportWindow.start.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} - ${reportWindow.end.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}`
     const cadenceLabels: Record<AdminReportCadence, string> = { daily: tr('Journalier','Daily'), weekly: tr('Hebdomadaire','Weekly'), monthly: tr('Mensuel','Monthly'), annual: tr('Annuel','Annual') }
-    const categoryLabels: Record<AdminReportCategory, string> = { enrollment: tr('Inscriptions','Enrollment'), academic: tr('Académique','Academic'), operations: tr('Opérations','Operations'), executive: tr('Rapport complet','Full report') }
+    const categoryLabels: Record<AdminReportCategory, string> = { enrollment: tr('Inscriptions','Enrollment'), academic: tr('AcadÃ©mique','Academic'), operations: tr('OpÃ©rations','Operations'), executive: tr('Rapport complet','Full report') }
     const reportStats = [
-      { label: tr('Période','Period'), value: cadenceLabels[reportCadence], detail: reportWindow.label, icon: CalendarDays },
+      { label: tr('PÃ©riode','Period'), value: cadenceLabels[reportCadence], detail: reportWindow.label, icon: CalendarDays },
       { label: tr('Indicateurs','Indicators'), value: String(reportRows.length), detail: categoryLabels[reportCategory], icon: BarChart3 },
-      { label: tr('Élèves à risque','At-risk students'), value: String(officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length), detail: tr('académique, présence ou discipline','academic, attendance or discipline'), icon: AlertTriangle },
-      { label: tr('Exports','Exports'), value: 'PDF XLS CSV', detail: tr('téléchargement ou impression','download or print'), icon: Download },
+      { label: tr('Ã‰lÃ¨ves Ã  risque','At-risk students'), value: String(officialRoster.filter((student) => getStudentRisk(student) === 'Needs action').length), detail: tr('acadÃ©mique, prÃ©sence ou discipline','academic, attendance or discipline'), icon: AlertTriangle },
+      { label: tr('Exports','Exports'), value: 'PDF XLS CSV', detail: tr('tÃ©lÃ©chargement ou impression','download or print'), icon: Download },
     ]
 
     return (
@@ -3046,14 +3070,14 @@ const AdminSectionView = ({
                 <FileText size={20} />
                 <span className="text-xs font-bold uppercase tracking-wide">{tr('Rapports du super administrateur','Super Admin Reports')}</span>
               </div>
-              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports détaillés exportables','Detailed exportable reports')}</h2>
+              <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports dÃ©taillÃ©s exportables','Detailed exportable reports')}</h2>
               <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">
-                {tr("Générer des rapports journaliers, hebdomadaires, mensuels ou annuels avec les données d’inscription, académiques, opérationnelles, financières, disciplinaires et les alertes IA.", "Generate daily, weekly, monthly or annual reports using enrollment, academic, operations, finance, discipline and AI-alert data.")}
+                {tr("GÃ©nÃ©rer des rapports journaliers, hebdomadaires, mensuels ou annuels avec les donnÃ©es dâ€™inscription, acadÃ©miques, opÃ©rationnelles, financiÃ¨res, disciplinaires et les alertes IA.", "Generate daily, weekly, monthly or annual reports using enrollment, academic, operations, finance, discipline and AI-alert data.")}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
               <label className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                {tr('Fréquence','Frequency')}
+                {tr('FrÃ©quence','Frequency')}
                 <select value={reportCadence} onChange={(event) => setReportCadence(event.target.value as AdminReportCadence)} className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold normal-case tracking-normal text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                   {Object.entries(cadenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
@@ -3089,9 +3113,9 @@ const AdminSectionView = ({
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="font-bold text-kcs-blue-900 dark:text-white">{categoryLabels[reportCategory]} - {cadenceLabels[reportCadence]}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{tr('Période couverte','Covered period')}: {reportWindow.label}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{tr('PÃ©riode couverte','Covered period')}: {reportWindow.label}</p>
               </div>
-              <span className="w-fit rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200">{tr('Prêt pour audit','Audit-ready')}</span>
+              <span className="w-fit rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-200">{tr('PrÃªt pour audit','Audit-ready')}</span>
             </div>
             <div className="-mx-1 overflow-x-auto px-1">
               <table className="min-w-full divide-y divide-gray-100 text-left text-sm dark:divide-kcs-blue-800">
@@ -3120,7 +3144,7 @@ const AdminSectionView = ({
           <div className="space-y-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Exporter le rapport','Export report')}</h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr("Le PDF ouvre la fenêtre d’impression; Excel et CSV sont téléchargés directement.", "PDF opens the print dialog; Excel and CSV download directly.")}</p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr("Le PDF ouvre la fenÃªtre dâ€™impression; Excel et CSV sont tÃ©lÃ©chargÃ©s directement.", "PDF opens the print dialog; Excel and CSV download directly.")}</p>
               <div className="mt-4 grid gap-3">
                 <button className={`${adminButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'pdf', officialRoster, admissionRequests)}>
                   <FileText size={16} /> PDF
@@ -3246,7 +3270,7 @@ const AdminDashboard = () => {
     aiSupport: staff.department || 'Unassigned department',
   }))
   const dashboardRecentActivity = (dashboardOverview?.recentActivity ?? []).map((item: any) =>
-    item.actor + ' · ' + item.action + ' · ' + new Date(item.createdAt).toLocaleString(),
+    item.actor + ' Â· ' + item.action + ' Â· ' + new Date(item.createdAt).toLocaleString(),
   )
   const dashboardSystemSignals = [
     { title: 'Shared registry', severity: dashboardDirectory ? 'healthy' : 'unavailable', detail: dashboardDirectory ? 'Orbit directory synchronized.' : 'Orbit directory could not be loaded.', roles: ['admin'] },
@@ -3447,7 +3471,7 @@ const AdminDashboard = () => {
                         {event.status}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{event.platform} • {event.audience}</p>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{event.platform} â€¢ {event.audience}</p>
                     <p className="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-300">{event.nextStep}</p>
                   </div>
                 ))}
@@ -3625,7 +3649,7 @@ const AdminDashboard = () => {
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{account.parentName ?? 'Family account'}</p>
                       <span className="text-sm font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{currency.format(account.totalDebt ?? 0)}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">EduPay synchronized • Paid {currency.format(account.totalPaid ?? 0)} • {account.studentCount ?? 0} student(s)</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">EduPay synchronized â€¢ Paid {currency.format(account.totalPaid ?? 0)} â€¢ {account.studentCount ?? 0} student(s)</p>
                   </button>
                 )) ?? <p className="text-sm text-gray-500 dark:text-gray-400">Loading synchronized EduPay accounts...</p>}
                 {dashboardFinanceError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{dashboardFinanceError}</p>}
@@ -3642,7 +3666,7 @@ const AdminDashboard = () => {
                   <button type="button" onClick={() => setReportCardControl(item)} key={`${item.student}-${item.term ?? item.years}`} className="w-full rounded-xl bg-gray-50 p-4 text-left transition hover:bg-kcs-gold-50 dark:bg-kcs-blue-800/30 dark:hover:bg-kcs-blue-800/60">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.student}</p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {item.term ?? item.years} • {item.principalStatus ?? item.status}
+                      {item.term ?? item.years} â€¢ {item.principalStatus ?? item.status}
                     </p>
                   </button>
                 ))}
@@ -3715,7 +3739,7 @@ const AdminDashboard = () => {
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{item.function}</p>
                       <span className="font-bold text-kcs-blue-700 dark:text-kcs-blue-300">{item.value}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.metric} • {item.status}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.metric} â€¢ {item.status}</p>
                   </div>
                 ))}
               </div>
@@ -3727,7 +3751,7 @@ const AdminDashboard = () => {
                 {auditLogs.map((log) => (
                   <div key={`${log.actor}-${log.time}`} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{log.action}</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{log.actor} • {log.target}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{log.actor} â€¢ {log.target}</p>
                     <p className="mt-1 text-xs text-gray-400">{log.time}</p>
                   </div>
                 ))}
@@ -3738,7 +3762,7 @@ const AdminDashboard = () => {
           <div className="rounded-2xl border border-gray-100 bg-white p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-bold text-kcs-blue-900 dark:text-white">Schedule Conflict Control</h2>
-              <span className="badge-blue text-xs">Teacher • room • class timetable</span>
+              <span className="badge-blue text-xs">Teacher â€¢ room â€¢ class timetable</span>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               {scheduleConflicts.map((conflict) => (

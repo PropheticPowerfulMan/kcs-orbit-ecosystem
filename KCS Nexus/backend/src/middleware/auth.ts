@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
+import { prisma } from '../config/prisma.js'
 import { ApiError } from '../utils/api.js'
 
 type AuthPayload = {
@@ -12,7 +13,7 @@ export type AuthenticatedRequest = Request & {
   user?: AuthPayload
 }
 
-export const authenticate = (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {
     return next(new ApiError(401, 'Authentication required'))
@@ -21,6 +22,10 @@ export const authenticate = (req: AuthenticatedRequest, _res: Response, next: Ne
   try {
     const token = header.replace('Bearer ', '')
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload
+    if (payload.role === 'parent') {
+      const parent = await prisma.user.findUnique({ where: { id: payload.sub }, select: { accountBlockedAt: true } })
+      if (parent?.accountBlockedAt) return next(new ApiError(403, 'This parent account is blocked. Contact the school administration.'))
+    }
     req.user = payload
     next()
   } catch {

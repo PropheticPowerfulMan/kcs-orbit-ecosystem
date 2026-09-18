@@ -44,20 +44,20 @@ const dispatchMutationFeedback = (type: 'success' | 'error', message: string) =>
 }
 
 const defaultSuccessMessage = (method?: string) => {
-  if (method === 'POST') return 'OpÃ©ration crÃ©Ã©e et enregistrÃ©e avec succÃ¨s.'
-  if (method === 'DELETE') return 'Suppression effectuÃ©e avec succÃ¨s.'
-  return 'Modification enregistrÃ©e avec succÃ¨s.'
+  if (method === 'POST') return 'OpÃƒÂ©ration crÃƒÂ©ÃƒÂ©e et enregistrÃƒÂ©e avec succÃƒÂ¨s.'
+  if (method === 'DELETE') return 'Suppression effectuÃƒÂ©e avec succÃƒÂ¨s.'
+  return 'Modification enregistrÃƒÂ©e avec succÃƒÂ¨s.'
 }
 
 const mutationErrorMessage = (error: AxiosError) => {
   const payload = error.response?.data as { message?: string; error?: string } | undefined
   if (payload?.message) return payload.message
   if (payload?.error) return payload.error
-  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps Ã  rÃ©pondre. Veuillez rÃ©essayer.'
-  if (!error.response) return 'Connexion au service impossible. VÃ©rifiez votre connexion puis rÃ©essayez.'
-  return 'Lâ€™opÃ©ration nâ€™a pas pu Ãªtre effectuÃ©e. Veuillez rÃ©essayer.'
+  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps ÃƒÂ  rÃƒÂ©pondre. Veuillez rÃƒÂ©essayer.'
+  if (!error.response) return 'Connexion au service impossible. VÃƒÂ©rifiez votre connexion puis rÃƒÂ©essayez.'
+  return 'LÃ¢â‚¬â„¢opÃƒÂ©ration nÃ¢â‚¬â„¢a pas pu ÃƒÂªtre effectuÃƒÂ©e. Veuillez rÃƒÂ©essayer.'
 }
-// Request interceptor â€” attach JWT token
+// Request interceptor Ã¢â‚¬â€ attach JWT token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().token
@@ -72,7 +72,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor â€” handle token refresh
+// Response interceptor Ã¢â‚¬â€ handle token refresh
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toUpperCase()
@@ -213,6 +213,8 @@ export const registryAPI = {
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
   resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),
+  parentAccessStatuses: () => api.get('/registry/parents/access-statuses'),
+  setParentAccess: (identifier: string, blocked: boolean, reason?: string) => api.patch('/registry/parents/' + encodeURIComponent(identifier) + '/account-access', { blocked, reason }),
   deleteEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.delete(`/registry/entities/${entityType}/${identifier}`, { params: { identifierType } }),
   registerFamily: (data: object) => api.post('/registry/families', data),
 }
