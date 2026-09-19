@@ -141,7 +141,14 @@ class UserCreateSerializer(serializers.ModelSerializer):
         role = validated_data.get('role', User.ROLE_STUDENT)
         submitted_email = (validated_data.get('email') or '').strip().lower()
         trusted_legacy_import = bool(self.context.get('legacy_import'))
-        if role in {User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE} and (not submitted_email or not trusted_legacy_import):
+        allow_institutional_override = bool(self.context.get('allow_institutional_email_override'))
+        if allow_institutional_override and submitted_email:
+            if not submitted_email.endswith('@ourkcs.org'):
+                raise serializers.ValidationError({'email': 'The institutional email must use the @ourkcs.org domain.'})
+            if User.objects.filter(email__iexact=submitted_email).exists():
+                raise serializers.ValidationError({'email': 'This institutional email is already assigned.'})
+            validated_data['email'] = submitted_email
+        elif role in {User.ROLE_STUDENT, User.ROLE_TEACHER, User.ROLE_EMPLOYEE} and (not submitted_email or not trusted_legacy_import):
             validated_data['email'] = generate_school_email(
                 first_name=validated_data.get('first_name', ''),
                 middle_name=validated_data.get('middle_name', ''),

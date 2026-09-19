@@ -214,7 +214,10 @@ class TeacherCreateSerializer(serializers.ModelSerializer):
         user_data = validated_data.pop('user')
         employee_type = validated_data.get('employee_type', Teacher.EMPLOYEE_TYPE_TEACHER)
         user_data['role'] = 'teacher' if employee_type == Teacher.EMPLOYEE_TYPE_TEACHER else 'employee'
-        user_serializer = UserCreateSerializer(data=user_data)
+        user_serializer = UserCreateSerializer(
+            data=user_data,
+            context={'allow_institutional_email_override': True},
+        )
         user_serializer.is_valid(raise_exception=True)
         user = user_serializer.save()
         if not validated_data.get('work_email'):

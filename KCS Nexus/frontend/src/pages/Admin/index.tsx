@@ -1229,6 +1229,7 @@ const MainTeacherAssignmentPanel = () => {
   const [section, setSection] = useState("")
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState("")
+  const [result, setResult] = useState<{ok:boolean;message:string}|null>(null)
   const load = async () => {
     setBusy(true)
     try {
@@ -1245,17 +1246,19 @@ const MainTeacherAssignmentPanel = () => {
     setBusy(true)
     try {
       await mainTeacherAPI.assign(teacherId, { status: "HOMEROOM_TEACHER", homeroomGrade: grade, homeroomSection: section })
-      setNotice(tr("Main Teacher affecté. Ses autres cours et son statut employé sont conservés.", "Main Teacher assigned. Other courses and employee status remain unchanged."))
+      const message = tr("Main Teacher affecté. Ses autres cours et son statut employé sont conservés.", "Main Teacher assigned. Other courses and employee status remain unchanged.")
+      setNotice(message); setResult({ok:true,message})
       await load()
-    } catch (error: any) { setNotice(error?.response?.data?.message || tr("Affectation impossible.", "Assignment failed.")); setBusy(false) }
+    } catch (error: any) { const message=error?.response?.data?.message || tr("Affectation impossible.", "Assignment failed."); setNotice(message); setResult({ok:false,message}); setBusy(false) }
   }
   const release = async (id: string) => {
     setBusy(true)
-    try { await mainTeacherAPI.assign(id, { status: "TEACHER" }); setNotice(tr("Affectation Main Teacher retirée; le compte enseignant et employé reste actif.", "Main Teacher assignment removed; teacher and employee account stays active.")); await load() }
-    catch (error: any) { setNotice(error?.response?.data?.message || tr("Modification impossible.", "Update failed.")); setBusy(false) }
+    try { await mainTeacherAPI.assign(id, { status: "TEACHER" }); const message=tr("Affectation Main Teacher retirée; le compte enseignant et employé reste actif.", "Main Teacher assignment removed; teacher and employee account stays active."); setNotice(message); setResult({ok:true,message}); await load() }
+    catch (error: any) { const message=error?.response?.data?.message || tr("Modification impossible.", "Update failed."); setNotice(message); setResult({ok:false,message}); setBusy(false) }
   }
   const name = (item: any) => [item.user?.lastName, item.user?.middleName, item.user?.firstName].filter(Boolean).join(" ")
   return <div className="space-y-6">
+    {result&&<div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950"><div className={"mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black text-white "+(result.ok?"bg-emerald-600":"bg-red-600")}>{result.ok?"✓":"!"}</div><h3 className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{result.ok?tr("Opération réussie","Operation successful"):tr("Opération impossible","Operation failed")}</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{result.message}</p><button type="button" onClick={()=>setResult(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 font-bold text-white">{tr("Fermer","Close")}</button></div></div>}
     <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
       <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr("Responsabilité de classe", "Class responsibility")}</p>
       <h2 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr("Affectation des Main Teachers", "Main Teacher Assignment")}</h2>

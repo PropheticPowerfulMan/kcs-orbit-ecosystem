@@ -18,7 +18,7 @@ class TeacherCreateSerializerTests(TestCase):
                 "user": {
                     "first_name": "Aline",
                     "last_name": "Mbuyi",
-                    "email": "aline.mbuyi@example.com",
+                    "email": "aline.custom@ourkcs.org",
                     "password": "EmployeePass123!",
                 },
                 "employee_type": Teacher.EMPLOYEE_TYPE_ADMINISTRATIVE,
@@ -30,6 +30,8 @@ class TeacherCreateSerializerTests(TestCase):
         employee = serializer.save()
 
         self.assertEqual(employee.user.role, User.ROLE_EMPLOYEE)
+        self.assertEqual(employee.user.email, 'aline.custom@ourkcs.org')
+        self.assertEqual(employee.work_email, 'aline.custom@ourkcs.org')
         self.assertTrue(employee.employee_id.startswith("SAV-EMP-"))
         self.assertEqual(employee.teacher_id, employee.employee_id)
 

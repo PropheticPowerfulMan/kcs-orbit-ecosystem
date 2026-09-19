@@ -382,7 +382,7 @@ def forgot_password(request):
 
     user = User.objects.filter(email__iexact=email, is_active=True).first()
     if user:
-        temporary_password = generate_temporary_password()
+        temporary_password = generate_temporary_password(user.role)
         message = (
             f'Bonjour {user.get_full_name() or user.username},\n\n'
             'Une demande de réinitialisation de mot de passe a été faite pour votre compte SAVANEX.\n'
