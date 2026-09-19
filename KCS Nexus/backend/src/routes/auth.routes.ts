@@ -419,7 +419,7 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       const federationGracePeriodMs = 30 * 60 * 1000
       const identityWasJustVerified = isFederated && Date.now() - user.updatedAt.getTime() < federationGracePeriodMs
       if (identityWasJustVerified) return user
-      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identitÃ© a Ã©tÃ© supprimÃ©e ou dÃ©sactivÃ©e dans lâ€™Ã©cosystÃ¨me.')
+      if (isFederated && requiresDirectoryIdentity) throw new ApiError(410, 'Cette identité a été supprimée ou désactivée dans l’écosystème.')
       return user
     }
 
@@ -670,7 +670,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(resolvedUser, false), token, refreshToken }, 'Connexion rÃ©ussie')
+  return success(res, { user: buildSafeUser(resolvedUser, false), token, refreshToken }, 'Connexion réussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -753,12 +753,12 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
     const message = [
       `Bonjour ${user.firstName},`,
       '',
-      'Une demande de rÃ©cupÃ©ration a Ã©tÃ© reÃ§ue pour votre compte KCS Nexus.',
+      'Une demande de récupération a été reçue pour votre compte KCS Nexus.',
       `Identifiant: ${user.email}`,
       `Nouveau mot de passe temporaire: ${temporaryPassword}`,
       '',
-      'Pour votre sÃ©curitÃ©, changez ce mot de passe aprÃ¨s votre prochaine connexion.',
-      "Si vous n'Ãªtes pas Ã  l'origine de cette demande, contactez l'administration.",
+      'Pour votre sécurité, changez ce mot de passe après votre prochaine connexion.',
+      "Si vous n'êtes pas à l'origine de cette demande, contactez l'administration.",
     ].join('\n')
 
     const result = channel === 'sms'

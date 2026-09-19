@@ -3,6 +3,7 @@ import { CalendarDays, CheckCircle2, RefreshCw, Sparkles, Trash2 } from 'lucide-
 import { shiningStudentsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
+import PortalSidebar from '@/components/layout/PortalSidebar'
 
 type Schedule = {
   id: string
@@ -92,7 +93,7 @@ export default function ShiningStudentsPage() {
     EXCUSED: tr('Excusé / à reprogrammer', 'Excused / reschedule'),
   }[status])
 
-  return <div className="min-h-screen bg-slate-50 px-4 py-6 dark:bg-kcs-blue-950 sm:px-6 lg:px-8">
+  return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 px-4 py-6 pt-20 dark:bg-kcs-blue-950 sm:px-6 lg:px-8 lg:pt-8">
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-sky-700 p-6 text-white shadow-xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -125,5 +126,5 @@ export default function ShiningStudentsPage() {
         </div>
       </section>
     </div>
-  </div>
+  </main></div>
 }

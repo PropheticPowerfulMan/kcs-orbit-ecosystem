@@ -225,7 +225,7 @@ const AIChat = () => {
                 <button
                   onClick={() => setChatLanguage(nextChatLanguage)}
                   className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-xs font-bold text-white transition-colors hover:bg-white/30"
-                  title={nextChatLanguage === 'fr' ? 'FranÃ§ais' : 'English'}
+                  title={nextChatLanguage === 'fr' ? 'Français' : 'English'}
                   type="button"
                 >
                   {nextChatLanguage.toUpperCase()}

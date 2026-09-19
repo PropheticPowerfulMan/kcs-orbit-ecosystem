@@ -44,20 +44,20 @@ const dispatchMutationFeedback = (type: 'success' | 'error', message: string) =>
 }
 
 const defaultSuccessMessage = (method?: string) => {
-  if (method === 'POST') return 'OpÃƒÂ©ration crÃƒÂ©ÃƒÂ©e et enregistrÃƒÂ©e avec succÃƒÂ¨s.'
-  if (method === 'DELETE') return 'Suppression effectuÃƒÂ©e avec succÃƒÂ¨s.'
-  return 'Modification enregistrÃƒÂ©e avec succÃƒÂ¨s.'
+  if (method === 'POST') return 'Opération créée et enregistrée avec succès.'
+  if (method === 'DELETE') return 'Suppression effectuée avec succès.'
+  return 'Modification enregistrée avec succès.'
 }
 
 const mutationErrorMessage = (error: AxiosError) => {
   const payload = error.response?.data as { message?: string; error?: string } | undefined
   if (payload?.message) return payload.message
   if (payload?.error) return payload.error
-  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps ÃƒÂ  rÃƒÂ©pondre. Veuillez rÃƒÂ©essayer.'
-  if (!error.response) return 'Connexion au service impossible. VÃƒÂ©rifiez votre connexion puis rÃƒÂ©essayez.'
-  return 'LÃ¢â‚¬â„¢opÃƒÂ©ration nÃ¢â‚¬â„¢a pas pu ÃƒÂªtre effectuÃƒÂ©e. Veuillez rÃƒÂ©essayer.'
+  if (error.code === 'ECONNABORTED') return 'Le service a mis trop de temps à répondre. Veuillez réessayer.'
+  if (!error.response) return 'Connexion au service impossible. Vérifiez votre connexion puis réessayez.'
+  return 'L’opération n’a pas pu être effectuée. Veuillez réessayer.'
 }
-// Request interceptor Ã¢â‚¬â€ attach JWT token
+// Request interceptor - attach JWT token
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = useAuthStore.getState().token
@@ -72,7 +72,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor Ã¢â‚¬â€ handle token refresh
+// Response interceptor - handle token refresh
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toUpperCase()

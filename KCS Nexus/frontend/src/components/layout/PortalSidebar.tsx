@@ -294,7 +294,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       <div className={isMobile ? 'nexus-mobile-menu-actions' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}>
         {(isMobile || !sidebarCollapsed) && (
           <div className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold leading-4 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/35 dark:text-emerald-200">
-            {currentLanguage === 'fr' ? 'RÃ¨gle KCS Â· rÃ©ussite et passage â‰¥ 70 %' : 'KCS rule Â· success and promotion â‰¥ 70%'}
+            {currentLanguage === 'fr' ? 'Règle KCS · réussite et passage ≥ 70 %' : 'KCS rule · success and promotion ≥ 70%'}
           </div>
         )}
         {(user.role === "teacher" || user.role === "admin") && (
@@ -310,7 +310,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           type="button"
           onClick={toggleLanguage}
           className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center gap-1 px-0'}`}
-          title={!isMobile && sidebarCollapsed ? (nextLanguage === 'fr' ? 'FranÃ§ais' : 'English') : undefined}
+          title={!isMobile && sidebarCollapsed ? (nextLanguage === 'fr' ? 'Français' : 'English') : undefined}
           aria-label={t('common.language')}
         >
           {!isMobile && sidebarCollapsed ? (
@@ -379,7 +379,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             onClick={toggleLanguage}
             className="flex h-10 flex-shrink-0 items-center justify-center gap-1 rounded-full border border-kcs-blue-100 bg-white/70 px-2 text-kcs-blue-700 shadow-sm transition-colors hover:bg-kcs-blue-50 dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800"
             aria-label={t('common.language')}
-            title={nextLanguage === 'fr' ? 'FranÃ§ais' : 'English'}
+            title={nextLanguage === 'fr' ? 'Français' : 'English'}
           >
             <Globe size={16} />
             <span className="text-xs font-bold">{nextLanguage.toUpperCase()}</span>

@@ -207,7 +207,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const sectionTitles: Record<string, { title: string; subtitle: string; icon: React.ElementType }> = {
     courses: { title: 'My Courses', subtitle: 'Assigned classes, rooms, schedules, and teaching load.', icon: BookOpen },
     students: { title: 'Students', subtitle: 'Academic profile, risk level, strengths, and support needs for each learner.', icon: Users },
-    attendance: { title: tr('PrÃ©sence', 'Attendance'), subtitle: tr('Registre journalier, tendances de la classe et indicateurs de suivi.', 'Daily attendance records, class trends, and follow-up signals.'), icon: ClipboardCheck },
+    attendance: { title: tr('Présence', 'Attendance'), subtitle: tr('Registre journalier, tendances de la classe et indicateurs de suivi.', 'Daily attendance records, class trends, and follow-up signals.'), icon: ClipboardCheck },
     assignments: { title: 'Assignments', subtitle: 'Homework status, priorities, missing work, and LMS resources.', icon: FileText },
     grades: { title: 'Gradebook', subtitle: 'Assignments, final grades, averages, medians, legend, and grading scale.', icon: TrendingUp },
     'report-card': { title: 'Report Cards', subtitle: 'Official Gradebook synthesis, attendance, comments, controlled submission, and publication status.', icon: GraduationCap },
@@ -421,7 +421,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       setMessageDraft((draft) => ({ ...draft, to: draft.to || contacts[0]?.id || '' }))
       const liveMessages = (messagesResponse.data?.data ?? []).map((message: any) => ({
         id: message.id,
-        from: message.senderId === user.id ? `To ${[message.recipient?.firstName, message.recipient?.middleName, message.recipient?.lastName].filter(Boolean).join(' ')} â€” ${message.recipient?.role ?? 'SCHOOL'}` : `${[message.sender?.firstName, message.sender?.middleName, message.sender?.lastName].filter(Boolean).join(' ')} â€” ${message.sender?.role ?? 'SCHOOL'}`,
+        from: message.senderId === user.id ? `To ${[message.recipient?.firstName, message.recipient?.middleName, message.recipient?.lastName].filter(Boolean).join(' ')} — ${message.recipient?.role ?? 'SCHOOL'}` : `${[message.sender?.firstName, message.sender?.middleName, message.sender?.lastName].filter(Boolean).join(' ')} — ${message.sender?.role ?? 'SCHOOL'}`,
         subject: message.subject,
         body: message.body,
         time: new Date(message.createdAt).toLocaleString(),
@@ -455,7 +455,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           id: course.id,
           name: course.name,
           className: canonicalClassLabel(course.grade),
-          room: course.schedules?.[0]?.room ?? 'â€”',
+          room: course.schedules?.[0]?.room ?? '—',
           teacher: 'Assigned teacher',
           abbreviation: course.code,
           creditHours: course.credits ?? 1,
@@ -633,9 +633,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       if (segment === 'discipline') return { columns: ['Reference', 'Student', 'Date', 'Category', 'Level', 'Status'], rows: disciplineList.map((item) => [item.id, item.student, item.date, item.category, item.level, item.status]), narrative: 'Confidential discipline-report register. Distribution is restricted to authorized staff.' }
       if (segment === 'messages') return { columns: ['From / To', 'Subject', 'Time', 'Response'], rows: inbox.map((item) => [item.from, item.subject, item.time, item.requiresResponse ? 'Required' : 'No']), narrative: 'Confidential teacher communication register.' }
       if (segment === 'settings') return { columns: ['Field', 'Recorded value'], rows: [['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim()], ['Email', profileDraft.email], ['Phone', profileDraft.phone]], narrative: 'Teacher profile record. This document does not include the profile photo.' }
-      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: teacherStudents.map((student) => [student.name, canonicalClassLabel(student.grade, student.section), `${student.average ?? 'â€”'}%`, `${student.attendance ?? 'â€”'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
+      return { columns: ['Student', 'Class', 'Average', 'Attendance', 'Risk'], rows: teacherStudents.map((student) => [student.name, canonicalClassLabel(student.grade, student.section), `${student.average ?? '—'}%`, `${student.attendance ?? '—'}%`, student.risk ?? 'low']), narrative: 'Current teacher student-support register.' }
     })()
-    if (!printOfficialPdf({ title: `Teacher ${meta.title} Export`, subtitle: 'KCS Nexus AI â€” Kinshasa Christian School', metadata: [['Document', meta.title], ['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim() || 'Teacher'], ['Academic year', '2025â€“2026'], ['Records', exportData.rows.length]], ...exportData, orientation: exportData.columns.length > 5 ? 'landscape' : 'portrait' })) return runAction('Allow pop-ups to generate the official printable PDF.')
+    if (!printOfficialPdf({ title: `Teacher ${meta.title} Export`, subtitle: 'KCS Nexus AI — Kinshasa Christian School', metadata: [['Document', meta.title], ['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim() || 'Teacher'], ['Academic year', '2025–2026'], ['Records', exportData.rows.length]], ...exportData, orientation: exportData.columns.length > 5 ? 'landscape' : 'portrait' })) return runAction('Allow pop-ups to generate the official printable PDF.')
     runAction(`${meta.title} contextual official PDF was generated.`)
   }
   const submitTeacherReport = async () => {
@@ -747,7 +747,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         id: nextCourse.id,
         name: nextCourse.name,
         abbreviation: nextCourse.abbreviation,
-        description: `${nextCourse.name} Â· ${selectedGrade} Â· synchronized from Teacher My Courses`,
+        description: `${nextCourse.name} · ${selectedGrade} · synchronized from Teacher My Courses`,
         grade: selectedGrade,
         credits: nextCourse.creditHours,
         room: nextCourse.room,
@@ -932,7 +932,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         id: enrollmentDialogCourse.id,
         name: enrollmentDialogCourse.name,
         abbreviation: enrollmentDialogCourse.abbreviation,
-        description: `${enrollmentDialogCourse.name} Â· ${enrollmentDialogCourse.className} Â· synchronized from Subject Enrollment`,
+        description: `${enrollmentDialogCourse.name} · ${enrollmentDialogCourse.className} · synchronized from Subject Enrollment`,
         grade: canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0]),
         credits: normalizeCreditHours(enrollmentDialogCourse.creditHours),
         room: enrollmentDialogCourse.room,
@@ -973,7 +973,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         id: course.id,
         name: course.name,
         abbreviation: course.abbreviation,
-        description: `${course.name} Â· ${course.className} Â· synchronized from Subject Enrollment`,
+        description: `${course.name} · ${course.className} · synchronized from Subject Enrollment`,
         grade: canonicalClassLabel(course.className || course.gradeLevels[0]),
         credits: normalizeCreditHours(course.creditHours),
         room: course.room,
@@ -1407,7 +1407,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                             onClick={() => void toggleCourseEnrollment(subject.id, student)}
                             className={`rounded-full px-3 py-1 text-xs font-semibold ${enrolled ? 'bg-kcs-blue-700 text-white' : 'bg-white text-gray-700 hover:bg-kcs-blue-50 hover:text-kcs-blue-700 dark:bg-kcs-blue-950/50 dark:text-gray-300'}`}
                           >
-                            {enrolled ? 'âœ“' : '+'} {student.name}
+                            {enrolled ? '✓' : '+'} {student.name}
                           </button>
                         )
                       })}
@@ -1438,8 +1438,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <h3 id="course-enrollment-title" className="mt-1 font-display text-2xl font-bold">{enrollmentDialogCourse.name}</h3>
                 <p className="mt-1 text-sm text-blue-100">
                   {canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0])}
-                  {' Â· '}{enrollmentDraftIds.length} enrolled
-                  {' Â· '}{superAdminStudentPool.length} active students in the school
+                  {' · '}{enrollmentDraftIds.length} enrolled
+                  {' · '}{superAdminStudentPool.length} active students in the school
                 </p>
               </div>
               <button
@@ -1549,10 +1549,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                                 : 'border-gray-200 bg-white hover:border-kcs-blue-300 hover:bg-slate-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60'}`}
                             >
                               <span className="w-6 flex-shrink-0 text-right text-[10px] font-black text-gray-400">{studentIndex + 1}</span>
-                              <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border text-xs font-bold ${selected ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-gray-300 text-transparent dark:border-kcs-blue-600'}`}>âœ“</span>
+                              <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border text-xs font-bold ${selected ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-gray-300 text-transparent dark:border-kcs-blue-600'}`}>✓</span>
                               <span className="min-w-0">
                                 <span className="block truncate text-sm font-bold text-kcs-blue-900 dark:text-white">{student.name}</span>
-                                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{student.studentNumber || 'No student number'} Â· {className}</span>
+                                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{student.studentNumber || 'No student number'} · {className}</span>
                               </span>
                             </button>
                           )
@@ -1579,7 +1579,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'students' && (
         <div className="space-y-6">
-          <div className={panelClass}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">Official Orbit student directory</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Active school records enriched with the teacher's verified academic indicators.</p></div><span className="rounded-full bg-kcs-blue-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{registryStatus === 'loading' ? 'Synchronizingâ€¦' : `${visibleTeacherStudents.length} of ${officialStudentCatalog.length} students`}</span></div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, student number, class, advisor, risk..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{studentClassOptions.map((className) => <option key={className}>{className}</option>)}</select></div>{registryStatus === 'error' && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">The Orbit directory could not be loaded. Refresh the page to retry.</p>}</div>
+          <div className={panelClass}><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">Official Orbit student directory</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Active school records enriched with the teacher's verified academic indicators.</p></div><span className="rounded-full bg-kcs-blue-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{registryStatus === 'loading' ? 'Synchronizing…' : `${visibleTeacherStudents.length} of ${officialStudentCatalog.length} students`}</span></div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px]"><input className={inputClass} value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} placeholder="Search name, student number, class, advisor, risk..."/><select className={inputClass} value={studentClassFilter} onChange={(event) => setStudentClassFilter(event.target.value)}><option>All</option>{studentClassOptions.map((className) => <option key={className}>{className}</option>)}</select></div>{registryStatus === 'error' && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300">The Orbit directory could not be loaded. Refresh the page to retry.</p>}</div>
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Import from Super Admin registry</h3>
@@ -2012,7 +2012,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       {segment === 'reports' && (
         <div className="space-y-6">
           <div className={panelClass}><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Operational report generator</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Administrative Staff submission</h3></div><div className="flex flex-wrap gap-2"><select value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value as 'Daily' | 'Weekly' | 'Annual')} className={inputClass}><option>Daily</option><option>Weekly</option><option>Annual</option></select><button type="button" onClick={printTeacherReport} className={compactButton}><Printer size={16}/> Print / PDF</button><button type="button" onClick={submitTeacherReport} className={compactButton}><Upload size={16}/> Submit to staff</button></div></div><div className="mt-5 grid gap-3 md:grid-cols-4">{[['Period', reportPeriod], ['Students', teacherStudents.length], ['Classes', courses.length], ['Generated', new Date().toLocaleDateString()]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs uppercase text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div>{actionMessage && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}</div>
-          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} Â· Average {student.average ?? 'N/A'} Â· Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
+          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · Average {student.average ?? 'N/A'} · Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>
             <h3 className="font-bold text-kcs-blue-900 dark:text-white">Draft report card</h3>
@@ -2074,7 +2074,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       )}
 
       {segment === 'resources' && (
-        <div className="space-y-5"><div className={panelClass}><label className="text-sm font-semibold text-kcs-blue-900 dark:text-white" htmlFor="resource-search">Search learning resources</label><input id="resource-search" value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} className={`${inputClass} mt-3 w-full`} placeholder="Title, subject, type or status..." /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lmsResources.filter((resource) => `${resource.title} ${resource.subject} ${resource.type} ${resource.status}`.toLowerCase().includes(resourceQuery.toLowerCase())).map((resource) => <button type="button" key={resource.title} onClick={() => setSelectedResource(resource)} className={`${panelClass} text-left transition hover:border-kcs-blue-300 hover:shadow-lg`}><div className="flex justify-between gap-3"><LibraryBig className="text-kcs-blue-600 dark:text-kcs-blue-300"/><span className="badge-blue capitalize">{resource.type}</span></div><h3 className="mt-4 font-bold text-kcs-blue-900 dark:text-white">{resource.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{resource.subject} Â· {resource.status}</p><p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">View resource â†’</p></button>)}</div>{selectedResource && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedResource.type}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedResource.title}</h3></div><button type="button" onClick={() => setSelectedResource(null)} aria-label="Close"><X/></button></div><p className="mt-5 text-sm text-gray-600 dark:text-gray-300">Subject: {selectedResource.subject}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Visibility: {selectedResource.audience.join(', ')}</p><button type="button" onClick={() => { setActionMessage(`${selectedResource.title} opened successfully.`); setSelectedResource(null) }} className={`${compactButton} mt-5 w-full`}><BookOpen size={16}/> Open resource</button></div></div>}</div>
+        <div className="space-y-5"><div className={panelClass}><label className="text-sm font-semibold text-kcs-blue-900 dark:text-white" htmlFor="resource-search">Search learning resources</label><input id="resource-search" value={resourceQuery} onChange={(event) => setResourceQuery(event.target.value)} className={`${inputClass} mt-3 w-full`} placeholder="Title, subject, type or status..." /></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{lmsResources.filter((resource) => `${resource.title} ${resource.subject} ${resource.type} ${resource.status}`.toLowerCase().includes(resourceQuery.toLowerCase())).map((resource) => <button type="button" key={resource.title} onClick={() => setSelectedResource(resource)} className={`${panelClass} text-left transition hover:border-kcs-blue-300 hover:shadow-lg`}><div className="flex justify-between gap-3"><LibraryBig className="text-kcs-blue-600 dark:text-kcs-blue-300"/><span className="badge-blue capitalize">{resource.type}</span></div><h3 className="mt-4 font-bold text-kcs-blue-900 dark:text-white">{resource.title}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{resource.subject} · {resource.status}</p><p className="mt-4 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">View resource →</p></button>)}</div>{selectedResource && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-lg rounded-3xl bg-kcs-blue-50 p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex justify-between"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">{selectedResource.type}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{selectedResource.title}</h3></div><button type="button" onClick={() => setSelectedResource(null)} aria-label="Close"><X/></button></div><p className="mt-5 text-sm text-gray-600 dark:text-gray-300">Subject: {selectedResource.subject}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Visibility: {selectedResource.audience.join(', ')}</p><button type="button" onClick={() => { setActionMessage(`${selectedResource.title} opened successfully.`); setSelectedResource(null) }} className={`${compactButton} mt-5 w-full`}><BookOpen size={16}/> Open resource</button></div></div>}</div>
       )}
 
       {segment === 'settings' && <AccountSettingsPanel roleLabel="Teacher account" />}
@@ -2151,8 +2151,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             <h3 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Compose and active threads</h3>
             <div className="mb-4 grid gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
               <select className={inputClass} value={messageDraft.to} onChange={(event) => setMessageDraft((draft) => ({ ...draft, to: event.target.value }))}>
-                <option value="">Select a recipientâ€¦</option>
-                {messageContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.firstName} {contact.lastName} Â· {contact.role.toLowerCase()}</option>)}
+                <option value="">Select a recipient…</option>
+                {messageContacts.map((contact) => <option key={contact.id} value={contact.id}>{contact.firstName} {contact.lastName} · {contact.role.toLowerCase()}</option>)}
               </select>
               <input className={inputClass} value={messageDraft.subject} onChange={(event) => setMessageDraft((draft) => ({ ...draft, subject: event.target.value }))} />
               <textarea className={inputClass} value={messageDraft.body} onChange={(event) => setMessageDraft((draft) => ({ ...draft, body: event.target.value }))} rows={3} />
@@ -2203,9 +2203,9 @@ const TeacherDashboardHome = () => {
   const classAverage = assignedGrades.length ? Math.round(assignedGrades.reduce((sum: number, grade: any) => sum + Number(grade.percentage || 0), 0) / assignedGrades.length) : 0
   const pendingActions = assignedAssignments.reduce((sum: number, assignment: any) => sum + (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length, 0)
   const atRiskStudents = assignedStudents.filter((student: any) => (student.attendanceRate != null && student.attendanceRate < 80) || (student.gpa != null && student.gpa < 2))
-  const todayClasses = (overview?.timetable ?? []).slice(0, 6).map((item: any) => ({ time: item.startTime + 'â€“' + item.endTime, course: item.courseName, room: item.room, students: item.studentCount }))
+  const todayClasses = (overview?.timetable ?? []).slice(0, 6).map((item: any) => ({ time: item.startTime + '–' + item.endTime, course: item.courseName, room: item.room, students: item.studentCount }))
   const gradingQueue = assignedAssignments.filter((assignment: any) => (assignment.submissions ?? []).some((submission: any) => submission.status === 'PENDING')).slice(0, 5).map((assignment: any) => ({ id: assignment.id, title: assignment.title, className: assignment.courseName, due: new Date(assignment.dueDate).toLocaleDateString(), pending: (assignment.submissions ?? []).filter((submission: any) => submission.status === 'PENDING').length }))
-  const studentAlerts = atRiskStudents.slice(0, 5).map((student: any) => ({ student: ((student.user?.firstName ?? '') + ' ' + (student.user?.lastName ?? '')).trim(), severity: student.attendanceRate < 70 || student.gpa < 1.5 ? 'high' : 'medium', note: 'Attendance: ' + (student.attendanceRate ?? 'â€”') + '% Â· GPA: ' + (student.gpa ?? 'â€”') }))
+  const studentAlerts = atRiskStudents.slice(0, 5).map((student: any) => ({ student: ((student.user?.firstName ?? '') + ' ' + (student.user?.lastName ?? '')).trim(), severity: student.attendanceRate < 70 || student.gpa < 1.5 ? 'high' : 'medium', note: 'Attendance: ' + (student.attendanceRate ?? '—') + '% · GPA: ' + (student.gpa ?? '—') }))
   const gradebookCategories = assignedCourses.slice(0, 4).map((course: any) => {
     const courseGrades = assignedGrades.filter((grade: any) => grade.courseId === course.id)
     const average = courseGrades.length ? Math.round(courseGrades.reduce((sum: number, grade: any) => sum + Number(grade.percentage || 0), 0) / courseGrades.length) : 0
@@ -2227,7 +2227,7 @@ const TeacherDashboardHome = () => {
   ]
 
   const aiTools: TeacherAiTool[] = [
-    { task: 'lesson-plan', title: 'Lesson plan', detail: 'Create a differentiated 45-minute lesson from todayâ€™s schedule.' },
+    { task: 'lesson-plan', title: 'Lesson plan', detail: 'Create a differentiated 45-minute lesson from today’s schedule.' },
     { task: 'quiz', title: 'Quiz builder', detail: 'Generate questions from the current subject and class level.' },
     { task: 'feedback', title: 'Smart feedback', detail: 'Improve comments for report cards and parent meetings.' },
     { task: 'intervention', title: 'Risk intervention', detail: 'Suggest support plans for struggling students.' },
@@ -2380,7 +2380,7 @@ const TeacherDashboardHome = () => {
           </div>
         </div>
       </div>
-      {activeAiTool && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI Teacher Assistant</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{activeAiTool.title}</h3></div><button type="button" onClick={() => setActiveAiTool(null)} aria-label="Close AI teacher assistant"><X size={18}/></button></div><p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{activeAiTool.detail}</p><div className="mt-4 min-h-24 rounded-xl bg-kcs-blue-50 p-4 text-sm leading-relaxed text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-kcs-blue-100" style={{ whiteSpace: 'pre-line' }}>{isAiGenerating ? 'Generating a teacher-review draftâ€¦' : aiError || aiResult}</div><textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} className="input-kcs mt-4 min-h-24" placeholder="Add class context or instructions to refine this output..." disabled={isAiGenerating}/><p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Review the draft before sharing it with students or families.</p><div className="mt-4 flex justify-end gap-2"><button type="button" disabled={isAiGenerating} onClick={() => void generateTeacherAi(activeAiTool, aiInstruction)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{isAiGenerating ? 'Generatingâ€¦' : 'Regenerate and improve'}</button></div></div></div>}
+      {activeAiTool && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI Teacher Assistant</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{activeAiTool.title}</h3></div><button type="button" onClick={() => setActiveAiTool(null)} aria-label="Close AI teacher assistant"><X size={18}/></button></div><p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{activeAiTool.detail}</p><div className="mt-4 min-h-24 rounded-xl bg-kcs-blue-50 p-4 text-sm leading-relaxed text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-kcs-blue-100" style={{ whiteSpace: 'pre-line' }}>{isAiGenerating ? 'Generating a teacher-review draft…' : aiError || aiResult}</div><textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} className="input-kcs mt-4 min-h-24" placeholder="Add class context or instructions to refine this output..." disabled={isAiGenerating}/><p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Review the draft before sharing it with students or families.</p><div className="mt-4 flex justify-end gap-2"><button type="button" disabled={isAiGenerating} onClick={() => void generateTeacherAi(activeAiTool, aiInstruction)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{isAiGenerating ? 'Generating…' : 'Regenerate and improve'}</button></div></div></div>}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -2628,7 +2628,7 @@ const TeacherPortal = () => {
                   return (
                     <div key={`${record.studentId}-${record.date}`} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                       <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{student?.name}</p>
-                      <p className="text-xs capitalize text-gray-500 dark:text-gray-400">{record.status} â€¢ visible to parents and admin</p>
+                      <p className="text-xs capitalize text-gray-500 dark:text-gray-400">{record.status} • visible to parents and admin</p>
                     </div>
                   )
                 })}
@@ -2640,7 +2640,7 @@ const TeacherPortal = () => {
                 {ecosystemGrades.slice(0, 4).map((grade) => (
                   <div key={`${grade.studentId}-${grade.assessment}`} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                     <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{grade.subject}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{grade.assessment} â€¢ {grade.score}% â€¢ parent/student updated</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{grade.assessment} • {grade.score}% • parent/student updated</p>
                   </div>
                 ))}
               </div>
@@ -2651,7 +2651,7 @@ const TeacherPortal = () => {
                 {ecosystemAssignments.filter((item) => item.status === 'submitted' || item.status === 'missing').map((item) => (
                   <div key={item.id} className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                     <p className="text-sm font-semibold text-kcs-blue-900 dark:text-white">{item.title}</p>
-                    <p className="text-xs capitalize text-gray-500 dark:text-gray-400">{item.status} â€¢ {item.subject}</p>
+                    <p className="text-xs capitalize text-gray-500 dark:text-gray-400">{item.status} • {item.subject}</p>
                   </div>
                 ))}
               </div>
@@ -2692,7 +2692,7 @@ const TeacherPortal = () => {
                       <p className="font-semibold text-kcs-blue-900 dark:text-white">{resource.title}</p>
                       <span className="rounded-full bg-kcs-gold-100 px-2 py-1 text-xs font-semibold capitalize text-kcs-blue-800 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-300">{resource.type}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{resource.subject} â€¢ {resource.status}</p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{resource.subject} • {resource.status}</p>
                   </div>
                 ))}
               </div>
@@ -2723,13 +2723,13 @@ const TeacherPortal = () => {
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-bold text-kcs-blue-900 dark:text-white">Custom Grading Scale</h2>
-              <span className="badge-blue text-xs">Export PDF â€¢ Excel â€¢ CSV</span>
+              <span className="badge-blue text-xs">Export PDF • Excel • CSV</span>
             </div>
             <div className="grid gap-3 md:grid-cols-4">
               {gradingScales.map((scale) => (
                 <div key={scale.letter} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
                   <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{scale.letter}</p>
-                  <p className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{scale.range} â€¢ GPA {scale.gpa.toFixed(1)}</p>
+                  <p className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{scale.range} • GPA {scale.gpa.toFixed(1)}</p>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{scale.descriptor}</p>
                 </div>
               ))}

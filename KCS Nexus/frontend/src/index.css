@@ -1493,3 +1493,13 @@ html:not(.dark) body:has(.portal-shell) table tbody tr:nth-child(even):not([clas
 html:not(.dark) body:has(.portal-shell) :is([role="dialog"], [role="menu"], [role="listbox"]) {
   box-shadow: 0 24px 70px rgba(24, 67, 101, 0.18) !important;
 }
+
+/* Keep the active dashboard entry readable above daylight surface overrides. */
+html:not(.dark) body:has(.portal-shell) .sidebar-link.active {
+  background-color: #1d5f9e !important;
+  color: #ffffff !important;
+  border-color: rgba(29, 95, 158, 0.55) !important;
+}
+html:not(.dark) body:has(.portal-shell) .sidebar-link.active :is(svg, span) {
+  color: #ffffff !important;
+}

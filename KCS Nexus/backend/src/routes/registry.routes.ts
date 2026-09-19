@@ -350,7 +350,7 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
     return success(res, orbitData, 'Families loaded from Orbit')
   }
 
-  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout lâ€™Ã©cosystÃ¨me.')
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
 
   const students = await prisma.studentProfile.findMany({
     include: {
@@ -432,7 +432,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) =>
     return success(res, orbitData, 'Shared directory loaded from Orbit')
   }
 
-  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout lâ€™Ã©cosystÃ¨me.')
+  throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')
 
   const [students, teachers] = await Promise.all([
     prisma.studentProfile.findMany({
@@ -737,7 +737,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       const emailSent = emailDelivery?.status === 'sent'
       await prisma.correspondenceLog.create({ data: {
         channel: 'EMAIL', status: emailSent ? 'SENT' : 'FAILED', subject: 'Nouveaux identifiants temporaires KCS',
-        body: 'RÃ©initialisation des accÃ¨s institutionnels demandÃ©e depuis KCS Nexus.',
+        body: 'Réinitialisation des accès institutionnels demandée depuis KCS Nexus.',
         recipientName: entity.fullName, recipientEmail: entity.email, sentAt: emailSent ? new Date() : null,
         failureReason: emailSent ? null : String(emailDelivery?.detail || emailDelivery?.status || 'UPSTREAM_EMAIL_NOT_CONFIRMED'),
         metadata: { kind: 'RESET_ACCESS', entityType, provider: 'SAVANEX', identifier },
@@ -745,7 +745,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
       return success(res, resetData, emailSent ? 'Acces temporaire regenere et courriel confirme par le serveur SMTP' : 'Acces temporaire regenere, mais le courriel n a pas ete confirme')
     }
     if (resetResponse.status !== 404) {
-      throw new ApiError(resetResponse.status, String(resetData.detail || 'La rÃ©initialisation SAVANEX a Ã©chouÃ©.'))
+      throw new ApiError(resetResponse.status, String(resetData.detail || 'La réinitialisation SAVANEX a échoué.'))
     }
   }
 
@@ -781,12 +781,12 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
     await updateRegistryEntityInOrbit(entityType, entity.id, env.KCS_ORBIT_ORGANIZATION_ID!, { mustChangePassword: true }, 'orbitId')
   }
   const subject = 'Nouveaux identifiants temporaires KCS Nexus'
-  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a Ã©tÃ© rÃ©initialisÃ© par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accÃ¨s: ${user.accessCode || 'non dÃ©fini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
+  const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a été réinitialisé par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accès: ${user.accessCode || 'non défini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
   const [emailDelivery, smsDelivery] = await Promise.all([
     sendSchoolMail({ to: user.email || entity.email, replyTo: env.SMTP_USER, subject, text: message, html: `<p>${message.replace(/\n/g, '<br>')}</p>` }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
     entityType === 'student'
       ? Promise.resolve({ sent: false as const, reason: 'STUDENT_EMAIL_ONLY' as const })
-      : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non dÃ©fini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
+      : sendSchoolSms(entity.phone, `KCS Nexus: identifiant ${user.email}; code ${user.accessCode || 'non défini'}; mot de passe temporaire ${temporaryPassword}`).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
   ])
   const emailFailureDetail = emailDelivery.sent ? null : (('providerDetail' in emailDelivery ? emailDelivery.providerDetail : undefined) || emailDelivery.reason)
   await prisma.correspondenceLog.create({ data: { channel: 'EMAIL', status: emailDelivery.sent ? 'SENT' : 'FAILED', subject, body: message, recipientName: entity.fullName || [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '), recipientEmail: user.email || entity.email, sentAt: emailDelivery.sent ? new Date() : null, failureReason: emailFailureDetail, metadata: { kind: 'RESET_ACCESS', entityType, recipientId: user.id } } })
