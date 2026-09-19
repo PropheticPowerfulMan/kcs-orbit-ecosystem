@@ -25,7 +25,7 @@ export default function IncidentReportsPage(){
  const print=(r:Report)=>printOfficialPdf({title:'INCIDENT REPORT',subtitle:'Rapport officiel hors discipline',metadata:[['Référence',r.reference],['Statut',labels[r.status]],['Auteur',r.authorName],['Rôle',r.authorRole],['Date du fait',new Date(r.occurredAt).toLocaleString('fr-CD')],['Lieu',r.location],['Catégorie',r.category],['Confidentialité',r.confidentiality],['Empreinte SHA-256',r.verificationHash],['Vérification',`${location.origin}/api/incident-reports/verify/${r.reference}`]],narrative:`${r.description}\n\nPersonnes concernées : ${r.peopleInvolved||'Non renseigné'}\nMesures immédiates : ${r.immediateActions||'Aucune'}\n\nPièce justificative : ${r.attachmentName||'Aucune'}`})
  const update=async(r:Report,status:Report['status'])=>{setBusy(true);setMessage('');try{await incidentReportsAPI.updateStatus(r.id,{status,adminNotes:r.adminNotes||''});setMessage('Rapport mis à jour avec succès.');await load()}catch(error:any){setMessage(error?.response?.data?.message||'Mise à jour impossible.')}finally{setBusy(false)}}
  return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 pt-20 dark:bg-kcs-blue-950 lg:p-8 lg:pt-8">
-  <div className="mx-auto min-w-0 max-w-7xl space-y-6">
+  <div className="w-full min-w-0 max-w-none space-y-6">
    {ordinaryAdministrator ? <AdministratorPortalHeader/> : <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">

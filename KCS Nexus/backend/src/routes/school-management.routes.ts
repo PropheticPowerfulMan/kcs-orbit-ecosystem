@@ -1,6 +1,7 @@
 import { Router, type NextFunction, type Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
+import { env } from '../config/env.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
@@ -107,6 +108,42 @@ const resolveActorId = async (req: AuthenticatedRequest) => {
   return account.id
 }
 
+type OrbitTeacher = { id: string; fullName?: string; firstName?: string; middleName?: string | null; lastName?: string; email?: string | null; phone?: string | null; employeeId?: string | null; department?: string | null; jobTitle?: string | null; employeeType?: string | null }
+
+async function getOrbitTeachers(): Promise<OrbitTeacher[]> {
+  if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return []
+  const baseUrl = env.KCS_ORBIT_API_URL.replace(/\/$/, '')
+  const response = await fetch(baseUrl + '/api/integration/read/shared-directory?organizationId=' + encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID), {
+    headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(3_000),
+  })
+  if (!response.ok) throw new ApiError(response.status, 'Orbit shared directory request failed with status ' + response.status)
+  const directory = await response.json() as { teachers?: OrbitTeacher[] }
+  return (directory.teachers ?? []).filter((teacher) => !teacher.employeeType || teacher.employeeType.toLowerCase() === 'teacher')
+}
+
+function splitOrbitTeacherName(teacher: OrbitTeacher) {
+  if (teacher.firstName || teacher.lastName) return { firstName: teacher.firstName || 'Teacher', middleName: teacher.middleName || null, lastName: teacher.lastName || 'KCS' }
+  const parts = (teacher.fullName || 'KCS Teacher').trim().split(/\s+/)
+  return { firstName: parts.at(-1) || 'Teacher', middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : null, lastName: parts[0] || 'KCS' }
+}
+
+async function materializeOrbitTeacher(orbitId: string) {
+  const teacher = (await getOrbitTeachers()).find((item) => item.id === orbitId)
+  if (!teacher) throw new ApiError(404, 'Teacher not found in the official Orbit directory')
+  const identity = splitOrbitTeacherName(teacher)
+  const email = teacher.email?.trim().toLowerCase() || orbitId.toLowerCase() + '@ourkcs.org'
+  let user = await prisma.user.findFirst({ where: { OR: [{ orbitUserId: orbitId }, { email: { equals: email, mode: 'insensitive' } }] } })
+  if (!user) {
+    const accessCode = 'ACC-TCH-' + orbitId.replace(/[^a-z0-9]/gi, '').slice(-8).toUpperCase()
+    user = await prisma.user.create({ data: { email, accessCode, firstName: identity.firstName, middleName: identity.middleName, lastName: identity.lastName, role: 'TEACHER', phone: teacher.phone || null, orbitUserId: orbitId, orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID } })
+  } else if (user.role !== 'TEACHER' || user.orbitUserId !== orbitId) {
+    user = await prisma.user.update({ where: { id: user.id }, data: { role: 'TEACHER', orbitUserId: orbitId, orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID, firstName: identity.firstName, middleName: identity.middleName, lastName: identity.lastName } })
+  }
+  return prisma.teacherProfile.upsert({
+    where: { userId: user.id }, update: {},
+    create: { userId: user.id, employeeNumber: teacher.employeeId || 'TCH-' + orbitId.slice(-10).toUpperCase(), department: teacher.department || 'Academics', qualification: teacher.jobTitle || 'Teacher', yearsOfExperience: 0 },
+  })
+}
 const buildInquiryNumber = () => `INQ-${Date.now().toString().slice(-7)}`
 const asPrismaData = <T extends object>(value: T) => value as any
 
@@ -148,20 +185,33 @@ schoolManagementRouter.patch('/admission-inquiries/:id/status', requireRoles('ad
 }))
 
 schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdministrator, asyncHandler(async (_req, res) => {
-  const teachers = await prisma.teacherProfile.findMany({
-    orderBy: { user: { lastName: 'asc' } },
-    select: {
-      id: true, status: true, homeroomGrade: true, homeroomSection: true,
-      user: { select: { firstName: true, middleName: true, lastName: true, email: true } },
-      _count: { select: { courses: true } },
-    },
-  })
-  return success(res, teachers, 'Main teacher assignments loaded')
+  const [profiles, orbitTeachers] = await Promise.all([
+    prisma.teacherProfile.findMany({
+      orderBy: { user: { lastName: 'asc' } },
+      select: { id: true, status: true, homeroomGrade: true, homeroomSection: true, user: { select: { firstName: true, middleName: true, lastName: true, email: true, orbitUserId: true } }, _count: { select: { courses: true } } },
+    }),
+    getOrbitTeachers(),
+  ])
+  const byOrbitId = new Map(profiles.filter((item) => item.user.orbitUserId).map((item) => [item.user.orbitUserId!, item]))
+  const byEmail = new Map(profiles.map((item) => [item.user.email.toLowerCase(), item]))
+  const merged: any[] = [...profiles]
+  for (const orbitTeacher of orbitTeachers) {
+    const local = byOrbitId.get(orbitTeacher.id) || (orbitTeacher.email ? byEmail.get(orbitTeacher.email.toLowerCase()) : undefined)
+    if (local) continue
+    const identity = splitOrbitTeacherName(orbitTeacher)
+    merged.push({ id: 'orbit:' + orbitTeacher.id, status: 'TEACHER', homeroomGrade: null, homeroomSection: null, user: { ...identity, email: orbitTeacher.email || '', orbitUserId: orbitTeacher.id }, _count: { courses: 0 }, source: 'orbit' })
+  }
+  merged.sort((left, right) => [left.user.lastName, left.user.middleName, left.user.firstName].filter(Boolean).join(' ').localeCompare([right.user.lastName, right.user.middleName, right.user.firstName].filter(Boolean).join(' ')))
+  return success(res, merged, 'Main teacher assignments loaded from Nexus and Orbit')
 }))
 
 schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministrator, asyncHandler(async (req, res) => {
-  const teacherId = getRouteParam(req.params.id)
+  let teacherId = getRouteParam(req.params.id)
   const payload = teacherStatusSchema.parse(req.body)
+  if (teacherId.startsWith('orbit:')) {
+    const profile = await materializeOrbitTeacher(teacherId.slice(6))
+    teacherId = profile.id
+  }
 
   if (['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(payload.status)) {
     const sameGrade = await prisma.teacherProfile.findMany({

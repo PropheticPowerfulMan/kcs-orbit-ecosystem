@@ -96,7 +96,7 @@ export default function ShiningStudentsPage() {
   }[status])
 
   return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 px-4 py-6 pt-20 dark:bg-kcs-blue-950 sm:px-6 lg:px-8 lg:pt-8">
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="w-full min-w-0 max-w-none space-y-6">
       {ordinaryAdministrator ? <AdministratorPortalHeader/> : <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">

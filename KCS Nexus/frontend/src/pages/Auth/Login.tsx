@@ -108,7 +108,7 @@ const LoginPage = () => {
             </div>
           </aside>
 
-          <motion.main initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="bg-white p-7 dark:bg-kcs-blue-950/95 sm:p-10">
+          <motion.main initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="bg-sky-50 p-7 dark:bg-kcs-blue-950/95 sm:p-10">
             <div className="mx-auto max-w-md">
               <Link to="/" className="inline-flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl kcs-gradient text-sm font-bold text-white shadow-kcs">KCS</div><div><p className="font-display text-sm font-bold text-kcs-blue-900 dark:text-white">Kinshasa Christian School</p><p className="text-xs text-kcs-gold-600 dark:text-kcs-gold-400">KCS Nexus</p></div></Link>
               <div className="mb-8 mt-9"><h2 className="font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">Connexion</h2><p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Utilisez votre e-mail ou votre code d’accès personnel.</p></div>
