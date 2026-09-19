@@ -1530,3 +1530,8 @@ html:not(.dark) .portal-shell [data-suggestion-box] select option {
   color: #123a59;
   -webkit-text-fill-color: #123a59;
 }
+
+/* Full-bleed route headers matching standard dashboard geometry. */
+.portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1rem; margin-right: -1rem; width: calc(100% + 2rem); border-radius: 0; }
+@media (min-width: 640px) { .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1.5rem; margin-right: -1.5rem; width: calc(100% + 3rem); } }
+@media (min-width: 1024px) { .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -2rem; margin-right: -2rem; width: calc(100% + 4rem); } }
