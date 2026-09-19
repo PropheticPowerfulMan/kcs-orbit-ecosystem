@@ -95,7 +95,19 @@ export default function ShiningStudentsPage() {
 
   return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 px-4 py-6 pt-20 dark:bg-kcs-blue-950 sm:px-6 lg:px-8 lg:pt-8">
     <div className="mx-auto max-w-7xl space-y-6">
-      {admin && <header className="portal-dashboard-hero rounded-3xl border border-sky-100/80 bg-white/90 p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/70"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}, {user?.firstName || 'Super'}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())} - A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.</p></header>}
+      <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
+              {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}, {user?.firstName || 'Super'}
+            </h1>
+            <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
+              {new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())} - A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
+            </p>
+          </div>
+          <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">Live production snapshot</div>
+        </div>
+      </div>
       <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-sky-700 p-6 text-white shadow-xl">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div><p className="text-xs font-black uppercase tracking-[0.2em] text-kcs-gold-300">KCS · Shining Student</p><h1 className="mt-2 text-3xl font-black">{tr('Prendre la parole, inspirer toute l’école', 'Speak up and inspire the whole school')}</h1><p className="mt-2 max-w-3xl text-sm text-sky-100">{tr('Deux élèves par jour scolaire : un du Lower School et un du Middle/Upper School. La rotation est équitable, vérifiable et exclut les week-ends ainsi que les dates fermées.', 'Two students per school day: one from Lower School and one from Middle/Upper School. Selection is fair, auditable and excludes weekends and closed dates.')}</p></div>

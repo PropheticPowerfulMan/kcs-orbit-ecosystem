@@ -38,8 +38,8 @@ const teacherStatusSchema = z.object({
   homeroomGrade: z.string().optional(),
   homeroomSection: z.string().optional(),
 }).superRefine((value, context) => {
-  if (value.status === 'HOMEROOM_TEACHER' && !value.homeroomGrade?.trim()) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ['homeroomGrade'], message: 'Select the main teacher class.' })
+  if (['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(value.status) && !value.homeroomGrade?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['homeroomGrade'], message: 'Select the assigned class.' })
   }
 })
 
@@ -163,11 +163,11 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
   const teacherId = getRouteParam(req.params.id)
   const payload = teacherStatusSchema.parse(req.body)
 
-  if (payload.status === 'HOMEROOM_TEACHER') {
+  if (['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(payload.status)) {
     const sameGrade = await prisma.teacherProfile.findMany({
       where: {
         id: { not: teacherId },
-        status: 'HOMEROOM_TEACHER',
+        status: payload.status as 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER',
         homeroomGrade: { equals: payload.homeroomGrade!.trim(), mode: 'insensitive' },
       },
       select: {
@@ -179,7 +179,8 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
     const conflict = sameGrade.find((entry) => (entry.homeroomSection || '').trim().toLowerCase() === requestedSection)
     if (conflict) {
       const conflictName = [conflict.user.lastName, conflict.user.firstName].filter(Boolean).join(' ')
-      throw new ApiError(409, 'This class already has a main teacher: ' + conflictName)
+      const assignmentLabel = payload.status === 'HOMEROOM_TEACHER' ? 'main teacher' : 'assistant teacher'
+      throw new ApiError(409, 'This class already has an ' + assignmentLabel + ': ' + conflictName)
     }
   }
 
@@ -187,8 +188,8 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
     where: { id: teacherId },
     data: asPrismaData({
       ...payload,
-      homeroomGrade: payload.status === 'HOMEROOM_TEACHER' ? payload.homeroomGrade!.trim() : null,
-      homeroomSection: payload.status === 'HOMEROOM_TEACHER' ? (payload.homeroomSection?.trim() || null) : null,
+      homeroomGrade: payload.status !== 'TEACHER' ? payload.homeroomGrade!.trim() : null,
+      homeroomSection: payload.status !== 'TEACHER' ? (payload.homeroomSection?.trim() || null) : null,
     }),
     include: { user: true, courses: true, reviews: true },
   })

@@ -1222,58 +1222,73 @@ const exportAdminReport = (
 
 const MainTeacherAssignmentPanel = () => {
   const language = useUIStore((state) => state.language)
-  const tr = (fr: string, en: string) => language === "fr" ? fr : en
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [teachers, setTeachers] = useState<any[]>([])
-  const [teacherId, setTeacherId] = useState("")
-  const [grade, setGrade] = useState<string>(SCHOOL_LEVELS[0])
-  const [section, setSection] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState("")
-  const [result, setResult] = useState<{ok:boolean;message:string}|null>(null)
+  const [drafts, setDrafts] = useState<Record<string, { status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; grade: string; section: string }>>({})
+  const [busyId, setBusyId] = useState('')
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const name = (item: any) => [item.user?.lastName, item.user?.middleName, item.user?.firstName].filter(Boolean).join(' ')
   const load = async () => {
-    setBusy(true)
     try {
       const response = await mainTeacherAPI.list()
-      setTeachers(response.data?.data || [])
-      setNotice("")
+      const rows = response.data?.data || []
+      setTeachers(rows)
+      setDrafts(Object.fromEntries(rows.map((item: any) => [item.id, {
+        status: item.status || 'TEACHER',
+        grade: item.homeroomGrade || SCHOOL_LEVELS[0],
+        section: item.homeroomSection || '',
+      }])))
     } catch (error: any) {
-      setNotice(error?.response?.data?.message || tr("Impossible de charger les enseignants.", "Unable to load teachers."))
-    } finally { setBusy(false) }
+      setResult({ ok: false, message: error?.response?.data?.message || tr('Impossible de charger les enseignants.', 'Unable to load teachers.') })
+    }
   }
   useEffect(() => { void load() }, [])
-  const assign = async () => {
-    if (!teacherId || !grade) { setNotice(tr("Choisissez un enseignant et une classe.", "Choose a teacher and a class.")); return }
-    setBusy(true)
+  const updateDraft = (id: string, patch: Partial<{ status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; grade: string; section: string }>) =>
+    setDrafts((current) => ({ ...current, [id]: { ...(current[id] || { status: 'TEACHER', grade: SCHOOL_LEVELS[0], section: '' }), ...patch } }))
+  const save = async (item: any) => {
+    const draft = drafts[item.id]
+    if (!draft) return
+    setBusyId(item.id)
     try {
-      await mainTeacherAPI.assign(teacherId, { status: "HOMEROOM_TEACHER", homeroomGrade: grade, homeroomSection: section })
-      const message = tr("Main Teacher affecté. Ses autres cours et son statut employé sont conservés.", "Main Teacher assigned. Other courses and employee status remain unchanged.")
-      setNotice(message); setResult({ok:true,message})
+      await mainTeacherAPI.assign(item.id, {
+        status: draft.status,
+        homeroomGrade: draft.status === 'TEACHER' ? undefined : draft.grade,
+        homeroomSection: draft.status === 'TEACHER' ? undefined : draft.section,
+      })
+      setResult({ ok: true, message: draft.status === 'HOMEROOM_TEACHER'
+        ? tr(`${name(item)} est maintenant Main Teacher de ${draft.grade}${draft.section ? ' · ' + draft.section : ''}. Ses autres cours sont conservés.`, `${name(item)} is now the Main Teacher for ${draft.grade}${draft.section ? ' · ' + draft.section : ''}. Other courses remain unchanged.`)
+        : draft.status === 'ASSISTANT_TEACHER'
+          ? tr(`${name(item)} est maintenant Assistant Teacher de ${draft.grade}${draft.section ? ' · ' + draft.section : ''}.`, `${name(item)} is now the Assistant Teacher for ${draft.grade}${draft.section ? ' · ' + draft.section : ''}.`)
+          : tr(`La responsabilité de classe de ${name(item)} a été retirée sans modifier ses cours ni son compte employé.`, `${name(item)}'s class responsibility was removed without changing courses or the employee account.`) })
       await load()
-    } catch (error: any) { const message=error?.response?.data?.message || tr("Affectation impossible.", "Assignment failed."); setNotice(message); setResult({ok:false,message}); setBusy(false) }
+    } catch (error: any) {
+      setResult({ ok: false, message: error?.response?.data?.message || tr('Affectation impossible.', 'Assignment failed.') })
+    } finally { setBusyId('') }
   }
-  const release = async (id: string) => {
-    setBusy(true)
-    try { await mainTeacherAPI.assign(id, { status: "TEACHER" }); const message=tr("Affectation Main Teacher retirée; le compte enseignant et employé reste actif.", "Main Teacher assignment removed; teacher and employee account stays active."); setNotice(message); setResult({ok:true,message}); await load() }
-    catch (error: any) { const message=error?.response?.data?.message || tr("Modification impossible.", "Update failed."); setNotice(message); setResult({ok:false,message}); setBusy(false) }
-  }
-  const name = (item: any) => [item.user?.lastName, item.user?.middleName, item.user?.firstName].filter(Boolean).join(" ")
   return <div className="space-y-6">
-    {result&&<div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950"><div className={"mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black text-white "+(result.ok?"bg-emerald-600":"bg-red-600")}>{result.ok?"✓":"!"}</div><h3 className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{result.ok?tr("Opération réussie","Operation successful"):tr("Opération impossible","Operation failed")}</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{result.message}</p><button type="button" onClick={()=>setResult(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 font-bold text-white">{tr("Fermer","Close")}</button></div></div>}
+    {result && <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950"><div className={'mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black text-white ' + (result.ok ? 'bg-emerald-600' : 'bg-red-600')}>{result.ok ? '✓' : '!'}</div><h3 className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{result.ok ? tr('Opération réussie', 'Operation successful') : tr('Opération impossible', 'Operation failed')}</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{result.message}</p><button type="button" onClick={() => setResult(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 font-bold text-white">{tr('Fermer', 'Close')}</button></div></div>}
     <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
-      <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr("Responsabilité de classe", "Class responsibility")}</p>
-      <h2 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr("Affectation des Main Teachers", "Main Teacher Assignment")}</h2>
-      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr("Réservé à l Administrator. Le Main Teacher fait la présence quotidienne de sa classe, contrôle le dossier du bulletin, rédige seul le commentaire général et soumet le bulletin à l administration. Il demeure employé et peut enseigner plusieurs autres cours et classes.", "Reserved for the operational Administrator. The Main Teacher records daily attendance for the assigned class, reviews the report-card file, is the only teacher who writes its general comment, and submits it to administration. The teacher remains an employee and may teach other courses and classes.")}</p>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        <select value={teacherId} onChange={(event) => setTeacherId(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><option value="">{tr("Choisir un enseignant", "Choose a teacher")}</option>{teachers.map((item) => <option key={item.id} value={item.id}>{name(item)}</option>)}</select>
-        <select value={grade} onChange={(event) => setGrade(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((item) => <option key={item}>{item}</option>)}</select>
-        <select value={section} onChange={(event) => setSection(event.target.value)} className="rounded-xl border border-sky-200 bg-white p-3 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((item) => <option key={item || "all"} value={item}>{item ? tr("Section ", "Section ") + item : tr("Sans section", "No section")}</option>)}</select>
-      </div>
-      <button type="button" disabled={busy} onClick={() => void assign()} className="mt-4 rounded-xl bg-kcs-blue-700 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? tr("Traitement...", "Processing...") : tr("Affecter comme Main Teacher", "Assign as Main Teacher")}</button>
-      {notice && <p className="mt-3 rounded-xl bg-white/80 p-3 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-950/70 dark:text-kcs-blue-100">{notice}</p>}
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr('Responsabilités de classe', 'Class responsibilities')}</p>
+      <h2 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Main Teachers et Assistants', 'Main Teachers and Assistants')}</h2>
+      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr('Cochez directement le rôle de chaque enseignant, choisissez sa classe puis enregistrez. Un seul Main Teacher et un seul Assistant peuvent être affectés à une même classe. Les autres cours et le statut employé restent inchangés.', 'Check each teacher role directly, choose the class, then save. Each class accepts one Main Teacher and one Assistant. Other courses and employee status remain unchanged.')}</p>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-blue-100 px-3 py-1.5 text-blue-800">{teachers.filter((item) => item.status === 'HOMEROOM_TEACHER').length} Main Teacher(s)</span><span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{teachers.filter((item) => item.status === 'ASSISTANT_TEACHER').length} Assistant(s)</span></div>
     </section>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-      <div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-bold text-kcs-blue-950 dark:text-white">{tr("Affectations actuelles", "Current assignments")}</h3><p className="text-sm text-slate-500">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").length} Main Teacher(s)</p></div><button type="button" onClick={() => void load()} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr("Actualiser", "Refresh")}</button></div>
-      <div className="mt-4 space-y-3">{teachers.filter((item) => item.status === "HOMEROOM_TEACHER").map((item) => <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-slate-100 p-4 dark:border-kcs-blue-800 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-sm text-slate-500">{item.homeroomGrade}{item.homeroomSection ? " · " + item.homeroomSection : ""} · {item._count?.courses || 0} {tr("cours enseigné(s)", "course(s) taught")}</p></div><button type="button" disabled={busy} onClick={() => void release(item.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 dark:border-red-800 dark:text-red-300">{tr("Retirer cette responsabilité", "Remove this responsibility")}</button></article>)}{!busy && !teachers.some((item) => item.status === "HOMEROOM_TEACHER") && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500 dark:bg-kcs-blue-950/50">{tr("Aucune affectation enregistrée.", "No assignment recorded.")}</p>}</div>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <div className="grid grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(7rem,.6fr)_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60 dark:text-slate-300">
+        <span>{tr('Employé / professeur', 'Employee / teacher')}</span><span>Main Teacher</span><span>{tr('Assistant', 'Assistant')}</span><span>{tr('Classe', 'Class')}</span><span>{tr('Section', 'Section')}</span><span>{tr('Action', 'Action')}</span>
+      </div>
+      <div className="divide-y dark:divide-kcs-blue-800">{teachers.map((item) => {
+        const draft = drafts[item.id] || { status: 'TEACHER', grade: SCHOOL_LEVELS[0], section: '' }
+        return <article key={item.id} className="grid grid-cols-1 gap-3 p-4 md:grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(7rem,.6fr)_auto] md:items-center">
+          <div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-xs text-slate-500">{item.user?.email} · {item._count?.courses || 0} {tr('cours', 'courses')}</p></div>
+          <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'HOMEROOM_TEACHER'} onChange={(event) => updateDraft(item.id, { status: event.target.checked ? 'HOMEROOM_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-kcs-blue-700"/>Main Teacher</label>
+          <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'ASSISTANT_TEACHER'} onChange={(event) => updateDraft(item.id, { status: event.target.checked ? 'ASSISTANT_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-amber-600"/>{tr('Assistant', 'Assistant')}</label>
+          <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateDraft(item.id, { grade: event.target.value })} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((level) => <option key={level}>{level}</option>)}</select>
+          <select value={draft.section} disabled={draft.status === 'TEACHER'} onChange={(event) => updateDraft(item.id, { section: event.target.value })} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((value) => <option key={value || 'none'} value={value}>{value || tr('Sans section', 'No section')}</option>)}</select>
+          <button type="button" disabled={busyId === item.id} onClick={() => void save(item)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busyId === item.id ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer', 'Save')}</button>
+        </article>
+      })}</div>
+      {!teachers.length && <p className="p-8 text-center text-sm text-slate-500">{tr('Aucun professeur disponible.', 'No teacher is available.')}</p>}
     </section>
   </div>
 }

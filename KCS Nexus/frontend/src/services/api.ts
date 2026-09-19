@@ -442,7 +442,7 @@ export const electivesAPI = {
 
 export const mainTeacherAPI = {
   list: () => api.get('/school-management/teachers/main-assignments'),
-  assign: (teacherId: string, data: { status: 'HOMEROOM_TEACHER' | 'TEACHER'; homeroomGrade?: string; homeroomSection?: string }) => api.patch('/school-management/teachers/' + teacherId + '/status', data),
+  assign: (teacherId: string, data: { status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; homeroomGrade?: string; homeroomSection?: string }) => api.patch('/school-management/teachers/' + teacherId + '/status', data),
 }
 
 export const disciplineAPI = {
