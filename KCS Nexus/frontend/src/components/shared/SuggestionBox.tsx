@@ -125,14 +125,14 @@ export default function SuggestionBox() {
   )
 
   return (
-    <section data-suggestion-box className="rounded-2xl border border-white/12 bg-kcs-blue-950/70 p-5 text-white shadow-[0_24px_70px_rgba(0,27,54,0.28)]">
+    <section data-suggestion-box className="rounded-2xl border border-white/12 !bg-[#062d50] p-5 !text-white shadow-[0_24px_70px_rgba(0,27,54,0.28)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-kcs-gold-300">
+          <p className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] !text-[#ffe29a]">
             <MessageSquareText size={16} /> {language === 'fr' ? 'Boîte à suggestions confidentielle' : 'Confidential Suggestion Box'}
           </p>
-          <div className="mt-2 space-y-1 text-xs leading-relaxed text-kcs-blue-100/90 sm:text-sm">
-            <p className="font-semibold text-kcs-gold-200">
+          <div className="mt-2 space-y-1 text-xs leading-relaxed !text-[#f0f8ff] sm:text-sm">
+            <p className="font-semibold !text-[#ffe4a3]">
               {language === 'fr'
                 ? '• Le message est strictement confidentiel.'
                 : '• This message is strictly confidential.'}
@@ -148,7 +148,7 @@ export default function SuggestionBox() {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-bold text-cyan-200">
+          <span className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-xs font-bold !text-[#dff8ff]">
             <LockKeyhole size={14} /> {language === 'fr' ? 'Anonymat garanti' : 'Anonymity protected'}
           </span>
         </div>
@@ -170,7 +170,7 @@ export default function SuggestionBox() {
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          className="min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:text-kcs-blue-200/60 focus:ring-2 focus:ring-kcs-gold-400"
+          className="min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:!text-[#cde8f7] focus:ring-2 focus:ring-kcs-gold-400"
           placeholder={language === 'fr' ? 'Écrivez votre suggestion confidentielle...' : 'Write your confidential suggestion...'}
         />
         <button
