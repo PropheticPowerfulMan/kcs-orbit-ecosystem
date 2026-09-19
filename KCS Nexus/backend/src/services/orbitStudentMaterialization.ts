@@ -4,6 +4,7 @@ import { splitClassName } from '../utils/className.js'
 
 export type OrbitStudentIdentity = {
   id: string
+  parentId?: string | null
   fullName?: string | null
   firstName?: string | null
   middleName?: string | null
@@ -98,15 +99,30 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
     status: (student.status || 'active').toLowerCase(),
     ...(student.dateOfBirth ? { dateOfBirth: new Date(student.dateOfBirth) } : {}),
   }
-  if (existingProfile) {
-    return prisma.studentProfile.update({
-      where: { id: existingProfile.id },
-      data: profileData,
-      select: { id: true, studentNumber: true },
-    })
+  const profile = existingProfile
+    ? await prisma.studentProfile.update({
+        where: { id: existingProfile.id },
+        data: profileData,
+        select: { id: true, studentNumber: true },
+      })
+    : await prisma.studentProfile.create({
+        data: { ...profileData, grade: classParts.grade || student.className?.trim() || 'Unassigned', section: classParts.section },
+        select: { id: true, studentNumber: true },
+      })
+
+  if (student.parentId) {
+    const parent = await prisma.user.findFirst({ where: { orbitUserId: student.parentId, role: 'PARENT' }, select: { id: true } })
+    if (parent) {
+      await prisma.$transaction([
+        prisma.parentStudentLink.deleteMany({ where: { studentId: profile.id, parentId: { not: parent.id } } }),
+        prisma.parentStudentLink.upsert({
+          where: { parentId_studentId: { parentId: parent.id, studentId: profile.id } },
+          update: { relation: 'Official parent' },
+          create: { parentId: parent.id, studentId: profile.id, relation: 'Official parent' },
+        }),
+      ])
+    }
   }
-  return prisma.studentProfile.create({
-    data: { ...profileData, grade: classParts.grade || student.className?.trim() || 'Unassigned', section: classParts.section },
-    select: { id: true, studentNumber: true },
-  })
+
+  return profile
 }
