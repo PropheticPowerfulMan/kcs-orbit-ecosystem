@@ -176,7 +176,7 @@ export default function ParentNotificationsPanel({ notices, onChange }: Props) {
 
       {activeNotice && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-kcs-blue-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="parent-notification-title" onMouseDown={(event) => { if (event.currentTarget === event.target) setActiveId(null) }}>
-          <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900 sm:p-8">
+          <div className="max-h-[85vh] w-[89.09874%] max-w-none overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900 sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <span className="rounded-full bg-kcs-blue-100 px-3 py-1 text-xs font-bold uppercase text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-200">{activeNotice.type}</span>
