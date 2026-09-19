@@ -145,7 +145,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
   }
 
   const value = await response.json() as OrbitSharedDirectory
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 10_000 }
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 1_000 }
   return value
 }
 
@@ -465,6 +465,7 @@ function normalizeCreateStudentPayload(payload: unknown) {
 }
 
 studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
     return success(res, orbitStudentsToProfiles(directory), 'Students loaded from Orbit')
@@ -483,6 +484,7 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandl
 }))
 
 studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const currentUser = await prisma.user.findUnique({
     where: { id: req.user!.sub },
     select: { id: true, email: true, accessCode: true, orbitUserId: true },
@@ -749,7 +751,8 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       studentDeliveryCredentials.push({ userId: localStudentUser.id, displayName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' '), studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
     }
 
-    const directory = await getSharedDirectoryFromOrbit()
+    sharedDirectoryCache = null
+    const directory = await getSharedDirectoryFromOrbit(true)
     const createdStudents = orbitStudentsToProfiles(directory).filter((student) => studentNumbers.includes(student.studentNumber))
     const delivery = await deliverFamilyCredentials({
       parentUserId: localParentUser.id,

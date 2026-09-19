@@ -81,11 +81,11 @@ def ecosystem_employee_detail_view(request,pk):
 def shared_directory_view(_request):
     if orbit_sync_is_enabled():
         cache_key = 'savanex:shared-directory:v1'
-        directory = cache.get(cache_key)
-        if directory is None:
-            directory = fetch_shared_directory()
-            cache.set(cache_key, directory, timeout=30)
-        return Response(directory)
+        directory = fetch_shared_directory()
+        cache.set(cache_key, directory, timeout=2)
+        response = Response(directory)
+        response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
+        return response
 
     students = Student.objects.select_related('user', 'parent', 'current_class').filter(is_active=True)
     teachers = Teacher.objects.select_related('user').filter(is_active=True)

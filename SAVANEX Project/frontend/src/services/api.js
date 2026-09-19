@@ -11,8 +11,8 @@ const DEMO_ACCESS_TOKEN = 'demo-access-token';
 const IS_GITHUB_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
 const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
-const DIRECTORY_CACHE_TTL_MS = 5 * 60 * 1000;
-const DIRECTORY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const DIRECTORY_CACHE_TTL_MS = 3 * 1000;
+const DIRECTORY_CACHE_MAX_AGE_MS = 10 * 1000;
 const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v2';
 
 const readStoredDirectory = () => {
@@ -187,6 +187,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => {
     const method = response.config.method?.toUpperCase();
+    if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      sharedDirectoryCache = null;
+      window.localStorage.removeItem(DIRECTORY_STORAGE_KEY);
+    }
     if (method && ['PUT', 'PATCH', 'DELETE'].includes(method)) {
       window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: response.data?.detail || response.data?.message || (method === 'DELETE' ? "Entité supprimée dans tout l'écosystème." : "Modification enregistrée et synchronisée dans l'écosystème.") } }));
     }
@@ -651,7 +655,11 @@ export const sharedDirectoryService = {
     if (sharedDirectoryRequest) return sharedDirectoryRequest;
 
     sharedDirectoryRequest = api
-      .get('/integration/shared-directory/', { timeout: DIRECTORY_REQUEST_TIMEOUT_MS })
+      .get('/integration/shared-directory/', {
+        timeout: DIRECTORY_REQUEST_TIMEOUT_MS,
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+        params: { _fresh: now },
+      })
       .then((res) => {
         sharedDirectoryCache = { data: res.data, loadedAt: Date.now() };
         storeDirectory(sharedDirectoryCache);
@@ -664,6 +672,7 @@ export const sharedDirectoryService = {
   },
   clear() {
     sharedDirectoryCache = null;
+    if (typeof window !== 'undefined') window.localStorage.removeItem(DIRECTORY_STORAGE_KEY);
   },
 };
 

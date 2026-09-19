@@ -140,7 +140,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
   }
 
   const value = await response.json() as SharedDirectoryResponse
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 10_000 }
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 1_000 }
   return value
 }
 
@@ -427,6 +427,7 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
 }))
 
 registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
     const orbitData = await getSharedDirectoryFromOrbit()
     return success(res, orbitData, 'Shared directory loaded from Orbit')
