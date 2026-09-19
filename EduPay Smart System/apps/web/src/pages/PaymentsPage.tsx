@@ -2479,7 +2479,7 @@ export function PaymentsPage() {
 
   const cancelPayment = async (payment: PaymentRecord) => {
     if (payment.status === "CANCELLED") return;
-    const reason = window.prompt(`Motif d'annulation du paiement ${payment.transactionNumber}`, "Erreur de saisie ou paiement enregistre par erreur");
+    const reason = window.prompt(`Motif d'annulation du paiement ${payment.transactionNumber}`, "Erreur de saisie ou paiement enregistré par erreur");
     if (reason === null) return;
 
     try {

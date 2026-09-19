@@ -789,7 +789,7 @@ paymentRouter.get("/", authorize("ADMIN", "ACCOUNTANT", "PARENT"), async (req: A
 
 paymentRouter.post("/:id/cancel", authorize("ADMIN", "ACCOUNTANT"), async (req: AuthenticatedRequest, res) => {
   const payload = z.object({
-    reason: z.string().max(500).optional()
+    reason: z.string().trim().min(3, "Un motif d’annulation d’au moins 3 caractères est obligatoire.").max(500)
   }).parse(req.body ?? {});
 
   try {

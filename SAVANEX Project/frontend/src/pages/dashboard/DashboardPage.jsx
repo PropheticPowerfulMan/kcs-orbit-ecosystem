@@ -426,7 +426,7 @@ const DashboardPage = () => {
       accent: 'text-orange-300',
     },
     {
-      title: 'Taux de reussite',
+      title: 'Taux de réussite',
       value: `${science.passRate.toFixed(1)}%`,
       subtitle: 'Élèves >= 75% excellence',
       accent: 'text-emerald-300',

@@ -72,7 +72,7 @@ const TimetablePage = () => {
         roomOccupation: 91,
         balanceGain: '+12%',
         recommendations: [
-          'Les conflits de capacite ont ete deplaces vers des salles specialisees.',
+          'Les conflits de capacité ont été déplacés vers des salles spécialisées.',
           "La charge des enseignants est redistribuée sur les créneaux libres de l'après-midi.",
           'Aucun chevauchement salle/enseignant ne reste dans la grille active.',
         ],

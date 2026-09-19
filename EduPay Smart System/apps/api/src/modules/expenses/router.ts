@@ -124,7 +124,7 @@ const approvalSchema = z.object({
 });
 
 const cancellationSchema = z.object({
-  reason: z.string().trim().min(3).max(1000).optional()
+  reason: z.string().trim().min(3, "Un motif d’annulation d’au moins 3 caractères est obligatoire.").max(1000)
 });
 
 const salaryProfileSchema = z.object({

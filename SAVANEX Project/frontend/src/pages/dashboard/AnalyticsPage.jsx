@@ -199,7 +199,7 @@ const AnalyticsPage = () => {
     { key: 'attendance', label: t('analytics.attendanceRate'), render: (v) => `${v}%` },
     { key: 'average', label: t('analytics.average'), render: (v) => v === null || v === undefined ? 'N/A' : `${v}% excellence` },
     { key: 'riskScore', label: 'Risque IA', render: (v, row) => <span className={v >= 65 ? 'text-rose-300' : v >= 42 ? 'text-amber-300' : 'text-emerald-300'}>{v}% - {row.severity}</span> },
-    { key: 'successProbability', label: 'Prob. reussite', render: (v) => `${v}%` },
+    { key: 'successProbability', label: 'Prob. réussite', render: (v) => `${v}%` },
     { key: 'intervention', label: 'Action predictive' },
     { key: 'risk_flags', label: t('analytics.flags'), render: (v) => v.join(', ') },
   ];
@@ -279,7 +279,7 @@ const AnalyticsPage = () => {
                 <YAxis dataKey="average" name="Moyenne" unit="%" stroke="#94a3b8" />
                 <ZAxis dataKey="riskScore" range={[80, 560]} name="Risque" />
                 <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={tooltipStyle} />
-                <Scatter data={enrichedWarnings} fill="#22d3ee" name="Eleves">
+                <Scatter data={enrichedWarnings} fill="#22d3ee" name="Élèves">
                   {enrichedWarnings.map((entry) => <Cell key={entry.student_name} fill={entry.riskScore >= 65 ? '#fb7185' : entry.riskScore >= 42 ? '#f59e0b' : '#34d399'} />)}
                 </Scatter>
               </ScatterChart>
