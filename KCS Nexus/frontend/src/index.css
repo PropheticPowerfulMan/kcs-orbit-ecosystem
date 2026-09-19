@@ -1503,3 +1503,30 @@ html:not(.dark) body:has(.portal-shell) .sidebar-link.active {
 html:not(.dark) body:has(.portal-shell) .sidebar-link.active :is(svg, span) {
   color: #ffffff !important;
 }
+
+
+/* Final low-glare daylight fallback for all authenticated dashboard surfaces. */
+html:not(.dark) .portal-shell :is([class~="bg-white/95"], [class~="bg-white/90"], [class~="bg-white/85"], [class~="bg-white/80"], [class~="bg-white/70"], [class~="bg-white/65"], [class~="bg-white/60"], [class~="bg-white/55"], [class~="bg-white/50"], [class~="bg-white/45"], [class~="bg-white/42"]) {
+  background-color: #edf5fa !important;
+  border-color: #b9cfdf !important;
+}
+html:not(.dark) .portal-shell :is([class~="bg-kcs-blue-50"], [class~="bg-sky-50"]) {
+  background-color: #e0edf6 !important;
+}
+html:not(.dark) .portal-shell :is(section, article, [role="dialog"]).bg-white {
+  background-color: #eef6fb !important;
+}
+html:not(.dark) .portal-shell :is(input, textarea, select):not([class*="bg-kcs-blue"]):not([class*="bg-kcs-red"]) {
+  background-color: #f0f7fb !important;
+}
+html:not(.dark) .portal-shell [data-suggestion-box] select {
+  background-color: #0b3b63 !important;
+  border-color: rgba(125, 211, 252, .45) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+}
+html:not(.dark) .portal-shell [data-suggestion-box] select option {
+  background-color: #e8f2f8;
+  color: #123a59;
+  -webkit-text-fill-color: #123a59;
+}

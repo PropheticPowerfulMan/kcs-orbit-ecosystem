@@ -125,7 +125,7 @@ export default function SuggestionBox() {
   )
 
   return (
-    <section className="rounded-2xl border border-white/12 bg-kcs-blue-950/70 p-5 text-white shadow-[0_24px_70px_rgba(0,27,54,0.28)]">
+    <section data-suggestion-box className="rounded-2xl border border-white/12 bg-kcs-blue-950/70 p-5 text-white shadow-[0_24px_70px_rgba(0,27,54,0.28)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-kcs-gold-300">
