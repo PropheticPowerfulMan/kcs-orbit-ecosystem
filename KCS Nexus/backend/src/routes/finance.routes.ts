@@ -139,6 +139,7 @@ financeRouter.get('/edupay-summary', requireRoles('admin', 'staff'), asyncHandle
   const overview = await response.json() as Record<string, unknown>
   const number = (key: string) => Number(overview[key] ?? 0)
   const parentAccounts = Array.isArray(overview.parentDebtAnalytics) ? overview.parentDebtAnalytics : []
+  const studentAccounts = Array.isArray(overview.studentDebtAnalytics) ? overview.studentDebtAnalytics : []
 
   return success(res, {
     source: 'EduPay',
@@ -151,6 +152,7 @@ financeRouter.get('/edupay-summary', requireRoles('admin', 'staff'), asyncHandle
       paymentCompletionRate: number('paymentCompletionRate'),
     },
     parentAccounts: parentAccounts.slice(0, 12),
+    studentAccounts,
   }, 'EduPay finance overview synchronized')
 }))
 

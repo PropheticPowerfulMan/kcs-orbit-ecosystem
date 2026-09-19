@@ -2019,6 +2019,8 @@ export async function getSchoolFinanceOverview(input: { schoolId: string; academ
     const paid = roundCurrency(paidByStudent.get(student.id) ?? 0);
     const gradeGroup = assignment?.gradeGroup ?? resolveGradeGroup({ className: student.class?.name, level: student.class?.level, studentName: student.fullName });
     return {
+      studentId: student.id,
+      studentName: student.fullName,
       parentId: parent.id,
       parentName: parent.fullName,
       className: student.class?.name ?? getGradeGroupLabel(gradeGroup),
@@ -2121,6 +2123,7 @@ export async function getSchoolFinanceOverview(input: { schoolId: string; academ
       collectionRate: value.expected > 0 ? roundCurrency((value.collected / value.expected) * 100) : 0
     })).sort((left, right) => right.debt - left.debt),
     parentDebtAnalytics,
+    studentDebtAnalytics: studentRows.sort((left, right) => right.debt - left.debt),
     reductionStatistics: reductionReport,
     financialHealthIndicators,
     activeAlerts: alerts.length,
