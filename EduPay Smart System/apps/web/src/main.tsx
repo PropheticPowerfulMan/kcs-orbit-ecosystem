@@ -8,6 +8,8 @@ import { applyLegacyReceiptVerificationRedirect } from "./utils/receiptLinkRecov
 import "./styles.css";
 import MutationFeedback from "./components/MutationFeedback";
 
+import { SecurePageBoundary } from './components/SecurePageBoundary';
+
 const applyStoredFont = () => {
   const saved = localStorage.getItem("edupay_font");
   const allowed = ["poppins", "space-grotesk", "fira-sans", "merriweather"];
@@ -57,13 +59,15 @@ const isReceiptRedirecting = applyLegacyReceiptVerificationRedirect();
 if (!isReceiptRedirecting) {
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
-      <I18nProvider>
-        <HashRouter>
-          <App />
-          <MutationFeedback />
-          <InstallAppButton />
-        </HashRouter>
-      </I18nProvider>
+      <SecurePageBoundary>
+        <I18nProvider>
+          <HashRouter>
+            <App />
+            <MutationFeedback />
+            <InstallAppButton />
+          </HashRouter>
+        </I18nProvider>
+      </SecurePageBoundary>
     </React.StrictMode>
   );
 }

@@ -1,17 +1,38 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import LoginPage from './pages/auth/LoginPage';
-import DashboardPage from './pages/dashboard/DashboardPage';
-import AnalyticsPage from './pages/dashboard/AnalyticsPage';
-import StudentsPage from './pages/students/StudentsPage';
-import ParentsPage from './pages/parents/ParentsPage';
-import TeachersPage from './pages/teachers/TeachersPage';
-import TimetablePage from './pages/timetable/TimetablePage';
-import CommunicationPage from './pages/communication/CommunicationPage';
-import ProfilePage from './pages/profile/ProfilePage';
-import EntityWorkspacePage from './pages/entities/EntityWorkspacePage';
+import { SecurePageLoader } from './components/common/SecurePageState';
 import { applyFontTheme, getStoredFontTheme } from './constants/fontThemes';
 import { useAuthStore } from './store/authStore';
+
+const CHUNK_RECOVERY_KEY = 'savanex:last-chunk-recovery';
+const lazyWithRecovery = (importer) => lazy(async () => {
+  try {
+    const module = await importer();
+    sessionStorage.removeItem(CHUNK_RECOVERY_KEY);
+    return module;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const chunkFailed = /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message);
+    const recoveryKey = `${window.location.pathname}${window.location.hash}`;
+    if (chunkFailed && sessionStorage.getItem(CHUNK_RECOVERY_KEY) !== recoveryKey) {
+      sessionStorage.setItem(CHUNK_RECOVERY_KEY, recoveryKey);
+      window.location.reload();
+      await new Promise(() => undefined);
+    }
+    throw error;
+  }
+});
+
+const LoginPage = lazyWithRecovery(() => import('./pages/auth/LoginPage'));
+const DashboardPage = lazyWithRecovery(() => import('./pages/dashboard/DashboardPage'));
+const AnalyticsPage = lazyWithRecovery(() => import('./pages/dashboard/AnalyticsPage'));
+const StudentsPage = lazyWithRecovery(() => import('./pages/students/StudentsPage'));
+const ParentsPage = lazyWithRecovery(() => import('./pages/parents/ParentsPage'));
+const TeachersPage = lazyWithRecovery(() => import('./pages/teachers/TeachersPage'));
+const TimetablePage = lazyWithRecovery(() => import('./pages/timetable/TimetablePage'));
+const CommunicationPage = lazyWithRecovery(() => import('./pages/communication/CommunicationPage'));
+const ProfilePage = lazyWithRecovery(() => import('./pages/profile/ProfilePage'));
+const EntityWorkspacePage = lazyWithRecovery(() => import('./pages/entities/EntityWorkspacePage'));
 
 const ProtectedRoute = ({ children }) => {
   const token = useAuthStore((s) => s.accessToken);
@@ -27,7 +48,8 @@ const App = () => {
   }, []);
 
   return (
-    <Routes>
+    <Suspense fallback={<SecurePageLoader />}>
+      <Routes>
       <Route path="/login" element={token ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
@@ -43,7 +65,8 @@ const App = () => {
       <Route path="/communication" element={<ProtectedRoute><CommunicationPage /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to={token ? '/dashboard' : '/login'} replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 };
 

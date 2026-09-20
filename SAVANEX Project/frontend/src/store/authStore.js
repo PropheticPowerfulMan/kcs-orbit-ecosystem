@@ -27,6 +27,15 @@ export const useAuthStore = create((set) => ({
     set({ accessToken: access, refreshToken: refresh, user });
   },
 
+  updateTokens: ({ access, refresh }) => {
+    if (access) sessionStorage.setItem('savanex_access', access);
+    if (refresh) sessionStorage.setItem('savanex_refresh', refresh);
+    set((state) => ({
+      accessToken: access || state.accessToken,
+      refreshToken: refresh || state.refreshToken,
+    }));
+  },
+
   updateUser: (user) => {
     sessionStorage.setItem('savanex_user', JSON.stringify(user));
     set({ user });

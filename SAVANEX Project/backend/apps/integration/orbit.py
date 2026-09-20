@@ -13,6 +13,8 @@ from decouple import config
 
 logger = logging.getLogger(__name__)
 
+KCS_ORBIT_READ_TIMEOUT_SECONDS = config('KCS_ORBIT_READ_TIMEOUT_SECONDS', default=60, cast=int)
+
 KCS_ORBIT_API_URL = config("KCS_ORBIT_API_URL", default="").rstrip("/")
 KCS_ORBIT_API_KEY = config("KCS_ORBIT_API_KEY", default="")
 KCS_ORBIT_ORGANIZATION_ID = config("KCS_ORBIT_ORGANIZATION_ID", default="")
@@ -135,7 +137,7 @@ def _get_json(path: str) -> dict:
         method="GET",
     )
 
-    with request.urlopen(req, timeout=KCS_ORBIT_TIMEOUT_SECONDS) as response:
+    with request.urlopen(req, timeout=KCS_ORBIT_READ_TIMEOUT_SECONDS) as response:
         if response.status not in (200, 201):
             raise RuntimeError(f"Unexpected status {response.status}")
         return json.loads(response.read().decode("utf-8"))

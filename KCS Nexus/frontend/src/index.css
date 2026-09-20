@@ -1562,3 +1562,33 @@ textarea.suggestion-message-input::placeholder {
 .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1rem; margin-right: -1rem; width: calc(100% + 2rem); border-radius: 0; }
 @media (min-width: 640px) { .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1.5rem; margin-right: -1.5rem; width: calc(100% + 3rem); } }
 @media (min-width: 1024px) { .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -2rem; margin-right: -2rem; width: calc(100% + 4rem); } }
+
+/* Portal greetings must scroll with their page on every device. A sticky
+   greeting consumes too much of the mobile viewport and behaves differently
+   between routes that share the same shell. */
+.portal-shell .portal-dashboard-topbar {
+  position: static !important;
+  inset-block-start: auto !important;
+}
+
+/* Daylight suggestion composer: use a pale blue writing surface with dark ink.
+   This deliberately overrides utility classes so every entity portal gets the
+   same accessible contrast without changing the moon theme. */
+html:not(.dark) [data-suggestion-box] textarea.suggestion-message-input {
+  background-color: #e8f3fa !important;
+  border-color: #82b4d2 !important;
+  color: #0b2d4a !important;
+  -webkit-text-fill-color: #0b2d4a !important;
+  caret-color: #0b2d4a !important;
+}
+html:not(.dark) [data-suggestion-box] textarea.suggestion-message-input::placeholder {
+  color: #4f6f86 !important;
+  -webkit-text-fill-color: #4f6f86 !important;
+  opacity: 1 !important;
+}
+html:not(.dark) [data-suggestion-box] select {
+  background-color: #e8f3fa !important;
+  border-color: #82b4d2 !important;
+  color: #0b2d4a !important;
+  -webkit-text-fill-color: #0b2d4a !important;
+}

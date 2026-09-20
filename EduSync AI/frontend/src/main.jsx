@@ -7,15 +7,19 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { registerPwa } from "./registerPwa";
 
+import { SecurePageBoundary } from './components/SecurePageState';
+
 registerPwa();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <ThemeProvider>
-      <AuthProvider>
-        <App />
-        <InstallAppButton />
-      </AuthProvider>
+      <SecurePageBoundary>
+        <AuthProvider>
+          <App />
+          <InstallAppButton />
+        </AuthProvider>
+      </SecurePageBoundary>
     </ThemeProvider>
   </React.StrictMode>
 );

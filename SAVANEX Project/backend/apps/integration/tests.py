@@ -1,10 +1,57 @@
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
+from django.core.cache import cache
 from rest_framework.test import APIClient
 
 from apps.users.models import User
 from apps.teachers.models import Teacher
+
+
+class SharedDirectoryResilienceTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='directory-admin',
+            password='TemporaryPass123!',
+            role=User.ROLE_ADMIN,
+        )
+        self.client.force_authenticate(self.user)
+
+    @patch('apps.integration.views.orbit_sync_is_enabled', return_value=True)
+    @patch('apps.integration.views.fetch_shared_directory')
+    def test_shared_directory_reuses_short_lived_cache(self, fetch_directory, _enabled):
+        fetch_directory.return_value = {'source': 'orbit', 'students': [{'id': 'student-1'}]}
+
+        first = self.client.get('/api/integration/shared-directory/')
+        second = self.client.get('/api/integration/shared-directory/')
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second['X-KCS-Directory-Cache'], 'hit')
+        fetch_directory.assert_called_once()
+
+    @patch('apps.integration.views.orbit_sync_is_enabled', return_value=True)
+    @patch('apps.integration.views.fetch_shared_directory')
+    def test_shared_directory_uses_verified_stale_copy_when_orbit_is_slow(self, fetch_directory, _enabled):
+        cached_directory = {'source': 'orbit', 'parents': [{'id': 'parent-1'}]}
+        cache.set('savanex:shared-directory:v2:stale', cached_directory, timeout=60)
+        fetch_directory.side_effect = TimeoutError('Orbit timeout')
+
+        response = self.client.get('/api/integration/shared-directory/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, cached_directory)
+        self.assertEqual(response['X-KCS-Directory-Cache'], 'stale')
+
+    @patch('apps.integration.views.orbit_sync_is_enabled', return_value=True)
+    @patch('apps.integration.views.fetch_shared_directory', side_effect=TimeoutError('Orbit timeout'))
+    def test_shared_directory_returns_explicit_service_error_without_cache(self, _fetch_directory, _enabled):
+        response = self.client.get('/api/integration/shared-directory/')
+
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('momentanément indisponible', response.data['detail'])
 
 
 @override_settings(

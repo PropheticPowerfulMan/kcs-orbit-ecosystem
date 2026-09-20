@@ -157,12 +157,15 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       setError('');
 
       try {
-        const [data, directory] = await Promise.all([
+        const [studentsResult, directoryResult] = await Promise.allSettled([
           studentsService.getAll(),
           sharedDirectoryService.get(),
         ]);
-        setStudents(data);
-        setDirectoryCounts(directory?.counts || null);
+        if (studentsResult.status === 'rejected') throw studentsResult.reason;
+        setStudents(studentsResult.value);
+        if (directoryResult.status === 'fulfilled') {
+          setDirectoryCounts(directoryResult.value?.counts || null);
+        }
       } catch {
         setError("Impossible de charger les élèves pour le moment.");
       } finally {
@@ -176,12 +179,14 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       if (refreshInFlight) return;
       refreshInFlight = true;
       try {
-        const [data, directory] = await Promise.all([
+        const [studentsResult, directoryResult] = await Promise.allSettled([
           studentsService.getAll(),
           sharedDirectoryService.get(),
         ]);
-        setStudents(data);
-        setDirectoryCounts(directory?.counts || null);
+        if (studentsResult.status === 'fulfilled') setStudents(studentsResult.value);
+        if (directoryResult.status === 'fulfilled') {
+          setDirectoryCounts(directoryResult.value?.counts || null);
+        }
       } catch {
         // Le prochain cycle retentera sans masquer les données déjà affichées.
       } finally {

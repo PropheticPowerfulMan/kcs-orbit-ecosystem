@@ -34,7 +34,7 @@ function PageLoadingFallback() {
     <div className="flex min-h-[40vh] items-center justify-center px-4">
       <div className="glass flex items-center gap-3 rounded-2xl border border-brand-300/20 px-5 py-4 text-sm font-semibold text-ink-dim shadow-xl">
         <div className="h-3 w-3 animate-pulse rounded-full bg-brand-300" />
-        Chargement de l'espace EduPay...
+        Chargement sécurisé de la page EduPay…
       </div>
     </div>
   );

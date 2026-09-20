@@ -80,11 +80,27 @@ def ecosystem_employee_detail_view(request,pk):
 @permission_classes([IsAuthenticated])
 def shared_directory_view(_request):
     if orbit_sync_is_enabled():
-        cache_key = 'savanex:shared-directory:v1'
-        directory = fetch_shared_directory()
-        cache.set(cache_key, directory, timeout=2)
+        fresh_cache_key = 'savanex:shared-directory:v2:fresh'
+        stale_cache_key = 'savanex:shared-directory:v2:stale'
+        force_refresh = str(_request.query_params.get('force', '')).lower() in {'1', 'true', 'yes'}
+        directory = None if force_refresh else cache.get(fresh_cache_key)
+        cache_status = 'hit' if directory is not None else 'miss'
+        if directory is None:
+            try:
+                directory = fetch_shared_directory()
+                cache.set(fresh_cache_key, directory, timeout=30)
+                cache.set(stale_cache_key, directory, timeout=15 * 60)
+            except Exception:
+                directory = cache.get(stale_cache_key)
+                if directory is None:
+                    return Response(
+                        {'detail': 'Le registre central est momentanément indisponible. Réessayez dans quelques instants.'},
+                        status=503,
+                    )
+                cache_status = 'stale'
         response = Response(directory)
         response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
+        response['X-KCS-Directory-Cache'] = cache_status
         return response
 
     students = Student.objects.select_related('user', 'parent', 'current_class').filter(is_active=True)

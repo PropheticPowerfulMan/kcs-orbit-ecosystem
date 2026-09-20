@@ -11,8 +11,8 @@ const DEMO_ACCESS_TOKEN = 'demo-access-token';
 const IS_GITHUB_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
 const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
-const DIRECTORY_CACHE_TTL_MS = 3 * 1000;
-const DIRECTORY_CACHE_MAX_AGE_MS = 10 * 1000;
+const DIRECTORY_CACHE_TTL_MS = 2 * 60 * 1000;
+const DIRECTORY_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
 const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v2';
 
 const readStoredDirectory = () => {
@@ -38,7 +38,8 @@ const storeDirectory = (value) => {
 
 let sharedDirectoryCache = readStoredDirectory();
 let sharedDirectoryRequest = null;
-const DIRECTORY_REQUEST_TIMEOUT_MS = 10000;
+let refreshRequest = null;
+const DIRECTORY_REQUEST_TIMEOUT_MS = 60000;
 
 const demoUser = {
   id: 1,
@@ -198,7 +199,7 @@ api.interceptors.response.use(
   },
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && original && !original._retry && !String(original.url || '').includes('/auth/refresh/')) {
       original._retry = true;
       const refresh = useAuthStore.getState().refreshToken;
       if (!refresh) {
@@ -207,9 +208,20 @@ api.interceptors.response.use(
       }
 
       try {
-        const res = await axios.post(`${API_BASE_URL}/auth/refresh/`, { refresh });
-        const newAccess = res.data.access;
-        useAuthStore.setState({ accessToken: newAccess });
+        if (!refreshRequest) {
+          refreshRequest = axios
+            .post(`${API_BASE_URL}/auth/refresh/`, { refresh })
+            .then((res) => {
+              const newAccess = res.data.access;
+              const rotatedRefresh = res.data.refresh || refresh;
+              useAuthStore.getState().updateTokens({ access: newAccess, refresh: rotatedRefresh });
+              return newAccess;
+            })
+            .finally(() => {
+              refreshRequest = null;
+            });
+        }
+        const newAccess = await refreshRequest;
         original.headers.Authorization = `Bearer ${newAccess}`;
         return api(original);
       } catch (refreshError) {
@@ -586,10 +598,15 @@ export const studentsService = {
       }));
     }
 
-    const [localStudents, sharedDirectory] = await Promise.all([
+    const [localResult, directoryResult] = await Promise.allSettled([
       fetchAllPages('/students/'),
       sharedDirectoryService.get(),
     ]);
+    if (localResult.status === 'rejected' && directoryResult.status === 'rejected') {
+      throw localResult.reason || directoryResult.reason;
+    }
+    const localStudents = localResult.status === 'fulfilled' ? localResult.value : [];
+    const sharedDirectory = directoryResult.status === 'fulfilled' ? directoryResult.value : null;
     return mergeLocalAndSharedStudents(localStudents, sharedDirectory);
   },
 
@@ -654,6 +671,7 @@ export const sharedDirectoryService = {
     }
     if (sharedDirectoryRequest) return sharedDirectoryRequest;
 
+    const staleDirectory = sharedDirectoryCache?.data || null;
     sharedDirectoryRequest = api
       .get('/integration/shared-directory/', {
         timeout: DIRECTORY_REQUEST_TIMEOUT_MS,
@@ -664,6 +682,10 @@ export const sharedDirectoryService = {
         sharedDirectoryCache = { data: res.data, loadedAt: Date.now() };
         storeDirectory(sharedDirectoryCache);
         return res.data;
+      })
+      .catch((error) => {
+        if (staleDirectory && error?.response?.status !== 401) return staleDirectory;
+        throw error;
       })
       .finally(() => {
         sharedDirectoryRequest = null;
