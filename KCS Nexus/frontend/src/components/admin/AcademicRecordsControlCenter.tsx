@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, FileCheck2, Printer, RefreshCw, Search, ShieldCheck } from 'lucide-react'
-import { academicRecordsAPI, studentsAPI } from '@/services/api'
+import { academicRecordsAPI } from '@/services/api'
 
 const escapePrintHtml=(value:unknown)=>String(value??"").replace(/[&<>"]/g,(character)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[character]??character))
 type Grade={id:string;percentage:number;letterGrade:string;cycle:{academicYear:string;term:string;status:string};student:{user:{firstName:string;lastName:string};studentNumber:string};course:{name:string;code:string;teacher:{user:{firstName:string;lastName:string}}}}
-type Card={id:string;term:string;average:number;attendanceSummary?:{total:number;present:number;absent:number;late:number;excused:number;sick:number;suspended:number;attendanceRate:number|null};publicationStatus:string;approvedAt?:string;student:{id:string;studentNumber:string;transcriptVisible:boolean;user:{firstName:string;lastName:string}}}
+type Card={id:string;term:string;average:number;teacherComment?:string|null;conduct?:string|null;attendanceSummary?:{total:number;present:number;absent:number;late:number;excused:number;sick:number;suspended:number;attendanceRate:number|null};publicationStatus:string;approvedAt?:string;student:{id:string;studentNumber:string;transcriptVisible:boolean;user:{firstName:string;lastName:string}}}
 type Transcript={student:{name:string;studentNumber:string;grade:string;photoUrl?:string|null};rows:Array<{id:string;percentage:number;letterGrade:string;credits:number;cycle:{academicYear:string;term:string};course:{name:string;code:string}}>;summary:{credits:number;cumulativeGpa:number|null;officialRecords:number};dataPolicy:string}
 type RegistryStudent={id:string;studentNumber?:string;grade?:string;section?:string;status?:string;user?:{firstName?:string;middleName?:string|null;lastName?:string;avatar?:string|null}}
 
 export default function AcademicRecordsControlCenter(){
  const [academicYear,setAcademicYear]=useState('2026-2027'),[term,setTerm]=useState('Semester 1 · Trimester 1'),[grades,setGrades]=useState<Grade[]>([]),[cards,setCards]=useState<Card[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[transcript,setTranscript]=useState<Transcript|null>(null),[registry,setRegistry]=useState<RegistryStudent[]>([]),[studentQuery,setStudentQuery]=useState('')
- const load=async()=>{setBusy(true);try{const [g,c,s]=await Promise.all([academicRecordsAPI.review({academicYear}),academicRecordsAPI.reportCards(),studentsAPI.getAll(undefined,{headers:{'x-skip-auth-logout':'true'}})]);setGrades(g.data.data||[]);setCards(c.data.data||[]);setRegistry(s.data.data||[])}catch(error:any){setNotice(error?.response?.data?.message||'Unable to load official academic records.')}finally{setBusy(false)}}
+ const load=async()=>{setBusy(true);try{const [g,c,s]=await Promise.all([academicRecordsAPI.review({academicYear}),academicRecordsAPI.reportCards(),academicRecordsAPI.studentRegistry()]);setGrades(g.data.data||[]);setCards(c.data.data||[]);setRegistry(s.data.data||[]);setNotice('')}catch(error:any){setNotice(error?.response?.data?.message||'Unable to load official academic records.')}finally{setBusy(false)}}
  useEffect(()=>{void load()},[])
  const matching=useMemo(()=>{const selected=term.toLowerCase();return grades.filter(item=>{const recorded=item.cycle.term.toLowerCase();return item.cycle.academicYear===academicYear&&(recorded===selected||selected.includes(recorded)||recorded.includes(selected))})},[grades,academicYear,term])
  const students=new Set(matching.map(item=>item.student.studentNumber)).size,courses=new Set(matching.map(item=>item.course.code)).size

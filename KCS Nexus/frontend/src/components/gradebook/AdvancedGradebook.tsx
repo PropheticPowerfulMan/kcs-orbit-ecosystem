@@ -229,7 +229,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
   }
   const [comments, setComments] = useState<Record<string, string>>({})
-  const [term, setTerm] = useState('Semester 2 · Trimester 3')
+  const [term, setTerm] = useState(terms[0])
   const [scale, setScale] = useState(100)
   const [query, setQuery] = useState('')
   const [bulkValue, setBulkValue] = useState('')
@@ -285,13 +285,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     window.addEventListener('keydown', handleSaveShortcut)
     return () => window.removeEventListener('keydown', handleSaveShortcut)
   }, [spreadsheetOpen, scores, comments, assignments, selectedCourseId])
-  const courseStudents = useMemo(() => {
-    const roster = selectedCourse?.studentIds?.length
-      ? selectedCourse.studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as GradebookStudent[]
-      : students
-
-    return roster.filter((student) => `${student.name} ${canonicalClassLabel(student.grade, student.section)}`.toLowerCase().includes(query.toLowerCase()))
-  }, [query, selectedCourse, students])
+  const enrolledCourseStudents = useMemo(() => selectedCourse?.studentIds?.length
+    ? selectedCourse.studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as GradebookStudent[]
+    : students, [selectedCourse, students])
+  const courseStudents = useMemo(() => enrolledCourseStudents.filter((student) =>
+    `${student.name} ${canonicalClassLabel(student.grade, student.section)}`.toLowerCase().includes(query.toLowerCase()),
+  ), [enrolledCourseStudents, query])
 
   const visibleAssignments = assignments.filter((assignment) => assignment.term === term || term === 'Annual final')
 
@@ -302,8 +301,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const getScore = (assignment: GradebookColumn, studentId: string) => parseScore(getRawScore(assignment.id, studentId), assignment.maxPoints)
 
   useEffect(() => {
-    setScores((current) => buildMissingScoreCells(assignments, courseStudents, current))
-  }, [assignments, courseStudents])
+    setScores((current) => buildMissingScoreCells(assignments, enrolledCourseStudents, current))
+  }, [assignments, enrolledCourseStudents])
 
   const getCategoryAverage = (studentId: string, categoryId: string) => {
     const categoryAssignments = visibleAssignments.filter((assignment) => assignment.category === categoryId)
@@ -325,13 +324,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     return activeWeight ? weighted / activeWeight : null
   }
 
-  const studentAnalytics = courseStudents.map((student) => {
+  const analyzeStudent = (student: GradebookStudent) => {
     const average = getWeightedAverage(student.id)
     const missing = visibleAssignments.filter((assignment) => !getRawScore(assignment.id, student.id).trim()).length
     const projected = average === null ? null : Math.max(0, Math.min(100, average + (student.attendance && student.attendance > 94 ? 2 : -3) - missing * 2))
     const risk = average === null || projected === null || missing >= 2 || projected < 70 ? 'high' : average < 78 || projected < 80 ? 'medium' : 'low'
     return { student, average, missing, projected, risk }
-  })
+  }
+  const studentAnalytics = courseStudents.map(analyzeStudent)
+  const submissionAnalytics = enrolledCourseStudents.map(analyzeStudent)
 
   const classAverage = studentAnalytics.filter((item) => item.average !== null).reduce((sum, item) => sum + (item.average ?? 0), 0) / Math.max(1, studentAnalytics.filter((item) => item.average !== null).length)
   const atRiskCount = studentAnalytics.filter((item) => item.risk !== 'low').length
@@ -449,23 +450,29 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const submitFinalGrades = async () => {
-    if (!selectedCourse) return onAction('Select a course before submitting final grades.')
-    if (!courseStudents.length) return onAction('This course has no enrolled students.')
+    if (!selectedCourse) return onAction('Select a course before submitting final grades.', true)
+    if (!enrolledCourseStudents.length) return onAction('This course has no enrolled students.', true)
     if (categories.reduce((sum, category) => sum + category.weight, 0) !== 100) return onAction('Category weights must total exactly 100% before final grades can be submitted.', true)
-    const incomplete = studentAnalytics.filter((item) => item.average === null || item.missing > 0)
-    if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`)
+    const incomplete = submissionAnalytics.filter((item) => item.average === null || item.missing > 0)
+    if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`, true)
     setSubmittingFinals(true)
     try {
       if (!await saveSpreadsheet(true)) return
-      await academicRecordsAPI.submitFinalGrades({
+      const response = await academicRecordsAPI.submitFinalGrades({
         courseId: selectedCourse.id,
         academicYear,
         term,
-        results: studentAnalytics.map((item) => ({ studentId: item.student.id, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
+        results: submissionAnalytics.map((item) => ({ studentId: item.student.id, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
       })
-      onAction(`${studentAnalytics.length} final grade(s) submitted for administrative review. The official record is now auditable.`)
+      const savedCount = Number(response.data?.data?.count ?? 0)
+      const propagatedCount = Number(response.data?.data?.reportCardDraftsUpdated ?? 0)
+      if (savedCount !== submissionAnalytics.length || propagatedCount !== submissionAnalytics.length) {
+        throw new Error(`Propagation check failed: ${savedCount}/${submissionAnalytics.length} grades and ${propagatedCount}/${submissionAnalytics.length} report-card drafts were confirmed.`)
+      }
+      window.dispatchEvent(new CustomEvent('kcs-final-grades-submitted', { detail: { courseId: selectedCourse.id, academicYear, term, count: savedCount } }))
+      onAction(`${submissionAnalytics.length} final grade(s) submitted for administrative review. The official record is now auditable.`)
     } catch (error: any) {
-      onAction(error?.response?.data?.message || 'Final-grade submission failed.')
+      onAction(error?.response?.data?.message || error?.message || 'Final-grade submission failed.', true)
     } finally { setSubmittingFinals(false) }
   }
 

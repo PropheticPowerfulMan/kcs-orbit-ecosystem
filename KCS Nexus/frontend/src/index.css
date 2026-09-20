@@ -1542,6 +1542,21 @@ html:not(.dark) .portal-shell [data-suggestion-box] textarea::placeholder {
   -webkit-text-fill-color: #d8effb !important;
   opacity: 1;
 }
+/* The shared suggestion composer must stay legible even when a portal has its
+   own daylight form overrides. Keep this selector independent of portal-shell. */
+textarea.suggestion-message-input {
+  background-color: #0b3b63 !important;
+  border-color: rgba(125, 211, 252, .55) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  opacity: 1 !important;
+}
+textarea.suggestion-message-input::placeholder {
+  color: #d8effb !important;
+  -webkit-text-fill-color: #d8effb !important;
+  opacity: 1 !important;
+}
 
 /* Full-bleed route headers matching standard dashboard geometry. */
 .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1rem; margin-right: -1rem; width: calc(100% + 2rem); border-radius: 0; }

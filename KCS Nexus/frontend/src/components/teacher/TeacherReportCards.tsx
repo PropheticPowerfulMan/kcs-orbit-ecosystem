@@ -667,7 +667,7 @@ function SubjectGradeSubmission() {
                   <th className='px-3 py-3'>Final / override</th>
                   <th className='px-3 py-3'>Override audit reason</th>
                   <th className='px-3 py-3'>Attendance</th>
-                  <th className='px-3 py-3'>Teacher comment</th>
+                  <th className='px-3 py-3'>Subject evidence note</th>
                   <th className='bg-kcs-blue-800 px-3 py-3 text-white dark:bg-kcs-gold-300 dark:text-kcs-blue-950'>Workflow status</th>
                 </tr>
               </thead>
@@ -695,7 +695,7 @@ function SubjectGradeSubmission() {
                       <p className='mt-1'>{attendance?.present ?? 0} P · {attendance?.absent ?? 0} A · {attendance?.late ?? 0} L</p>
                     </td>
                     <td className='min-w-72 px-3 py-3'>
-                      <textarea aria-label={`Teacher comment for ${studentName(row.student)}`} disabled={locked} className={field} rows={2} maxLength={400} value={row.draft.teacherComment} onChange={(event) => updateEntry(row.student.id, { teacherComment: event.target.value })} placeholder='Professional academic comment' />
+                      <textarea aria-label={`Subject evidence note for ${studentName(row.student)}`} disabled={locked} className={field} rows={2} maxLength={400} value={row.draft.teacherComment} onChange={(event) => updateEntry(row.student.id, { teacherComment: event.target.value })} placeholder='Subject evidence note — not the official report-card comment' />
                     </td>
                     <td className='min-w-44 bg-kcs-gold-50/80 px-3 py-3 dark:bg-kcs-blue-900'><span className='inline-flex rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 ring-1 ring-kcs-gold-300 dark:bg-kcs-gold-300 dark:text-kcs-blue-950 dark:ring-kcs-gold-200'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
                   </tr>
@@ -720,7 +720,7 @@ function SubjectGradeSubmission() {
       <div className='flex flex-wrap gap-2'>
         <button className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200' onClick={() => setPreviewOpen(true)}><Eye size={16} />Preview</button>
         <button className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-700 disabled:opacity-40 dark:border-kcs-blue-700 dark:text-kcs-blue-200' disabled={saving || locked} onClick={() => void persistDrafts()}><Save size={16} />Save draft</button>
-        <button className={primary} disabled={saving || locked || !allRows.length || readyCount !== allRows.length} onClick={() => void submit()}><Send size={16} />Submit to administration</button>
+        <button className={primary} disabled={saving || locked || !allRows.length || readyCount !== allRows.length} onClick={() => void submit()}><Send size={16} />Submit subject final grades</button>
       </div>
     </div>
 

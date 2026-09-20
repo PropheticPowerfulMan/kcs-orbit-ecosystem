@@ -68,6 +68,15 @@ academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) =
 
 academicRecordsRouter.use(authenticate)
 
+academicRecordsRouter.get('/student-registry', requireRoles('admin','staff'), asyncHandler(async (_req, res) => {
+ const students = await prisma.studentProfile.findMany({
+  include: { user: true },
+  orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
+ })
+ res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+ return success(res, students, 'Official Nexus academic student registry loaded')
+}))
+
 academicRecordsRouter.post('/transcripts/verification', requireRoles('admin','staff'), asyncHandler(async (req: AuthenticatedRequest, res) => {
  const payload = z.object({ documentId: z.string().regex(new RegExp('^KCS-TR-[0-9]{8}-[A-Z0-9-]+$','i')), fingerprint: z.string().min(6).max(100), studentId: z.string().min(1) }).parse(req.body)
  const student = await prisma.studentProfile.findUnique({ where: { id: payload.studentId }, include: { user: true } })
@@ -87,18 +96,29 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
  const enrolled=new Set(course.enrollments.map(item=>item.studentId))
  if(payload.results.some(item=>!enrolled.has(item.studentId)))throw new ApiError(400,'A submitted student is not enrolled in this course')
  if(new Set(payload.results.map(item=>item.studentId)).size!==payload.results.length)throw new ApiError(400,'Duplicate student in submission')
- const lockedCards=await prisma.reportCard.count({where:{studentId:{in:payload.results.map(item=>item.studentId)},term:`${payload.academicYear} · ${payload.term}`,publicationStatus:{in:['APPROVED','EMAILED','POSTED_TO_PORTAL']}}})
- if(lockedCards)throw new ApiError(409,'This reporting session is already approved or published and can no longer be changed')
+ const lockedCards=await prisma.reportCard.count({where:{studentId:{in:payload.results.map(item=>item.studentId)},term:`${payload.academicYear} · ${payload.term}`,publicationStatus:{not:'DRAFT'}}})
+ if(lockedCards)throw new ApiError(409,'This reporting session has entered main-teacher or administrative review and can no longer be changed')
  const period=periodKey(payload.academicYear,payload.term,'SUBMITTED')
  const saved=await prisma.$transaction(async tx=>{
   await tx.grade.deleteMany({where:{courseId:course.id,assignmentId:null,period}})
   const created=[]
   for(const item of payload.results)created.push(await tx.grade.create({data:{courseId:course.id,studentId:item.studentId,assignmentId:null,score:item.percentage,maxScore:100,percentage:item.percentage,letterGrade:letter(item.percentage),period}}))
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,results:payload.results}}})
+  const termLabel=reportCardTerm(payload.academicYear,payload.term)
+  const draftCards=[]
+  for(const item of payload.results){
+   const submittedGrades=await tx.grade.findMany({where:{studentId:item.studentId,assignmentId:null,period},include:{course:{select:{credits:true}}}})
+   const average=weightedCourseAverage(submittedGrades)
+   draftCards.push(await tx.reportCard.upsert({
+    where:{studentId_term:{studentId:item.studentId,term:termLabel}},
+    create:{studentId:item.studentId,term:termLabel,average,principalStatus:'DRAFT',publicationStatus:'DRAFT'},
+    update:{average},
+   }))
+  }
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,reportCardDraftsUpdated:draftCards.length,results:payload.results}}})
   await synchronizeStudentAcademicMetrics(tx,payload.results.map(item=>item.studentId))
-  return created
+  return{created,draftCards}
  })
- return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.length},'Final grades submitted for administrative review',201)
+ return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.created.length,reportCardDraftsUpdated:saved.draftCards.length},'Final grades submitted and propagated to report-card drafts',201)
 }))
 
 academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{

@@ -170,7 +170,7 @@ export default function SuggestionBox() {
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          className="min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm text-white outline-none placeholder:!text-[#cde8f7] focus:ring-2 focus:ring-kcs-gold-400"
+          className="suggestion-message-input min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm !text-white outline-none placeholder:!text-[#d8effb] focus:ring-2 focus:ring-kcs-gold-400"
           placeholder={language === 'fr' ? 'Écrivez votre suggestion confidentielle...' : 'Write your confidential suggestion...'}
         />
         <button
