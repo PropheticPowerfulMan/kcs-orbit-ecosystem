@@ -360,7 +360,10 @@ const ParentsPage = () => {
       .sort((left, right) => right.students - left.students || left.className.localeCompare(right.className));
   }, [filtered]);
 
-  const activeFamilies = filtered.filter((family) => family.activeStudents > 0).length;
+  const isFullDirectoryView = !query.trim() && classLevelFilter === 'all' && classSuffixFilter === 'all' && familyFilter === 'all';
+  const activeFamilies = isFullDirectoryView
+    ? (directory?.counts?.families ?? directory?.counts?.parents ?? familyRows.length)
+    : filtered.filter((family) => family.activeStudents > 0).length;
   const totalStudents = filtered.reduce((sum, family) => sum + family.student_count, 0);
   const classesCovered = classGroups.length;
 

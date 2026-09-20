@@ -42,7 +42,9 @@ class SharedDirectoryResilienceTests(TestCase):
         response = self.client.get('/api/integration/shared-directory/')
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, cached_directory)
+        self.assertEqual(response.data['source'], 'orbit')
+        self.assertEqual(response.data['parents'], cached_directory['parents'])
+        self.assertEqual(response.data['counts'], {'families': 0, 'parents': 1, 'students': 0, 'teachers': 0})
         self.assertEqual(response['X-KCS-Directory-Cache'], 'stale')
 
     @patch('apps.integration.views.orbit_sync_is_enabled', return_value=True)
@@ -199,8 +201,8 @@ class EcosystemEmployeeIntegrationTests(TestCase):
         self.assertEqual(response.status_code,200)
         self.assertEqual(response.data,[])
 
-    ('apps.integration.views.deliver_employee_communication')
-    ('apps.integration.views.sync_teacher')
+    @patch('apps.integration.views.deliver_employee_communication')
+    @patch('apps.integration.views.sync_teacher')
     def test_employee_update_normalizes_nullable_fields_and_notifies(self, sync_teacher, deliver):
         deliver.return_value = []
         user = User.objects.create_user(

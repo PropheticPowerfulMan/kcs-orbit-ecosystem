@@ -122,6 +122,22 @@ async function getFamiliesFromOrbit() {
 
 let sharedDirectoryCache: { value: SharedDirectoryResponse; expiresAt: number } | null = null
 
+function canonicalSharedDirectory(value: SharedDirectoryResponse): SharedDirectoryResponse {
+  const parents = Array.isArray(value.parents) ? value.parents : []
+  const students = Array.isArray(value.students) ? value.students : []
+  const teachers = Array.isArray(value.teachers) ? value.teachers : []
+  const families = Array.isArray((value as SharedDirectoryResponse & { families?: unknown[] }).families)
+    ? (value as SharedDirectoryResponse & { families: unknown[] }).families
+    : parents
+  return {
+    ...value,
+    counts: { families: families.length, parents: parents.length, students: students.length, teachers: teachers.length },
+    parents,
+    students,
+    teachers,
+  }
+}
+
 async function getSharedDirectoryFromOrbit(force = false) {
   if (!force && sharedDirectoryCache && sharedDirectoryCache.expiresAt > Date.now()) return sharedDirectoryCache.value
   const response = await fetch(
@@ -131,7 +147,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
         'x-api-key': env.KCS_ORBIT_API_KEY!,
         'x-app-slug': 'KCS_NEXUS',
       },
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(15_000),
     },
   )
 
@@ -139,7 +155,7 @@ async function getSharedDirectoryFromOrbit(force = false) {
     throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
   }
 
-  const value = await response.json() as SharedDirectoryResponse
+  const value = canonicalSharedDirectory(await response.json() as SharedDirectoryResponse)
   sharedDirectoryCache = { value, expiresAt: Date.now() + 1_000 }
   return value
 }
@@ -426,10 +442,11 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
   })
 }))
 
-registryRouter.get('/directory', authenticate, asyncHandler(async (_req, res) => {
+registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
-    const orbitData = await getSharedDirectoryFromOrbit()
+    const force = ['1', 'true', 'yes'].includes(String(req.query.force ?? '').toLowerCase())
+    const orbitData = await getSharedDirectoryFromOrbit(force)
     return success(res, orbitData, 'Shared directory loaded from Orbit')
   }
 
@@ -868,6 +885,8 @@ registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler
       status: 'ACTIVE',
       dateOfBirth: student.dateOfBirth,
     })
+    sharedDirectoryCache = null
+    await getSharedDirectoryFromOrbit(true)
 
     return success(res, {
       source: 'orbit',

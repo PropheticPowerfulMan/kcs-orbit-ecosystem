@@ -27,7 +27,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { analyticsService, studentsService, teachersService } from '../../services/api';
+import { analyticsService, sharedDirectoryService, studentsService, teachersService } from '../../services/api';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import StatCard from '../../components/ui/StatCard';
 import SchoolLogo from '../../components/ui/SchoolLogo';
@@ -155,7 +155,7 @@ const normalizeLabel = (value, fallback) => {
 
 const SCHOOL_CLASS_LEVEL_COUNT = 15;
 
-const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) => {
+const buildDashboardStats = (overview, studentRows, teacherRows, directory, sources = {}) => {
   const visibleStudents = Array.isArray(studentRows) ? studentRows : [];
   const visibleTeachers = Array.isArray(teacherRows) ? teacherRows : [];
   const activeStudents = visibleStudents.filter((student) => student.is_active !== false);
@@ -167,8 +167,9 @@ const buildDashboardStats = (overview, studentRows, teacherRows, sources = {}) =
   );
 
   return {
-    total_students: sources.students ? activeStudents.length : (overview?.total_students || 0),
-    total_teachers: sources.teachers ? activeTeachers.length : (overview?.total_teachers || 0),
+    total_students: directory?.counts?.students ?? (sources.students ? activeStudents.length : (overview?.total_students || 0)),
+    total_teachers: directory?.counts?.teachers ?? (sources.teachers ? activeTeachers.length : (overview?.total_teachers || 0)),
+    total_families: directory?.counts?.families ?? directory?.counts?.parents ?? 0,
     total_classes: Math.max(overview?.total_classes || 0, classes.size, SCHOOL_CLASS_LEVEL_COUNT),
     attendance_rate_30d: overview?.attendance_rate_30d ?? 0,
     average_grade: overview?.average_grade ?? null,
@@ -183,17 +184,19 @@ const DashboardPage = () => {
 
   useEffect(() => {
     const load = async () => {
-      const [overviewResult, studentsResult, teachersResult] = await Promise.allSettled([
+      const [overviewResult, studentsResult, teachersResult, directoryResult] = await Promise.allSettled([
         analyticsService.getOverview(),
         studentsService.getAll(),
         teachersService.getAll(),
+        sharedDirectoryService.get({ force: true }),
       ]);
 
       const overview = overviewResult.status === 'fulfilled' ? overviewResult.value : null;
       const studentRows = studentsResult.status === 'fulfilled' ? studentsResult.value : [];
       const teacherRows = teachersResult.status === 'fulfilled' ? teachersResult.value : [];
+      const directory = directoryResult.status === 'fulfilled' ? directoryResult.value : null;
 
-      setStats(buildDashboardStats(overview, studentRows, teacherRows, {
+      setStats(buildDashboardStats(overview, studentRows, teacherRows, directory, {
         students: studentsResult.status === 'fulfilled',
         teachers: teachersResult.status === 'fulfilled',
       }));

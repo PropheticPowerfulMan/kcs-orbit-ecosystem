@@ -11,16 +11,37 @@ const DEMO_ACCESS_TOKEN = 'demo-access-token';
 const IS_GITHUB_PAGES = typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
 const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
-const DIRECTORY_CACHE_TTL_MS = 2 * 60 * 1000;
-const DIRECTORY_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
-const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v2';
+const DIRECTORY_CACHE_TTL_MS = 15 * 1000;
+const DIRECTORY_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v3';
+
+const normalizeSharedDirectory = (directory) => {
+  const payload = directory && typeof directory === 'object' ? directory : {};
+  const families = Array.isArray(payload.families) ? payload.families : [];
+  const parents = Array.isArray(payload.parents) ? payload.parents : [];
+  const students = Array.isArray(payload.students) ? payload.students : [];
+  const teachers = Array.isArray(payload.teachers) ? payload.teachers : [];
+  return {
+    ...payload,
+    families,
+    parents,
+    students,
+    teachers,
+    counts: {
+      families: families.length,
+      parents: parents.length,
+      students: students.length,
+      teachers: teachers.length,
+    },
+  };
+};
 
 const readStoredDirectory = () => {
   if (typeof window === 'undefined') return null;
   try {
     const value = JSON.parse(window.localStorage.getItem(DIRECTORY_STORAGE_KEY) || 'null');
     return value?.loadedAt && Date.now() - value.loadedAt < DIRECTORY_CACHE_MAX_AGE_MS
-      ? value
+      ? { ...value, data: normalizeSharedDirectory(value.data) }
       : null;
   } catch {
     return null;
@@ -191,6 +212,8 @@ api.interceptors.response.use(
     if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       sharedDirectoryCache = null;
       window.localStorage.removeItem(DIRECTORY_STORAGE_KEY);
+      window.dispatchEvent(new CustomEvent('savanex:directory-changed'));
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent('savanex:directory-changed')), 1200);
     }
     if (method && ['PUT', 'PATCH', 'DELETE'].includes(method)) {
       window.dispatchEvent(new CustomEvent('ecosystem:mutation-success', { detail: { message: response.data?.detail || response.data?.message || (method === 'DELETE' ? "Entité supprimée dans tout l'écosystème." : "Modification enregistrée et synchronisée dans l'écosystème.") } }));
@@ -669,28 +692,30 @@ export const sharedDirectoryService = {
     if (!force && sharedDirectoryCache && now - sharedDirectoryCache.loadedAt < DIRECTORY_CACHE_TTL_MS) {
       return sharedDirectoryCache.data;
     }
-    if (sharedDirectoryRequest) return sharedDirectoryRequest;
+    if (!force && sharedDirectoryRequest) return sharedDirectoryRequest;
 
     const staleDirectory = sharedDirectoryCache?.data || null;
-    sharedDirectoryRequest = api
+    const request = api
       .get('/integration/shared-directory/', {
         timeout: DIRECTORY_REQUEST_TIMEOUT_MS,
         headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-        params: { _fresh: now },
+        params: { force: force ? '1' : undefined, _fresh: now },
       })
       .then((res) => {
-        sharedDirectoryCache = { data: res.data, loadedAt: Date.now() };
+        const data = normalizeSharedDirectory(res.data);
+        sharedDirectoryCache = { data, loadedAt: Date.now() };
         storeDirectory(sharedDirectoryCache);
-        return res.data;
+        return data;
       })
       .catch((error) => {
-        if (staleDirectory && error?.response?.status !== 401) return staleDirectory;
+        if (!force && staleDirectory && error?.response?.status !== 401) return staleDirectory;
         throw error;
       })
       .finally(() => {
-        sharedDirectoryRequest = null;
+        if (sharedDirectoryRequest === request) sharedDirectoryRequest = null;
       });
-    return sharedDirectoryRequest;
+    if (!force) sharedDirectoryRequest = request;
+    return request;
   },
   clear() {
     sharedDirectoryCache = null;

@@ -90,22 +90,29 @@ academicRecordsRouter.post('/transcripts/verification', requireRoles('admin','st
 
 academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=submissionSchema.parse(req.body)
- const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:true,enrollments:{select:{studentId:true}}}})
+ const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:true,enrollments:{select:{studentId:true,student:{select:{studentNumber:true,user:{select:{orbitUserId:true}}}}}}}})
  if(!course)throw new ApiError(404,'Course not found')
  if(course.teacher.userId!==req.user!.sub)throw new ApiError(403,'Only the assigned teacher may submit these grades')
+ const enrollmentLookup=new Map<string,string>()
+ for(const enrollment of course.enrollments){
+  for(const key of [enrollment.studentId,enrollment.student.studentNumber,enrollment.student.user.orbitUserId]){
+   if(key)enrollmentLookup.set(key.trim().toLowerCase(),enrollment.studentId)
+  }
+ }
+ const canonicalResults=payload.results.map(item=>({...item,studentId:enrollmentLookup.get(item.studentId.trim().toLowerCase())??item.studentId}))
  const enrolled=new Set(course.enrollments.map(item=>item.studentId))
- if(payload.results.some(item=>!enrolled.has(item.studentId)))throw new ApiError(400,'A submitted student is not enrolled in this course')
- if(new Set(payload.results.map(item=>item.studentId)).size!==payload.results.length)throw new ApiError(400,'Duplicate student in submission')
- const lockedCards=await prisma.reportCard.count({where:{studentId:{in:payload.results.map(item=>item.studentId)},term:`${payload.academicYear} · ${payload.term}`,publicationStatus:{not:'DRAFT'}}})
+ if(canonicalResults.some(item=>!enrolled.has(item.studentId)))throw new ApiError(400,'A submitted student could not be matched to the official Nexus course enrollment')
+ if(new Set(canonicalResults.map(item=>item.studentId)).size!==canonicalResults.length)throw new ApiError(400,'Duplicate student in submission after identity reconciliation')
+ const lockedCards=await prisma.reportCard.count({where:{studentId:{in:canonicalResults.map(item=>item.studentId)},term:reportCardTerm(payload.academicYear,payload.term),publicationStatus:{not:'DRAFT'}}})
  if(lockedCards)throw new ApiError(409,'This reporting session has entered main-teacher or administrative review and can no longer be changed')
  const period=periodKey(payload.academicYear,payload.term,'SUBMITTED')
  const saved=await prisma.$transaction(async tx=>{
   await tx.grade.deleteMany({where:{courseId:course.id,assignmentId:null,period}})
   const created=[]
-  for(const item of payload.results)created.push(await tx.grade.create({data:{courseId:course.id,studentId:item.studentId,assignmentId:null,score:item.percentage,maxScore:100,percentage:item.percentage,letterGrade:letter(item.percentage),period}}))
+  for(const item of canonicalResults)created.push(await tx.grade.create({data:{courseId:course.id,studentId:item.studentId,assignmentId:null,score:item.percentage,maxScore:100,percentage:item.percentage,letterGrade:letter(item.percentage),period}}))
   const termLabel=reportCardTerm(payload.academicYear,payload.term)
   const draftCards=[]
-  for(const item of payload.results){
+  for(const item of canonicalResults){
    const submittedGrades=await tx.grade.findMany({where:{studentId:item.studentId,assignmentId:null,period},include:{course:{select:{credits:true}}}})
    const average=weightedCourseAverage(submittedGrades)
    draftCards.push(await tx.reportCard.upsert({
@@ -114,8 +121,8 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
     update:{average},
    }))
   }
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,reportCardDraftsUpdated:draftCards.length,results:payload.results}}})
-  await synchronizeStudentAcademicMetrics(tx,payload.results.map(item=>item.studentId))
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,reportCardDraftsUpdated:draftCards.length,results:canonicalResults}}})
+  await synchronizeStudentAcademicMetrics(tx,canonicalResults.map(item=>item.studentId))
   return{created,draftCards}
  })
  return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.created.length,reportCardDraftsUpdated:saved.draftCards.length},'Final grades submitted and propagated to report-card drafts',201)
@@ -233,20 +240,25 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
  const submittedCourseIds=new Set(context.grades.map(item=>item.courseId))
  const missingCourseIds=expectedCourseIds.filter(courseId=>!submittedCourseIds.has(courseId))
  if(!expectedCourseIds.length)throw new ApiError(409,'This learner has no official course enrollment')
- if(missingCourseIds.length)throw new ApiError(409,`Submission blocked: ${missingCourseIds.length} subject teacher(s) have not submitted final grades`)
+ if(missingCourseIds.length){
+  const missingCourses=context.student.enrollments.filter(item=>missingCourseIds.includes(item.courseId)).map(item=>item.course.code||item.course.name)
+  throw new ApiError(409,`Submission blocked: final grades are still missing for ${missingCourses.join(', ')}`)
+ }
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
  const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
  if(current&&current.publicationStatus!=='DRAFT')throw new ApiError(409,'This report card has already entered administrative review')
- const card=await prisma.$transaction(async tx=>{
+ const result=await prisma.$transaction(async tx=>{
   const saved=await tx.reportCard.upsert({
    where:{studentId_term:{studentId,term:termLabel}},
    create:{studentId,term:termLabel,average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
    update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
   })
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,courseGrades:context.grades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
-  return saved
+  const recipients=await tx.user.findMany({where:{role:'ADMIN'},select:{id:true}})
+  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:'Report card ready for review',message:`A main teacher submitted the complete report card for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
+  return{saved,notified:recipients.length}
  })
- return success(res,card,'Complete report card submitted to Super Administration')
+ return success(res,{...result.saved,superAdministrationNotified:result.notified},'Complete report card submitted to Super Administration')
 }))
 
 academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{

@@ -499,6 +499,21 @@ function SubjectGradeSubmission() {
     setError('')
     try {
       if (!await persistDrafts('Draft saved before controlled submission.')) return
+      const synchronizedCourse = await teacherWorkspaceAPI.syncCourse({
+        id: course.id,
+        name: course.name,
+        abbreviation: course.code,
+        description: `${course.name} · ${course.grade} · verified before report-card submission`,
+        grade: course.grade,
+        credits: 1,
+        room: '',
+        studentIds: allRows.map((row) => row.student.id),
+        studentNumbers: allRows.map((row) => row.student.studentNumber).filter(Boolean),
+      })
+      const synchronizedEnrollmentCount = synchronizedCourse.data?.data?.enrollments?.length ?? 0
+      if (synchronizedEnrollmentCount !== allRows.length) {
+        throw new Error(`Course roster verification failed: ${synchronizedEnrollmentCount}/${allRows.length} official enrollments were confirmed.`)
+      }
       await academicRecordsAPI.submitFinalGrades({
         courseId: course.id,
         academicYear,

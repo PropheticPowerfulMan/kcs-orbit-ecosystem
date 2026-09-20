@@ -23,6 +23,22 @@ from apps.users.permissions import IsAdminUser
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
 
 
+def _canonical_directory(directory):
+    # Keep counters tied to the arrays actually returned to every application.
+    payload = dict(directory or {})
+    for collection in ('families', 'parents', 'students', 'teachers'):
+        if not isinstance(payload.get(collection), list):
+            payload[collection] = []
+    payload['counts'] = {
+        'families': len(payload['families']),
+        'parents': len(payload['parents']),
+        'students': len(payload['students']),
+        'teachers': len(payload['teachers']),
+    }
+    payload['verifiedAt'] = timezone.now().isoformat()
+    return payload
+
+
 
 
 def _trusted_nexus(request):
@@ -87,7 +103,7 @@ def shared_directory_view(_request):
         cache_status = 'hit' if directory is not None else 'miss'
         if directory is None:
             try:
-                directory = fetch_shared_directory()
+                directory = _canonical_directory(fetch_shared_directory())
                 cache.set(fresh_cache_key, directory, timeout=30)
                 cache.set(stale_cache_key, directory, timeout=15 * 60)
             except Exception:
@@ -98,6 +114,7 @@ def shared_directory_view(_request):
                         status=503,
                     )
                 cache_status = 'stale'
+        directory = _canonical_directory(directory)
         response = Response(directory)
         response['Cache-Control'] = 'private, no-store, no-cache, must-revalidate'
         response['X-KCS-Directory-Cache'] = cache_status

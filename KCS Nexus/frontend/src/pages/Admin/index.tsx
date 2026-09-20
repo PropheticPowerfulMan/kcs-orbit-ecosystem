@@ -1440,10 +1440,10 @@ const AdminSectionView = ({
     </div>
   ) : null
 
-  const refreshOfficialRoster = async () => {
+  const refreshOfficialRoster = async (forceDirectory = false) => {
     const [response, directoryResponse] = await Promise.all([
       getAdminRoster(),
-      registryAPI.getDirectory().catch(() => null),
+      registryAPI.getDirectory(forceDirectory).catch(() => null),
     ])
     const directory = directoryResponse?.data?.data
     if (directory?.parents) {
@@ -1626,7 +1626,7 @@ const AdminSectionView = ({
       setStudentNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cette famille pour le moment.'))
       return
     }
-    const refreshedRoster = await refreshOfficialRoster()
+    const refreshedRoster = await refreshOfficialRoster(true)
     const focusStudent = refreshedRoster.find((student) => finalRecords.some((record) => record.studentNumber === student.studentNumber)) ?? refreshedRoster[0] ?? finalRecords[0]
     setSelectedStudent(focusStudent)
     setDivisionFilter(getDivisionForGrade(focusStudent.grade).id)
@@ -1740,7 +1740,7 @@ const AdminSectionView = ({
       } else if (familyContacts.length > 0) {
         throw new Error('Aucun parent responsable officiel ne permet d’enregistrer ces contacts familiaux.')
       }
-      const roster = await refreshOfficialRoster()
+      const roster = await refreshOfficialRoster(true)
       const updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
       if (updatedStudent) {
         setSelectedStudent(updatedStudent)
@@ -1779,7 +1779,7 @@ const AdminSectionView = ({
     if (!confirmed) return
     try {
       const response = await studentsAPI.delete(student.id)
-      await refreshOfficialRoster()
+      await refreshOfficialRoster(true)
       setStudentNotice(response.data?.message || `${student.name} a été supprimé du registre officiel.`)
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${student.name} pour le moment.`))
@@ -1882,7 +1882,7 @@ const AdminSectionView = ({
           ? { photoData: parentEditForm.photoData }
           : {}),
       }, editingParent.identifierType)
-      const roster = await refreshOfficialRoster()
+      const roster = await refreshOfficialRoster(true)
       const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
       const updatedParent = refreshedParents.find((parent) => parent.id === editingParent.id) ?? null
       setEditingParent(null)
@@ -1903,7 +1903,7 @@ const AdminSectionView = ({
 
     try {
       const response = await registryAPI.deleteEntity('parent', parent.id, parent.identifierType)
-      await refreshOfficialRoster()
+      await refreshOfficialRoster(true)
       setSelectedParent((current) => current?.id === parent.id ? null : current)
       setEditingParent((current) => current?.id === parent.id ? null : current)
       setParentNotice(response.data?.message || `${parent.name} a ete supprime du registre parent.`)
@@ -1954,7 +1954,7 @@ const AdminSectionView = ({
         ? await registryAPI.updateEntity('teacher', editingTeacherId, payload)
         : await registryAPI.createEntity('teacher', payload)
       clearTeacherForm()
-      await refreshOfficialRoster()
+      await refreshOfficialRoster(true)
       setTeacherNotice(response.data?.message || (editingTeacherId ? 'Employé modifié et propagé.' : 'Employé ajouté et propagé.'))
     } catch (error) {
       setTeacherNotice(extractStudentApiMessage(error, 'Impossible d’enregistrer cet employé.'))
@@ -1966,7 +1966,7 @@ const AdminSectionView = ({
     try {
       const response = await registryAPI.deleteEntity('teacher', teacher.id)
       if (editingTeacherId === teacher.id) clearTeacherForm()
-      await refreshOfficialRoster()
+      await refreshOfficialRoster(true)
       setTeacherNotice(response.data?.message || `${teacher.fullName} a été supprimé et la suppression a été propagée.`)
     } catch (error) {
       setTeacherNotice(extractStudentApiMessage(error, `Impossible de supprimer ${teacher.fullName}.`))
@@ -2026,7 +2026,7 @@ const AdminSectionView = ({
         return next
       })
       setAdmissionCredentials(payload)
-      await refreshOfficialRoster()
+      await refreshOfficialRoster(true)
     } catch (error) {
       setAdmissionNotice(extractStudentApiMessage(error, 'Unable to approve and provision this family.'))
     } finally {

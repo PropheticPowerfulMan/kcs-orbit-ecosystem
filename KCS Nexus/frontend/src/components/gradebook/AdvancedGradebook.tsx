@@ -46,6 +46,7 @@ type Course = {
 
 type GradebookStudent = {
   id: string
+  studentNumber?: string
   name: string
   grade: string
   section: string
@@ -458,6 +459,21 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     setSubmittingFinals(true)
     try {
       if (!await saveSpreadsheet(true)) return
+      const synchronizedCourse = await teacherWorkspaceAPI.syncCourse({
+        id: selectedCourse.id,
+        name: selectedCourse.name,
+        abbreviation: selectedCourse.abbreviation,
+        description: `${selectedCourse.name} · ${selectedCourse.className} · verified before final-grade submission`,
+        grade: selectedCourse.className || selectedCourse.gradeLevels[0],
+        credits: 1,
+        room: '',
+        studentIds: enrolledCourseStudents.map((student) => student.id),
+        studentNumbers: enrolledCourseStudents.map((student) => student.studentNumber).filter(Boolean),
+      })
+      const synchronizedEnrollmentCount = synchronizedCourse.data?.data?.enrollments?.length ?? 0
+      if (synchronizedEnrollmentCount !== enrolledCourseStudents.length) {
+        throw new Error(`Course roster verification failed: ${synchronizedEnrollmentCount}/${enrolledCourseStudents.length} official enrollments were confirmed.`)
+      }
       const response = await academicRecordsAPI.submitFinalGrades({
         courseId: selectedCourse.id,
         academicYear,

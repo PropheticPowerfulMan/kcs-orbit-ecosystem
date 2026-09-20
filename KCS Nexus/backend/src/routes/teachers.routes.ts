@@ -162,9 +162,9 @@ const teacherCourseSyncSchema = z.object({
   id: z.string().min(3).max(120),
   name: z.string().trim().min(2).max(180),
   abbreviation: z.string().trim().max(30).optional().default(''),
-  description: z.string().trim().max(5000).optional().default('Managed from Teacher My Courses'),
+  description: z.string().trim().max(5000).optional(),
   grade: z.string().trim().min(1).max(80),
-  credits: z.coerce.number().int().min(1).max(20).default(1),
+  credits: z.coerce.number().int().min(1).max(20).optional(),
   room: z.string().trim().max(80).optional().default(''),
   studentIds: z.array(z.string().min(1)).max(1000).default([]),
   studentNumbers: z.array(z.string().min(1).max(100)).max(1000).default([]),
@@ -338,13 +338,33 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   let code = existing?.code ?? `${codeBase}-${classCode}`
   const collision = await prisma.course.findFirst({ where: { code, id: { not: payload.id } }, select: { id: true } })
   if (collision) code = `${codeBase}-${classCode}-${payload.id.slice(-6).toUpperCase()}`
+  const isSubmissionPreflight = payload.description?.includes('verified before') === true
   const course = await prisma.$transaction(async (tx) => {
     const saved = existing
-    ? await tx.course.update({ where: { id: payload.id }, data: { name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
-      : await tx.course.create({ data: { id: payload.id, teacherId: teacher.id, name: payload.name, description: payload.description, grade: payload.grade, credits: payload.credits, code } })
+    ? await tx.course.update({
+        where: { id: payload.id },
+        data: {
+          name: payload.name,
+          grade: payload.grade,
+          code,
+          ...(payload.description !== undefined && !isSubmissionPreflight ? { description: payload.description } : {}),
+          ...(payload.credits !== undefined && !isSubmissionPreflight ? { credits: payload.credits } : {}),
+        },
+      })
+      : await tx.course.create({
+        data: {
+          id: payload.id,
+          teacherId: teacher.id,
+          name: payload.name,
+          description: payload.description ?? 'Managed from Teacher My Courses',
+          grade: payload.grade,
+          credits: payload.credits ?? 1,
+          code,
+        },
+      })
     await tx.enrollment.deleteMany({ where: { courseId: saved.id, studentId: { notIn: resolvedStudentIds } } })
     if (resolvedStudentIds.length) await tx.enrollment.createMany({ data: resolvedStudentIds.map((studentId) => ({ courseId: saved.id, studentId })), skipDuplicates: true })
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_COURSE_SYNCHRONIZED', targetType: 'Course', targetId: saved.id, metadata: { grade: payload.grade, credits: payload.credits, room: payload.room, enrolledStudents: resolvedStudentIds.length } } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_COURSE_SYNCHRONIZED', targetType: 'Course', targetId: saved.id, metadata: { grade: payload.grade, credits: payload.credits ?? 'preserved', room: payload.room, enrolledStudents: resolvedStudentIds.length } } })
     return tx.course.findUnique({ where: { id: saved.id }, include: { enrollments: { select: { studentId: true } } } })
   })
   return success(res, course, 'My Courses synchronized with the official academic registry')

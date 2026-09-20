@@ -128,8 +128,13 @@ export default function TeacherWholeSchoolReportCards() {
     setNotice('')
     try {
       const payload = { academicYear, term, teacherComment, conduct }
-      if (submit) await academicRecordsAPI.submitTeacherReport(selected.id, payload)
-      else await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload)
+      if (submit) {
+        const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload)
+        const saved = response.data?.data
+        if (saved?.publicationStatus !== 'READY_FOR_REVIEW' || Number(saved?.superAdministrationNotified ?? 0) < 1) {
+          throw new Error('The report card was not confirmed in the Super Administration review queue.')
+        }
+      } else await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload)
       setNotice(submit ? 'The complete report card was submitted to Super Administration.' : 'The main-teacher draft was saved in KCS Nexus.')
       await load()
     } catch (reason: any) {

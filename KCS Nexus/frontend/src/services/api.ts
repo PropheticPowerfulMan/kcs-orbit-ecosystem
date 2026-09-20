@@ -239,7 +239,7 @@ export const studentsAPI = {
 // --- Registry API ---
 export const registryAPI = {
   getFamilies: () => api.get('/registry/families'),
-  getDirectory: () => api.get('/registry/directory', { timeout: 60_000 }),
+  getDirectory: (force = false) => api.get('/registry/directory', { timeout: 60_000, params: force ? { force: '1', _fresh: Date.now() } : undefined }),
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
   resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),
