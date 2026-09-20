@@ -70,7 +70,7 @@ academicRecordsRouter.use(authenticate)
 
 academicRecordsRouter.get('/student-registry', requireRoles('admin','staff'), asyncHandler(async (_req, res) => {
  const students = await prisma.studentProfile.findMany({
-  include: { user: true },
+  include: { user: { select: { id: true, firstName: true, middleName: true, lastName: true, avatar: true } } },
   orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
  })
  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
