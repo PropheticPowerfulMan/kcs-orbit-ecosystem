@@ -1477,7 +1477,7 @@ const AdminSectionView = ({
     let mounted = true
     Promise.all([
       getAdminRoster(),
-      registryAPI.getDirectory().catch(() => null),
+      registryAPI.getDirectory(true).catch(() => null),
     ])
       .then(([response, directoryResponse]) => {
         const profiles = response.data?.data
@@ -1516,19 +1516,21 @@ const AdminSectionView = ({
       if (refreshInFlight) return
       refreshInFlight = true
       try {
-        await refreshOfficialRoster()
+        await refreshOfficialRoster(true)
       } catch {
         // Le prochain cycle retentera sans vider le registre affiché.
       } finally {
         refreshInFlight = false
       }
     }
-    const timer = window.setInterval(() => void refresh(), 1500)
+    const timer = window.setInterval(() => void refresh(), 15000)
     window.addEventListener('focus', refresh)
+    window.addEventListener('ecosystem:mutation-success', refresh)
     return () => {
       mounted = false
       window.clearInterval(timer)
       window.removeEventListener('focus', refresh)
+      window.removeEventListener('ecosystem:mutation-success', refresh)
     }
   }, [setOfficialRoster, shouldLoadRoster])
 
@@ -2133,7 +2135,9 @@ const AdminSectionView = ({
   const selectedInsight = selectedStudent ? students.find((item) => item.id === selectedStudent.id || item.name === selectedStudent.name) : undefined
 
   if (segment === 'parents') {
-    const totalLinkedStudents = parentRecords.reduce((sum, parent) => sum + parent.studentCount, 0)
+    const canonicalParentCount = sharedDirectory?.counts?.families ?? sharedDirectory?.counts?.parents
+    const totalLinkedStudents = sharedDirectory?.counts?.students
+      ?? parentRecords.reduce((sum, parent) => sum + parent.studentCount, 0)
     const parentsWithAlerts = parentRecords.filter((parent) => parent.status === 'Suivi requis').length
 
     return (
@@ -2160,13 +2164,13 @@ const AdminSectionView = ({
               <h2 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Parents</h2>
               <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Annuaire des parents responsables, construit depuis les familles et les eleves synchronises dans KCS Nexus.</p>
             </div>
-            <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{apiSynced ? 'Synchronise Orbit' : 'Mode local'}</span>
+            <span className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'}`}>{apiSynced ? 'Synchronisé Orbit' : 'Synchronisation Orbit…'}</span>
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { label: 'Parents visibles', value: filteredParents.length, detail: `${sharedDirectory?.counts?.parents ?? parentRecords.length} au total partage`, icon: Users },
+            { label: 'Parents visibles', value: filteredParents.length, detail: canonicalParentCount == null ? 'Synchronisation Orbit…' : `${canonicalParentCount} au total partagé`, icon: Users },
             { label: 'Enfants lies', value: totalLinkedStudents, detail: 'dans le registre officiel', icon: GraduationCap },
             { label: 'Suivi requis', value: parentsWithAlerts, detail: 'au moins un enfant a surveiller', icon: AlertTriangle },
           ].map(({ label, value, detail, icon: Icon }) => (
@@ -2444,7 +2448,7 @@ const AdminSectionView = ({
       && familyFilter === 'All'
     const classesCovered = isFullDirectoryView ? SCHOOL_LEVELS.length : Object.keys(rosterByClass).length
     const familiesCovered = isFullDirectoryView
-      ? (sharedDirectory?.counts?.families ?? sharedDirectory?.counts?.parents ?? parentRecords.length)
+      ? (sharedDirectory?.counts?.families ?? sharedDirectory?.counts?.parents ?? '—')
       : Object.keys(rosterByFamily).length
 
     return (
@@ -2458,7 +2462,7 @@ const AdminSectionView = ({
               <p className="mt-1 max-w-3xl text-sm text-gray-500 dark:text-gray-400">Liste officielle lisible par classe et par famille, alimentée par SAVANEX via Orbit.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'}`}>{apiSynced ? 'Synchronisé Orbit' : 'Mode local'}</span>
+              <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${apiSynced ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'}`}>{apiSynced ? 'Synchronisé Orbit' : 'Synchronisation Orbit…'}</span>
               <button className={`${adminButton} inline-flex items-center gap-2`} onClick={openCreateStudentForm}><UserPlus size={16} /> Ajouter un élève</button>
             </div>
           </div>

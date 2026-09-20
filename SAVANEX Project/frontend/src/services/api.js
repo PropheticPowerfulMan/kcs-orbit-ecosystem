@@ -13,7 +13,7 @@ const DEMO_MODE_ENABLED = IS_GITHUB_PAGES
   || String(import.meta.env.VITE_ENABLE_DEMO_MODE || '').trim().toLowerCase() === 'true';
 const DIRECTORY_CACHE_TTL_MS = 15 * 1000;
 const DIRECTORY_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
-const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v3';
+const DIRECTORY_STORAGE_KEY = 'savanex:shared-directory:v4';
 
 const normalizeSharedDirectory = (directory) => {
   const payload = directory && typeof directory === 'object' ? directory : {};
@@ -605,7 +605,7 @@ export const intelligenceService = {
 };
 
 export const studentsService = {
-  async getAll() {
+  async getAll({ forceDirectory = false, directory: suppliedDirectory = null } = {}) {
     if (isDemoSession()) {
       return demoStudents.map((student, index) => ({
         id: index + 1,
@@ -621,15 +621,12 @@ export const studentsService = {
       }));
     }
 
-    const [localResult, directoryResult] = await Promise.allSettled([
-      fetchAllPages('/students/'),
-      sharedDirectoryService.get(),
-    ]);
-    if (localResult.status === 'rejected' && directoryResult.status === 'rejected') {
-      throw localResult.reason || directoryResult.reason;
-    }
+    // Orbit is authoritative. Resolve it first so token refresh completes once
+    // and the small local register can never impersonate the whole ecosystem.
+    const sharedDirectory = suppliedDirectory
+      || await sharedDirectoryService.get({ force: forceDirectory });
+    const [localResult] = await Promise.allSettled([fetchAllPages('/students/')]);
     const localStudents = localResult.status === 'fulfilled' ? localResult.value : [];
-    const sharedDirectory = directoryResult.status === 'fulfilled' ? directoryResult.value : null;
     return mergeLocalAndSharedStudents(localStudents, sharedDirectory);
   },
 

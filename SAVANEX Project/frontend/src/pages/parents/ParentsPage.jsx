@@ -76,31 +76,23 @@ const ParentsPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [temporaryCredentials, setTemporaryCredentials] = useState(null);
 
-  const loadStudents = async (silent = false) => {
+  const loadStudents = async (silent = false, forceDirectory = !silent) => {
     if (!silent) {
       setLoading(true);
       setError('');
     }
 
-    const [studentResult, directoryResult] = await Promise.allSettled([
-        studentsService.getAll(),
-        sharedDirectoryService.get(),
-      ]);
-
-    if (studentResult.status === 'fulfilled') {
-      setStudents(Array.isArray(studentResult.value) ? studentResult.value : []);
-    } else if (!silent) {
-      setStudents([]);
-    }
-
-    if (directoryResult.status === 'fulfilled') {
-      setDirectory(directoryResult.value || null);
-    } else if (!silent) {
-      setDirectory(null);
-    }
-
-    if (!silent && studentResult.status === 'rejected' && directoryResult.status === 'rejected') {
-      setError('Impossible de charger les familles pour le moment.');
+    try {
+      const officialDirectory = await sharedDirectoryService.get({ force: forceDirectory });
+      const officialStudents = await studentsService.getAll({ directory: officialDirectory });
+      setDirectory(officialDirectory);
+      setStudents(Array.isArray(officialStudents) ? officialStudents : []);
+    } catch {
+      if (!silent) {
+        setDirectory(null);
+        setStudents([]);
+        setError('Impossible de charger les familles pour le moment.');
+      }
     }
 
     if (!silent) setLoading(false);
@@ -113,12 +105,12 @@ const ParentsPage = () => {
       if (refreshInFlight) return;
       refreshInFlight = true;
       try {
-        await loadStudents(true);
+        await loadStudents(true, true);
       } finally {
         refreshInFlight = false;
       }
     };
-    const timer = window.setInterval(() => void refresh(), 1500);
+    const timer = window.setInterval(() => void refresh(), 30000);
     window.addEventListener('focus', refresh);
     window.addEventListener('savanex:directory-changed', refresh);
     return () => {
@@ -362,9 +354,11 @@ const ParentsPage = () => {
 
   const isFullDirectoryView = !query.trim() && classLevelFilter === 'all' && classSuffixFilter === 'all' && familyFilter === 'all';
   const activeFamilies = isFullDirectoryView
-    ? (directory?.counts?.families ?? directory?.counts?.parents ?? familyRows.length)
+    ? (directory?.counts?.families ?? directory?.counts?.parents ?? 0)
     : filtered.filter((family) => family.activeStudents > 0).length;
-  const totalStudents = filtered.reduce((sum, family) => sum + family.student_count, 0);
+  const totalStudents = isFullDirectoryView
+    ? (directory?.counts?.students ?? 0)
+    : filtered.reduce((sum, family) => sum + family.student_count, 0);
   const classesCovered = classGroups.length;
 
   const openEdit = (row) => {

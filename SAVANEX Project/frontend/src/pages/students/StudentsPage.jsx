@@ -157,15 +157,10 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       setError('');
 
       try {
-        const [studentsResult, directoryResult] = await Promise.allSettled([
-          studentsService.getAll(),
-          sharedDirectoryService.get(),
-        ]);
-        if (studentsResult.status === 'rejected') throw studentsResult.reason;
-        setStudents(studentsResult.value);
-        if (directoryResult.status === 'fulfilled') {
-          setDirectoryCounts(directoryResult.value?.counts || null);
-        }
+        const directory = await sharedDirectoryService.get({ force: true });
+        const officialStudents = await studentsService.getAll({ directory });
+        setStudents(officialStudents);
+        setDirectoryCounts(directory?.counts || null);
       } catch {
         setError("Impossible de charger les élèves pour le moment.");
       } finally {
@@ -179,14 +174,9 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       if (refreshInFlight) return;
       refreshInFlight = true;
       try {
-        const [studentsResult, directoryResult] = await Promise.allSettled([
-          studentsService.getAll(),
-          sharedDirectoryService.get(),
-        ]);
-        if (studentsResult.status === 'fulfilled') setStudents(studentsResult.value);
-        if (directoryResult.status === 'fulfilled') {
-          setDirectoryCounts(directoryResult.value?.counts || null);
-        }
+        const directory = await sharedDirectoryService.get({ force: true });
+        setStudents(await studentsService.getAll({ directory }));
+        setDirectoryCounts(directory?.counts || null);
       } catch {
         // Le prochain cycle retentera sans masquer les données déjà affichées.
       } finally {
@@ -285,9 +275,11 @@ const StudentsPage = ({ familyWorkspace = false }) => {
     && familyFilter === 'all';
   const linkedFamiliesFromStudents = new Set(filtered.map((student) => student.parent_name).filter(Boolean)).size;
   const linkedFamilies = isFullDirectoryView
-    ? (directoryCounts?.families ?? directoryCounts?.parents ?? linkedFamiliesFromStudents)
+    ? (directoryCounts?.families ?? directoryCounts?.parents ?? 0)
     : linkedFamiliesFromStudents;
-  const activeStudents = filtered.filter((student) => student.is_active).length;
+  const activeStudents = isFullDirectoryView
+    ? (directoryCounts?.students ?? 0)
+    : filtered.filter((student) => student.is_active).length;
   const detectedClasses = new Set(filtered.map((student) => normalizeClassDisplay(student.class_name)).filter(Boolean)).size;
   const classesCovered = isFullDirectoryView ? standardClassLevels.length : detectedClasses;
 
@@ -326,7 +318,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
   };
 
   const refreshStudents = async () => {
-    const data = await studentsService.getAll();
+    const data = await studentsService.getAll({ forceDirectory: true });
     setStudents(data);
   };
 
@@ -497,7 +489,7 @@ const StudentsPage = ({ familyWorkspace = false }) => {
       };
 
       const response = await studentsService.registerFamily(payload);
-      const data = await studentsService.getAll();
+      const data = await studentsService.getAll({ forceDirectory: true });
       setStudents(data);
       const parentCredential = response.temporaryCredentials?.parent;
       const studentCredentials = response.temporaryCredentials?.students || [];

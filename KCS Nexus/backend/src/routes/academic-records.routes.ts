@@ -12,7 +12,7 @@ import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 
 const submissionSchema=z.object({
  courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
- results:z.array(z.object({studentId:z.string().min(1),percentage:z.number().min(0).max(100),comment:z.string().max(1000).optional()})).min(1)
+ results:z.array(z.object({studentId:z.string().min(1),studentNumber:z.string().trim().min(1).max(100).optional(),percentage:z.number().min(0).max(100),comment:z.string().max(1000).optional()})).min(1)
 })
 const cycleSchema=z.object({academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80)})
 const teacherReportDraftSchema=cycleSchema.extend({
@@ -99,9 +99,14 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
    if(key)enrollmentLookup.set(key.trim().toLowerCase(),enrollment.studentId)
   }
  }
- const canonicalResults=payload.results.map(item=>({...item,studentId:enrollmentLookup.get(item.studentId.trim().toLowerCase())??item.studentId}))
+ const canonicalResults=payload.results.map(item=>{
+  const identityKeys=[item.studentId,item.studentNumber].filter((value):value is string=>Boolean(value?.trim()))
+  const canonicalStudentId=identityKeys.map(key=>enrollmentLookup.get(key.trim().toLowerCase())).find(Boolean)
+  return{...item,studentId:canonicalStudentId??item.studentId}
+ })
  const enrolled=new Set(course.enrollments.map(item=>item.studentId))
- if(canonicalResults.some(item=>!enrolled.has(item.studentId)))throw new ApiError(400,'A submitted student could not be matched to the official Nexus course enrollment')
+ const unmatched=canonicalResults.filter(item=>!enrolled.has(item.studentId))
+ if(unmatched.length)throw new ApiError(400,`A submitted student could not be matched to the official Nexus course enrollment (${unmatched.slice(0,5).map(item=>item.studentNumber||item.studentId).join(', ')})`)
  if(new Set(canonicalResults.map(item=>item.studentId)).size!==canonicalResults.length)throw new ApiError(400,'Duplicate student in submission after identity reconciliation')
  const lockedCards=await prisma.reportCard.count({where:{studentId:{in:canonicalResults.map(item=>item.studentId)},term:reportCardTerm(payload.academicYear,payload.term),publicationStatus:{not:'DRAFT'}}})
  if(lockedCards)throw new ApiError(409,'This reporting session has entered main-teacher or administrative review and can no longer be changed')

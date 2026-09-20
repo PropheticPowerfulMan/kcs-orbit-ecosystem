@@ -478,7 +478,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         courseId: selectedCourse.id,
         academicYear,
         term,
-        results: submissionAnalytics.map((item) => ({ studentId: item.student.id, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
+        results: submissionAnalytics.map((item) => ({ studentId: item.student.id, studentNumber: item.student.studentNumber || undefined, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
       })
       const savedCount = Number(response.data?.data?.count ?? 0)
       const propagatedCount = Number(response.data?.data?.reportCardDraftsUpdated ?? 0)
@@ -522,7 +522,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   return (
-    <div className="space-y-6">
+    <div className="gradebook-mobile-surface space-y-6">
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
