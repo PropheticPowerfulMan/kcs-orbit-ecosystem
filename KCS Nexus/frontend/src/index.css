@@ -1530,6 +1530,18 @@ html:not(.dark) .portal-shell [data-suggestion-box] select option {
   color: #123a59;
   -webkit-text-fill-color: #123a59;
 }
+html:not(.dark) .portal-shell [data-suggestion-box] textarea {
+  background-color: #0b3b63 !important;
+  border-color: rgba(125, 211, 252, .45) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+}
+html:not(.dark) .portal-shell [data-suggestion-box] textarea::placeholder {
+  color: #d8effb !important;
+  -webkit-text-fill-color: #d8effb !important;
+  opacity: 1;
+}
 
 /* Full-bleed route headers matching standard dashboard geometry. */
 .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1rem; margin-right: -1rem; width: calc(100% + 2rem); border-radius: 0; }
