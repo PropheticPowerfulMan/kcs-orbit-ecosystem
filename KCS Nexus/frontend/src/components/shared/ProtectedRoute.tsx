@@ -25,7 +25,7 @@ const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: Prote
       }
     }).catch(() => undefined)
     synchronizeProfile()
-    const timer = window.setInterval(synchronizeProfile, 30_000)
+    const timer = window.setInterval(synchronizeProfile, 300_000)
     const synchronizeWhenVisible = () => {
       if (document.visibilityState === 'visible') synchronizeProfile()
     }

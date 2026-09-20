@@ -29,6 +29,23 @@ const refreshSession = async () => {
   return refreshSessionPromise
 }
 
+const decodeJwtExpiry = (token: string) => {
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = JSON.parse(window.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='))) as { exp?: number }
+    return typeof decoded.exp === 'number' ? decoded.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+const accessTokenNeedsRefresh = (token: string) => {
+  const expiry = decodeJwtExpiry(token)
+  return expiry !== null && expiry - Date.now() < 90_000
+}
+
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const feedbackExcludedPaths = ['/auth/login', '/auth/refresh']
 
@@ -59,8 +76,21 @@ const mutationErrorMessage = (error: AxiosError) => {
 }
 // Request interceptor - attach JWT token
 api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = useAuthStore.getState().token
+  async (config: InternalAxiosRequestConfig) => {
+    let { token } = useAuthStore.getState()
+    const requestPath = config.url ?? ''
+    if (token && !requestPath.includes('/auth/refresh') && !requestPath.includes('/auth/login') && accessTokenNeedsRefresh(token)) {
+      const currentRefreshToken = useAuthStore.getState().refreshToken
+      if (currentRefreshToken) {
+        try {
+          const refreshed = await refreshSession()
+          token = refreshed.token
+          useAuthStore.getState().login(refreshed.user, refreshed.token, currentRefreshToken)
+        } catch {
+          // The response interceptor remains the final authority for logout.
+        }
+      }
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -189,7 +219,7 @@ export const eventsAPI = {
 
 // --- Students API ---
 export const studentsAPI = {
-  getAll: (params?: object, config?: object) => api.get('/students', { params, ...config }),
+  getAll: (params?: object, config?: object) => api.get('/students', { timeout: 60_000, params, ...config }),
   getMyChildren: () => api.get('/students/me/children', { timeout: 30_000 }),
   getMyOverview: () => api.get('/students/me/overview'),
   getById: (id: string) => api.get(`/students/${id}`),
@@ -209,7 +239,7 @@ export const studentsAPI = {
 // --- Registry API ---
 export const registryAPI = {
   getFamilies: () => api.get('/registry/families'),
-  getDirectory: () => api.get('/registry/directory'),
+  getDirectory: () => api.get('/registry/directory', { timeout: 60_000 }),
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
   resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),

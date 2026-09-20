@@ -1,34 +1,53 @@
-import { Component, Suspense, lazy, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, Suspense, lazy, useEffect, useState, type ComponentType, type ErrorInfo, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from '@/components/layout/Layout'
 import ProtectedRoute from '@/components/shared/ProtectedRoute'
 import { useAuthStore } from '@/store/authStore'
 import GlobalTextTranslator from '@/components/shared/GlobalTextTranslator'
 import { academicRecordsAPI } from '@/services/api'
+const CHUNK_RELOAD_KEY = 'kcs-nexus:last-chunk-recovery'
 
-const HomePage = lazy(() => import('@/pages/Home'))
-const AboutPage = lazy(() => import('@/pages/About'))
-const AcademicsPage = lazy(() => import('@/pages/Academics'))
-const NewsPage = lazy(() => import('@/pages/News'))
-const AdmissionsPage = lazy(() => import('@/pages/Admissions'))
-const GalleryPage = lazy(() => import('@/pages/Gallery'))
-const ContactPage = lazy(() => import('@/pages/Contact'))
-const LoginPage = lazy(() => import('@/pages/Auth/Login'))
-const StudentPortal = lazy(() => import('@/pages/StudentPortal'))
-const AITutorPage = lazy(() => import('@/pages/StudentPortal/AITutor'))
-const StudentForumPage = lazy(() => import('@/pages/StudentForum'))
-const ParentPortal = lazy(() => import('@/pages/ParentPortal'))
-const ParentForumPage = lazy(() => import('@/pages/ParentForum'))
-const TeacherPortal = lazy(() => import('@/pages/TeacherPortal'))
-const StaffPortal = lazy(() => import('@/pages/StaffPortal'))
-const IncidentReportsPage = lazy(() => import('@/pages/IncidentReports'))
-const ElectivesPage = lazy(() => import('@/pages/Electives'))
-const ShiningStudentsPage = lazy(() => import('@/pages/ShiningStudents'))
-const CourseSyllabiPage = lazy(() => import('@/pages/CourseSyllabi'))
-const AdminDashboard = lazy(() => import('@/pages/Admin'))
-const DataMigrationCenter = lazy(() => import('@/pages/Admin/DataMigrationCenter'))
+const lazyWithRecovery = <T extends ComponentType<any>>(importer: () => Promise<{ default: T }>) => lazy(async () => {
+  try {
+    const module = await importer()
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+    return module
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const chunkFailed = /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message)
+    const recoveryKey = `${window.location.pathname}${window.location.search}`
+    if (chunkFailed && sessionStorage.getItem(CHUNK_RELOAD_KEY) !== recoveryKey) {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, recoveryKey)
+      window.location.reload()
+      await new Promise<never>(() => undefined)
+    }
+    throw error
+  }
+})
 
-class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: string }, { error: Error | null }> {
+const HomePage = lazyWithRecovery(() => import('@/pages/Home'))
+const AboutPage = lazyWithRecovery(() => import('@/pages/About'))
+const AcademicsPage = lazyWithRecovery(() => import('@/pages/Academics'))
+const NewsPage = lazyWithRecovery(() => import('@/pages/News'))
+const AdmissionsPage = lazyWithRecovery(() => import('@/pages/Admissions'))
+const GalleryPage = lazyWithRecovery(() => import('@/pages/Gallery'))
+const ContactPage = lazyWithRecovery(() => import('@/pages/Contact'))
+const LoginPage = lazyWithRecovery(() => import('@/pages/Auth/Login'))
+const StudentPortal = lazyWithRecovery(() => import('@/pages/StudentPortal'))
+const AITutorPage = lazyWithRecovery(() => import('@/pages/StudentPortal/AITutor'))
+const StudentForumPage = lazyWithRecovery(() => import('@/pages/StudentForum'))
+const ParentPortal = lazyWithRecovery(() => import('@/pages/ParentPortal'))
+const ParentForumPage = lazyWithRecovery(() => import('@/pages/ParentForum'))
+const TeacherPortal = lazyWithRecovery(() => import('@/pages/TeacherPortal'))
+const StaffPortal = lazyWithRecovery(() => import('@/pages/StaffPortal'))
+const IncidentReportsPage = lazyWithRecovery(() => import('@/pages/IncidentReports'))
+const ElectivesPage = lazyWithRecovery(() => import('@/pages/Electives'))
+const ShiningStudentsPage = lazyWithRecovery(() => import('@/pages/ShiningStudents'))
+const CourseSyllabiPage = lazyWithRecovery(() => import('@/pages/CourseSyllabi'))
+const AdminDashboard = lazyWithRecovery(() => import('@/pages/Admin'))
+const DataMigrationCenter = lazyWithRecovery(() => import('@/pages/Admin/DataMigrationCenter'))
+
+class RouteErrorBoundary extends Component<{ children: ReactNode; routeKey: string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
 
   static getDerivedStateFromError(error: Error) {
@@ -36,7 +55,7 @@ class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: stri
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Admin dashboard render failed', error, info)
+    console.error('Nexus route render failed', error, info)
   }
 
   componentDidUpdate(previousProps: { routeKey: string }) {
@@ -52,7 +71,7 @@ class AdminErrorBoundary extends Component<{ children: ReactNode; routeKey: stri
       <div className="portal-shell flex">
         <main className="flex min-h-screen items-center justify-center bg-gray-50 p-6 dark:bg-kcs-blue-950">
           <section className="w-full max-w-2xl rounded-2xl border border-red-100 bg-white p-6 shadow-xl dark:border-red-900/40 dark:bg-kcs-blue-900">
-            <p className="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-300">Admin section error</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-300">Nexus page error</p>
             <h1 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Cette section n'a pas pu s'afficher.</h1>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{this.state.error.message}</p>
             <button
@@ -75,9 +94,9 @@ const AdminDashboardRoute = () => {
   const isSuperAdministrator = user?.id === 'configured-superadmin'
 
   return (
-    <AdminErrorBoundary routeKey={location.pathname}>
+    <RouteErrorBoundary routeKey={location.pathname}>
       {isSuperAdministrator ? <AdminDashboard /> : <StaffPortal />}
-    </AdminErrorBoundary>
+    </RouteErrorBoundary>
   )
 }
 
@@ -124,7 +143,15 @@ const TranscriptVerificationPage = () => {
   )
 }
 
-const RouteFallback = () => <div className="min-h-[40vh]" />
+const RouteFallback = () => (
+  <div className="flex min-h-[40vh] items-center justify-center bg-sky-50 px-4 dark:bg-kcs-blue-950">
+    <div className="rounded-2xl border border-kcs-blue-100 bg-white/90 px-6 py-5 text-center shadow-lg dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+      <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-kcs-blue-100 border-t-kcs-blue-700 dark:border-kcs-blue-700 dark:border-t-kcs-gold-400" />
+      <p className="mt-3 text-sm font-bold text-kcs-blue-900 dark:text-white">Chargement sécurisé de la page…</p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">Secure page loading…</p>
+    </div>
+  </div>
+)
 
 const RouteScrollReset = () => {
   const location = useLocation()
@@ -148,10 +175,12 @@ const RouteScrollReset = () => {
 }
 
 const App = () => {
+  const location = useLocation()
   return (
     <>
       <RouteScrollReset />
       <GlobalTextTranslator />
+      <RouteErrorBoundary routeKey={location.pathname}>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/shining-students" element={<ProtectedRoute allowedRoles={['admin','staff','student','parent']}><ShiningStudentsPage /></ProtectedRoute>} />
@@ -398,6 +427,7 @@ const App = () => {
           </Route>
         </Routes>
       </Suspense>
+      </RouteErrorBoundary>
     </>
   )
 }

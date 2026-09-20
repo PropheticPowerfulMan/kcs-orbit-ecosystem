@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -27,6 +27,26 @@ type PortalSidebarProps = { badges?: Record<string, number> }
 // page. Revoking it when a sidebar instance unmounts makes the same stored URL
 // invalid and causes the profile photo to disappear during portal navigation.
 const sessionAvatarUrls = new Map<string, string>()
+const sessionAvatarRequests = new Map<string, Promise<string | null>>()
+
+const loadSessionAvatar = (userId: string) => {
+  const cached = sessionAvatarUrls.get(userId)
+  if (cached) return Promise.resolve(cached)
+  const pending = sessionAvatarRequests.get(userId)
+  if (pending) return pending
+
+  const request = authAPI.avatar(userId)
+    .then((response) => {
+      if (!(response.data instanceof Blob) || response.data.size === 0) return null
+      const objectUrl = URL.createObjectURL(response.data)
+      sessionAvatarUrls.set(userId, objectUrl)
+      return objectUrl
+    })
+    .catch(() => null)
+    .finally(() => sessionAvatarRequests.delete(userId))
+  sessionAvatarRequests.set(userId, request)
+  return request
+}
 
 const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
@@ -130,6 +150,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const mobileSidebarRef = useRef<HTMLElement>(null)
   const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
+  const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
   const { user, logout, updateUser } = useAuthStore()
   const {
     sidebarCollapsed,
@@ -148,21 +169,23 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   }, [location.pathname, setSidebarOpen])
 
   useEffect(() => {
-    if (!user?.id || user.avatar) return
-    const cachedAvatar = sessionAvatarUrls.get(user.id)
-    if (cachedAvatar) {
-      updateUser({ avatar: cachedAvatar })
-      return
-    }
+    if (!user?.id) return
     let active = true
-    authAPI.avatar(user.id).then((response) => {
-      if (!active || !(response.data instanceof Blob) || response.data.size === 0) return
-      const objectUrl = URL.createObjectURL(response.data)
-      sessionAvatarUrls.set(user.id, objectUrl)
-      updateUser({ avatar: objectUrl })
-    }).catch(() => undefined)
+    void loadSessionAvatar(user.id).then((avatar) => {
+      if (active && avatar) updateUser({ avatar })
+    })
     return () => { active = false }
-  }, [user?.id, user?.avatar, updateUser])
+  }, [user?.id, avatarLoadVersion, updateUser])
+
+  const handleAvatarError = () => {
+    if (!user?.id) return
+    const staleUrl = sessionAvatarUrls.get(user.id)
+    if (staleUrl) URL.revokeObjectURL(staleUrl)
+    sessionAvatarUrls.delete(user.id)
+    sessionAvatarRequests.delete(user.id)
+    updateUser({ avatar: undefined })
+    if (avatarLoadVersion === 0) setAvatarLoadVersion(1)
+  }
 
   useLayoutEffect(() => {
     const navigation = desktopNavigationRef.current
@@ -431,7 +454,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
                 <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-kcs-blue-200 dark:bg-kcs-blue-700" aria-hidden="true" />
                 <div className="rounded-[24px] border border-white/70 bg-white/60 p-3 shadow-inner shadow-white/40 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/40 dark:shadow-none">
                 <div className="flex items-center gap-3">
-                  {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-12 w-12 flex-shrink-0 rounded-full object-cover ring-4 ring-white dark:ring-kcs-blue-950"/> : <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${roleColor} text-sm font-bold text-white ring-4 ring-white dark:ring-kcs-blue-950`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
+                  {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-12 w-12 flex-shrink-0 rounded-full object-cover ring-4 ring-white dark:ring-kcs-blue-950" onError={handleAvatarError}/> : <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${roleColor} text-sm font-bold text-white ring-4 ring-white dark:ring-kcs-blue-950`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">
                       {[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')}
@@ -519,7 +542,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       {/* User Profile */}
       <div className={`border-b border-white/60 p-4 dark:border-white/10 ${sidebarCollapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 rounded-[22px] border border-white/60 bg-white/50 p-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/30 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-          {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-10 w-10 flex-shrink-0 rounded-xl object-cover"/> : <div className={`w-10 h-10 rounded-xl ${roleColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
+          {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-10 w-10 flex-shrink-0 rounded-xl object-cover" onError={handleAvatarError}/> : <div className={`w-10 h-10 rounded-xl ${roleColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
           <AnimatePresence>
             {!sidebarCollapsed && (
               <motion.div
