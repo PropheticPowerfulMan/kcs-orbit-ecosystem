@@ -6,6 +6,7 @@ import { authenticate, requireRoles, type AuthenticatedRequest } from '../middle
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { sendSchoolSms } from '../utils/sms.js'
+import { normalizeClassParts } from '../utils/className.js'
 
 const enumValue = <T extends readonly [string, ...string[]]>(values: T) => z.enum(values)
 
@@ -213,24 +214,30 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
     teacherId = profile.id
   }
 
+  const requestedClass = payload.status === 'TEACHER'
+    ? null
+    : normalizeClassParts(payload.homeroomGrade, payload.homeroomSection)
   if (['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(payload.status)) {
-    const sameGrade = await prisma.teacherProfile.findMany({
+    const sameRole = await prisma.teacherProfile.findMany({
       where: {
         id: { not: teacherId },
         status: payload.status as 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER',
-        homeroomGrade: { equals: payload.homeroomGrade!.trim(), mode: 'insensitive' },
       },
       select: {
+        homeroomGrade: true,
         homeroomSection: true,
         user: { select: { firstName: true, lastName: true } },
       },
     })
-    const requestedSection = (payload.homeroomSection || '').trim().toLowerCase()
-    const conflict = sameGrade.find((entry) => (entry.homeroomSection || '').trim().toLowerCase() === requestedSection)
+    const conflict = sameRole.find((entry) => {
+      const assignedClass = normalizeClassParts(entry.homeroomGrade, entry.homeroomSection)
+      return assignedClass.grade.toLowerCase() === requestedClass!.grade.toLowerCase()
+        && assignedClass.section.toLowerCase() === requestedClass!.section.toLowerCase()
+    })
     if (conflict) {
       const conflictName = [conflict.user.lastName, conflict.user.firstName].filter(Boolean).join(' ')
       const assignmentLabel = payload.status === 'HOMEROOM_TEACHER' ? 'main teacher' : 'assistant teacher'
-      throw new ApiError(409, 'This class already has an ' + assignmentLabel + ': ' + conflictName)
+      throw new ApiError(409, [requestedClass!.grade, requestedClass!.section].filter(Boolean).join(' ') + ' already has a ' + assignmentLabel + ': ' + conflictName)
     }
   }
 
@@ -238,8 +245,8 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
     where: { id: teacherId },
     data: asPrismaData({
       ...payload,
-      homeroomGrade: payload.status !== 'TEACHER' ? payload.homeroomGrade!.trim() : null,
-      homeroomSection: payload.status !== 'TEACHER' ? (payload.homeroomSection?.trim() || null) : null,
+      homeroomGrade: requestedClass?.grade ?? null,
+      homeroomSection: requestedClass?.section || null,
     }),
     include: { user: true, courses: true, reviews: true },
   })

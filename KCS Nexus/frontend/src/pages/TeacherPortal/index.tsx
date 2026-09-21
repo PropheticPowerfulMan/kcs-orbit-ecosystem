@@ -803,11 +803,31 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const deleteCourse = async (courseId: string) => {
     const course = courses.find((item) => item.id === courseId)
+    if (!course) return
     const nextCourses = courses.filter((item) => item.id !== courseId)
-    if (!await persistWorkspace({ courses: nextCourses }, `${course?.name ?? 'Subject'} removed and saved.`)) return
+    const remainingStudentIds = new Set(nextCourses.flatMap((item) => item.studentIds))
+    const nextStudents = teacherStudents.filter((student) => remainingStudentIds.has(student.id))
+    try {
+      const response = await teacherWorkspaceAPI.deleteCourse(courseId)
+      const removed = response.data?.data?.removedDependencies ?? {}
+      const detail = [
+        removed.enrollments ? `${removed.enrollments} enrollment(s)` : '',
+        removed.assignments ? `${removed.assignments} assignment(s)` : '',
+        removed.grades ? `${removed.grades} grade record(s)` : '',
+      ].filter(Boolean).join(', ')
+      if (!await persistWorkspace(
+        { courses: nextCourses, teacherStudents: nextStudents },
+        `${course.name} and its official student links were removed${detail ? ` (${detail})` : ''}.`,
+      )) return
+    } catch (error: any) {
+      runAction(error?.response?.data?.message || 'The official course could not be deleted.', true)
+      return
+    }
     setCourses(nextCourses)
+    setTeacherStudents(nextStudents)
     if (editingCourseId === courseId) resetCourseDraft()
-    if (selectedEnrollmentCourseId === courseId) setSelectedEnrollmentCourseId(courses.find((item) => item.id !== courseId)?.id ?? '')
+    if (selectedEnrollmentCourseId === courseId) setSelectedEnrollmentCourseId(nextCourses[0]?.id ?? '')
+    if (selectedGradebookCourseId === courseId) setSelectedGradebookCourseId(nextCourses[0]?.id ?? '')
   }
 
   const filteredCourses = courses.filter((course) => {

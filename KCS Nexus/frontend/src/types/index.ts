@@ -13,6 +13,7 @@ export interface User {
   middleName?: string | null;
   lastName: string;
   role: UserRole;
+  accessRoles?: UserRole[];
   staffFunction?: 'principal' | 'academic_coordinator' | 'registrar' | 'accountant' | 'discipline' | 'communications' | 'admissions' | 'office';
   permissions?: string[];
   avatar?: string;

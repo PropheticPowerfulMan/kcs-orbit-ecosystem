@@ -237,8 +237,14 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   if (!user) return null
   const schoolLogoSrc = getAssetUrl('images/kcs.jpg')
+  const accessRoles = user.accessRoles?.length ? user.accessRoles : [user.role]
+  const activeRole: UserRole = location.pathname.startsWith('/portal/teacher') && accessRoles.includes('teacher')
+    ? 'teacher'
+    : location.pathname.startsWith('/portal/staff') && accessRoles.includes('staff')
+      ? 'staff'
+      : user.role
 
-  const navItems: NavItem[] = user.role === 'admin' && user.id !== 'configured-superadmin' ? [
+  const navItems: NavItem[] = activeRole === 'admin' && user.id !== 'configured-superadmin' ? [
     { to: '/admin', label: t('portalNav.dashboard'), icon: LayoutDashboard },
     { to: '/shining-students', label: 'Shining Student', icon: GraduationCap },
     { to: '/incident-reports', label: t('portalNav.incidentReport'), icon: ClipboardList },
@@ -253,7 +259,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin/messages', label: t('portalNav.messages'), icon: MessageSquare },
     { to: '/admin/permissions', label: t('portalNav.permissions'), icon: Shield },
     { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
-  ] : getNavItems(user.role, t)
+  ] : getNavItems(activeRole, t)
   const navItemsWithBadges = navItems.map((item) => ({ ...item, badge: badges[item.to] ?? item.badge }))
   const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'
@@ -267,7 +273,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     teacher: 'bg-green-600',
     student: 'bg-kcs-blue-600',
     parent: 'bg-orange-500',
-  }[user.role]
+  }[activeRole]
 
   const roleName = {
     admin: t('roles.admin'),
@@ -275,7 +281,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     teacher: t('roles.teacher'),
     student: t('roles.student'),
     parent: t('roles.parent'),
-  }[user.role]
+  }[activeRole]
 
   const renderNavigation = (isMobile = false) => (
     <>
@@ -290,7 +296,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           <NavLink
             key={to}
             to={to}
-            end={to === (user.role === 'admin' ? '/admin' : `/portal/${user.role}`)}
+            end={to === (activeRole === 'admin' ? '/admin' : `/portal/${activeRole}`)}
             onClick={() => {
               if (isMobile) {
                 setSidebarOpen(false)
@@ -321,7 +327,19 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             {currentLanguage === 'fr' ? 'Règle KCS · réussite et passage ≥ 70 %' : 'KCS rule · success and promotion ≥ 70%'}
           </div>
         )}
-        {(user.role === "teacher" || user.role === "admin") && (
+        {accessRoles.includes('teacher') && activeRole !== 'teacher' && (
+          <Link to="/portal/teacher" className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace') : undefined}>
+            <BookOpen size={18} />
+            {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace enseignant' : 'Teacher workspace'}</span>}
+          </Link>
+        )}
+        {accessRoles.includes('staff') && activeRole !== 'staff' && (
+          <Link to="/portal/staff" className={isMobile ? 'nexus-mobile-action' : `sidebar-link w-full ${!sidebarCollapsed ? '' : 'justify-center px-0'}`} title={!isMobile && sidebarCollapsed ? (currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace') : undefined}>
+            <Shield size={18} />
+            {(isMobile || !sidebarCollapsed) && <span>{currentLanguage === 'fr' ? 'Espace administratif' : 'Staff workspace'}</span>}
+          </Link>
+        )}
+        {(accessRoles.includes('teacher') || user.role === 'admin') && (
           <button type="button" onClick={async () => { const response = await academyAPI.launch(); window.location.assign(response.data.data.url) }}
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
             title={!isMobile && sidebarCollapsed ? "KCS Nexus Academy" : undefined}>
@@ -460,7 +478,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
                       {[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')}
                     </p>
                     <p className="truncate text-xs capitalize text-gray-500 dark:text-gray-400">
-                      {user.role}
+                      {roleName}
                     </p>
                   </div>
                   <button
@@ -555,7 +573,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
                   {[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 capitalize truncate">
-                  {user.role}
+                  {roleName}
                 </p>
               </motion.div>
             )}

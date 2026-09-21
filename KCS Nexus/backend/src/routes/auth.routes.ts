@@ -18,6 +18,25 @@ const RESET_TOKEN_TTL_MINUTES = 30
 const RESET_TOKEN_BYTES = 32
 const PASSWORD_RESET_RESPONSE = 'If an account exists, a new temporary password will be sent through the selected channel.'
 
+const buildSafeUserWithAccess = async (user: PrismaUser, includeAvatar = true) => {
+  const profiles = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      teacherProfile: { select: { id: true } },
+      staffProfile: { select: { id: true } },
+    },
+  })
+  const accessRoles = new Set<string>([user.role.toLowerCase()])
+  if (profiles?.teacherProfile) accessRoles.add('teacher')
+  if (profiles?.staffProfile) accessRoles.add('staff')
+  return {
+    ...buildSafeUser(user, includeAvatar),
+    staffFunction: user.staffFunction,
+    permissions: user.permissions,
+    accessRoles: [...accessRoles],
+  }
+}
+
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 }
@@ -431,11 +450,9 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       : null
     const canAdoptCanonicalEmail = Boolean(canonicalEmail && (!canonicalEmailOwner || canonicalEmailOwner.id === user.id))
 
-    const hasTeacherProfile = user.role === 'STAFF' ? Boolean(await prisma.teacherProfile.findUnique({ where: { userId: user.id }, select: { id: true } })) : false
     return prisma.user.update({
       where: { id: user.id },
       data: {
-        ...(hasTeacherProfile ? { role: 'TEACHER' } : {}),
         ...(typeof entity.firstName === 'string' && entity.firstName.trim() ? { firstName: entity.firstName.trim() } : {}),
         ...(entity.middleName === null || typeof entity.middleName === 'string' ? { middleName: entity.middleName ? String(entity.middleName).trim() : null } : {}),
         ...(typeof entity.lastName === 'string' && entity.lastName.trim() ? { lastName: entity.lastName.trim() } : {}),
@@ -603,7 +620,7 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(user, false), token, refreshToken }, 'User registered', 201)
+  return success(res, { user: await buildSafeUserWithAccess(user, false), token, refreshToken }, 'User registered', 201)
 }))
 
 authRouter.post('/login', asyncHandler(async (req, res) => {
@@ -639,7 +656,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
         },
       })
 
-      return success(res, { user: buildSafeUser(user, false), token, refreshToken }, 'Login successful')
+      return success(res, { user: await buildSafeUserWithAccess(user, false), token, refreshToken }, 'Login successful')
     }
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
@@ -670,7 +687,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     },
   })
 
-  return success(res, { user: buildSafeUser(resolvedUser, false), token, refreshToken }, 'Connexion réussie')
+  return success(res, { user: await buildSafeUserWithAccess(resolvedUser, false), token, refreshToken }, 'Connexion réussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {
@@ -710,7 +727,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
     throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
   }
   const token = signAccessToken(synchronizedUser)
-  return success(res, { token, user: buildSafeUser(synchronizedUser, false) }, 'Token refreshed')
+  return success(res, { token, user: await buildSafeUserWithAccess(synchronizedUser, false) }, 'Token refreshed')
 }))
 
 async function forwardPasswordRecovery(email: string, channel: 'email' | 'sms', sources: string[] = []) {
@@ -863,7 +880,7 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
   // the signed session without turning a transient Orbit mirror miss into a
   // logout. Canonical enforcement remains on the refresh-token path.
   const synchronizedUser = await refreshCanonicalIdentity(user, false)
-  return success(res, buildSafeUser(synchronizedUser, false))
+  return success(res, await buildSafeUserWithAccess(synchronizedUser, false))
 }))
 
 authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -922,7 +939,7 @@ authRouter.put('/access-code', authenticate, asyncHandler(async (req: Authentica
     data: { accessCode: normalizedAccessCode } as any,
   })
 
-  return success(res, buildSafeUser(updated), 'Access code updated')
+  return success(res, await buildSafeUserWithAccess(updated), 'Access code updated')
 }))
 
 authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -946,7 +963,7 @@ authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedR
 
   })
 
-  return success(res, buildSafeUser(updated), 'Profile updated successfully')
+  return success(res, await buildSafeUserWithAccess(updated), 'Profile updated successfully')
 }))
 
 authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -979,7 +996,7 @@ authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedReq
     data: { email: newEmail.toLowerCase().trim() },
   })
 
-  return success(res, buildSafeUser(updated), 'Email address updated successfully')
+  return success(res, await buildSafeUserWithAccess(updated), 'Email address updated successfully')
 }))
 
 authRouter.post('/2fa/setup', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {

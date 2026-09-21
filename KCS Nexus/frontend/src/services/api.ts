@@ -307,6 +307,7 @@ export const teacherWorkspaceAPI = {
   get: () => api.get('/teachers/me/workspace'),
   save: (state: Record<string, unknown>, revision?: number) => api.put('/teachers/me/workspace', { state, revision }),
   syncCourse: (data: object) => api.put('/teachers/me/courses/sync', data),
+  deleteCourse: (courseId: string) => api.delete('/teachers/me/courses/' + encodeURIComponent(courseId)),
   attendance: (courseId: string, date?: string) => api.get('/teachers/me/attendance', { params: { courseId, date } }),
   saveAttendance: (data: object) => api.post('/teachers/me/attendance/bulk', data),
   createAssignment: (data: object) => api.post('/teachers/me/assignments', data),

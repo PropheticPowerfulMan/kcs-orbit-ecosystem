@@ -1557,6 +1557,19 @@ textarea.suggestion-message-input::placeholder {
   -webkit-text-fill-color: #d8effb !important;
   opacity: 1 !important;
 }
+[data-suggestion-box] select {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid rgba(125, 211, 252, .55);
+  border-radius: .75rem;
+  background-color: #07385f;
+  padding: .75rem;
+  color: #ffffff;
+  font-size: .875rem;
+  font-weight: 700;
+}
+[data-suggestion-box] select option { background-color: #e8f2f8; color: #123a59; }
+
 
 /* Full-bleed route headers matching standard dashboard geometry. */
 .portal-edge-header > .portal-dashboard-topbar, .portal-route-header { margin-left: -1rem; margin-right: -1rem; width: calc(100% + 2rem); border-radius: 0; }

@@ -158,7 +158,6 @@ export default function SuggestionBox() {
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           aria-label={language === 'fr' ? 'Catégorie de suggestion' : 'Suggestion category'}
-          className="rounded-xl border border-white/10 bg-kcs-blue-900 px-3 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-kcs-gold-400"
         >
           <option value="wellbeing">Wellbeing</option>
           <option value="discipline">Discipline</option>

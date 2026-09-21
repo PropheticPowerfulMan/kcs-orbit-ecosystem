@@ -34,7 +34,7 @@ export const authenticate = async (req: AuthenticatedRequest, _res: Response, ne
 }
 
 export const requireRoles = (...roles: AuthPayload['role'][]) => {
-  return (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+  return async (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
     if (!req.user) {
       return next(new ApiError(403, 'Insufficient permissions'))
     }
@@ -43,7 +43,22 @@ export const requireRoles = (...roles: AuthPayload['role'][]) => {
       return next()
     }
 
-    return next(new ApiError(403, 'Insufficient permissions'))
+    try {
+      const needsTeacherAccess = roles.includes('teacher')
+      const needsStaffAccess = roles.includes('staff')
+      if (needsTeacherAccess || needsStaffAccess) {
+        const profile = await prisma.user.findUnique({
+          where: { id: req.user.sub },
+          select: { teacherProfile: { select: { id: true } }, staffProfile: { select: { id: true } } },
+        })
+        if ((needsTeacherAccess && profile?.teacherProfile) || (needsStaffAccess && profile?.staffProfile)) {
+          return next()
+        }
+      }
+      return next(new ApiError(403, 'Insufficient permissions'))
+    } catch (error) {
+      return next(error)
+    }
   }
 }
 

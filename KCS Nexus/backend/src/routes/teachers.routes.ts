@@ -7,7 +7,6 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
-import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
 import { normalizeClassParts } from '../utils/className.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
@@ -403,6 +402,41 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   return success(res, course, 'My Courses synchronized with the official academic registry')
 }))
 
+teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const courseId = getRouteParam(req.params.courseId)
+  const teacher = await prisma.teacherProfile.findUnique({
+    where: { userId: req.user!.sub },
+    select: { id: true },
+  })
+  if (!teacher) throw new ApiError(404, 'Teacher profile not found')
+
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: {
+      id: true,
+      teacherId: true,
+      name: true,
+      _count: { select: { enrollments: true, assignments: true, grades: true, schedules: true } },
+    },
+  })
+  if (!course) throw new ApiError(404, 'Course not found')
+  if (course.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
+
+  await prisma.$transaction(async (tx) => {
+    await tx.course.delete({ where: { id: course.id } })
+    await tx.auditLog.create({
+      data: {
+        actorId: req.user!.sub,
+        action: 'TEACHER_COURSE_DELETED',
+        targetType: 'Course',
+        targetId: course.id,
+        metadata: { name: course.name, removedDependencies: course._count },
+      },
+    })
+  })
+  return success(res, { id: course.id, removedDependencies: course._count }, 'Course and all official student dependencies deleted')
+}))
+
 teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const teacher = await prisma.teacherProfile.findUnique({
     where: { userId: req.user!.sub },
@@ -447,7 +481,10 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
   }
   const homeroomDirectory = hasHomeroomScope ? studentDirectory.filter(matchesHomeroom) : []
   const buildScope = (courseStudents: any[], homeroomStudents: any[]) => {
-    const teachingClasses = [...new Set((teacher?.courses ?? []).map((course) => normalizeClassParts(course.grade).grade))]
+    const teachingClasses = [...new Set((teacher?.courses ?? []).map((course) => {
+      const courseClass = normalizeClassParts(course.grade)
+      return [courseClass.grade, courseClass.section].filter(Boolean).join(String.fromCharCode(32))
+    }))]
     const combinedStudents = mergeStudentDirectory(homeroomStudents, courseStudents)
     return {
       roleStatus: teacher?.status ?? 'TEACHER',
@@ -471,29 +508,9 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     },
   })
   if (!teacher || !teacher.courses.length) {
-    const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
-    const assignedClasses = extractWorkspaceClasses(workspace?.state)
-    const registry = await prisma.studentProfile.findMany({
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true } },
-        parentLinks: { select: { parentId: true } },
-      },
-      orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
-    })
-    const courseStudents = registry.filter((student) => belongsToTeacherClasses(student, assignedClasses)).map((student) => ({
-      ...student,
-      analytics: {
-        average: student.gpa ?? null,
-        attendanceRate: student.attendanceRate ?? null,
-        rank: null,
-        risk: 'unassessed',
-        strengths: [],
-        weaknesses: [],
-        gradedItems: 0,
-        attendanceRecords: 0,
-        missingAssignments: 0,
-      },
-    }))
+    // A cached workspace is never an authoritative enrollment source. Without
+    // an official course, the Gradebook must stay empty for every teacher.
+    const courseStudents: any[] = []
     const homeroomStudents = homeroomDirectory.map(withRegistryAnalytics)
     const scopedStudentDirectory = mergeStudentDirectory(homeroomStudents, courseStudents)
     const scope = buildScope(courseStudents, homeroomStudents)

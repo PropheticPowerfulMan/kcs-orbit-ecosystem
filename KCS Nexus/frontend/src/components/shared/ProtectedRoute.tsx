@@ -40,7 +40,9 @@ const ProtectedRoute = ({ children, allowedRoles, redirectTo = '/login' }: Prote
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+  const accessRoles = user?.accessRoles?.length ? user.accessRoles : (user ? [user.role] : [])
+
+  if (allowedRoles && user && !allowedRoles.some((role) => accessRoles.includes(role))) {
     const fallbackRoute = user.role === 'admin' ? '/admin' : `/portal/${user.role}`
     return <Navigate to={fallbackRoute} state={{ from: location, unauthorizedRole: user.role }} replace />
   }

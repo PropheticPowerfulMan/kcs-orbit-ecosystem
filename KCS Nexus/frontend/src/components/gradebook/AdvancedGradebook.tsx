@@ -286,9 +286,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     window.addEventListener('keydown', handleSaveShortcut)
     return () => window.removeEventListener('keydown', handleSaveShortcut)
   }, [spreadsheetOpen, scores, comments, assignments, selectedCourseId])
-  const enrolledCourseStudents = useMemo(() => selectedCourse?.studentIds?.length
-    ? selectedCourse.studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as GradebookStudent[]
-    : students, [selectedCourse, students])
+  const enrolledCourseStudents = useMemo(() => {
+    if (!selectedCourse) return []
+    return (selectedCourse.studentIds ?? [])
+      .map((id) => students.find((student) => student.id === id))
+      .filter(Boolean) as GradebookStudent[]
+  }, [selectedCourse, students])
   const courseStudents = useMemo(() => enrolledCourseStudents.filter((student) =>
     `${student.name} ${canonicalClassLabel(student.grade, student.section)}`.toLowerCase().includes(query.toLowerCase()),
   ), [enrolledCourseStudents, query])
@@ -520,6 +523,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       return { ...category, weight }
     }))
   }
+
 
   return (
     <div className="gradebook-mobile-surface space-y-6">
