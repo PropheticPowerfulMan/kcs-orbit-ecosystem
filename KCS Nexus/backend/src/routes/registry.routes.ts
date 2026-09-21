@@ -121,6 +121,7 @@ async function getFamiliesFromOrbit() {
 }
 
 let sharedDirectoryCache: { value: SharedDirectoryResponse; expiresAt: number } | null = null
+let lastCoherentSharedDirectory: SharedDirectoryResponse | null = null
 
 function canonicalSharedDirectory(value: SharedDirectoryResponse): SharedDirectoryResponse {
   const parents = Array.isArray(value.parents) ? value.parents : []
@@ -140,6 +141,7 @@ function canonicalSharedDirectory(value: SharedDirectoryResponse): SharedDirecto
 
 async function getSharedDirectoryFromOrbit(force = false) {
   if (!force && sharedDirectoryCache && sharedDirectoryCache.expiresAt > Date.now()) return sharedDirectoryCache.value
+  try {
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
     {
@@ -156,8 +158,24 @@ async function getSharedDirectoryFromOrbit(force = false) {
   }
 
   const value = canonicalSharedDirectory(await response.json() as SharedDirectoryResponse)
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 1_000 }
+  const previousTotal = lastCoherentSharedDirectory ? lastCoherentSharedDirectory.students.length + lastCoherentSharedDirectory.parents.length : 0
+  const nextTotal = value.students.length + value.parents.length
+  if (lastCoherentSharedDirectory && previousTotal >= 10 && nextTotal < Math.floor(previousTotal * 0.7)) {
+    console.warn('[registry] Abnormal Orbit directory collapse blocked', { previousTotal, nextTotal })
+    sharedDirectoryCache = { value: lastCoherentSharedDirectory, expiresAt: Date.now() + 30_000 }
+    return lastCoherentSharedDirectory
+  }
+  if (nextTotal > 0) lastCoherentSharedDirectory = value
+  sharedDirectoryCache = { value, expiresAt: Date.now() + 30_000 }
   return value
+  } catch (error) {
+    if (lastCoherentSharedDirectory) {
+      console.warn('[registry] Orbit unavailable; serving the last coherent in-memory directory')
+      sharedDirectoryCache = { value: lastCoherentSharedDirectory, expiresAt: Date.now() + 15_000 }
+      return lastCoherentSharedDirectory
+    }
+    throw error
+  }
 }
 
 type ChangeDeliveryEntity = {
@@ -513,7 +531,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => 
       studentNumber: student.studentNumber,
       email: student.user.email,
       phone: null,
-      photoData: student.user.avatar,
+      photoData: student.officialAvatar ?? student.user.avatar,
       dateOfBirth: null,
       status: student.status,
       mustChangePassword: false,

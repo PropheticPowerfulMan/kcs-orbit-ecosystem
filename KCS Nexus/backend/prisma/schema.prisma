@@ -427,6 +427,9 @@ model StudentProfile {
   enrollmentDate        DateTime               @default(now())
   status                String                 @default("active")
   transcriptVisible     Boolean                @default(false)
+  /// Official registry portrait managed by authorized school staff.
+  /// The student's self-service dashboard avatar remains on User.avatar.
+  officialAvatar        String?
   gpa                   Float?
   attendanceRate        Float?
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)

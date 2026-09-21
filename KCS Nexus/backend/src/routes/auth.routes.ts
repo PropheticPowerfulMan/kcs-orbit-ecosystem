@@ -450,6 +450,13 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
       : null
     const canAdoptCanonicalEmail = Boolean(canonicalEmail && (!canonicalEmailOwner || canonicalEmailOwner.id === user.id))
 
+    if (user.role === 'STUDENT' && (entity.photoData === null || typeof entity.photoData === 'string')) {
+      await prisma.studentProfile.updateMany({
+        where: { userId: user.id },
+        data: { officialAvatar: typeof entity.photoData === 'string' ? entity.photoData.trim() || null : null },
+      })
+    }
+
     return prisma.user.update({
       where: { id: user.id },
       data: {
@@ -462,7 +469,7 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
         // Directory synchronization must never erase a valid local photo merely
         // because an upstream projection currently exposes an empty photo field.
         // Explicit removal is handled by the dedicated avatar update endpoint.
-        ...(typeof entity.photoData === 'string' && entity.photoData.trim()
+        ...(user.role !== 'STUDENT' && typeof entity.photoData === 'string' && entity.photoData.trim()
           ? { avatar: entity.photoData }
           : {}),
       },
@@ -473,6 +480,10 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
   }
 }
 async function updateFederatedPhoto(user: { role: string; accessCode: string | null; email: string; permissions: string[] }, avatar: string) {
+  // Student dashboard avatars are personal. The official portrait is changed
+  // only through the authorized registry/student-dossier workflow.
+  if (user.role === 'STUDENT') return
+
   const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
   if (!isFederated || !env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return
 

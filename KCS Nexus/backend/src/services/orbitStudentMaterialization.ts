@@ -83,7 +83,7 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
         middleName: name.middleName,
         lastName: name.lastName,
         ...(student.phone !== undefined ? { phone: student.phone?.trim() || null } : {}),
-        ...(student.photoData ? { avatar: student.photoData } : {}),
+
       },
     })
   }
@@ -97,6 +97,7 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
     studentNumber: canonicalNumber,
     ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim(), section: classParts.section } : {}),
     status: (student.status || 'active').toLowerCase(),
+    ...(student.photoData !== undefined ? { officialAvatar: student.photoData || null } : {}),
     ...(student.dateOfBirth ? { dateOfBirth: new Date(student.dateOfBirth) } : {}),
   }
   const profile = existingProfile

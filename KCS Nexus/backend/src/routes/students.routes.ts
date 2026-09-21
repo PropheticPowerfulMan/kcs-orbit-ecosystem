@@ -739,8 +739,8 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       })
       const localStudentProfile = await prisma.studentProfile.upsert({
         where: { studentNumber: student.studentNumber },
-        update: { userId: localStudentUser.id, grade: student.grade, section: student.section || '', dateOfBirth: student.dateOfBirth, status: 'active' },
-        create: { userId: localStudentUser.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section || '', dateOfBirth: student.dateOfBirth, status: 'active' },
+        update: { userId: localStudentUser.id, grade: student.grade, section: student.section || '', dateOfBirth: student.dateOfBirth, status: 'active', officialAvatar: student.photoData || null },
+        create: { userId: localStudentUser.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section || '', dateOfBirth: student.dateOfBirth, status: 'active', officialAvatar: student.photoData || null },
       })
       await prisma.parentStudentLink.upsert({
         where: { parentId_studentId: { parentId: localParentUser.id, studentId: localStudentProfile.id } },
@@ -1081,9 +1081,9 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
     sharedDirectoryCache = null
     const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
     if (payload.photoData !== undefined) {
-      await prisma.user.updateMany({
-        where: { OR: [{ orbitUserId: target.id }, ...(target.email ? [{ email: target.email }] : [])] },
-        data: { avatar: payload.photoData },
+      await prisma.studentProfile.updateMany({
+        where: { user: { OR: [{ orbitUserId: target.id }, ...(target.email ? [{ email: target.email }] : [])] } },
+        data: { officialAvatar: payload.photoData || null },
       })
     }
     const localUsers = await prisma.user.findMany({
@@ -1138,7 +1138,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
   }
 
   const student = await prisma.$transaction(async (tx) => {
-    if (payload.firstName !== undefined || payload.middleName !== undefined || payload.lastName !== undefined || payload.email !== undefined || payload.photoData !== undefined) {
+    if (payload.firstName !== undefined || payload.middleName !== undefined || payload.lastName !== undefined || payload.email !== undefined) {
       await tx.user.update({
         where: { id: currentStudent.userId },
         data: {
@@ -1146,7 +1146,6 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
           ...(payload.middleName !== undefined ? { middleName: payload.middleName || null } : {}),
           ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
           ...(payload.email !== undefined ? { email: payload.email } : {}),
-          ...(payload.photoData !== undefined ? { avatar: payload.photoData } : {}),
         },
       })
     }
@@ -1158,6 +1157,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
         ...(payload.grade !== undefined ? { grade: payload.grade } : {}),
         ...(payload.section !== undefined ? { section: payload.section } : {}),
         ...(payload.status !== undefined ? { status: payload.status.toLowerCase() } : {}),
+        ...(payload.photoData !== undefined ? { officialAvatar: payload.photoData || null } : {}),
       },
       include: {
         user: true,
