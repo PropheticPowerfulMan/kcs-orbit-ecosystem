@@ -223,6 +223,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const meta = sectionTitles[segment] ?? sectionTitles.reports
   const Icon = meta.icon
   const [superAdminStudentPool, setSuperAdminStudentPool] = useState<RegistryStudent[]>([])
+  const [supportStudentPool, setSupportStudentPool] = useState<RegistryStudent[]>([])
+  const [courseStudentPool, setCourseStudentPool] = useState<RegistryStudent[]>([])
   const [registryStatus, setRegistryStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   const getRosterForClass = (className: string) => superAdminStudentPool.filter((student) => (
@@ -433,6 +435,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [user?.id])
 
   const findStudent = (studentId: string) => teacherStudents.find((student) => student.id === studentId)
+    ?? supportStudentPool.find((student) => student.id === studentId)
     ?? superAdminStudentPool.find((student) => student.id === studentId)
   const runAction = (message: string, isError = false) => {
     setActionMessage(message)
@@ -449,8 +452,15 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         const response = await teacherWorkspaceAPI.overview()
         const overview = response.data?.data ?? {}
         setOfficialTimetable(overview.timetable ?? [])
-        const assignedStudents = (overview.students ?? []).map(mapRegistryStudent)
+        const assignedStudents = (overview.courseStudents ?? overview.students ?? []).map(mapRegistryStudent)
         const registryStudents = (overview.studentDirectory ?? overview.students ?? []).map(mapRegistryStudent)
+        const homeroomStudents = (overview.homeroomStudents ?? []).map(mapRegistryStudent)
+        const scopedStudents = (overview.scopedStudentDirectory ?? overview.courseStudents ?? overview.students ?? []).map(mapRegistryStudent)
+        const hasHomeroomScope = Boolean(
+          overview.scope?.homeroom
+          && ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(overview.scope?.roleStatus),
+        )
+        const supportStudents = hasHomeroomScope ? homeroomStudents : scopedStudents
         const officialCourses = (overview.courses ?? []).map((course: any) => ({
           id: course.id,
           name: course.name,
@@ -465,10 +475,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         }))
         if (!active) return
         setSuperAdminStudentPool(registryStudents)
+        setSupportStudentPool(supportStudents)
+        setCourseStudentPool(assignedStudents)
         setTeacherStudents((current) => {
-          const merged = new Map(current.map((student) => [student.id, student]))
-          assignedStudents.forEach((student: RegistryStudent) => merged.set(student.id, student))
-          return [...merged.values()]
+          return assignedStudents.map((student: RegistryStudent) => {
+            const cached = current.find((candidate) => sameRegistryStudent(candidate, student))
+            return cached ? { ...cached, ...student } : student
+          })
         })
         setCourses((current) => current.length ? current : officialCourses)
         setSelectedEnrollmentCourseId((current) => current || officialCourses[0]?.id || '')
@@ -477,6 +490,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       } catch {
         if (!active) return
         setSuperAdminStudentPool([])
+        setSupportStudentPool([])
+        setCourseStudentPool([])
         setRegistryStatus('error')
       }
     }
@@ -500,19 +515,19 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [superAdminStudentPool, workspaceStatus])
 
   useEffect(() => {
-    const firstStudent = superAdminStudentPool[0]
+    const firstStudent = supportStudentPool[0] ?? courseStudentPool[0]
     if (!firstStudent) return
 
     setSelectedStudentId((current) => current || firstStudent.id)
     setReportCardStudentId((current) => current || firstStudent.id)
-    setTeacherStudents((current) => current.length ? current : superAdminStudentPool)
+    setTeacherStudents((current) => current.length ? current : courseStudentPool)
     setAttendanceDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
     setAssignmentDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
     setGradeDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
     setReportDraft((draft) => ({ ...draft, student: draft.student || firstStudent.name }))
-    setDisciplineDraft((draft) => ({ ...draft, studentId: draft.studentId || superAdminStudentPool[1]?.id || firstStudent.id }))
+    setDisciplineDraft((draft) => ({ ...draft, studentId: draft.studentId || supportStudentPool[1]?.id || firstStudent.id }))
     setCourseDraft((draft) => ({ ...draft, studentId: draft.studentId || firstStudent.id }))
-  }, [superAdminStudentPool])
+  }, [supportStudentPool, courseStudentPool])
 
   useEffect(() => {
     const handleGradebookSaved = (event: Event) => {
@@ -815,7 +830,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         .map((student) => [student.studentNumber!.trim().toLowerCase(), student]),
     )
 
-    return superAdminStudentPool.map((officialStudent) => {
+    return supportStudentPool.map((officialStudent) => {
       const assignedStudent = assignedById.get(officialStudent.id)
         ?? (officialStudent.studentNumber
           ? assignedByNumber.get(officialStudent.studentNumber.trim().toLowerCase())
@@ -836,7 +851,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       const classDifference = compareClassLabels(left.grade, right.grade)
       return classDifference || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
     })
-  }, [superAdminStudentPool, teacherStudents])
+  }, [supportStudentPool, teacherStudents])
   const studentClassOptions = useMemo(() => Array.from(new Set(
     officialStudentCatalog.map((student) => canonicalClassLabel(student.grade, student.section)),
   )).filter((className) => gradeOptions.includes(className)).sort(compareClassLabels), [officialStudentCatalog])
@@ -1140,7 +1155,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   if (segment === 'messages') return <ParentCommunicationPanel />
 
-  if (segment === 'discipline') return <TeacherDisciplinePanel students={teacherStudents} />
+  if (segment === 'discipline') return <TeacherDisciplinePanel students={supportStudentPool} />
 
   if (segment === 'grades') {
     return (
@@ -1173,7 +1188,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
         <AdvancedGradebook
           courses={courses}
-          students={superAdminStudentPool}
+          students={courseStudentPool}
           selectedCourseId={selectedGradebookCourseId}
           onSelectCourse={setSelectedGradebookCourseId}
           onAction={runAction}
@@ -1591,7 +1606,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               <button onClick={importStudent} className={compactButton}>Add to my students</button>
             </div>
             <div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">
-              {superAdminStudentPool.length} verified students available from the school registry.
+              {supportStudentPool.length} verified students in your assigned support scope.
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -2196,7 +2211,13 @@ const TeacherDashboardHome = () => {
     return () => { active = false }
   }, [])
 
-  const assignedStudents = overview?.students ?? []
+  const homeroomScope = overview?.scope?.homeroom
+  const isHomeroomTeam = Boolean(
+    homeroomScope
+    && ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(overview?.scope?.roleStatus),
+  )
+  const assignedStudents = isHomeroomTeam ? (overview?.homeroomStudents ?? []) : (overview?.courseStudents ?? overview?.students ?? [])
+  const taughtStudents = overview?.courseStudents ?? overview?.students ?? []
   const assignedCourses = overview?.courses ?? []
   const assignedAssignments = overview?.assignments ?? []
   const assignedGrades = overview?.grades ?? []
@@ -2213,7 +2234,7 @@ const TeacherDashboardHome = () => {
   })
   const messages = dashboardMessages.map((message: any) => ({ id: message.id, from: ((message.sender?.firstName ?? '') + ' ' + (message.sender?.lastName ?? '')).trim() || 'KCS Nexus', subject: message.subject, time: new Date(message.createdAt).toLocaleString() }))
   const metricCards = [
-    { label: 'Assigned Students', value: String(assignedStudents.length), sub: assignedCourses.length + ' assigned course(s)', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
+    { label: isHomeroomTeam ? 'Homeroom Students' : 'Course Students', value: String(assignedStudents.length), sub: isHomeroomTeam ? homeroomScope.label + ' · ' + taughtStudents.length + ' taught across all courses' : assignedCourses.length + ' assigned course(s)', icon: Users, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-300' },
     { label: 'Pending Actions', value: String(pendingActions), sub: pendingActions ? 'Submissions to review' : 'No pending action', icon: FileText, tone: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
     { label: 'Risk Alerts', value: String(atRiskStudents.length), sub: atRiskStudents.length ? 'Attendance or GPA signal' : 'No active alert', icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
     { label: 'Class Average', value: classAverage + '%', sub: assignedGrades.length ? assignedGrades.length + ' registered grades' : 'No registered grade', icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' },

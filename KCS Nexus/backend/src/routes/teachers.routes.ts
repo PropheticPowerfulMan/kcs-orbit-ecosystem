@@ -8,6 +8,7 @@ import { authenticate, requireRoles, type AuthenticatedRequest } from '../middle
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { belongsToTeacherClasses, extractWorkspaceClasses } from '../utils/teacherClassAccess.js'
+import { normalizeClassParts } from '../utils/className.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
@@ -93,6 +94,38 @@ const getOrbitStudentDirectory = async () => {
       }
     })
 }
+
+const studentIdentityKeys = (student: any) => [
+  student?.id,
+  student?.studentNumber,
+  student?.orbitId,
+  student?.user?.id,
+  ...(Array.isArray(student?.externalIds) ? student.externalIds.map((item: any) => item?.externalId) : []),
+].filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+  .map((value) => value.trim().toLowerCase())
+
+const mergeStudentDirectory = (...groups: any[][]) => {
+  const identities = new Map<string, any>()
+  const ordered: any[] = []
+  for (const student of groups.flat()) {
+    const keys = studentIdentityKeys(student)
+    const existing = keys.map((key) => identities.get(key)).find(Boolean)
+    if (existing) {
+      Object.assign(existing, student)
+      keys.forEach((key) => identities.set(key, existing))
+      continue
+    }
+    if (!keys.length) continue
+    const value = { ...student }
+    ordered.push(value)
+    keys.forEach((key) => identities.set(key, value))
+  }
+  return ordered
+}
+
+const teacherHasHomeroomScope = (teacher: { status?: string; homeroomGrade?: string | null } | null) => Boolean(
+  teacher?.homeroomGrade && ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(teacher.status ?? ''),
+)
 
 const activityReportPeriodSchema = z.object({
   periodStart: z.coerce.date(),
@@ -374,7 +407,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
   const teacher = await prisma.teacherProfile.findUnique({
     where: { userId: req.user!.sub },
     select: {
-      id: true, employeeNumber: true, department: true, qualification: true, homeroomGrade: true, homeroomSection: true,
+      id: true, employeeNumber: true, department: true, qualification: true, status: true, homeroomGrade: true, homeroomSection: true,
       user: { select: { id: true, firstName: true, lastName: true } },
       courses: {
         select: {
@@ -390,17 +423,53 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
   const localStudentDirectory = await prisma.studentProfile.findMany({
     where: { status: { equals: 'active', mode: 'insensitive' } },
     select: {
-      id: true, studentNumber: true, grade: true, section: true, status: true,
+      id: true, studentNumber: true, grade: true, section: true, status: true, gpa: true, attendanceRate: true,
       user: { select: { id: true, firstName: true, middleName: true, lastName: true } },
     },
     orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
   })
-  let studentDirectory = localStudentDirectory
+  let studentDirectory: any[] = localStudentDirectory
   try {
-    studentDirectory = await getOrbitStudentDirectory() ?? localStudentDirectory
+    const orbitStudentDirectory = await getOrbitStudentDirectory()
+    studentDirectory = orbitStudentDirectory ? mergeStudentDirectory(localStudentDirectory, orbitStudentDirectory) : localStudentDirectory
   } catch (error) {
     console.warn('[teacher-overview] Orbit student directory unavailable; using local Nexus registry.', error)
   }
+  const hasHomeroomScope = teacherHasHomeroomScope(teacher)
+  const homeroomClass = hasHomeroomScope
+    ? normalizeClassParts(teacher?.homeroomGrade, teacher?.homeroomSection)
+    : null
+  const matchesHomeroom = (student: any) => {
+    if (!homeroomClass) return false
+    const studentClass = normalizeClassParts(student.grade ?? student.className, student.section)
+    return studentClass.grade.toLowerCase() === homeroomClass.grade.toLowerCase()
+      && (!homeroomClass.section || studentClass.section.toLowerCase() === homeroomClass.section.toLowerCase())
+  }
+  const homeroomDirectory = hasHomeroomScope ? studentDirectory.filter(matchesHomeroom) : []
+  const buildScope = (courseStudents: any[], homeroomStudents: any[]) => {
+    const teachingClasses = [...new Set((teacher?.courses ?? []).map((course) => normalizeClassParts(course.grade).grade))]
+    const combinedStudents = mergeStudentDirectory(homeroomStudents, courseStudents)
+    return {
+      roleStatus: teacher?.status ?? 'TEACHER',
+      homeroom: homeroomClass ? {
+        grade: homeroomClass.grade,
+        section: homeroomClass.section,
+        label: [homeroomClass.grade, homeroomClass.section].filter(Boolean).join(' '),
+      } : null,
+      teachingClasses,
+      courseCount: teacher?.courses.length ?? 0,
+      homeroomStudentCount: homeroomStudents.length,
+      courseStudentCount: courseStudents.length,
+      combinedStudentCount: combinedStudents.length,
+    }
+  }
+  const withRegistryAnalytics = (student: any) => ({
+    ...student,
+    analytics: student.analytics ?? {
+      average: student.gpa ?? null, attendanceRate: student.attendanceRate ?? null, rank: null,
+      risk: 'unassessed', strengths: [], weaknesses: [], gradedItems: 0, attendanceRecords: 0, missingAssignments: 0,
+    },
+  })
   if (!teacher || !teacher.courses.length) {
     const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
     const assignedClasses = extractWorkspaceClasses(workspace?.state)
@@ -411,7 +480,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
       },
       orderBy: [{ grade: 'asc' }, { section: 'asc' }, { user: { lastName: 'asc' } }],
     })
-  const students = registry.filter((student) => belongsToTeacherClasses(student, assignedClasses)).map((student) => ({
+    const courseStudents = registry.filter((student) => belongsToTeacherClasses(student, assignedClasses)).map((student) => ({
       ...student,
       analytics: {
         average: student.gpa ?? null,
@@ -425,17 +494,22 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
         missingAssignments: 0,
       },
     }))
+    const homeroomStudents = homeroomDirectory.map(withRegistryAnalytics)
+    const scopedStudentDirectory = mergeStudentDirectory(homeroomStudents, courseStudents)
+    const scope = buildScope(courseStudents, homeroomStudents)
     return success(res, {
       profile: teacher ? {
         id: teacher.id,
         employeeNumber: teacher.employeeNumber,
         department: teacher.department,
         qualification: teacher.qualification,
+        status: teacher.status,
         homeroomGrade: teacher.homeroomGrade,
         homeroomSection: teacher.homeroomSection,
         user: teacher.user,
       } : null,
-      courses: [], students, studentDirectory, assignments: [], grades: [], timetable: await academicScheduleForTeacher(teacher?.user),
+      courses: [], students: courseStudents, courseStudents, homeroomStudents, scopedStudentDirectory, studentDirectory, scope,
+      assignments: [], grades: [], timetable: await academicScheduleForTeacher(teacher?.user),
     }, teacher ? 'Teacher roster loaded while official courses synchronize' : 'Teacher roster loaded while profile synchronization is pending')
   }
   const students = new Map<string, any>()
@@ -486,11 +560,22 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     }
   })
   analyticsStudents.filter((student) => student.analytics.average !== null).sort((a, b) => b.analytics.average! - a.analytics.average!).forEach((student, index) => { student.analytics.rank = index + 1 })
+  const analyticsByIdentity = new Map<string, any>()
+  analyticsStudents.forEach((student) => studentIdentityKeys(student).forEach((key) => analyticsByIdentity.set(key, student)))
+  const homeroomStudents = homeroomDirectory.map((student) => {
+    const analytics = studentIdentityKeys(student).map((key) => analyticsByIdentity.get(key)).find(Boolean)
+    return analytics ? { ...student, ...analytics, analytics: analytics.analytics } : withRegistryAnalytics(student)
+  })
+  const scopedStudentDirectory = mergeStudentDirectory(homeroomStudents, analyticsStudents)
   return success(res, {
-    profile: { id: teacher.id, employeeNumber: teacher.employeeNumber, department: teacher.department, qualification: teacher.qualification, homeroomGrade: teacher.homeroomGrade, homeroomSection: teacher.homeroomSection, user: teacher.user },
+    profile: { id: teacher.id, employeeNumber: teacher.employeeNumber, department: teacher.department, qualification: teacher.qualification, status: teacher.status, homeroomGrade: teacher.homeroomGrade, homeroomSection: teacher.homeroomSection, user: teacher.user },
     courses: teacher.courses,
     students: analyticsStudents,
+    courseStudents: analyticsStudents,
+    homeroomStudents,
+    scopedStudentDirectory,
     studentDirectory,
+    scope: buildScope(analyticsStudents, homeroomStudents),
     assignments: teacher.courses.flatMap((course) => course.assignments.map((assignment) => ({ ...assignment, courseId: course.id, courseName: course.name }))),
     grades: teacher.courses.flatMap((course) => course.grades.map((grade) => ({ ...grade, courseId: course.id, courseName: course.name }))),
     timetable: (await academicScheduleForTeacher(teacher.user)).length ? await academicScheduleForTeacher(teacher.user) : teacher.courses.flatMap((course) => course.schedules.map((schedule) => ({ ...schedule, courseId: course.id, courseName: course.name, studentCount: course.enrollments.length }))),
