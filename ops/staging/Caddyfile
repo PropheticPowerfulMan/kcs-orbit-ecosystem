@@ -34,6 +34,18 @@
     reverse_proxy nexus_web:80
   }
 
+  redir /kitchen /kitchen/ 308
+  handle /kitchen/api/health {
+    rewrite * /health
+    reverse_proxy kitchen_api:5100
+  }
+  handle /kitchen/api/* {
+    uri strip_prefix /kitchen
+    reverse_proxy kitchen_api:5100
+  }
+  handle_path /kitchen/* {
+    reverse_proxy kitchen_web:80
+  }
   redir /savanex /savanex/ 308
   handle /savanex/api/* {
     uri strip_prefix /savanex

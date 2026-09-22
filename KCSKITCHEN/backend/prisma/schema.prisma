@@ -1,0 +1,374 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum KitchenRole {
+  KITCHEN_ADMIN
+  CASHIER
+  FINANCE
+  AUDITOR
+  TEACHER
+  STAFF
+  STUDENT
+}
+
+enum PersonType {
+  TEACHER
+  STAFF
+  STUDENT
+  ADMINISTRATIVE_STAFF
+  OTHER
+}
+
+enum ProductCategory {
+  FOOD
+  DRINK
+  SNACK
+  DESSERT
+  OTHER
+}
+
+enum InventoryUnit {
+  UNIT
+  BOTTLE
+  CAN
+  KG
+  LITER
+  PORTION
+  OTHER
+}
+
+enum PaymentMode {
+  CASH
+  MOBILE_MONEY
+  BANK
+  EDUPAY
+  CREDIT
+}
+
+enum PaymentStatus {
+  PAID
+  CREDIT
+  PARTIALLY_PAID
+  VOIDED
+  REFUNDED
+}
+
+enum TransactionStatus {
+  CONFIRMED
+  VOIDED
+  REVERSED
+  REFUNDED
+}
+
+enum LedgerEntryType {
+  PURCHASE
+  CREDIT
+  PAYMENT
+  DISCOUNT
+  ADJUSTMENT
+  REFUND
+  REVERSAL
+}
+
+enum DiscountType {
+  THRESHOLD_FIXED_TOTAL
+  FIXED_AMOUNT
+  PERCENTAGE
+  CATEGORY_DISCOUNT
+  ROLE_DISCOUNT
+  MANUAL_AUTHORIZED_DISCOUNT
+}
+
+enum StockMovementType {
+  STOCK_IN
+  SALE
+  WASTE
+  EXPIRED
+  DAMAGED
+  LOSS
+  ADJUSTMENT
+  RETURN
+}
+
+enum DisputeReason {
+  I_DID_NOT_TAKE_THIS
+  WRONG_ITEM
+  WRONG_QUANTITY
+  WRONG_PRICE
+  WRONG_DATE
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  REJECTED
+}
+
+enum PeriodStatus {
+  OPEN
+  REVIEW
+  CLOSED
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum ConfirmationType {
+  NONE
+  PIN
+  DASHBOARD
+  QR
+  SIGNATURE
+}
+model KitchenAccess {
+  id String @id @default(cuid())
+  orbitPersonId String @unique
+  personType PersonType
+  role KitchenRole
+  isActive Boolean @default(true)
+  creditEnabled Boolean @default(false)
+  creditLimit Decimal? @db.Decimal(14, 2)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([role, isActive])
+}
+
+model Product {
+  id String @id @default(cuid())
+  name String
+  description String?
+  category ProductCategory
+  currentPrice Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  photoUrl String?
+  isAvailable Boolean @default(true)
+  trackInventory Boolean @default(false)
+  stockQuantity Decimal @default(0) @db.Decimal(14, 3)
+  unit InventoryUnit @default(UNIT)
+  minimumStock Decimal @default(0) @db.Decimal(14, 3)
+  reorderLevel Decimal @default(0) @db.Decimal(14, 3)
+  priceHistory ProductPriceHistory[]
+  transactionItems KitchenTransactionItem[]
+  stockMovements StockMovement[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([category, isAvailable])
+}
+
+model ProductPriceHistory {
+  id String @id @default(cuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  price Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  effectiveAt DateTime @default(now())
+  changedBy String
+  reason String?
+  @@index([productId, effectiveAt])
+}
+
+model DiscountRule {
+  id String @id @default(cuid())
+  name String
+  type DiscountType
+  eligibleRole KitchenRole?
+  category ProductCategory?
+  thresholdAmount Decimal? @db.Decimal(14, 2)
+  fixedAmount Decimal? @db.Decimal(14, 2)
+  targetAmount Decimal? @db.Decimal(14, 2)
+  percentage Decimal? @db.Decimal(7, 4)
+  priority Int @default(100)
+  isActive Boolean @default(false)
+  requiresApproval Boolean @default(false)
+  validFrom DateTime?
+  validUntil DateTime?
+  applications DiscountApplication[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([isActive, priority])
+}
+
+model KitchenCounter {
+  name String @id
+  value Int @default(0)
+}
+
+model KitchenTransaction {
+  id String @id @default(cuid())
+  transactionNumber String @unique
+  orbitPersonId String
+  personType PersonType
+  personNameSnapshot String
+  cashierOrbitPersonId String
+  cashierNameSnapshot String
+  subtotal Decimal @db.Decimal(14, 2)
+  discount Decimal @default(0) @db.Decimal(14, 2)
+  total Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  paymentMode PaymentMode
+  paymentStatus PaymentStatus
+  status TransactionStatus @default(CONFIRMED)
+  creditAmount Decimal @default(0) @db.Decimal(14, 2)
+  notes String?
+  confirmationType ConfirmationType @default(NONE)
+  confirmedByPersonAt DateTime?
+  originalTransactionId String?
+  originalTransaction KitchenTransaction? @relation("TransactionReversal", fields: [originalTransactionId], references: [id])
+  reversals KitchenTransaction[] @relation("TransactionReversal")
+  items KitchenTransactionItem[]
+  discounts DiscountApplication[]
+  ledgerEntries KitchenLedgerEntry[]
+  disputes KitchenDispute[]
+  payments KitchenPayment[]
+  createdAt DateTime @default(now())
+  @@index([orbitPersonId, createdAt])
+  @@index([cashierOrbitPersonId, createdAt])
+  @@index([status, createdAt])
+}
+
+model KitchenTransactionItem {
+  id String @id @default(cuid())
+  transactionId String
+  transaction KitchenTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productNameSnapshot String
+  quantity Decimal @db.Decimal(14, 3)
+  unitPriceAtPurchase Decimal @db.Decimal(14, 2)
+  subtotal Decimal @db.Decimal(14, 2)
+  @@index([transactionId])
+}
+
+model DiscountApplication {
+  id String @id @default(cuid())
+  transactionId String
+  transaction KitchenTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  discountRuleId String?
+  discountRule DiscountRule? @relation(fields: [discountRuleId], references: [id], onDelete: SetNull)
+  originalAmount Decimal @db.Decimal(14, 2)
+  discountAmount Decimal @db.Decimal(14, 2)
+  finalAmount Decimal @db.Decimal(14, 2)
+  reason String
+  appliedAutomatically Boolean @default(true)
+  approvedBy String?
+  createdAt DateTime @default(now())
+}
+
+model KitchenLedgerEntry {
+  id String @id @default(cuid())
+  orbitPersonId String
+  transactionId String?
+  transaction KitchenTransaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  paymentId String?
+  payment KitchenPayment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  type LedgerEntryType
+  amount Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  description String
+  reason String?
+  performedBy String
+  createdAt DateTime @default(now())
+  @@index([orbitPersonId, createdAt])
+  @@index([transactionId])
+}
+
+model KitchenPayment {
+  id String @id @default(cuid())
+  orbitPersonId String
+  transactionId String?
+  transaction KitchenTransaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  amount Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  method PaymentMode
+  reference String?
+  notes String?
+  receivedBy String
+  createdAt DateTime @default(now())
+  ledgerEntries KitchenLedgerEntry[]
+  @@index([orbitPersonId, createdAt])
+}
+
+model KitchenDispute {
+  id String @id @default(cuid())
+  transactionId String
+  transaction KitchenTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  orbitPersonId String
+  reason DisputeReason
+  comment String?
+  status DisputeStatus @default(OPEN)
+  resolution String?
+  resolvedBy String?
+  resolvedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, createdAt])
+  @@index([orbitPersonId, createdAt])
+}
+
+model StockMovement {
+  id String @id @default(cuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  type StockMovementType
+  quantity Decimal @db.Decimal(14, 3)
+  reason String
+  actor String
+  createdAt DateTime @default(now())
+  @@index([productId, createdAt])
+}
+
+model AccountingPeriod {
+  id String @id @default(cuid())
+  year Int
+  month Int
+  status PeriodStatus @default(OPEN)
+  reviewedBy String?
+  reviewedAt DateTime?
+  closedBy String?
+  closedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([year, month])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String
+  actorRole String
+  action String
+  entityType String
+  entityId String
+  oldValue Json?
+  newValue Json?
+  reason String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model NotificationOutbox {
+  id String @id @default(cuid())
+  orbitPersonId String
+  eventType String
+  channels String[]
+  payload Json
+  status NotificationStatus @default(QUEUED)
+  attempts Int @default(0)
+  lastError String?
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+  @@index([status, createdAt])
+}

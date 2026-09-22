@@ -20,6 +20,7 @@ declare global {
 function getIntegrationKeyByApp(): Record<AppSlug, string | undefined> {
   return {
     [AppSlug.KCS_NEXUS]: process.env.KCS_NEXUS_INTEGRATION_KEY,
+    [AppSlug.KCS_KITCHEN]: process.env.KCS_KITCHEN_INTEGRATION_KEY,
     [AppSlug.EDUPAY]: process.env.EDUPAY_INTEGRATION_KEY,
     [AppSlug.EDUSYNCAI]: process.env.EDUSYNCAI_INTEGRATION_KEY,
     [AppSlug.SAVANEX]: process.env.SAVANEX_INTEGRATION_KEY

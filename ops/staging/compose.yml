@@ -20,6 +20,8 @@ services:
       nexus_api: { condition: service_healthy }
       savanex_web: { condition: service_healthy }
       savanex_api: { condition: service_healthy }
+      kitchen_web: { condition: service_healthy }
+      kitchen_api: { condition: service_healthy }
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"], interval: 15s, timeout: 5s, retries: 10 }
   orbit_db:
     <<: *service-defaults
@@ -42,6 +44,7 @@ services:
       CORS_ORIGIN: https://${STAGING_DOMAIN}
       JWT_SECRET: ${ORBIT_STAGING_JWT_SECRET:?set ORBIT_STAGING_JWT_SECRET}
       KCS_NEXUS_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      KCS_KITCHEN_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       EDUPAY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       EDUSYNCAI_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       SAVANEX_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
@@ -242,6 +245,60 @@ services:
     tmpfs: [/var/cache/nginx, /var/run]
     networks: [staging_internal]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
+  kitchen_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-kitchen-db-staging
+    environment:
+      POSTGRES_DB: ${KITCHEN_STAGING_POSTGRES_DB:?set KITCHEN_STAGING_POSTGRES_DB}
+      POSTGRES_USER: ${KITCHEN_STAGING_POSTGRES_USER:?set KITCHEN_STAGING_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${KITCHEN_STAGING_POSTGRES_PASSWORD:?set KITCHEN_STAGING_POSTGRES_PASSWORD}
+    volumes: [staging_kitchen_db_data:/var/lib/postgresql/data]
+    networks: [staging_internal]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 15 }
+  kitchen_api:
+    <<: *service-defaults
+    build: { context: ../.., dockerfile: ops/staging/docker/kitchen-api.Dockerfile }
+    image: kcs/kitchen-api:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-kitchen-api-staging
+    environment:
+      NODE_ENV: production
+      PORT: "5100"
+      DATABASE_URL: postgresql://${KITCHEN_STAGING_POSTGRES_USER}:${KITCHEN_STAGING_POSTGRES_PASSWORD}@kitchen_db:5432/${KITCHEN_STAGING_POSTGRES_DB}?schema=public
+      FRONTEND_URL: https://${STAGING_DOMAIN}/kitchen
+      JWT_SECRET: ${KITCHEN_STAGING_JWT_SECRET:?set KITCHEN_STAGING_JWT_SECRET}
+      QR_SIGNING_SECRET: ${KITCHEN_STAGING_QR_SECRET:?set KITCHEN_STAGING_QR_SECRET}
+      NEXUS_API_URL: http://nexus_api:5000
+      ORBIT_API_URL: http://orbit_api:4500
+      ORBIT_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      ORBIT_ORGANIZATION_ID: ${KCS_ORBIT_ORGANIZATION_ID:?set KCS_ORBIT_ORGANIZATION_ID}
+      DIRECTORY_CACHE_SECONDS: "60"
+    networks: [staging_internal]
+    depends_on:
+      kitchen_db: { condition: service_healthy }
+      nexus_api: { condition: service_healthy }
+      orbit_api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 15
+      start_period: 45s
+  kitchen_web:
+    <<: *service-defaults
+    build:
+      context: ../..
+      dockerfile: ops/staging/docker/kitchen-web.Dockerfile
+      args:
+        VITE_API_URL: /kitchen/api
+        VITE_BASE_PATH: /kitchen/
+    image: kcs/kitchen-web:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-kitchen-web-staging
+    read_only: true
+    tmpfs: [/var/cache/nginx, /var/run]
+    networks: [staging_internal]
+    depends_on: { kitchen_api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
 networks:
   staging_internal: { internal: true }
   staging_egress:
@@ -258,3 +315,4 @@ volumes:
   staging_savanex_media:
   staging_savanex_static:
   staging_caddy_data:
+  staging_kitchen_db_data:

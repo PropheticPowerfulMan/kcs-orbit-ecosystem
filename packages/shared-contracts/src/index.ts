@@ -6,6 +6,7 @@ const TrimmedStringSchema = z.string().trim().min(1);
 
 export const AppSlugSchema = z.enum([
   "KCS_NEXUS",
+  "KCS_KITCHEN",
   "EDUPAY",
   "EDUSYNCAI",
   "SAVANEX"
@@ -20,6 +21,7 @@ export const RegistryEntityTypeSchema = z.enum([
 
 export const CanonicalIdAppPrefix = {
   KCS_NEXUS: "KCSNEX",
+  KCS_KITCHEN: "KCSKIT",
   EDUPAY: "EDUPAY",
   EDUSYNCAI: "EDUSAI",
   SAVANEX: "SAV"
@@ -331,7 +333,7 @@ export function composeCanonicalFullName(identity: CanonicalIdentity) {
 type AcademicStudent = { id: string; firstName: string; lastName: string; classId?: string | null; className?: string | null; status?: string | null; averagePercent?: number | null };
 type AcademicClass = { id: string; name: string; gradeLevel?: string | null; suffix?: string | null };
 
-/** Règle académique institutionnelle unique, partagée par toutes les applications KCS. */
+/** RÃ¨gle acadÃ©mique institutionnelle unique, partagÃ©e par toutes les applications KCS. */
 export const KCS_ACADEMIC_PASSING_SCORE_PERCENT = 70 as const;
 export const KCS_TEST_FAMILY_EXEMPTION_NAME = "LOKALA LOMBOTO JONATHAN" as const;
 

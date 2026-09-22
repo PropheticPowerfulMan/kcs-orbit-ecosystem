@@ -1,0 +1,10 @@
+{
+  "name": "kcs-kitchen",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build:api": "npm --prefix backend run build",
+    "build:web": "npm --prefix frontend run build",
+    "test": "npm --prefix backend test"
+  }
+}

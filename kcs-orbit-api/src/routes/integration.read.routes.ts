@@ -7,6 +7,6 @@ import { requireAnyIntegrationAccess, requireIntegrationAccess } from "../middle
 const router = Router();
 
 router.get("/kcs-nexus/families", requireIntegrationAccess(AppSlug.KCS_NEXUS), asyncHandler(readKcsNexusFamilies));
-router.get("/shared-directory", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), asyncHandler(readSharedDirectory));
+router.get("/shared-directory", requireAnyIntegrationAccess(AppSlug.KCS_NEXUS, AppSlug.KCS_KITCHEN, AppSlug.EDUPAY, AppSlug.EDUSYNCAI, AppSlug.SAVANEX), asyncHandler(readSharedDirectory));
 
 export default router;
