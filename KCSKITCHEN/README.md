@@ -15,7 +15,7 @@ KCS Kitchen is the canteen domain application of the KCS Orbit Ecosystem.
 - Confirmed transactions are never deleted silently.
 - Corrections use reversal, refund or adjustment records.
 - Inventory changes and discounts are audited.
-- Notification failures do not roll back a sale; the outbox is retried independently.
+- Notification failures do not roll back a sale; the outbox retries independently with bounded exponential backoff and an idempotent Nexus bridge.
 - Credit is disabled until explicitly granted to an Orbit identity.
 - Teacher threshold discount rules exist as configuration and are not active by default.
 

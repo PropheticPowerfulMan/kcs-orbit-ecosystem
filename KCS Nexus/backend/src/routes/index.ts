@@ -30,6 +30,7 @@ import { attendanceRouter } from './attendance.routes.js'
 import { electivesRouter } from './electives.routes.js'
 import { shiningStudentsRouter } from './shining-students.routes.js'
 import { syllabiRouter } from './syllabi.routes.js'
+import { kitchenNotificationsRouter } from './kitchen-notifications.routes.js'
 
 export const router = Router()
 
@@ -64,5 +65,6 @@ router.use('/shining-students', shiningStudentsRouter)
 router.use('/syllabi', syllabiRouter)
 
 router.use('/employees', employeesRouter)
+router.use('/kitchen-notifications', kitchenNotificationsRouter)
 router.use('/', diagnosticRouter)
 router.use('/school-management', schoolManagementRouter)

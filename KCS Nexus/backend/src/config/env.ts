@@ -45,6 +45,7 @@ const envSchema = z.object({
   ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID: z.string().optional(),
   ACADEMY_PUBLIC_URL: z.string().url().optional(),
   ACADEMY_INTEGRATION_KEY: z.string().min(32).optional(),
+  KCS_KITCHEN_INTEGRATION_KEY: z.string().min(16).optional(),
   EDUPAY_API_URL: z.string().optional(),
   EDUPAY_SERVICE_TOKEN: z.string().optional(),
   EDUPAY_SERVICE_EMAIL: z.string().email().optional(),

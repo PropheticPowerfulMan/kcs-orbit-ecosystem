@@ -11,6 +11,7 @@ import { prisma } from './db.js'
 import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentity } from './auth.js'
 import { calculateDiscount } from './discount.js'
 import { loadDirectory, resolvePerson } from './directory.js'
+import { processNotificationOutbox } from './notifications.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -668,6 +669,12 @@ app.put('/api/periods/:year/:month', authenticate, allow('KITCHEN_ADMIN', 'FINAN
   })
   await audit(req, status === 'CLOSED' ? 'MONTH_CLOSED' : 'MONTH_STATUS_CHANGED', 'AccountingPeriod', period.id, old, period)
   res.json({ period })
+}))
+
+app.post('/api/notifications/retry', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const result = await processNotificationOutbox(100)
+  await audit(req, 'NOTIFICATION_RETRY', 'NotificationOutbox', 'batch', undefined, result)
+  res.json(result)
 }))
 
 app.get('/api/audit', authenticate, allow('KITCHEN_ADMIN', 'AUDITOR'), asyncRoute(async (req, res) => {

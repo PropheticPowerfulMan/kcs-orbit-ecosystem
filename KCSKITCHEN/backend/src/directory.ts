@@ -1,4 +1,5 @@
 import { env } from './config.js'
+import { classifyDirectoryEmployee } from './identity.js'
 
 export type DirectoryPerson = {
   id: string
@@ -9,6 +10,10 @@ export type DirectoryPerson = {
   status?: string | null
   className?: string | null
   accessCode?: string | null
+  employeeType?: string | null
+  department?: string | null
+  jobTitle?: string | null
+  subject?: string | null
   kind: 'STUDENT' | 'TEACHER' | 'STAFF'
 }
 
@@ -34,7 +39,7 @@ export async function loadDirectory(force = false): Promise<DirectoryPerson[]> {
     const body = await response.json() as Directory
     const people: DirectoryPerson[] = [
       ...(body.students || []).map(person => ({ ...person, kind: 'STUDENT' as const })),
-      ...(body.teachers || []).map(person => ({ ...person, kind: 'TEACHER' as const })),
+      ...(body.teachers || []).map(person => ({ ...person, kind: classifyDirectoryEmployee(person) })),
       ...(body.staff || []).map(person => ({ ...person, kind: 'STAFF' as const }))
     ].filter(person => !person.status || person.status === 'ACTIVE')
     cached = { at: Date.now(), people }
