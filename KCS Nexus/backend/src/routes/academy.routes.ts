@@ -39,7 +39,8 @@ academyRouter.post("/launch", authenticate, requireRoles("teacher", "student", "
   });
   const payload = await response.json().catch(() => ({})) as { ticket?: string; message?: string };
   if (!response.ok || !payload.ticket) throw new ApiError(response.status, payload.message || "Academy launch failed");
-  const url = new URL("/api/auth/callback", env.ACADEMY_PUBLIC_URL);
+  const academyBaseUrl = env.ACADEMY_PUBLIC_URL.endsWith("/") ? env.ACADEMY_PUBLIC_URL : env.ACADEMY_PUBLIC_URL + "/";
+  const url = new URL("api/auth/callback", academyBaseUrl);
   url.searchParams.set("ticket", payload.ticket);
   return success(res, { url: url.toString() });
 }));

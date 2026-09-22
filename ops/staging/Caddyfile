@@ -12,6 +12,33 @@
     respond "staging gateway healthy" 200
   }
 
+  handle /academy {
+    reverse_proxy academy:3000
+  }
+  handle /academy/* {
+    reverse_proxy academy:3000
+  }
+
+  # Compatibility for the two legacy absolute form actions still rendered by
+  # the Academy client. The Referer guard prevents any collision with EduPay.
+  handle /api/auth/institutional-login {
+    rewrite * /academy/api/auth/institutional-login
+    reverse_proxy academy:3000
+  }
+  @academyLogout {
+    path /api/auth/logout
+    header_regexp academy_ref Referer /academy
+  }
+  handle @academyLogout {
+    rewrite * /academy/api/auth/logout
+    reverse_proxy academy:3000
+  }
+  @academyLogin {
+    path /login
+    header_regexp academy_login_ref Referer /academy
+  }
+  redir @academyLogin /academy/login 303
+
   handle /api/health {
     rewrite * /health
     reverse_proxy edupay_api:4000

@@ -22,6 +22,7 @@ services:
       savanex_api: { condition: service_healthy }
       kitchen_web: { condition: service_healthy }
       kitchen_api: { condition: service_healthy }
+      academy: { condition: service_healthy }
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"], interval: 15s, timeout: 5s, retries: 10 }
   orbit_db:
     <<: *service-defaults
@@ -48,6 +49,7 @@ services:
       EDUPAY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       EDUSYNCAI_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       SAVANEX_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      ACADEMY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       ACADEMIC_ROLLOVER_AUTO_ENABLED: "false"
     networks: [staging_internal]
     depends_on: { orbit_db: { condition: service_healthy } }
@@ -156,6 +158,7 @@ services:
       SAVANEX_AUTH_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       SAVANEX_INTELLIGENCE_API_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
       ACADEMY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      ACADEMY_PUBLIC_URL: https://${STAGING_DOMAIN}/academy/
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -304,6 +307,30 @@ services:
     networks: [staging_internal]
     depends_on: { kitchen_api: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
+  academy:
+    <<: *service-defaults
+    build:
+      context: "../../KCS Nexus Academy"
+      dockerfile: Dockerfile
+      args:
+        ACADEMY_BASE_PATH: /academy
+    image: kcs/academy:staging-${STAGING_RELEASE:?set STAGING_RELEASE}
+    container_name: kcs-academy-staging
+    environment:
+      NODE_ENV: production
+      ORBIT_API_URL: http://orbit_api:4500
+      NEXUS_API_URL: http://nexus_api:5000
+      ACADEMY_INTEGRATION_KEY: ${STAGING_INTEGRATION_KEY:?set STAGING_INTEGRATION_KEY}
+      ACADEMY_ORGANIZATION_ID: ${KCS_ORBIT_ORGANIZATION_ID:?set KCS_ORBIT_ORGANIZATION_ID}
+      ACADEMY_PUBLIC_URL: https://${STAGING_DOMAIN}/academy/
+      ACADEMY_BASE_PATH: /academy
+      ACADEMY_DEMO_MODE: "false"
+      ACADEMY_LOCAL_AUTH_ONLY: "false"
+    networks: [staging_internal]
+    depends_on:
+      orbit_api: { condition: service_healthy }
+      nexus_api: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/academy/api/health"], interval: 15s, timeout: 5s, retries: 15, start_period: 45s }
 networks:
   staging_internal: { internal: true }
   staging_egress:
