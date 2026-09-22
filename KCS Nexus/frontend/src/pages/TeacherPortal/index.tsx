@@ -163,7 +163,11 @@ type StudentProfileResponse = {
 
 const toClassKey = (grade: string, section = '') => canonicalClassLabel(grade, section).toLowerCase()
 
-const mapRegistryStudent = (student: StudentProfileResponse, index: number): RegistryStudent => {
+const mapRegistryStudent = (
+  student: StudentProfileResponse,
+  index: number,
+  assignmentLabel = 'Official school registry',
+): RegistryStudent => {
   const firstName = student.user?.firstName?.trim() ?? ''
   const middleName = student.user?.middleName?.trim() ?? ''
   const lastName = student.user?.lastName?.trim() ?? ''
@@ -176,7 +180,7 @@ const mapRegistryStudent = (student: StudentProfileResponse, index: number): Reg
     grade: canonicalClassLabel(student.grade, student.section),
     section: '',
     parentId: student.parentLinks?.[0]?.parentId ?? student.parentLinks?.[0]?.parent?.id,
-    advisor: student.analytics ? 'Official assigned-course roster' : 'Not assigned to this teacher',
+    advisor: assignmentLabel,
     average: student.analytics?.average ?? undefined,
     rank: student.analytics?.rank ?? undefined,
     attendance: student.analytics?.attendanceRate ?? undefined,
@@ -380,19 +384,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       const workspace = response.data?.data
       const state = workspace?.state as Record<string, any> | undefined
       if (state) {
-        if (Array.isArray(state.courses) && state.courses.length) {
-          setCourses(state.courses.map((course: any) => {
-            const className = canonicalClassLabel(course.className || course.gradeLevels?.[0])
-            return { ...course, className, gradeLevels: [className] }
-          }))
-        }
-        if (Array.isArray(state.teacherStudents) && state.teacherStudents.length) {
-          setTeacherStudents(state.teacherStudents.map((student: RegistryStudent) => ({
-            ...student,
-            grade: canonicalClassLabel(student.grade, student.section),
-            section: '',
-          })))
-        }
+        // Courses and enrollments are deliberately not restored from this
+        // workspace cache. The relational Nexus registry loaded by /me/overview
+        // is the only authority for a teacher's Gradebook roster.
         if (Array.isArray(state.attendanceEntries)) setAttendanceEntries(state.attendanceEntries)
         if (Array.isArray(state.assignmentList)) setAssignmentList(state.assignmentList)
         if (Array.isArray(state.gradeEntries)) setGradeEntries(state.gradeEntries)
@@ -452,10 +446,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         const response = await teacherWorkspaceAPI.overview()
         const overview = response.data?.data ?? {}
         setOfficialTimetable(overview.timetable ?? [])
-        const assignedStudents = (overview.courseStudents ?? overview.students ?? []).map(mapRegistryStudent)
-        const registryStudents = (overview.studentDirectory ?? overview.students ?? []).map(mapRegistryStudent)
-        const homeroomStudents = (overview.homeroomStudents ?? []).map(mapRegistryStudent)
-        const scopedStudents = (overview.scopedStudentDirectory ?? overview.courseStudents ?? overview.students ?? []).map(mapRegistryStudent)
+        const assignedStudents = (overview.courseStudents ?? overview.students ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index, 'Official course enrollment'))
+        const registryStudents = (overview.studentDirectory ?? overview.students ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index))
+        const homeroomStudents = (overview.homeroomStudents ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index, overview.scope?.roleStatus === 'ASSISTANT_TEACHER' ? 'Official assistant-teacher class' : 'Official main-teacher class'))
+        const scopedStudents = (overview.scopedStudentDirectory ?? overview.courseStudents ?? overview.students ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index, 'Official teacher scope'))
         const hasHomeroomScope = Boolean(
           overview.scope?.homeroom
           && ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(overview.scope?.roleStatus),
@@ -483,9 +477,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             return cached ? { ...cached, ...student } : student
           })
         })
-        setCourses((current) => current.length ? current : officialCourses)
-        setSelectedEnrollmentCourseId((current) => current || officialCourses[0]?.id || '')
-        setSelectedGradebookCourseId((current) => current || officialCourses[0]?.id || '')
+        setCourses(officialCourses)
+        setSelectedEnrollmentCourseId((current) => officialCourses.some((course: any) => course.id === current) ? current : officialCourses[0]?.id || '')
+        setSelectedGradebookCourseId((current) => officialCourses.some((course: any) => course.id === current) ? current : officialCourses[0]?.id || '')
         setRegistryStatus('ready')
       } catch {
         if (!active) return
