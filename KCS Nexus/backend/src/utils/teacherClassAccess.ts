@@ -2,7 +2,7 @@ import { normalizeClassParts } from './className.js'
 
 export type TeacherClassParts = { grade: string; section: string }
 
-export const teacherClassKey = (value: TeacherClassParts) => `${value.grade}::${value.section}`
+export const teacherClassKey = (value: TeacherClassParts) => `${value.grade.trim().toLowerCase()}::${value.section.trim().toLowerCase()}`
 
 const addClass = (classes: Map<string, TeacherClassParts>, grade?: unknown, section?: unknown) => {
   if (typeof grade !== 'string' || !grade.trim()) return

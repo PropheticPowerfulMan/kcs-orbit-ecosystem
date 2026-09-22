@@ -1227,19 +1227,30 @@ const MainTeacherAssignmentPanel = () => {
   const [drafts, setDrafts] = useState<Record<string, { status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; grade: string; section: string }>>({})
   const [busyId, setBusyId] = useState('')
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [rosterStudents, setRosterStudents] = useState<any[]>([])
+  const [rosterClasses, setRosterClasses] = useState<any[]>([])
+  const [rosterDrafts, setRosterDrafts] = useState<Record<string, string>>({})
+  const [rosterGrade, setRosterGrade] = useState('')
+  const [rosterQuery, setRosterQuery] = useState('')
+  const [rosterBusyId, setRosterBusyId] = useState('')
   const name = (item: any) => [item.user?.lastName, item.user?.middleName, item.user?.firstName].filter(Boolean).join(' ')
   const load = async () => {
     try {
-      const response = await mainTeacherAPI.list()
-      const rows = response.data?.data || []
+      const [teacherResponse, rosterResponse] = await Promise.all([mainTeacherAPI.list(), mainTeacherAPI.roster()])
+      const rows = teacherResponse.data?.data || []
+      const roster = rosterResponse.data?.data || { students: [], classes: [] }
       setTeachers(rows)
       setDrafts(Object.fromEntries(rows.map((item: any) => [item.id, {
         status: item.status || 'TEACHER',
         grade: item.homeroomGrade || SCHOOL_LEVELS[0],
         section: item.homeroomSection || '',
       }])))
+      setRosterStudents(roster.students || [])
+      setRosterClasses(roster.classes || [])
+      setRosterDrafts(Object.fromEntries((roster.students || []).map((student: any) => [student.id, student.section || ''])))
+      setRosterGrade((current) => current || (roster.students || [])[0]?.grade || SCHOOL_LEVELS[0])
     } catch (error: any) {
-      setResult({ ok: false, message: error?.response?.data?.message || tr('Impossible de charger les enseignants.', 'Unable to load teachers.') })
+      setResult({ ok: false, message: error?.response?.data?.message || tr('Impossible de charger les enseignants et les listes de classe.', 'Unable to load teachers and class rosters.') })
     }
   }
   useEffect(() => { void load() }, [])
@@ -1265,6 +1276,31 @@ const MainTeacherAssignmentPanel = () => {
       setResult({ ok: false, message: error?.response?.data?.message || tr('Affectation impossible.', 'Assignment failed.') })
     } finally { setBusyId('') }
   }
+  const gradeOptions = [...new Set(rosterStudents.map((student) => student.grade).filter(Boolean))].sort((left, right) => String(left).localeCompare(String(right), 'en', { numeric: true }))
+  const sectionOptions = [...new Set([
+    ...rosterClasses.filter((item) => item.grade === rosterGrade).map((item) => item.section),
+    ...rosterStudents.filter((student) => student.grade === rosterGrade).map((student) => student.section),
+  ].filter(Boolean))].sort((left, right) => String(left).localeCompare(String(right), 'en', { numeric: true }))
+  const visibleRoster = rosterStudents.filter((student) => {
+    if (student.grade !== rosterGrade) return false
+    const haystack = [student.studentNumber, student.grade, student.section, name(student)].filter(Boolean).join(' ').toLowerCase()
+    return !rosterQuery.trim() || haystack.includes(rosterQuery.trim().toLowerCase())
+  })
+  const saveRosterSection = async (student: any) => {
+    const section = (rosterDrafts[student.id] || '').trim()
+    setRosterBusyId(student.id)
+    try {
+      await mainTeacherAPI.assignStudentSection(student.id, section)
+      setResult({ ok: true, message: section
+        ? tr(`${name(student)} est maintenant affecté(e) à ${student.grade} · ${section}.`, `${name(student)} is now assigned to ${student.grade} · ${section}.`)
+        : tr(`${name(student)} est maintenant sans sous-classe et ne figurera dans aucun registre de titulaire.`, `${name(student)} is now unassigned and will not appear in a main-teacher register.`) })
+      await load()
+    } catch (error: any) {
+      setResult({ ok: false, message: error?.response?.data?.message || tr('Impossible denregistrer la sous-classe.', 'Unable to save the class section.') })
+    } finally {
+      setRosterBusyId('')
+    }
+  }
   return <div className="space-y-6">
     {result && <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950"><div className={'mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black text-white ' + (result.ok ? 'bg-emerald-600' : 'bg-red-600')}>{result.ok ? 'âœ“' : '!'}</div><h3 className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{result.ok ? tr('OpÃ©ration rÃ©ussie', 'Operation successful') : tr('OpÃ©ration impossible', 'Operation failed')}</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{result.message}</p><button type="button" onClick={() => setResult(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 font-bold text-white">{tr('Fermer', 'Close')}</button></div></div>}
     <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
@@ -1284,11 +1320,36 @@ const MainTeacherAssignmentPanel = () => {
           <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'HOMEROOM_TEACHER'} onChange={(event) => updateDraft(item.id, { status: event.target.checked ? 'HOMEROOM_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-kcs-blue-700"/>Main Teacher</label>
           <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'ASSISTANT_TEACHER'} onChange={(event) => updateDraft(item.id, { status: event.target.checked ? 'ASSISTANT_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-amber-600"/>{tr('Assistant', 'Assistant')}</label>
           <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateDraft(item.id, { grade: event.target.value })} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((level) => <option key={level}>{level}</option>)}</select>
-          <select value={draft.section} disabled={draft.status === 'TEACHER'} onChange={(event) => updateDraft(item.id, { section: event.target.value })} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((value) => <option key={value || 'none'} value={value}>{value || tr('Sans section', 'No section')}</option>)}</select>
+          <input list="main-teacher-section-options" value={draft.section} disabled={draft.status === 'TEACHER'} maxLength={40} onChange={(event) => updateDraft(item.id, { section: event.target.value })} placeholder={tr('Ex. A, B, Sciences 1&', 'E.g. A, B, Science 1&')} className="rounded-xl border bg-white p-2.5 text-sm disabled:opacity-40 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
           <button type="button" disabled={busyId === item.id} onClick={() => void save(item)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busyId === item.id ? tr('Enregistrementâ€¦', 'Savingâ€¦') : tr('Enregistrer', 'Save')}</button>
         </article>
       })}</div>
       {!teachers.length && <p className="p-8 text-center text-sm text-slate-500">{tr('Aucun professeur disponible.', 'No teacher is available.')}</p>}
+    </section>
+    <datalist id="main-teacher-section-options">{sectionOptions.map((section) => <option key={String(section)} value={String(section)}/>)}</datalist>
+    <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr('Registre officiel des sous-classes', 'Official class-section roster')}</p>
+          <h3 className="mt-2 text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Affecter chaque élève à une sous-classe unique', 'Assign every learner to one class section')}</h3>
+          <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr('Les sections sont libres et illimitées : A, B, Sciences 1, Groupe Bleu, etc. Orbit ne peut plus effacer une affectation officielle lorsque son registre ne fournit que le niveau général.', 'Sections are free-form and unlimited: A, B, Science 1, Blue Group, etc. Orbit can no longer erase an official assignment when its directory only provides the general grade.')}</p>
+        </div>
+        <div className="rounded-xl bg-white px-4 py-3 text-center shadow-sm dark:bg-kcs-blue-950"><strong className="block text-xl text-kcs-blue-950 dark:text-white">{rosterStudents.filter((student) => student.grade === rosterGrade && !student.section).length}</strong><span className="text-xs font-bold text-amber-700 dark:text-amber-300">{tr('sans sous-classe', 'unassigned')}</span></div>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-[220px_1fr]">
+        <select value={rosterGrade} onChange={(event) => setRosterGrade(event.target.value)} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select>
+        <input value={rosterQuery} onChange={(event) => setRosterQuery(event.target.value)} placeholder={tr('Recherche précise : nom, matricule, section&', 'Precise search: name, number, section&')} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">{rosterClasses.filter((item) => item.grade === rosterGrade).map((item) => <span key={item.teacherId + item.role} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-kcs-blue-800 shadow-sm dark:bg-kcs-blue-950 dark:text-sky-100">{item.section || tr('Sans section', 'No section')} · {item.role === 'HOMEROOM_TEACHER' ? 'Main Teacher' : tr('Assistant', 'Assistant')} · {item.teacherName}</span>)}</div>
+      <div className="mt-5 divide-y overflow-hidden rounded-2xl border border-slate-200 bg-white dark:divide-kcs-blue-800 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60">
+        {visibleRoster.map((student) => <article key={student.id} className="grid gap-3 p-4 md:grid-cols-[minmax(13rem,1.4fr)_minmax(8rem,.7fr)_minmax(12rem,1fr)_auto] md:items-center">
+          <div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(student)}</p><p className="text-xs text-slate-500">{student.studentNumber} · {student.grade}</p></div>
+          <span className={"w-fit rounded-full px-3 py-1 text-xs font-bold " + (student.section ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>{student.section || tr('Non affecté', 'Unassigned')}</span>
+          <input list="main-teacher-section-options" value={rosterDrafts[student.id] || ''} maxLength={40} onChange={(event) => setRosterDrafts((current) => ({ ...current, [student.id]: event.target.value }))} placeholder={tr('Sous-classe officielle', 'Official class section')} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
+          <button type="button" disabled={rosterBusyId === student.id || (rosterDrafts[student.id] || '').trim() === (student.section || '').trim()} onClick={() => void saveRosterSection(student)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{rosterBusyId === student.id ? tr('Enregistrement&', 'Saving&') : tr('Affecter', 'Assign')}</button>
+        </article>)}
+        {!visibleRoster.length && <p className="p-8 text-center text-sm text-slate-500">{tr('Aucun élève ne correspond à cette recherche.', 'No learner matches this search.')}</p>}
+      </div>
     </section>
   </div>
 }

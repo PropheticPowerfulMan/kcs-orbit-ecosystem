@@ -44,6 +44,10 @@ const teacherStatusSchema = z.object({
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['homeroomGrade'], message: 'Select the assigned class.' })
   }
 })
+const studentClassSectionSchema = z.object({
+  section: z.string().trim().max(40).transform((value) => value.replace(/\s+/g, ' ')),
+})
+
 
 const teacherReviewSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5),
@@ -206,6 +210,71 @@ schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdmin
   return success(res, merged, 'Main teacher assignments loaded from Nexus and Orbit')
 }))
 
+schoolManagementRouter.get('/teachers/class-rosters', requireOperationalAdministrator, asyncHandler(async (_req, res) => {
+  const [students, assignedTeachers] = await Promise.all([
+    prisma.studentProfile.findMany({
+      where: { status: { equals: 'active', mode: 'insensitive' } },
+      select: {
+        id: true,
+        studentNumber: true,
+        grade: true,
+        section: true,
+        user: { select: { firstName: true, middleName: true, lastName: true } },
+      },
+      orderBy: [{ grade: 'asc' }, { user: { lastName: 'asc' } }],
+    }),
+    prisma.teacherProfile.findMany({
+      where: { status: { in: ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'] } },
+      select: {
+        id: true,
+        status: true,
+        homeroomGrade: true,
+        homeroomSection: true,
+        user: { select: { firstName: true, middleName: true, lastName: true } },
+      },
+    }),
+  ])
+  return success(res, {
+    students,
+    classes: assignedTeachers
+      .filter((teacher) => Boolean(teacher.homeroomGrade))
+      .map((teacher) => ({
+        teacherId: teacher.id,
+        role: teacher.status,
+        teacherName: [teacher.user.lastName, teacher.user.middleName, teacher.user.firstName].filter(Boolean).join(' '),
+        ...normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection),
+      })),
+  }, 'Official class-section roster loaded')
+}))
+
+schoolManagementRouter.patch('/teachers/class-rosters/:studentId', requireOperationalAdministrator, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const studentId = getRouteParam(req.params.studentId)
+  const payload = studentClassSectionSchema.parse(req.body)
+  const student = await prisma.studentProfile.findUnique({
+    where: { id: studentId },
+    select: { id: true, grade: true, section: true, studentNumber: true },
+  })
+  if (!student) throw new ApiError(404, 'Student not found in the official Nexus register')
+  const normalized = normalizeClassParts(student.grade, payload.section)
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.studentProfile.update({
+      where: { id: studentId },
+      data: { section: normalized.section },
+      select: { id: true, studentNumber: true, grade: true, section: true },
+    })
+    await tx.auditLog.create({
+      data: {
+        actorId: getActorId(req),
+        action: 'STUDENT_CLASS_SECTION_ASSIGNED',
+        targetType: 'StudentProfile',
+        targetId: studentId,
+        metadata: { grade: normalized.grade, previousSection: student.section, section: normalized.section },
+      },
+    })
+    return saved
+  })
+  return success(res, updated, normalized.section ? 'Student assigned to the official class section' : 'Student returned to the unassigned class-section pool')
+}))
 schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministrator, asyncHandler(async (req, res) => {
   let teacherId = getRouteParam(req.params.id)
   const payload = teacherStatusSchema.parse(req.body)

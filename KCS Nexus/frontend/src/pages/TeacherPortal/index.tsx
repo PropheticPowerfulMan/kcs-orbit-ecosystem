@@ -63,6 +63,40 @@ const normalizeCreditHours = (value: unknown) => {
   return Number.isFinite(numeric) ? Math.min(60, Math.max(1, Math.trunc(numeric))) : 1
 }
 
+
+const generateCourseAbbreviation = (name: string) => {
+  const words = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .match(/[A-Z0-9]+/g) ?? []
+  if (!words.length) return ''
+  if (words.length === 1) return words[0].slice(0, 6)
+  return words.map((word) => word[0]).join('').slice(0, 8)
+}
+
+type TeacherReportPeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Annual'
+
+const localDateKey = (value: Date) => [
+  value.getFullYear(),
+  String(value.getMonth() + 1).padStart(2, '0'),
+  String(value.getDate()).padStart(2, '0'),
+].join('-')
+
+const teacherReportRange = (period: TeacherReportPeriod, now = new Date()) => {
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+  let start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (period === 'Weekly') {
+    const day = start.getDay() || 7
+    start.setDate(start.getDate() - day + 1)
+  } else if (period === 'Monthly') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1)
+  } else if (period === 'Annual') {
+    const academicYearStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
+    start = new Date(academicYearStart, 7, 1)
+  }
+  return { from: localDateKey(start), to: localDateKey(end), start, end }
+}
 const inferGradeLabel = (className: string) => canonicalClassLabel(className)
 
 const gradingScaleRows = [
@@ -249,7 +283,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [twoFactorSetupUrl, setTwoFactorSetupUrl] = useState('')
   const [workspaceRevision, setWorkspaceRevision] = useState<number | undefined>()
   const [workspaceStatus, setWorkspaceStatus] = useState<'loading' | 'ready' | 'saving' | 'error'>('loading')
-  const [reportPeriod, setReportPeriod] = useState<'Daily' | 'Weekly' | 'Annual'>('Daily')
+  const [reportPeriod, setReportPeriod] = useState<TeacherReportPeriod>('Weekly')
+  const [reportCourseId, setReportCourseId] = useState('all')
+  const [reportRecipientIds, setReportRecipientIds] = useState<string[]>([])
+  const [reportObservation, setReportObservation] = useState('')
+  const [reportActions, setReportActions] = useState('')
+  const [reportSaving, setReportSaving] = useState(false)
   const [selectedAiStudent, setSelectedAiStudent] = useState<RegistryStudent | null>(null)
   const [studentQuery, setStudentQuery] = useState('')
   const [studentClassFilter, setStudentClassFilter] = useState('All')
@@ -285,6 +324,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [attendanceEntries, setAttendanceEntries] = useState(() => ecosystemAttendance.slice(0, 0))
   const [assignmentList, setAssignmentList] = useState(() => ecosystemAssignments.slice(0, 0))
   const [gradeEntries, setGradeEntries] = useState(() => ecosystemGrades.slice(0, 0))
+  const [officialCourseAssignments, setOfficialCourseAssignments] = useState<any[]>([])
+  const [officialCourseGrades, setOfficialCourseGrades] = useState<any[]>([])
   const [reportList, setReportList] = useState(() => reportCards.slice(0, 0))
   const [disciplineList, setDisciplineList] = useState(() => disciplineReports.slice(0, 0))
   const [reportCardStudentId, setReportCardStudentId] = useState('')
@@ -446,6 +487,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         const response = await teacherWorkspaceAPI.overview()
         const overview = response.data?.data ?? {}
         setOfficialTimetable(overview.timetable ?? [])
+        setOfficialCourseAssignments(overview.assignments ?? [])
+        setOfficialCourseGrades(overview.grades ?? [])
         const assignedStudents = (overview.courseStudents ?? overview.students ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index, 'Official course enrollment'))
         const registryStudents = (overview.studentDirectory ?? overview.students ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index))
         const homeroomStudents = (overview.homeroomStudents ?? []).map((student: StudentProfileResponse, index: number) => mapRegistryStudent(student, index, overview.scope?.roleStatus === 'ASSISTANT_TEACHER' ? 'Official assistant-teacher class' : 'Official main-teacher class'))
@@ -484,6 +527,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       } catch {
         if (!active) return
         setSuperAdminStudentPool([])
+        setOfficialCourseAssignments([])
+        setOfficialCourseGrades([])
         setSupportStudentPool([])
         setCourseStudentPool([])
         setRegistryStatus('error')
@@ -647,15 +692,145 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (!printOfficialPdf({ title: `Teacher ${meta.title} Export`, subtitle: 'KCS Nexus AI — Kinshasa Christian School', metadata: [['Document', meta.title], ['Teacher', `${profileDraft.lastName} ${profileDraft.middleName} ${profileDraft.firstName}`.replace(/\s+/g, ' ').trim() || 'Teacher'], ['Academic year', '2025–2026'], ['Records', exportData.rows.length]], ...exportData, orientation: exportData.columns.length > 5 ? 'landscape' : 'portrait' })) return runAction('Allow pop-ups to generate the official printable PDF.')
     runAction(`${meta.title} contextual official PDF was generated.`)
   }
-  const submitTeacherReport = async () => {
-    const report = { id: `TR-${Date.now()}`, period: reportPeriod, teacher: `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim(), submittedAt: new Date().toISOString(), students: teacherStudents.length, attendance: Math.round(teacherStudents.reduce((sum, student) => sum + (student.attendance ?? 0), 0) / Math.max(teacherStudents.length, 1)), status: 'Submitted to administrative staff' }
-    const nextReports = [report, ...submittedTeacherReports]
-    if (await persistWorkspace({ submittedTeacherReports: nextReports }, `${reportPeriod} report submitted to Administrative Staff.`)) {
-      setSubmittedTeacherReports(nextReports)
-      downloadTeacherFile(`kcs-${reportPeriod.toLowerCase()}-teacher-report-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(report, null, 2), 'application/json')
+  const rangeSafeFilePart = (value: unknown) => String(value ?? '').replace(/[^0-9-]/g, '')
+
+  const reportAuthorityContacts = useMemo(() => messageContacts.filter((contact) => {
+    const role = String(contact.role ?? '').toUpperCase()
+    return role.includes('ADMIN') || role === 'STAFF' || role === 'ADMINISTRATIVE_STAFF'
+  }).sort((left, right) => `${left.lastName} ${left.firstName}`.localeCompare(`${right.lastName} ${right.firstName}`)), [messageContacts])
+
+  const toggleReportRecipient = (recipientId: string) => {
+    setReportRecipientIds((current) => current.includes(recipientId)
+      ? current.filter((id) => id !== recipientId)
+      : [...current, recipientId])
+  }
+
+  const buildTeacherOperationalReport = () => {
+    const range = teacherReportRange(reportPeriod)
+    const selectedCourse = reportCourseId === 'all' ? undefined : courses.find((course) => course.id === reportCourseId)
+    const scopedIds = new Set(selectedCourse?.studentIds ?? teacherStudents.map((student) => student.id))
+    const scopedStudents = teacherStudents.filter((student) => scopedIds.has(student.id))
+    const inRange = (value?: string | Date | null) => {
+      if (!value) return false
+      const date = new Date(value)
+      return !Number.isNaN(date.getTime()) && date >= range.start && date <= range.end
+    }
+    const scopedAssignments = officialCourseAssignments.filter((assignment) => (
+      (!selectedCourse || assignment.courseId === selectedCourse.id)
+      && inRange(assignment.publishedAt ?? assignment.dueDate ?? assignment.createdAt)
+    ))
+    const scopedGrades = officialCourseGrades.filter((grade) => (
+      (!selectedCourse || grade.courseId === selectedCourse.id)
+      && inRange(grade.createdAt)
+    ))
+    const scopedAttendance = attendanceEntries.filter((entry) => (
+      scopedIds.has(entry.studentId)
+      && (!selectedCourse || toClassKey(entry.className) === toClassKey(selectedCourse.className || selectedCourse.gradeLevels[0]))
+      && inRange(entry.date)
+    ))
+    const scopedIncidents = disciplineList.filter((incident) => (
+      (!incident.studentId || scopedIds.has(incident.studentId))
+      && inRange(incident.createdAt ?? incident.date)
+    ))
+    const attendanceValues = scopedStudents.map((student) => student.attendance).filter((value): value is number => typeof value === 'number')
+    const attendanceAverage = attendanceValues.length
+      ? Math.round(attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length)
+      : null
+    const missingAssignments = scopedStudents.reduce((sum, student) => sum + (student.missingAssignments ?? 0), 0)
+    const atRisk = scopedStudents.filter((student) => ['high', 'medium'].includes(String(student.risk).toLowerCase()))
+    const teacherName = [user?.lastName, user?.middleName, user?.firstName].filter(Boolean).join(' ') || 'Teacher'
+    const scopeLabel = selectedCourse
+      ? `${selectedCourse.name} · ${selectedCourse.gradeLevels.join(', ')}`
+      : tr('Tous mes cours et classes', 'All my courses and classes')
+
+    return {
+      id: `TR-${Date.now()}`,
+      period: reportPeriod,
+      dateFrom: range.from,
+      dateTo: range.to,
+      teacher: teacherName,
+      scopeCourseId: selectedCourse?.id ?? 'all',
+      scopeLabel,
+      generatedAt: new Date().toISOString(),
+      students: scopedStudents.length,
+      classes: selectedCourse ? 1 : new Set(courses.flatMap((course) => course.gradeLevels)).size,
+      activitiesPublished: scopedAssignments.length,
+      gradesRecorded: scopedGrades.length,
+      attendanceRecords: scopedAttendance.length,
+      attendanceAverage,
+      missingAssignments,
+      incidents: scopedIncidents.length,
+      learnersRequiringFollowUp: atRisk.length,
+      observations: reportObservation.trim(),
+      actions: reportActions.trim(),
+      evidence: {
+        assignments: scopedAssignments.map((assignment) => ({ id: assignment.id, title: assignment.title, course: assignment.courseName, dueDate: assignment.dueDate, type: assignment.type })),
+        studentSummary: scopedStudents.map((student) => ({ id: student.id, studentNumber: student.studentNumber, name: student.name, grade: canonicalClassLabel(student.grade, student.section), average: student.average ?? null, attendance: student.attendance ?? null, risk: student.risk ?? 'unassessed', missingAssignments: student.missingAssignments ?? 0 })),
+        incidents: scopedIncidents.map((incident) => ({ id: incident.id, student: incident.student, category: incident.category, level: incident.level, status: incident.status, createdAt: incident.createdAt ?? incident.date })),
+      },
     }
   }
 
+  const saveTeacherOperationalReport = async (notify: boolean) => {
+    const baseReport = buildTeacherOperationalReport()
+    if (!baseReport.students) return runAction(tr('Aucun élève officiel ne correspond à ce périmètre.', 'No official learner matches this report scope.'), true)
+    const recipients = reportAuthorityContacts.filter((contact) => reportRecipientIds.includes(contact.id))
+    if (notify && !recipients.length) return runAction(tr('Sélectionnez au moins un responsable autorisé.', 'Select at least one authorized recipient.'), true)
+    setReportSaving(true)
+    try {
+      const messageBody = [
+        'KCS NEXUS AI — TEACHER OPERATIONAL REPORT',
+        `${tr('Période', 'Period')}: ${baseReport.period} · ${baseReport.dateFrom} — ${baseReport.dateTo}`,
+        `${tr('Enseignant', 'Teacher')}: ${baseReport.teacher}`,
+        `${tr('Périmètre', 'Scope')}: ${baseReport.scopeLabel}`,
+        `${tr('Élèves', 'Learners')}: ${baseReport.students}`,
+        `${tr('Activités publiées', 'Published activities')}: ${baseReport.activitiesPublished}`,
+        `${tr('Notes enregistrées', 'Recorded grades')}: ${baseReport.gradesRecorded}`,
+        `${tr('Présence moyenne vérifiée', 'Verified attendance average')}: ${baseReport.attendanceAverage ?? 'N/A'}%`,
+        `${tr('Travaux manquants', 'Missing work')}: ${baseReport.missingAssignments}`,
+        `${tr('Élèves à suivre', 'Learners requiring follow-up')}: ${baseReport.learnersRequiringFollowUp}`,
+        `${tr('Incidents', 'Incidents')}: ${baseReport.incidents}`,
+        `${tr('Observations de l’enseignant', 'Teacher observations')}: ${baseReport.observations || tr('Aucune observation ajoutée.', 'No observation added.')}`,
+        `${tr('Actions et prochaines étapes', 'Actions and next steps')}: ${baseReport.actions || tr('Aucune action ajoutée.', 'No action added.')}`,
+        '',
+        tr('Le dossier détaillé et ses preuves restent enregistrés dans KCS Nexus.', 'The detailed record and its evidence remain stored in KCS Nexus.'),
+      ].join('\n')
+      const deliveryResults = notify ? await Promise.allSettled(recipients.map((recipient) => messagesAPI.send({
+        recipientId: recipient.id,
+        subject: `${baseReport.period} teacher report · ${baseReport.scopeLabel}`,
+        body: messageBody,
+      }))) : []
+      const delivered = deliveryResults.filter((result) => result.status === 'fulfilled').length
+      const report = {
+        ...baseReport,
+        status: notify ? `Submitted · ${delivered}/${recipients.length} delivered` : 'Draft saved',
+        recipients: recipients.map((recipient, index) => ({
+          id: recipient.id,
+          name: [recipient.lastName, recipient.firstName].filter(Boolean).join(' '),
+          role: recipient.role,
+          delivery: deliveryResults[index]?.status ?? 'not-requested',
+        })),
+      }
+      const nextReports = [report, ...submittedTeacherReports].slice(0, 100)
+      if (!await persistWorkspace({ submittedTeacherReports: nextReports })) return
+      setSubmittedTeacherReports(nextReports)
+      downloadTeacherFile(`kcs-${reportPeriod.toLowerCase()}-teacher-report-${rangeSafeFilePart(report.dateFrom)}-${rangeSafeFilePart(report.dateTo)}.json`, JSON.stringify(report, null, 2), 'application/json')
+      if (notify && delivered !== recipients.length) {
+        runAction(tr(`Rapport enregistré. ${delivered}/${recipients.length} destinataire(s) informé(s); vérifiez les échecs dans la messagerie.`, `Report saved. ${delivered}/${recipients.length} recipient(s) notified; review failed deliveries in Messages.`), delivered === 0)
+      } else {
+        runAction(notify
+          ? tr(`Rapport enregistré et transmis à ${delivered} responsable(s).`, `Report saved and sent to ${delivered} authorized recipient(s).`)
+          : tr('Brouillon du rapport enregistré dans KCS Nexus.', 'Report draft saved in KCS Nexus.'))
+      }
+    } catch (error: any) {
+      runAction(error?.response?.data?.message || tr('Le rapport n’a pas pu être enregistré.', 'The report could not be saved.'), true)
+    } finally {
+      setReportSaving(false)
+    }
+  }
+
+
+  const reportPreview = buildTeacherOperationalReport()
   const addReportCardCourse = () => {
     setReportCardRows((current) => [
       ...current,
@@ -741,7 +916,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       ...(existingCourse ?? {}),
       id: existingCourse?.id ?? `course-${Date.now()}`,
       name: courseDraft.name.trim(),
-      abbreviation: courseDraft.abbreviation.trim(),
+      abbreviation: generateCourseAbbreviation(courseDraft.name),
       creditHours: normalizeCreditHours(courseDraft.creditHours),
       teacher: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Teacher',
       className: selectedGrade,
@@ -1286,13 +1461,14 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                       Subject name
-                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => { setCourseDraft((draft) => ({ ...draft, name: event.target.value })); if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined })) }} />
+                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => { const name = event.target.value; setCourseDraft((draft) => ({ ...draft, name, abbreviation: generateCourseAbbreviation(name) })); if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined })) }} />
                       {courseErrors.name && <p className="field-error" role="alert">{courseErrors.name}</p>}
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Abbreviation
-                        <input className={inputClass} value={courseDraft.abbreviation} onChange={(event) => setCourseDraft((draft) => ({ ...draft, abbreviation: event.target.value }))} />
+                        <input className={`${inputClass} cursor-not-allowed bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-950/70`} value={courseDraft.abbreviation} readOnly aria-readonly="true" />
+                        <span className="text-[11px] font-normal text-gray-400">{tr('G�n�r�e automatiquement depuis le nom du cours.', 'Generated automatically from the subject name.')}</span>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Credit Hours
@@ -2040,7 +2216,86 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'reports' && (
         <div className="space-y-6">
-          <div className={panelClass}><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">Operational report generator</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">Administrative Staff submission</h3></div><div className="flex flex-wrap gap-2"><select value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value as 'Daily' | 'Weekly' | 'Annual')} className={inputClass}><option>Daily</option><option>Weekly</option><option>Annual</option></select><button type="button" onClick={printTeacherReport} className={compactButton}><Printer size={16}/> Print / PDF</button><button type="button" onClick={submitTeacherReport} className={compactButton}><Upload size={16}/> Submit to staff</button></div></div><div className="mt-5 grid gap-3 md:grid-cols-4">{[['Period', reportPeriod], ['Students', teacherStudents.length], ['Classes', courses.length], ['Generated', new Date().toLocaleDateString()]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-xs uppercase text-gray-400">{label}</p><p className="mt-1 font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}</div>{actionMessage && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300">{actionMessage}</p>}</div>
+          <div className={panelClass}>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-gold-600">{tr('Rapport opérationnel vérifié', 'Verified operational report')}</p>
+                <h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{tr('Activités réelles de la classe et suivi des élèves', 'Real class activity and learner follow-up')}</h3>
+                <p className="mt-2 max-w-3xl text-sm text-gray-500 dark:text-gray-300">{tr('Le rapport utilise uniquement les cours, inscriptions, travaux, notes, présences et incidents disponibles dans Nexus. Vous pouvez compléter l’analyse avant de l’enregistrer ou de la transmettre.', 'The report uses only courses, enrollments, assignments, grades, attendance and incidents available in Nexus. Complete the analysis before saving or submitting it.')}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={printTeacherReport} className={compactButton}><Printer size={16}/> {tr('Imprimer / PDF', 'Print / PDF')}</button>
+                <button type="button" disabled={reportSaving} onClick={() => void saveTeacherOperationalReport(false)} className="rounded-xl border border-kcs-blue-300 bg-white px-4 py-2 text-sm font-semibold text-kcs-blue-800 disabled:opacity-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-kcs-blue-100"><FileText size={16} className="mr-2 inline"/>{tr('Enregistrer le brouillon', 'Save draft')}</button>
+                <button type="button" disabled={reportSaving} onClick={() => void saveTeacherOperationalReport(true)} className={`${compactButton} disabled:opacity-50`}><Upload size={16}/> {reportSaving ? tr('Traitement…', 'Processing…') : tr('Transmettre et notifier', 'Submit and notify')}</button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                {tr('Période du rapport', 'Report period')}
+                <select value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value as TeacherReportPeriod)} className={inputClass}>
+                  <option value="Daily">{tr('Journalier', 'Daily')}</option>
+                  <option value="Weekly">{tr('Hebdomadaire', 'Weekly')}</option>
+                  <option value="Monthly">{tr('Mensuel', 'Monthly')}</option>
+                  <option value="Annual">{tr('Annuel scolaire', 'Academic annual')}</option>
+                </select>
+                <span className="text-[11px] font-normal text-gray-400">{reportPreview.dateFrom} — {reportPreview.dateTo}</span>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                {tr('Cours ou périmètre', 'Course or scope')}
+                <select value={reportCourseId} onChange={(event) => setReportCourseId(event.target.value)} className={inputClass}>
+                  <option value="all">{tr('Tous mes cours et classes', 'All my courses and classes')}</option>
+                  {courses.map((course) => <option key={course.id} value={course.id}>{course.name} · {course.gradeLevels.join(', ')}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              {[
+                [tr('Élèves', 'Learners'), reportPreview.students],
+                [tr('Activités', 'Activities'), reportPreview.activitiesPublished],
+                [tr('Notes', 'Grades'), reportPreview.gradesRecorded],
+                [tr('Présence', 'Attendance'), reportPreview.attendanceAverage == null ? 'N/A' : `${reportPreview.attendanceAverage}%`],
+                [tr('À suivre', 'Follow-up'), reportPreview.learnersRequiringFollowUp],
+                [tr('Incidents', 'Incidents'), reportPreview.incidents],
+              ].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50/80 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="text-xs uppercase text-gray-500 dark:text-gray-400">{label}</p><p className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                {tr('Observations factuelles de l’enseignant', 'Teacher factual observations')}
+                <textarea className={`${inputClass} min-h-28`} value={reportObservation} onChange={(event) => setReportObservation(event.target.value)} placeholder={tr('Progrès, difficultés, participation, comportement, événements importants…', 'Progress, challenges, participation, conduct, important events…')} />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
+                {tr('Actions prises et prochaines étapes', 'Actions taken and next steps')}
+                <textarea className={`${inputClass} min-h-28`} value={reportActions} onChange={(event) => setReportActions(event.target.value)} placeholder={tr('Soutien, rencontre, intervention, communication familiale, objectifs…', 'Support, meeting, intervention, family communication, targets…')} />
+              </label>
+            </div>
+
+            <fieldset className="mt-5 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50/60 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
+              <legend className="px-2 text-sm font-bold text-kcs-blue-900 dark:text-white">{tr('Responsables à informer', 'Authorized recipients')}</legend>
+              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{tr('L’envoi utilise la messagerie institutionnelle Nexus et reste dans l’historique.', 'Delivery uses institutional Nexus messaging and remains in the message history.')}</p>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {reportAuthorityContacts.map((contact) => <label key={contact.id} className="flex items-center gap-3 rounded-xl bg-white p-3 text-sm dark:bg-kcs-blue-900/70">
+                  <input type="checkbox" checked={reportRecipientIds.includes(contact.id)} onChange={() => toggleReportRecipient(contact.id)} className="h-4 w-4 rounded border-kcs-blue-300 text-kcs-blue-700 focus:ring-kcs-blue-500"/>
+                  <span className="min-w-0"><strong className="block truncate text-kcs-blue-900 dark:text-white">{[contact.lastName, contact.firstName].filter(Boolean).join(' ')}</strong><span className="text-xs text-gray-500 dark:text-gray-400">{contact.role}</span></span>
+                </label>)}
+                {!reportAuthorityContacts.length && <p className="text-sm text-amber-700 dark:text-amber-300">{tr('Aucun responsable autorisé n’est actuellement disponible dans le répertoire de messagerie.', 'No authorized recipient is currently available in the messaging directory.')}</p>}
+              </div>
+            </fieldset>
+
+            {actionMessage && <p className={`mt-4 rounded-xl p-3 text-sm font-semibold ${actionIsError ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'}`}>{actionMessage}</p>}
+
+            {submittedTeacherReports.length > 0 && <div className="mt-6 border-t border-kcs-blue-100 pt-5 dark:border-kcs-blue-800">
+              <h4 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Historique des rapports opérationnels', 'Operational report history')}</h4>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {submittedTeacherReports.slice(0, 6).map((report: any) => <article key={String(report.id)} className="rounded-xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/60">
+                  <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-kcs-blue-900 dark:text-white">{report.period} · {report.scopeLabel ?? tr('Tous les cours', 'All courses')}</p><p className="text-xs text-gray-500">{report.dateFrom ?? ''} — {report.dateTo ?? ''}</p></div><span className="badge-blue text-xs">{String(report.status ?? 'Saved')}</span></div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-600 dark:text-gray-300"><span>{report.students ?? 0} {tr('élèves', 'learners')}</span><span>{report.activitiesPublished ?? 0} {tr('activités', 'activities')}</span><span>{report.learnersRequiringFollowUp ?? 0} {tr('à suivre', 'follow-up')}</span></div>
+                </article>)}
+              </div>
+            </div>}
+          </div>
           <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · Average {student.average ?? 'N/A'} · Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <div className={panelClass}>

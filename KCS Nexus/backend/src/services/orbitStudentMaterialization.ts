@@ -95,7 +95,8 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
   const profileData = {
     userId: user.id,
     studentNumber: canonicalNumber,
-    ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim(), section: classParts.section } : {}),
+    ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim() } : {}),
+    ...(classParts.section ? { section: classParts.section } : {}),
     status: (student.status || 'active').toLowerCase(),
     ...(student.photoData !== undefined ? { officialAvatar: student.photoData || null } : {}),
     ...(student.dateOfBirth ? { dateOfBirth: new Date(student.dateOfBirth) } : {}),

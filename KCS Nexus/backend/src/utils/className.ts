@@ -4,6 +4,24 @@ export function splitClassName(className?: string | null) {
     return { grade: 'Grade 1', section: '' }
   }
 
+  const duplicatedGradeMatch = cleanClassName.match(/^grade\s*(\d{1,2})\s+grade\s*\1$/i)
+  if (duplicatedGradeMatch) {
+    const gradeNumber = Number(duplicatedGradeMatch[1])
+    if (gradeNumber >= 1 && gradeNumber <= 12) return { grade: `Grade ${gradeNumber}`, section: '' }
+  }
+
+  const gradeWithSectionMatch = cleanClassName.match(/^grade\s*(\d{1,2})(?:\s+(.+))?$/i)
+  if (gradeWithSectionMatch) {
+    const gradeNumber = Number(gradeWithSectionMatch[1])
+    if (gradeNumber >= 1 && gradeNumber <= 12) {
+      return { grade: `Grade ${gradeNumber}`, section: gradeWithSectionMatch[2]?.trim() || '' }
+    }
+  }
+
+  const kindergartenWithSectionMatch = cleanClassName.match(/^k(?:indergarten)?\s*([3-5])(?:\s+(.+))?$/i)
+  if (kindergartenWithSectionMatch) {
+    return { grade: `K${kindergartenWithSectionMatch[1]}`, section: kindergartenWithSectionMatch[2]?.trim() || '' }
+  }
   const sectionMatch = cleanClassName.match(/^(.*?)(?:\s+([A-Z]))?$/)
   const rawGrade = sectionMatch?.[1]?.trim() || cleanClassName
   const section = sectionMatch?.[2] || ''
@@ -29,7 +47,12 @@ export function splitClassName(className?: string | null) {
 }
 
 export function normalizeClassParts(grade?: string | null, section?: string | null) {
-  return splitClassName([grade, section].filter((value) => Boolean(value?.trim())).join(' '))
+  const cleanSection = (section ?? '').trim().replace(/\s+/g, ' ')
+  if (cleanSection) {
+    const normalizedGrade = splitClassName(grade)
+    return { grade: normalizedGrade.grade, section: cleanSection }
+  }
+  return splitClassName(grade)
 }
 
 function classRank(grade: string) {

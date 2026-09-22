@@ -86,7 +86,11 @@ async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: 
   const students = (directory.students ?? []).filter((student) => {
     if ((student.status ?? 'active').toLowerCase() !== 'active') return false
     const classParts = splitClassName(student.className)
-    return belongsToTeacherClasses(classParts, assignedClasses)
+    return assignedClasses.some((assignedClass) => {
+      const sameGrade = assignedClass.grade.trim().toLowerCase() === classParts.grade.trim().toLowerCase()
+      if (!sameGrade) return false
+      return !classParts.section || teacherClassKey(classParts) === teacherClassKey(assignedClass)
+    })
   })
   await Promise.all(students.map((student) => ensureOrbitStudentProfile(student)))
 }
@@ -124,7 +128,16 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
     orderBy: { user: { lastName: 'asc' } },
   })
   const visibleStudents = registryStudents.filter((student) => belongsToTeacherClasses(student, assignedClasses))
+  const assignedGrades = new Set(assignedClasses.map((value) => value.grade.trim().toLowerCase()))
+  const unassignedStudentCount = registryStudents.filter((student) => {
+    const normalized = normalizeClassParts(student.grade, student.section)
+    return assignedGrades.has(normalized.grade.trim().toLowerCase()) && !normalized.section
+  }).length
   const classesByKey = new Map<string, { grade: string; section: string; studentCount: number }>()
+  for (const assignedClass of assignedClasses) {
+    const normalized = normalizeClassParts(assignedClass.grade, assignedClass.section)
+    classesByKey.set(teacherClassKey(normalized), { ...normalized, studentCount: 0 })
+  }
   for (const student of visibleStudents) {
     const value = normalizeClassParts(student.grade, student.section)
     const key = teacherClassKey(value)
@@ -150,6 +163,8 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
     class: { grade: requestedClass.grade, section: requestedClass.section },
     classes,
     summary: summarize(students.flatMap((student) => student.attendanceRecords.slice(0, 1))),
+    requiresRosterAssignment: unassignedStudentCount > 0,
+    unassignedStudentCount,
     students: students.map((student) => ({
       id: student.id,
       studentNumber: student.studentNumber,

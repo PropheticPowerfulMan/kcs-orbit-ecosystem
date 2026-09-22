@@ -110,7 +110,7 @@ const AcademicsPage = () => {
             </span>
             <h1 className="text-5xl md:text-6xl font-bold font-display text-white mb-5">
               Academic{' '}
-              <span className="text-gradient-gold">Programs</span>
+              <span className="bg-gradient-to-r from-kcs-gold-300 via-kcs-gold-400 to-white bg-clip-text text-transparent drop-shadow-sm">Programs</span>
             </h1>
             <p className="text-xl text-kcs-blue-100 max-w-2xl mx-auto">
               A world-class American curriculum designed to challenge, inspire, and prepare students for excellence at the highest level.
