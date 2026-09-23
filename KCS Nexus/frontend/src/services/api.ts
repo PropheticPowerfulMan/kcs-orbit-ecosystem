@@ -393,9 +393,9 @@ export const aiAPI = {
   chat: (messages: object[], language?: string) =>
     api.post('/ai/chat', { messages, language }),
   teacherAssistant: (
-    task: 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
+    task: 'dashboard-insights' | 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
     context?: string,
-  ) => api.post('/ai/teacher-assistant', { task, context }),
+  ) => api.post('/ai/teacher-assistant', { task, context }, { timeout: 45000 }),
   tutor: (subject: string, question: string, studentId?: string) =>
     api.post('/ai/tutor', { subject, question, studentId }),
   generateQuiz: (subject: string, topic: string, difficulty: string) =>
@@ -507,7 +507,7 @@ export const academicRecordsAPI = {
   studentRegistry: () => api.get('/academic-records/student-registry'),
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
   myFinalGrades: () => api.get('/academic-records/final-grades/me'),
-  teacherReportDashboard: (params: { academicYear: string; term: string }) => api.get('/academic-records/report-cards/teacher-dashboard', { params }),
+  teacherReportDashboard: (params: { academicYear: string; term: string }) => api.get('/academic-records/report-cards/teacher-dashboard', { params, timeout: 30_000 }),
   saveTeacherReportDraft: (studentId: string, data: object) => api.put(`/academic-records/report-cards/teacher-draft/${studentId}`, data),
   submitTeacherReport: (studentId: string, data: object) => api.post(`/academic-records/report-cards/teacher-submit/${studentId}`, data),
   review: (params?: object) => api.get('/academic-records/review', { params }),

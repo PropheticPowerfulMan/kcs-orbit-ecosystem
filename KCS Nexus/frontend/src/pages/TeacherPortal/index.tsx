@@ -1,6 +1,6 @@
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Bell, BookOpen, Brain, Calendar, CheckCircle2, ChevronRight,
@@ -133,7 +133,7 @@ type ProfileDraft = {
   avatar: string
 }
 
-type TeacherAiTask = 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary'
+type TeacherAiTask = 'dashboard-insights' | 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary'
 
 type TeacherAiTool = {
   task: TeacherAiTask
@@ -317,6 +317,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [enrollmentStatusFilter, setEnrollmentStatusFilter] = useState<'all' | 'selected' | 'unselected'>('all')
   const [enrollmentAutoSync, setEnrollmentAutoSync] = useState(true)
   const [enrollmentSaving, setEnrollmentSaving] = useState(false)
+  const [courseSaving, setCourseSaving] = useState(false)
   const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState('')
   const [gradebookColumnsByCourse, setGradebookColumnsByCourse] = useState<Record<string, GradebookColumn[]>>({})
   const [gradebookScores, setGradebookScores] = useState<Record<string, string>>({})
@@ -896,6 +897,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const createCourse = async () => {
+    if (courseSaving) return
     const selectedGrade = canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
     const errors: { name?: string; grade?: string } = {}
     if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
@@ -911,8 +913,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       runAction('The subject being edited is no longer available. Reload My Courses and try again.', true)
       return
     }
+    setCourseSaving(true)
     const roster = getRosterForClass(courseDraft.className || selectedGrade)
-    const nextCourse = {
+    let nextCourse = {
       ...(existingCourse ?? {}),
       id: existingCourse?.id ?? `course-${Date.now()}`,
       name: courseDraft.name.trim(),
@@ -927,7 +930,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       status: existingCourse ? 'updated' : 'draft',
     }
     try {
-      await teacherWorkspaceAPI.syncCourse({
+      const response = await teacherWorkspaceAPI.syncCourse({
         id: nextCourse.id,
         name: nextCourse.name,
         abbreviation: nextCourse.abbreviation,
@@ -938,8 +941,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         studentIds: nextCourse.studentIds,
         studentNumbers: roster.map((student) => student.studentNumber).filter(Boolean),
       })
+      const officialCourse = response.data?.data
+      nextCourse = { ...nextCourse, id: officialCourse?.id ?? nextCourse.id, abbreviation: officialCourse?.code ?? nextCourse.abbreviation }
     } catch (error: any) {
       runAction(error?.response?.data?.message || 'The subject could not be synchronized with the official academic registry.', true)
+      setCourseSaving(false)
       return
     }
     const nextCourses = existingCourse
@@ -947,7 +953,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       : [nextCourse, ...courses]
     const existingIds = new Set(teacherStudents.map((student) => student.id))
     const nextStudents = [...roster.filter((student) => !existingIds.has(student.id)), ...teacherStudents]
-    if (!await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) enrolled.`)) return
+    const persisted = await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) enrolled.`)
+    setCourseSaving(false)
+    if (!persisted) return
     setCourses(nextCourses)
     setTeacherStudents(nextStudents)
     setSelectedGradebookCourseId(nextCourse.id)
@@ -1512,7 +1520,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       {courseErrors.grade && <p className="field-error mt-1" role="alert">{courseErrors.grade}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{editingCourseId ? 'Save class' : 'Create a class'}</button>
+                      <button type="button" disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? 'Saving securely…' : editingCourseId ? 'Save class' : 'Create a class'}</button>
                       {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>
@@ -1627,20 +1635,20 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
       {segment === 'courses' && enrollmentDialogCourse && (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6"
+          className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-6"
           onMouseDown={() => { if (!enrollmentSaving) setEnrollmentDialogCourseId(null) }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="course-enrollment-title"
-            className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-kcs-blue-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950"
+            className="flex h-[100dvh] max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-kcs-blue-200 bg-white shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-3xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <header className="flex flex-col gap-4 border-b border-gray-100 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-5 py-5 text-white sm:flex-row sm:items-start sm:justify-between sm:px-7">
+            <header className="relative flex flex-row items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-4 py-3 text-white sm:px-7 sm:py-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-300">Official course roster</p>
-                <h3 id="course-enrollment-title" className="mt-1 font-display text-2xl font-bold">{enrollmentDialogCourse.name}</h3>
+                <h3 id="course-enrollment-title" className="mt-1 pr-2 font-display text-xl font-bold sm:text-2xl">{enrollmentDialogCourse.name}</h3>
                 <p className="mt-1 text-sm text-blue-100">
                   {canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0])}
                   {' · '}{enrollmentDraftIds.length} enrolled
@@ -1652,32 +1660,32 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 aria-label="Close enrollment manager"
                 disabled={enrollmentSaving}
                 onClick={() => setEnrollmentDialogCourseId(null)}
-                className="self-end rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20 disabled:opacity-50 sm:self-auto"
+                className="flex-shrink-0 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20 disabled:opacity-50"
               >
                 <X size={22} />
               </button>
             </header>
 
-            <div className="grid gap-3 border-b border-gray-100 bg-slate-50 px-5 py-4 sm:grid-cols-3 sm:px-7 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40">
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-kcs-blue-900">
-                <p className="text-2xl font-bold text-kcs-blue-900 dark:text-white">{enrollmentDraftIds.length}</p>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-300">Selected for this course</p>
+            <div className="grid grid-cols-3 gap-2 border-b border-gray-100 bg-slate-50 px-3 py-3 sm:gap-3 sm:px-7 sm:py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40">
+              <div className="rounded-xl bg-white px-2 py-2 shadow-sm sm:rounded-2xl sm:px-4 sm:py-3 dark:bg-kcs-blue-900">
+                <p className="text-xl font-bold text-kcs-blue-900 sm:text-2xl dark:text-white">{enrollmentDraftIds.length}</p>
+                <p className="text-[10px] font-semibold leading-tight text-gray-500 sm:text-xs dark:text-gray-300">Selected for this course</p>
               </div>
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-kcs-blue-900">
-                <p className="text-2xl font-bold text-kcs-blue-900 dark:text-white">
+              <div className="rounded-xl bg-white px-2 py-2 shadow-sm sm:rounded-2xl sm:px-4 sm:py-3 dark:bg-kcs-blue-900">
+                <p className="text-xl font-bold text-kcs-blue-900 sm:text-2xl dark:text-white">
                   {getRosterForClass(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0]).length}
                 </p>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-300">Official students in the course class</p>
+                <p className="text-[10px] font-semibold leading-tight text-gray-500 sm:text-xs dark:text-gray-300">Official class roster</p>
               </div>
-              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-kcs-blue-900">
-                <p className="text-2xl font-bold text-kcs-blue-900 dark:text-white">{visibleEnrollmentStudents.length}</p>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-300">Visible with current filters</p>
+              <div className="rounded-xl bg-white px-2 py-2 shadow-sm sm:rounded-2xl sm:px-4 sm:py-3 dark:bg-kcs-blue-900">
+                <p className="text-xl font-bold text-kcs-blue-900 sm:text-2xl dark:text-white">{visibleEnrollmentStudents.length}</p>
+                <p className="text-[10px] font-semibold leading-tight text-gray-500 sm:text-xs dark:text-gray-300">Visible now</p>
               </div>
             </div>
 
-            <div className="grid gap-3 border-b border-gray-100 px-5 py-4 lg:grid-cols-[minmax(240px,1fr)_190px_180px_auto] lg:items-center sm:px-7 dark:border-kcs-blue-800">
+            <div className="grid grid-cols-2 gap-2 border-b border-gray-100 px-3 py-3 lg:grid-cols-[minmax(240px,1fr)_190px_180px_auto] lg:items-center sm:gap-3 sm:px-7 sm:py-4 dark:border-kcs-blue-800">
               <input
-                className={inputClass}
+                className={`${inputClass} col-span-2 lg:col-span-1`}
                 value={enrollmentQuery}
                 onChange={(event) => setEnrollmentQuery(event.target.value)}
                 placeholder="Search by student name, number, or class..."
@@ -1692,13 +1700,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <option value="selected">Enrolled only</option>
                 <option value="unselected">Not enrolled</option>
               </select>
-              <div className="flex flex-wrap gap-2">
+              <div className="col-span-2 grid grid-cols-2 gap-2 lg:col-span-1">
                 <button type="button" onClick={selectVisibleEnrollment} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-xs font-bold text-white hover:bg-kcs-blue-800">Select visible</button>
                 <button type="button" onClick={deselectVisibleEnrollment} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">Deselect visible</button>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-kcs-blue-700 dark:bg-kcs-blue-900/40">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-7 sm:py-5">
+              <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-3 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/40">
                 <div>
                   <p className="font-bold text-kcs-blue-900 dark:text-white">
                     {enrollmentAutoSync ? 'Automatic class synchronization active' : 'Custom enrollment'}
@@ -1741,7 +1749,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                           }} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-red-50 hover:text-red-700 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300">Clear class</button>
                         </div>
                       </div>
-                      <div className="grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-2 p-2 sm:grid-cols-2 sm:p-3 xl:grid-cols-3">
                         {students.map((student, studentIndex) => {
                           const selected = enrollmentDraftIds.includes(student.id)
                           return (
@@ -1749,7 +1757,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                               type="button"
                               key={student.id}
                               onClick={() => toggleEnrollmentDraft(student.id)}
-                              className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${selected
+                              className={`flex min-h-14 items-center gap-2 rounded-xl border px-2.5 py-2.5 text-left transition sm:gap-3 sm:px-3 sm:py-3 ${selected
                                 ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900'
                                 : 'border-gray-200 bg-white hover:border-kcs-blue-300 hover:bg-slate-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60'}`}
                             >
@@ -1769,11 +1777,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               )}
             </div>
 
-            <footer className="flex flex-col-reverse gap-3 border-t border-gray-100 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7 dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Changes apply only after saving. Cancel leaves the existing roster untouched.</p>
-              <div className="flex gap-2">
-                <button type="button" disabled={enrollmentSaving} onClick={() => setEnrollmentDialogCourseId(null)} className="rounded-xl border-2 border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-800 dark:text-kcs-gold-200 dark:hover:bg-kcs-blue-700">Cancel</button>
-                <button type="button" disabled={enrollmentSaving} onClick={() => void saveCourseEnrollment()} className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50">
+            <footer className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-gray-100 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
+              <p className="hidden text-xs text-gray-500 sm:block dark:text-gray-400">Changes apply only after saving. Cancel leaves the existing roster untouched.</p>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <button type="button" disabled={enrollmentSaving} onClick={() => setEnrollmentDialogCourseId(null)} className="flex-1 rounded-xl border-2 border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 sm:flex-none sm:px-5 dark:border-kcs-gold-400 dark:bg-kcs-blue-800 dark:text-kcs-gold-200 dark:hover:bg-kcs-blue-700">Cancel</button>
+                <button type="button" disabled={enrollmentSaving} onClick={() => void saveCourseEnrollment()} className="flex-1 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50 sm:flex-none sm:px-5">
                   {enrollmentSaving ? 'Saving...' : `Save ${enrollmentDraftIds.length} enrolled`}
                 </button>
               </div>
@@ -2458,6 +2466,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 }
 
 const TeacherDashboardHome = () => {
+  const location = useLocation()
   const [activeAiTool, setActiveAiTool] = useState<TeacherAiTool | null>(null)
   const [aiResult, setAiResult] = useState('')
   const [aiInstruction, setAiInstruction] = useState('')
@@ -2517,6 +2526,7 @@ const TeacherDashboardHome = () => {
   ]
 
   const aiTools: TeacherAiTool[] = [
+    { task: 'dashboard-insights', title: 'Live teaching insights', detail: 'Prioritize the most important actions from your verified courses, learners, grades, attendance, and assignments.' },
     { task: 'lesson-plan', title: 'Lesson plan', detail: 'Create a differentiated 45-minute lesson from today’s schedule.' },
     { task: 'quiz', title: 'Quiz builder', detail: 'Generate questions from the current subject and class level.' },
     { task: 'feedback', title: 'Smart feedback', detail: 'Improve comments for report cards and parent meetings.' },
@@ -2541,6 +2551,13 @@ const TeacherDashboardHome = () => {
       setIsAiGenerating(false)
     }
   }
+
+  useEffect(() => {
+    const openInsights = () => void generateTeacherAi(aiTools[0])
+    window.addEventListener('kcs:open-teacher-ai-insights', openInsights)
+    if (new URLSearchParams(location.search).get('aiInsights') === 'open') openInsights()
+    return () => window.removeEventListener('kcs:open-teacher-ai-insights', openInsights)
+  }, [location.search])
 
   return (
     <>
@@ -2814,8 +2831,16 @@ const TeacherPortal = () => {
   const { user } = useAuthStore()
   const language = useUIStore((state) => state.language)
   const location = useLocation()
+  const navigate = useNavigate()
   const activeSegment = getTeacherSegment(location.pathname)
   const isDashboard = activeSegment === 'dashboard'
+  const openTeacherAiInsights = () => {
+    if (!isDashboard) {
+      navigate('/portal/teacher?aiInsights=open')
+      return
+    }
+    window.dispatchEvent(new Event('kcs:open-teacher-ai-insights'))
+  }
 
   return (
     <div className="portal-shell flex">
@@ -2836,7 +2861,7 @@ const TeacherPortal = () => {
               <Link to="/portal/teacher/messages" className="btn-primary w-full justify-center py-2 text-sm sm:w-auto">
                 Inbox
               </Link>
-              <button type="button" onClick={() => document.getElementById('teacher-ai-insights')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="btn-gold flex w-full items-center justify-center gap-2 py-2 text-sm sm:w-auto">
+              <button type="button" onClick={openTeacherAiInsights} className="btn-gold flex w-full items-center justify-center gap-2 py-2 text-sm sm:w-auto">
                 <Brain size={16} /> AI Insights
               </button>
             </div>

@@ -176,7 +176,20 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
  ])
  const gradeByEnrollment=new Map(submittedGrades.map(item=>[`${item.studentId}:${item.courseId}`,item]))
  const learners=students.map(student=>{
-  const subjects=student.enrollments.map(enrollment=>{
+  const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
+   const subjectKey=[
+    enrollment.course.name,
+    enrollment.course.grade,
+    enrollment.course.teacher.user.lastName,
+    enrollment.course.teacher.user.firstName,
+   ].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
+   const current=bySubject.get(subjectKey)
+   const currentGrade=current?gradeByEnrollment.get(`${student.id}:${current.courseId}`):null
+   const candidateGrade=gradeByEnrollment.get(`${student.id}:${enrollment.courseId}`)
+   if(!current||(!currentGrade&&candidateGrade))bySubject.set(subjectKey,enrollment)
+   return bySubject
+  },new Map<string,(typeof student.enrollments)[number]>()).values()]
+  const subjects=uniqueEnrollments.map(enrollment=>{
    const grade=gradeByEnrollment.get(`${student.id}:${enrollment.courseId}`)
    return{
     courseId:enrollment.course.id,
@@ -190,7 +203,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    }
   })
   const submitted=subjects.filter(subject=>subject.percentage!==null)
-  const expectedCourseIds=new Set(student.enrollments.map(item=>item.courseId))
+  const expectedCourseIds=new Set(uniqueEnrollments.map(item=>item.courseId))
   const weightedGrades=submittedGrades.filter(item=>item.studentId===student.id&&expectedCourseIds.has(item.courseId))
   const reportCard=student.reportCards[0]??null
   return{

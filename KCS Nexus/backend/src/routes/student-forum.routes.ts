@@ -36,13 +36,32 @@ const analyzeTone = (text: string) => {
   return { sentiment: 'neutral', priority: 'normal' }
 }
 
+const resolveForumActorId = async (req: AuthenticatedRequest) => {
+  if (!req.user) throw new ApiError(401, 'Authentication required')
+  if (req.user.sub !== 'configured-superadmin') return req.user.sub
+
+  const superAdmin = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: { equals: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com', mode: 'insensitive' } },
+        { accessCode: 'ACC-ADM-SUPER1' },
+      ],
+      role: 'ADMIN',
+    },
+    select: { id: true },
+  })
+  if (!superAdmin) throw new ApiError(500, 'The configured superadministrator account is not synchronized with the Nexus user registry.')
+  return superAdmin.id
+}
+
 studentForumRouter.get('/posts', authenticate, requireRoles('admin', 'teacher', 'student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
+  const actorId = await resolveForumActorId(req)
   const posts = await prisma.studentForumPost.findMany({
     include: {
       author: true,
       comments: { include: { author: true }, orderBy: { createdAt: 'asc' } },
-      likes: { where: { userId: req.user.sub }, select: { id: true } },
+      likes: { where: { userId: actorId }, select: { id: true } },
       _count: { select: { likes: true } },
     },
     orderBy: { updatedAt: 'desc' },
@@ -56,6 +75,7 @@ studentForumRouter.get('/posts', authenticate, requireRoles('admin', 'teacher', 
 
 studentForumRouter.post('/posts', authenticate, requireRoles('student', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
+  const actorId = await resolveForumActorId(req)
   const data = postSchema.parse(req.body)
   const media = validateForumMedia(data.attachmentData, data.attachmentType, data.attachmentName)
   if (!data.content.trim() && !media.attachmentData) throw new ApiError(400, 'A message or attachment is required')
@@ -66,7 +86,7 @@ studentForumRouter.post('/posts', authenticate, requireRoles('student', 'admin')
     data: {
       ...text,
       ...media,
-      authorId: req.user.sub,
+      authorId: actorId,
       sentiment: tone.sentiment,
       priority: tone.priority,
     },
@@ -78,6 +98,7 @@ studentForumRouter.post('/posts', authenticate, requireRoles('student', 'admin')
 
 studentForumRouter.post('/posts/:id/comments', authenticate, requireRoles('student', 'teacher', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
+  const actorId = await resolveForumActorId(req)
   const postId = getRouteParam(req.params.id)
   const data = commentSchema.parse(req.body)
   const content = data.content.trim()
@@ -91,7 +112,7 @@ studentForumRouter.post('/posts/:id/comments', authenticate, requireRoles('stude
   const comment = await prisma.studentForumComment.create({
     data: {
       postId,
-      authorId: req.user.sub,
+      authorId: actorId,
       content,
       ...media,
       sentiment: tone.sentiment,
@@ -120,16 +141,17 @@ studentForumRouter.get('/comments/:id/attachment', authenticate, requireRoles('a
 
 studentForumRouter.post('/posts/:id/likes', authenticate, requireRoles('student', 'teacher', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
+  const actorId = await resolveForumActorId(req)
   const postId = getRouteParam(req.params.id)
   const post = await prisma.studentForumPost.findUnique({ where: { id: postId }, select: { id: true } })
   if (!post) throw new ApiError(404, 'Student forum post not found')
 
-  const key = { postId_userId: { postId, userId: req.user.sub } }
+  const key = { postId_userId: { postId, userId: actorId } }
   const existing = await prisma.studentForumLike.findUnique({ where: key })
   if (existing) {
     await prisma.studentForumLike.delete({ where: key })
   } else {
-    await prisma.studentForumLike.create({ data: { postId, userId: req.user.sub } })
+    await prisma.studentForumLike.create({ data: { postId, userId: actorId } })
   }
   const likeCount = await prisma.studentForumLike.count({ where: { postId } })
   return success(res, { liked: !existing, likeCount })

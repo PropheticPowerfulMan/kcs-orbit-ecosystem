@@ -119,11 +119,18 @@ const buildLocalSchoolAnswer = (question: string, language?: string) => {
 }
 
 const teacherAssistantFallback = (
-  task: 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
+  task: 'dashboard-insights' | 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
   context: string,
+  verifiedSnapshot = '',
 ) => {
   const contextLine = context.trim() ? `\nContext supplied by the teacher: ${context.trim()}` : ''
   const plans = {
+    'dashboard-insights': [
+      'Review the verified snapshot below and address the highest-priority academic or attendance signal first.',
+      'Separate urgent learner follow-up from routine grading and planning work.',
+      'Use only recorded evidence; label missing information instead of guessing.',
+      'Set a measurable next action, an owner, and a short review deadline for each priority.',
+    ],
     'lesson-plan': [
       'Learning objective: state one observable outcome and success criteria.',
       'Launch (5 min): activate prior knowledge with one diagnostic question.',
@@ -157,7 +164,131 @@ const teacherAssistantFallback = (
     ],
   }
 
-  return `${plans[task].map((step, index) => `${index + 1}. ${step}`).join('\n')}${contextLine}\n\nReview and adapt this draft before sharing it with students or families.`
+  const verifiedContext = verifiedSnapshot ? `\n\nVerified live Nexus snapshot:\n${verifiedSnapshot}` : ''
+  return `${plans[task].map((step, index) => `${index + 1}. ${step}`).join('\n')}${verifiedContext}${contextLine}\n\nReview and adapt this draft before sharing it with students or families.`
+}
+
+const buildTeacherInsightSnapshot = async (userId: string) => {
+  const teacher = await prisma.teacherProfile.findUnique({
+    where: { userId },
+    select: {
+      status: true,
+      homeroomGrade: true,
+      homeroomSection: true,
+      user: { select: { firstName: true, middleName: true, lastName: true } },
+      courses: {
+        select: {
+          name: true,
+          grade: true,
+          enrollments: {
+            select: {
+              student: {
+                select: {
+                  id: true,
+                  studentNumber: true,
+                  attendanceRate: true,
+                  user: { select: { firstName: true, middleName: true, lastName: true } },
+                },
+              },
+            },
+          },
+          grades: { select: { studentId: true, percentage: true } },
+          assignments: {
+            select: {
+              dueDate: true,
+              submissions: { select: { studentId: true, status: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!teacher) return { local: 'No verified teacher profile is linked to this account yet.', provider: 'No verified teacher profile is linked to this account yet.' }
+
+  const now = new Date()
+  const learners = new Map<string, {
+    name: string
+    studentNumber: string
+    attendanceRate: number | null
+    percentages: number[]
+    overdue: number
+  }>()
+
+  for (const course of teacher.courses) {
+    for (const { student } of course.enrollments) {
+      if (!learners.has(student.id)) {
+        learners.set(student.id, {
+          name: [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' '),
+          studentNumber: student.studentNumber,
+          attendanceRate: student.attendanceRate == null ? null : Number(student.attendanceRate),
+          percentages: [],
+          overdue: 0,
+        })
+      }
+    }
+    for (const grade of course.grades) learners.get(grade.studentId)?.percentages.push(Number(grade.percentage))
+    for (const assignment of course.assignments) {
+      if (assignment.dueDate >= now) continue
+      for (const submission of assignment.submissions) {
+        if (submission.status !== 'PENDING') continue
+        const learner = learners.get(submission.studentId)
+        if (learner) learner.overdue += 1
+      }
+    }
+  }
+
+  const learnerSignals = [...learners.values()].map((learner) => {
+    const average = learner.percentages.length
+      ? Number((learner.percentages.reduce((sum, value) => sum + value, 0) / learner.percentages.length).toFixed(1))
+      : null
+    const highRisk = (average !== null && average < 60)
+      || (learner.attendanceRate !== null && learner.attendanceRate < 80)
+      || learner.overdue >= 2
+    const mediumRisk = (average !== null && average < 70)
+      || (learner.attendanceRate !== null && learner.attendanceRate < 90)
+      || learner.overdue > 0
+    return { ...learner, average, severity: highRisk ? 2 : mediumRisk ? 1 : 0 }
+  }).sort((left, right) => right.severity - left.severity || right.overdue - left.overdue)
+
+  const courseLines = teacher.courses.map((course) => {
+    const average = course.grades.length
+      ? Number((course.grades.reduce((sum, grade) => sum + Number(grade.percentage), 0) / course.grades.length).toFixed(1))
+      : null
+    const overdue = course.assignments.reduce((total, assignment) => total + (assignment.dueDate < now
+      ? assignment.submissions.filter((submission) => submission.status === 'PENDING').length
+      : 0), 0)
+    return `- ${course.name} (${course.grade}): ${course.enrollments.length} enrolled; ${course.assignments.length} assignment(s); ${course.grades.length} recorded grade(s); average ${average ?? 'not available'}; ${overdue} overdue submission(s).`
+  })
+  const priorityLearners = learnerSignals.filter((learner) => learner.severity > 0).slice(0, 12)
+  const localPriorityLines = priorityLearners.map((learner) =>
+    `- ${learner.name} [${learner.studentNumber}]: average ${learner.average ?? 'not available'}; attendance ${learner.attendanceRate ?? 'not available'}; ${learner.overdue} overdue submission(s).`,
+  )
+  const providerPriorityLines = priorityLearners.map((learner, index) =>
+    `- Learner ${index + 1}: average ${learner.average ?? 'not available'}; attendance ${learner.attendanceRate ?? 'not available'}; ${learner.overdue} overdue submission(s).`,
+  )
+  const teacherName = [teacher.user.lastName, teacher.user.middleName, teacher.user.firstName].filter(Boolean).join(' ')
+  const homeroom = [teacher.homeroomGrade, teacher.homeroomSection].filter(Boolean).join(' ')
+  const sharedLines = [
+    `Generated at: ${now.toISOString()}`,
+    `Verified scope: ${teacher.courses.length} course(s), ${learners.size} unique enrolled learner(s).`,
+    'Course evidence:',
+    ...(courseLines.length ? courseLines : ['- No official course is currently assigned.']),
+    'Priority learner signals:',
+  ]
+
+  return {
+    local: [
+      `Teacher: ${teacherName}; role: ${teacher.status}; main class: ${homeroom || 'not assigned'}.`,
+      ...sharedLines,
+      ...(localPriorityLines.length ? localPriorityLines : ['- No risk signal can currently be established from the recorded data.']),
+    ].join('\n'),
+    provider: [
+      `Teacher role: ${teacher.status}; main class: ${homeroom || 'not assigned'}.`,
+      ...sharedLines,
+      ...(providerPriorityLines.length ? providerPriorityLines : ['- No risk signal can currently be established from the recorded data.']),
+    ].join('\n'),
+  }
 }
 
 const buildSystemPrompt = (language: ChatLanguage) => {
@@ -220,19 +351,21 @@ aiRouter.post('/chat', asyncHandler(async (req, res) => {
   }
 }))
 
-aiRouter.post('/teacher-assistant', authenticate, requireRoles('teacher', 'staff', 'admin'), asyncHandler(async (req, res) => {
+aiRouter.post('/teacher-assistant', authenticate, requireRoles('teacher', 'staff', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
-    task: z.enum(['lesson-plan', 'quiz', 'feedback', 'intervention', 'meeting-summary']),
+    task: z.enum(['dashboard-insights', 'lesson-plan', 'quiz', 'feedback', 'intervention', 'meeting-summary']),
     context: z.string().max(4000).default(''),
   })
   const { task, context } = schema.parse(req.body)
-  const fallback = teacherAssistantFallback(task, context)
+  const verifiedSnapshot = await buildTeacherInsightSnapshot(req.user!.sub)
+  const fallback = teacherAssistantFallback(task, context, verifiedSnapshot.local)
 
   if (!openai) {
     return success(res, { response: fallback, source: 'teacher-guidance-fallback' })
   }
 
   const taskLabels = {
+    'dashboard-insights': 'a prioritized operational teaching analysis with evidence, risks, next actions, owners, and review dates',
     'lesson-plan': 'a differentiated lesson plan',
     quiz: 'a short formative quiz with answers or a marking guide',
     feedback: 'constructive report-card or parent-meeting feedback',
@@ -242,19 +375,19 @@ aiRouter.post('/teacher-assistant', authenticate, requireRoles('teacher', 'staff
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: openaiModel,
       messages: [
         {
           role: 'system',
-          content: 'You are KCS Nexus AI Teacher Assistant. Produce practical drafts for a teacher. Do not invent student records, grades, attendance, family details, policies, or completed actions. State assumptions clearly, use concise sections and actionable next steps, and require teacher review before sharing.',
+          content: 'You are KCS Nexus AI Teacher Assistant. Produce perceptive, practical drafts for a teacher. Use the verified Nexus snapshot as the only source of student, course, grade, attendance, and assignment facts. Never invent records, policies, causes, diagnoses, or completed actions. Distinguish facts, missing evidence, risks, and recommendations. Prioritize the highest-impact actions, include measurable follow-up dates, and require teacher review before sharing.',
         },
         {
           role: 'user',
-          content: `Create ${taskLabels[task]}. Teacher context:\n${context || 'No additional context was supplied.'}`,
+          content: `Create ${taskLabels[task]}.\n\nVerified Nexus snapshot:\n${verifiedSnapshot.provider}\n\nAdditional teacher context:\n${context || 'No additional context was supplied.'}`,
         },
       ],
       temperature: 0.35,
-      max_tokens: 700,
+      max_tokens: 1000,
     })
 
     return success(res, {

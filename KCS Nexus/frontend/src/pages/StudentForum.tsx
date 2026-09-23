@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Brain, Camera, Heart, MessageCircle, Mic, Paperclip, Plus, Send, ShieldCheck, Users, Video, X } from 'lucide-react'
+import { Brain, Camera, Heart, Loader2, MessageCircle, Mic, Paperclip, Plus, Send, ShieldCheck, Users, Video, X } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -36,6 +36,7 @@ const StudentForumPage = () => {
   const [attachment, setAttachment] = useState<{ type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string } | null>(null)
   const [commentAttachments, setCommentAttachments] = useState<Record<string, { type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string } | null>>({})
   const [recordingFor, setRecordingFor] = useState('')
+  const [publishing, setPublishing] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -58,12 +59,17 @@ const StudentForumPage = () => {
 
   const createPost = async (event: FormEvent) => {
     event.preventDefault()
-    if (!draft.title || (!draft.content && !attachment)) return
-    const response = await studentForumAPI.createPost({ ...draft, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
-    const created = response.data.data
-    setPosts((current) => [{ ...created, likeCount: 0, likedByMe: false, author: `${user?.firstName ?? 'Student'} ${user?.lastName?.[0] ?? ''}.`.trim(), comments: [] }, ...current])
-    setDraft({ title: '', category: 'Academics', content: '' })
-    setAttachment(null)
+    if (publishing || !draft.title || (!draft.content && !attachment)) return
+    setPublishing(true)
+    try {
+      const response = await studentForumAPI.createPost({ ...draft, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
+      const created = response.data.data
+      setPosts((current) => [{ ...created, likeCount: 0, likedByMe: false, author: `${user?.firstName ?? 'Student'} ${user?.lastName?.[0] ?? ''}.`.trim(), comments: [] }, ...current])
+      setDraft({ title: '', category: 'Academics', content: '' })
+      setAttachment(null)
+    } finally {
+      setPublishing(false)
+    }
   }
 
   const addComment = async (postId: string) => {
@@ -105,6 +111,22 @@ const StudentForumPage = () => {
   return (
     <div className="portal-shell flex">
       <PortalSidebar />
+      {publishing && (
+        <div className="fixed inset-0 z-[900] flex items-center justify-center bg-kcs-blue-950/65 p-4 backdrop-blur-md" role="status" aria-live="polite" aria-label={tr('Publication en cours', 'Publishing in progress')}>
+          <motion.div initial={{ opacity: 0, scale: 0.94, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-sm overflow-hidden rounded-3xl border border-cyan-300/40 bg-white p-6 text-center shadow-2xl dark:border-cyan-500/30 dark:bg-kcs-blue-900">
+            <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
+              <span className="absolute inset-0 animate-ping rounded-full bg-cyan-400/20" />
+              <span className="absolute inset-2 animate-pulse rounded-full bg-kcs-blue-100 dark:bg-kcs-blue-800" />
+              <Loader2 className="relative animate-spin text-kcs-blue-700 dark:text-cyan-300" size={36} />
+            </div>
+            <h2 className="mt-4 font-display text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Publication sécurisée en cours', 'Secure publication in progress')}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{tr('Le message et ses médias sont vérifiés puis ajoutés au forum. Merci de patienter.', 'The message and its media are being verified and added to the forum. Please wait.')}</p>
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-kcs-blue-100 dark:bg-kcs-blue-950">
+              <motion.div className="h-full rounded-full bg-gradient-to-r from-kcs-blue-700 via-cyan-400 to-kcs-blue-700" initial={{ x: '-100%', width: '70%' }} animate={{ x: '150%' }} transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }} />
+            </div>
+          </motion.div>
+        </div>
+      )}
       <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 dark:bg-kcs-blue-950">
         <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
           <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}{user?.firstName ? `, ${user.firstName}` : ''}</h1>
@@ -136,8 +158,12 @@ const StudentForumPage = () => {
               <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Camera size={16}/> Photo</button><button type="button" onClick={() => videoInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Video size={16}/> Video</button><button type="button" onClick={() => audioInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Mic size={16}/> Audio</button></div>
               {attachment && <div className="mt-3 flex items-center justify-between rounded-xl bg-kcs-blue-50 p-3 text-sm"><span>{attachment.name}</span><button type="button" onClick={() => setAttachment(null)}><X size={16}/></button></div>}
               <AudioRecorder language={language} onRecorded={(file) => readAnyMedia(file, (media) => setAttachment(media))}/>
-              <button className="btn-primary mt-4 inline-flex w-full items-center justify-center gap-2">
-                <Send size={16} /> Publish
+              <button disabled={publishing} aria-busy={publishing} className="btn-primary relative mt-4 inline-flex w-full items-center justify-center gap-2 overflow-hidden disabled:cursor-wait disabled:opacity-90">
+                {publishing && <span className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/25 to-transparent" />}
+                <span className="relative inline-flex items-center gap-2">
+                  {publishing ? <Loader2 size={17} className="animate-spin" /> : <Send size={16} />}
+                  {publishing ? tr('Publication…', 'Publishing…') : tr('Publier', 'Publish')}
+                </span>
               </button>
             </form>
 

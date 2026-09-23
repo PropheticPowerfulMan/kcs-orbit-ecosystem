@@ -336,8 +336,10 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   const payload = teacherCourseSyncSchema.parse(req.body)
   if (new Set(payload.studentIds).size !== payload.studentIds.length) throw new ApiError(400, 'Duplicate learner in course enrollment')
   const teacher = await ensureTeacherProfile(req.user!.sub)
-  const existing = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true } })
-  if (existing && existing.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
+  const requestedExisting = await prisma.course.findUnique({ where: { id: payload.id }, select: { id: true, teacherId: true, code: true } })
+  if (requestedExisting && requestedExisting.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
+  const naturalExisting = requestedExisting ? null : await prisma.course.findFirst({ where: { teacherId: teacher.id, name: { equals: payload.name, mode: 'insensitive' }, grade: { equals: payload.grade, mode: 'insensitive' } }, select: { id: true, teacherId: true, code: true } })
+  const existing = requestedExisting ?? naturalExisting
   const normalizedStudentNumbers = [...new Set(payload.studentNumbers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
   const uniqueStudentIds = [...new Set(payload.studentIds)]
   if (uniqueStudentIds.length || normalizedStudentNumbers.length) {
@@ -368,13 +370,13 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toUpperCase().slice(0, 18) || 'COURSE'
   const classCode = payload.grade.replace(/[^a-z0-9]+/gi, '').toUpperCase().slice(0, 10)
   let code = existing?.code ?? `${codeBase}-${classCode}`
-  const collision = await prisma.course.findFirst({ where: { code, id: { not: payload.id } }, select: { id: true } })
+  const collision = await prisma.course.findFirst({ where: { code, id: { not: existing?.id ?? payload.id } }, select: { id: true } })
   if (collision) code = `${codeBase}-${classCode}-${payload.id.slice(-6).toUpperCase()}`
   const isSubmissionPreflight = payload.description?.includes('verified before') === true
   const course = await prisma.$transaction(async (tx) => {
     const saved = existing
     ? await tx.course.update({
-        where: { id: payload.id },
+        where: { id: existing.id },
         data: {
           name: payload.name,
           grade: payload.grade,
@@ -383,8 +385,15 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
           ...(payload.credits !== undefined && !isSubmissionPreflight ? { credits: payload.credits } : {}),
         },
       })
-      : await tx.course.create({
-        data: {
+      : await tx.course.upsert({
+        where: { code },
+        update: {
+          name: payload.name,
+          grade: payload.grade,
+          ...(payload.description !== undefined && !isSubmissionPreflight ? { description: payload.description } : {}),
+          ...(payload.credits !== undefined && !isSubmissionPreflight ? { credits: payload.credits } : {}),
+        },
+        create: {
           id: payload.id,
           teacherId: teacher.id,
           name: payload.name,
@@ -419,7 +428,7 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
       _count: { select: { enrollments: true, assignments: true, grades: true, schedules: true } },
     },
   })
-  if (!course) throw new ApiError(404, 'Course not found')
+  if (!course) return success(res, { id: courseId, alreadyDeleted: true, removedDependencies: {} }, 'Course was already absent from the official registry')
   if (course.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
 
   await prisma.$transaction(async (tx) => {

@@ -62,6 +62,18 @@ const workflowLabel = (learner: LearnerRecord) => {
   if (status === 'DRAFT') return 'Main-teacher draft'
   return learner.allSubjectsSubmitted ? 'Ready for main teacher' : 'Waiting for subject grades'
 }
+const requestReportDashboard = async (params: { academicYear: string; term: string }) => {
+  try {
+    return await academicRecordsAPI.teacherReportDashboard(params)
+  } catch (reason: any) {
+    const status = Number(reason?.response?.status ?? 0)
+    const retryable = reason?.code === 'ECONNABORTED' || !reason?.response || [502, 503, 504].includes(status)
+    if (!retryable) throw reason
+    await new Promise((resolve) => window.setTimeout(resolve, 700))
+    return academicRecordsAPI.teacherReportDashboard(params)
+  }
+}
+
 
 export default function TeacherWholeSchoolReportCards() {
   const [academicYear, setAcademicYear] = useState('2026-2027')
@@ -82,7 +94,7 @@ export default function TeacherWholeSchoolReportCards() {
     setLoading(true)
     setError('')
     try {
-      const response = await academicRecordsAPI.teacherReportDashboard({ academicYear, term })
+      const response = await requestReportDashboard({ academicYear, term })
       const next = response.data?.data as Dashboard
       setDashboard(next)
       setSelectedId((current) => next.learners.some((learner) => learner.id === current) ? current : (next.learners.find((learner) => learner.isHomeroomStudent)?.id ?? next.learners[0]?.id ?? ''))
