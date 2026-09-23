@@ -10,8 +10,20 @@ import '@/i18n'
 import { getRouteBasePath } from '@/utils/assets'
 import { registerPwa } from '@/registerPwa'
 import MutationFeedback from '@/components/shared/MutationFeedback'
+import ConnectionGuard from '@/components/shared/ConnectionGuard'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: false,
+      staleTime: 15_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+    },
+    mutations: { retry: false },
+  },
+})
 const routerBasePath = getRouteBasePath()
 
 if (import.meta.env.DEV && 'serviceWorker' in navigator && window.location.hostname === 'localhost') {
@@ -31,6 +43,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={routerBasePath}>
         <App />
+        <ConnectionGuard />
         <MutationFeedback />
         <InstallAppButton />
       </BrowserRouter>

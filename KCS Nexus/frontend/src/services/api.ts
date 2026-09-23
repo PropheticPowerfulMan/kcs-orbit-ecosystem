@@ -12,7 +12,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 25000,
 })
 
 type AuthenticatedUser = NonNullable<ReturnType<typeof useAuthStore.getState>['user']>
@@ -22,7 +22,7 @@ const refreshSession = async () => {
   if (!refreshSessionPromise) {
     const { refreshToken } = useAuthStore.getState()
     if (!refreshToken) throw new Error('No refresh token')
-    refreshSessionPromise = axios.post(`${API_BASE}/auth/refresh`, { refreshToken })
+    refreshSessionPromise = axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { timeout: 15_000 })
       .then((response) => response.data.data)
       .finally(() => { refreshSessionPromise = null })
   }
@@ -48,6 +48,39 @@ const accessTokenNeedsRefresh = (token: string) => {
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const feedbackExcludedPaths = ['/auth/login', '/auth/refresh']
+type ResilientRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean
+  _networkRetryCount?: number
+}
+const safeReadMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
+const transientStatuses = new Set([408, 425, 429, 502, 503, 504])
+let connectionWasDegraded = false
+
+const dispatchConnectionDegraded = (attempt = 0) => {
+  connectionWasDegraded = true
+  window.dispatchEvent(new CustomEvent('ecosystem:connection-degraded', { detail: { attempt } }))
+}
+
+const dispatchConnectionRestored = () => {
+  if (!connectionWasDegraded) return
+  connectionWasDegraded = false
+  window.dispatchEvent(new CustomEvent('ecosystem:connection-restored'))
+}
+
+const isTransientNetworkError = (error: AxiosError) => {
+  if (error.code === 'ERR_CANCELED') return false
+  if (!error.response) return true
+  return transientStatuses.has(error.response.status)
+}
+
+const mayRetrySafely = (config: ResilientRequestConfig | undefined, error: AxiosError) => {
+  const method = config?.method?.toUpperCase() || 'GET'
+  const optedOut = config?.headers?.['x-no-network-retry'] === 'true'
+  return Boolean(config && safeReadMethods.has(method) && !optedOut && navigator.onLine && isTransientNetworkError(error) && (config._networkRetryCount || 0) < 2)
+}
+
+const networkRetryDelay = (attempt: number) => 450 * (2 ** (attempt - 1)) + Math.round(Math.random() * 180)
+const waitForNetworkRetry = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 
 const expectsMutationFeedback = (config?: InternalAxiosRequestConfig) => {
   const method = config?.method?.toUpperCase()
@@ -105,6 +138,7 @@ api.interceptors.request.use(
 // Response interceptor - handle token refresh
 api.interceptors.response.use(
   (response) => {
+    dispatchConnectionRestored()
     const method = response.config.method?.toUpperCase()
     if (expectsMutationFeedback(response.config)) {
       dispatchMutationFeedback('success', response.data?.message || defaultSuccessMessage(method))
@@ -112,7 +146,7 @@ api.interceptors.response.use(
     return response
   },
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+    const originalRequest = error.config as ResilientRequestConfig
     const skipAuthLogout = originalRequest?.headers?.['x-skip-auth-logout'] === 'true'
 
     // A 410 returned by a dashboard resource means that resource is gone; it
@@ -149,6 +183,14 @@ api.interceptors.response.use(
         return Promise.reject(error)
       }
     }
+    if (mayRetrySafely(originalRequest, error)) {
+      originalRequest._networkRetryCount = (originalRequest._networkRetryCount || 0) + 1
+      dispatchConnectionDegraded(originalRequest._networkRetryCount)
+      await waitForNetworkRetry(networkRetryDelay(originalRequest._networkRetryCount))
+      return api(originalRequest)
+    }
+
+    if (isTransientNetworkError(error)) dispatchConnectionDegraded()
 
     if (expectsMutationFeedback(originalRequest)) dispatchMutationFeedback('error', mutationErrorMessage(error))
     return Promise.reject(error)
@@ -168,7 +210,7 @@ export const authAPI = {
       if (status !== 405 && status !== 502 && status !== 503 && status !== 504 && (error as AxiosError)?.code !== 'ERR_NETWORK' && (error as AxiosError)?.code !== 'ECONNABORTED') throw error
       return axios.post(window.location.origin + getRouteUrl('api/auth/login'), payload, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 15_000,
+        timeout: 25_000,
       })
     }
   },
