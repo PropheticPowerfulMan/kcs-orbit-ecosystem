@@ -16,6 +16,24 @@ const normalizeGrade = (value: unknown) => {
   return numbered ? `Grade ${Number(numbered[1])}` : grade
 }
 
+const normalizeClassTarget = (value: unknown) => {
+  const raw = String(value ?? '').replace(/\s+/g, ' ').trim()
+  const kindergarten = raw.match(/(?:kindergarten\s*)?(?:k|grade)?\s*([3-5])(?:\s*[- ]?\s*([a-z]))?\b/i)
+  if (kindergarten && /kindergarten|\bk\s*[3-5]\b/i.test(raw)) {
+    return 'K' + kindergarten[1] + (kindergarten[2] ? ' ' + kindergarten[2].toUpperCase() : '')
+  }
+  const numbered = raw.match(/(?:grade|g)?\s*(1[0-2]|[1-9])(?:\s*[- ]?\s*([a-z]))?\b/i)
+  return numbered
+    ? 'Grade ' + Number(numbered[1]) + (numbered[2] ? ' ' + numbered[2].toUpperCase() : '')
+    : raw
+}
+
+const parentClassTargets = (parent: any): string[] => {
+  const preciseClasses = (parent.classes ?? []).map((value: unknown) => normalizeClassTarget(value)).filter((value: string) => Boolean(value))
+  const fallbackGrades = (parent.grades ?? []).map((value: unknown) => normalizeClassTarget(value)).filter((value: string) => Boolean(value))
+  return Array.from(new Set<string>(preciseClasses.length ? preciseClasses : fallbackGrades))
+}
+
 const displayName = (parent: any) => [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') || 'Destinataire'
 const messageRecipient = (message: any) => {
   const person = message.sender?.role === 'PARENT' ? message.sender : message.recipient
@@ -36,7 +54,8 @@ const copy = {
     official: 'Communication officielle', channels: 'Email, SMS et boîte Nexus', subject: 'Sujet', exactMessage: 'Message exact à envoyer...', copyStored: 'Sans préfixe applicatif ; une copie est conservée dans Nexus.', sending: 'Envoi...', sendTo: (count: number) => 'Envoyer à ' + count + ' destinataire(s)',
     history: 'Historique', oldMessages: 'Historique des messages reçus et envoyés', historySearch: 'Parent, sujet, contenu, email, téléphone ou date...', startDate: 'Date de début', endDate: 'Date de fin', results: 'résultat(s)', deleting: 'Suppression...', deleteSelection: 'Supprimer la sélection',
     choice: 'Choix', parent: 'Correspondant', date: 'Date', action: 'Action', view: 'Voir', sentMessage: 'Message envoyé', close: 'Fermer', nexus: 'Nexus', sent: 'Envoyé', failed: 'Échec', logged: 'Enregistré', deliveryTitle: 'Résultat de l’envoi', deliveryIntro: 'Résultat technique reçu pour chaque destinataire.', providerAccepted: 'Accepté par le fournisseur', notSent: 'Non envoyé', finalPending: 'Réception finale à confirmer', deliveryNote: 'Un statut accepté confirme la prise en charge par le serveur email ou l’opérateur SMS. La réception finale dans la boîte mail ou sur le téléphone dépend ensuite du fournisseur.', emailLabel: 'E-mail', smsLabel: 'SMS',
-    attachDocument: 'Joindre un fichier audio, vidéo ou document', fileTooLarge: 'Le fichier ne doit pas dépasser 25 Mo.', removeAttachment: 'Retirer la pièce jointe', download: 'Télécharger'
+    attachDocument: 'Joindre un fichier audio, vidéo ou document', fileTooLarge: 'Le fichier ne doit pas dépasser 25 Mo.', removeAttachment: 'Retirer la pièce jointe', download: 'Télécharger',
+    quickAudience: 'Sélection rapide par classe', quickAudienceHelp: 'Choisissez une ou plusieurs classes : les parents réellement liés aux élèves concernés sont sélectionnés immédiatement, sans parcourir la liste.', allParents: 'Tous les parents', classesChosen: 'classe(s) ciblée(s)', familiesReady: 'famille(s) prête(s)'
   },
   en: {
     loadFailed: 'Unable to load communications.', selectParent: 'Select at least one recipient.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
@@ -46,7 +65,8 @@ const copy = {
     official: 'Official communication', channels: 'Email, SMS and Nexus inbox', subject: 'Subject', exactMessage: 'Exact message to send...', copyStored: 'No application prefix; a copy is retained in Nexus.', sending: 'Sending...', sendTo: (count: number) => 'Send to ' + count + ' recipient(s)',
     history: 'History', oldMessages: 'Received and sent message history', historySearch: 'Parent, subject, content, email, phone number or date...', startDate: 'Start date', endDate: 'End date', results: 'result(s)', deleting: 'Deleting...', deleteSelection: 'Delete selection',
     choice: 'Select', parent: 'Contact', date: 'Date', action: 'Action', view: 'View', sentMessage: 'Sent message', close: 'Close', nexus: 'Nexus', sent: 'Sent', failed: 'Failed', logged: 'Recorded', deliveryTitle: 'Delivery result', deliveryIntro: 'Technical result received for each recipient.', providerAccepted: 'Accepted by provider', notSent: 'Not sent', finalPending: 'Final receipt pending confirmation', deliveryNote: 'An accepted status confirms processing by the email server or SMS operator. Final arrival in the inbox or on the phone then depends on the provider.', emailLabel: 'Email', smsLabel: 'SMS',
-    attachDocument: 'Attach audio, video or document', fileTooLarge: 'The file must not exceed 25 MB.', removeAttachment: 'Remove attachment', download: 'Download'
+    attachDocument: 'Attach audio, video or document', fileTooLarge: 'The file must not exceed 25 MB.', removeAttachment: 'Remove attachment', download: 'Download',
+    quickAudience: 'Quick selection by class', quickAudienceHelp: 'Choose one or more classes: parents truly linked to the relevant learners are selected immediately, without browsing the list.', allParents: 'All parents', classesChosen: 'class(es) targeted', familiesReady: 'family/families ready'
   },
 } as const
 
@@ -60,6 +80,7 @@ export default function ParentCommunicationPanel() {
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [gradeFilter, setGradeFilter] = useState('ALL')
   const [contactFilter, setContactFilter] = useState('ALL')
+  const [quickClasses, setQuickClasses] = useState<string[]>([])
   const [channels, setChannels] = useState<Array<'email' | 'sms'>>(['email', 'sms'])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -93,10 +114,6 @@ export default function ParentCommunicationPanel() {
   }, [])
 
   useEffect(() => {
-    setSelectedParents([])
-  }, [roleFilter, gradeFilter, contactFilter, parentQuery])
-
-  useEffect(() => {
     const availableIds = new Set(parents.map((parent) => parent.id))
     setSelectedParents((current) => current.filter((id) => availableIds.has(id)))
   }, [parents])
@@ -105,6 +122,47 @@ export default function ParentCommunicationPanel() {
     const available = new Set<string>(parents.flatMap((person) => person.grades ?? []).map(normalizeGrade).filter(Boolean))
     return [...requiredGradeOptions, ...[...available].filter((grade) => !requiredGradeOptions.includes(grade))]
   }, [parents])
+
+
+  const parentAudienceGroups = useMemo(() => {
+    const groups = new Map<string, Set<string>>()
+    parents.filter((person) => person.role === 'PARENT').forEach((parent) => {
+      parentClassTargets(parent).forEach((className) => {
+        if (!groups.has(className)) groups.set(className, new Set())
+        groups.get(className)?.add(parent.id)
+      })
+    })
+    const rank = (label: string) => {
+      const k = label.match(/^K([3-5])/)
+      if (k) return Number(k[1]) - 3
+      const grade = label.match(/^Grade\s+(\d+)/i)
+      return grade ? 10 + Number(grade[1]) : 100
+    }
+    return Array.from(groups.entries())
+      .map(([label, ids]) => ({ label, count: ids.size }))
+      .sort((a, b) => rank(a.label) - rank(b.label) || a.label.localeCompare(b.label, language === 'fr' ? 'fr' : 'en', { numeric: true }))
+  }, [language, parents])
+
+  const selectQuickAudience = (nextClasses: string[]) => {
+    setQuickClasses(nextClasses)
+    setRoleFilter('PARENT')
+    setGradeFilter('ALL')
+    setContactFilter('ALL')
+    setParentQuery('')
+    const ids = parents
+      .filter((parent) => parent.role === 'PARENT' && nextClasses.some((className) => parentClassTargets(parent).includes(className)))
+      .map((parent) => parent.id)
+    setSelectedParents(Array.from(new Set(ids)))
+  }
+
+  const selectAllParents = () => {
+    setQuickClasses([])
+    setRoleFilter('PARENT')
+    setGradeFilter('ALL')
+    setContactFilter('ALL')
+    setParentQuery('')
+    setSelectedParents(Array.from(new Set(parents.filter((person) => person.role === 'PARENT').map((person) => person.id))))
+  }
 
   const parentRows = useMemo(() => {
     const tokens = parentQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -200,17 +258,32 @@ export default function ParentCommunicationPanel() {
             <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.recipients}</p><h2 className="text-2xl font-bold dark:text-white">{c.families}</h2></div>
             <b className="text-kcs-blue-700 dark:text-white">{selectedParents.length} {c.selected}</b>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select className={fieldClass} value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => setGradeFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
+          <div className="mt-4 rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50/80 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/60">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div><h3 className="font-black text-kcs-blue-950 dark:text-white">{c.quickAudience}</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-kcs-blue-700 dark:text-kcs-blue-200">{c.quickAudienceHelp}</p></div>
+              <button type="button" className={primaryButton + ' shrink-0'} onClick={selectAllParents}><CheckSquare size={17}/>{c.allParents} ({parents.filter((person) => person.role === 'PARENT').length})</button>
+            </div>
+            <div className="mt-3 flex max-h-40 flex-wrap gap-2 overflow-y-auto pr-1">
+              {parentAudienceGroups.map((group) => {
+                const active = quickClasses.includes(group.label)
+                return <button type="button" key={group.label} aria-pressed={active} onClick={() => selectQuickAudience(active ? quickClasses.filter((item) => item !== group.label) : [...quickClasses, group.label])} className={'inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition ' + (active ? 'border-kcs-gold-500 bg-kcs-gold-300 text-kcs-blue-950 shadow-sm' : 'border-kcs-blue-200 bg-white text-kcs-blue-900 hover:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white')}>
+                  {active ? <CheckSquare size={16}/> : <Square size={16}/>}<span>{group.label}</span><span className={'rounded-full px-2 py-0.5 text-[11px] ' + (active ? 'bg-kcs-blue-950 text-white' : 'bg-kcs-blue-100 text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white')}>{group.count}</span>
+                </button>
+              })}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-kcs-blue-800 dark:text-kcs-blue-100"><span>{quickClasses.length} {c.classesChosen}</span><span aria-hidden="true">·</span><span>{selectedParents.length} {c.familiesReady}</span></div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"><select className={fieldClass} value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Toutes les catégories' : 'All categories'}</option><option value="PARENT">{language === 'fr' ? 'Parents' : 'Parents'}</option><option value="STUDENT">{language === 'fr' ? 'Élèves' : 'Students'}</option><option value="TEACHER">{language === 'fr' ? 'Enseignants' : 'Teachers'}</option><option value="STAFF">{language === 'fr' ? 'Personnel' : 'Staff'}</option><option value="ADMIN">{language === 'fr' ? 'Administrateurs' : 'Administrators'}</option></select><select className={fieldClass} value={gradeFilter} onChange={(event) => { setGradeFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Tous les grades' : 'All grades'}</option>{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select><select className={fieldClass} value={contactFilter} onChange={(event) => { setContactFilter(event.target.value); setQuickClasses([]); setSelectedParents([]) }}><option value="ALL">{language === 'fr' ? 'Tous les contacts' : 'All contacts'}</option><option value="EMAIL">{language === 'fr' ? 'Avec email' : 'Has email'}</option><option value="SMS">{language === 'fr' ? 'Avec téléphone' : 'Has phone'}</option><option value="BOTH">{language === 'fr' ? 'Email et téléphone' : 'Email and phone'}</option></select></div><input className={fieldClass + ' mt-3'} value={parentQuery} onChange={(event) => setParentQuery(event.target.value)} placeholder={c.parentSearch} />
           <div className="mt-3 flex flex-wrap gap-2">
-            <button className={primaryButton} onClick={() => setSelectedParents(allParentsSelected ? [] : parentRows.map((parent) => parent.id))}>
+            <button className={primaryButton} onClick={() => { setQuickClasses([]); setSelectedParents(allParentsSelected ? [] : parentRows.map((parent) => parent.id)) }}>
               {allParentsSelected ? <CheckSquare size={17} /> : <Square size={17} />} {allParentsSelected ? c.deselect : c.selectResults}
             </button>
-            <button className={primaryButton} onClick={() => setSelectedParents([])}>{c.clear}</button>
+            <button className={primaryButton} onClick={() => { setQuickClasses([]); setSelectedParents([]) }}>{c.clear}</button>
           </div>
           <div className="mt-4 max-h-[480px] space-y-2 overflow-y-auto pr-1">
             {parentRows.map((parent) => {
               const selected = selectedParents.includes(parent.id)
-              return <button key={parent.id} onClick={() => toggle(setSelectedParents, parent.id)} className={`w-full rounded-xl border p-4 text-left transition ${selected ? 'border-kcs-gold-400 bg-kcs-gold-50 shadow-[inset_4px_0_0_#eab308] dark:bg-kcs-gold-900/20' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
+              return <button key={parent.id} onClick={() => { setQuickClasses([]); toggle(setSelectedParents, parent.id) }} className={`w-full rounded-xl border p-4 text-left transition ${selected ? 'border-kcs-gold-400 bg-kcs-gold-50 shadow-[inset_4px_0_0_#eab308] dark:bg-kcs-gold-900/20' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
                 <b className="flex items-center gap-2 dark:text-white">{selected ? <CheckSquare size={18} /> : <Square size={18} />}{displayName(parent)}</b>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">{parent.email || c.noEmail} · {parent.phone || c.noPhone}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-kcs-blue-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white">{parent.role}</span>{(parent.grades ?? []).map((grade: string) => <span key={grade} className="rounded-full bg-kcs-gold-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-900 dark:bg-kcs-gold-300 dark:text-kcs-blue-950">{grade}</span>)}{parent.department ? <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700 dark:bg-slate-600 dark:text-white">{parent.department}</span> : null}</div><p className="mt-1 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-100">{parent.accessCode}</p>
