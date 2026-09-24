@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
   FileText,
   Lightbulb,
+  Loader2,
   Plus,
   Search,
   Sparkles,
@@ -237,6 +238,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('')
   const [saveNotice, setSaveNotice] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
+  const [addingAssignment, setAddingAssignment] = useState(false)
   const [submittingFinals, setSubmittingFinals] = useState(false)
   const [draft, setDraft] = useState({
     title: '',
@@ -364,9 +366,11 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     { month: 'May', average: Math.min(98, Math.round(classAverage + 2)) },
   ]
 
-  const addAssignment = () => {
+  const addAssignment = async () => {
     if (!draft.title.trim()) return onAction('Enter a clear task title before adding it.', true)
     if (!draft.date) return onAction('Select the assessment date before adding the task.', true)
+    if (addingAssignment) return
+    setAddingAssignment(true)
     const nextAssignment = {
       id: `gb-${Date.now()}`,
       title: draft.title.trim() || 'New Assignment',
@@ -377,11 +381,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       term,
       description: draft.description,
     }
-    setAssignments((current) => [...current, nextAssignment])
-    setScores((current) => buildMissingScoreCells([nextAssignment], courseStudents, current))
-    setSelectedAssignmentId(nextAssignment.id)
-    setDraft((current) => ({ ...current, title: '', date: '', description: '' }))
-    onAction(`${nextAssignment.title} ${nextAssignment.type} added to ${selectedCourse?.name ?? 'Gradebook'}; averages will recalculate automatically as scores are entered.`)
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 320))
+      setAssignments((current) => [...current, nextAssignment])
+      setScores((current) => buildMissingScoreCells([nextAssignment], courseStudents, current))
+      setSelectedAssignmentId(nextAssignment.id)
+      setDraft((current) => ({ ...current, title: '', date: '', description: '' }))
+      onAction(`${nextAssignment.title} ${nextAssignment.type} added to ${selectedCourse?.name ?? 'Gradebook'}; averages will recalculate automatically as scores are entered.`)
+    } finally {
+      setAddingAssignment(false)
+    }
   }
 
   const deleteAssignment = (assignmentId: string) => {
@@ -625,7 +634,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               Instructions or learning objective <span className="font-normal text-gray-500">(optional)</span>
               <textarea className="input-kcs min-h-20 py-2 text-sm" value={draft.description} onChange={(event) => setDraft((item) => ({ ...item, description: event.target.value }))} placeholder="Describe the assessed skill, chapter, or instructions." />
             </label>
-            <button onClick={addAssignment} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-kcs-blue-800"><Plus size={16} className="mr-1 inline" /> Add task</button>
+            <button
+              type="button"
+              onClick={() => void addAssignment()}
+              disabled={addingAssignment}
+              aria-busy={addingAssignment}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-kcs-blue-800 hover:shadow-md active:translate-y-0 disabled:cursor-wait disabled:opacity-75"
+            >
+              {addingAssignment ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
+              {addingAssignment ? 'Adding task…' : 'Add task'}
+            </button>
           </div>
         </div>
 

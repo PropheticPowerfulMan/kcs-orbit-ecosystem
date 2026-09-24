@@ -509,6 +509,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           creditHours: course.credits ?? 1,
           gradeLevels: [canonicalClassLabel(course.grade)],
           studentIds: (course.enrollments ?? []).map((enrollment: any) => enrollment.studentId),
+          enrollmentMode: 'official',
           status: 'active',
         }))
         if (!active) return
@@ -545,13 +546,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   useEffect(() => {
     if (!superAdminStudentPool.length) return
-    setCourses((current) => current.map((course) => ({
-      ...course,
-      studentIds: course.enrollmentMode === 'custom'
-        ? course.studentIds
-        : getRosterForClass(course.className || course.gradeLevels[0]).map((student) => student.id),
-      enrollmentMode: course.enrollmentMode === 'custom' ? 'custom' : 'class',
-    })))
+    setCourses((current) => current.map((course) => course.enrollmentMode === 'class'
+      ? {
+          ...course,
+          studentIds: getRosterForClass(course.className || course.gradeLevels[0]).map((student) => student.id),
+        }
+      : course))
   }, [superAdminStudentPool, workspaceStatus])
 
   useEffect(() => {
@@ -2687,7 +2687,25 @@ const TeacherDashboardHome = () => {
           </div>
         </div>
       </div>
-      {activeAiTool && <div className="fixed inset-0 z-50 flex items-center justify-center bg-kcs-blue-950/65 p-4"><div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-kcs-gold-600">AI Teacher Assistant</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{activeAiTool.title}</h3></div><button type="button" onClick={() => setActiveAiTool(null)} aria-label="Close AI teacher assistant"><X size={18}/></button></div><p className="mt-3 text-sm text-gray-500 dark:text-gray-400">{activeAiTool.detail}</p><div className="mt-4 min-h-24 rounded-xl bg-kcs-blue-50 p-4 text-sm leading-relaxed text-kcs-blue-900 dark:bg-kcs-blue-800/30 dark:text-kcs-blue-100" style={{ whiteSpace: 'pre-line' }}>{isAiGenerating ? 'Generating a teacher-review draft…' : aiError || aiResult}</div><textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} className="input-kcs mt-4 min-h-24" placeholder="Add class context or instructions to refine this output..." disabled={isAiGenerating}/><p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Review the draft before sharing it with students or families.</p><div className="mt-4 flex justify-end gap-2"><button type="button" disabled={isAiGenerating} onClick={() => void generateTeacherAi(activeAiTool, aiInstruction)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">{isAiGenerating ? 'Generating…' : 'Regenerate and improve'}</button></div></div></div>}
+      {activeAiTool && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center overflow-y-auto bg-kcs-blue-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="teacher-ai-dialog-title">
+          <div className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-kcs-blue-100 bg-[#f7fbff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:max-w-2xl sm:rounded-3xl">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-kcs-blue-100 bg-white/90 px-4 py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/70 sm:px-6">
+              <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-wide text-kcs-gold-600 sm:text-xs">AI Teacher Assistant</p><h3 id="teacher-ai-dialog-title" className="mt-1 truncate text-lg font-bold text-kcs-blue-900 dark:text-white sm:text-xl">{activeAiTool.title}</h3></div>
+              <button type="button" onClick={() => setActiveAiTool(null)} aria-label="Close AI teacher assistant" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-kcs-blue-100 bg-kcs-blue-50 text-kcs-blue-800 transition hover:bg-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-white"><X size={20}/></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+              <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">{activeAiTool.detail}</p>
+              <div className="mt-4 max-h-[36dvh] min-h-28 overflow-y-auto rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 text-sm leading-relaxed text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-800/40 dark:text-kcs-blue-100 sm:max-h-72" style={{ whiteSpace: 'pre-line' }}>{isAiGenerating ? 'Generating a teacher-review draft...' : aiError || aiResult}</div>
+              <textarea value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} className="input-kcs mt-4 min-h-28 resize-y text-sm" placeholder="Add class context or instructions to refine this output..." disabled={isAiGenerating}/>
+              <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">Review the draft before sharing it with students or families.</p>
+            </div>
+            <div className="shrink-0 border-t border-kcs-blue-100 bg-white/90 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/70 sm:px-6">
+              <button type="button" disabled={isAiGenerating} onClick={() => void generateTeacherAi(activeAiTool, aiInstruction)} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-kcs-blue-800 disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:min-w-56">{isAiGenerating ? 'Generating...' : 'Regenerate and improve'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
