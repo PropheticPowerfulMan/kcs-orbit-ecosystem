@@ -5,7 +5,7 @@ import { env } from '../config/env.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { compareClassParts, normalizeClassParts, splitClassName } from '../utils/className.js'
-import { belongsToTeacherClasses, teacherClassKey } from '../utils/teacherClassAccess.js'
+import { teacherClassKey } from '../utils/teacherClassAccess.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { ensureOrbitStudentProfile, type OrbitStudentIdentity } from '../services/orbitStudentMaterialization.js'
 
@@ -75,8 +75,18 @@ async function assignedTeacherClasses(userId: string) {
   return [normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection)]
 }
 
+const matchesAssignedClass = (
+  student: { grade: string; section?: string | null },
+  assignedClass: { grade: string; section: string },
+) => {
+  const normalizedStudent = normalizeClassParts(student.grade, student.section)
+  const normalizedAssignment = normalizeClassParts(assignedClass.grade, assignedClass.section)
+  return normalizedStudent.grade.toLowerCase() === normalizedAssignment.grade.toLowerCase()
+    && (!normalizedAssignment.section || teacherClassKey(normalizedStudent) === teacherClassKey(normalizedAssignment))
+}
 async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: string; section: string }>) {
   if (!assignedClasses.length || !env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return
+
   const response = await fetch(
     `${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`,
     { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(10_000) },
@@ -86,11 +96,7 @@ async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: 
   const students = (directory.students ?? []).filter((student) => {
     if ((student.status ?? 'active').toLowerCase() !== 'active') return false
     const classParts = splitClassName(student.className)
-    return assignedClasses.some((assignedClass) => {
-      const sameGrade = assignedClass.grade.trim().toLowerCase() === classParts.grade.trim().toLowerCase()
-      if (!sameGrade) return false
-      return !classParts.section || teacherClassKey(classParts) === teacherClassKey(assignedClass)
-    })
+    return assignedClasses.some((assignedClass) => matchesAssignedClass(classParts, assignedClass))
   })
   await Promise.all(students.map((student) => ensureOrbitStudentProfile(student)))
 }
@@ -127,8 +133,14 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
     },
     orderBy: { user: { lastName: 'asc' } },
   })
-  const visibleStudents = registryStudents.filter((student) => belongsToTeacherClasses(student, assignedClasses))
-  const assignedGrades = new Set(assignedClasses.map((value) => value.grade.trim().toLowerCase()))
+  const visibleStudents = registryStudents
+    .filter((student) => assignedClasses.some((assignedClass) => matchesAssignedClass(student, assignedClass)))
+    .sort((left, right) => {
+      const leftName = [left.user.lastName, left.user.middleName, left.user.firstName].filter(Boolean).join(' ')
+      const rightName = [right.user.lastName, right.user.middleName, right.user.firstName].filter(Boolean).join(' ')
+      return leftName.localeCompare(rightName, undefined, { sensitivity: 'base', numeric: true })
+    })
+  const assignedGrades = new Set(assignedClasses.filter((value) => Boolean(value.section)).map((value) => value.grade.trim().toLowerCase()))
   const unassignedStudentCount = registryStudents.filter((student) => {
     const normalized = normalizeClassParts(student.grade, student.section)
     return assignedGrades.has(normalized.grade.trim().toLowerCase()) && !normalized.section
@@ -136,13 +148,7 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
   const classesByKey = new Map<string, { grade: string; section: string; studentCount: number }>()
   for (const assignedClass of assignedClasses) {
     const normalized = normalizeClassParts(assignedClass.grade, assignedClass.section)
-    classesByKey.set(teacherClassKey(normalized), { ...normalized, studentCount: 0 })
-  }
-  for (const student of visibleStudents) {
-    const value = normalizeClassParts(student.grade, student.section)
-    const key = teacherClassKey(value)
-    const existing = classesByKey.get(key)
-    classesByKey.set(key, { ...value, studentCount: (existing?.studentCount ?? 0) + 1 })
+    classesByKey.set(teacherClassKey(normalized), { ...normalized, studentCount: registryStudents.filter((student) => matchesAssignedClass(student, normalized)).length })
   }
   const classes = [...classesByKey.values()].sort(compareClassParts)
   if (!classes.length) {
@@ -154,16 +160,13 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
   if (!classesByKey.has(teacherClassKey(requestedClass))) {
     throw new ApiError(403, 'The selected class is not assigned to this teacher')
   }
-  const students = visibleStudents.filter((student) => {
-    const value = normalizeClassParts(student.grade, student.section)
-    return teacherClassKey(value) === teacherClassKey(requestedClass)
-  })
+  const students = visibleStudents.filter((student) => matchesAssignedClass(student, requestedClass))
   return success(res, {
     date: date.toISOString().slice(0, 10),
     class: { grade: requestedClass.grade, section: requestedClass.section },
     classes,
     summary: summarize(students.flatMap((student) => student.attendanceRecords.slice(0, 1))),
-    requiresRosterAssignment: unassignedStudentCount > 0,
+    requiresRosterAssignment: Boolean(requestedClass.section) && unassignedStudentCount > 0,
     unassignedStudentCount,
     students: students.map((student) => ({
       id: student.id,
@@ -194,7 +197,7 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
     where: { status: { equals: 'active', mode: 'insensitive' } },
     select: { id: true, grade: true, section: true },
   })
-  const students = activeStudents.filter((student) => teacherClassKey(normalizeClassParts(student.grade, student.section)) === teacherClassKey(selectedClass))
+  const students = activeStudents.filter((student) => matchesAssignedClass(student, selectedClass))
   const officialIds = new Set(students.map((student) => student.id))
   if (students.length !== ids.length || ids.some((id) => !officialIds.has(id))) {
     throw new ApiError(409, 'The official class roster changed. Reload attendance before submitting so every active learner is included.')

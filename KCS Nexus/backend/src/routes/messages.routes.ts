@@ -59,7 +59,7 @@ const getOrbitDirectory = async () => {
     const response = await fetch(`${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}`, { headers: { 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' }, signal: AbortSignal.timeout(3_000) })
     if (!response.ok) throw new Error(`status ${response.status}`)
     const value = await response.json() as OrbitDirectory
-    orbitDirectoryCache = { expiresAt: Date.now() + 10_000, value }
+    orbitDirectoryCache = { expiresAt: Date.now() + 15 * 60_000, value }
     return value
   } catch (error) {
     console.warn('Orbit shared directory unavailable; using Nexus recipient fallback', error)
@@ -77,15 +77,52 @@ const findOfficialContact = (directory: OrbitDirectory, person: { firstName?: st
 messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const query = String(req.query.q ?? '').trim()
   const box = String(req.query.box ?? 'all')
+  const requestedLimit = Number(req.query.limit ?? 250)
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.trunc(requestedLimit), 20), 250) : 100
+  const cursor = String(req.query.cursor ?? '').trim()
+  const from = String(req.query.from ?? '').trim()
+  const to = String(req.query.to ?? '').trim()
   const userId = await resolveMessageActorId(req)
   const targetRole = req.user!.role.toUpperCase() as 'ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT'
   const direction = box === 'sent' ? { senderId: userId } : box === 'inbox' ? { recipientId: userId } : { OR: [{ senderId: userId }, { recipientId: userId }, { targetRole }] }
-  const search = query ? { OR: [{ subject: { contains: query, mode: 'insensitive' as const } }, { body: { contains: query, mode: 'insensitive' as const } }] } : {}
-  const messages = await prisma.internalMessage.findMany({
-    where: { AND: [direction, search] },
-    select: { id: true, senderId: true, recipientId: true, subject: true, body: true, attachmentName: true, attachmentMime: true, attachmentSize: true, targetRole: true, readAt: true, priority: true, channel: true, createdAt: true, sender: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } }, recipient: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } } },
-    orderBy: { createdAt: 'desc' }, take: 250,
-  })
+  const queryTokens = query.split(/\s+/).filter(Boolean)
+  const search = queryTokens.length ? {
+    AND: queryTokens.map((token) => {
+      const identitySearch = {
+        OR: [
+          { firstName: { contains: token, mode: 'insensitive' as const } },
+          { middleName: { contains: token, mode: 'insensitive' as const } },
+          { lastName: { contains: token, mode: 'insensitive' as const } },
+          { email: { contains: token, mode: 'insensitive' as const } },
+          { phone: { contains: token, mode: 'insensitive' as const } },
+        ],
+      }
+      return { OR: [
+        { subject: { contains: token, mode: 'insensitive' as const } },
+        { body: { contains: token, mode: 'insensitive' as const } },
+        { sender: { is: identitySearch } },
+        { recipient: { is: identitySearch } },
+      ] }
+    }),
+  } : {}
+  const createdAt = {
+    ...(from && !Number.isNaN(Date.parse(from)) ? { gte: new Date(from + (from.length <= 10 ? 'T00:00:00.000Z' : '')) } : {}),
+    ...(to && !Number.isNaN(Date.parse(to)) ? { lte: new Date(to + (to.length <= 10 ? 'T23:59:59.999Z' : '')) } : {}),
+  }
+  const where = { AND: [direction, search, Object.keys(createdAt).length ? { createdAt } : {}] }
+  const [page, total] = await Promise.all([
+    prisma.internalMessage.findMany({
+      where,
+      select: { id: true, senderId: true, recipientId: true, subject: true, body: true, attachmentName: true, attachmentMime: true, attachmentSize: true, targetRole: true, readAt: true, priority: true, channel: true, createdAt: true, sender: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } }, recipient: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true, email: true, phone: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    }),
+    prisma.internalMessage.count({ where }),
+  ])
+  const hasMore = page.length > limit
+  const messages = page.slice(0, limit)
+  const nextCursor = hasMore ? messages.at(-1)?.id || '' : ''
   const correspondence = messages.length ? await prisma.correspondenceLog.findMany({
     where: { senderId: userId },
     select: { channel: true, status: true, failureReason: true, sentAt: true, deliveredAt: true, metadata: true },
@@ -98,6 +135,10 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
     if (!messageId) return
     deliveryByMessage.set(messageId, [...(deliveryByMessage.get(messageId) || []), entry])
   })
+  res.setHeader('X-Total-Count', String(total))
+  res.setHeader('X-Has-More', hasMore ? 'true' : 'false')
+  if (nextCursor) res.setHeader('X-Next-Cursor', nextCursor)
+  res.setHeader('Cache-Control', 'private, no-store')
   return success(res, messages.map((message) => ({ ...message, hasAttachment: Boolean(message.attachmentName), deliveries: deliveryByMessage.get(message.id) || [] })))
 }))
 

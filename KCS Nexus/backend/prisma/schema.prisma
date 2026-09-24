@@ -746,6 +746,10 @@ model InternalMessage {
 
   @@index([targetRole])
   @@index([createdAt])
+  @@index([senderId, createdAt])
+  @@index([recipientId, createdAt])
+  @@index([targetRole, createdAt])
+  @@index([createdAt, id])
 }
 
 model ReportCard {
@@ -1283,6 +1287,7 @@ model CorrespondenceLog {
 
   @@index([channel])
   @@index([status])
+  @@index([senderId, createdAt])
   @@index([createdAt])
   @@index([reportCardId])
   @@index([disciplineCaseId])

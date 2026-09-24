@@ -111,6 +111,7 @@ const defaultCategories: Category[] = [
 ]
 
 const assignmentTypeLabels: Record<AssignmentType, { name: string; help: string }> = {
+
   homework: { name: 'Homework', help: 'Practice completed outside the lesson.' },
   quiz: { name: 'Quiz', help: 'Short knowledge or skill check.' },
   test: { name: 'Test', help: 'Unit or chapter assessment.' },
@@ -125,6 +126,16 @@ type GradebookSnapshot = {
   scores: Record<string, string>
   comments: Record<string, string>
   savedAt?: string
+}
+
+type OfficialFinalGrade = {
+  id: string
+  studentId: string
+  courseId: string
+  percentage: number
+  letterGrade: string
+  createdAt: string
+  cycle?: { academicYear?: string; term?: string; status?: string }
 }
 
 const legacyDemoAssignmentIds = new Set(['gb-lab', 'gb-quiz', 'gb-homework', 'gb-exam', 'gb-participation'])
@@ -213,12 +224,29 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       const latest = await teacherWorkspaceAPI.get()
       const workspace = latest.data?.data
       const state = (workspace?.state ?? {}) as Record<string, any>
+      const legacyColumns = assignments.map(({ id, title, type, date, maxPoints }) => ({ id, title, type, date, maxPoints }))
+      const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
+      const legacyPrefix = `${selectedCourseId}-`
+      Object.keys(nextLegacyScores).forEach((key) => {
+        if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
+      })
+      assignments.forEach((assignment) => {
+        students.forEach((student) => {
+          const value = scores[`${assignment.id}:${student.id}`]
+          if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
+        })
+      })
       const savedWorkspace = await teacherWorkspaceAPI.save({
         ...state,
         advancedGradebookByCourse: {
           ...(state.advancedGradebookByCourse ?? {}),
           [selectedCourseId]: snapshot,
         },
+        gradebookColumnsByCourse: {
+          ...(state.gradebookColumnsByCourse ?? {}),
+          [selectedCourseId]: legacyColumns,
+        },
+        gradebookScores: nextLegacyScores,
       }, workspace?.revision)
       window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt, revision: savedWorkspace.data?.data?.revision } }))
       setSaveNotice(`Saved to KCS Nexus at ${new Date().toLocaleTimeString()}`)
@@ -240,6 +268,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [academicYear, setAcademicYear] = useState('2026-2027')
   const [addingAssignment, setAddingAssignment] = useState(false)
   const [submittingFinals, setSubmittingFinals] = useState(false)
+  const [officialFinalGrades, setOfficialFinalGrades] = useState<OfficialFinalGrade[]>([])
   const [draft, setDraft] = useState({
     title: '',
     type: 'quiz' as AssignmentType,
@@ -258,9 +287,85 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       let saved: Partial<GradebookSnapshot> = {}
       try {
         saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
-        const response = await teacherWorkspaceAPI.get()
-        const serverSnapshot = response.data?.data?.state?.advancedGradebookByCourse?.[selectedCourseId] as Partial<GradebookSnapshot> | undefined
+        if (!saved.assignments?.length && selectedCourse?.studentIds?.length) {
+          const enrolledIds = new Set(selectedCourse.studentIds)
+          const browserSnapshots: Array<{ snapshot: Partial<GradebookSnapshot>; overlap: number }> = []
+          for (let index = 0; index < localStorage.length; index += 1) {
+            const key = localStorage.key(index)
+            if (!key?.startsWith('kcs-live-gradebook-') || key === `kcs-live-gradebook-${selectedCourseId}`) continue
+            try {
+              const snapshot = JSON.parse(localStorage.getItem(key) || '{}') as Partial<GradebookSnapshot>
+              const overlap = Object.keys(snapshot.scores ?? {}).filter((scoreKey) => enrolledIds.has(scoreKey.slice(scoreKey.lastIndexOf(':') + 1))).length
+              if (snapshot.assignments?.length && overlap > 0) browserSnapshots.push({ snapshot, overlap })
+            } catch {
+              // Ignore a damaged legacy browser entry and keep looking.
+            }
+          }
+          browserSnapshots.sort((left, right) => right.overlap - left.overlap)
+          if (browserSnapshots[0] && (!browserSnapshots[1] || browserSnapshots[0].overlap > browserSnapshots[1].overlap)) saved = browserSnapshots[0].snapshot
+        }
+        const [response, officialResponse] = await Promise.all([
+          teacherWorkspaceAPI.get(),
+          academicRecordsAPI.myFinalGrades().catch(() => null),
+        ])
+        const state = (response.data?.data?.state ?? {}) as Record<string, any>
+        const snapshots = (state.advancedGradebookByCourse ?? {}) as Record<string, Partial<GradebookSnapshot>>
+        let serverSnapshot = snapshots[selectedCourseId]
+
+        if (!serverSnapshot && selectedCourse) {
+          const legacyCourse = Array.isArray(state.courses)
+            ? state.courses.find((course: any) =>
+                snapshots[course?.id]
+                && String(course?.name || '').trim().toLowerCase() === selectedCourse.name.trim().toLowerCase()
+                && canonicalClassLabel(course?.className || course?.gradeLevels?.[0]) === canonicalClassLabel(selectedCourse.className || selectedCourse.gradeLevels[0]),
+              )
+            : null
+          if (legacyCourse?.id) serverSnapshot = snapshots[legacyCourse.id]
+        }
+
+        if (!serverSnapshot && selectedCourse) {
+          const legacyColumnsByCourse = (state.gradebookColumnsByCourse ?? {}) as Record<string, Array<{ id: string; title: string; type?: string; date?: string; maxPoints?: number }>>
+          const legacyCourse = Array.isArray(state.courses)
+            ? state.courses.find((course: any) =>
+                legacyColumnsByCourse[course?.id]?.length
+                && String(course?.name || '').trim().toLowerCase() === selectedCourse.name.trim().toLowerCase()
+                && canonicalClassLabel(course?.className || course?.gradeLevels?.[0]) === canonicalClassLabel(selectedCourse.className || selectedCourse.gradeLevels[0]),
+              )
+            : null
+          const legacyCourseId = legacyColumnsByCourse[selectedCourseId]?.length ? selectedCourseId : legacyCourse?.id
+          const legacyColumns = legacyCourseId ? legacyColumnsByCourse[legacyCourseId] ?? [] : []
+          if (legacyCourseId && legacyColumns.length) {
+            const legacyScores = (state.gradebookScores ?? {}) as Record<string, string>
+            const migratedScores: Record<string, string> = {}
+            legacyColumns.forEach((column) => selectedCourse.studentIds.forEach((studentId) => {
+              const value = legacyScores[`${legacyCourseId}-${column.id}-${studentId}`]
+              if (value !== undefined) migratedScores[`${column.id}:${studentId}`] = value
+            }))
+            serverSnapshot = {
+              assignments: legacyColumns.map((column) => {
+                const normalizedType = String(column.type || 'test').toLowerCase()
+                const type = assignmentTypes.includes(normalizedType as AssignmentType) ? normalizedType as AssignmentType : 'test'
+                return { id: column.id, title: column.title, type, category: type, maxPoints: Math.max(1, Number(column.maxPoints) || 100), date: String(column.date || ''), term: terms[0], description: '' }
+              }),
+              categories: defaultCategories,
+              scores: migratedScores,
+              comments: {},
+            }
+          }
+        }
+
+        if (!serverSnapshot && selectedCourse?.studentIds?.length) {
+          const enrolledIds = new Set(selectedCourse.studentIds)
+          const ranked = Object.entries(snapshots).map(([key, snapshot]) => ({
+            key,
+            snapshot,
+            overlap: Object.keys(snapshot.scores ?? {}).filter((scoreKey) => enrolledIds.has(scoreKey.slice(scoreKey.lastIndexOf(':') + 1))).length,
+          })).filter((item) => item.overlap > 0).sort((left, right) => right.overlap - left.overlap)
+          if (ranked[0] && (!ranked[1] || ranked[0].overlap > ranked[1].overlap)) serverSnapshot = ranked[0].snapshot
+        }
+
         if (serverSnapshot) saved = serverSnapshot
+        if (active) setOfficialFinalGrades((officialResponse?.data?.data?.submissions ?? []) as OfficialFinalGrade[])
       } catch {
         // The browser copy remains a safe fallback while the server is temporarily unavailable.
       }
@@ -276,7 +381,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
     void loadGradebook()
     return () => { active = false }
-  }, [selectedCourseId, students])
+  }, [selectedCourseId, selectedCourse, students])
 
   useEffect(() => {
     if (!spreadsheetOpen) return
@@ -292,7 +397,11 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     if (!selectedCourse) return []
     return (selectedCourse.studentIds ?? [])
       .map((id) => students.find((student) => student.id === id))
-      .filter(Boolean) as GradebookStudent[]
+      .filter(Boolean)
+      .sort((left, right) => (left?.name ?? '').localeCompare(right?.name ?? '', undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      })) as GradebookStudent[]
   }, [selectedCourse, students])
   const courseStudents = useMemo(() => enrolledCourseStudents.filter((student) =>
     `${student.name} ${canonicalClassLabel(student.grade, student.section)}`.toLowerCase().includes(query.toLowerCase()),
@@ -303,6 +412,19 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const scoreKey = (assignmentId: string, studentId: string) => `${assignmentId}:${studentId}`
 
   const getRawScore = (assignmentId: string, studentId: string) => scores[scoreKey(assignmentId, studentId)] ?? ''
+  const officialCourseGrades = useMemo(() => officialFinalGrades
+    .filter((grade) =>
+      grade.courseId === selectedCourse?.id
+      && (!grade.cycle?.academicYear || grade.cycle.academicYear === academicYear)
+      && (!grade.cycle?.term || grade.cycle.term === term),
+    )
+    .map((grade) => ({ ...grade, student: students.find((student) => student.id === grade.studentId) }))
+    .sort((left, right) => (left.student?.name ?? left.studentId).localeCompare(right.student?.name ?? right.studentId, undefined, {
+      sensitivity: 'base',
+      numeric: true,
+    })),
+  [officialFinalGrades, selectedCourse?.id, academicYear, term, students])
+
 
   const getScore = (assignment: GradebookColumn, studentId: string) => parseScore(getRawScore(assignment.id, studentId), assignment.maxPoints)
 
@@ -591,6 +713,26 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         </div>
       </div>
 
+      {officialCourseGrades.length > 0 && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 dark:border-emerald-800 dark:bg-emerald-950/20">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">Official submitted results</p>
+              <h4 className="mt-1 font-bold text-kcs-blue-950 dark:text-white">Grades already preserved in report cards</h4>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">These values come directly from the official Nexus academic register. Recovered task details remain editable in the spreadsheet below.</p>
+            </div>
+            <span className="w-fit rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white">{officialCourseGrades.length} official grade(s)</span>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {officialCourseGrades.map((grade) => (
+              <div key={grade.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-3 dark:border-emerald-900 dark:bg-kcs-blue-950">
+                <div><p className="font-semibold text-kcs-blue-950 dark:text-white">{grade.student?.name ?? grade.studentId}</p><p className="text-xs text-slate-500">{grade.cycle?.term ?? term}</p></div>
+                <div className="text-right"><strong className="text-lg text-emerald-700 dark:text-emerald-300">{Number(grade.percentage).toFixed(2)}%</strong><p className="text-xs font-bold text-slate-500">{grade.letterGrade}</p></div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
           <div className="flex items-center justify-between gap-3">
@@ -598,6 +740,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Create an assessment task</h4>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Add one real Gradebook column. The task type automatically selects its weighting category.</p>
             </div>
+
             <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">RBAC: teacher classes only</span>
           </div>
           <div className="mt-4 grid gap-3">

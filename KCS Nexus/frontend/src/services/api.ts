@@ -76,7 +76,7 @@ const isTransientNetworkError = (error: AxiosError) => {
 const mayRetrySafely = (config: ResilientRequestConfig | undefined, error: AxiosError) => {
   const method = config?.method?.toUpperCase() || 'GET'
   const optedOut = config?.headers?.['x-no-network-retry'] === 'true'
-  return Boolean(config && safeReadMethods.has(method) && !optedOut && navigator.onLine && isTransientNetworkError(error) && (config._networkRetryCount || 0) < 2)
+  return Boolean(config && safeReadMethods.has(method) && !optedOut && navigator.onLine && isTransientNetworkError(error) && (config._networkRetryCount || 0) < 3)
 }
 
 const networkRetryDelay = (attempt: number) => 450 * (2 ** (attempt - 1)) + Math.round(Math.random() * 180)
@@ -479,10 +479,10 @@ export const financeAPI = {
 }
 
 export const messagesAPI = {
-  getAll: (params?: { q?: string; box?: string }) => api.get('/messages', { params, timeout: 30_000 }),
+  getAll: (params?: { q?: string; box?: string; limit?: number; cursor?: string; from?: string; to?: string }) => api.get('/messages', { params, timeout: 20_000 }),
   getContacts: () => api.get('/messages/contacts'),
-  getParentContacts: () => api.get('/messages/parent-contacts', { timeout: 30_000 }),
-  deliverToParents: (data: FormData) => api.post('/messages/parent-delivery', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getParentContacts: () => api.get('/messages/parent-contacts', { timeout: 15_000 }),
+  deliverToParents: (data: FormData) => api.post('/messages/parent-delivery', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 }),
   attachment: (id: string) => api.get(`/messages/${id}/attachment`, { responseType: 'blob' }),
   send: (data: FormData | { recipientId: string; subject: string; body: string }) => api.post('/messages', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
   broadcast: (data: { audience: 'ALL' | 'PARENTS' | 'STUDENTS' | 'TEACHERS' | 'STAFF' | 'GRADE_9_12_FAMILIES'; subject: string; body: string }) => api.post('/messages/broadcast', data),

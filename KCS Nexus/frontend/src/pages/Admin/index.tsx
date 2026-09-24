@@ -1248,7 +1248,10 @@ const MainTeacherAssignmentPanel = () => {
       setRosterStudents(roster.students || [])
       setRosterClasses(roster.classes || [])
       setRosterDrafts(Object.fromEntries((roster.students || []).map((student: any) => [student.id, student.section || ''])))
-      setRosterGrade((current) => current || (roster.students || [])[0]?.grade || SCHOOL_LEVELS[0])
+      setRosterGrade((current) => current || (
+        (roster.students || []).find((student: any) => String(student.grade || '').trim().toLowerCase() === 'grade 9')?.grade
+        || (roster.students || [])[0]?.grade || SCHOOL_LEVELS[0]
+      ))
     } catch (error: any) {
       setResult({ ok: false, message: error?.response?.data?.message || tr('Impossible de charger les enseignants et les listes de classe.', 'Unable to load teachers and class rosters.') })
     }
@@ -1277,6 +1280,10 @@ const MainTeacherAssignmentPanel = () => {
     } finally { setBusyId('') }
   }
   const gradeOptions = [...new Set(rosterStudents.map((student) => student.grade).filter(Boolean))].sort((left, right) => String(left).localeCompare(String(right), 'en', { numeric: true }))
+  const orderedTeachers = [...teachers].sort((left, right) =>
+    name(left).localeCompare(name(right), language === 'fr' ? 'fr' : 'en', { sensitivity: 'base', numeric: true }),
+  )
+
   const sectionOptions = [...new Set([
     ...rosterClasses.filter((item) => item.grade === rosterGrade).map((item) => item.section),
     ...rosterStudents.filter((student) => student.grade === rosterGrade).map((student) => student.section),
@@ -1285,7 +1292,9 @@ const MainTeacherAssignmentPanel = () => {
     if (student.grade !== rosterGrade) return false
     const haystack = [student.studentNumber, student.grade, student.section, name(student)].filter(Boolean).join(' ').toLowerCase()
     return !rosterQuery.trim() || haystack.includes(rosterQuery.trim().toLowerCase())
-  })
+  }).sort((left, right) =>
+    name(left).localeCompare(name(right), language === 'fr' ? 'fr' : 'en', { sensitivity: 'base', numeric: true }),
+  )
   const saveRosterSection = async (student: any) => {
     const section = (rosterDrafts[student.id] || '').trim()
     setRosterBusyId(student.id)
@@ -1301,19 +1310,20 @@ const MainTeacherAssignmentPanel = () => {
       setRosterBusyId('')
     }
   }
-  return <div className="space-y-6">
+  return <div className="flex flex-col gap-6">
     {result && <div className="fixed inset-0 z-[170] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-lg rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-kcs-blue-950"><div className={'mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black text-white ' + (result.ok ? 'bg-emerald-600' : 'bg-red-600')}>{result.ok ? '✓' : '!'}</div><h3 className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{result.ok ? tr('Opération réussie', 'Operation successful') : tr('Opération impossible', 'Operation failed')}</h3><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{result.message}</p><button type="button" onClick={() => setResult(null)} className="mt-5 w-full rounded-xl bg-kcs-blue-700 px-4 py-3 font-bold text-white">{tr('Fermer', 'Close')}</button></div></div>}
-    <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
+    <section className="order-1 rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
       <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr('Responsabilités de classe', 'Class responsibilities')}</p>
       <h2 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Main Teachers et Assistants', 'Main Teachers and Assistants')}</h2>
-      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr('Cochez directement le rôle de chaque enseignant, choisissez sa classe puis enregistrez. Un seul Main Teacher et un seul Assistant peuvent être affectés à une même classe. Les autres cours et le statut employé restent inchangés.', 'Check each teacher role directly, choose the class, then save. Each class accepts one Main Teacher and one Assistant. Other courses and employee status remain unchanged.')}</p>
+      <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr('Commencez par affecter les élèves aux sections dans l’étape 1 ci-dessous, puis choisissez le Main Teacher et son Assistant dans l’étape 2. Une classe non divisée peut rester sans section. Toute classe divisée accepte autant de sections que nécessaire.', 'Start by assigning learners to sections in step 1 below, then choose the Main Teacher and Assistant in step 2. An unsplit class may remain without a section. Any divided class supports as many sections as needed.')}</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-sky-200 bg-white p-3 text-sm font-bold text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><span className="mr-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-kcs-blue-700 text-white">1</span>{tr('Élèves et sections officielles', 'Learners and official sections')}</div><div className="rounded-xl border border-sky-200 bg-white p-3 text-sm font-bold text-kcs-blue-900 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"><span className="mr-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-kcs-blue-700 text-white">2</span>{tr('Main Teacher et Assistant', 'Main Teacher and Assistant')}</div></div>
       <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-blue-100 px-3 py-1.5 text-blue-800">{teachers.filter((item) => item.status === 'HOMEROOM_TEACHER').length} Main Teacher(s)</span><span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{teachers.filter((item) => item.status === 'ASSISTANT_TEACHER').length} Assistant(s)</span></div>
     </section>
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+    <section className="order-4 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
       <div className="grid grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(7rem,.6fr)_auto] gap-3 border-b bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60 dark:text-slate-300">
         <span>{tr('Employé / professeur', 'Employee / teacher')}</span><span>Main Teacher</span><span>{tr('Assistant', 'Assistant')}</span><span>{tr('Classe', 'Class')}</span><span>{tr('Section', 'Section')}</span><span>{tr('Action', 'Action')}</span>
       </div>
-      <div className="divide-y dark:divide-kcs-blue-800">{teachers.map((item) => {
+      <div className="divide-y dark:divide-kcs-blue-800">{orderedTeachers.map((item) => {
         const draft = drafts[item.id] || { status: 'TEACHER', grade: SCHOOL_LEVELS[0], section: '' }
         return <article key={item.id} className="grid grid-cols-1 gap-3 p-4 md:grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,.8fr)_minmax(9rem,.8fr)_minmax(8rem,.8fr)_minmax(7rem,.6fr)_auto] md:items-center">
           <div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(item)}</p><p className="text-xs text-slate-500">{item.user?.email} · {item._count?.courses || 0} {tr('cours', 'courses')}</p></div>
@@ -1327,7 +1337,7 @@ const MainTeacherAssignmentPanel = () => {
       {!teachers.length && <p className="p-8 text-center text-sm text-slate-500">{tr('Aucun professeur disponible.', 'No teacher is available.')}</p>}
     </section>
     <datalist id="main-teacher-section-options">{sectionOptions.map((section) => <option key={String(section)} value={String(section)}/>)}</datalist>
-    <section className="rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
+    <section className="order-2 rounded-2xl border border-sky-100 bg-sky-50/70 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr('Registre officiel des sous-classes', 'Official class-section roster')}</p>
@@ -1437,6 +1447,20 @@ const AdminSectionView = ({
     familyContacts: [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')],
     students: [createAdminStudentDraft()],
   })
+
+  useEffect(() => {
+    if (!editingParent) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !savingParentEdit) setEditingParent(null)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [editingParent, savingParentEdit])
 
   const shouldLoadRoster = adminRosterSegments.has(segment)
 
@@ -2383,9 +2407,9 @@ const AdminSectionView = ({
           </div>
         )}
 
-        {editingParent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Modifier parent">
-            <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:max-h-[calc(100dvh-3rem)] lg:w-[80vw]">
+        {editingParent && createPortal((
+          <div className="fixed inset-0 z-[1400] flex items-start justify-center overflow-hidden bg-kcs-blue-950/75 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Modifier parent">
+            <section className="flex h-[100dvh] max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl lg:w-[min(92vw,72rem)]">
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-kcs-blue-700 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
@@ -2398,7 +2422,7 @@ const AdminSectionView = ({
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
                   <div className="mt-3">
@@ -2489,13 +2513,13 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
                 <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border-2 border-slate-400 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-300 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">Annuler</button>
                 <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>
             </section>
           </div>
-        )}
+        ), document.body)}
       </div>
     )
   }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import MessageAttachment from '../../components/shared/MessageAttachment'
 import AudioRecorder from '../../components/shared/AudioRecorder'
 import { messagesAPI } from '../../services/api'
+import { useAuthStore } from '../../store/authStore'
 
 const fieldClass = 'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const primaryButton = 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-45'
@@ -56,6 +57,7 @@ const copy = {
     choice: 'Choix', parent: 'Correspondant', date: 'Date', action: 'Action', view: 'Voir', sentMessage: 'Message envoyé', close: 'Fermer', nexus: 'Nexus', sent: 'Envoyé', failed: 'Échec', logged: 'Enregistré', deliveryTitle: 'Résultat de l’envoi', deliveryIntro: 'Résultat technique reçu pour chaque destinataire.', providerAccepted: 'Accepté par le fournisseur', notSent: 'Non envoyé', finalPending: 'Réception finale à confirmer', deliveryNote: 'Un statut accepté confirme la prise en charge par le serveur email ou l’opérateur SMS. La réception finale dans la boîte mail ou sur le téléphone dépend ensuite du fournisseur.', emailLabel: 'E-mail', smsLabel: 'SMS',
     attachDocument: 'Joindre un fichier audio, vidéo ou document', fileTooLarge: 'Le fichier ne doit pas dépasser 25 Mo.', removeAttachment: 'Retirer la pièce jointe', download: 'Télécharger',
     quickAudience: 'Sélection rapide par classe', quickAudienceHelp: 'Choisissez une ou plusieurs classes : les parents réellement liés aux élèves concernés sont sélectionnés immédiatement, sans parcourir la liste.', allParents: 'Tous les parents', classesChosen: 'classe(s) ciblée(s)', familiesReady: 'famille(s) prête(s)'
+    ,cachedData: 'Connexion lente : le dernier registre fiable reste affich\u00e9 pendant la synchronisation.', refresh: 'Actualiser', loadOlder: 'Charger des messages plus anciens', loadingOlder: 'Chargement des archives...', archiveCount: (shown: number, total: number) => shown + ' message(s) affich\u00e9(s) sur ' + total
   },
   en: {
     loadFailed: 'Unable to load communications.', selectParent: 'Select at least one recipient.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
@@ -67,14 +69,36 @@ const copy = {
     choice: 'Select', parent: 'Contact', date: 'Date', action: 'Action', view: 'View', sentMessage: 'Sent message', close: 'Close', nexus: 'Nexus', sent: 'Sent', failed: 'Failed', logged: 'Recorded', deliveryTitle: 'Delivery result', deliveryIntro: 'Technical result received for each recipient.', providerAccepted: 'Accepted by provider', notSent: 'Not sent', finalPending: 'Final receipt pending confirmation', deliveryNote: 'An accepted status confirms processing by the email server or SMS operator. Final arrival in the inbox or on the phone then depends on the provider.', emailLabel: 'Email', smsLabel: 'SMS',
     attachDocument: 'Attach audio, video or document', fileTooLarge: 'The file must not exceed 25 MB.', removeAttachment: 'Remove attachment', download: 'Download',
     quickAudience: 'Quick selection by class', quickAudienceHelp: 'Choose one or more classes: parents truly linked to the relevant learners are selected immediately, without browsing the list.', allParents: 'All parents', classesChosen: 'class(es) targeted', familiesReady: 'family/families ready'
+    ,cachedData: 'Slow connection: the last reliable directory remains visible while synchronization continues.', refresh: 'Refresh', loadOlder: 'Load older messages', loadingOlder: 'Loading archives...', archiveCount: (shown: number, total: number) => shown + ' message(s) shown out of ' + total
   },
 } as const
 
+const communicationCachePrefix = 'kcs:nexus:communications:v3'
+const readCommunicationCache = (cacheKey: string) => {
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem(cacheKey) || 'null')
+    return parsed && Array.isArray(parsed.parents) && Array.isArray(parsed.history) ? parsed : null
+  } catch {
+    return null
+  }
+}
+const mergeMessages = (current: any[], incoming: any[]) => {
+  const byId = new Map(current.map((message) => [message.id, message]))
+  incoming.forEach((message) => byId.set(message.id, { ...byId.get(message.id), ...message }))
+  return Array.from(byId.values()).sort((left, right) => {
+    const dateOrder = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    return dateOrder || String(right.id).localeCompare(String(left.id))
+  })
+}
+
 export default function ParentCommunicationPanel() {
   const { i18n } = useTranslation()
+  const authenticatedUserId = useAuthStore((state) => state.user?.id || state.user?.email || 'anonymous')
+  const communicationCacheKey = `${communicationCachePrefix}:${authenticatedUserId}`
+  const cachedCommunication = useMemo(() => readCommunicationCache(communicationCacheKey), [communicationCacheKey])
   const language = (i18n.resolvedLanguage || i18n.language || 'en').startsWith('fr') ? 'fr' : 'en'
   const c = copy[language]
-  const [parents, setParents] = useState<any[]>([])
+  const [parents, setParents] = useState<any[]>(() => cachedCommunication?.parents ?? [])
   const [selectedParents, setSelectedParents] = useState<string[]>([])
   const [parentQuery, setParentQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
@@ -85,10 +109,17 @@ export default function ParentCommunicationPanel() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [attachment, setAttachment] = useState<File | null>(null)
-  const [history, setHistory] = useState<any[]>([])
+  const [history, setHistory] = useState<any[]>(() => cachedCommunication?.history ?? [])
+  const [historyCursor, setHistoryCursor] = useState('')
+  const [historyHasMore, setHistoryHasMore] = useState(true)
+  const [historyTotal, setHistoryTotal] = useState(() => Number(cachedCommunication?.total || 0))
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const [usingCachedData, setUsingCachedData] = useState(() => Boolean(cachedCommunication))
   const [historyQuery, setHistoryQuery] = useState('')
   const [historyFrom, setHistoryFrom] = useState('')
   const [historyTo, setHistoryTo] = useState('')
+  const [remoteHistory, setRemoteHistory] = useState<any[] | null>(null)
+  const [searchingArchive, setSearchingArchive] = useState(false)
   const [selectedHistory, setSelectedHistory] = useState<string[]>([])
   const [viewingMessage, setViewingMessage] = useState<any | null>(null)
   const [deliveryReport, setDeliveryReport] = useState<any | null>(null)
@@ -97,16 +128,28 @@ export default function ParentCommunicationPanel() {
   const [notice, setNotice] = useState('')
 
   const load = async () => {
-    const retryOnce = async <T,>(request: () => Promise<T>) => {
-      try { return await request() } catch { return request() }
-    }
     const [contactsResult, historyResult] = await Promise.allSettled([
-      retryOnce(() => messagesAPI.getParentContacts()),
-      retryOnce(() => messagesAPI.getAll({ box: 'all' })),
+      messagesAPI.getParentContacts(),
+      messagesAPI.getAll({ box: 'all', limit: 100 }),
     ])
-    if (contactsResult.status === 'fulfilled') setParents(contactsResult.value.data?.data ?? [])
-    if (historyResult.status === 'fulfilled') setHistory(historyResult.value.data?.data ?? [])
-    if (contactsResult.status === 'rejected') throw contactsResult.reason
+    let refreshed = false
+    if (contactsResult.status === 'fulfilled') {
+      setParents(contactsResult.value.data?.data ?? [])
+      refreshed = true
+    }
+    if (historyResult.status === 'fulfilled') {
+      const next = historyResult.value.data?.data ?? []
+      setHistory((current) => mergeMessages(current, next))
+      setHistoryCursor(String(historyResult.value.headers['x-next-cursor'] || ''))
+      setHistoryHasMore(String(historyResult.value.headers['x-has-more']) === 'true')
+      setHistoryTotal(Number(historyResult.value.headers['x-total-count'] || next.length))
+      refreshed = true
+    }
+    if (refreshed) {
+      setUsingCachedData(contactsResult.status === 'rejected' || historyResult.status === 'rejected')
+      if (contactsResult.status === 'fulfilled' && historyResult.status === 'fulfilled') setNotice('')
+    }
+    if (!refreshed) throw contactsResult.status === 'rejected' ? contactsResult.reason : historyResult.status === 'rejected' ? historyResult.reason : new Error('Communication refresh failed')
   }
 
   useEffect(() => {
@@ -117,6 +160,39 @@ export default function ParentCommunicationPanel() {
     const availableIds = new Set(parents.map((parent) => parent.id))
     setSelectedParents((current) => current.filter((id) => availableIds.has(id)))
   }, [parents])
+
+  useEffect(() => {
+    if (!parents.length && !history.length) return
+    try {
+      window.sessionStorage.setItem(communicationCacheKey, JSON.stringify({
+        parents,
+        history: history.slice(0, 500),
+        total: historyTotal,
+        savedAt: new Date().toISOString(),
+      }))
+    } catch {
+      // A full browser cache must never prevent the live communication screen.
+    }
+  }, [communicationCacheKey, history, historyTotal, parents])
+
+  const loadOlderHistory = async () => {
+    if (!historyHasMore || !historyCursor || loadingOlder) return
+    setLoadingOlder(true)
+    try {
+      const response = await messagesAPI.getAll({ box: 'all', limit: 100, cursor: historyCursor })
+      const rows = response.data?.data ?? []
+      setHistory((current) => mergeMessages(current, rows))
+      setHistoryCursor(String(response.headers['x-next-cursor'] || ''))
+      setHistoryHasMore(String(response.headers['x-has-more']) === 'true')
+      setHistoryTotal(Number(response.headers['x-total-count'] || historyTotal))
+      setUsingCachedData(false)
+    } catch {
+      setUsingCachedData(true)
+      setNotice(c.loadFailed)
+    } finally {
+      setLoadingOlder(false)
+    }
+  }
 
   const gradeOptions = useMemo(() => {
     const available = new Set<string>(parents.flatMap((person) => person.grades ?? []).map(normalizeGrade).filter(Boolean))
@@ -175,18 +251,45 @@ export default function ParentCommunicationPanel() {
     })
   }, [parentQuery, parents, roleFilter, gradeFilter, contactFilter])
 
+  useEffect(() => {
+    const active = Boolean(historyQuery.trim() || historyFrom || historyTo)
+    if (!active) {
+      setRemoteHistory(null)
+      setSearchingArchive(false)
+      return
+    }
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      setSearchingArchive(true)
+      void messagesAPI.getAll({
+        box: 'all',
+        limit: 250,
+        q: historyQuery.trim() || undefined,
+        from: historyFrom || undefined,
+        to: historyTo || undefined,
+      }).then((response) => {
+        if (!cancelled) setRemoteHistory(response.data?.data ?? [])
+      }).catch(() => {
+        if (!cancelled) setUsingCachedData(true)
+      }).finally(() => {
+        if (!cancelled) setSearchingArchive(false)
+      })
+    }, 450)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [historyFrom, historyQuery, historyTo])
+
   const historyRows = useMemo(() => {
     const tokens = historyQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
     const from = historyFrom ? new Date(`${historyFrom}T00:00:00`) : null
     const to = historyTo ? new Date(`${historyTo}T23:59:59.999`) : null
-    return history.filter((message) => {
+    return (remoteHistory ?? history).filter((message) => {
       const createdAt = new Date(message.createdAt)
       const haystack = [message.subject, message.body, messageRecipient(message), message.recipient?.email, message.recipient?.phone, createdAt.toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US')].filter(Boolean).join(' ').toLowerCase()
       return tokens.every((token) => haystack.includes(token))
         && (!from || createdAt >= from)
         && (!to || createdAt <= to)
     })
-  }, [history, historyFrom, historyQuery, historyTo, language])
+  }, [history, historyFrom, historyQuery, historyTo, language, remoteHistory])
 
   const allParentsSelected = parentRows.length > 0 && parentRows.every((parent) => selectedParents.includes(parent.id))
   const allHistorySelected = historyRows.length > 0 && historyRows.every((message) => selectedHistory.includes(message.id))
@@ -251,6 +354,12 @@ export default function ParentCommunicationPanel() {
   return (
     <div className="space-y-6">
       {notice ? <div className="rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60 dark:text-kcs-blue-100">{notice}</div> : null}
+      {usingCachedData ? <div className="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+        <span className="flex items-center gap-2"><AlertTriangle size={18} />{c.cachedData}</span>
+        <button type="button" className={primaryButton + ' shrink-0'} onClick={() => void load()}>
+          {c.refresh}
+        </button>
+      </div> : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
         <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -309,7 +418,7 @@ export default function ParentCommunicationPanel() {
 
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.history}</p><h2 className="text-2xl font-bold dark:text-white">{c.oldMessages}</h2></div>
+          <div><p className="text-xs font-bold uppercase text-kcs-gold-600">{c.history}</p><h2 className="text-2xl font-bold dark:text-white">{c.oldMessages}</h2><p className="mt-1 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-200">{c.archiveCount(history.length, historyTotal || history.length)}</p></div>
           <div className="grid w-full gap-2 sm:grid-cols-2 xl:max-w-4xl xl:grid-cols-3">
             <input className={fieldClass} value={historyQuery} onChange={(event) => setHistoryQuery(event.target.value)} placeholder={c.historySearch} />
             <input type="date" className={fieldClass} value={historyFrom} onChange={(event) => setHistoryFrom(event.target.value)} aria-label={c.startDate} />
@@ -321,7 +430,7 @@ export default function ParentCommunicationPanel() {
             {allHistorySelected ? <CheckSquare size={17} /> : <Square size={17} />} {allHistorySelected ? c.deselect : c.selectResults}
           </button>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-gray-500 dark:text-gray-300">{historyRows.length} {c.results} · {selectedHistory.length} {c.selected}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-300">{searchingArchive ? (language === 'fr' ? 'Recherche dans toutes les archives...' : 'Searching all archives...') : historyRows.length + ' ' + c.results} · {selectedHistory.length} {c.selected}</span>
             <button className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40" disabled={!selectedHistory.length || deleting} onClick={() => void deleteSelected()}><Trash2 size={17} />{deleting ? c.deleting : c.deleteSelection}</button>
           </div>
         </div>
@@ -341,6 +450,11 @@ export default function ParentCommunicationPanel() {
             })}</tbody>
           </table>
         </div>
+        {historyHasMore && remoteHistory === null ? <div className="mt-5 flex justify-center">
+          <button type="button" className={primaryButton} disabled={loadingOlder || !historyCursor} onClick={() => void loadOlderHistory()}>
+            {loadingOlder ? c.loadingOlder : c.loadOlder}
+          </button>
+        </div> : null}
       </section>
 
       {deliveryReport ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={() => setDeliveryReport(null)} role="dialog" aria-modal="true" aria-labelledby="delivery-result-title">
