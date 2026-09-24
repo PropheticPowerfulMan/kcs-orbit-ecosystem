@@ -19,7 +19,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api, staging_web]
+    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api, kitchen_web, kitchen_api, staging_web]
 
   staging_web:
     <<: *service-defaults
@@ -71,6 +71,14 @@ services:
     volumes: [edusync_db_data:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
 
+  kitchen_db:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    container_name: kcs-orbit-kitchen-db
+    env_file: /etc/kcs-orbit/kitchen-db.env
+    volumes: [kitchen_db_data:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10 }
+
   redis:
     <<: *service-defaults
     image: redis:7-alpine
@@ -105,6 +113,24 @@ services:
     networks: [kcs_edge]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
 
+
+  kitchen_api:
+    <<: *service-defaults
+    image: kcs/kitchen-api:${KITCHEN_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/kitchen-api.env
+    depends_on:
+      kitchen_db: { condition: service_healthy }
+      orbit_api: { condition: service_healthy }
+      nexus_api: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5100/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 15, start_period: 45s }
+
+  kitchen_web:
+    <<: *service-defaults
+    image: kcs/kitchen-web:${KITCHEN_WEB_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
+    networks: [kcs_edge]
+    depends_on: { kitchen_api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
 
   academy:
     <<: *service-defaults
@@ -178,6 +204,7 @@ volumes:
   edupay_db_data:
   savanex_db_data:
   edusync_db_data:
+  kitchen_db_data:
   redis_data:
   nexus_uploads:
   edupay_receipts:

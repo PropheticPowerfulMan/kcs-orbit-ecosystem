@@ -6,7 +6,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps --status running
 
 failed=0
-for service in orbit_api nexus_api nexus_web edupay_api edupay_web savanex_api savanex_web edusync_api edusync_web; do
+for service in orbit_api nexus_api nexus_web kitchen_api kitchen_web edupay_api edupay_web savanex_api savanex_web edusync_api edusync_web; do
   container_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps -q "$service")"
   status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
   if [[ "$status" != "healthy" && "$status" != "running" ]]; then

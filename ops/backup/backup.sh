@@ -47,7 +47,7 @@ dump_postgres_container() {
   docker exec "$container" sh -c 'exec pg_dump --format=custom --compress=6 --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' > "$WORK_DIR/postgresql/${name}.dump"
   pg_restore --list "$WORK_DIR/postgresql/${name}.dump" >/dev/null
 }
-if [[ -n "${ORBIT_DATABASE_URL:-}${NEXUS_DATABASE_URL:-}${EDUPAY_DATABASE_URL:-}${SAVANEX_DATABASE_URL:-}${EDUSYNC_DATABASE_URL:-}" ]]; then
+if [[ -n "${ORBIT_DATABASE_URL:-}${NEXUS_DATABASE_URL:-}${EDUPAY_DATABASE_URL:-}${SAVANEX_DATABASE_URL:-}${EDUSYNC_DATABASE_URL:-}${KITCHEN_DATABASE_URL:-}" ]]; then
   command -v pg_dump >/dev/null || { echo "pg_dump is required for URL database backups" >&2; exit 1; }
 fi
 dump_postgres orbit "${ORBIT_DATABASE_URL:-}"
@@ -55,11 +55,13 @@ dump_postgres nexus "${NEXUS_DATABASE_URL:-}"
 dump_postgres edupay "${EDUPAY_DATABASE_URL:-}"
 dump_postgres savanex "${SAVANEX_DATABASE_URL:-}"
 dump_postgres edusync "${EDUSYNC_DATABASE_URL:-}"
+dump_postgres kitchen "${KITCHEN_DATABASE_URL:-}"
 [[ -n "${ORBIT_DATABASE_URL:-}" ]] || dump_postgres_container orbit "${ORBIT_DATABASE_CONTAINER:-}"
 [[ -n "${NEXUS_DATABASE_URL:-}" ]] || dump_postgres_container nexus "${NEXUS_DATABASE_CONTAINER:-}"
 [[ -n "${EDUPAY_DATABASE_URL:-}" ]] || dump_postgres_container edupay "${EDUPAY_DATABASE_CONTAINER:-}"
 [[ -n "${SAVANEX_DATABASE_URL:-}" ]] || dump_postgres_container savanex "${SAVANEX_DATABASE_CONTAINER:-}"
 [[ -n "${EDUSYNC_DATABASE_URL:-}" ]] || dump_postgres_container edusync "${EDUSYNC_DATABASE_CONTAINER:-}"
+[[ -n "${KITCHEN_DATABASE_URL:-}" ]] || dump_postgres_container kitchen "${KITCHEN_DATABASE_CONTAINER:-}"
 
 if [[ -n "${SQLITE_DATABASES:-}" ]]; then
   command -v sqlite3 >/dev/null || { echo "sqlite3 is required while SQLITE_DATABASES is set" >&2; exit 1; }
