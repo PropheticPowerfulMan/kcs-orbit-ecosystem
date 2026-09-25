@@ -546,7 +546,7 @@ export const shiningStudentsAPI = {
 }
 
 export const academicRecordsAPI = {
-  studentRegistry: () => api.get('/academic-records/student-registry'),
+  studentRegistry: () => api.get('/academic-records/student-registry', { timeout: 60_000 }),
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
   myFinalGrades: () => api.get('/academic-records/final-grades/me'),
   teacherReportDashboard: (params: { academicYear: string; term: string }) => api.get('/academic-records/report-cards/teacher-dashboard', { params, timeout: 30_000 }),

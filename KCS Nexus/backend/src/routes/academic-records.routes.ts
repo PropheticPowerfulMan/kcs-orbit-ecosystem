@@ -108,8 +108,8 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
  const unmatched=canonicalResults.filter(item=>!enrolled.has(item.studentId))
  if(unmatched.length)throw new ApiError(400,`A submitted student could not be matched to the official Nexus course enrollment (${unmatched.slice(0,5).map(item=>item.studentNumber||item.studentId).join(', ')})`)
  if(new Set(canonicalResults.map(item=>item.studentId)).size!==canonicalResults.length)throw new ApiError(400,'Duplicate student in submission after identity reconciliation')
- const lockedCards=await prisma.reportCard.count({where:{studentId:{in:canonicalResults.map(item=>item.studentId)},term:reportCardTerm(payload.academicYear,payload.term),publicationStatus:{not:'DRAFT'}}})
- if(lockedCards)throw new ApiError(409,'This reporting session has entered main-teacher or administrative review and can no longer be changed')
+ const lockedCards=await prisma.reportCard.count({where:{studentId:{in:canonicalResults.map(item=>item.studentId)},term:reportCardTerm(payload.academicYear,payload.term),publicationStatus:{in:['APPROVED','EMAILED','POSTED_TO_PORTAL']}}})
+ if(lockedCards)throw new ApiError(409,'An approved or published report card is frozen. The Super Administration must reopen it before grades can change')
  const period=periodKey(payload.academicYear,payload.term,'SUBMITTED')
  const saved=await prisma.$transaction(async tx=>{
   await tx.grade.deleteMany({where:{courseId:course.id,assignmentId:null,period}})
@@ -123,7 +123,7 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
    draftCards.push(await tx.reportCard.upsert({
     where:{studentId_term:{studentId:item.studentId,term:termLabel}},
     create:{studentId:item.studentId,term:termLabel,average,principalStatus:'DRAFT',publicationStatus:'DRAFT'},
-    update:{average},
+    update:{average,principalStatus:'DRAFT',publicationStatus:'DRAFT',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
    }))
   }
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,reportCardDraftsUpdated:draftCards.length,results:canonicalResults}}})
@@ -236,14 +236,14 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term)
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
  const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
- if(current&&current.publicationStatus!=='DRAFT')throw new ApiError(409,'This report card was submitted and is now read-only for the main teacher')
+ if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,'This report card is approved or published and is now read-only for the main teacher')
  const card=await prisma.$transaction(async tx=>{
   const saved=await tx.reportCard.upsert({
    where:{studentId_term:{studentId,term:termLabel}},
    create:{studentId,term:termLabel,average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'DRAFT',publicationStatus:'DRAFT'},
-   update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary},
+   update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'DRAFT',publicationStatus:'DRAFT',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
   })
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_DRAFT_SAVED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,submittedCourseGrades:context.grades.length}}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_DRAFT_SAVED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,submittedCourseGrades:context.grades.length,withdrawnPreviousSubmission:current?.publicationStatus==='READY_FOR_REVIEW'}}})
   return saved
  })
  return success(res,card,'Main-teacher report-card draft saved')
@@ -264,19 +264,20 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
  }
  const termLabel=reportCardTerm(payload.academicYear,payload.term)
  const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
- if(current&&current.publicationStatus!=='DRAFT')throw new ApiError(409,'This report card has already entered administrative review')
+ if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,'This report card is already approved or published and cannot be replaced without Super Administration review')
+ const replacesPreviousSubmission=current?.publicationStatus==='READY_FOR_REVIEW'
  const result=await prisma.$transaction(async tx=>{
   const saved=await tx.reportCard.upsert({
    where:{studentId_term:{studentId,term:termLabel}},
    create:{studentId,term:termLabel,average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
-   update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW'},
+   update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
   })
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,courseGrades:context.grades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:replacesPreviousSubmission?'MAIN_TEACHER_REPORT_CARD_RESUBMITTED':'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,replacesPreviousSubmission,courseGrades:context.grades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
   const recipients=await tx.user.findMany({where:{role:'ADMIN'},select:{id:true}})
-  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:'Report card ready for review',message:`A main teacher submitted the complete report card for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
+  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
   return{saved,notified:recipients.length}
  })
- return success(res,{...result.saved,superAdministrationNotified:result.notified},'Complete report card submitted to Super Administration')
+ return success(res,{...result.saved,superAdministrationNotified:result.notified,replacesPreviousSubmission},replacesPreviousSubmission?'Previous submission replaced and updated report card sent to Super Administration':'Complete report card submitted to Super Administration')
 }))
 
 academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{
