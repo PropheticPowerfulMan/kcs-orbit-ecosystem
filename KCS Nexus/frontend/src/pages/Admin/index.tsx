@@ -22,7 +22,7 @@ import ShiningStudentWeekWidget from '@/components/shared/ShiningStudentWeekWidg
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
-import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenter'
+import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
 import TeacherActivityReportsInbox from '@/components/admin/TeacherActivityReportsInbox'
 import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'

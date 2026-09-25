@@ -309,8 +309,35 @@ academicRecordsRouter.post('/report-cards/generate',requireRoles('admin','staff'
 }))
 
 academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{
- const cards=await prisma.reportCard.findMany({where:req.query.status?{publicationStatus:String(req.query.status) as any}:{},include:{student:{include:{user:true}},approvedBy:true},orderBy:{updatedAt:'desc'}})
- return success(res,cards)
+ const cards=await prisma.reportCard.findMany({
+  where:req.query.status?{publicationStatus:String(req.query.status) as any}:{},
+  include:{
+   student:{
+    include:{
+     user:true,
+     grades:{
+      where:{assignmentId:null,period:{contains:'::SUBMITTED'}},
+      include:{course:{select:{name:true,code:true,credits:true}}},
+      orderBy:{createdAt:'desc'},
+     },
+    },
+   },
+   approvedBy:true,
+  },
+  orderBy:{updatedAt:'desc'},
+ })
+ const enriched=cards.map(card=>{
+  const {grades,...student}=card.student
+  const [academicYear,...termParts]=card.term.split(' · ')
+  const expectedPeriod=periodKey(academicYear,termParts.join(' · '),'SUBMITTED')
+  const byCourse=new Map<string,(typeof grades)[number]>()
+  for(const grade of grades){
+   if(grade.period===expectedPeriod&&!byCourse.has(grade.courseId))byCourse.set(grade.courseId,grade)
+  }
+  const subjects=[...byCourse.values()].sort((left,right)=>(left.course.code||left.course.name).localeCompare(right.course.code||right.course.name,'en',{numeric:true,sensitivity:'base'}))
+  return {...card,student,subjects}
+ })
+ return success(res,enriched)
 }))
 
 academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
