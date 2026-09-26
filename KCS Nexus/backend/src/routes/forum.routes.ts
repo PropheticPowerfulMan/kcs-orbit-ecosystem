@@ -24,6 +24,23 @@ const commentSchema = z.object({
   attachmentName: z.string().max(255).optional(),
 })
 
+const resolveForumActorId = async (req: AuthenticatedRequest) => {
+  if (!req.user) throw new ApiError(401, 'Authentication required')
+  if (req.user.sub !== 'configured-superadmin') return req.user.sub
+  const superAdmin = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: { equals: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com', mode: 'insensitive' } },
+        { accessCode: 'ACC-ADM-SUPER1' },
+      ],
+      role: 'ADMIN',
+    },
+    select: { id: true },
+  })
+  if (!superAdmin) throw new ApiError(500, 'The configured superadministrator account is not synchronized with the Nexus user registry.')
+  return superAdmin.id
+}
+
 const analyzeTone = (text: string) => {
   const lower = text.toLowerCase()
   const urgentWords = ['danger', 'urgent', 'unsafe', 'violence', 'harassment', 'abuse', 'security']
@@ -49,6 +66,7 @@ forumRouter.get('/posts', authenticate, requireRoles('admin', 'parent', 'teacher
 
 forumRouter.post('/posts', authenticate, requireRoles('parent', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
+  const actorId = await resolveForumActorId(req)
   const data = postSchema.parse(req.body)
   const media = validateForumMedia(data.attachmentData, data.attachmentType, data.attachmentName)
   if (!data.content.trim() && !media.attachmentData) throw new ApiError(400, 'A message or attachment is required')
@@ -59,7 +77,7 @@ forumRouter.post('/posts', authenticate, requireRoles('parent', 'admin'), asyncH
     data: {
       ...text,
       ...media,
-      authorId: req.user.sub,
+      authorId: actorId,
       sentiment: tone.sentiment,
       priority: tone.priority,
     },
@@ -71,6 +89,7 @@ forumRouter.post('/posts', authenticate, requireRoles('parent', 'admin'), asyncH
 
 forumRouter.post('/posts/:id/comments', authenticate, requireRoles('parent', 'admin', 'teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
+  const actorId = await resolveForumActorId(req)
   const postId = getRouteParam(req.params.id)
   const data = commentSchema.parse(req.body)
   const content = data.content.trim()
@@ -84,7 +103,7 @@ forumRouter.post('/posts/:id/comments', authenticate, requireRoles('parent', 'ad
   const comment = await prisma.parentForumComment.create({
     data: {
       postId,
-      authorId: req.user.sub,
+      authorId: actorId,
       content,
       ...media,
       sentiment: tone.sentiment,

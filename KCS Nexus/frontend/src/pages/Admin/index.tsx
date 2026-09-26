@@ -629,8 +629,8 @@ const reportCadenceLabels: Record<AdminReportCadence, string> = {
 
 const reportCategoryLabels: Record<AdminReportCategory, string> = {
   enrollment: 'Inscriptions',
-  academic: 'Academique',
-  operations: 'Operations',
+  academic: 'Académique',
+  operations: 'Opérations',
   executive: 'Rapport complet',
 }
 
@@ -673,7 +673,9 @@ const buildReportRows = (
   cadence: AdminReportCadence,
   officialRoster: AdminStudentRecord[],
   admissionRequests: AdminAdmissionRequest[],
+  language: 'fr' | 'en' = 'fr',
 ) => {
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const attendanceValues = officialRoster.map((student) => student.attendance).filter((value): value is number => value != null)
   const gpaValues = officialRoster.map((student) => student.gpa).filter((value): value is number => value != null)
   const averageAttendance = attendanceValues.length ? Math.round(attendanceValues.reduce((sum, value) => sum + value, 0) / attendanceValues.length) : null
@@ -683,30 +685,30 @@ const buildReportRows = (
   const acceptedAdmissions = admissionRequests.filter((item) => item.status === 'ACCEPTED').length
   const openDiscipline = disciplineReports.filter((report) => report.status !== 'Closed').length
   const unpaidInvoices = feeAccounts.filter((fee) => fee.status !== 'paid').length
-  const cadenceNote = reportCadenceLabels[cadence].toLowerCase()
+  const cadenceNote = language === 'fr' ? reportCadenceLabels[cadence].toLowerCase() : ({ daily: 'daily', weekly: 'weekly', monthly: 'monthly', annual: 'annual' } as const)[cadence]
   const rows: AdminReportRow[] = []
 
   if (category === 'enrollment' || category === 'executive') {
     rows.push(
-      { section: 'Inscriptions', metric: 'Effectif officiel', value: officialRoster.length, detail: `${officialRoster.length} eleves actifs dans le registre super administrateur.`, action: 'Verifier les nouvelles admissions et les classes incompletes.' },
-      { section: 'Inscriptions', metric: 'Dossiers en attente', value: pendingAdmissions, detail: `${pendingAdmissions} demandes necessitent une decision sur la periode ${cadenceNote}.`, action: 'Prioriser les dossiers soumis ou en revue.' },
-      { section: 'Inscriptions', metric: 'Admissions acceptees', value: acceptedAdmissions, detail: `${acceptedAdmissions} candidats ont deja ete acceptes dans le cycle actuel.`, action: 'Confirmer la creation des dossiers officiels.' },
+      { section: tr('Inscriptions', 'Enrollment'), metric: tr('Effectif officiel', 'Official enrollment'), value: officialRoster.length, detail: tr(`${officialRoster.length} élèves actifs dans le registre du Super Administrateur.`, `${officialRoster.length} active learners in the Super Administrator registry.`), action: tr('Vérifier les nouvelles admissions et les classes incomplètes.', 'Review new admissions and incomplete classes.') },
+      { section: tr('Inscriptions', 'Enrollment'), metric: tr('Dossiers en attente', 'Pending applications'), value: pendingAdmissions, detail: tr(`${pendingAdmissions} demandes nécessitent une décision sur la période ${cadenceNote}.`, `${pendingAdmissions} applications require a decision during the ${cadenceNote} period.`), action: tr('Prioriser les dossiers soumis ou en cours d’examen.', 'Prioritize submitted or under-review applications.') },
+      { section: tr('Inscriptions', 'Enrollment'), metric: tr('Admissions acceptées', 'Accepted admissions'), value: acceptedAdmissions, detail: tr(`${acceptedAdmissions} candidats ont déjà été acceptés dans le cycle actuel.`, `${acceptedAdmissions} applicants have already been accepted in the current cycle.`), action: tr('Confirmer la création des dossiers officiels.', 'Confirm creation of the official records.') },
     )
   }
 
   if (category === 'academic' || category === 'executive') {
     rows.push(
-      { section: 'Academique', metric: 'GPA moyen', value: averageGpa ?? 'Aucune donnée', detail: `Moyenne academique globale calculee sur ${officialRoster.length} dossiers.`, action: 'Examiner les classes et matieres sous la moyenne.' },
-      { section: 'Academique', metric: 'Assiduite moyenne', value: averageAttendance == null ? 'Aucune donnée' : `${averageAttendance}%`, detail: averageAttendance == null ? 'Aucune présence réelle n’a encore été saisie.' : `Presence moyenne pour le rapport ${cadenceNote}.`, action: 'Declencher un suivi parent pour les presences inferieures a 88%.' },
-      { section: 'Academique', metric: 'Eleves a risque', value: needsAction, detail: `${needsAction} eleves combinent risque academique, presence ou discipline.`, action: 'Assigner un plan de soutien et une date de suivi.' },
+      { section: tr('Académique', 'Academic'), metric: tr('GPA moyen', 'Average GPA'), value: averageGpa ?? tr('Aucune donnée', 'No data'), detail: tr(`Moyenne académique globale calculée sur ${officialRoster.length} dossiers.`, `Overall academic average calculated from ${officialRoster.length} records.`), action: tr('Examiner les classes et matières sous la moyenne.', 'Review classes and subjects below the average.') },
+      { section: tr('Académique', 'Academic'), metric: tr('Assiduité moyenne', 'Average attendance'), value: averageAttendance == null ? tr('Aucune donnée', 'No data') : `${averageAttendance}%`, detail: averageAttendance == null ? tr('Aucune présence réelle n’a encore été saisie.', 'No actual attendance has been entered yet.') : tr(`Présence moyenne pour le rapport ${cadenceNote}.`, `Average attendance for the ${cadenceNote} report.`), action: tr('Déclencher un suivi parental pour les présences inférieures à 88 %.', 'Start parent follow-up for attendance below 88%.') },
+      { section: tr('Académique', 'Academic'), metric: tr('Élèves à risque', 'At-risk students'), value: needsAction, detail: tr(`${needsAction} élèves présentent un risque académique, d’assiduité ou de discipline.`, `${needsAction} learners show academic, attendance, or discipline risk.`), action: tr('Assigner un plan de soutien et une date de suivi.', 'Assign a support plan and follow-up date.') },
     )
   }
 
   if (category === 'operations' || category === 'executive') {
     rows.push(
-      { section: 'Operations', metric: 'Rapports discipline ouverts', value: openDiscipline, detail: `${openDiscipline} rapports demandent encore une resolution administrative.`, action: 'Valider les contacts parents et les mesures correctives.' },
-      { section: 'Operations', metric: 'Factures non soldees', value: unpaidInvoices, detail: `${unpaidInvoices} comptes financiers ne sont pas entierement soldes.`, action: 'Envoyer les releves et organiser les relances.' },
-      { section: 'Operations', metric: 'Alertes IA', value: aiSignals.length, detail: `${aiSignals.length} signaux IA alimentent ce rapport detaille.`, action: 'Revoir les recommandations prioritaires avec les responsables.' },
+      { section: tr('Opérations', 'Operations'), metric: tr('Rapports disciplinaires ouverts', 'Open discipline reports'), value: openDiscipline, detail: tr(`${openDiscipline} rapports nécessitent encore une résolution administrative.`, `${openDiscipline} reports still require administrative resolution.`), action: tr('Valider les contacts des parents et les mesures correctives.', 'Validate parent contacts and corrective actions.') },
+      { section: tr('Opérations', 'Operations'), metric: tr('Factures non soldées', 'Outstanding invoices'), value: unpaidInvoices, detail: tr(`${unpaidInvoices} comptes financiers ne sont pas entièrement soldés.`, `${unpaidInvoices} financial accounts are not fully settled.`), action: tr('Envoyer les relevés et organiser les relances.', 'Send statements and organize follow-ups.') },
+      { section: tr('Opérations', 'Operations'), metric: tr('Alertes IA', 'AI alerts'), value: aiSignals.length, detail: tr(`${aiSignals.length} signaux IA alimentent ce rapport détaillé.`, `${aiSignals.length} AI signals feed this detailed report.`), action: tr('Revoir les recommandations prioritaires avec les responsables.', 'Review priority recommendations with the responsible teams.') },
     )
   }
 
@@ -807,8 +809,10 @@ const buildAdminReportDocument = (
   rows: AdminReportRow[],
   category: AdminReportCategory,
   cadence: AdminReportCadence,
+  language: 'fr' | 'en' = 'fr',
 ) => {
-  const generatedAt = new Date().toLocaleString()
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const generatedAt = new Date().toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US')
   const generatedIso = new Date().toISOString()
   const authenticityCode = buildAuthenticityCode(`${title}|${periodLabel}|${generatedIso}|${rows.map((row) => `${row.section}:${row.metric}:${row.value}`).join('|')}`)
   const documentId = `KCS-${category.toUpperCase()}-${cadence.toUpperCase()}-${generatedIso.slice(0, 10).replace(/-/g, '')}-${authenticityCode}`
@@ -824,10 +828,10 @@ const buildAdminReportDocument = (
     </tr>
   `).join('')
   const securityMarks = [
-    'Reference unique',
-    'Horodatage serveur navigateur',
-    'Controle de coherence',
-    'Usage Super Admin',
+    tr('Référence unique', 'Unique reference'),
+    tr('Horodatage sécurisé', 'Secure timestamp'),
+    tr('Contrôle de cohérence', 'Consistency check'),
+    tr('Usage Super Administrateur', 'Super Administrator use'),
   ]
   const escapedSecurityMarks = securityMarks.map((mark) => `<span>${escapeHtml(mark)}</span>`).join('')
   const escapedControls = rows.map((row, index) => `
@@ -1099,12 +1103,12 @@ const buildAdminReportDocument = (
         </div>
         <div>
           <p class="school">${escapeHtml(SCHOOL_NAME)}</p>
-          <p class="tagline">Official Super Admin Report</p>
+          <p class="tagline">${escapeHtml(tr('Rapport officiel de la Super Administration', 'Official Super Administration Report'))}</p>
         </div>
       </section>
       <aside class="badge">
-        <strong>Document officiel</strong>
-        <span>Dashboard Super Administrateur</span>
+        <strong>${escapeHtml(tr('Document officiel', 'Official document'))}</strong>
+        <span>${escapeHtml(tr('Tableau de bord de la Super Administration', 'Super Administration dashboard'))}</span>
         <small>${escapeHtml(documentId)}</small>
       </aside>
     </header>
@@ -1112,20 +1116,20 @@ const buildAdminReportDocument = (
     <h1>${escapeHtml(title)}</h1>
     <section class="security-strip">${escapedSecurityMarks}</section>
     <section class="meta-grid">
-      <div class="meta-card"><span>Periode</span><strong>${escapeHtml(periodLabel)}</strong></div>
-      <div class="meta-card"><span>Frequence</span><strong>${escapeHtml(reportCadenceLabels[cadence])}</strong></div>
+      <div class="meta-card"><span>${escapeHtml(tr('Période', 'Period'))}</span><strong>${escapeHtml(periodLabel)}</strong></div>
+      <div class="meta-card"><span>${escapeHtml(tr('Fréquence', 'Frequency'))}</span><strong>${escapeHtml(reportCadenceLabels[cadence])}</strong></div>
       <div class="meta-card"><span>Type</span><strong>${escapeHtml(reportCategoryLabels[category])}</strong></div>
-      <div class="meta-card"><span>Generation</span><strong>${escapeHtml(generatedAt)}</strong></div>
-      <div class="meta-card"><span>Authenticite</span><strong>${escapeHtml(authenticityCode)}</strong></div>
+      <div class="meta-card"><span>${escapeHtml(tr('Génération', 'Generated'))}</span><strong>${escapeHtml(generatedAt)}</strong></div>
+      <div class="meta-card"><span>${escapeHtml(tr('Authenticité', 'Authenticity'))}</span><strong>${escapeHtml(authenticityCode)}</strong></div>
     </section>
 
     <section class="overview">
       <div class="panel">
-        <h2>Resume executif</h2>
+        <h2>${escapeHtml(tr('Résumé exécutif', 'Executive summary'))}</h2>
         <p>Ce rapport consolide ${escapeHtml(rows.length)} indicateurs pour la periode ${escapeHtml(periodLabel)}. Il met en evidence les donnees du registre, les points de suivi operationnel et les actions administratives a traiter. Les priorites signalees ci-dessous servent de base aux controles de direction et aux decisions du Super Administrateur.</p>
       </div>
       <div class="panel">
-        <h2>Surete documentaire</h2>
+        <h2>${escapeHtml(tr('Sûreté documentaire', 'Document assurance'))}</h2>
         <div class="assurance-grid">
           <div class="assurance"><strong>ID</strong><span>${escapeHtml(documentId)}</span></div>
           <div class="assurance"><strong>Alertes</strong><span>${escapeHtml(criticalActions)} controle(s) a surveiller.</span></div>
@@ -1134,31 +1138,31 @@ const buildAdminReportDocument = (
       </div>
     </section>
 
-    <p class="section-title">Indicateurs detailles</p>
+    <p class="section-title">${escapeHtml(tr('Indicateurs détaillés', 'Detailed indicators'))}</p>
     <table>
       <thead>
         <tr>
-          <th>Section</th>
-          <th>{tr('Indicateur','Indicator')}</th>
-          <th>{tr('Valeur','Value')}</th>
-          <th>Detail</th>
-          <th>{tr('Action recommandée','Recommended action')}</th>
+          <th>${escapeHtml(tr('Section', 'Section'))}</th>
+          <th>${escapeHtml(tr('Indicateur','Indicator'))}</th>
+          <th>${escapeHtml(tr('Valeur','Value'))}</th>
+          <th>${escapeHtml(tr('Détail','Detail'))}</th>
+          <th>${escapeHtml(tr('Action recommandée','Recommended action'))}</th>
         </tr>
       </thead>
       <tbody>${escapedRows}</tbody>
     </table>
 
-    <p class="section-title">Plan de controle et d'authenticite</p>
+    <p class="section-title">${escapeHtml(tr('Plan de contrôle et d’authenticité', 'Control and authenticity plan'))}</p>
     <section class="control-grid">${escapedControls}</section>
 
     <section class="signature-row">
-      <div class="signature">Direction / Super Administrateur</div>
-      <div class="signature">Cachet de l'ecole</div>
-      <div class="stamp">Verifie<br>${escapeHtml(authenticityCode)}</div>
+      <div class="signature">${escapeHtml(tr('Direction / Super Administration', 'Leadership / Super Administration'))}</div>
+      <div class="signature">${escapeHtml(tr('Cachet de l’école', 'School seal'))}</div>
+      <div class="stamp">${escapeHtml(tr('Vérifié', 'Verified'))}<br>${escapeHtml(authenticityCode)}</div>
     </section>
     <footer class="footer">
-      <span>${escapeHtml(SCHOOL_NAME)} - Rapport genere depuis KCS Nexus - ${escapeHtml(documentId)}</span>
-      <span>Confidentiel - authenticite: ${escapeHtml(authenticityCode)}</span>
+      <span>${escapeHtml(SCHOOL_NAME)} - ${escapeHtml(tr('Rapport généré depuis KCS Nexus', 'Report generated from KCS Nexus'))} - ${escapeHtml(documentId)}</span>
+      <span>${escapeHtml(tr('Confidentiel - authenticité', 'Confidential - authenticity'))}: ${escapeHtml(authenticityCode)}</span>
     </footer>
   </main>
   <script>
@@ -1192,22 +1196,27 @@ const exportAdminReport = (
   format: AdminReportFormat,
   officialRoster: AdminStudentRecord[],
   admissionRequests: AdminAdmissionRequest[],
+  language: 'fr' | 'en' = 'fr',
 ) => {
-  const rows = buildReportRows(category, cadence, officialRoster, admissionRequests)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const rows = buildReportRows(category, cadence, officialRoster, admissionRequests, language)
   const period = buildReportWindow(cadence)
-  const title = `${SCHOOL_NAME} - ${reportCategoryLabels[category]} - ${reportCadenceLabels[cadence]}`
+  period.label = `${period.start.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} - ${period.end.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}`
+  const categoryLabel = ({ enrollment: tr('Inscriptions','Enrollment'), academic: tr('Académique','Academic'), operations: tr('Opérations','Operations'), executive: tr('Rapport complet','Full report') } as const)[category]
+  const cadenceLabel = ({ daily: tr('Journalier','Daily'), weekly: tr('Hebdomadaire','Weekly'), monthly: tr('Mensuel','Monthly'), annual: tr('Annuel','Annual') } as const)[cadence]
+  const title = `${SCHOOL_NAME} - ${categoryLabel} - ${cadenceLabel}`
   const filename = `kcs-${category}-${cadence}-${new Date().toISOString().slice(0, 10)}`
 
   if (format === 'csv') {
     const csv = [
-      ['Section', 'Indicateur', 'Valeur', 'Detail', 'Action'].map(escapeExportCell).join(','),
+      [tr('Section','Section'), tr('Indicateur','Indicator'), tr('Valeur','Value'), tr('Détail','Detail'), tr('Action recommandée','Recommended action')].map(escapeExportCell).join(','),
       ...rows.map((row) => [row.section, row.metric, row.value, row.detail, row.action].map(escapeExportCell).join(',')),
     ].join('\n')
     downloadExportFile(`${filename}.csv`, csv, 'text/csv;charset=utf-8')
     return
   }
 
-  const html = buildAdminReportDocument(title, period.label, rows, category, cadence)
+  const html = buildAdminReportDocument(title, period.label, rows, category, cadence, language)
 
   if (format === 'excel') {
     downloadExportFile(`${filename}.xls`, html, 'application/vnd.ms-excel;charset=utf-8')
@@ -3159,7 +3168,7 @@ const AdminSectionView = ({
   }
 
   if (segment === 'reports') {
-    const reportRows = buildReportRows(reportCategory, reportCadence, officialRoster, admissionRequests)
+    const reportRows = buildReportRows(reportCategory, reportCadence, officialRoster, admissionRequests, language)
     const reportWindow = buildReportWindow(reportCadence)
     reportWindow.label = `${reportWindow.start.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')} - ${reportWindow.end.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US')}`
     const cadenceLabels: Record<AdminReportCadence, string> = { daily: tr('Journalier','Daily'), weekly: tr('Hebdomadaire','Weekly'), monthly: tr('Mensuel','Monthly'), annual: tr('Annuel','Annual') }
@@ -3231,10 +3240,10 @@ const AdminSectionView = ({
               <table className="min-w-full divide-y divide-gray-100 text-left text-sm dark:divide-kcs-blue-800">
                 <thead className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   <tr>
-                    <th className="py-3 pr-4">Section</th>
-                    <th className="py-3 pr-4">Indicateur</th>
-                    <th className="py-3 pr-4">Valeur</th>
-                    <th className="py-3 pr-4">Action recommandee</th>
+                    <th className="py-3 pr-4">{tr('Section','Section')}</th>
+                    <th className="py-3 pr-4">{tr('Indicateur','Indicator')}</th>
+                    <th className="py-3 pr-4">{tr('Valeur','Value')}</th>
+                    <th className="py-3 pr-4">{tr('Action recommandée','Recommended action')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
@@ -3256,13 +3265,13 @@ const AdminSectionView = ({
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Exporter le rapport','Export report')}</h3>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr("Le PDF ouvre la fenêtre d’impression; Excel et CSV sont téléchargés directement.", "PDF opens the print dialog; Excel and CSV download directly.")}</p>
               <div className="mt-4 grid gap-3">
-                <button className={`${adminButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'pdf', officialRoster, admissionRequests)}>
+                <button className={`${adminButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'pdf', officialRoster, admissionRequests, language)}>
                   <FileText size={16} /> PDF
                 </button>
-                <button className={`${adminOutlineButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'excel', officialRoster, admissionRequests)}>
+                <button className={`${adminOutlineButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'excel', officialRoster, admissionRequests, language)}>
                   <FileSpreadsheet size={16} /> Excel
                 </button>
-                <button className={`${adminOutlineButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'csv', officialRoster, admissionRequests)}>
+                <button className={`${adminOutlineButton} flex items-center justify-center gap-2`} onClick={() => exportAdminReport(reportCategory, reportCadence, 'csv', officialRoster, admissionRequests, language)}>
                   <Download size={16} /> CSV
                 </button>
               </div>
@@ -3271,7 +3280,7 @@ const AdminSectionView = ({
             <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Contenu inclus','Included content')}</h3>
               <div className="mt-3 space-y-3">
-                {['Registre officiel des eleves', 'Admissions et decisions', 'Notes, presences et risques', 'Finances, discipline et audit IA'].map((item) => (
+                {[tr('Registre officiel des élèves','Official student registry'), tr('Admissions et décisions','Admissions and decisions'), tr('Notes, présences et risques','Grades, attendance and risks'), tr('Finances, discipline et audit IA','Finance, discipline and AI audit')].map((item) => (
                   <div key={item} className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-800/30">
                     <CheckCircle2 size={16} className="mt-0.5 text-green-600 dark:text-green-300" />
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{item}</span>

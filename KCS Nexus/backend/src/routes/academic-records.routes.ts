@@ -161,7 +161,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
   prisma.studentProfile.findMany({
    where:{status:{equals:'active',mode:'insensitive'}},
    include:{
-    user:{select:{firstName:true,middleName:true,lastName:true}},
+    user:{select:{firstName:true,middleName:true,lastName:true,avatar:true}},
     enrollments:{include:{course:{select:{id:true,name:true,code:true,grade:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}}},
     reportCards:{where:{term:termLabel},take:1},
     attendanceRecords:{where:{date:window},select:{status:true}},
@@ -210,6 +210,8 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    id:student.id,
    studentNumber:student.studentNumber,
    name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),
+   officialAvatar:student.officialAvatar,
+   user:student.user,
    grade:student.grade,
    section:student.section,
    isHomeroomStudent:isTeacherHomeroomFor(teacher,student),
