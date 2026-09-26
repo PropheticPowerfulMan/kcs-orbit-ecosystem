@@ -49,19 +49,22 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
  if(!student)throw new ApiError(404,'Student not found')
  if(!isTeacherHomeroomFor(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
- const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
-  const subjectKey=[enrollment.course.name,enrollment.course.grade,enrollment.course.teacherId].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
-  if(!bySubject.has(subjectKey))bySubject.set(subjectKey,enrollment)
-  return bySubject
- },new Map<string,(typeof student.enrollments)[number]>()).values()]
  const submittedGrades=await prisma.grade.findMany({
-  where:{studentId,courseId:{in:uniqueEnrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
+  where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
   include:{course:true},
   orderBy:{createdAt:'desc'},
  })
  const latestGradeByCourse=new Map<string,(typeof submittedGrades)[number]>()
  for(const grade of submittedGrades)if(!latestGradeByCourse.has(grade.courseId))latestGradeByCourse.set(grade.courseId,grade)
- const grades=[...latestGradeByCourse.values()]
+ const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
+  const subjectKey=[enrollment.course.name,enrollment.course.grade,enrollment.course.teacherId].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
+  const current=bySubject.get(subjectKey)
+  const currentGrade=current?latestGradeByCourse.get(current.courseId):null
+  const candidateGrade=latestGradeByCourse.get(enrollment.courseId)
+  if(!current||(!currentGrade&&candidateGrade))bySubject.set(subjectKey,enrollment)
+  return bySubject
+ },new Map<string,(typeof student.enrollments)[number]>()).values()]
+ const grades=uniqueEnrollments.map(item=>latestGradeByCourse.get(item.courseId)).filter((item):item is (typeof submittedGrades)[number]=>Boolean(item))
  return{teacher,student,enrollments:uniqueEnrollments,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
 }
 export const academicRecordsRouter=Router()
