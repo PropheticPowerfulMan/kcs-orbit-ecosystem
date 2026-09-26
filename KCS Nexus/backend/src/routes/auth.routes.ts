@@ -16,7 +16,7 @@ import { generateTotpSecret, verifyTotp } from '../utils/totp.js'
 
 const RESET_TOKEN_TTL_MINUTES = 30
 const RESET_TOKEN_BYTES = 32
-const PASSWORD_RESET_RESPONSE = 'If an account exists, a new temporary password will be sent through the selected channel.'
+const PASSWORD_RESET_RESPONSE = 'If an account exists, a secure password-reset link will be sent through the selected channel.'
 
 const buildSafeUserWithAccess = async (user: PrismaUser, includeAvatar = true) => {
   const profiles = await prisma.user.findUnique({
@@ -152,11 +152,17 @@ type ExternalUserProfile = {
   staffFunction?: string | null
 }
 
+const strongPasswordSchema = z.string().min(12, 'Password must contain at least 12 characters').max(128)
+  .regex(/[a-z]/, 'Password must include a lowercase letter')
+  .regex(/[A-Z]/, 'Password must include an uppercase letter')
+  .regex(/[0-9]/, 'Password must include a number')
+  .regex(/[^A-Za-z0-9]/, 'Password must include a special character')
+
 const registerSchema = z.object({
   firstName: z.string().min(2),
   lastName: z.string().min(2),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: strongPasswordSchema,
   role: z.enum(['student', 'parent'], { message: 'KCS Nexus can only register parents and their children. School employees are provisioned by SAVANEX or EduPay.' }),
 })
 
@@ -172,11 +178,35 @@ const loginSchema = z.object({
 
 const configuredSuperAdmin = {
   id: 'configured-superadmin',
-  email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com',
-  password: process.env.SUPERADMIN_PASSWORD || 'SuperAdmin123!',
-  firstName: process.env.SUPERADMIN_FIRSTNAME || 'Super',
-  lastName: process.env.SUPERADMIN_LASTNAME || 'Admin',
+  email: env.SUPERADMIN_EMAIL,
+  password: env.SUPERADMIN_PASSWORD || 'SuperAdmin123!',
+  firstName: env.SUPERADMIN_FIRSTNAME,
+  lastName: env.SUPERADMIN_LASTNAME,
   role: 'admin' as const,
+}
+
+const MAX_FAILED_LOGINS = 5
+const LOGIN_LOCK_MINUTES = 15
+
+async function ensureAccountNotLocked(user: PrismaUser) {
+  if (!user.loginLockedUntil) return
+  if (user.loginLockedUntil > new Date()) {
+    throw new ApiError(423, `Account temporarily locked after repeated failed sign-in attempts. Try again after ${user.loginLockedUntil.toISOString()}.`)
+  }
+  await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginLockedUntil: null } })
+}
+
+async function recordFailedLogin(user: PrismaUser) {
+  const attempts = user.failedLoginAttempts + 1
+  const lockedUntil = attempts >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOGIN_LOCK_MINUTES * 60_000) : null
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: attempts, lastFailedLoginAt: new Date(), loginLockedUntil: lockedUntil } }),
+    prisma.auditLog.create({ data: { actorId: user.id, action: lockedUntil ? 'auth.account_locked' : 'auth.login_failed', targetType: 'User', targetId: user.id, metadata: { attempts, lockedUntil: lockedUntil?.toISOString() ?? null } } }),
+  ])
+}
+
+async function recordSuccessfulLogin(user: PrismaUser) {
+  await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginLockedUntil: null, lastLoginAt: new Date() } })
 }
 
 async function getConfiguredSuperAdminAccount() {
@@ -198,7 +228,12 @@ async function loginConfiguredSuperAdmin(payload: z.infer<typeof loginSchema>) {
   const identifier = (payload.identifier ?? payload.email ?? '').trim().toLowerCase()
   if (identifier !== configuredSuperAdmin.email.toLowerCase()) return null
   const account = await getConfiguredSuperAdminAccount()
-  if (!account.passwordHash || !(await bcrypt.compare(payload.password, account.passwordHash))) return null
+  await ensureAccountNotLocked(account)
+  if (!account.passwordHash || !(await bcrypt.compare(payload.password, account.passwordHash))) {
+    await recordFailedLogin(account)
+    return null
+  }
+  await recordSuccessfulLogin(account)
   const user = buildConfiguredSuperAdminUser(account)
   return {
     user,
@@ -646,6 +681,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   }
 
   const user = await findLocalUserByIdentifier(identifier)
+  if (user) await ensureAccountNotLocked(user)
   const isFederatedUser = Boolean(user?.permissions?.some((permission) => permission.startsWith('ecosystem:')))
   if (user?.passwordHash && !isFederatedUser) {
     const isValid = await bcrypt.compare(payload.password, user.passwordHash)
@@ -656,6 +692,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
           throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
         }
       }
+      await recordSuccessfulLogin(user)
       const token = signAccessToken(user)
       const refreshToken = signRefreshToken(user)
 
@@ -669,6 +706,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
 
       return success(res, { user: await buildSafeUserWithAccess(user, false), token, refreshToken }, 'Login successful')
     }
+    await recordFailedLogin(user)
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
@@ -677,6 +715,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   const providerPermissions = hasTeacherProfile ? ['ecosystem:savanex'] : (user?.permissions ?? [])
   const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password, providerPermissions)
   if (!externalUser) {
+    if (user) await recordFailedLogin(user)
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
@@ -684,6 +723,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   if (!resolvedUser) {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
+
+  await recordSuccessfulLogin(resolvedUser)
 
   if (resolvedUser.role === 'PARENT' && resolvedUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
 
@@ -777,47 +818,26 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
   await forwardPasswordRecovery(normalizedEmail, channel, recoverySources)
 
   if (user?.passwordHash && recoverySources.length === 0 && !isConfiguredSuperAdminUser(user.id)) {
-    const temporaryPassword = `KCS-${crypto.randomBytes(8).toString('base64url')}!`
-    const message = [
-      `Bonjour ${user.firstName},`,
-      '',
-      'Une demande de récupération a été reçue pour votre compte KCS Nexus.',
-      `Identifiant: ${user.email}`,
-      `Nouveau mot de passe temporaire: ${temporaryPassword}`,
-      '',
-      'Pour votre sécurité, changez ce mot de passe après votre prochaine connexion.',
-      "Si vous n'êtes pas à l'origine de cette demande, contactez l'administration.",
-    ].join('\n')
+    const rawToken = crypto.randomBytes(RESET_TOKEN_BYTES).toString('base64url')
+    const tokenHash = hashResetToken(rawToken)
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000)
+    const resetUrl = buildPasswordResetUrl(rawToken)
+    const resetMessage = buildPasswordResetEmail(user.firstName, resetUrl)
+
+    const created = await prisma.$transaction(async (transaction) => {
+      await transaction.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } })
+      return transaction.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt } })
+    })
 
     const result = channel === 'sms'
-      ? await sendSchoolSms(user.phone, `KCS Nexus : ${message}`)
-      : await sendSchoolMail({
-          to: user.email,
-          subject: 'Nouveau mot de passe temporaire KCS Nexus',
-          text: message,
-        })
+      ? await sendSchoolSms(user.phone, `KCS Nexus: secure password reset link (valid ${RESET_TOKEN_TTL_MINUTES} minutes): ${resetUrl}`)
+      : await sendSchoolMail({ to: user.email, subject: 'Secure KCS Nexus password reset', text: resetMessage.text, html: resetMessage.html })
 
     if (result.sent) {
-      const passwordHash = await bcrypt.hash(temporaryPassword, 10)
-      await prisma.$transaction([
-        prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
-        prisma.passwordResetToken.updateMany({
-          where: { userId: user.id, usedAt: null },
-          data: { usedAt: new Date() },
-        }),
-        prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
-        prisma.auditLog.create({
-          data: {
-            actorId: user.id,
-            action: 'auth.temporary_password_issued',
-            targetType: 'User',
-            targetId: user.id,
-            metadata: { email: normalizedEmail, channel },
-          },
-        }),
-      ])
+      await prisma.auditLog.create({ data: { actorId: user.id, action: 'auth.password_reset_link_issued', targetType: 'User', targetId: user.id, metadata: { email: normalizedEmail, channel, expiresAt: expiresAt.toISOString() } } })
     } else {
-      console.warn(`[auth] Password recovery was not applied because delivery failed via ${channel}.`)
+      await prisma.passwordResetToken.delete({ where: { id: created.id } }).catch(() => undefined)
+      console.warn(`[auth] Password reset link delivery failed via ${channel}.`)
     }
   }
 
@@ -825,7 +845,7 @@ authRouter.post('/forgot-password', asyncHandler(async (req, res) => {
 }))
 
 authRouter.post('/reset-password', asyncHandler(async (req, res) => {
-  const schema = z.object({ token: z.string().min(1), password: z.string().min(8) })
+  const schema = z.object({ token: z.string().min(1), password: strongPasswordSchema })
   const { token, password } = schema.parse(req.body)
   const tokenHash = hashResetToken(token)
   const resetToken = await prisma.passwordResetToken.findUnique({
@@ -841,7 +861,7 @@ authRouter.post('/reset-password', asyncHandler(async (req, res) => {
   await prisma.$transaction([
     prisma.user.update({
       where: { id: resetToken.userId },
-      data: { passwordHash },
+      data: { passwordHash, failedLoginAttempts: 0, loginLockedUntil: null, passwordChangedAt: new Date() },
     }),
     prisma.passwordResetToken.update({
       where: { id: resetToken.id },
@@ -895,7 +915,7 @@ authRouter.get('/me', authenticate, asyncHandler(async (req: AuthenticatedReques
 }))
 
 authRouter.put('/change-password', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8) })
+  const schema = z.object({ currentPassword: z.string().min(1), newPassword: strongPasswordSchema })
   const { currentPassword, newPassword } = schema.parse(req.body)
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
     const account = await getConfiguredSuperAdminAccount()
@@ -903,7 +923,7 @@ authRouter.put('/change-password', authenticate, asyncHandler(async (req: Authen
       throw new ApiError(400, 'Current password is incorrect')
     }
     await prisma.$transaction([
-      prisma.user.update({ where: { id: account.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10) } }),
+      prisma.user.update({ where: { id: account.id }, data: { passwordHash: await bcrypt.hash(newPassword, 10), failedLoginAttempts: 0, loginLockedUntil: null, passwordChangedAt: new Date() } }),
       prisma.refreshToken.deleteMany({ where: { userId: account.id } }),
     ])
     return success(res, null, 'Password changed successfully')
@@ -920,7 +940,7 @@ authRouter.put('/change-password', authenticate, asyncHandler(async (req: Authen
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10)
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, failedLoginAttempts: 0, loginLockedUntil: null, passwordChangedAt: new Date() } })
   await prisma.refreshToken.deleteMany({ where: { userId: user.id } })
   return success(res, null, 'Password changed across the ecosystem')
 }))

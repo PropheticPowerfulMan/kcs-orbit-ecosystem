@@ -135,7 +135,8 @@ export default function TeacherWholeSchoolReportCards() {
     setError('')
   }, [selected?.id, term])
 
-  const locked = Boolean(selected?.reportCard && selected.reportCard.publicationStatus !== 'DRAFT')
+  const locked = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus))
+  const awaitingReview = selected?.reportCard?.publicationStatus === 'READY_FOR_REVIEW'
   const updateReport = async (submit: boolean) => {
     if (!selected) return
     setSaving(true)
@@ -143,17 +144,18 @@ export default function TeacherWholeSchoolReportCards() {
     setNotice('')
     try {
       const payload = { academicYear, term, teacherComment, conduct }
+      let submission: any = null
       if (submit) {
         const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload)
-        const saved = response.data?.data
-        if (saved?.publicationStatus !== 'READY_FOR_REVIEW' || Number(saved?.superAdministrationNotified ?? 0) < 1) {
+        submission = response.data?.data
+        if (submission?.publicationStatus !== 'READY_FOR_REVIEW' || Number(submission?.superAdministrationNotified ?? 0) < 1) {
           throw new Error('The report card was not confirmed in the Super Administration review queue.')
         }
       } else await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload)
-      setNotice(submit ? 'The complete report card was submitted to Super Administration.' : 'The main-teacher draft was saved in KCS Nexus.')
+      setNotice(submit ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced and Super Administration was notified again.' : 'The complete report card was submitted to Super Administration.') : 'The main-teacher draft was saved in KCS Nexus.')
       await load()
     } catch (reason: any) {
-      setError(reason?.response?.data?.message ?? 'The report-card operation failed.')
+      setError(reason?.response?.data?.message ?? reason?.message ?? 'The report-card operation failed.')
     } finally {
       setSaving(false)
     }
@@ -271,7 +273,7 @@ export default function TeacherWholeSchoolReportCards() {
               <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Main teacher comment<textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => setTeacherComment(event.target.value)} placeholder='Synthesize academic progress, effort, strengths, and the next priority.' /></label>
               <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Conduct and learning habits<input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder='Conduct, responsibility, collaboration, punctuality...' /></label>
               {selected.isHomeroomStudent && !selected.allSubjectsSubmitted && <p className='mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'>Submission remains locked: {selected.expectedSubjectCount - selected.submittedSubjectCount} subject teacher(s) still need to submit final grades.</p>}
-              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 disabled:opacity-40 dark:border-kcs-blue-700 dark:text-kcs-blue-200'><Save size={15} />Save draft</button><button type='button' disabled={saving || locked || !selected.allSubjectsSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'><CheckCircle2 size={15} />Submit to Super Administration</button></div>}
+              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 disabled:opacity-40 dark:border-kcs-blue-700 dark:text-kcs-blue-200'><Save size={15} />Save draft</button><button type='button' aria-busy={saving} disabled={saving || locked || !selected.allSubjectsSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'>{saving?<RefreshCw size={15} className='animate-spin'/>:<CheckCircle2 size={15} />}{saving?'Submitting…':awaitingReview?'Replace submission to Super Administration':'Submit to Super Administration'}</button></div>}
             </div>
           </div>
         </>}

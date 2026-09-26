@@ -37,16 +37,35 @@ const StudentForumPage = () => {
   const [commentAttachments, setCommentAttachments] = useState<Record<string, { type: 'image' | 'video' | 'audio' | 'document'; data: string; name: string } | null>>({})
   const [recordingFor, setRecordingFor] = useState('')
   const [publishing, setPublishing] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [busyAction, setBusyAction] = useState('')
+  const [error, setError] = useState('')
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    studentForumAPI.getPosts().then((response) => {
-      const records = Array.isArray(response.data.data) ? response.data.data : []
-      setPosts(records.map((post: any) => ({ ...post, likeCount: Number(post.likeCount ?? 0), likedByMe: Boolean(post.likedByMe), author: `${post.author.firstName} ${post.author.lastName?.[0] ?? ''}.`, comments: post.comments.map((comment: any) => ({ ...comment, author: `${comment.author.firstName} ${comment.author.lastName?.[0] ?? ''}.` })) })))
-    }).catch(() => undefined)
-  }, [])
+  const mapPosts = (records: any[]) => records.map((post: any) => ({ ...post, likeCount: Number(post.likeCount ?? 0), likedByMe: Boolean(post.likedByMe), author: `${post.author?.firstName ?? 'KCS'} ${post.author?.lastName?.[0] ?? ''}.`, comments: (post.comments ?? []).map((comment: any) => ({ ...comment, author: `${comment.author?.firstName ?? 'KCS'} ${comment.author?.lastName?.[0] ?? ''}.` })) }))
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    let lastError: any
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await studentForumAPI.getPosts()
+        setPosts(mapPosts(Array.isArray(response.data?.data) ? response.data.data : []))
+        setLoading(false)
+        return
+      } catch (reason: any) {
+        lastError = reason
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 700 * (attempt + 1)))
+      }
+    }
+    setError(lastError?.response?.data?.message ?? tr('Impossible de charger le forum. Réessayez avec Actualiser.','Unable to load the forum. Try Refresh.'))
+    setLoading(false)
+  }
+
+  useEffect(() => { void load() }, [])
 
   const report = useMemo(() => {
     const urgent = posts.filter((post) => post.priority === 'urgent').length
@@ -59,14 +78,21 @@ const StudentForumPage = () => {
 
   const createPost = async (event: FormEvent) => {
     event.preventDefault()
-    if (publishing || !draft.title || (!draft.content && !attachment)) return
+    const title = draft.title.trim()
+    const content = draft.content.trim()
+    if (publishing) return
+    if (title.length < 4) { setError(tr('Le titre doit contenir au moins 4 caractères.','The title must contain at least 4 characters.')); return }
+    if (!content && !attachment) { setError(tr('Ajoutez un message ou une pièce jointe.','Add a message or an attachment.')); return }
     setPublishing(true)
+    setError('')
     try {
-      const response = await studentForumAPI.createPost({ ...draft, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
+      const response = await studentForumAPI.createPost({ ...draft, title, content, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) })
       const created = response.data.data
       setPosts((current) => [{ ...created, likeCount: 0, likedByMe: false, author: `${user?.firstName ?? 'Student'} ${user?.lastName?.[0] ?? ''}.`.trim(), comments: [] }, ...current])
       setDraft({ title: '', category: 'Academics', content: '' })
       setAttachment(null)
+    } catch (reason: any) {
+      setError(reason?.response?.data?.message ?? tr('Publication impossible. Réessayez.','Unable to publish. Please try again.'))
     } finally {
       setPublishing(false)
     }
@@ -75,14 +101,22 @@ const StudentForumPage = () => {
   const addComment = async (postId: string) => {
     const content = commentDrafts[postId] ?? ''
     const media = commentAttachments[postId]
-    if (!content.trim() && !media) return
-    const response = await studentForumAPI.addComment(postId, { content, ...(media ? { attachmentType: media.type, attachmentData: media.data, attachmentName: media.name } : {}) })
-    setPosts((current) => current.map((post) => post.id === postId
-      ? { ...post, comments: [...post.comments, { ...response.data.data, author: user?.firstName ?? 'Student' }] }
-      : post))
-    setCommentDrafts((current) => ({ ...current, [postId]: '' }))
-    setCommentAttachments((current) => ({ ...current, [postId]: null }))
-    setRecordingFor('')
+    if (!content.trim() && !media) { setError(tr('Écrivez une réponse ou joignez un média.','Write a reply or attach media.')); return }
+    setBusyAction(postId)
+    setError('')
+    try {
+      const response = await studentForumAPI.addComment(postId, { content: content.trim(), ...(media ? { attachmentType: media.type, attachmentData: media.data, attachmentName: media.name } : {}) })
+      setPosts((current) => current.map((post) => post.id === postId
+        ? { ...post, comments: [...post.comments, { ...response.data.data, author: user?.firstName ?? 'Student' }] }
+        : post))
+      setCommentDrafts((current) => ({ ...current, [postId]: '' }))
+      setCommentAttachments((current) => ({ ...current, [postId]: null }))
+      setRecordingFor('')
+    } catch (reason: any) {
+      setError(reason?.response?.data?.message ?? tr('Réponse impossible. Réessayez.','Unable to reply. Please try again.'))
+    } finally {
+      setBusyAction('')
+    }
   }
 
   const readMedia = (file: File | undefined, type: 'image' | 'video' | 'audio') => {
@@ -103,9 +137,14 @@ const StudentForumPage = () => {
   }
 
   const toggleLike = async (postId: string) => {
-    const response = await studentForumAPI.toggleLike(postId)
-    const result = response.data.data
-    setPosts((current) => current.map((post) => post.id === postId ? { ...post, likedByMe: Boolean(result.liked), likeCount: Number(result.likeCount) } : post))
+    setError('')
+    try {
+      const response = await studentForumAPI.toggleLike(postId)
+      const result = response.data.data
+      setPosts((current) => current.map((post) => post.id === postId ? { ...post, likedByMe: Boolean(result.liked), likeCount: Number(result.likeCount) } : post))
+    } catch (reason: any) {
+      setError(reason?.response?.data?.message ?? tr('Interaction impossible. Réessayez.','Unable to update this interaction.'))
+    }
   }
 
   return (
@@ -138,6 +177,7 @@ const StudentForumPage = () => {
             <h2 className="font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{tr('Forum des élèves', 'Student Forum')}</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{tr('Discussions réelles modérées avec suivi IA du bien-être.', 'Real moderated discussions with AI-assisted wellbeing monitoring.')}</p>
           </header>
+          {error && <div className="xl:col-span-2 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100 sm:flex-row sm:items-center sm:justify-between" role="alert"><span>{error}</span><button type="button" onClick={() => void load()} className="rounded-xl bg-red-700 px-4 py-2 text-white">{tr('Actualiser','Refresh')}</button></div>}
           <div className="space-y-6">
             <form onSubmit={createPost} className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
               <div className="mb-5 flex items-center gap-3">
@@ -178,7 +218,8 @@ const StudentForumPage = () => {
           </div>
 
           <section className="min-w-0 space-y-4">
-            {posts.length === 0 && <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-600 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-gray-300">No real student discussion has been published yet.</div>}
+            {loading && posts.length === 0 && <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-8 text-center font-semibold text-kcs-blue-800 dark:border-cyan-800 dark:bg-kcs-blue-900 dark:text-cyan-100"><Loader2 className="mx-auto mb-3 animate-spin"/> {tr('Chargement sécurisé du forum…','Secure forum loading…')}</div>}
+            {!loading && posts.length === 0 && <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-600 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-gray-300">No real student discussion has been published yet.</div>}
             {posts.map((post, index) => (
               <motion.article
                 key={post.id}
@@ -218,7 +259,7 @@ const StudentForumPage = () => {
                     <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-4 dark:text-white" title={tr('Joindre un média','Attach media')}><Paperclip size={17}/><input type="file" accept="image/*,audio/*,video/*,.pdf,.txt" className="hidden" onChange={(event)=>readAnyMedia(event.target.files?.[0],media=>setCommentAttachments(current=>({...current,[post.id]:media})))}/></label>
                     <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-4 dark:text-white" title={tr('Filmer maintenant','Record video now')}><Video size={17}/><input type="file" accept="video/*" capture="environment" className="hidden" onChange={(event)=>readAnyMedia(event.target.files?.[0],media=>setCommentAttachments(current=>({...current,[post.id]:media})))}/></label>
                     <button type="button" onClick={()=>setRecordingFor(recordingFor===post.id?'':post.id)} className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 dark:text-white" title={tr('Enregistrer un audio','Record audio')}><Mic size={17}/></button>
-                    <button onClick={() => void addComment(post.id)} className="min-h-11 rounded-xl bg-kcs-blue-700 px-4 text-white hover:bg-kcs-blue-800"><Send size={16}/></button>
+                    <button disabled={busyAction===post.id} onClick={() => void addComment(post.id)} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-kcs-blue-700 px-4 text-white hover:bg-kcs-blue-800 disabled:opacity-60">{busyAction===post.id?<Loader2 size={16} className="animate-spin"/>:<Send size={16}/>}</button>
                   </div>
                   {commentAttachments[post.id] && <div className="flex items-center justify-between rounded-xl bg-cyan-50 p-3 text-sm dark:bg-kcs-blue-950 dark:text-white"><span className="truncate">{commentAttachments[post.id]?.name}</span><button type="button" onClick={()=>setCommentAttachments(current=>({...current,[post.id]:null}))}><X size={16}/></button></div>}
                   {recordingFor===post.id && <AudioRecorder language={language} onRecorded={(file)=>readAnyMedia(file,media=>setCommentAttachments(current=>({...current,[post.id]:media})))}/>}

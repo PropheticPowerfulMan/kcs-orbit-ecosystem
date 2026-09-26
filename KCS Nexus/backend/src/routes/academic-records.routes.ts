@@ -49,12 +49,20 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
  if(!student)throw new ApiError(404,'Student not found')
  if(!isTeacherHomeroomFor(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
- const grades=await prisma.grade.findMany({
-  where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
+ const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
+  const subjectKey=[enrollment.course.name,enrollment.course.grade,enrollment.course.teacherId].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
+  if(!bySubject.has(subjectKey))bySubject.set(subjectKey,enrollment)
+  return bySubject
+ },new Map<string,(typeof student.enrollments)[number]>()).values()]
+ const submittedGrades=await prisma.grade.findMany({
+  where:{studentId,courseId:{in:uniqueEnrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
   include:{course:true},
   orderBy:{createdAt:'desc'},
  })
- return{teacher,student,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
+ const latestGradeByCourse=new Map<string,(typeof submittedGrades)[number]>()
+ for(const grade of submittedGrades)if(!latestGradeByCourse.has(grade.courseId))latestGradeByCourse.set(grade.courseId,grade)
+ const grades=[...latestGradeByCourse.values()]
+ return{teacher,student,enrollments:uniqueEnrollments,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
 }
 export const academicRecordsRouter=Router()
 academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) => {
@@ -256,12 +264,12 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
  const payload=teacherReportDraftSchema.parse(req.body)
  if(payload.teacherComment.length<5)throw new ApiError(400,'Add the main teacher comment before submitting the report card')
  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term)
- const expectedCourseIds=[...new Set(context.student.enrollments.map(item=>item.courseId))]
+ const expectedCourseIds=[...new Set(context.enrollments.map(item=>item.courseId))]
  const submittedCourseIds=new Set(context.grades.map(item=>item.courseId))
  const missingCourseIds=expectedCourseIds.filter(courseId=>!submittedCourseIds.has(courseId))
  if(!expectedCourseIds.length)throw new ApiError(409,'This learner has no official course enrollment')
  if(missingCourseIds.length){
-  const missingCourses=context.student.enrollments.filter(item=>missingCourseIds.includes(item.courseId)).map(item=>item.course.code||item.course.name)
+  const missingCourses=context.enrollments.filter(item=>missingCourseIds.includes(item.courseId)).map(item=>item.course.code||item.course.name)
   throw new ApiError(409,`Submission blocked: final grades are still missing for ${missingCourses.join(', ')}`)
  }
  const termLabel=reportCardTerm(payload.academicYear,payload.term)

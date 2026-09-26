@@ -26,7 +26,11 @@ const commentSchema = z.object({
 
 const resolveForumActorId = async (req: AuthenticatedRequest) => {
   if (!req.user) throw new ApiError(401, 'Authentication required')
-  if (req.user.sub !== 'configured-superadmin') return req.user.sub
+  if (req.user.sub !== 'configured-superadmin') {
+    const actor = await prisma.user.findUnique({ where: { id: req.user.sub }, select: { id: true } })
+    if (!actor) throw new ApiError(401, 'Your Nexus session is no longer linked to an active account. Please sign in again.')
+    return actor.id
+  }
   const superAdmin = await prisma.user.findFirst({
     where: {
       OR: [

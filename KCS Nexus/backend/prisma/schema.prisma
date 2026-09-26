@@ -316,6 +316,11 @@ model User {
   accountBlockedAt       DateTime?
   accountBlockedReason   String?
   accountBlockedBy       String?
+  failedLoginAttempts    Int                    @default(0)
+  loginLockedUntil       DateTime?
+  lastFailedLoginAt      DateTime?
+  lastLoginAt            DateTime?
+  passwordChangedAt      DateTime?
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
   studentProfile         StudentProfile?

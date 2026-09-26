@@ -52,9 +52,12 @@ export default function ParentForumPage() {
 
   const createPost = async (event: FormEvent) => {
     event.preventDefault()
-    if (draft.title.trim().length < 4 || (draft.content.trim().length < 8 && !attachment)) return
+    const title = draft.title.trim()
+    const content = draft.content.trim()
+    if (title.length < 4) { setError(tr('Le titre doit contenir au moins 4 caractères.','The title must contain at least 4 characters.')); return }
+    if (!content && !attachment) { setError(tr('Ajoutez un message ou une pièce jointe.','Add a message or an attachment.')); return }
     setBusy('create'); setError('')
-    try { await forumAPI.createPost({ ...draft, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) }); setDraft({ title:'',category:'Academics',content:'' }); setAttachment(null); await load() }
+    try { await forumAPI.createPost({ ...draft, title, content, ...(attachment ? { attachmentType: attachment.type, attachmentData: attachment.data, attachmentName: attachment.name } : {}) }); setDraft({ title:'',category:'Academics',content:'' }); setAttachment(null); await load() }
     catch (reason: any) { setError(reason?.response?.data?.message ?? tr('Publication impossible.','Unable to publish.')) }
     finally { setBusy('') }
   }
@@ -95,7 +98,7 @@ export default function ParentForumPage() {
               <div className="mt-3 grid grid-cols-3 gap-2">{[['image',Camera,tr('Photo','Photo')],['video',Video,tr('Vidéo','Video')],['audio',Mic,tr('Audio','Audio')]].map(([kind,Icon,label]:any)=><label key={kind} className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-1 rounded-xl bg-cyan-50 text-xs font-bold text-cyan-800 dark:bg-kcs-blue-950 dark:text-cyan-200"><Icon size={15}/>{label}<input type="file" accept={`${kind}/*`} capture={kind==='video'?'environment':undefined} className="hidden" onChange={(e)=>readMedia(e.target.files?.[0],setAttachment)}/></label>)}</div>
               {attachment&&<div className="mt-2 flex items-center justify-between rounded-xl bg-slate-100 p-3 text-sm dark:bg-kcs-blue-950 dark:text-white"><span className="truncate">{attachment.name}</span><button type="button" onClick={()=>setAttachment(null)}><X size={16}/></button></div>}
               <div className="mt-3"><AudioRecorder language={language} onRecorded={(file)=>readMedia(file,setAttachment)}/></div>
-              <button disabled={busy==='create'} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 font-bold text-white disabled:opacity-50"><Send size={16}/>{tr('Publier','Publish')}</button>
+              <button disabled={busy==='create'} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 font-bold text-white disabled:opacity-50">{busy==='create'?<RefreshCw size={16} className="animate-spin"/>:<Send size={16}/>} {busy==='create'?tr('Publication…','Publishing…'):tr('Publier','Publish')}</button>
             </form>
             <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-kcs-blue-900"><div className="relative"><Search className="absolute left-3 top-3 text-gray-400" size={17}/><input className="input-kcs pl-10" value={query} onChange={(e)=>setQuery(e.target.value)} placeholder={tr('Titre, auteur, contenu…','Title, author, content…')}/></div><select className="input-kcs mt-3" value={category} onChange={(e)=>setCategory(e.target.value)}><option value="ALL">{tr('Toutes les catégories','All categories')}</option>{categories.map((item)=><option key={item}>{item}</option>)}</select><p className="mt-3 text-xs text-gray-500 dark:text-gray-300">{visible.length} / {posts.length} {tr('discussion(s)','discussion(s)')}</p></div>
           </aside>

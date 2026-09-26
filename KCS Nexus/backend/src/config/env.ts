@@ -12,6 +12,10 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(8, 'JWT_REFRESH_SECRET must be at least 8 characters'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  SUPERADMIN_EMAIL: z.string().email().default('superadmin@kcsnexus.com'),
+  SUPERADMIN_PASSWORD: z.string().min(12).optional(),
+  SUPERADMIN_FIRSTNAME: z.string().default('Super'),
+  SUPERADMIN_LASTNAME: z.string().default('Admin'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   GOOGLE_CLIENT_ID: z.string().optional(),
@@ -65,6 +69,9 @@ const envSchema = z.object({
   }
   if (weak(value.JWT_REFRESH_SECRET)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['JWT_REFRESH_SECRET'], message: 'Strong production JWT_REFRESH_SECRET required' })
+  }
+  if (!value.SUPERADMIN_PASSWORD || weak(value.SUPERADMIN_PASSWORD)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SUPERADMIN_PASSWORD'], message: 'Strong production SUPERADMIN_PASSWORD required' })
   }
   if (!value.DATABASE_URL.startsWith('postgresql://') && !value.DATABASE_URL.startsWith('postgres://')) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['DATABASE_URL'], message: 'Production PostgreSQL DATABASE_URL required' })

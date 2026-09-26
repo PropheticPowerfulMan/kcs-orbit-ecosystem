@@ -45,7 +45,7 @@ const AccountSettingsPanel = ({ roleLabel }: AccountSettingsPanelProps) => {
     setError('')
     setMessage('')
     const wantsPasswordChange = Boolean(passwords.current || passwords.newPassword || passwords.confirm)
-    if (wantsPasswordChange && passwords.newPassword.length < 8) return setError('Le nouveau mot de passe doit contenir au moins 8 caractères.')
+    if (wantsPasswordChange && !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,128}$/.test(passwords.newPassword)) return setError('Le nouveau mot de passe doit contenir 12 caractères minimum, avec majuscule, minuscule, chiffre et symbole.')
     if (wantsPasswordChange && passwords.newPassword !== passwords.confirm) return setError('Les nouveaux mots de passe ne correspondent pas.')
 
     setSaving(true)
@@ -90,7 +90,7 @@ const AccountSettingsPanel = ({ roleLabel }: AccountSettingsPanelProps) => {
           <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-4 text-sm text-kcs-blue-800 dark:border-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-kcs-blue-100">
             Seuls la photo et le mot de passe peuvent être modifiés ici. Le nom, les contacts, l’e-mail et le code d’accès sont gérés par l’administration.
           </div>          <div className="grid gap-3 sm:grid-cols-3">
-            {passwordFields.map(([id,label])=><label key={id} className="grid gap-1 text-xs font-semibold text-gray-500">{label}<span className="flex items-center overflow-hidden rounded-xl border border-gray-200 pr-2 dark:border-kcs-blue-700"><input className={passwordInputClass} value={passwords[id]} onChange={(e)=>setPasswords({...passwords,[id]:e.target.value})} type={visiblePasswords[id]?'text':'password'} autoComplete={id==='current'?'off':'new-password'} placeholder={id==='current'?'Saisissez votre mot de passe actuel':'8 caractères minimum'} data-lpignore="true" data-1p-ignore="true"/><button type="button" onClick={()=>setVisiblePasswords({...visiblePasswords,[id]:!visiblePasswords[id]})} className="p-2">{visiblePasswords[id]?<EyeOff size={16}/>:<Eye size={16}/>}</button></span></label>)}
+            {passwordFields.map(([id,label])=><label key={id} className="grid gap-1 text-xs font-semibold text-gray-500">{label}<span className="flex items-center overflow-hidden rounded-xl border border-gray-200 pr-2 dark:border-kcs-blue-700"><input className={passwordInputClass} value={passwords[id]} onChange={(e)=>setPasswords({...passwords,[id]:e.target.value})} type={visiblePasswords[id]?'text':'password'} autoComplete={id==='current'?'off':'new-password'} placeholder={id==='current'?'Saisissez votre mot de passe actuel':'12 caractères + majuscule, chiffre et symbole'} data-lpignore="true" data-1p-ignore="true"/><button type="button" onClick={()=>setVisiblePasswords({...visiblePasswords,[id]:!visiblePasswords[id]})} className="p-2">{visiblePasswords[id]?<EyeOff size={16}/>:<Eye size={16}/>}</button></span></label>)}
           </div>
           {message && <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{message}</p>}
           {error && <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}

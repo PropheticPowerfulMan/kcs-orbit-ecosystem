@@ -1440,6 +1440,8 @@ const AdminSectionView = ({
   const [financeLoading, setFinanceLoading] = useState(false)
   const [reportCadence, setReportCadence] = useState<AdminReportCadence>('weekly')
   const [reportCategory, setReportCategory] = useState<AdminReportCategory>('executive')
+  const [liveExporting, setLiveExporting] = useState<'xlsx' | 'xml' | ''>('')
+  const [liveExportNotice, setLiveExportNotice] = useState('')
   const [editingStudent, setEditingStudent] = useState<AdminStudentRecord | null>(null)
   const [studentEditForm, setStudentEditForm] = useState<AdminStudentEditForm>(() => createAdminStudentEditForm(null))
   const [savingStudentEdit, setSavingStudentEdit] = useState(false)
@@ -3167,6 +3169,29 @@ const AdminSectionView = ({
     )
   }
 
+  const downloadLiveSchoolData = async (format: 'xlsx' | 'xml') => {
+    setLiveExporting(format)
+    setLiveExportNotice('')
+    try {
+      const response = await adminAPI.exportData(format)
+      const disposition = String(response.headers?.['content-disposition'] || '')
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || ('kcs-live-school-data.' + format)
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      setLiveExportNotice(tr('Export temps réel généré et journalisé avec succès.','Real-time export generated and audit-logged successfully.'))
+    } catch (error: any) {
+      setLiveExportNotice(error?.response?.data?.message ?? tr("L'export temps réel a échoué. Réessayez.",'The real-time export failed. Please try again.'))
+    } finally {
+      setLiveExporting('')
+    }
+  }
+
   if (segment === 'reports') {
     const reportRows = buildReportRows(reportCategory, reportCadence, officialRoster, admissionRequests, language)
     const reportWindow = buildReportWindow(reportCadence)
@@ -3209,6 +3234,17 @@ const AdminSectionView = ({
               </label>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-cyan-200 bg-cyan-50/80 p-5 shadow-sm dark:border-cyan-800 dark:bg-kcs-blue-900/60">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div><p className="text-xs font-black uppercase tracking-[.16em] text-cyan-700 dark:text-cyan-300">{tr("Instantané institutionnel sécurisé","Secure institutional snapshot")}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{tr("Exporter la vie réelle de l'école","Export live school data")}</h3><p className="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-300">{tr("Généré directement depuis Nexus au moment du clic : personnes, élèves, enseignants, cours, inscriptions, présences, notes, bulletins, admissions, métadonnées de communication et piste d’audit. Les mots de passe, jetons, clés API, corps des messages et fichiers privés sont exclus.","Generated directly from Nexus when clicked: people, learners, teachers, courses, enrollments, attendance, grades, report cards, admissions, communication metadata and audit trail. Passwords, tokens, API keys, message bodies and private files are excluded.")}</p></div>
+            <div className="grid shrink-0 gap-2 sm:grid-cols-2">
+              <button type="button" disabled={Boolean(liveExporting)} onClick={() => void downloadLiveSchoolData('xlsx')} className={`${adminButton} inline-flex items-center justify-center gap-2 disabled:opacity-60`}>{liveExporting==='xlsx'?<RefreshCw size={16} className="animate-spin"/>:<FileSpreadsheet size={16}/>} {liveExporting==='xlsx'?tr('Génération…','Generating…'):'Excel (.xlsx)'}</button>
+              <button type="button" disabled={Boolean(liveExporting)} onClick={() => void downloadLiveSchoolData('xml')} className={`${adminOutlineButton} inline-flex items-center justify-center gap-2 disabled:opacity-60`}>{liveExporting==='xml'?<RefreshCw size={16} className="animate-spin"/>:<FileText size={16}/>} {liveExporting==='xml'?tr('Génération…','Generating…'):'XML'}</button>
+            </div>
+          </div>
+          {liveExportNotice ? <p className="mt-4 rounded-xl border border-cyan-200 bg-white/80 p-3 text-sm font-semibold text-kcs-blue-900 dark:border-cyan-700 dark:bg-kcs-blue-950 dark:text-white" role="status">{liveExportNotice}</p> : null}
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

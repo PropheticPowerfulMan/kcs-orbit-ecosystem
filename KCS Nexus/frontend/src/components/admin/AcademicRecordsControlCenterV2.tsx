@@ -3,6 +3,8 @@ import { CheckCircle2, FileCheck2, FilterX, Printer, RefreshCw, Search, ShieldCh
 import { academicRecordsAPI } from '@/services/api'
 import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
 import { printOfficialReportCard, type PrintableReportCard } from '@/utils/officialReportCardPrint'
+import { SCHOOL_LEVELS, normalizeSchoolLevel } from '@/constants/schoolLevels'
+import { compareClassLabels } from '@/utils/classLabels'
 
 type Grade = {
   id: string
@@ -39,6 +41,10 @@ type RegistryStudent = {
 const normalize = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 const studentName = (student: RegistryStudent) => [student.user?.lastName, student.user?.middleName, student.user?.firstName].filter(Boolean).join(' ') || student.studentNumber || 'Unnamed student'
 const cardStudentName = (card: Card) => [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
+const validSection = (value: unknown) => {
+  const section = String(value ?? '').trim().replace(/\s+/g, ' ')
+  return section && !normalizeSchoolLevel(section) ? section : ''
+}
 const inputClass = 'w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 focus:ring-2 focus:ring-sky-200 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:placeholder:text-slate-400'
 
 export default function AcademicRecordsControlCenterV2() {
@@ -89,19 +95,22 @@ export default function AcademicRecordsControlCenterV2() {
     })
   }, [academicYear, grades, term])
 
-  const gradeOptions = useMemo(() => Array.from(new Set(registry.map((student) => student.grade).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })), [registry])
-  const sectionOptions = useMemo(() => Array.from(new Set(registry.filter((student) => gradeFilter === 'ALL' || student.grade === gradeFilter).map((student) => student.section).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })), [gradeFilter, registry])
+  const gradeOptions = useMemo(() => {
+    const available = new Set(registry.map((student) => normalizeSchoolLevel(student.grade)).filter(Boolean) as string[])
+    return SCHOOL_LEVELS.filter((grade) => available.has(grade))
+  }, [registry])
+  const sectionOptions = useMemo(() => Array.from(new Set(registry.filter((student) => gradeFilter === 'ALL' || normalizeSchoolLevel(student.grade) === gradeFilter).map((student) => validSection(student.section)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' })), [gradeFilter, registry])
   const statusOptions = useMemo(() => Array.from(new Set(registry.map((student) => student.status).filter(Boolean) as string[])).sort(), [registry])
 
   const visibleRegistry = useMemo(() => {
     const tokens = normalize(studentQuery).split(/\s+/).filter(Boolean)
     return registry.filter((student) => {
-      if (gradeFilter !== 'ALL' && student.grade !== gradeFilter) return false
-      if (sectionFilter !== 'ALL' && (student.section || '') !== sectionFilter) return false
+      if (gradeFilter !== 'ALL' && normalizeSchoolLevel(student.grade) !== gradeFilter) return false
+      if (sectionFilter !== 'ALL' && validSection(student.section) !== sectionFilter) return false
       if (statusFilter !== 'ALL' && normalize(student.status) !== normalize(statusFilter)) return false
       const haystack = normalize([studentName(student), student.studentNumber, student.grade, student.section, student.status].filter(Boolean).join(' '))
       return tokens.every((token) => haystack.includes(token))
-    }).sort((left, right) => [left.grade, left.section, studentName(left)].filter(Boolean).join(' ').localeCompare([right.grade, right.section, studentName(right)].filter(Boolean).join(' '), 'en', { numeric: true, sensitivity: 'base' }))
+    }).sort((left, right) => compareClassLabels(String(left.grade ?? ''), String(right.grade ?? '')) || validSection(left.section).localeCompare(validSection(right.section), 'en', { numeric: true, sensitivity: 'base' }) || studentName(left).localeCompare(studentName(right), 'en', { sensitivity: 'base' }))
   }, [gradeFilter, registry, sectionFilter, statusFilter, studentQuery])
 
   const visibleCards = useMemo(() => {
@@ -221,7 +230,7 @@ export default function AcademicRecordsControlCenterV2() {
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={inputClass}><option value="ALL">All statuses</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select>
         <button type="button" onClick={resetSearch} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 px-3 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><FilterX size={17}/>Reset</button>
       </div>
-      <div className="mt-4 max-h-[31rem] overflow-y-auto pr-1"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRegistry.map((student) => <article key={student.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{studentName(student)}</p><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{student.studentNumber || 'No student ID'} · {[student.grade, student.section].filter(Boolean).join(' ') || 'Class pending'}</p></div><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-200 dark:text-emerald-950">{student.status || 'active'}</span></div><button type="button" disabled={busy} onClick={() => void viewTranscript(student.id)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-kcs-blue-700 px-3 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50"><Printer size={16}/>{busy ? 'Loading…' : 'View and print official transcript'}</button></article>)}</div>{!busy && !visibleRegistry.length ? <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">No learner matches these precise filters.</p> : null}{busy && !registry.length ? <p className="p-6 text-center text-sm font-bold text-kcs-blue-700 dark:text-sky-200">Secure loading of the official student registry…</p> : null}</div>
+      <div className="mt-4 max-h-[31rem] overflow-y-auto pr-1"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRegistry.map((student) => <article key={student.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{studentName(student)}</p><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{student.studentNumber || 'No student ID'} · {[normalizeSchoolLevel(student.grade) || student.grade, validSection(student.section)].filter(Boolean).join(' ') || 'Class pending'}</p></div><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-200 dark:text-emerald-950">{student.status || 'active'}</span></div><button type="button" disabled={busy} onClick={() => void viewTranscript(student.id)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-kcs-blue-700 px-3 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50"><Printer size={16}/>{busy ? 'Loading…' : 'View and print official transcript'}</button></article>)}</div>{!busy && !visibleRegistry.length ? <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">No learner matches these precise filters.</p> : null}{busy && !registry.length ? <p className="p-6 text-center text-sm font-bold text-kcs-blue-700 dark:text-sky-200">Secure loading of the official student registry…</p> : null}</div>
     </section>
 
     <section id="official-report-cards" className="scroll-mt-24 rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5">

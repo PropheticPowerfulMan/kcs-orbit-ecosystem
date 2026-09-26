@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
-import { asyncHandler, success } from '../utils/api.js'
+import { ApiError, asyncHandler, success } from '../utils/api.js'
+import * as XLSX from 'xlsx'
 
 export const adminRouter = Router()
 
@@ -171,9 +172,92 @@ adminRouter.get('/analytics', asyncHandler(async (req, res) => {
   })
 }))
 
-adminRouter.get('/export/:type', asyncHandler(async (req, res) => {
-  const content = `KCS Nexus export generated for ${req.params.type} at ${new Date().toISOString()}`
-  res.setHeader('Content-Type', 'text/plain')
-  res.setHeader('Content-Disposition', `attachment; filename=${req.params.type}-export.txt`)
-  res.send(content)
+const safeSpreadsheetValue = (value: unknown) => {
+  if (value == null) return ''
+  const text = value instanceof Date ? value.toISOString() : String(value)
+  return /^[=+\-@]/.test(text) ? "'" + text : text
+}
+
+const exportRows = (rows: Record<string, unknown>[]) => rows.map((row) =>
+  Object.fromEntries(Object.entries(row).map(([key, value]) => [key, safeSpreadsheetValue(value)])),
+)
+
+const xmlEscape = (value: unknown) => String(value ?? '').replace(/[<>&"']/g, (character) => ({
+  '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;',
+})[character] || character)
+
+adminRouter.get('/export/:type', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const type = String(req.params.type || '').toLowerCase()
+  if (!['xlsx', 'xml'].includes(type)) throw new ApiError(400, 'Supported export formats are xlsx and xml.')
+
+  const [users, students, teachers, courses, enrollments, attendance, grades, reportCards, admissions, messages, audits] = await Promise.all([
+    prisma.user.findMany({ select: { id: true, email: true, accessCode: true, firstName: true, middleName: true, lastName: true, role: true, staffFunction: true, phone: true, accountBlockedAt: true, createdAt: true }, orderBy: [{ role: 'asc' }, { lastName: 'asc' }] }),
+    prisma.studentProfile.findMany({ select: { id: true, studentNumber: true, grade: true, section: true, status: true, enrollmentDate: true, gpa: true, attendanceRate: true, user: { select: { firstName: true, middleName: true, lastName: true, email: true, phone: true } } }, orderBy: [{ grade: 'asc' }, { studentNumber: 'asc' }] }),
+    prisma.teacherProfile.findMany({ select: { id: true, employeeNumber: true, department: true, qualification: true, user: { select: { firstName: true, middleName: true, lastName: true, email: true, phone: true } } } }),
+    prisma.course.findMany({ select: { id: true, code: true, name: true, grade: true, credits: true, teacher: { select: { employeeNumber: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } } }),
+    prisma.enrollment.findMany({ select: { createdAt: true, course: { select: { code: true, name: true, grade: true } }, student: { select: { studentNumber: true, grade: true, section: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } } }),
+    prisma.attendanceRecord.findMany({ select: { date: true, className: true, period: true, subject: true, status: true, student: { select: { studentNumber: true, user: { select: { firstName: true, middleName: true, lastName: true } } } }, recordedBy: { select: { firstName: true, lastName: true } } }, orderBy: { date: 'desc' } }),
+    prisma.grade.findMany({ select: { score: true, maxScore: true, percentage: true, letterGrade: true, period: true, createdAt: true, student: { select: { studentNumber: true, user: { select: { firstName: true, middleName: true, lastName: true } } } }, course: { select: { code: true, name: true } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.reportCard.findMany({ select: { term: true, average: true, conduct: true, teacherComment: true, principalStatus: true, publicationStatus: true, approvedAt: true, updatedAt: true, student: { select: { studentNumber: true, grade: true, section: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } }, orderBy: { updatedAt: 'desc' } }),
+    prisma.admissionApplication.findMany({ select: { applicationNumber: true, firstName: true, middleName: true, lastName: true, gradeApplying: true, parentName: true, parentEmail: true, parentPhone: true, status: true, submittedAt: true, updatedAt: true }, orderBy: { submittedAt: 'desc' } }),
+    prisma.internalMessage.findMany({ select: { id: true, subject: true, attachmentName: true, attachmentMime: true, attachmentSize: true, targetRole: true, readAt: true, priority: true, channel: true, createdAt: true, sender: { select: { firstName: true, lastName: true, email: true } }, recipient: { select: { firstName: true, lastName: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.auditLog.findMany({ select: { action: true, targetType: true, targetId: true, createdAt: true, actor: { select: { firstName: true, lastName: true, email: true } } }, orderBy: { createdAt: 'desc' }, take: 10000 }),
+  ])
+
+  const name = (person: { firstName?: string | null; middleName?: string | null; lastName?: string | null } | null | undefined) =>
+    [person?.lastName, person?.middleName, person?.firstName].filter(Boolean).join(' ')
+
+  const sheets: Record<string, Record<string, unknown>[]> = {
+    Summary: [
+      { Indicator: 'Generated at', Value: new Date().toISOString() },
+      { Indicator: 'People', Value: users.length },
+      { Indicator: 'Students', Value: students.length },
+      { Indicator: 'Teachers', Value: teachers.length },
+      { Indicator: 'Courses', Value: courses.length },
+      { Indicator: 'Enrollments', Value: enrollments.length },
+      { Indicator: 'Attendance records', Value: attendance.length },
+      { Indicator: 'Grades', Value: grades.length },
+      { Indicator: 'Report cards', Value: reportCards.length },
+      { Indicator: 'Admissions', Value: admissions.length },
+      { Indicator: 'Message metadata', Value: messages.length },
+    ],
+    People: users.map((item) => ({ ID: item.id, Role: item.role, Name: name(item), Email: item.email, AccessCode: item.accessCode, Phone: item.phone, Function: item.staffFunction, BlockedAt: item.accountBlockedAt, CreatedAt: item.createdAt })),
+    Students: students.map((item) => ({ ID: item.id, StudentNumber: item.studentNumber, Name: name(item.user), Grade: item.grade, Section: item.section, Status: item.status, Email: item.user.email, Phone: item.user.phone, EnrolledAt: item.enrollmentDate, GPA: item.gpa, AttendanceRate: item.attendanceRate })),
+    Teachers: teachers.map((item) => ({ ID: item.id, EmployeeNumber: item.employeeNumber, Name: name(item.user), Department: item.department, Qualification: item.qualification, Email: item.user.email, Phone: item.user.phone })),
+    Courses: courses.map((item) => ({ ID: item.id, Code: item.code, Course: item.name, Grade: item.grade, Credits: item.credits, Teacher: name(item.teacher.user), TeacherNumber: item.teacher.employeeNumber })),
+    Enrollments: enrollments.map((item) => ({ StudentNumber: item.student.studentNumber, Student: name(item.student.user), StudentGrade: item.student.grade, Section: item.student.section, CourseCode: item.course.code, Course: item.course.name, CourseGrade: item.course.grade, EnrolledAt: item.createdAt })),
+    Attendance: attendance.map((item) => ({ Date: item.date, StudentNumber: item.student.studentNumber, Student: name(item.student.user), Class: item.className, Period: item.period, Subject: item.subject, Status: item.status, RecordedBy: name(item.recordedBy) })),
+    Grades: grades.map((item) => ({ CreatedAt: item.createdAt, Period: item.period, StudentNumber: item.student.studentNumber, Student: name(item.student.user), CourseCode: item.course.code, Course: item.course.name, Score: item.score, Maximum: item.maxScore, Percentage: item.percentage, LetterGrade: item.letterGrade })),
+    ReportCards: reportCards.map((item) => ({ UpdatedAt: item.updatedAt, StudentNumber: item.student.studentNumber, Student: name(item.student.user), Grade: item.student.grade, Section: item.student.section, Term: item.term, Average: item.average, Conduct: item.conduct, MainTeacherComment: item.teacherComment, PrincipalStatus: item.principalStatus, PublicationStatus: item.publicationStatus, ApprovedAt: item.approvedAt })),
+    Admissions: admissions.map((item) => ({ ApplicationNumber: item.applicationNumber, Student: name(item), GradeApplying: item.gradeApplying, Parent: item.parentName, ParentEmail: item.parentEmail, ParentPhone: item.parentPhone, Status: item.status, SubmittedAt: item.submittedAt, UpdatedAt: item.updatedAt })),
+    Communications: messages.map((item) => ({ ID: item.id, CreatedAt: item.createdAt, Subject: item.subject, Sender: name(item.sender), SenderEmail: item.sender?.email, Recipient: name(item.recipient), RecipientEmail: item.recipient?.email, TargetRole: item.targetRole, Channel: item.channel, Priority: item.priority, ReadAt: item.readAt, AttachmentName: item.attachmentName, AttachmentType: item.attachmentMime, AttachmentSize: item.attachmentSize })),
+    AuditTrail: audits.map((item) => ({ CreatedAt: item.createdAt, Actor: name(item.actor), ActorEmail: item.actor?.email, Action: item.action, TargetType: item.targetType, TargetID: item.targetId })),
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const actorId = req.user?.sub === 'configured-superadmin' ? null : req.user?.sub
+  await prisma.auditLog.create({ data: { actorId, action: 'admin.live_export_generated', targetType: 'school-data-export', targetId: type, metadata: { format: type, sheets: Object.keys(sheets), generatedAt: new Date().toISOString() } } })
+
+  res.setHeader('Cache-Control', 'no-store, private')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  if (type === 'xlsx') {
+    const workbook = XLSX.utils.book_new()
+    for (const [sheetName, rows] of Object.entries(sheets)) {
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportRows(rows)), sheetName.slice(0, 31))
+    }
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', compression: true })
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', 'attachment; filename="kcs-live-school-data-' + timestamp + '.xlsx"')
+    return res.send(buffer)
+  }
+
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<kcsSchoolData generatedAt="' + xmlEscape(new Date().toISOString()) + '">' +
+    Object.entries(sheets).map(([sheetName, rows]) =>
+      '<dataset name="' + xmlEscape(sheetName) + '">' + rows.map((row) =>
+        '<record>' + Object.entries(row).map(([key, value]) => '<field name="' + xmlEscape(key) + '">' + xmlEscape(value instanceof Date ? value.toISOString() : value) + '</field>').join('') + '</record>'
+      ).join('') + '</dataset>'
+    ).join('') + '</kcsSchoolData>'
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8')
+  res.setHeader('Content-Disposition', 'attachment; filename="kcs-live-school-data-' + timestamp + '.xml"')
+  return res.send(xml)
 }))

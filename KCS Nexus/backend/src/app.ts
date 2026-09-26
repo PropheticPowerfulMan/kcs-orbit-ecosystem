@@ -8,34 +8,36 @@ import { router } from './routes/index.js'
 import { errorHandler, notFoundHandler } from './middleware/error.js'
 
 export const app = express()
+app.set('trust proxy', 1)
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
-const authRateLimit = (windowMs: number, max: number) => {
+const authRateLimit = (windowMs: number, maxFailures: number) => {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    // Session maintenance is not an authentication attempt. Counting refresh
-    // and profile requests eventually locks out an otherwise valid session.
     const rateLimitedPaths = new Set(['/login', '/register', '/forgot-password', '/reset-password'])
     if (!rateLimitedPaths.has(req.path)) return next()
 
     const now = Date.now()
-    const key = `${req.ip}:${req.path}:${String(req.body?.email || req.body?.identifier || '').toLowerCase()}`
+    const identifier = String(req.body?.email || req.body?.identifier || '').trim().toLowerCase()
+    const key = `${req.ip}:${req.path}:${identifier}`
     const current = authAttempts.get(key)
-
-    if (!current || current.resetAt <= now) {
-      authAttempts.set(key, { count: 1, resetAt: now + windowMs })
-      return next()
+    if (current && current.resetAt > now && current.count >= maxFailures) {
+      const retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+      res.setHeader('Retry-After', String(retryAfter))
+      return res.status(429).json({ success: false, message: 'Too many failed authentication attempts. Please wait and try again.' })
     }
+    if (current?.resetAt && current.resetAt <= now) authAttempts.delete(key)
 
-    if (current.count >= max) {
-      return res.status(429).json({
-        success: false,
-        message: 'Too many authentication attempts. Please wait and try again.',
-      })
-    }
-
-    current.count += 1
-    authAttempts.set(key, current)
+    res.once('finish', () => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        authAttempts.delete(key)
+        return
+      }
+      if (![400, 401, 403, 428].includes(res.statusCode)) return
+      const previous = authAttempts.get(key)
+      const active = previous && previous.resetAt > Date.now() ? previous : { count: 0, resetAt: Date.now() + windowMs }
+      authAttempts.set(key, { count: active.count + 1, resetAt: active.resetAt })
+    })
     return next()
   }
 }
@@ -56,7 +58,7 @@ app.get('/health', (_req, res) => {
   })
 })
 
-app.use('/api/auth', authRateLimit(15 * 60 * 1000, 20))
+app.use('/api/auth', authRateLimit(15 * 60 * 1000, 10))
 app.use('/api', router)
 app.use(notFoundHandler)
 app.use(errorHandler)
