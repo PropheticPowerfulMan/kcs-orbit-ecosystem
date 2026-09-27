@@ -45,7 +45,7 @@ const printableAsset = (value?: string | null) => {
 
 export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
   const logo = printableAsset('/images/kcs-logo.png')
-  const watermark = printableAsset('/images/kcs-logo.png')
+  const watermark = printableAsset('/images/kcs.jpg?v=official-watermark-20260927')
   const photo = printableAsset(card.student.officialAvatar ?? card.student.user.avatar)
   const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
   const issuedAt = new Date()
@@ -65,8 +65,8 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   <title>${escapeHtml(documentId)} · Official Report Card</title>
   <style>
   @page{size:A4;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eaf2f8;color:#102849;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .sheet{position:relative;width:210mm;min-height:277mm;margin:14px auto;overflow:hidden;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:8px;background:linear-gradient(90deg,#f1b82d 0 18%,#0d5d99 18% 84%,#20bfa9 84%)}
-  .watermark-wrap{position:absolute;z-index:0;left:50%;top:50%;width:160mm;height:160mm;transform:translate(-50%,-50%);display:grid;place-items:center;pointer-events:none}.watermark{display:block;width:150mm;height:150mm;object-fit:contain;object-position:center;opacity:.06;filter:grayscale(1)}.content{position:relative;z-index:1;padding:14mm 14mm 11mm}
+  .sheet{position:relative;isolation:isolate;width:210mm;min-height:277mm;margin:14px auto;overflow:hidden;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:8px;background:linear-gradient(90deg,#f1b82d 0 18%,#0d5d99 18% 84%,#20bfa9 84%)}
+  .watermark-wrap{position:absolute;z-index:0;inset:0;display:grid;place-items:center;pointer-events:none}.watermark{display:block;width:138mm;height:138mm;object-fit:contain;object-position:center;opacity:.085;filter:grayscale(1);mix-blend-mode:multiply}.content{position:relative;z-index:1;padding:14mm 14mm 11mm}
   .masthead{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:12px;border-bottom:3px solid #d6a62a}.school-logo{width:70mm;height:auto}.document-title{text-align:right}.document-title small{display:block;color:#60758c;font-size:9px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}.document-title h1{margin:4px 0 0;color:#053665;font-size:23px;text-transform:uppercase}.document-title p{margin:5px 0 0;color:#8f6d15;font-size:9px;font-weight:800}
   .status{margin-top:10px;padding:7px 12px;border-radius:7px;background:#eaf5fb;color:#073b70;font-size:9px;font-weight:900;letter-spacing:.09em;text-align:center;text-transform:uppercase}.status.draft{background:#fff4cf;color:#795b0a}
   .identity{display:grid;grid-template-columns:26mm 1fr 38mm;gap:13px;align-items:center;margin:13px 0;padding:12px;background:linear-gradient(120deg,#f8fbfd,#edf7f5);border:1px solid #c8ddec;border-radius:10px}.student-photo{width:26mm;height:32mm;object-fit:cover;border:2px solid #d8aa2f;border-radius:8px;background:#fff}.student-photo.placeholder{display:flex;align-items:center;justify-content:center;color:#0d5d99;font-weight:900}
@@ -77,7 +77,7 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   .empty{padding:18px;text-align:center;color:#725b15;background:#fff7dc;border:1px solid #ead99d;border-radius:8px;font-size:9px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:24px}.signature{padding-top:7px;border-top:1px solid #496178;text-align:center;color:#52677d;font-size:9px}
   footer{display:flex;justify-content:space-between;margin-top:18px;padding-top:8px;border-top:2px solid #20a995;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
   @media print{body{background:#fff}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}.content{padding:10mm 9mm 7mm}}
-  </style></head><body><main class="sheet"><div class="top-line"></div><div class="watermark-wrap"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div>
+  </style></head><body><main class="sheet"><div class="top-line"></div><div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div>
   <div class="content"><header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
   <div class="document-title"><small>Academic Progress Record</small><h1>Official Report Card</h1><p>${escapeHtml(documentId)}</p></div></header>
   <div class="status ${card.publicationStatus==='DRAFT'?'draft':''}">Document status · ${escapeHtml(statusLabel)}</div>

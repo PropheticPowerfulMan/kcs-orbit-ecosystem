@@ -133,7 +133,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   ]
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
-      <div className="sidebar-brand"><img src="./images/kcs-logo.png" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
+      <div className="sidebar-brand"><img src="./images/kcs-seal.svg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
       <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{user.role.replaceAll('_', ' ')}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
@@ -143,7 +143,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-logo.png" alt="KCS"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="status-pill"><ShieldCheck /> Orbit verified</div></header>
+      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-logo.png" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="status-pill"><ShieldCheck /> Orbit verified</div></header>
       <div className="page-body">
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
         {page === 'pos' && <PointOfSale t={t} />}
@@ -308,7 +308,7 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
     } catch (err) { setMessage((err as Error).message) }
   }
   return <Modal wide onClose={onClose}><div className="receipt" id={'receipt-' + transaction.id}>
-    <div className="receipt-head"><img src="./images/kcs-logo.png" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h2>KCS KITCHEN RECEIPT</h2><b>{transaction.transactionNumber}</b></div></div>
+    <div className="receipt-head"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h2>KCS KITCHEN RECEIPT</h2><b>{transaction.transactionNumber}</b></div></div>
     <div className="receipt-meta"><div><small>PERSON</small><b>{transaction.personNameSnapshot}</b></div><div><small>DATE / TIME</small><b>{dateTime(transaction.createdAt)}</b></div><div><small>CASHIER</small><b>{transaction.cashierNameSnapshot}</b></div><div><small>PAYMENT</small><b>{transaction.paymentMode} · {transaction.paymentStatus}</b></div></div>
     <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.quantity}</td><td>{money(item.unitPriceAtPurchase)}</td><td>{money(item.subtotal)}</td></tr>)}</tbody></table>
     <div className="receipt-totals"><span>Subtotal <b>{money(transaction.subtotal)}</b></span><span>Discount <b>− {money(transaction.discount)}</b></span><strong>Total <b>{money(transaction.total)}</b></strong></div>
