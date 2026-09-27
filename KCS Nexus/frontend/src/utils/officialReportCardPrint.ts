@@ -45,7 +45,7 @@ const printableAsset = (value?: string | null) => {
 
 export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
   const logo = printableAsset('/images/kcs-logo.png')
-  const watermark = printableAsset('/images/kcs.jpg')
+  const watermark = printableAsset('/images/kcs-logo.png')
   const photo = printableAsset(card.student.officialAvatar ?? card.student.user.avatar)
   const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
   const issuedAt = new Date()
@@ -66,7 +66,7 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   <style>
   @page{size:A4;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eaf2f8;color:#102849;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{position:relative;width:210mm;min-height:277mm;margin:14px auto;overflow:hidden;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:8px;background:linear-gradient(90deg,#f1b82d 0 18%,#0d5d99 18% 84%,#20bfa9 84%)}
-  .watermark-wrap{position:absolute;z-index:0;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}.watermark{display:block;width:132mm;height:132mm;object-fit:contain;opacity:.055;filter:grayscale(1)}.content{position:relative;z-index:1;padding:14mm 14mm 11mm}
+  .watermark-wrap{position:absolute;z-index:0;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}.watermark{display:block;width:150mm;max-height:105mm;object-fit:contain;opacity:.055;filter:grayscale(1)}.content{position:relative;z-index:1;padding:14mm 14mm 11mm}
   .masthead{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:12px;border-bottom:3px solid #d6a62a}.school-logo{width:70mm;height:auto}.document-title{text-align:right}.document-title small{display:block;color:#60758c;font-size:9px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}.document-title h1{margin:4px 0 0;color:#053665;font-size:23px;text-transform:uppercase}.document-title p{margin:5px 0 0;color:#8f6d15;font-size:9px;font-weight:800}
   .status{margin-top:10px;padding:7px 12px;border-radius:7px;background:#eaf5fb;color:#073b70;font-size:9px;font-weight:900;letter-spacing:.09em;text-align:center;text-transform:uppercase}.status.draft{background:#fff4cf;color:#795b0a}
   .identity{display:grid;grid-template-columns:26mm 1fr 38mm;gap:13px;align-items:center;margin:13px 0;padding:12px;background:linear-gradient(120deg,#f8fbfd,#edf7f5);border:1px solid #c8ddec;border-radius:10px}.student-photo{width:26mm;height:32mm;object-fit:cover;border:2px solid #d8aa2f;border-radius:8px;background:#fff}.student-photo.placeholder{display:flex;align-items:center;justify-content:center;color:#0d5d99;font-weight:900}

@@ -47,7 +47,7 @@ export function printOfficialTranscript(transcript: OfficialTranscript, onBlocke
   <style>
   @page{size:A4;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eaf2f8;color:#102849;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{position:relative;width:210mm;min-height:277mm;margin:14px auto;overflow:hidden;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:8px;background:linear-gradient(90deg,#032f5f 0 72%,#f1b82d 72% 86%,#18bde0 86%)}
-  .watermark{position:absolute;z-index:0;left:50%;top:52%;width:180mm;height:auto;transform:translate(-50%,-50%);opacity:.06;filter:grayscale(1);pointer-events:none}.content{position:relative;z-index:1;padding:16mm 15mm 12mm}
+  .watermark-wrap{position:absolute;z-index:0;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}.watermark{display:block;width:155mm;max-height:105mm;object-fit:contain;opacity:.055;filter:grayscale(1)}.content{position:relative;z-index:1;padding:16mm 15mm 12mm}
   .masthead{display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:13px;border-bottom:2px solid #0d5d99}.school-logo{width:72mm;height:auto}.document-title{text-align:right}.document-title small{display:block;color:#60758c;font-size:9px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
   .document-title h1{margin:4px 0 0;color:#053665;font-size:22px;line-height:1.05;letter-spacing:.04em;text-transform:uppercase}.document-title p{margin:6px 0 0;color:#9a7212;font-size:9px;font-weight:800}
   .identity{display:grid;grid-template-columns:27mm 1fr;gap:14px;margin:17px 0 14px;padding:13px;background:linear-gradient(120deg,#eff7fc,#f8fbfd);border:1px solid #c8ddec;border-left:5px solid #0d5d99;border-radius:10px}
@@ -61,7 +61,7 @@ export function printOfficialTranscript(transcript: OfficialTranscript, onBlocke
   footer{display:flex;justify-content:space-between;gap:15px;margin-top:22px;padding-top:8px;border-top:2px solid #f1b82d;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
   @media print{body{background:#fff}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}.content{padding:11mm 10mm 8mm}}
   </style></head><body><main class="sheet"><div class="top-line"></div>
-  <img class="watermark" src="${escapeHtml(logo)}" alt=""><div class="content">
+  <div class="watermark-wrap"><img class="watermark" src="${escapeHtml(logo)}" alt=""></div><div class="content">
   <header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
   <div class="document-title"><small>Office of Academic Records</small><h1>Official Academic Transcript</h1><p>Document ${escapeHtml(documentId)}</p></div></header>
   <section class="identity">${photoBlock}<div><h2>${escapeHtml(transcript.student.name)}</h2><div class="identity-grid">

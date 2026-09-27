@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, FileCheck2, FilterX, Printer, RefreshCw, Search, ShieldCheck, X } from 'lucide-react'
+import { CheckCircle2, FileCheck2, FilterX, Loader2, Printer, RefreshCw, Search, ShieldCheck, X } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
 import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
 import { printOfficialReportCard, type PrintableReportCard } from '@/utils/officialReportCardPrint'
@@ -61,6 +61,10 @@ export default function AcademicRecordsControlCenterV2() {
   const [sectionFilter, setSectionFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [cardQuery, setCardQuery] = useState('')
+  const [cardGradeFilter, setCardGradeFilter] = useState('ALL')
+  const [transcriptLoadingId, setTranscriptLoadingId] = useState('')
+  const [transcriptPrinting, setTranscriptPrinting] = useState(false)
+  const [reportPrintingId, setReportPrintingId] = useState('')
 
   const load = async () => {
     setBusy(true)
@@ -95,11 +99,8 @@ export default function AcademicRecordsControlCenterV2() {
     })
   }, [academicYear, grades, term])
 
-  const gradeOptions = useMemo(() => {
-    const available = new Set(registry.map((student) => normalizeSchoolLevel(student.grade)).filter(Boolean) as string[])
-    return SCHOOL_LEVELS.filter((grade) => available.has(grade))
-  }, [registry])
-  const sectionOptions = useMemo(() => Array.from(new Set(registry.filter((student) => gradeFilter === 'ALL' || normalizeSchoolLevel(student.grade) === gradeFilter).map((student) => validSection(student.section)).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' })), [gradeFilter, registry])
+  const gradeOptions = SCHOOL_LEVELS
+  const sectionOptions = useMemo(() => Array.from(new Set(['A', 'B', 'C', ...registry.filter((student) => gradeFilter === 'ALL' || normalizeSchoolLevel(student.grade) === gradeFilter).map((student) => validSection(student.section)).filter(Boolean)])).sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' })), [gradeFilter, registry])
   const statusOptions = useMemo(() => Array.from(new Set(registry.map((student) => student.status).filter(Boolean) as string[])).sort(), [registry])
 
   const visibleRegistry = useMemo(() => {
@@ -116,10 +117,11 @@ export default function AcademicRecordsControlCenterV2() {
   const visibleCards = useMemo(() => {
     const tokens = normalize(cardQuery).split(/\s+/).filter(Boolean)
     return cards.filter((card) => {
+      if (cardGradeFilter !== 'ALL' && normalizeSchoolLevel(card.student.grade) !== cardGradeFilter) return false
       const haystack = normalize([cardStudentName(card), card.student.studentNumber, card.student.grade, card.student.section, card.term, card.publicationStatus].filter(Boolean).join(' '))
       return tokens.every((token) => haystack.includes(token))
     })
-  }, [cardQuery, cards])
+  }, [cardGradeFilter, cardQuery, cards])
 
   const finalStudentCount = new Set(matching.map((item) => item.student.studentNumber)).size
   const courseCount = new Set(matching.map((item) => item.course.code)).size
@@ -175,15 +177,29 @@ export default function AcademicRecordsControlCenterV2() {
   }
 
   const viewTranscript = async (studentId: string) => {
-    setBusy(true)
+    setTranscriptLoadingId(studentId)
     try {
       const response = await academicRecordsAPI.transcript(studentId)
       setTranscript(response.data.data)
     } catch (error: any) {
       setNotice(error?.response?.data?.message ?? 'Transcript unavailable.')
     } finally {
-      setBusy(false)
+      setTranscriptLoadingId('')
     }
+  }
+
+  const printTranscript = () => {
+    if (!transcript || transcriptPrinting) return
+    setTranscriptPrinting(true)
+    printOfficialTranscript(transcript, setNotice)
+    window.setTimeout(() => setTranscriptPrinting(false), 900)
+  }
+
+  const printReportCard = (card: Card) => {
+    if (reportPrintingId) return
+    setReportPrintingId(card.id)
+    printOfficialReportCard(card, setNotice)
+    window.setTimeout(() => setReportPrintingId(''), 900)
   }
 
   const setTranscriptVisibility = async (studentId: string, visible: boolean) => {
@@ -205,7 +221,7 @@ export default function AcademicRecordsControlCenterV2() {
         <img src="/images/kcs-logo.png" alt="" className="pointer-events-none absolute left-1/2 top-1/2 w-[78%] -translate-x-1/2 -translate-y-1/2 opacity-[0.035] grayscale"/>
         <header className="relative z-10 flex flex-col gap-3 border-b border-sky-100 bg-white/95 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/95 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">{transcript.student.photoUrl ? <img src={transcript.student.photoUrl} alt={transcript.student.name} className="h-16 w-14 rounded-lg border-2 border-kcs-gold-400 object-cover"/> : <div className="flex h-16 w-14 items-center justify-center rounded-lg border border-dashed border-sky-300 text-xs font-black text-kcs-blue-700 dark:text-sky-200">KCS</div>}<div className="min-w-0"><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">Official transcript</p><h3 className="truncate text-xl font-black text-kcs-blue-950 dark:text-white">{transcript.student.name}</h3><p className="text-sm text-slate-500 dark:text-slate-300">{transcript.student.studentNumber} · {transcript.student.grade}</p></div></div>
-          <div className="flex flex-wrap gap-2"><button type="button" onClick={() => printOfficialTranscript(transcript, setNotice)} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800"><Printer size={17}/>Print / Save PDF</button><button type="button" onClick={() => setTranscript(null)} className="inline-flex items-center gap-2 rounded-xl border border-sky-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><X size={17}/>Close</button></div>
+          <div className="flex flex-wrap gap-2"><button type="button" aria-busy={transcriptPrinting} disabled={transcriptPrinting} onClick={printTranscript} className="inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-60">{transcriptPrinting ? <Loader2 size={17} className="animate-spin"/> : <Printer size={17}/>} {transcriptPrinting ? 'Preparing PDF…' : 'Print / Save PDF'}</button><button type="button" onClick={() => setTranscript(null)} className="inline-flex items-center gap-2 rounded-xl border border-sky-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><X size={17}/>Close</button></div>
         </header>
         <div className="relative z-10 overflow-y-auto p-4 sm:p-6">
           <div className="grid gap-3 sm:grid-cols-3">{[['Official records', transcript.summary.officialRecords], ['Credits', transcript.summary.credits], ['GPA', transcript.summary.cumulativeGpa ?? '—']].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-sky-100 bg-sky-50/90 p-4 text-center dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase text-slate-500 dark:text-slate-300">{label}</p><b className="mt-1 block text-2xl text-kcs-blue-950 dark:text-white">{value}</b></div>)}</div>
@@ -230,13 +246,13 @@ export default function AcademicRecordsControlCenterV2() {
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={inputClass}><option value="ALL">All statuses</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select>
         <button type="button" onClick={resetSearch} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 px-3 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><FilterX size={17}/>Reset</button>
       </div>
-      <div className="mt-4 max-h-[31rem] overflow-y-auto pr-1"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRegistry.map((student) => <article key={student.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{studentName(student)}</p><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{student.studentNumber || 'No student ID'} · {[normalizeSchoolLevel(student.grade) || student.grade, validSection(student.section)].filter(Boolean).join(' ') || 'Class pending'}</p></div><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-200 dark:text-emerald-950">{student.status || 'active'}</span></div><button type="button" disabled={busy} onClick={() => void viewTranscript(student.id)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-kcs-blue-700 px-3 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50"><Printer size={16}/>{busy ? 'Loading…' : 'View and print official transcript'}</button></article>)}</div>{!busy && !visibleRegistry.length ? <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">No learner matches these precise filters.</p> : null}{busy && !registry.length ? <p className="p-6 text-center text-sm font-bold text-kcs-blue-700 dark:text-sky-200">Secure loading of the official student registry…</p> : null}</div>
+      <div className="mt-4 max-h-[31rem] overflow-y-auto pr-1"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRegistry.map((student) => <article key={student.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{studentName(student)}</p><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{student.studentNumber || 'No student ID'} · {[normalizeSchoolLevel(student.grade) || student.grade, validSection(student.section)].filter(Boolean).join(' ') || 'Class pending'}</p></div><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-200 dark:text-emerald-950">{student.status || 'active'}</span></div><button type="button" aria-busy={transcriptLoadingId === student.id} disabled={Boolean(transcriptLoadingId)} onClick={() => void viewTranscript(student.id)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-kcs-blue-700 px-3 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50">{transcriptLoadingId === student.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {transcriptLoadingId === student.id ? 'Loading this transcript…' : 'View and print official transcript'}</button></article>)}</div>{!busy && !visibleRegistry.length ? <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">No learner matches these precise filters.</p> : null}{busy && !registry.length ? <p className="p-6 text-center text-sm font-bold text-kcs-blue-700 dark:text-sky-200">Secure loading of the official student registry…</p> : null}</div>
     </section>
 
     <section id="official-report-cards" className="scroll-mt-24 rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">Official report cards</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">Review, approve, publish and print</h3></div><label className="relative w-full sm:max-w-md"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={cardQuery} onChange={(event) => setCardQuery(event.target.value)} className={inputClass + ' pl-10'} placeholder="Search report card by learner, ID, class or status"/></label></div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">Official report cards</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">Review, approve, publish and print</h3></div><div className="grid w-full gap-2 sm:grid-cols-[11rem_minmax(16rem,1fr)] lg:max-w-2xl"><select value={cardGradeFilter} onChange={(event) => setCardGradeFilter(event.target.value)} className={inputClass}><option value="ALL">All grades</option>{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select><label className="relative"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={cardQuery} onChange={(event) => setCardQuery(event.target.value)} className={inputClass + ' pl-10'} placeholder="Learner, ID, class, section or status"/></label></div></div>
       <div className="mt-4 grid gap-3 lg:grid-cols-2">{visibleCards.map((card) => <article key={card.id} className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-base font-black text-kcs-blue-950 dark:text-white">{cardStudentName(card)}</p><p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-200">{card.student.studentNumber} · {[card.student.grade, card.student.section].filter(Boolean).join(' ')} · {card.term}</p><p className="mt-3 text-sm font-bold text-kcs-blue-900 dark:text-sky-100">Average: <strong className="text-lg text-emerald-700 dark:text-emerald-300">{card.average.toFixed(2)}%</strong></p>{card.attendanceSummary ? <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-200">Présences: <strong>{card.attendanceSummary.present}</strong> · Absences: <strong>{card.attendanceSummary.absent}</strong> · Retards: <strong>{card.attendanceSummary.late}</strong> · Taux: <strong>{card.attendanceSummary.attendanceRate ?? '—'}%</strong></p> : null}</div><span className="shrink-0 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-black text-kcs-blue-900 dark:border-sky-300 dark:bg-sky-200 dark:text-kcs-blue-950">{card.publicationStatus.replace(/_/g, ' ')}</span></div>
-        <div className="mt-4 flex flex-wrap gap-2">{card.publicationStatus === 'READY_FOR_REVIEW' ? <button disabled={busy} onClick={() => void approve(card.id)} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white"><CheckCircle2 size={16} className="mr-1 inline"/>Approve and freeze</button> : null}{card.publicationStatus === 'APPROVED' ? <button disabled={busy} onClick={() => void publish(card.id)} className="rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950">Publish to portals</button> : null}<button disabled={busy} onClick={() => void setTranscriptVisibility(card.student.id, !card.student.transcriptVisible)} className={card.student.transcriptVisible ? 'rounded-xl bg-rose-100 px-3 py-2 text-sm font-black text-rose-800 dark:bg-rose-200 dark:text-rose-950' : 'rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white'}>{card.student.transcriptVisible ? 'Masquer le relevé' : 'Autoriser le relevé à l’élève'}</button><button disabled={busy} onClick={() => void viewTranscript(card.student.id)} className="rounded-xl border border-sky-300 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-sky-100">View transcript</button><button type="button" onClick={() => printOfficialReportCard(card, setNotice)} className="inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950"><Printer size={16}/>Print / Save report card PDF</button></div>
+        <div className="mt-4 flex flex-wrap gap-2">{card.publicationStatus === 'READY_FOR_REVIEW' ? <button disabled={busy} onClick={() => void approve(card.id)} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white"><CheckCircle2 size={16} className="mr-1 inline"/>Approve and freeze</button> : null}{card.publicationStatus === 'APPROVED' ? <button disabled={busy} onClick={() => void publish(card.id)} className="rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950">Publish to portals</button> : null}<button disabled={busy} onClick={() => void setTranscriptVisibility(card.student.id, !card.student.transcriptVisible)} className={card.student.transcriptVisible ? 'rounded-xl bg-rose-100 px-3 py-2 text-sm font-black text-rose-800 dark:bg-rose-200 dark:text-rose-950' : 'rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white'}>{card.student.transcriptVisible ? 'Masquer le relevé' : 'Autoriser le relevé à l’élève'}</button><button disabled={Boolean(transcriptLoadingId)} onClick={() => void viewTranscript(card.student.id)} className="inline-flex items-center gap-2 rounded-xl border border-sky-300 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 dark:bg-kcs-blue-950 dark:text-sky-100">{transcriptLoadingId === card.student.id ? <Loader2 size={16} className="animate-spin"/> : null}{transcriptLoadingId === card.student.id ? 'Loading…' : 'View transcript'}</button><button type="button" aria-busy={reportPrintingId === card.id} disabled={Boolean(reportPrintingId)} onClick={() => printReportCard(card)} className="inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950 disabled:opacity-60">{reportPrintingId === card.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {reportPrintingId === card.id ? 'Preparing PDF…' : 'Print / Save report card PDF'}</button></div>
       </article>)}</div>
       {!visibleCards.length ? <p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-sky-100">No report card matches this search.</p> : null}
     </section>

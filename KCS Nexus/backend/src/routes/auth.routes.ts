@@ -566,7 +566,10 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
 
   if (user) {
     // Orbit remains the identity authority after an account has been linked.
-    // A secondary login provider must not reorder canonical identity fields.
+    // A secondary login provider must not reorder canonical identity fields
+    // or demote/promote the primary Nexus role. A teacher may also hold an
+    // administrative employee function, but the provider used for a specific
+    // login must never decide which dashboard becomes the primary dashboard.
     const preserveCanonicalIdentity = Boolean(user.orbitUserId)
     return prisma.user.update({
       where: { id: user.id },
@@ -578,9 +581,9 @@ async function upsertExternalUser(externalUser: ExternalUserProfile | null, pass
           lastName: externalUser.lastName,
         } : {}),
         accessCode: externalUser.accessCode,
-        role: externalUser.role,
-        permissions: externalUser.permissions ?? [],
-        staffFunction: externalUser.staffFunction ?? null,
+        role: preserveCanonicalIdentity ? user.role : externalUser.role,
+        permissions: preserveCanonicalIdentity ? user.permissions : (externalUser.permissions ?? []),
+        staffFunction: preserveCanonicalIdentity ? user.staffFunction : (externalUser.staffFunction ?? null),
         passwordHash,
       },
     })

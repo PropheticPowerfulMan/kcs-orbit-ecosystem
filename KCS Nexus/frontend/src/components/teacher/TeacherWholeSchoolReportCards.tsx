@@ -90,6 +90,7 @@ export default function TeacherWholeSchoolReportCards() {
   const [conduct, setConduct] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -163,6 +164,8 @@ export default function TeacherWholeSchoolReportCards() {
 
   const printSelectedReportCard = () => {
     if (!selected) return
+    if (printing) return
+    setPrinting(true)
     printOfficialReportCard({
       id: selected.reportCard?.id ?? `draft-${selected.id}`,
       term: `${academicYear} · ${term}`,
@@ -185,6 +188,7 @@ export default function TeacherWholeSchoolReportCards() {
         user: selected.user,
       },
     }, setError)
+    window.setTimeout(() => setPrinting(false), 900)
   }
 
   const homeroomCount = learners.filter((learner) => learner.isHomeroomStudent).length
@@ -249,7 +253,7 @@ export default function TeacherWholeSchoolReportCards() {
         {!selected ? <p className='py-16 text-center text-sm text-gray-500'>Select a learner to open the complete report-card file.</p> : <>
           <div className='flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between dark:border-kcs-blue-800'>
             <div><p className='text-xs font-black uppercase tracking-wide text-kcs-gold-600'>Complete learner record</p><h3 className='mt-1 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white'>{selected.name}</h3><p className='text-sm text-gray-500'>{selected.studentNumber} · {canonicalClassLabel(selected.grade, selected.section)}</p></div>
-            <div className='flex flex-wrap items-center gap-2 text-xs font-bold'>{selected.isHomeroomStudent && <button type='button' onClick={printSelectedReportCard} className='inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-300'><Printer size={16} />Print / Save official PDF</button>}<span className='rounded-full bg-kcs-blue-50 px-3 py-1.5 text-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200'>{workflowLabel(selected)}</span>{selected.isHomeroomStudent ? <span className='rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'>Main-teacher control</span> : <span className='rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-kcs-blue-800 dark:text-gray-300'>Whole-school read only</span>}</div>
+            <div className='flex flex-wrap items-center gap-2 text-xs font-bold'>{selected.isHomeroomStudent && <button type='button' aria-busy={printing} disabled={printing} onClick={printSelectedReportCard} className='inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-300 disabled:opacity-60'>{printing ? <RefreshCw size={16} className='animate-spin' /> : <Printer size={16} />}{printing ? 'Preparing PDF…' : 'Print / Save official PDF'}</button>}<span className='rounded-full bg-kcs-blue-50 px-3 py-1.5 text-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200'>{workflowLabel(selected)}</span>{selected.isHomeroomStudent ? <span className='rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'>Main-teacher control</span> : <span className='rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-kcs-blue-800 dark:text-gray-300'>Whole-school read only</span>}</div>
           </div>
 
           <div className='mt-4 grid gap-3 sm:grid-cols-4'>

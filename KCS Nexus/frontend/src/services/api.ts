@@ -469,7 +469,7 @@ export const dataMigrationAPI = {
   errorReport: (id: string) => api.get(`/data-migration/jobs/${id}/errors.csv`, { responseType: 'blob' }),
   successReport: (id: string) => api.get(`/data-migration/jobs/${id}/success.csv`, { responseType: 'blob' }),
   rollbackReport: (id: string) => api.get(`/data-migration/jobs/${id}/rollback.csv`, { responseType: 'blob' }),
-  template: (entity: string) => api.get(`/data-migration/templates/${entity}`, { responseType: 'blob' }),
+  template: (entity: string, format: 'xlsx' | 'csv' = 'xlsx') => api.get(`/data-migration/templates/${entity}`, { params: { format }, responseType: 'blob' }),
 }
 
 export const financeAPI = {
