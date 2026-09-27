@@ -2876,7 +2876,7 @@ const TeacherPortal = () => {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <Link to="/portal/teacher/messages" className="btn-primary w-full justify-center py-2 text-sm sm:w-auto">
+              <Link to="/portal/teacher/messages" className="portal-inbox-action btn-primary w-full justify-center py-2 text-center text-sm sm:w-auto">
                 Inbox
               </Link>
               <button type="button" onClick={openTeacherAiInsights} className="btn-gold flex w-full items-center justify-center gap-2 py-2 text-sm sm:w-auto">

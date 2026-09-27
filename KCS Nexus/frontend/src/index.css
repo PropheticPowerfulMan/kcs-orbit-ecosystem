@@ -396,7 +396,7 @@ html:not(.dark) .gradebook-focus-window .input-kcs {
   }
 
   .btn-primary {
-    @apply bg-kcs-blue-700 hover:bg-kcs-blue-800 text-white font-semibold px-6 py-3 rounded-xl
+    @apply inline-flex items-center justify-center text-center bg-kcs-blue-700 hover:bg-kcs-blue-800 text-white font-semibold px-6 py-3 rounded-xl
            transition-all duration-300 hover:shadow-kcs-lg hover:-translate-y-0.5 active:translate-y-0;
   }
   
@@ -426,7 +426,7 @@ html:not(.dark) .parent-portal-shell main textarea {
   background-color: #fbfdff;
 }
   .btn-gold {
-    @apply bg-kcs-blue-700 hover:bg-kcs-blue-800 text-white font-bold px-6 py-3 rounded-xl
+    @apply inline-flex items-center justify-center text-center bg-kcs-blue-700 hover:bg-kcs-blue-800 text-white font-bold px-6 py-3 rounded-xl
            transition-all duration-300 hover:shadow-gold hover:-translate-y-0.5 active:translate-y-0;
   }
   
@@ -1726,6 +1726,56 @@ html:not(.dark) [data-suggestion-box] select {
     min-height: 2.75rem;
   }
 
+  .portal-shell .portal-dashboard-topbar {
+    border-radius: 0 0 1.15rem 1.15rem;
+    box-shadow: 0 10px 28px rgba(7, 59, 112, .1);
+  }
+
+  .portal-shell .portal-dashboard-topbar > div > .flex.flex-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.75rem, 1fr));
+    width: 100%;
+  }
+
+  .portal-shell .portal-dashboard-topbar :is(.btn-primary, .btn-gold, .portal-inbox-action) {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+
+  .portal-shell .portal-inbox-action {
+    place-content: center;
+    place-items: center;
+  }
+
+  .portal-shell :is(button, a) > svg {
+    flex: 0 0 auto;
+  }
+
+  .portal-shell .overflow-x-auto {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .portal-shell article > .mt-4.flex.flex-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    width: 100%;
+  }
+
+  .portal-shell article > .mt-4.flex.flex-wrap > :is(button, a) {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .portal-shell [role='dialog'] > :is(section, article, div) {
+    max-width: min(96vw, 44rem);
+  }
+
   .portal-shell table {
     min-width: 620px;
     font-size: .75rem;
@@ -1784,6 +1834,11 @@ html:not(.dark) [data-suggestion-box] select {
 
   .gradebook-mobile-surface > .grid:first-child > .grid {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .portal-shell .portal-dashboard-topbar > div > .flex.flex-wrap,
+  .portal-shell article > .mt-4.flex.flex-wrap {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

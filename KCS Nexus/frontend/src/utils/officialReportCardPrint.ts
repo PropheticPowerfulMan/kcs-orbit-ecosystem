@@ -44,25 +44,37 @@ const printableAsset = (value?: string | null) => {
 }
 
 export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
+  const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-GB'
+  const localizedTerm = (value: string) => language === 'fr'
+    ? value.replace(/Semester/g, 'Semestre').replace(/Trimester/g, 'Trimestre').replace(/Annual final/gi, 'Final annuel')
+    : value
   const logo = printableAsset('/images/kcs-logo.png')
   const watermark = printableAsset('/images/kcs.jpg?v=official-watermark-20260927')
   const photo = printableAsset(card.student.officialAvatar ?? card.student.user.avatar)
   const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
   const issuedAt = new Date()
   const documentId = `KCS-RC-${issuedAt.toISOString().slice(0,10).replace(/-/g,'')}-${card.student.studentNumber.replace(/[^a-z0-9]/gi,'').toUpperCase()}`
-  const statusLabel = card.publicationStatus.replace(/_/g, ' ')
+  const statusLabel = ({
+    DRAFT: tr('BROUILLON', 'DRAFT'),
+    READY_FOR_REVIEW: tr('PRÊT POUR EXAMEN', 'READY FOR REVIEW'),
+    APPROVED: tr('APPROUVÉ', 'APPROVED'),
+    EMAILED: tr('ENVOYÉ PAR E-MAIL', 'EMAILED'),
+    POSTED_TO_PORTAL: tr('PUBLIÉ DANS LE PORTAIL', 'POSTED TO PORTAL'),
+  } as Record<string, string>)[card.publicationStatus] ?? card.publicationStatus.replace(/_/g, ' ')
   const subjects = (card.subjects ?? []).map((subject) => `
     <tr><td><b>${escapeHtml(subject.course.code)}</b><span>${escapeHtml(subject.course.name)}</span></td>
     <td class="number">${subject.course.credits ?? '—'}</td><td class="number">${subject.percentage.toFixed(2)}%</td>
     <td class="grade">${escapeHtml(subject.letterGrade)}</td></tr>`).join('')
   const attendance = card.attendanceSummary
   const photoBlock = photo
-    ? `<img class="student-photo" src="${escapeHtml(photo)}" alt="Student photograph">`
+    ? `<img class="student-photo" src="${escapeHtml(photo)}" alt="${tr('Photo de l’élève', 'Student photograph')}">`
     : '<div class="student-photo placeholder">KCS</div>'
 
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+  const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${escapeHtml(documentId)} · Official Report Card</title>
+  <title>${escapeHtml(documentId)} · ${tr('Bulletin officiel', 'Official Report Card')}</title>
   <style>
   @page{size:A4;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eaf2f8;color:#102849;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{position:relative;isolation:isolate;width:210mm;min-height:277mm;margin:14px auto;overflow:hidden;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:8px;background:linear-gradient(90deg,#f1b82d 0 18%,#0d5d99 18% 84%,#20bfa9 84%)}
@@ -79,19 +91,19 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   @media print{body{background:#fff}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}.content{padding:10mm 9mm 7mm}}
   </style></head><body><main class="sheet"><div class="top-line"></div><div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div>
   <div class="content"><header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
-  <div class="document-title"><small>Academic Progress Record</small><h1>Official Report Card</h1><p>${escapeHtml(documentId)}</p></div></header>
-  <div class="status ${card.publicationStatus==='DRAFT'?'draft':''}">Document status · ${escapeHtml(statusLabel)}</div>
+  <div class="document-title"><small>${tr('Dossier de progression académique', 'Academic Progress Record')}</small><h1>${tr('Bulletin scolaire officiel', 'Official Report Card')}</h1><p>${escapeHtml(documentId)}</p></div></header>
+  <div class="status ${card.publicationStatus==='DRAFT'?'draft':''}">${tr('Statut du document', 'Document status')} · ${escapeHtml(statusLabel)}</div>
   <section class="identity">${photoBlock}<div><h2>${escapeHtml(studentName)}</h2>
-  <p>Student ID · <b>${escapeHtml(card.student.studentNumber)}</b></p><p>Class · <b>${escapeHtml([card.student.grade,card.student.section].filter(Boolean).join(' ')||'Pending')}</b></p>
-  <p>Reporting period · <b>${escapeHtml(card.term)}</b></p></div><div class="average"><span>Final average</span><b>${card.average.toFixed(2)}%</b></div></section>
-  <h3>Academic performance</h3>${subjects?`<table><colgroup><col class="course-col"><col class="credit-col"><col class="result-col"><col class="grade-col"></colgroup><thead><tr><th>Course</th><th>Credit</th><th>Final result</th><th>Grade</th></tr></thead><tbody>${subjects}</tbody></table>`:'<div class="empty">No submitted subject result is attached to this report card yet.</div>'}
-  <h3>Attendance summary</h3>${attendance?`<div class="attendance"><div class="stat"><span>Present</span><b>${attendance.present}</b></div><div class="stat"><span>Absent</span><b>${attendance.absent}</b></div><div class="stat"><span>Late</span><b>${attendance.late}</b></div><div class="stat"><span>Excused</span><b>${attendance.excused}</b></div><div class="stat"><span>Rate</span><b>${attendance.attendanceRate??'—'}%</b></div></div>`:'<div class="empty">Attendance summary is not available for this reporting period.</div>'}
-  <h3>Class leadership review</h3><div class="comments"><div class="comment"><b>Main Teacher comment</b>${escapeHtml(card.teacherComment||'No comment entered.')}</div><div class="comment"><b>Conduct</b>${escapeHtml(card.conduct||'Not entered.')}</div></div>
-  <div class="signatures"><div class="signature">Main Teacher</div><div class="signature">Principal / Authorized signature</div></div>
-  <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, Democratic Republic of Congo</div><div style="text-align:right">KCS Nexus AI · Official Report Card<br>${escapeHtml(issuedAt.toLocaleDateString('en-GB'))}</div></footer>
+  <p>${tr('Matricule', 'Student ID')} · <b>${escapeHtml(card.student.studentNumber)}</b></p><p>${tr('Classe', 'Class')} · <b>${escapeHtml([card.student.grade,card.student.section].filter(Boolean).join(' ')||tr('En attente', 'Pending'))}</b></p>
+  <p>${tr('Période scolaire', 'Reporting period')} · <b>${escapeHtml(localizedTerm(card.term))}</b></p></div><div class="average"><span>${tr('Moyenne finale', 'Final average')}</span><b>${card.average.toFixed(2)}%</b></div></section>
+  <h3>${tr('Résultats académiques', 'Academic performance')}</h3>${subjects?`<table><colgroup><col class="course-col"><col class="credit-col"><col class="result-col"><col class="grade-col"></colgroup><thead><tr><th>${tr('Cours', 'Course')}</th><th>${tr('Crédit', 'Credit')}</th><th>${tr('Résultat final', 'Final result')}</th><th>${tr('Note', 'Grade')}</th></tr></thead><tbody>${subjects}</tbody></table>`:`<div class="empty">${tr('Aucun résultat de matière soumis n’est encore rattaché à ce bulletin.', 'No submitted subject result is attached to this report card yet.')}</div>`}
+  <h3>${tr('Résumé des présences', 'Attendance summary')}</h3>${attendance?`<div class="attendance"><div class="stat"><span>${tr('Présent', 'Present')}</span><b>${attendance.present}</b></div><div class="stat"><span>${tr('Absent', 'Absent')}</span><b>${attendance.absent}</b></div><div class="stat"><span>${tr('Retard', 'Late')}</span><b>${attendance.late}</b></div><div class="stat"><span>${tr('Excusé', 'Excused')}</span><b>${attendance.excused}</b></div><div class="stat"><span>${tr('Taux', 'Rate')}</span><b>${attendance.attendanceRate??'—'}%</b></div></div>`:`<div class="empty">${tr('Le résumé des présences n’est pas disponible pour cette période.', 'Attendance summary is not available for this reporting period.')}</div>`}
+  <h3>${tr('Appréciation de la direction de classe', 'Class leadership review')}</h3><div class="comments"><div class="comment"><b>${tr('Commentaire du titulaire', 'Main Teacher comment')}</b>${escapeHtml(card.teacherComment||tr('Aucun commentaire saisi.', 'No comment entered.'))}</div><div class="comment"><b>${tr('Conduite', 'Conduct')}</b>${escapeHtml(card.conduct||tr('Non renseignée.', 'Not entered.'))}</div></div>
+  <div class="signatures"><div class="signature">${tr('Titulaire de classe', 'Main Teacher')}</div><div class="signature">${tr('Préfet / Signature autorisée', 'Principal / Authorized signature')}</div></div>
+  <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, ${tr('République démocratique du Congo', 'Democratic Republic of Congo')}</div><div style="text-align:right">KCS Nexus AI · ${tr('Bulletin officiel', 'Official Report Card')}<br>${escapeHtml(issuedAt.toLocaleDateString(dateLocale))}</div></footer>
   </div></main><script>addEventListener('load',function(){var i=Array.prototype.slice.call(document.images);Promise.all(i.map(function(x){if(x.complete)return Promise.resolve();return new Promise(function(r){x.onload=r;x.onerror=r})})).then(function(){setTimeout(function(){window.focus();window.print()},250)})});<\/script></body></html>`
   const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}))
   const printWindow=window.open(url,'_blank','width=1100,height=900')
-  if(!printWindow){URL.revokeObjectURL(url);onBlocked('The browser blocked the print window. Allow pop-ups and try again.');return}
+  if(!printWindow){URL.revokeObjectURL(url);onBlocked(tr('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres contextuelles puis réessayez.', 'The browser blocked the print window. Allow pop-ups and try again.'));return}
   window.setTimeout(()=>URL.revokeObjectURL(url),60_000)
 }

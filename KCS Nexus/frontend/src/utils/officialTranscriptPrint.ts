@@ -26,6 +26,12 @@ const printableAsset = (value?: string | null) => {
 }
 
 export function printOfficialTranscript(transcript: OfficialTranscript, onBlocked: (message: string) => void) {
+  const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-GB'
+  const localizedTerm = (value: string) => language === 'fr'
+    ? value.replace(/Semester/g, 'Semestre').replace(/Trimester/g, 'Trimestre').replace(/Annual final/gi, 'Final annuel')
+    : value
   const issueDate = new Date(transcript.generatedAt ?? Date.now())
   const compactDate = issueDate.toISOString().slice(0, 10).replace(/-/g, '')
   const studentToken = transcript.student.studentNumber.replace(/[^a-z0-9]/gi, '').toUpperCase() || 'STUDENT'
@@ -34,17 +40,17 @@ export function printOfficialTranscript(transcript: OfficialTranscript, onBlocke
   const watermark = printableAsset('/images/kcs.jpg?v=official-watermark-20260927')
   const photo = printableAsset(transcript.student.photoUrl)
   const rows = transcript.rows.map((row) => `
-    <tr><td>${escapeHtml(row.cycle.academicYear)}</td><td>${escapeHtml(row.cycle.term)}</td>
+    <tr><td>${escapeHtml(row.cycle.academicYear)}</td><td>${escapeHtml(localizedTerm(row.cycle.term))}</td>
     <td><b>${escapeHtml(row.course.code)}</b><span>${escapeHtml(row.course.name)}</span></td>
     <td class="number">${row.credits}</td><td class="number">${row.percentage.toFixed(2)}%</td>
     <td class="grade">${escapeHtml(row.letterGrade)}</td></tr>`).join('')
   const photoBlock = photo
-    ? `<img class="student-photo" src="${escapeHtml(photo)}" alt="Student photograph">`
+    ? `<img class="student-photo" src="${escapeHtml(photo)}" alt="${tr('Photo de l’élève', 'Student photograph')}">`
     : '<div class="student-photo placeholder">KCS</div>'
 
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+  const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${escapeHtml(documentId)} · Official Transcript</title>
+  <title>${escapeHtml(documentId)} · ${tr('Relevé officiel', 'Official Transcript')}</title>
   <style>
   @page{size:A4;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#eaf2f8;color:#102849;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sheet{position:relative;isolation:isolate;width:210mm;min-height:277mm;margin:14px auto;overflow:hidden;background:#fff;border:1px solid #cad8e6;box-shadow:0 18px 55px #082b4d26}.top-line{height:8px;background:linear-gradient(90deg,#032f5f 0 72%,#f1b82d 72% 86%,#18bde0 86%)}
@@ -64,25 +70,25 @@ export function printOfficialTranscript(transcript: OfficialTranscript, onBlocke
   </style></head><body><main class="sheet"><div class="top-line"></div>
   <div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div><div class="content">
   <header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
-  <div class="document-title"><small>Office of Academic Records</small><h1>Official Academic Transcript</h1><p>Document ${escapeHtml(documentId)}</p></div></header>
+  <div class="document-title"><small>${tr('Bureau des dossiers académiques', 'Office of Academic Records')}</small><h1>${tr('Relevé académique officiel', 'Official Academic Transcript')}</h1><p>${tr('Document', 'Document')} ${escapeHtml(documentId)}</p></div></header>
   <section class="identity">${photoBlock}<div><h2>${escapeHtml(transcript.student.name)}</h2><div class="identity-grid">
-  <div>Student ID<b>${escapeHtml(transcript.student.studentNumber)}</b></div><div>Current grade<b>${escapeHtml(transcript.student.grade)}</b></div>
-  <div>Date issued<b>${escapeHtml(issueDate.toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'}))}</b></div><div>Record status<b>Official · Verified source</b></div>
-  </div></div></section><section class="metrics"><div class="metric"><span>Official results</span><b>${transcript.summary.officialRecords}</b></div>
-  <div class="metric"><span>Credits earned</span><b>${transcript.summary.credits}</b></div><div class="metric"><span>Cumulative GPA</span><b>${transcript.summary.cumulativeGpa ?? '—'}</b></div></section>
-  <div class="records-title"><h3>Scholastic record</h3><span>Only approved final grades are included</span></div>
-  ${rows ? `<table><thead><tr><th>Academic year</th><th>Term</th><th>Course</th><th>Credit</th><th>Average</th><th>Grade</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="empty">No approved academic result has been published for this learner yet.</div>'}
-  <div class="certification">This transcript is generated from the official Kinshasa Christian School academic register. Alteration invalidates the document. Provisional, projected or unauthorized results are excluded.</div>
-  <div class="signatures"><div class="signature">Registrar / Academic Records Officer</div><div class="signature">School Director / Authorized signature</div></div>
-  <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, Democratic Republic of Congo</div>
-  <div style="text-align:right">KCS Nexus AI · Institutional Academic Record<br>${escapeHtml(documentId)}</div></footer>
+  <div>${tr('Matricule', 'Student ID')}<b>${escapeHtml(transcript.student.studentNumber)}</b></div><div>${tr('Classe actuelle', 'Current grade')}<b>${escapeHtml(transcript.student.grade)}</b></div>
+  <div>${tr('Date de délivrance', 'Date issued')}<b>${escapeHtml(issueDate.toLocaleDateString(dateLocale,{day:'2-digit',month:'long',year:'numeric'}))}</b></div><div>${tr('Statut du dossier', 'Record status')}<b>${tr('Officiel · Source vérifiée', 'Official · Verified source')}</b></div>
+  </div></div></section><section class="metrics"><div class="metric"><span>${tr('Résultats officiels', 'Official results')}</span><b>${transcript.summary.officialRecords}</b></div>
+  <div class="metric"><span>${tr('Crédits obtenus', 'Credits earned')}</span><b>${transcript.summary.credits}</b></div><div class="metric"><span>${tr('Moyenne générale cumulative', 'Cumulative GPA')}</span><b>${transcript.summary.cumulativeGpa ?? '—'}</b></div></section>
+  <div class="records-title"><h3>${tr('Dossier scolaire', 'Scholastic record')}</h3><span>${tr('Seules les notes finales approuvées sont incluses', 'Only approved final grades are included')}</span></div>
+  ${rows ? `<table><thead><tr><th>${tr('Année scolaire', 'Academic year')}</th><th>${tr('Période', 'Term')}</th><th>${tr('Cours', 'Course')}</th><th>${tr('Crédit', 'Credit')}</th><th>${tr('Moyenne', 'Average')}</th><th>${tr('Note', 'Grade')}</th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="empty">${tr('Aucun résultat académique approuvé n’a encore été publié pour cet élève.', 'No approved academic result has been published for this learner yet.')}</div>`}
+  <div class="certification">${tr('Ce relevé est généré depuis le registre académique officiel de Kinshasa Christian School. Toute modification invalide le document. Les résultats provisoires, projetés ou non autorisés sont exclus.', 'This transcript is generated from the official Kinshasa Christian School academic register. Alteration invalidates the document. Provisional, projected or unauthorized results are excluded.')}</div>
+  <div class="signatures"><div class="signature">${tr('Responsable des dossiers académiques', 'Registrar / Academic Records Officer')}</div><div class="signature">${tr('Direction de l’école / Signature autorisée', 'School Director / Authorized signature')}</div></div>
+  <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, ${tr('République démocratique du Congo', 'Democratic Republic of Congo')}</div>
+  <div style="text-align:right">KCS Nexus AI · ${tr('Dossier académique institutionnel', 'Institutional Academic Record')}<br>${escapeHtml(documentId)}</div></footer>
   </div></main><script>addEventListener('load',function(){var i=Array.prototype.slice.call(document.images);Promise.all(i.map(function(x){if(x.complete)return Promise.resolve();return new Promise(function(r){x.onload=r;x.onerror=r})})).then(function(){setTimeout(function(){window.focus();window.print()},250)})});<\/script></body></html>`
 
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
   const printWindow = window.open(url, '_blank', 'width=1100,height=900')
   if (!printWindow) {
     URL.revokeObjectURL(url)
-    onBlocked('The browser blocked the print window. Allow pop-ups and try again.')
+    onBlocked(tr('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres contextuelles puis réessayez.', 'The browser blocked the print window. Allow pop-ups and try again.'))
     return
   }
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
