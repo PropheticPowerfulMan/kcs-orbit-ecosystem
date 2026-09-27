@@ -12,6 +12,7 @@ import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentit
 import { calculateDiscount } from './discount.js'
 import { loadDirectory, resolvePerson } from './directory.js'
 import { processNotificationOutbox } from './notifications.js'
+import { procurementRouter } from './procurement.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -65,6 +66,7 @@ async function balanceFor(orbitPersonId: string) {
 }
 
 app.get('/health', (_req, res) => res.json({ status: 'healthy', service: 'kcs-kitchen-api' }))
+app.use('/api', procurementRouter)
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const payload = z.object({

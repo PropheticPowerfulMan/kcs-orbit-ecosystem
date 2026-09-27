@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
   AlertTriangle, Archive, BarChart3, ChefHat, ClipboardList, CreditCard, Languages,
-  LayoutDashboard, LogOut, Menu, Package, Plus, ReceiptText, ScanLine, Search,
-  ShieldCheck, ShoppingCart, Sun, Moon, Users, Wallet, X
+  LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
+  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Users, Wallet, X
 } from 'lucide-react'
 import { api, dateTime, getToken, money, setToken } from './api'
 import type { Person, Product, Role, Transaction, User } from './types'
+import Procurement from './Procurement'
 
 type Lang = 'fr' | 'en'
-type Page = 'dashboard' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'disputes' | 'reports' | 'access'
+type Page = 'dashboard' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
 
 const text = {
   fr: {
     signIn: 'Connexion institutionnelle', identifier: 'E-mail ou code institutionnel', password: 'Mot de passe',
     enter: 'Entrer dans KCS Kitchen', trace: 'Chaque consommation. Chaque franc. Une preuve.',
     powered: 'Propulsé par KCS Orbit', dashboard: 'Tableau de bord', pos: 'Point de vente', catalog: 'Catalogue',
-    transactions: 'Transactions', ledger: 'Mon relevé', inventory: 'Stock', disputes: 'Contestations',
+    transactions: 'Transactions', ledger: 'Mon relevé', inventory: 'Stock', procurement: 'Achats et fournisseurs', disputes: 'Contestations',
     reports: 'Rapports', access: 'Accès et crédit', logout: 'Déconnexion', today: 'Aujourd’hui',
     outstanding: 'Solde à recouvrer', sales: 'Ventes', credit: 'Crédit émis', payments: 'Paiements',
     discounts: 'Réductions', openDisputes: 'Contestations ouvertes', lowStock: 'Stock faible',
@@ -31,7 +32,7 @@ const text = {
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
     enter: 'Enter KCS Kitchen', trace: 'Every consumption. Every franc. One proof.',
     powered: 'Powered by KCS Orbit', dashboard: 'Dashboard', pos: 'Point of sale', catalog: 'Catalog',
-    transactions: 'Transactions', ledger: 'My statement', inventory: 'Inventory', disputes: 'Disputes',
+    transactions: 'Transactions', ledger: 'My statement', inventory: 'Inventory', procurement: 'Purchasing & suppliers', disputes: 'Disputes',
     reports: 'Reports', access: 'Access and credit', logout: 'Sign out', today: 'Today',
     outstanding: 'Outstanding balance', sales: 'Sales', credit: 'Credit issued', payments: 'Payments',
     discounts: 'Discounts', openDisputes: 'Open disputes', lowStock: 'Low stock',
@@ -72,6 +73,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const { lang, setLang, t } = useLanguage()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError('')
     const data = new FormData(event.currentTarget)
@@ -96,12 +98,13 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <div><span className="eyebrow">SECURE ACCESS</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
       <form onSubmit={submit}>
         <label>{t.identifier}<input name="identifier" autoComplete="username" required /></label>
-        <label>{t.password}<input name="password" type="password" autoComplete="current-password" required /></label>
+        <label>{t.password}<span className="password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>{showPassword ? <EyeOff /> : <Eye />}</button></span></label>
         {error && <div className="form-error">{error}</div>}
         <button className="primary large" disabled={loading}>{loading ? '…' : t.enter}</button>
       </form>
       <small>🔒 Orbit identity · Encrypted session · Audited access</small>
     </section>
+      <p className="manager-hint">Gestionnaires : utilisez votre identité Admin Nexus institutionnelle. Aucun compte Kitchen séparé n’est créé.</p>
   </main>
 }
 
@@ -113,7 +116,9 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [open, setOpen] = useState(false)
   const [dark, setDark] = useState(() => localStorage.getItem('kcs-kitchen-theme') === 'dark')
   useEffect(() => { document.body.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kcs-kitchen-theme', dark ? 'dark' : 'light') }, [dark])
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('kcs-kitchen-sidebar') === 'collapsed')
   const isPrivileged = privileged.includes(user.role)
+  useEffect(() => { localStorage.setItem('kcs-kitchen-sidebar', collapsed ? 'collapsed' : 'expanded') }, [collapsed])
   const nav: Array<[Page, string, ReactNode, boolean]> = [
     ['dashboard', t.dashboard, <LayoutDashboard />, true],
     ['pos', t.pos, <ShoppingCart />, ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)],
@@ -123,10 +128,11 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['inventory', t.inventory, <Package />, isPrivileged],
     ['disputes', t.disputes, <AlertTriangle />, true],
     ['reports', t.reports, <BarChart3 />, isPrivileged],
+    ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN']
   ]
-  return <div className="app-shell">
-    <aside className={open ? 'sidebar open' : 'sidebar'}>
+  return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
+    <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
       <div className="sidebar-brand"><img src="./images/kcs-logo.png" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
       <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{user.role.replaceAll('_', ' ')}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
@@ -137,7 +143,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><div><span className="eyebrow">KCS KITCHEN · LIVE STAGING</span><h1>{t[page]}</h1></div><div className="status-pill"><ShieldCheck /> Orbit verified</div></header>
+      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-logo.png" alt="KCS"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="status-pill"><ShieldCheck /> Orbit verified</div></header>
       <div className="page-body">
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
         {page === 'pos' && <PointOfSale t={t} />}
@@ -148,6 +154,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'disputes' && <Disputes user={user} t={t} />}
         {page === 'reports' && <Reports t={t} />}
         {page === 'access' && <Access t={t} />}
+        {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
     </main>
   </div>

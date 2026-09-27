@@ -7,17 +7,35 @@ export function setToken(token: string | null) {
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(API_BASE + path, {
-    ...options,
-    headers: {
-      'content-type': 'application/json',
-      ...(getToken() ? { authorization: 'Bearer ' + getToken() } : {}),
-      ...(options.headers || {})
+  const method = String(options.method || 'GET').toUpperCase()
+  const attempts = method === 'GET' ? 3 : 1
+  let lastError: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 30_000)
+    try {
+      const response = await fetch(API_BASE + path, {
+        ...options,
+        signal: options.signal || controller.signal,
+        headers: {
+          'content-type': 'application/json',
+          ...(getToken() ? { authorization: 'Bearer ' + getToken() } : {}),
+          ...(options.headers || {})
+        }
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw Object.assign(new Error(body.message || 'Request failed'), { status: response.status, fields: body.fields })
+      return body as T
+    } catch (error: any) {
+      lastError = error
+      const retryable = method === 'GET' && (!error?.status || error.status >= 500)
+      if (!retryable || attempt === attempts - 1) throw error
+      await new Promise(resolve => window.setTimeout(resolve, 500 * (2 ** attempt)))
+    } finally {
+      window.clearTimeout(timeout)
     }
-  })
-  const body = await response.json().catch(() => ({}))
-  if (!response.ok) throw Object.assign(new Error(body.message || 'Request failed'), { status: response.status, fields: body.fields })
-  return body as T
+  }
+  throw lastError
 }
 
 export function money(value: unknown, currency = 'CDF') {

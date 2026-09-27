@@ -131,6 +131,13 @@ enum ConfirmationType {
   QR
   SIGNATURE
 }
+
+enum PurchaseStatus {
+  RECEIVED
+  PARTIALLY_PAID
+  PAID
+  VOIDED
+}
 model KitchenAccess {
   id String @id @default(cuid())
   orbitPersonId String @unique
@@ -162,9 +169,77 @@ model Product {
   priceHistory ProductPriceHistory[]
   transactionItems KitchenTransactionItem[]
   stockMovements StockMovement[]
+  purchaseItems KitchenPurchaseItem[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([category, isAvailable])
+}
+
+model Supplier {
+  id String @id @default(cuid())
+  name String
+  contactName String?
+  phone String?
+  email String?
+  address String?
+  taxId String?
+  isActive Boolean @default(true)
+  purchases KitchenPurchase[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([name, isActive])
+}
+
+model KitchenPurchase {
+  id String @id @default(cuid())
+  purchaseNumber String @unique
+  supplierId String
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  invoiceNumber String?
+  invoiceDate DateTime
+  dueDate DateTime?
+  currency String @default("CDF")
+  total Decimal @db.Decimal(14, 2)
+  paidAmount Decimal @default(0) @db.Decimal(14, 2)
+  balance Decimal @db.Decimal(14, 2)
+  status PurchaseStatus @default(RECEIVED)
+  notes String?
+  createdBy String
+  receivedAt DateTime @default(now())
+  items KitchenPurchaseItem[]
+  payments SupplierPayment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([supplierId, createdAt])
+  @@index([status, dueDate])
+}
+
+model KitchenPurchaseItem {
+  id String @id @default(cuid())
+  purchaseId String
+  purchase KitchenPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  productId String?
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  description String
+  quantity Decimal @db.Decimal(14, 3)
+  unit InventoryUnit @default(UNIT)
+  unitCost Decimal @db.Decimal(14, 2)
+  total Decimal @db.Decimal(14, 2)
+  @@index([purchaseId])
+}
+
+model SupplierPayment {
+  id String @id @default(cuid())
+  purchaseId String
+  purchase KitchenPurchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  amount Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  method PaymentMode
+  reference String?
+  notes String?
+  paidBy String
+  paidAt DateTime @default(now())
+  @@index([purchaseId, paidAt])
 }
 
 model ProductPriceHistory {

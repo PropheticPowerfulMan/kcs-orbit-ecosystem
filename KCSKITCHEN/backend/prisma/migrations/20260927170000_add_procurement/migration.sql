@@ -1,0 +1,15 @@
+CREATE TYPE "PurchaseStatus" AS ENUM ('RECEIVED', 'PARTIALLY_PAID', 'PAID', 'VOIDED');
+CREATE TABLE "Supplier" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "contactName" TEXT, "phone" TEXT, "email" TEXT, "address" TEXT, "taxId" TEXT, "isActive" BOOLEAN NOT NULL DEFAULT true, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "Supplier_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "KitchenPurchase" ("id" TEXT NOT NULL, "purchaseNumber" TEXT NOT NULL, "supplierId" TEXT NOT NULL, "invoiceNumber" TEXT, "invoiceDate" TIMESTAMP(3) NOT NULL, "dueDate" TIMESTAMP(3), "currency" TEXT NOT NULL DEFAULT 'CDF', "total" DECIMAL(14,2) NOT NULL, "paidAmount" DECIMAL(14,2) NOT NULL DEFAULT 0, "balance" DECIMAL(14,2) NOT NULL, "status" "PurchaseStatus" NOT NULL DEFAULT 'RECEIVED', "notes" TEXT, "createdBy" TEXT NOT NULL, "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "KitchenPurchase_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "KitchenPurchaseItem" ("id" TEXT NOT NULL, "purchaseId" TEXT NOT NULL, "productId" TEXT, "description" TEXT NOT NULL, "quantity" DECIMAL(14,3) NOT NULL, "unit" "InventoryUnit" NOT NULL DEFAULT 'UNIT', "unitCost" DECIMAL(14,2) NOT NULL, "total" DECIMAL(14,2) NOT NULL, CONSTRAINT "KitchenPurchaseItem_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "SupplierPayment" ("id" TEXT NOT NULL, "purchaseId" TEXT NOT NULL, "amount" DECIMAL(14,2) NOT NULL, "currency" TEXT NOT NULL DEFAULT 'CDF', "method" "PaymentMode" NOT NULL, "reference" TEXT, "notes" TEXT, "paidBy" TEXT NOT NULL, "paidAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "SupplierPayment_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "KitchenPurchase_purchaseNumber_key" ON "KitchenPurchase"("purchaseNumber");
+CREATE INDEX "Supplier_name_isActive_idx" ON "Supplier"("name", "isActive");
+CREATE INDEX "KitchenPurchase_supplierId_createdAt_idx" ON "KitchenPurchase"("supplierId", "createdAt");
+CREATE INDEX "KitchenPurchase_status_dueDate_idx" ON "KitchenPurchase"("status", "dueDate");
+CREATE INDEX "KitchenPurchaseItem_purchaseId_idx" ON "KitchenPurchaseItem"("purchaseId");
+CREATE INDEX "SupplierPayment_purchaseId_paidAt_idx" ON "SupplierPayment"("purchaseId", "paidAt");
+ALTER TABLE "KitchenPurchase" ADD CONSTRAINT "KitchenPurchase_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "KitchenPurchaseItem" ADD CONSTRAINT "KitchenPurchaseItem_purchaseId_fkey" FOREIGN KEY ("purchaseId") REFERENCES "KitchenPurchase"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "KitchenPurchaseItem" ADD CONSTRAINT "KitchenPurchaseItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "SupplierPayment" ADD CONSTRAINT "SupplierPayment_purchaseId_fkey" FOREIGN KEY ("purchaseId") REFERENCES "KitchenPurchase"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

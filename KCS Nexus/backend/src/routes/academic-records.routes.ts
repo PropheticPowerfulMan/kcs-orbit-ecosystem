@@ -1,5 +1,8 @@
 import { Router } from 'express'
 import { z } from 'zod'
+import multer from 'multer'
+import { createHash } from 'node:crypto'
+import * as XLSX from 'xlsx'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
@@ -9,6 +12,7 @@ import { normalizeClassParts } from '../utils/className.js'
 import { teacherClassKey } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
+import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
 
 const submissionSchema=z.object({
  courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
@@ -68,6 +72,7 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  return{teacher,student,enrollments:uniqueEnrollments,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
 }
 export const academicRecordsRouter=Router()
+const legacyUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:MAX_IMPORT_BYTES,files:1}})
 academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) => {
  const documentId = z.string().regex(new RegExp('^KCS-TR-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
  const fingerprint = z.string().min(6).max(100).parse(req.query.fingerprint)
@@ -78,6 +83,61 @@ academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) =
 }))
 
 academicRecordsRouter.use(authenticate)
+const legacyHeaders=['studentNumber','academicYear','gradeLevel','term','courseCode','courseName','credits','percentage','letterGrade','sourceSchool','sourceDocument']
+const legacyCell=(row:Record<string,unknown>,key:string)=>{
+ const found=Object.keys(row).find(candidate=>candidate.replace(/[ _-]/g,'').toLowerCase()===key.replace(/[ _-]/g,'').toLowerCase())
+ return String(found?row[found]??'':'').trim()
+}
+
+academicRecordsRouter.get('/legacy-records/template',requireSuperAdmin(),asyncHandler(async(req,res)=>{
+ const format=String(req.query.format||'xlsx').toLowerCase()
+ const example={studentNumber:'KCS-STU-...',academicYear:'2025-2026',gradeLevel:'Grade 10',term:'Annual final',courseCode:'MATH-10',courseName:'Mathematics',credits:1,percentage:84,letterGrade:'B',sourceSchool:'Kinshasa Christian School',sourceDocument:'QuickSchools official export'}
+ if(format==='csv'){
+  const csv=[legacyHeaders.join(','),legacyHeaders.map(key=>JSON.stringify((example as Record<string,unknown>)[key]??'')).join(',')].join('\r\n')
+  res.setHeader('content-type','text/csv; charset=utf-8');res.setHeader('content-disposition','attachment; filename="kcs-legacy-transcript-template.csv"');return res.send('\ufeff'+csv)
+ }
+ const workbook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet([example],{header:legacyHeaders}),'Verified history')
+ const buffer=XLSX.write(workbook,{type:'buffer',bookType:'xlsx'})
+ res.setHeader('content-type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');res.setHeader('content-disposition','attachment; filename="kcs-legacy-transcript-template.xlsx"');return res.send(buffer)
+}))
+
+academicRecordsRouter.post('/legacy-records/import',requireSuperAdmin(),legacyUpload.single('file'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ if(!req.file)throw new ApiError(400,'A CSV or Excel file is required')
+ if(String(req.body.confirmation||'')!=='IMPORT VERIFIED LEGACY RECORDS')throw new ApiError(400,'Type IMPORT VERIFIED LEGACY RECORDS to confirm this controlled import')
+ validateImportFile(req.file.originalname,req.file.mimetype,req.file.size)
+ const rows=parseImportBuffer(req.file.buffer,req.file.originalname)
+ if(!rows.length||rows.length>5000)throw new ApiError(400,'Import must contain between 1 and 5,000 rows')
+ const studentNumbers=[...new Set(rows.map(row=>legacyCell(row,'studentNumber')).filter(Boolean))]
+ const students=await prisma.studentProfile.findMany({where:{studentNumber:{in:studentNumbers}},select:{id:true,studentNumber:true}})
+ const studentMap=new Map(students.map(student=>[student.studentNumber.toUpperCase(),student]))
+ const fileHash=createHash('sha256').update(req.file.buffer).digest('hex')
+ const parsed:Array<{studentId:string;academicYear:string;gradeLevel:string;term:string;courseCode:string;courseName:string;credits:number;percentage:number;letterGrade:string;sourceSchool:string;sourceDocument:string}>=[]
+ const errors:string[]=[]
+ rows.forEach((row,index)=>{
+  const line=index+2,studentNumber=legacyCell(row,'studentNumber'),academicYear=legacyCell(row,'academicYear'),rawGrade=legacyCell(row,'gradeLevel')
+  const gradeMatch=rawGrade.match(/(?:grade\s*)?(9|10|11|12)$/i),term=legacyCell(row,'term'),courseCode=legacyCell(row,'courseCode').toUpperCase(),courseName=legacyCell(row,'courseName')
+  const credits=Number(legacyCell(row,'credits')),percentage=Number(legacyCell(row,'percentage')),sourceSchool=legacyCell(row,'sourceSchool'),sourceDocument=legacyCell(row,'sourceDocument')
+  const student=studentMap.get(studentNumber.toUpperCase())
+  if(!student)errors.push('Line '+line+': unknown studentNumber '+(studentNumber||'(empty)'))
+  if(!/^\d{4}-\d{4}$/.test(academicYear))errors.push('Line '+line+': academicYear must use YYYY-YYYY')
+  if(!gradeMatch)errors.push('Line '+line+': gradeLevel must be Grade 9, 10, 11 or 12')
+  if(!term||!courseCode||!courseName||!sourceSchool||!sourceDocument)errors.push('Line '+line+': term, course, school and source document are required')
+  if(!Number.isFinite(credits)||credits<=0||credits>20)errors.push('Line '+line+': credits must be greater than 0')
+  if(!Number.isFinite(percentage)||percentage<0||percentage>100)errors.push('Line '+line+': percentage must be between 0 and 100')
+  if(student&&gradeMatch&&/^\d{4}-\d{4}$/.test(academicYear)&&term&&courseCode&&courseName&&sourceSchool&&sourceDocument&&credits>0&&credits<=20&&percentage>=0&&percentage<=100)parsed.push({studentId:student.id,academicYear,gradeLevel:'Grade '+gradeMatch[1],term,courseCode,courseName,credits,percentage,letterGrade:legacyCell(row,'letterGrade')||letter(percentage),sourceSchool,sourceDocument})
+ })
+ if(errors.length)throw new ApiError(400,'Legacy import rejected without partial changes. '+errors.slice(0,30).join(' | '))
+ await prisma.$transaction(async tx=>{
+  for(const item of parsed)await tx.legacyTranscriptRecord.upsert({
+   where:{studentId_academicYear_term_courseCode:{studentId:item.studentId,academicYear:item.academicYear,term:item.term,courseCode:item.courseCode}},
+   create:{...item,fileHash,sourceSystem:'QUICKSCHOOLS',verificationStatus:'VERIFIED',importedBy:req.user!.sub},
+   update:{...item,fileHash,sourceSystem:'QUICKSCHOOLS',verificationStatus:'VERIFIED',importedBy:req.user!.sub},
+  })
+ })
+ const actorId=req.user!.sub==='configured-superadmin'?(await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}))?.id:req.user!.sub
+ await prisma.auditLog.create({data:{actorId:actorId||null,action:'VERIFIED_LEGACY_TRANSCRIPT_IMPORT',targetType:'LegacyTranscriptRecord',targetId:fileHash,metadata:{file:req.file.originalname,rows:parsed.length,students:studentNumbers.length,source:'QUICKSCHOOLS'}}})
+ return success(res,{imported:parsed.length,students:studentNumbers.length,fileHash},'Verified legacy academic history imported',201)
+}))
 
 academicRecordsRouter.get('/student-registry', requireRoles('admin','staff'), asyncHandler(async (_req, res) => {
  const students = await prisma.studentProfile.findMany({
@@ -398,8 +458,13 @@ academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff'
  const student=await prisma.studentProfile.findUnique({where:{id:studentId},include:{user:true}});if(!student)throw new ApiError(404,'Student not found')
  if(req.user!.role==='student'){const own=await prisma.studentProfile.findUnique({where:{userId:req.user!.sub},select:{id:true}});if(own?.id!==studentId)throw new ApiError(403,'Transcript access denied');if(!student.transcriptVisible)throw new ApiError(403,'Le relevé de notes n’est pas encore autorisé par la Super Administration.')}
  if(req.user!.role==='parent'){const link=await prisma.parentStudentLink.findUnique({where:{parentId_studentId:{parentId:req.user!.sub,studentId}}});if(!link)throw new ApiError(403,'Transcript access denied');if(!student.transcriptVisible)throw new ApiError(403,'Le relevé de notes n’est pas encore autorisé par la Super Administration.');const clearance=await getParentAcademicClearance(req.user!.sub);if(!clearance.allowed)throw new ApiError(402,clearance.reason)}
- const grades=await prisma.grade.findMany({where:{studentId,assignmentId:null,period:{endsWith:'::APPROVED'}},include:{course:true},orderBy:{period:'asc'}})
- const rows=grades.map(item=>({...item,cycle:parsePeriod(item.period),credits:item.course.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.course.credits}))
+ const [grades,legacy]=await Promise.all([
+  prisma.grade.findMany({where:{studentId,assignmentId:null,period:{endsWith:'::APPROVED'}},include:{course:true},orderBy:{period:'asc'}}),
+  prisma.legacyTranscriptRecord.findMany({where:{studentId,verificationStatus:'VERIFIED'},orderBy:[{academicYear:'asc'},{term:'asc'},{courseCode:'asc'}]})
+ ])
+ const currentRows=grades.map(item=>({...item,cycle:parsePeriod(item.period),credits:item.course.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.course.credits,source:'NEXUS_APPROVED'}))
+ const legacyRows=legacy.map(item=>({id:item.id,studentId:item.studentId,percentage:item.percentage,letterGrade:item.letterGrade,cycle:{academicYear:item.academicYear,term:item.term,status:'VERIFIED_LEGACY'},credits:item.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.credits,course:{id:'legacy-'+item.id,code:item.courseCode,name:item.courseName,credits:item.credits},source:'QUICKSCHOOLS_VERIFIED',gradeLevel:item.gradeLevel,sourceSchool:item.sourceSchool,sourceDocument:item.sourceDocument}))
+ const rows=[...legacyRows,...currentRows].sort((left,right)=>left.cycle.academicYear.localeCompare(right.cycle.academicYear)||left.cycle.term.localeCompare(right.cycle.term)||left.course.code.localeCompare(right.course.code))
  const credits=rows.reduce((sum,item)=>sum+item.credits,0),points=rows.reduce((sum,item)=>sum+item.qualityPoints,0)
- return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:student.officialAvatar ?? student.user.avatar,transcriptVisible:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
+ return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:student.officialAvatar ?? student.user.avatar,transcriptVisible:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length,legacyRecords:legacyRows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_AND_VERIFIED_LEGACY_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
 }))

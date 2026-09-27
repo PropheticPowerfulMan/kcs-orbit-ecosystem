@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, FileCheck2, FilterX, Loader2, Printer, RefreshCw, Search, ShieldCheck, X } from 'lucide-react'
+import { CheckCircle2, Download, FileCheck2, FilterX, History, Loader2, Printer, RefreshCw, Search, ShieldCheck, Upload, X } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
 import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
 import { printOfficialReportCard, type PrintableReportCard } from '@/utils/officialReportCardPrint'
@@ -47,12 +47,21 @@ const validSection = (value: unknown) => {
 }
 const inputClass = 'w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 focus:ring-2 focus:ring-sky-200 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:placeholder:text-slate-400'
 
+const RECORD_CACHE_KEY = 'kcs-academic-records-cache-v2'
+const transcriptCacheKey = (studentId: string) => 'kcs-transcript-cache-v2:' + studentId
+const readRecordCache = () => {
+  try { return JSON.parse(sessionStorage.getItem(RECORD_CACHE_KEY) || '{}') as { grades?: Grade[]; cards?: Card[]; registry?: RegistryStudent[]; savedAt?: string } }
+  catch { return {} }
+}
+
 export default function AcademicRecordsControlCenterV2() {
   const [academicYear, setAcademicYear] = useState('2026-2027')
+
   const [term, setTerm] = useState('Semester 1 · Trimester 1')
-  const [grades, setGrades] = useState<Grade[]>([])
-  const [cards, setCards] = useState<Card[]>([])
-  const [registry, setRegistry] = useState<RegistryStudent[]>([])
+  const [grades, setGrades] = useState<Grade[]>(() => readRecordCache().grades ?? [])
+  const [cards, setCards] = useState<Card[]>(() => readRecordCache().cards ?? [])
+  const [registry, setRegistry] = useState<RegistryStudent[]>(() => readRecordCache().registry ?? [])
+  const [cacheSavedAt, setCacheSavedAt] = useState(() => readRecordCache().savedAt ?? '')
   const [transcript, setTranscript] = useState<Transcript | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
@@ -65,6 +74,9 @@ export default function AcademicRecordsControlCenterV2() {
   const [transcriptLoadingId, setTranscriptLoadingId] = useState('')
   const [transcriptPrinting, setTranscriptPrinting] = useState(false)
   const [reportPrintingId, setReportPrintingId] = useState('')
+  const [legacyFile, setLegacyFile] = useState<File | null>(null)
+  const [legacyBusy, setLegacyBusy] = useState(false)
+  const [legacyConfirmation, setLegacyConfirmation] = useState('')
 
   const load = async () => {
     setBusy(true)
@@ -74,15 +86,22 @@ export default function AcademicRecordsControlCenterV2() {
         academicRecordsAPI.reportCards(),
         academicRecordsAPI.studentRegistry(),
       ])
-      if (gradeResult.status === 'fulfilled') setGrades(gradeResult.value.data.data ?? [])
-      if (cardResult.status === 'fulfilled') setCards(cardResult.value.data.data ?? [])
-      if (registryResult.status === 'fulfilled' && Array.isArray(registryResult.value.data.data)) setRegistry(registryResult.value.data.data)
+      const nextGrades = gradeResult.status === 'fulfilled' ? (gradeResult.value.data.data ?? []) : grades
+      const nextCards = cardResult.status === 'fulfilled' ? (cardResult.value.data.data ?? []) : cards
+      const nextRegistry = registryResult.status === 'fulfilled' && Array.isArray(registryResult.value.data.data) ? registryResult.value.data.data : registry
+      setGrades(nextGrades); setCards(nextCards); setRegistry(nextRegistry)
       const failures = [gradeResult, cardResult, registryResult].filter((result) => result.status === 'rejected')
+      if (failures.length < 3) {
+        const savedAt = new Date().toISOString()
+        sessionStorage.setItem(RECORD_CACHE_KEY, JSON.stringify({ grades: nextGrades, cards: nextCards, registry: nextRegistry, savedAt }))
+        setCacheSavedAt(savedAt)
+      }
       if (registryResult.status === 'rejected') {
         const error: any = registryResult.reason
-        setNotice(error?.response?.data?.message ?? 'The official student registry is temporarily unavailable. The last visible list has been preserved.')
+        const detail = error?.response?.data?.message ?? 'The official student registry is temporarily unavailable.'
+        setNotice(detail + (nextRegistry.length ? ' A secure cached copy is displayed' + (cacheSavedAt ? ' from ' + new Date(cacheSavedAt).toLocaleTimeString() : '') + '.' : ''))
       } else if (failures.length) {
-        setNotice('The student registry is available. Some academic indicators are still synchronizing; use Refresh to retry.')
+        setNotice('The student registry is available. Cached academic indicators are filling the unavailable sections; Refresh will synchronize them again.')
       } else setNotice('')
     } finally {
       setBusy(false)
@@ -180,9 +199,18 @@ export default function AcademicRecordsControlCenterV2() {
     setTranscriptLoadingId(studentId)
     try {
       const response = await academicRecordsAPI.transcript(studentId)
-      setTranscript(response.data.data)
+      const data = response.data.data as Transcript
+      setTranscript(data)
+      sessionStorage.setItem(transcriptCacheKey(studentId), JSON.stringify({ data, savedAt: new Date().toISOString() }))
     } catch (error: any) {
-      setNotice(error?.response?.data?.message ?? 'Transcript unavailable.')
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(transcriptCacheKey(studentId)) || '{}')
+        if (!cached.data) throw new Error('no cache')
+        setTranscript(cached.data)
+        setNotice('Live transcript synchronization is unavailable. A secure read-only copy from ' + new Date(cached.savedAt).toLocaleString() + ' is displayed; approvals and publications remain disabled until reconnection.')
+      } catch {
+        setNotice(error?.response?.data?.message ?? 'Transcript unavailable.')
+      }
     } finally {
       setTranscriptLoadingId('')
     }
@@ -200,6 +228,32 @@ export default function AcademicRecordsControlCenterV2() {
     setReportPrintingId(card.id)
     printOfficialReportCard(card, setNotice)
     window.setTimeout(() => setReportPrintingId(''), 900)
+  }
+
+  const downloadLegacyTemplate = async (format: 'csv' | 'xlsx') => {
+    setLegacyBusy(true)
+    try {
+      const response = await academicRecordsAPI.legacyTemplate(format)
+      const url = URL.createObjectURL(response.data)
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'kcs-legacy-transcript-template.' + format; anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error: any) { setNotice(error?.response?.data?.message ?? 'Template download failed.') }
+    finally { setLegacyBusy(false) }
+  }
+
+  const importLegacyRecords = async () => {
+    if (!legacyFile || legacyConfirmation !== 'IMPORT VERIFIED LEGACY RECORDS') {
+      setNotice('Choose a verified QuickSchools export and type the exact confirmation phrase.')
+      return
+    }
+    setLegacyBusy(true)
+    try {
+      const data = new FormData(); data.append('file', legacyFile); data.append('confirmation', legacyConfirmation)
+      const response = await academicRecordsAPI.importLegacyRecords(data)
+      setNotice(response.data.message + ' · ' + response.data.data.imported + ' row(s), ' + response.data.data.students + ' learner(s).')
+      setLegacyFile(null); setLegacyConfirmation(''); await load()
+    } catch (error: any) { setNotice(error?.response?.data?.message ?? 'Verified legacy import failed without partial changes.') }
+    finally { setLegacyBusy(false) }
   }
 
   const setTranscriptVisibility = async (studentId: string, visible: boolean) => {
@@ -238,6 +292,10 @@ export default function AcademicRecordsControlCenterV2() {
     <div className="flex flex-col gap-3 rounded-2xl border border-kcs-gold-300 bg-kcs-gold-50 p-4 dark:border-kcs-gold-700 dark:bg-kcs-blue-900 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-700 dark:text-kcs-gold-300">Official report cards</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">Open the report-card register to review, approve and print the official PDF.</p></div><button type="button" onClick={() => document.getElementById('official-report-cards')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950"><Printer size={17}/>Open report cards and print</button></div>
 
     <section className="rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5">
+    <section className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4 shadow-sm dark:border-violet-800 dark:bg-violet-950/20 sm:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div className="max-w-3xl"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-violet-700 dark:text-violet-300"><History size={17}/>Verified historical records · QuickSchools transition</p><h3 className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">Import Grade 9–12 history without inventing results</h3><p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">Use only official QuickSchools exports or signed school records. The import is all-or-nothing, matched by student ID, fingerprinted, auditable and merged with approved Nexus grades in the official transcript.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={legacyBusy} onClick={() => void downloadLegacyTemplate('xlsx')} className="inline-flex items-center gap-2 rounded-xl border border-violet-300 bg-white px-3 py-2 text-sm font-black text-violet-800 dark:bg-kcs-blue-950 dark:text-violet-200"><Download size={16}/>Excel template</button><button type="button" disabled={legacyBusy} onClick={() => void downloadLegacyTemplate('csv')} className="inline-flex items-center gap-2 rounded-xl border border-violet-300 bg-white px-3 py-2 text-sm font-black text-violet-800 dark:bg-kcs-blue-950 dark:text-violet-200"><Download size={16}/>CSV template</button></div></div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(18rem,1fr)_auto]"><label className="rounded-xl border border-dashed border-violet-300 bg-white p-3 text-sm font-bold text-kcs-blue-950 dark:bg-kcs-blue-950 dark:text-white"><span className="mb-2 flex items-center gap-2"><Upload size={16}/>Official CSV/XLS/XLSX</span><input type="file" accept=".csv,.xls,.xlsx" onChange={(event) => setLegacyFile(event.target.files?.[0] ?? null)} className="block w-full text-xs"/></label><label className="text-xs font-bold text-slate-600 dark:text-slate-300">Controlled confirmation<input value={legacyConfirmation} onChange={(event) => setLegacyConfirmation(event.target.value)} className={inputClass + ' mt-2'} placeholder="IMPORT VERIFIED LEGACY RECORDS"/></label><button type="button" disabled={legacyBusy || !legacyFile || legacyConfirmation !== 'IMPORT VERIFIED LEGACY RECORDS'} onClick={() => void importLegacyRecords()} className="inline-flex min-h-12 items-center justify-center gap-2 self-end rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white disabled:opacity-50">{legacyBusy ? <Loader2 size={17} className="animate-spin"/> : <Upload size={17}/>}Import verified history</button></div>
+    </section>
       <div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">Precise transcript finder</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">Find a learner and generate the transcript immediately</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{visibleRegistry.length} result(s) displayed from {registry.length} official learner records.</p></div>
       <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(16rem,1.5fr)_11rem_11rem_11rem_auto]">
         <label className="relative"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={studentQuery} onChange={(event) => setStudentQuery(event.target.value)} className={inputClass + ' pl-10'} placeholder="Exact name, student ID, class, section…"/></label>

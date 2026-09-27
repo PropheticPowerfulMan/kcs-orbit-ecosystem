@@ -37,6 +37,21 @@ const buildSafeUserWithAccess = async (user: PrismaUser, includeAvatar = true) =
   }
 }
 
+async function resolveEffectiveLoginUser(user: PrismaUser) {
+  if (user.role !== 'STAFF') return user
+  const profiles = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { teacherProfile: { select: { id: true } }, staffProfile: { select: { id: true } } },
+  })
+  const isTeacherIdentity = Boolean(
+    profiles?.teacherProfile
+      && !profiles.staffProfile
+      && (user.accessCode || '').trim().toUpperCase().startsWith('ACC-TCH-'),
+  )
+  if (!isTeacherIdentity) return user
+  return prisma.user.update({ where: { id: user.id }, data: { role: 'TEACHER' } })
+}
+
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 }
@@ -695,14 +710,15 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
           throw new ApiError(428, payload.twoFactorCode ? 'Invalid two-factor authentication code' : 'Two-factor authentication code required')
         }
       }
-      await recordSuccessfulLogin(user)
-      const token = signAccessToken(user)
-      const refreshToken = signRefreshToken(user)
+      const effectiveUser = await resolveEffectiveLoginUser(user)
+      await recordSuccessfulLogin(effectiveUser)
+      const token = signAccessToken(effectiveUser)
+      const refreshToken = signRefreshToken(effectiveUser)
 
       await prisma.refreshToken.create({
         data: {
           token: refreshToken,
-          userId: user.id,
+          userId: effectiveUser.id,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
       })
@@ -727,22 +743,23 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')
   }
 
-  await recordSuccessfulLogin(resolvedUser)
+  const effectiveUser = await resolveEffectiveLoginUser(resolvedUser)
+  await recordSuccessfulLogin(effectiveUser)
 
-  if (resolvedUser.role === 'PARENT' && resolvedUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
+  if (effectiveUser.role === 'PARENT' && effectiveUser.accountBlockedAt) throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
 
-  const token = signAccessToken(resolvedUser)
-  const refreshToken = signRefreshToken(resolvedUser)
+  const token = signAccessToken(effectiveUser)
+  const refreshToken = signRefreshToken(effectiveUser)
 
   await prisma.refreshToken.create({
     data: {
       token: refreshToken,
-      userId: resolvedUser.id,
+      userId: effectiveUser.id,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
   })
 
-  return success(res, { user: await buildSafeUserWithAccess(resolvedUser, false), token, refreshToken }, 'Connexion réussie')
+  return success(res, { user: await buildSafeUserWithAccess(effectiveUser, false), token, refreshToken }, 'Connexion réussie')
 }))
 
 authRouter.post('/google', asyncHandler(async (req, res) => {

@@ -445,6 +445,7 @@ model StudentProfile {
   aiSessions            AITutorSession[]
   aiRecommendations     AIRecommendation[]
   attendanceRecords     AttendanceRecord[]
+  legacyTranscriptRecords LegacyTranscriptRecord[]
   reportCards           ReportCard[]
   transcripts           Transcript[]
   feeInvoices           FeeInvoice[]
@@ -781,6 +782,32 @@ model ReportCard {
   correspondenceLogs CorrespondenceLog[]
 
   @@unique([studentId, term])
+}
+
+model LegacyTranscriptRecord {
+  id             String         @id @default(cuid())
+  studentId      String
+  academicYear   String
+  gradeLevel     String
+  term           String
+  courseCode     String
+  courseName     String
+  credits        Float
+  percentage     Float
+  letterGrade    String
+  sourceSchool   String
+  sourceSystem   String         @default("QUICKSCHOOLS")
+  sourceDocument String
+  fileHash       String
+  verificationStatus String     @default("VERIFIED")
+  importedBy     String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, academicYear, term, courseCode])
+  @@index([studentId, academicYear])
+  @@index([verificationStatus])
 }
 
 model Transcript {
