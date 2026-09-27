@@ -84,3 +84,14 @@ label{display:grid;gap:.45rem;font-size:.78rem;font-weight:700;color:var(--ink)}
 .purchase-total{display:flex;justify-content:space-between;align-items:center;border-radius:14px;padding:1rem 1.2rem;background:linear-gradient(110deg,var(--navy),var(--navy2));color:white}.purchase-total strong{font-size:1.35rem}.spin{animation:spin .85s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:900px){.collapse-button{display:none}.header-logo{width:36px;height:36px}.app-shell.collapsed{display:block}.sidebar.collapsed .sidebar-brand div,.sidebar.collapsed .identity div,.sidebar.collapsed nav span,.sidebar.collapsed .sidebar-footer button{font-size:inherit}.sidebar.collapsed nav button,.sidebar.collapsed .sidebar-footer button{justify-content:flex-start}.procurement-stats{grid-template-columns:repeat(2,1fr)}.purchase-line{grid-template-columns:1fr 1fr}.purchase-line button{grid-column:2}}
 @media(max-width:520px){.procurement-stats{grid-template-columns:1fr}.culinary-hero{min-height:205px;border-radius:17px}.culinary-hero>svg{display:none}.purchase-line{grid-template-columns:1fr}.purchase-line button{grid-column:1}.workspace>header .header-logo{display:none}}
+
+/* The culinary identity covers the complete experience, while contrast veils preserve accessibility. */
+.login-page{position:relative;background-image:linear-gradient(90deg,rgba(1,24,43,.9) 0%,rgba(2,47,77,.64) 52%,rgba(222,242,249,.74) 100%),url('/images/kitchen-culinary-hero.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+.login-brand{background-image:none;background-color:transparent}
+.workspace{min-height:100vh;background-image:linear-gradient(rgba(237,246,251,.86),rgba(237,246,251,.91)),url('/images/kitchen-culinary-hero.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed}
+body[data-theme=dark] .workspace{background-image:linear-gradient(rgba(4,29,50,.82),rgba(4,29,50,.9)),url('/images/kitchen-culinary-hero.jpg')}
+.page-body{min-height:calc(100vh - 82px)}
+@media(max-width:820px){
+  .login-page{background-image:linear-gradient(180deg,rgba(1,27,48,.86) 0%,rgba(2,43,72,.68) 44%,rgba(226,244,250,.78) 100%),url('/images/kitchen-culinary-hero.jpg');background-position:62% center}
+  .workspace{background-attachment:scroll}.page-body{min-height:calc(100vh - 72px)}
+}
