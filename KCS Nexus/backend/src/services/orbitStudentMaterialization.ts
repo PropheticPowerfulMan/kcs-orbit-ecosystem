@@ -1,6 +1,7 @@
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
-import { splitClassName } from '../utils/className.js'
+import { formatClassName, splitClassName } from '../utils/className.js'
+import { ApiError } from '../utils/api.js'
 
 export type OrbitStudentIdentity = {
   id: string
@@ -18,6 +19,44 @@ export type OrbitStudentIdentity = {
   dateOfBirth?: string | null
   photoData?: string | null
   externalIds?: Array<{ appSlug: string; externalId: string }>
+}
+
+type OrbitStudentClassReference = {
+  orbitUserId?: string | null
+  studentNumber: string
+  grade: string
+  section?: string | null
+}
+
+export async function updateOrbitStudentClassAssignment(
+  student: OrbitStudentClassReference,
+  grade: string,
+  section?: string | null,
+) {
+  if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) {
+    return { synchronized: false as const }
+  }
+
+  const identifier = student.orbitUserId || student.studentNumber
+  const identifierType = student.orbitUserId ? 'orbitId' : 'externalId'
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/registry/student/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}&identifierType=${identifierType}`,
+    {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.KCS_ORBIT_API_KEY,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+      body: JSON.stringify({ className: formatClassName(grade, section) }),
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
+  const payload = await response.json().catch(() => ({})) as { message?: string }
+  if (!response.ok) {
+    throw new ApiError(response.status, payload.message || `Orbit class assignment failed with status ${response.status}`)
+  }
+  return { synchronized: true as const }
 }
 
 const identityName = (student: OrbitStudentIdentity) => {
@@ -95,8 +134,7 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
   const profileData = {
     userId: user.id,
     studentNumber: canonicalNumber,
-    ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim() } : {}),
-    ...(classParts.section ? { section: classParts.section } : {}),
+    ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim(), section: classParts.section } : {}),
     status: (student.status || 'active').toLowerCase(),
     ...(student.photoData !== undefined ? { officialAvatar: student.photoData || null } : {}),
     ...(student.dateOfBirth ? { dateOfBirth: new Date(student.dateOfBirth) } : {}),

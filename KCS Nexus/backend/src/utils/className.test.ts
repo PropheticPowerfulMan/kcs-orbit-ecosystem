@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { compareClassParts, normalizeClassParts, splitClassName } from './className.js'
+import { classAssignmentsOverlap, compareClassParts, formatClassName, normalizeClassParts, splitClassName } from './className.js'
 
 test('normalizes duplicated Grade names used by imported student records', () => {
   assert.deepEqual(splitClassName('Grade 10 Grade 10'), { grade: 'Grade 10', section: '' })
@@ -21,6 +21,18 @@ test('normalizes imported grade and section fields into one class identity', () 
   assert.deepEqual(normalizeClassParts('Grade 7', 'Grade 7'), { grade: 'Grade 7', section: '' })
   assert.deepEqual(normalizeClassParts('7th Grade', ''), { grade: 'Grade 7', section: '' })
   assert.deepEqual(normalizeClassParts('12th Grade', ''), { grade: 'Grade 12', section: '' })
+})
+
+test('formats sectioned and whole-class assignments without preserving a stale section', () => {
+  assert.equal(formatClassName('Grade 9', 'A'), 'Grade 9 A')
+  assert.equal(formatClassName('Grade 9', ''), 'Grade 9')
+  assert.deepEqual(splitClassName(formatClassName('Grade 9', '')), { grade: 'Grade 9', section: '' })
+})
+
+test('treats a whole-class responsibility as overlapping every section of that grade', () => {
+  assert.equal(classAssignmentsOverlap({ grade: 'Grade 9', section: '' }, { grade: 'Grade 9', section: 'A' }), true)
+  assert.equal(classAssignmentsOverlap({ grade: 'Grade 9', section: 'A' }, { grade: 'Grade 9', section: 'B' }), false)
+  assert.equal(classAssignmentsOverlap({ grade: 'Grade 9', section: 'A' }, { grade: 'Grade 10', section: 'A' }), false)
 })
 
 test('sorts classes from K3 through Grade 12', () => {

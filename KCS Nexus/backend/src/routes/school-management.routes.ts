@@ -6,7 +6,8 @@ import { authenticate, requireRoles, type AuthenticatedRequest } from '../middle
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { sendSchoolSms } from '../utils/sms.js'
-import { normalizeClassParts } from '../utils/className.js'
+import { classAssignmentsOverlap, normalizeClassParts } from '../utils/className.js'
+import { updateOrbitStudentClassAssignment } from '../services/orbitStudentMaterialization.js'
 
 const enumValue = <T extends readonly [string, ...string[]]>(values: T) => z.enum(values)
 
@@ -190,6 +191,7 @@ schoolManagementRouter.patch('/admission-inquiries/:id/status', requireRoles('ad
 }))
 
 schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdministrator, asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const [profiles, orbitTeachers] = await Promise.all([
     prisma.teacherProfile.findMany({
       orderBy: { user: { lastName: 'asc' } },
@@ -211,6 +213,7 @@ schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdmin
 }))
 
 schoolManagementRouter.get('/teachers/class-rosters', requireOperationalAdministrator, asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const [students, assignedTeachers] = await Promise.all([
     prisma.studentProfile.findMany({
       where: { status: { equals: 'active', mode: 'insensitive' } },
@@ -252,28 +255,42 @@ schoolManagementRouter.patch('/teachers/class-rosters/:studentId', requireOperat
   const payload = studentClassSectionSchema.parse(req.body)
   const student = await prisma.studentProfile.findUnique({
     where: { id: studentId },
-    select: { id: true, grade: true, section: true, studentNumber: true },
+    select: { id: true, grade: true, section: true, studentNumber: true, user: { select: { orbitUserId: true } } },
   })
   if (!student) throw new ApiError(404, 'Student not found in the official Nexus register')
   const normalized = normalizeClassParts(student.grade, payload.section)
-  const updated = await prisma.$transaction(async (tx) => {
-    const saved = await tx.studentProfile.update({
-      where: { id: studentId },
-      data: { section: normalized.section },
-      select: { id: true, studentNumber: true, grade: true, section: true },
+  const orbitReference = { orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, grade: student.grade, section: student.section }
+  const orbitSync = await updateOrbitStudentClassAssignment(orbitReference, normalized.grade, normalized.section)
+  let updated
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.studentProfile.update({
+        where: { id: studentId },
+        data: { grade: normalized.grade, section: normalized.section },
+        select: { id: true, studentNumber: true, grade: true, section: true },
+      })
+      await tx.auditLog.create({
+        data: {
+          actorId: getActorId(req),
+          action: 'STUDENT_CLASS_SECTION_ASSIGNED',
+          targetType: 'StudentProfile',
+          targetId: studentId,
+          metadata: { grade: normalized.grade, previousSection: student.section, section: normalized.section, orbitSynchronized: orbitSync.synchronized },
+        },
+      })
+      return saved
     })
-    await tx.auditLog.create({
-      data: {
-        actorId: getActorId(req),
-        action: 'STUDENT_CLASS_SECTION_ASSIGNED',
-        targetType: 'StudentProfile',
-        targetId: studentId,
-        metadata: { grade: normalized.grade, previousSection: student.section, section: normalized.section },
-      },
-    })
-    return saved
-  })
-  return success(res, updated, normalized.section ? 'Student assigned to the official class section' : 'Student returned to the unassigned class-section pool')
+  } catch (error) {
+    if (orbitSync.synchronized) {
+      try {
+        await updateOrbitStudentClassAssignment(orbitReference, student.grade, student.section)
+      } catch (rollbackError) {
+        console.error('[class-roster] Orbit rollback failed after the Nexus transaction failed.', rollbackError)
+      }
+    }
+    throw error
+  }
+  return success(res, updated, normalized.section ? 'Student assigned to the official class section' : 'Student assigned to the whole class without a section')
 }))
 schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministrator, asyncHandler(async (req, res) => {
   let teacherId = getRouteParam(req.params.id)
@@ -287,6 +304,19 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
     ? null
     : normalizeClassParts(payload.homeroomGrade, payload.homeroomSection)
   if (['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(payload.status)) {
+    if (!requestedClass!.section) {
+      const activeRoster = await prisma.studentProfile.findMany({
+        where: { status: { equals: 'active', mode: 'insensitive' } },
+        select: { grade: true, section: true },
+      })
+      const existingSections = Array.from(new Set(activeRoster
+        .map((student) => normalizeClassParts(student.grade, student.section))
+        .filter((studentClass) => studentClass.grade.toLowerCase() === requestedClass!.grade.toLowerCase() && Boolean(studentClass.section))
+        .map((studentClass) => studentClass.section)))
+      if (existingSections.length) {
+        throw new ApiError(409, `${requestedClass!.grade} is already divided into sections (${existingSections.join(', ')}). Choose the correct section instead of Whole class.`)
+      }
+    }
     const sameRole = await prisma.teacherProfile.findMany({
       where: {
         id: { not: teacherId },
@@ -298,11 +328,10 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
         user: { select: { firstName: true, lastName: true } },
       },
     })
-    const conflict = sameRole.find((entry) => {
-      const assignedClass = normalizeClassParts(entry.homeroomGrade, entry.homeroomSection)
-      return assignedClass.grade.toLowerCase() === requestedClass!.grade.toLowerCase()
-        && assignedClass.section.toLowerCase() === requestedClass!.section.toLowerCase()
-    })
+    const conflict = sameRole.find((entry) => classAssignmentsOverlap(
+      { grade: entry.homeroomGrade, section: entry.homeroomSection },
+      requestedClass!,
+    ))
     if (conflict) {
       const conflictName = [conflict.user.lastName, conflict.user.firstName].filter(Boolean).join(' ')
       const assignmentLabel = payload.status === 'HOMEROOM_TEACHER' ? 'main teacher' : 'assistant teacher'

@@ -10,6 +10,14 @@ export function splitClassName(className?: string | null) {
     if (gradeNumber >= 1 && gradeNumber <= 12) return { grade: `Grade ${gradeNumber}`, section: '' }
   }
 
+  const duplicatedGradeWithSectionMatch = cleanClassName.match(/^grade\s*(\d{1,2})\s+grade\s*\1(?:\s+(.+))?$/i)
+  if (duplicatedGradeWithSectionMatch) {
+    const gradeNumber = Number(duplicatedGradeWithSectionMatch[1])
+    if (gradeNumber >= 1 && gradeNumber <= 12) {
+      return { grade: `Grade ${gradeNumber}`, section: duplicatedGradeWithSectionMatch[2]?.trim() || '' }
+    }
+  }
+
   const gradeWithSectionMatch = cleanClassName.match(/^grade\s*(\d{1,2})(?:\s+(.+))?$/i)
   if (gradeWithSectionMatch) {
     const gradeNumber = Number(gradeWithSectionMatch[1])
@@ -50,9 +58,24 @@ export function normalizeClassParts(grade?: string | null, section?: string | nu
   const cleanSection = (section ?? '').trim().replace(/\s+/g, ' ')
   if (cleanSection) {
     const normalizedGrade = splitClassName(grade)
-    return { grade: normalizedGrade.grade, section: cleanSection }
+    return splitClassName(`${normalizedGrade.grade} ${cleanSection}`)
   }
   return splitClassName(grade)
+}
+
+export function classAssignmentsOverlap(
+  left: { grade?: string | null; section?: string | null },
+  right: { grade?: string | null; section?: string | null },
+) {
+  const leftClass = normalizeClassParts(left.grade, left.section)
+  const rightClass = normalizeClassParts(right.grade, right.section)
+  return leftClass.grade.toLowerCase() === rightClass.grade.toLowerCase()
+    && (!leftClass.section || !rightClass.section || leftClass.section.toLowerCase() === rightClass.section.toLowerCase())
+}
+
+export function formatClassName(grade?: string | null, section?: string | null) {
+  const normalized = normalizeClassParts(grade, section)
+  return [normalized.grade, normalized.section].filter(Boolean).join(' ')
 }
 
 function classRank(grade: string) {

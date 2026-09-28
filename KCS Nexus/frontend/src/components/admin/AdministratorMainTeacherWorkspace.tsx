@@ -107,7 +107,7 @@ export default function AdministratorMainTeacherWorkspace() {
 
   const selectedSet = useMemo(() => new Set(selectedStudentIds), [selectedStudentIds])
   const allVisibleSelected = visibleStudents.length > 0 && visibleStudents.every((student) => selectedSet.has(student.id))
-  const unassignedCount = gradeStudents.filter((student) => !String(student.section || '').trim()).length
+  const wholeClassCount = gradeStudents.filter((student) => !String(student.section || '').trim()).length
 
   const updateTeacherDraft = (id: string, patch: Partial<TeacherDraft>) =>
     setTeacherDrafts((current) => ({
@@ -172,10 +172,6 @@ export default function AdministratorMainTeacherWorkspace() {
   const saveTeacher = async (teacher: any) => {
     const draft = teacherDrafts[teacher.id]
     if (!draft) return
-    if (draft.status !== 'TEACHER' && !draft.section.trim()) {
-      setResult({ ok: false, message: tr('Choisissez la section officielle avant d’affecter le responsable.', 'Choose the official section before assigning the class responsibility.') })
-      return
-    }
     setBusyKey('teacher:' + teacher.id)
     try {
       await mainTeacherAPI.assign(teacher.id, {
@@ -187,7 +183,10 @@ export default function AdministratorMainTeacherWorkspace() {
         ok: true,
         message: draft.status === 'TEACHER'
           ? tr(`La responsabilité de classe de ${personName(teacher)} a été retirée sans modifier ses cours.`, `${personName(teacher)}'s class responsibility was removed without changing assigned courses.`)
-          : tr(`${personName(teacher)} est maintenant affecté(e) à ${draft.grade} ${draft.section.trim()}.`, `${personName(teacher)} is now assigned to ${draft.grade} ${draft.section.trim()}.`),
+          : tr(
+            `${personName(teacher)} est maintenant affecté(e) à ${draft.grade}${draft.section.trim() ? ` ${draft.section.trim()}` : ' · classe entière'}.`,
+            `${personName(teacher)} is now assigned to ${draft.grade}${draft.section.trim() ? ` ${draft.section.trim()}` : ' · whole class'}.`,
+          ),
       })
       await load()
     } catch (error: any) {
@@ -210,7 +209,7 @@ export default function AdministratorMainTeacherWorkspace() {
     <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-5 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/60">
       <p className="text-xs font-black uppercase tracking-[.18em] text-kcs-gold-600">{tr('Organisation officielle des classes', 'Official class organization')}</p>
       <h2 className="mt-2 text-2xl font-black text-kcs-blue-950 dark:text-white">{tr('Sections, Main Teachers et Assistants', 'Sections, Main Teachers and Assistants')}</h2>
-      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">{tr('Étape 1 : répartissez réellement les élèves entre les sous-classes. Étape 2 : affectez un Main Teacher et un assistant à chaque section constituée. Un professeur conserve tous ses autres cours.', 'Step 1: place learners into their actual class sections. Step 2: assign a Main Teacher and an assistant to every completed section. Teachers keep all their other courses.')}</p>
+      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-300">{tr('Si une classe est divisée, répartissez les élèves puis affectez les responsables par section. Si elle ne comporte aucune section, laissez les élèves sans sous-classe et choisissez « Classe entière » pour son Main Teacher ou son assistant. Un professeur conserve tous ses autres cours.', 'For a divided class, place learners into sections and assign leaders per section. If the class has no section, leave learners without a subsection and choose “Whole class” for its Main Teacher or assistant. Teachers keep all their other courses.')}</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl bg-white p-4 font-bold text-kcs-blue-900 shadow-sm dark:bg-kcs-blue-950 dark:text-white"><span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-kcs-blue-700 text-white">1</span>{tr('Répartir les élèves', 'Place learners')}</div>
         <div className="rounded-xl bg-white p-4 font-bold text-kcs-blue-900 shadow-sm dark:bg-kcs-blue-950 dark:text-white"><span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-kcs-blue-700 text-white">2</span>{tr('Affecter les responsables', 'Assign class leaders')}</div>
@@ -221,12 +220,12 @@ export default function AdministratorMainTeacherWorkspace() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600"><Users size={16}/>{tr('Étape 1 · Registre des élèves', 'Step 1 · Learner roster')}</p>
-          <h3 className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Affecter chaque élève à une seule section', 'Assign each learner to one section')}</h3>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{tr('Les sections sont libres : A, B, C, Sciences 1, Groupe Bleu… Une nouvelle affectation remplace automatiquement l’ancienne.', 'Sections are flexible: A, B, C, Science 1, Blue Group… A new assignment automatically replaces the previous one.')}</p>
+          <h3 className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Sections facultatives selon l’organisation réelle de la classe', 'Optional sections based on the actual class organization')}</h3>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">{tr('Laissez la section vide pour une classe entière. Pour une classe divisée, utilisez A, B, C, Sciences 1, Groupe Bleu… Une nouvelle affectation remplace définitivement l’ancienne.', 'Leave the section empty for a whole class. For a divided class, use A, B, C, Science 1, Blue Group… A new assignment permanently replaces the previous one.')}</p>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="rounded-xl bg-sky-50 px-4 py-3 dark:bg-kcs-blue-950"><strong className="block text-xl dark:text-white">{gradeStudents.length}</strong><span className="text-xs text-slate-500">{tr('élèves', 'learners')}</span></div>
-          <div className="rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-950/30"><strong className="block text-xl text-amber-800 dark:text-amber-200">{unassignedCount}</strong><span className="text-xs text-amber-700 dark:text-amber-300">{tr('non affectés', 'unassigned')}</span></div>
+          <div className="rounded-xl bg-emerald-50 px-4 py-3 dark:bg-emerald-950/30"><strong className="block text-xl text-emerald-800 dark:text-emerald-200">{wholeClassCount}</strong><span className="text-xs text-emerald-700 dark:text-emerald-300">{tr('sans section', 'without section')}</span></div>
         </div>
       </div>
 
@@ -236,7 +235,7 @@ export default function AdministratorMainTeacherWorkspace() {
         </select>
         <select value={sectionFilter} onChange={(event) => { setSectionFilter(event.target.value); setSelectedStudentIds([]) }} className={fieldClass}>
           <option value="ALL">{tr('Toutes les sections', 'All sections')}</option>
-          <option value="UNASSIGNED">{tr('Non affectés seulement', 'Unassigned only')}</option>
+          <option value="UNASSIGNED">{tr('Classe entière · sans section', 'Whole class · no section')}</option>
           {sectionOptions.map((section) => <option key={section} value={section}>{selectedGrade} {section}</option>)}
         </select>
         <label className="relative block"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={query} onChange={(event) => setQuery(event.target.value)} className={fieldClass + ' pl-10'} placeholder={tr('Rechercher par nom, matricule ou section', 'Search by name, number or section')}/></label>
@@ -263,8 +262,8 @@ export default function AdministratorMainTeacherWorkspace() {
           return <article key={student.id} className={'grid gap-3 p-4 md:grid-cols-[auto_minmax(13rem,1.3fr)_minmax(8rem,.6fr)_minmax(12rem,1fr)_auto] md:items-center ' + (selected ? 'bg-sky-50 dark:bg-kcs-blue-800/40' : 'bg-white dark:bg-kcs-blue-950/30')}>
             <button type="button" aria-label={tr('Sélectionner cet élève', 'Select this learner')} onClick={() => setSelectedStudentIds((current) => selected ? current.filter((id) => id !== student.id) : [...current, student.id])} className="text-kcs-blue-700 dark:text-sky-200">{selected ? <CheckSquare size={21}/> : <Square size={21}/>}</button>
             <div><p className="font-bold text-kcs-blue-950 dark:text-white">{personName(student)}</p><p className="text-xs text-slate-500">{student.studentNumber} · {student.grade}</p></div>
-            <span className={'w-fit rounded-full px-3 py-1 text-xs font-bold ' + (student.section ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>{student.section ? `${student.grade} ${student.section}` : tr('Non affecté', 'Unassigned')}</span>
-            <input list="official-section-options" value={sectionDrafts[student.id] ?? ''} onChange={(event) => setSectionDrafts((current) => ({ ...current, [student.id]: event.target.value }))} className={fieldClass} placeholder={tr('Section officielle', 'Official section')}/>
+            <span className={'w-fit rounded-full px-3 py-1 text-xs font-bold ' + (student.section ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800')}>{student.section ? `${student.grade} ${student.section}` : tr('Classe entière', 'Whole class')}</span>
+            <input list="official-section-options" value={sectionDrafts[student.id] ?? ''} onChange={(event) => setSectionDrafts((current) => ({ ...current, [student.id]: event.target.value }))} className={fieldClass} placeholder={tr('Vide = classe entière', 'Empty = whole class')}/>
             <button type="button" disabled={busyKey === 'student:' + student.id || unchanged} onClick={() => void saveStudentSection(student)} className={actionClass}>{busyKey === 'student:' + student.id ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer', 'Save')}</button>
           </article>
         })}
@@ -290,7 +289,10 @@ export default function AdministratorMainTeacherWorkspace() {
             <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'HOMEROOM_TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { status: event.target.checked ? 'HOMEROOM_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-kcs-blue-700"/>Main Teacher</label>
             <label className="flex items-center gap-2 text-sm font-semibold dark:text-white"><input type="checkbox" checked={draft.status === 'ASSISTANT_TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { status: event.target.checked ? 'ASSISTANT_TEACHER' : 'TEACHER' })} className="h-5 w-5 accent-amber-600"/>{tr('Assistant', 'Assistant')}</label>
             <select value={draft.grade} disabled={draft.status === 'TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { grade: event.target.value })} className={fieldClass + ' disabled:opacity-40'}>{SCHOOL_LEVELS.map((level) => <option key={level}>{level}</option>)}</select>
-            <input list="official-section-options" value={draft.section} disabled={draft.status === 'TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { section: event.target.value })} className={fieldClass + ' disabled:opacity-40'} placeholder={tr('A, B, C…', 'A, B, C…')}/>
+            <div>
+              <input list="official-section-options" value={draft.section} disabled={draft.status === 'TEACHER'} onChange={(event) => updateTeacherDraft(teacher.id, { section: event.target.value })} className={fieldClass + ' disabled:opacity-40'} placeholder={tr('Classe entière ou A, B, C…', 'Whole class or A, B, C…')}/>
+              {draft.status !== 'TEACHER' && !draft.section.trim() ? <span className="mt-1 block text-xs font-bold text-emerald-700 dark:text-emerald-300">{tr('Classe entière · aucune section requise', 'Whole class · no section required')}</span> : null}
+            </div>
             <button type="button" disabled={busyKey === 'teacher:' + teacher.id} onClick={() => void saveTeacher(teacher)} className={actionClass}>{busyKey === 'teacher:' + teacher.id ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer', 'Save')}</button>
           </article>
         })}
