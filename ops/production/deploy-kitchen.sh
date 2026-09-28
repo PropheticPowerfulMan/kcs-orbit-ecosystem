@@ -42,7 +42,7 @@ rollback_on_error() {
   trap - ERR
   echo "Kitchen deployment failed; restoring the previous Kitchen images." >&2
   cp -p -- "$env_snapshot" "$ENV_FILE"
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" +    up -d --no-build --no-deps --wait --wait-timeout 300 kitchen_api kitchen_web || true
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --no-deps --wait --wait-timeout 300 kitchen_api kitchen_web || true
   rm -f -- "$env_snapshot" "$services_snapshot"
   exit "$exit_code"
 }
@@ -53,7 +53,7 @@ set_release_key KITCHEN_WEB_RELEASE "$RELEASE"
 chmod 600 "$ENV_FILE"
 
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --quiet
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" +  up -d --no-build --no-deps --wait --wait-timeout 300 kitchen_api kitchen_web
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --no-deps --wait --wait-timeout 300 kitchen_api kitchen_web
 
 for service in kitchen_api kitchen_web; do
   container_id="$(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps -q "$service")"
