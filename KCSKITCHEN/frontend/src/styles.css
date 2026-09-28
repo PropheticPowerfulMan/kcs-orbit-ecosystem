@@ -95,3 +95,118 @@ body[data-theme=dark] .workspace{background-image:linear-gradient(rgba(4,29,50,.
   .login-page{background-image:linear-gradient(180deg,rgba(1,27,48,.86) 0%,rgba(2,43,72,.68) 44%,rgba(226,244,250,.78) 100%),url('/images/kitchen-culinary-hero.jpg');background-position:62% center}
   .workspace{background-attachment:scroll}.page-body{min-height:calc(100vh - 72px)}
 }
+
+/* Kitchen identity: full-bleed culinary canvas, transparent institutional marks and safe collapsed navigation. */
+.login-page{
+  min-height:100svh;
+  grid-template-rows:minmax(0,1fr);
+  overflow:hidden;
+  isolation:isolate;
+  background-image:
+    linear-gradient(90deg,rgba(1,24,43,.9) 0%,rgba(2,47,77,.62) 52%,rgba(4,62,91,.46) 100%),
+    url('/images/kitchen-culinary-hero.jpg');
+}
+.login-brand img{
+  width:min(390px,86%);
+  max-height:128px;
+  padding:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  object-fit:contain;
+  object-position:left center;
+}
+.manager-hint{
+  position:absolute;
+  z-index:4;
+  left:50%;
+  bottom:.7rem;
+  width:min(760px,calc(100% - 2rem));
+  transform:translateX(-50%);
+  margin:0!important;
+  padding:.65rem 1rem;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(2,31,52,.74);
+  color:#e9f8ff!important;
+  box-shadow:0 12px 34px rgba(0,21,37,.2);
+  backdrop-filter:blur(14px);
+}
+.header-logo{
+  width:clamp(155px,15vw,225px);
+  height:58px;
+  padding:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  object-fit:contain;
+  object-position:left center;
+  filter:drop-shadow(0 7px 15px rgba(0,0,0,.2));
+}
+.sidebar-brand{min-width:0}
+.sidebar-brand img{
+  flex:0 0 auto;
+  width:82px;
+  height:46px;
+  padding:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  object-fit:contain;
+  object-position:left center;
+  filter:drop-shadow(0 7px 14px rgba(0,0,0,.2));
+}
+.sidebar-brand div,.identity div{min-width:0;overflow:hidden}
+.sidebar.collapsed .sidebar-brand{justify-content:center;padding-inline:0}
+.sidebar.collapsed .sidebar-brand img{
+  width:50px;
+  height:50px;
+  margin:0;
+  object-fit:cover;
+  object-position:left center;
+}
+.sidebar.collapsed .sidebar-brand div,
+.sidebar.collapsed .identity div,
+.sidebar.collapsed nav span{display:none}
+.sidebar.collapsed .identity{justify-content:center;padding-inline:0}
+.sidebar.collapsed .identity>span{flex-basis:40px;width:40px}
+.catalog-table .table-head,.catalog-table .table-row{grid-template-columns:2fr 1fr 1fr 1fr .8fr 1.25fr}
+.catalog-delete,.danger-action{color:#a52235;border-color:#f0aab3;background:#fff1f3}
+.catalog-delete{width:max-content;padding:.5rem .65rem;font-size:.65rem}
+.danger-action:hover,.catalog-delete:hover{border-color:#d84f5f;background:#ffe2e6}
+.delete-confirmation{display:grid;gap:.8rem;text-align:center;justify-items:center;padding:.5rem}
+.delete-confirmation h2{margin:0}.delete-confirmation p{max-width:460px;margin:0}
+.delete-confirmation-icon{width:58px;height:58px;display:grid;place-items:center;border-radius:18px;background:#ffe8eb;color:#c43245}
+.delete-confirmation .button-row{width:100%;justify-content:center;margin-top:.4rem}
+.button-spinner{width:17px;height:17px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+.qty button,
+.qty button:hover,
+.qty button:active{
+  transform:none;
+  box-shadow:none;
+  transition:none;
+}
+
+@media(max-width:900px){
+  .login-page{
+    overflow:auto;
+    background-image:
+      linear-gradient(180deg,rgba(1,27,48,.88) 0%,rgba(2,43,72,.6) 48%,rgba(5,66,96,.54) 100%),
+      url('/images/kitchen-culinary-hero.jpg');
+    background-position:62% center;
+  }
+  .login-card{margin-bottom:4.5rem}
+  .manager-hint{position:absolute;bottom:.65rem}
+  .sidebar.collapsed .sidebar-brand div,
+  .sidebar.collapsed .identity div{display:grid}
+  .sidebar.collapsed nav span{display:inline}
+  .sidebar.collapsed .sidebar-brand{justify-content:flex-start;padding:.35rem .2rem 1rem}
+  .sidebar.collapsed .sidebar-brand img{width:82px;height:46px;object-fit:contain}
+  .sidebar.collapsed .identity{justify-content:flex-start;padding:1.1rem .2rem}
+  .header-logo{width:132px;height:44px;padding:0}
+}
+@media(max-width:520px){
+  .login-brand img{width:min(320px,92%);padding:0;background:transparent}
+  .manager-hint{font-size:.64rem!important}
+  .workspace>header .header-logo{width:48px;height:48px;padding:0;background:transparent;object-fit:cover;object-position:left center}
+  .catalog-delete{width:100%}
+}

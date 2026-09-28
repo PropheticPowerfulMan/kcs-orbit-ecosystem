@@ -170,9 +170,11 @@ model Product {
   transactionItems KitchenTransactionItem[]
   stockMovements StockMovement[]
   purchaseItems KitchenPurchaseItem[]
+  archivedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([category, isAvailable])
+  @@index([archivedAt, category, isAvailable])
 }
 
 model Supplier {

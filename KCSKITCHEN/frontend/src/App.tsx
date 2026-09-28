@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import {
   AlertTriangle, Archive, BarChart3, ChefHat, ClipboardList, CreditCard, Languages,
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
-  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Users, Wallet, X
+  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X
 } from 'lucide-react'
 import { api, dateTime, getToken, money, setToken } from './api'
 import type { Person, Product, Role, Transaction, User } from './types'
@@ -26,7 +26,10 @@ const text = {
     addProduct: 'Ajouter un produit', save: 'Enregistrer', available: 'Disponible', price: 'Prix',
     quantity: 'Quantité', history: 'Historique vérifiable', receipt: 'Reçu', print: 'Imprimer / PDF',
     close: 'Fermer', search: 'Rechercher', role: 'Rôle', active: 'Actif', creditAllowed: 'Crédit autorisé',
-    success: 'Opération réussie', error: 'L’opération a échoué', refresh: 'Actualiser'
+    success: 'Opération réussie', error: 'L’opération a échoué', refresh: 'Actualiser',
+    deleteProduct: 'Retirer du catalogue', deleteProductTitle: 'Retirer ce produit du catalogue ?',
+    deleteProductHelp: 'Le produit ne sera plus proposé dans KCS Kitchen. Son historique de ventes et de stock restera intact et vérifiable.',
+    cancel: 'Annuler', productRemoved: 'Le produit a été retiré du catalogue avec succès.', actions: 'Actions'
   },
   en: {
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
@@ -42,7 +45,10 @@ const text = {
     addProduct: 'Add product', save: 'Save', available: 'Available', price: 'Price',
     quantity: 'Quantity', history: 'Verifiable history', receipt: 'Receipt', print: 'Print / PDF',
     close: 'Close', search: 'Search', role: 'Role', active: 'Active', creditAllowed: 'Credit enabled',
-    success: 'Operation completed', error: 'Operation failed', refresh: 'Refresh'
+    success: 'Operation completed', error: 'Operation failed', refresh: 'Refresh',
+    deleteProduct: 'Remove from catalog', deleteProductTitle: 'Remove this product from the catalog?',
+    deleteProductHelp: 'The product will no longer be offered in KCS Kitchen. Its sales and inventory history will remain intact and auditable.',
+    cancel: 'Cancel', productRemoved: 'The product was successfully removed from the catalog.', actions: 'Actions'
   }
 }
 
@@ -133,9 +139,9 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   ]
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
-      <div className="sidebar-brand"><img src="./images/kcs-seal.svg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
+      <div className="sidebar-brand"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
       <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{user.role.replaceAll('_', ' ')}</small></div></div>
-      <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
+      <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
         <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages /> {lang.toUpperCase()}</button>
         <button onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />} {dark ? 'Light' : 'Dark'}</button>
@@ -261,6 +267,8 @@ function PointOfSale({ t }: { t: Record<string, string> }) {
 function Catalog({ canEdit, t }: { canEdit: boolean; t: Record<string, string> }) {
   const [products, setProducts] = useState<Product[]>([])
   const [show, setShow] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<Product | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const load = () => api<{ products: Product[] }>('/products?all=true').then(result => setProducts(result.products))
   useEffect(() => { load() }, [])
@@ -275,11 +283,26 @@ function Catalog({ canEdit, t }: { canEdit: boolean; t: Record<string, string> }
       setShow(false); load(); setNotice({ type: 'success', message: t.success })
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
   }
+  async function removeProduct() {
+    if (!pendingDelete || deleting) return
+    setDeleting(true)
+    try {
+      await api('/products/' + encodeURIComponent(pendingDelete.id), { method: 'DELETE' })
+      setPendingDelete(null)
+      await load()
+      setNotice({ type: 'success', message: t.productRemoved })
+    } catch (err) {
+      setNotice({ type: 'error', message: (err as Error).message })
+    } finally {
+      setDeleting(false)
+    }
+  }
   return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">LIVE CATALOG</span><h2>{t.catalog}</h2></div>{canEdit && <button className="primary" onClick={() => setShow(true)}><Plus />{t.addProduct}</button>}</div>
-    <div className="data-table catalog-table"><div className="table-head"><span>Product</span><span>Category</span><span>{t.price}</span><span>Stock</span><span>Status</span></div>
-      {products.map(product => <div className="table-row" key={product.id}><span data-label="Product"><b>{product.name}</b><small>{product.description}</small></span><span data-label="Category">{product.category}</span><span data-label={t.price}><b>{money(product.currentPrice, product.currency)}</b></span><span data-label="Stock">{product.trackInventory ? product.stockQuantity + ' ' + product.unit : '—'}</span><span data-label="Status"><em className={product.isAvailable ? 'badge good' : 'badge'}>{product.isAvailable ? t.available : 'Disabled'}</em></span></div>)}
+    <div className="data-table catalog-table"><div className="table-head"><span>Product</span><span>Category</span><span>{t.price}</span><span>Stock</span><span>Status</span><span>{t.actions}</span></div>
+      {products.map(product => <div className="table-row" key={product.id}><span data-label="Product"><b>{product.name}</b><small>{product.description}</small></span><span data-label="Category">{product.category}</span><span data-label={t.price}><b>{money(product.currentPrice, product.currency)}</b></span><span data-label="Stock">{product.trackInventory ? product.stockQuantity + ' ' + product.unit : '—'}</span><span data-label="Status"><em className={product.isAvailable ? 'badge good' : 'badge'}>{product.isAvailable ? t.available : 'Disabled'}</em></span><span data-label={t.actions}>{canEdit ? <button className="catalog-delete" onClick={() => setPendingDelete(product)}><Trash2 />{t.deleteProduct}</button> : '—'}</span></div>)}
     </div></section>
     {show && <Modal onClose={() => setShow(false)}><form className="modal-form" onSubmit={save}><span className="eyebrow">CATALOG</span><h2>{t.addProduct}</h2><label>Name<input name="name" required /></label><div className="form-grid"><label>Category<select name="category"><option>FOOD</option><option>DRINK</option><option>SNACK</option><option>DESSERT</option><option>OTHER</option></select></label><label>{t.price}<input name="price" type="number" min="0" required /></label><label>Unit<select name="unit"><option>UNIT</option><option>BOTTLE</option><option>CAN</option><option>KG</option><option>LITER</option><option>PORTION</option></select></label><label>Opening stock<input name="stock" type="number" min="0" defaultValue="0" /></label><label>Reorder level<input name="reorder" type="number" min="0" defaultValue="0" /></label></div><label className="check"><input name="track" type="checkbox" /> Track inventory</label><button className="primary large">{t.save}</button></form></Modal>}
+    {pendingDelete && <Modal onClose={() => !deleting && setPendingDelete(null)}><div className="delete-confirmation"><span className="delete-confirmation-icon"><Trash2 /></span><span className="eyebrow">KCS KITCHEN · CATALOG</span><h2>{t.deleteProductTitle}</h2><strong>{pendingDelete.name}</strong><p>{t.deleteProductHelp}</p><div className="button-row"><button onClick={() => setPendingDelete(null)} disabled={deleting}>{t.cancel}</button><button className="danger-action" onClick={removeProduct} disabled={deleting}>{deleting ? <span className="button-spinner" /> : <Trash2 />}{t.deleteProduct}</button></div></div></Modal>}
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 

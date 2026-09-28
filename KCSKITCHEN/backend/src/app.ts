@@ -137,7 +137,10 @@ const productSchema = z.object({
 
 app.get('/api/products', authenticate, asyncRoute(async (req, res) => {
   const products = await prisma.product.findMany({
-    where: req.query.all === 'true' ? {} : { isAvailable: true },
+    where: {
+      archivedAt: null,
+      ...(req.query.all === 'true' ? {} : { isAvailable: true })
+    },
     orderBy: [{ category: 'asc' }, { name: 'asc' }]
   })
   res.json({ products })
@@ -159,7 +162,7 @@ app.post('/api/products', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async
 
 app.put('/api/products/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
   const data = productSchema.partial().parse(req.body)
-  const old = await prisma.product.findUniqueOrThrow({ where: { id: routeParam(req, 'id') } })
+  const old = await prisma.product.findFirstOrThrow({ where: { id: routeParam(req, 'id'), archivedAt: null } })
   const priceChanged = data.currentPrice != null && Number(old.currentPrice) !== data.currentPrice
   const product = await prisma.product.update({ where: { id: old.id }, data: {
     ...data,
@@ -171,6 +174,25 @@ app.put('/api/products/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(as
   } })
   await audit(req, priceChanged ? 'PRICE_CHANGED' : 'PRODUCT_UPDATED', 'Product', product.id, old, product, req.body.reason)
   res.json({ product })
+}))
+
+app.delete('/api/products/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = routeParam(req, 'id')
+  const old = await prisma.product.findFirstOrThrow({ where: { id, archivedAt: null } })
+  const product = await prisma.product.update({
+    where: { id },
+    data: { isAvailable: false, archivedAt: new Date() }
+  })
+  await audit(
+    req,
+    'PRODUCT_REMOVED_FROM_CATALOG',
+    'Product',
+    product.id,
+    old,
+    product,
+    'Soft removal: financial, sales and inventory history preserved'
+  )
+  res.json({ product, message: 'Product removed from the active catalog' })
 }))
 
 app.get('/api/discount-rules', authenticate, asyncRoute(async (_req, res) => {
