@@ -75,6 +75,13 @@ const generateCourseAbbreviation = (name: string) => {
   return words.map((word) => word[0]).join('').slice(0, 8)
 }
 
+const COURSE_SCOPE_CUSTOM = '[KCS_SCOPE:CUSTOM]'
+const COURSE_SCOPE_CLASS = '[KCS_SCOPE:CLASS]'
+
+const courseScopeDescription = (name: string, scope: 'class' | 'custom', className: string) => (
+  `${name} · ${scope === 'custom' ? 'Multi-class custom roster' : className} · synchronized from Teacher My Courses ${scope === 'custom' ? COURSE_SCOPE_CUSTOM : COURSE_SCOPE_CLASS}`
+)
+
 type TeacherReportPeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Annual'
 
 const localDateKey = (value: Date) => [
@@ -363,7 +370,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     room: '',
     gradeLevels: [] as string[],
     studentId: '',
+    enrollmentMode: 'class' as 'class' | 'custom',
   })
+  const [courseAbbreviationManual, setCourseAbbreviationManual] = useState(false)
   const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string }>({})
   const courseNameRef = useRef<HTMLInputElement>(null)
   const courseGradeRef = useRef<HTMLDivElement>(null)
@@ -499,19 +508,26 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           && ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(overview.scope?.roleStatus),
         )
         const supportStudents = hasHomeroomScope ? homeroomStudents : scopedStudents
-        const officialCourses = (overview.courses ?? []).map((course: any) => ({
-          id: course.id,
-          name: course.name,
-          className: canonicalClassLabel(course.grade),
-          room: course.schedules?.[0]?.room ?? '—',
-          teacher: 'Assigned teacher',
-          abbreviation: course.code,
-          creditHours: course.credits ?? 1,
-          gradeLevels: [canonicalClassLabel(course.grade)],
-          studentIds: (course.enrollments ?? []).map((enrollment: any) => enrollment.studentId),
-          enrollmentMode: 'official',
-          status: 'active',
-        }))
+        const officialCourses = (overview.courses ?? []).map((course: any) => {
+          const customRoster = String(course.description ?? '').includes(COURSE_SCOPE_CUSTOM) || String(course.grade ?? '').toLowerCase() === 'multi-class'
+          const enrolledClasses = Array.from(new Set<string>((course.enrollments ?? []).map((enrollment: any) => (
+            canonicalClassLabel(enrollment.student?.grade, enrollment.student?.section)
+          )).filter(Boolean))).sort(compareClassLabels)
+          const officialClass = canonicalClassLabel(course.grade)
+          return {
+            id: course.id,
+            name: course.name,
+            className: customRoster ? 'Multi-class' : officialClass,
+            room: course.schedules?.[0]?.room ?? '—',
+            teacher: 'Assigned teacher',
+            abbreviation: course.code,
+            creditHours: course.credits ?? 1,
+            gradeLevels: customRoster ? enrolledClasses : [officialClass],
+            studentIds: (course.enrollments ?? []).map((enrollment: any) => enrollment.studentId),
+            enrollmentMode: customRoster ? 'custom' : 'class',
+            status: 'active',
+          }
+        })
         if (!active) return
         setSuperAdminStudentPool(registryStudents)
         setSupportStudentPool(supportStudents)
@@ -865,7 +881,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       room: '',
       gradeLevels: [] as string[],
       studentId: firstStudentId,
+      enrollmentMode: 'class' as 'class' | 'custom',
     })
+    setCourseAbbreviationManual(false)
   }
 
   const generateReportCard = async () => {
@@ -898,10 +916,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const createCourse = async () => {
     if (courseSaving) return
-    const selectedGrade = canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
+    const customRoster = courseDraft.enrollmentMode === 'custom'
+    const selectedGrade = customRoster ? 'Multi-class' : canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
     const errors: { name?: string; grade?: string } = {}
     if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
-    if (!courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
+    if (!customRoster && !courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
     if (errors.name || errors.grade) {
       setCourseErrors(errors)
       window.requestAnimationFrame(() => errors.name ? courseNameRef.current?.focus() : courseGradeRef.current?.focus())
@@ -914,19 +933,24 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       return
     }
     setCourseSaving(true)
-    const roster = getRosterForClass(courseDraft.className || selectedGrade)
+    const roster = customRoster
+      ? superAdminStudentPool.filter((student) => existingCourse?.studentIds.includes(student.id))
+      : getRosterForClass(courseDraft.className || selectedGrade)
+    const abbreviation = courseDraft.abbreviation.trim().toUpperCase() || generateCourseAbbreviation(courseDraft.name)
     let nextCourse = {
       ...(existingCourse ?? {}),
       id: existingCourse?.id ?? `course-${Date.now()}`,
       name: courseDraft.name.trim(),
-      abbreviation: generateCourseAbbreviation(courseDraft.name),
+      abbreviation,
       creditHours: normalizeCreditHours(courseDraft.creditHours),
       teacher: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Teacher',
       className: selectedGrade,
       room: courseDraft.room.trim(),
-      gradeLevels: [selectedGrade],
+      gradeLevels: customRoster
+        ? Array.from(new Set(roster.map((student) => canonicalClassLabel(student.grade, student.section)))).sort(compareClassLabels)
+        : [selectedGrade],
       studentIds: roster.map((student) => student.id),
-      enrollmentMode: 'class',
+      enrollmentMode: customRoster ? 'custom' : 'class',
       status: existingCourse ? 'updated' : 'draft',
     }
     try {
@@ -934,7 +958,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         id: nextCourse.id,
         name: nextCourse.name,
         abbreviation: nextCourse.abbreviation,
-        description: `${nextCourse.name} · ${selectedGrade} · synchronized from Teacher My Courses`,
+        description: courseScopeDescription(nextCourse.name, customRoster ? 'custom' : 'class', selectedGrade),
         grade: selectedGrade,
         credits: nextCourse.creditHours,
         room: nextCourse.room,
@@ -953,13 +977,23 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       : [nextCourse, ...courses]
     const existingIds = new Set(teacherStudents.map((student) => student.id))
     const nextStudents = [...roster.filter((student) => !existingIds.has(student.id)), ...teacherStudents]
-    const persisted = await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) enrolled.`)
+    const persisted = await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, customRoster
+      ? `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} as a multi-class course; ${roster.length} selected student(s) retained.`
+      : `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) enrolled.`)
     setCourseSaving(false)
     if (!persisted) return
     setCourses(nextCourses)
     setTeacherStudents(nextStudents)
     setSelectedGradebookCourseId(nextCourse.id)
     resetCourseDraft()
+    if (customRoster && !existingCourse) {
+      setEnrollmentDialogCourseId(nextCourse.id)
+      setEnrollmentDraftIds([])
+      setEnrollmentQuery('')
+      setEnrollmentClassFilter('All classes')
+      setEnrollmentStatusFilter('all')
+      setEnrollmentAutoSync(false)
+    }
   }
 
   const editCourse = (courseId: string) => {
@@ -972,9 +1006,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       creditHours: String(normalizeCreditHours(course.creditHours)),
       className: canonicalClassLabel(course.className || course.gradeLevels[0]),
       room: course.room,
-      gradeLevels: [canonicalClassLabel(course.className || course.gradeLevels[0])],
+      gradeLevels: course.enrollmentMode === 'custom' ? course.gradeLevels : [canonicalClassLabel(course.className || course.gradeLevels[0])],
       studentId: course.studentIds[0] ?? superAdminStudentPool[0]?.id ?? '',
+      enrollmentMode: course.enrollmentMode === 'custom' ? 'custom' : 'class',
     })
+    setCourseAbbreviationManual(true)
     runAction(`${course.name} loaded for editing.`)
   }
 
@@ -1049,6 +1085,24 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       return classDifference || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
     })
   }, [supportStudentPool, teacherStudents])
+  const enrollmentStudentCatalog = useMemo(() => {
+    const assignedById = new Map(teacherStudents.map((student) => [student.id, student]))
+    const assignedByNumber = new Map(teacherStudents
+      .filter((student) => student.studentNumber?.trim())
+      .map((student) => [student.studentNumber!.trim().toLowerCase(), student]))
+
+    return superAdminStudentPool.map((officialStudent) => {
+      const assignedStudent = assignedById.get(officialStudent.id)
+        ?? (officialStudent.studentNumber ? assignedByNumber.get(officialStudent.studentNumber.trim().toLowerCase()) : undefined)
+      return assignedStudent ? { ...officialStudent, ...assignedStudent, id: officialStudent.id } : officialStudent
+    }).sort((left, right) => {
+      const classDifference = compareClassLabels(
+        canonicalClassLabel(left.grade, left.section),
+        canonicalClassLabel(right.grade, right.section),
+      )
+      return classDifference || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
+    })
+  }, [superAdminStudentPool, teacherStudents])
   const studentClassOptions = useMemo(() => Array.from(new Set(
     officialStudentCatalog.map((student) => canonicalClassLabel(student.grade, student.section)),
   )).filter((className) => gradeOptions.includes(className)).sort(compareClassLabels), [officialStudentCatalog])
@@ -1070,7 +1124,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }, [officialStudentCatalog, studentClassFilter, studentQuery])
   const visibleEnrollmentStudents = useMemo(() => {
     const query = enrollmentQuery.trim().toLowerCase()
-    return officialStudentCatalog.filter((student) => {
+    return enrollmentStudentCatalog.filter((student) => {
       const className = canonicalClassLabel(student.grade, student.section)
       const selected = enrollmentDraftIds.includes(student.id)
       const matchesClass = enrollmentClassFilter === 'All classes' || className === enrollmentClassFilter
@@ -1080,7 +1134,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       const searchable = `${student.name} ${student.studentNumber ?? ''} ${className}`.toLowerCase()
       return matchesClass && matchesStatus && (!query || searchable.includes(query))
     })
-  }, [enrollmentClassFilter, enrollmentDraftIds, enrollmentQuery, enrollmentStatusFilter, officialStudentCatalog])
+  }, [enrollmentClassFilter, enrollmentDraftIds, enrollmentQuery, enrollmentStatusFilter, enrollmentStudentCatalog])
   const visibleEnrollmentGroups = useMemo(() => {
     const groups = new Map<string, RegistryStudent[]>()
     visibleEnrollmentStudents.forEach((student) => {
@@ -1097,7 +1151,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setEnrollmentDialogCourseId(courseId)
     setEnrollmentDraftIds([...course.studentIds])
     setEnrollmentQuery('')
-    setEnrollmentClassFilter(canonicalClassLabel(course.className || course.gradeLevels[0]))
+    setEnrollmentClassFilter(course.enrollmentMode === 'custom' ? 'All classes' : canonicalClassLabel(course.className || course.gradeLevels[0]))
     setEnrollmentStatusFilter('all')
     setEnrollmentAutoSync(course.enrollmentMode !== 'custom')
   }
@@ -1133,23 +1187,33 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (!enrollmentDialogCourse) return
     setEnrollmentSaving(true)
     const selectedIds = new Set(enrollmentDraftIds)
-    const nextCourses = courses.map((course) => course.id === enrollmentDialogCourse.id
-      ? { ...course, studentIds: [...selectedIds], enrollmentMode: enrollmentAutoSync ? 'class' : 'custom' }
-      : course)
+    const nextMode = enrollmentAutoSync ? 'class' : 'custom'
+    const selectedRoster = enrollmentStudentCatalog.filter((student) => selectedIds.has(student.id))
+    const nextGradeLevels = nextMode === 'custom'
+      ? Array.from(new Set(selectedRoster.map((student) => canonicalClassLabel(student.grade, student.section)))).sort(compareClassLabels)
+      : enrollmentDialogCourse.gradeLevels
+    const updatedCourse = {
+      ...enrollmentDialogCourse,
+      className: nextMode === 'custom' ? 'Multi-class' : enrollmentDialogCourse.className,
+      gradeLevels: nextGradeLevels,
+      studentIds: [...selectedIds],
+      enrollmentMode: nextMode,
+    }
+    const nextCourses = courses.map((course) => course.id === enrollmentDialogCourse.id ? updatedCourse : course)
     const existingIds = new Set(teacherStudents.map((student) => student.id))
-    const selectedStudents = superAdminStudentPool.filter((student) => selectedIds.has(student.id) && !existingIds.has(student.id))
+    const selectedStudents = selectedRoster.filter((student) => !existingIds.has(student.id))
     const nextStudents = [...selectedStudents, ...teacherStudents]
     try {
       await teacherWorkspaceAPI.syncCourse({
         id: enrollmentDialogCourse.id,
         name: enrollmentDialogCourse.name,
         abbreviation: enrollmentDialogCourse.abbreviation,
-        description: `${enrollmentDialogCourse.name} · ${enrollmentDialogCourse.className} · synchronized from Subject Enrollment`,
-        grade: canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0]),
+        description: courseScopeDescription(updatedCourse.name, nextMode, updatedCourse.className),
+        grade: nextMode === 'custom' ? 'Multi-class' : canonicalClassLabel(updatedCourse.className || updatedCourse.gradeLevels[0]),
         credits: normalizeCreditHours(enrollmentDialogCourse.creditHours),
         room: enrollmentDialogCourse.room,
         studentIds: [...selectedIds],
-        studentNumbers: superAdminStudentPool.filter((student) => selectedIds.has(student.id)).map((student) => student.studentNumber).filter(Boolean),
+        studentNumbers: selectedRoster.map((student) => student.studentNumber).filter(Boolean),
       })
     } catch (error: any) {
       setEnrollmentSaving(false)
@@ -1174,8 +1238,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const nextIds = enrolled
       ? course.studentIds.filter((id: string) => id !== student.id)
       : [...course.studentIds, student.id]
+    const selectedRoster = enrollmentStudentCatalog.filter((candidate) => nextIds.includes(candidate.id))
+    const nextGradeLevels = Array.from(new Set(selectedRoster.map((candidate) => canonicalClassLabel(candidate.grade, candidate.section)))).sort(compareClassLabels)
     const nextCourses = courses.map((item) => item.id === courseId
-      ? { ...item, studentIds: nextIds, enrollmentMode: 'custom' }
+      ? { ...item, className: 'Multi-class', gradeLevels: nextGradeLevels, studentIds: nextIds, enrollmentMode: 'custom' }
       : item)
     const nextStudents = !enrolled && !teacherStudents.some((item) => item.id === student.id)
       ? [student, ...teacherStudents]
@@ -1185,12 +1251,12 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         id: course.id,
         name: course.name,
         abbreviation: course.abbreviation,
-        description: `${course.name} · ${course.className} · synchronized from Subject Enrollment`,
-        grade: canonicalClassLabel(course.className || course.gradeLevels[0]),
+        description: courseScopeDescription(course.name, 'custom', 'Multi-class'),
+        grade: 'Multi-class',
         credits: normalizeCreditHours(course.creditHours),
         room: course.room,
         studentIds: nextIds,
-        studentNumbers: superAdminStudentPool.filter((candidate) => nextIds.includes(candidate.id)).map((candidate) => candidate.studentNumber).filter(Boolean),
+        studentNumbers: selectedRoster.map((candidate) => candidate.studentNumber).filter(Boolean),
       })
     } catch (error: any) {
       runAction(error?.response?.data?.message || 'The official subject enrollment could not be synchronized.', true)
@@ -1464,19 +1530,19 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             {courseTab === 'setup' && (
               <div className="grid gap-6 p-5 xl:grid-cols-[0.8fr_1.2fr]">
                 <div className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? 'Edit class' : 'Create a class'}</h4>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Fill in the fields below. Grades can be selected in bulk like a school SIS.</p>
+                  <h4 className="font-bold text-kcs-blue-900 dark:text-white">{editingCourseId ? 'Edit course' : 'Create a course'}</h4>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Use one official class or build a custom roster with learners from several classes.</p>
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                       Subject name
-                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => { const name = event.target.value; setCourseDraft((draft) => ({ ...draft, name, abbreviation: generateCourseAbbreviation(name) })); if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined })) }} />
+                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => { const name = event.target.value; setCourseDraft((draft) => ({ ...draft, name, abbreviation: courseAbbreviationManual ? draft.abbreviation : generateCourseAbbreviation(name) })); if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined })) }} />
                       {courseErrors.name && <p className="field-error" role="alert">{courseErrors.name}</p>}
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Abbreviation
-                        <input className={`${inputClass} cursor-not-allowed bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-950/70`} value={courseDraft.abbreviation} readOnly aria-readonly="true" />
-                        <span className="text-[11px] font-normal text-gray-400">{tr('G�n�r�e automatiquement depuis le nom du cours.', 'Generated automatically from the subject name.')}</span>
+                        <input className={`${inputClass} bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-950/70`} value={courseDraft.abbreviation} maxLength={30} onChange={(event) => { setCourseAbbreviationManual(true); const abbreviation = event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 30); setCourseDraft((draft) => ({ ...draft, abbreviation })) }} />
+                        <span className="flex items-center justify-between gap-2 text-[11px] font-normal text-gray-400"><span>{tr('Générée automatiquement, puis modifiable librement.', 'Generated automatically, then freely editable.')}</span><button type="button" className="font-bold text-kcs-blue-700 hover:underline dark:text-kcs-gold-300" onClick={() => { setCourseAbbreviationManual(false); setCourseDraft((draft) => ({ ...draft, abbreviation: generateCourseAbbreviation(draft.name) })) }}>{tr('Régénérer', 'Regenerate')}</button></span>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Credit Hours
@@ -1494,18 +1560,28 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         />
                       </label>
                     </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button type="button" onClick={() => setCourseDraft((draft) => ({ ...draft, enrollmentMode: 'class' }))} className={`rounded-xl border p-3 text-left transition ${courseDraft.enrollmentMode === 'class' ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900/60' : 'border-gray-200 bg-white hover:border-kcs-blue-300 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40'}`}>
+                        <span className="block text-sm font-bold text-kcs-blue-900 dark:text-white">{tr('Classe officielle', 'Official class')}</span>
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-300">{tr('Inscription automatique de toute une classe ou section.', 'Automatically enroll one complete class or section.')}</span>
+                      </button>
+                      <button type="button" onClick={() => { setCourseDraft((draft) => ({ ...draft, enrollmentMode: 'custom', className: '', gradeLevels: [] })); setCourseErrors((current) => ({ ...current, grade: undefined })) }} className={`rounded-xl border p-3 text-left transition ${courseDraft.enrollmentMode === 'custom' ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900/60' : 'border-gray-200 bg-white hover:border-kcs-blue-300 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40'}`}>
+                        <span className="block text-sm font-bold text-kcs-blue-900 dark:text-white">{tr('Groupe multi-classes', 'Multi-class group')}</span>
+                        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-300">{tr('Sélection manuelle des élèves de plusieurs classes.', 'Select learners manually across several classes.')}</span>
+                      </button>
+                    </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Room
                         <input className={inputClass} value={courseDraft.room} onChange={(event) => setCourseDraft((draft) => ({ ...draft, room: event.target.value }))} />
                       </label>
                       <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-gray-600 dark:bg-kcs-blue-950/40 dark:text-gray-300">
-                        Auto enrollment
-                        <p className="mt-1 text-lg font-bold text-kcs-blue-900 dark:text-white">{getRosterForClass(courseDraft.className || courseDraft.gradeLevels[0]).length}</p>
-                        <p className="font-normal text-gray-400">official student(s) in selected class</p>
+                        {courseDraft.enrollmentMode === 'custom' ? tr('Sélection personnalisée', 'Custom selection') : 'Auto enrollment'}
+                        <p className="mt-1 text-lg font-bold text-kcs-blue-900 dark:text-white">{courseDraft.enrollmentMode === 'custom' ? (editingCourseId ? courses.find((course) => course.id === editingCourseId)?.studentIds.length ?? 0 : 0) : getRosterForClass(courseDraft.className || courseDraft.gradeLevels[0]).length}</p>
+                        <p className="font-normal text-gray-400">{courseDraft.enrollmentMode === 'custom' ? tr('La fenêtre de sélection s’ouvrira après la création.', 'The roster manager opens after creation.') : 'official student(s) in selected class'}</p>
                       </div>
                     </div>
-                    <div>
+                    {courseDraft.enrollmentMode === 'class' && <div>
                       <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Which class do you teach the subject for?</p>
                       <div ref={courseGradeRef} tabIndex={-1} aria-invalid={Boolean(courseErrors.grade)} className={courseErrors.grade ? "mt-2 rounded-xl border border-red-500 bg-white p-3 ring-2 ring-red-100 dark:bg-kcs-blue-950/30" : "mt-2 rounded-xl border border-gray-100 bg-white p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/30"}>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
@@ -1518,9 +1594,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         </div>
                       </div>
                       {courseErrors.grade && <p className="field-error mt-1" role="alert">{courseErrors.grade}</p>}
-                    </div>
+                    </div>}
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? 'Saving securely…' : editingCourseId ? 'Save class' : 'Create a class'}</button>
+                      <button type="button" disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? 'Saving securely…' : editingCourseId ? 'Save course' : 'Create course'}</button>
                       {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>
@@ -1590,7 +1666,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <div>
                         <p className="text-xs font-semibold uppercase text-kcs-blue-500">Selected subject enrollment</p>
                         <h4 className="font-bold text-kcs-blue-900 dark:text-white">{selectedEnrollmentCourse.name}</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-300">{selectedEnrollmentCourse.gradeLevels.join(', ')} - {selectedEnrollmentCourse.studentIds.length} enrolled - {superAdminStudentPool.length - selectedEnrollmentCourse.studentIds.length} available</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">{selectedEnrollmentCourse.gradeLevels.join(', ') || tr('Groupe multi-classes', 'Multi-class group')} - {selectedEnrollmentCourse.studentIds.length} enrolled - {enrollmentStudentCatalog.length - selectedEnrollmentCourse.studentIds.length} available</p>
                       </div>
                       <button onClick={() => openCourseEnrollment(selectedEnrollmentCourse.id)} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
                         Manage selected roster
@@ -1612,7 +1688,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <button type="button" onClick={(event) => { event.stopPropagation(); editCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-kcs-gold-100 px-3 py-1 text-xs font-bold text-kcs-blue-800">Modify subject</button>
                       <button type="button" onClick={(event) => { event.stopPropagation(); deleteCourse(subject.id); setCourseTab('setup') }} className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700">Delete subject</button>
                       <button type="button" onClick={(event) => { event.stopPropagation(); openCourseEnrollment(subject.id) }} className="rounded-full bg-kcs-blue-700 px-3 py-1 text-xs font-bold text-white hover:bg-kcs-blue-800 dark:bg-kcs-gold-400 dark:text-kcs-blue-950">Manage roster</button>
-                      {superAdminStudentPool.map((student) => {
+                      {enrollmentStudentCatalog.map((student) => {
                         const enrolled = subject.studentIds.includes(student.id)
                         return (
                           <button
@@ -1652,7 +1728,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <p className="mt-1 text-sm text-blue-100">
                   {canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0])}
                   {' · '}{enrollmentDraftIds.length} enrolled
-                  {' · '}{superAdminStudentPool.length} active students in the school
+                  {' · '}{enrollmentStudentCatalog.length} active students in the school
                 </p>
               </div>
               <button

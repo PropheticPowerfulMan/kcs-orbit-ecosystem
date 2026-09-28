@@ -110,7 +110,12 @@ const mergeStudentDirectory = (...groups: any[][]) => {
     const keys = studentIdentityKeys(student)
     const existing = keys.map((key) => identities.get(key)).find(Boolean)
     if (existing) {
+      // The first group is the authoritative Nexus registry. Orbit may enrich
+      // the class and identity data, but it must never replace the local
+      // StudentProfile id used by Enrollment foreign keys.
+      const nexusStudentProfileId = existing.id
       Object.assign(existing, student)
+      existing.id = nexusStudentProfileId
       keys.forEach((key) => identities.set(key, existing))
       continue
     }
@@ -369,9 +374,11 @@ teachersRouter.put('/me/courses/sync', authenticate, requireRoles('teacher'), as
   const codeBase = (payload.abbreviation || payload.name)
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toUpperCase().slice(0, 18) || 'COURSE'
   const classCode = payload.grade.replace(/[^a-z0-9]+/gi, '').toUpperCase().slice(0, 10)
-  let code = existing?.code ?? `${codeBase}-${classCode}`
+  // The teacher-facing abbreviation is editable. Keep the requested value as
+  // the canonical course code and add a class/id suffix only on a real collision.
+  let code = codeBase
   const collision = await prisma.course.findFirst({ where: { code, id: { not: existing?.id ?? payload.id } }, select: { id: true } })
-  if (collision) code = `${codeBase}-${classCode}-${payload.id.slice(-6).toUpperCase()}`
+  if (collision) code = `${codeBase}-${classCode || 'CUSTOM'}-${payload.id.slice(-6).toUpperCase()}`
   const isSubmissionPreflight = payload.description?.includes('verified before') === true
   const course = await prisma.$transaction(async (tx) => {
     const saved = existing
