@@ -1,5 +1,5 @@
 export type Role = 'KITCHEN_ADMIN' | 'CASHIER' | 'FINANCE' | 'AUDITOR' | 'TEACHER' | 'STAFF' | 'STUDENT'
 export type User = { userId: string; orbitPersonId: string; fullName: string; email: string | null; personType: string; role: Role }
-export type Product = { id: string; name: string; description?: string; category: string; currentPrice: string; currency: string; isAvailable: boolean; trackInventory: boolean; stockQuantity: string; unit: string; reorderLevel: string }
+export type Product = { id: string; name: string; description?: string; category: string; currentPrice: string; currency: string; photoUrl?: string | null; isAvailable: boolean; trackInventory: boolean; stockQuantity: string; unit: string; minimumStock: string; reorderLevel: string }
 export type Person = { id: string; displayId?: string; fullName: string; email?: string; phone?: string; kind: string; className?: string }
 export type Transaction = { id: string; transactionNumber: string; orbitPersonId: string; personNameSnapshot: string; cashierNameSnapshot: string; subtotal: string; discount: string; total: string; paymentMode: string; paymentStatus: string; status: string; createdAt: string; items: Array<{ id: string; productNameSnapshot: string; quantity: string; unitPriceAtPurchase: string; subtotal: string }>; disputes?: unknown[] }

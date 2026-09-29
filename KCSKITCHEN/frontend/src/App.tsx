@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import {
   AlertTriangle, Archive, BarChart3, ChefHat, ClipboardList, CreditCard, Languages,
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
-  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X
+  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X, Pencil, LoaderCircle
 } from 'lucide-react'
 import { api, dateTime, getToken, money, setToken } from './api'
 import type { Person, Product, Role, Transaction, User } from './types'
 import Procurement from './Procurement'
+import InstallAppButton from './InstallApp'
+import PersonSelector from './PersonSelector'
+import { DualMoney, ExchangeRateCard, useExchangeRate } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
 type Page = 'dashboard' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
@@ -29,7 +32,12 @@ const text = {
     success: 'Opération réussie', error: 'L’opération a échoué', refresh: 'Actualiser',
     deleteProduct: 'Retirer du catalogue', deleteProductTitle: 'Retirer ce produit du catalogue ?',
     deleteProductHelp: 'Le produit ne sera plus proposé dans KCS Kitchen. Son historique de ventes et de stock restera intact et vérifiable.',
-    cancel: 'Annuler', productRemoved: 'Le produit a été retiré du catalogue avec succès.', actions: 'Actions'
+    cancel: 'Annuler', productRemoved: 'Le produit a été retiré du catalogue avec succès.', actions: 'Actions',
+    editProduct: 'Modifier le produit', editProductHelp: 'Mettez à jour les informations opérationnelles. Chaque changement reste audité.',
+    productCreated: 'Le produit a été créé avec succès.', productUpdated: 'Le produit a été mis à jour avec succès.',
+    name: 'Nom du produit', description: 'Description détaillée', category: 'Catégorie', currency: 'Devise', unit: 'Unité',
+    openingStock: 'Stock initial', reorderLevel: 'Seuil de réapprovisionnement', minimumStock: 'Stock minimum',
+    trackInventory: 'Suivre le stock', updateReason: 'Motif de la modification', saveChanges: 'Enregistrer les modifications', unavailable: 'Indisponible'
   },
   en: {
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
@@ -48,7 +56,12 @@ const text = {
     success: 'Operation completed', error: 'Operation failed', refresh: 'Refresh',
     deleteProduct: 'Remove from catalog', deleteProductTitle: 'Remove this product from the catalog?',
     deleteProductHelp: 'The product will no longer be offered in KCS Kitchen. Its sales and inventory history will remain intact and auditable.',
-    cancel: 'Cancel', productRemoved: 'The product was successfully removed from the catalog.', actions: 'Actions'
+    cancel: 'Cancel', productRemoved: 'The product was successfully removed from the catalog.', actions: 'Actions',
+    editProduct: 'Edit product', editProductHelp: 'Update operational information. Every change remains audited.',
+    productCreated: 'The product was created successfully.', productUpdated: 'The product was updated successfully.',
+    name: 'Product name', description: 'Detailed description', category: 'Category', currency: 'Currency', unit: 'Unit',
+    openingStock: 'Opening stock', reorderLevel: 'Reorder level', minimumStock: 'Minimum stock',
+    trackInventory: 'Track inventory', updateReason: 'Reason for update', saveChanges: 'Save changes', unavailable: 'Unavailable'
   }
 }
 
@@ -93,6 +106,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   }
   return <main className="login-page">
     <button className="language-fab" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages size={18} /> {lang.toUpperCase()}</button>
+    <InstallAppButton lang={lang} />
     <section className="login-brand">
       <img src="./images/kcs-logo.png" alt="Kinshasa Christian School" />
       <span>KCS ORBIT ECOSYSTEM</span>
@@ -149,11 +163,12 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-logo.png" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="status-pill"><ShieldCheck /> Orbit verified</div></header>
+      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-logo.png" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> Orbit verified</div></div></header>
       <div className="page-body">
+        <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
-        {page === 'pos' && <PointOfSale t={t} />}
-        {page === 'catalog' && <Catalog canEdit={user.role === 'KITCHEN_ADMIN'} t={t} />}
+        {page === 'pos' && <PointOfSale t={t} lang={lang} />}
+        {page === 'catalog' && <Catalog canEdit={user.role === 'KITCHEN_ADMIN'} t={t} lang={lang} />}
         {page === 'transactions' && <Transactions user={user} t={t} />}
         {page === 'ledger' && <Ledger user={user} t={t} />}
         {page === 'inventory' && <Inventory canEdit={user.role === 'KITCHEN_ADMIN'} t={t} />}
@@ -204,26 +219,22 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
   </>
 }
 
-function PointOfSale({ t }: { t: Record<string, string> }) {
+function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [products, setProducts] = useState<Product[]>([])
-  const [people, setPeople] = useState<Person[]>([])
-  const [query, setQuery] = useState('')
   const [person, setPerson] = useState<Person | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
   const [paymentMode, setPaymentMode] = useState('CASH')
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const { rate } = useExchangeRate()
   useEffect(() => { api<{ products: Product[] }>('/products').then(result => setProducts(result.products)) }, [])
-  useEffect(() => {
-    if (query.trim().length < 2) return setPeople([])
-    const timer = setTimeout(() => api<{ people: Person[] }>('/directory?q=' + encodeURIComponent(query)).then(result => setPeople(result.people)).catch(() => setPeople([])), 250)
-    return () => clearTimeout(timer)
-  }, [query])
-  const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (cart[product.id] || 0), 0), [products, cart])
+  const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
   function change(id: string, quantity: number) { setCart(current => ({ ...current, [id]: Math.max(0, quantity) })) }
   async function checkout() {
     if (!person || total <= 0) return setNotice({ type: 'error', message: 'Select a person and at least one item.' })
+    setSubmitting(true)
     try {
       const result = await api<{ transaction: Transaction }>('/transactions', {
         method: 'POST',
@@ -234,29 +245,27 @@ function PointOfSale({ t }: { t: Record<string, string> }) {
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPeople([]); setQuery(''); setPerson(null)
+      setReceipt(result.transaction); setCart({}); setPerson(null)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+    finally { setSubmitting(false) }
   }
   return <>
     <section className="pos-grid">
       <div className="panel">
         <div className="step-title"><span>1</span><div><small>IDENTITY</small><h2>{t.identify}</h2></div></div>
-        {person ? <div className="selected-person"><div className="avatar">{person.fullName.slice(0, 2).toUpperCase()}</div><div><b>{person.fullName}</b><small>{person.kind} · {person.displayId || person.className || ''}</small></div><button onClick={() => setPerson(null)}><X /></button></div> :
-          <div className="search-box"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t.searchPerson} />
-            {people.length > 0 && <div className="search-results">{people.map(item => <button key={item.id} onClick={() => { setPerson(item); setPeople([]); setQuery('') }}><b>{item.fullName}</b><small>{item.kind} · {item.displayId || item.email}</small></button>)}</div>}
-          </div>}
+        <PersonSelector value={person} onChange={setPerson} lang={lang} />
         <div className="step-title"><span>2</span><div><small>CATALOG</small><h2>{t.chooseItems}</h2></div></div>
         <div className="product-grid">{products.map(product => <button key={product.id} className="product-tile" onClick={() => add(product.id)} disabled={!product.isAvailable}>
-          <span className="product-icon"><ChefHat /></span><b>{product.name}</b><small>{product.category}</small><strong>{money(product.currentPrice, product.currency)}</strong>{cart[product.id] ? <em>{cart[product.id]}</em> : null}
+          <span className="product-icon"><ChefHat /></span><b>{product.name}</b><small>{product.category}</small><DualMoney value={product.currentPrice} currency={product.currency} rate={rate} compact />{cart[product.id] ? <em>{cart[product.id]}</em> : null}
         </button>)}</div>
       </div>
       <aside className="basket panel">
         <div className="step-title"><span>3</span><div><small>CHECKOUT</small><h2>{t.basket}</h2></div></div>
-        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><small>{money(product.currentPrice)}</small></span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><strong>{money(Number(product.currentPrice) * cart[product.id])}</strong></div>)}</div>
+        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><DualMoney value={product.currentPrice} currency={product.currency} rate={rate} compact /></span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DualMoney value={Number(product.currentPrice) * cart[product.id]} currency={product.currency} rate={rate} compact /></div>)}</div>
         {!total && <Empty text={t.noData} />}
         <div className="payment-switch"><button className={paymentMode !== 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CASH')}><Wallet />{t.payNow}</button><button className={paymentMode === 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CREDIT')}><CreditCard />{t.onCredit}</button></div>
-        <div className="total-row"><span>{t.total}</span><strong>{money(total)}</strong></div>
-        <button className="primary large" onClick={checkout}><ShieldCheck /> {t.confirmSale}</button>
+        <div className="total-row"><span>{t.total}</span><DualMoney value={total} currency="CDF" rate={rate} /></div>
+        <button className="primary large" onClick={checkout} disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
       </aside>
     </section>
     {receipt && <Receipt transaction={receipt} onClose={() => setReceipt(null)} />}
@@ -264,24 +273,31 @@ function PointOfSale({ t }: { t: Record<string, string> }) {
   </>
 }
 
-function Catalog({ canEdit, t }: { canEdit: boolean; t: Record<string, string> }) {
+function Catalog({ canEdit, t, lang }: { canEdit: boolean; t: Record<string, string>; lang: Lang }) {
   const [products, setProducts] = useState<Product[]>([])
   const [show, setShow] = useState(false)
+  const [editing, setEditing] = useState<Product | null>(null)
+  const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const { rate } = useExchangeRate()
   const load = () => api<{ products: Product[] }>('/products?all=true').then(result => setProducts(result.products))
   useEffect(() => { load() }, [])
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget)
+    setSaving(true)
     try {
-      await api('/products', { method: 'POST', body: JSON.stringify({
-        name: data.get('name'), category: data.get('category'), currentPrice: Number(data.get('price')),
-        currency: 'CDF', isAvailable: true, trackInventory: data.get('track') === 'on',
-        stockQuantity: Number(data.get('stock') || 0), unit: data.get('unit'), minimumStock: 0, reorderLevel: Number(data.get('reorder') || 0)
-      }) })
-      setShow(false); load(); setNotice({ type: 'success', message: t.success })
+      const payload = {
+        name: data.get('name'), description: data.get('description') || null, category: data.get('category'), currentPrice: Number(data.get('price')),
+        currency: data.get('currency'), isAvailable: data.get('available') === 'on', trackInventory: data.get('track') === 'on',
+        unit: data.get('unit'), minimumStock: Number(data.get('minimum') || 0), reorderLevel: Number(data.get('reorder') || 0),
+        ...(editing ? { reason: data.get('reason') } : { stockQuantity: Number(data.get('stock') || 0) })
+      }
+      await api('/products' + (editing ? '/' + encodeURIComponent(editing.id) : ''), { method: editing ? 'PUT' : 'POST', body: JSON.stringify(payload) })
+      setShow(false); setEditing(null); await load(); setNotice({ type: 'success', message: editing ? t.productUpdated : t.productCreated })
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+    finally { setSaving(false) }
   }
   async function removeProduct() {
     if (!pendingDelete || deleting) return
@@ -297,11 +313,28 @@ function Catalog({ canEdit, t }: { canEdit: boolean; t: Record<string, string> }
       setDeleting(false)
     }
   }
-  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">LIVE CATALOG</span><h2>{t.catalog}</h2></div>{canEdit && <button className="primary" onClick={() => setShow(true)}><Plus />{t.addProduct}</button>}</div>
-    <div className="data-table catalog-table"><div className="table-head"><span>Product</span><span>Category</span><span>{t.price}</span><span>Stock</span><span>Status</span><span>{t.actions}</span></div>
-      {products.map(product => <div className="table-row" key={product.id}><span data-label="Product"><b>{product.name}</b><small>{product.description}</small></span><span data-label="Category">{product.category}</span><span data-label={t.price}><b>{money(product.currentPrice, product.currency)}</b></span><span data-label="Stock">{product.trackInventory ? product.stockQuantity + ' ' + product.unit : '—'}</span><span data-label="Status"><em className={product.isAvailable ? 'badge good' : 'badge'}>{product.isAvailable ? t.available : 'Disabled'}</em></span><span data-label={t.actions}>{canEdit ? <button className="catalog-delete" onClick={() => setPendingDelete(product)}><Trash2 />{t.deleteProduct}</button> : '—'}</span></div>)}
+  return <><section className="panel catalog-panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · LIVE CATALOG</span><h2>{t.catalog}</h2><p>{lang === 'fr' ? 'Produits, prix, disponibilité et seuils de stock dans un registre audité.' : 'Products, pricing, availability and inventory thresholds in one audited register.'}</p></div>{canEdit && <button className="primary" onClick={() => { setEditing(null); setShow(true) }}><Plus />{t.addProduct}</button>}</div>
+    <div className="data-table catalog-table"><div className="table-head"><span>{t.name}</span><span>{t.category}</span><span>{t.price}</span><span>Stock</span><span>Status</span><span>{t.actions}</span></div>
+      {products.map(product => <div className="table-row" key={product.id}>
+        <span data-label={t.name}><b>{product.name}</b><small>{product.description}</small></span>
+        <span data-label={t.category}>{product.category}</span>
+        <span data-label={t.price}><DualMoney value={product.currentPrice} currency={product.currency} rate={rate} compact /></span>
+        <span data-label="Stock">{product.trackInventory ? product.stockQuantity + ' ' + product.unit : '—'}</span>
+        <span data-label="Status"><em className={product.isAvailable ? 'badge good' : 'badge'}>{product.isAvailable ? t.available : t.unavailable}</em></span>
+        <span className="catalog-actions" data-label={t.actions}>{canEdit ? <><button className="catalog-edit" onClick={() => { setEditing(product); setShow(true) }}><Pencil />{t.editProduct}</button><button className="catalog-delete" onClick={() => setPendingDelete(product)}><Trash2 />{t.deleteProduct}</button></> : '—'}</span>
+      </div>)}
     </div></section>
-    {show && <Modal onClose={() => setShow(false)}><form className="modal-form" onSubmit={save}><span className="eyebrow">CATALOG</span><h2>{t.addProduct}</h2><label>Name<input name="name" required /></label><div className="form-grid"><label>Category<select name="category"><option>FOOD</option><option>DRINK</option><option>SNACK</option><option>DESSERT</option><option>OTHER</option></select></label><label>{t.price}<input name="price" type="number" min="0" required /></label><label>Unit<select name="unit"><option>UNIT</option><option>BOTTLE</option><option>CAN</option><option>KG</option><option>LITER</option><option>PORTION</option></select></label><label>Opening stock<input name="stock" type="number" min="0" defaultValue="0" /></label><label>Reorder level<input name="reorder" type="number" min="0" defaultValue="0" /></label></div><label className="check"><input name="track" type="checkbox" /> Track inventory</label><button className="primary large">{t.save}</button></form></Modal>}
+    {show && <Modal wide onClose={() => !saving && (setShow(false), setEditing(null))}><form key={editing?.id || 'new-product'} className="modal-form product-editor" onSubmit={save}>
+      <div className="editor-intro"><span className="product-editor-icon"><ChefHat /></span><div><span className="eyebrow">KCS KITCHEN · CATALOG</span><h2>{editing ? t.editProduct : t.addProduct}</h2><p>{editing ? t.editProductHelp : (lang === 'fr' ? 'Créez une fiche produit complète, exploitable sur ordinateur, tablette et mobile.' : 'Create a complete product record for desktop, tablet and mobile operations.')}</p></div></div>
+      <div className="form-grid"><label>{t.name}<input name="name" required defaultValue={editing?.name || ''} /></label><label>{t.category}<select name="category" defaultValue={editing?.category || 'FOOD'}><option>FOOD</option><option>DRINK</option><option>SNACK</option><option>DESSERT</option><option>OTHER</option></select></label></div>
+      <label>{t.description}<textarea name="description" maxLength={500} defaultValue={editing?.description || ''} placeholder={lang === 'fr' ? 'Composition, portion, allergènes ou précisions utiles…' : 'Contents, portion, allergens or useful details…'} /></label>
+      <div className="form-grid three"><label>{t.price}<input name="price" type="number" min="0" step="0.01" required defaultValue={editing?.currentPrice || ''} /></label><label>{t.currency}<select name="currency" defaultValue={editing?.currency || 'CDF'}><option value="CDF">CDF · Franc congolais</option><option value="USD">USD · Dollar américain</option></select></label><label>{t.unit}<select name="unit" defaultValue={editing?.unit || 'UNIT'}><option>UNIT</option><option>BOTTLE</option><option>CAN</option><option>KG</option><option>LITER</option><option>PORTION</option><option>OTHER</option></select></label></div>
+      <div className="form-grid three">{!editing && <label>{t.openingStock}<input name="stock" type="number" min="0" step="0.001" defaultValue="0" /></label>}<label>{t.minimumStock}<input name="minimum" type="number" min="0" step="0.001" defaultValue={editing?.minimumStock || '0'} /></label><label>{t.reorderLevel}<input name="reorder" type="number" min="0" step="0.001" defaultValue={editing?.reorderLevel || '0'} /></label></div>
+      <div className="editor-switches"><label className="check"><input name="track" type="checkbox" defaultChecked={editing?.trackInventory || false} /> {t.trackInventory}</label><label className="check"><input name="available" type="checkbox" defaultChecked={editing ? editing.isAvailable : true} /> {t.available}</label></div>
+      {editing && <label>{t.updateReason}<textarea name="reason" maxLength={500} placeholder={lang === 'fr' ? 'Ex. : correction de prix, changement de portion…' : 'E.g. price correction, portion change…'} /></label>}
+      <div className="editor-rate-note"><ExchangeRateCard lang={lang} /><p>{lang === 'fr' ? 'Les équivalences USD/CDF sont recalculées automatiquement. Le prix historique original reste conservé.' : 'USD/CDF equivalents refresh automatically. The original historical price remains preserved.'}</p></div>
+      <div className="editor-actions"><button type="button" onClick={() => { setShow(false); setEditing(null) }} disabled={saving}>{t.cancel}</button><button className="primary" disabled={saving}>{saving ? <LoaderCircle className="spin" /> : <ShieldCheck />}{editing ? t.saveChanges : t.save}</button></div>
+    </form></Modal>}
     {pendingDelete && <Modal onClose={() => !deleting && setPendingDelete(null)}><div className="delete-confirmation"><span className="delete-confirmation-icon"><Trash2 /></span><span className="eyebrow">KCS KITCHEN · CATALOG</span><h2>{t.deleteProductTitle}</h2><strong>{pendingDelete.name}</strong><p>{t.deleteProductHelp}</p><div className="button-row"><button onClick={() => setPendingDelete(null)} disabled={deleting}>{t.cancel}</button><button className="danger-action" onClick={removeProduct} disabled={deleting}>{deleting ? <span className="button-spinner" /> : <Trash2 />}{t.deleteProduct}</button></div></div></Modal>}
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }

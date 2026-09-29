@@ -13,6 +13,7 @@ import { calculateDiscount } from './discount.js'
 import { loadDirectory, resolvePerson } from './directory.js'
 import { processNotificationOutbox } from './notifications.js'
 import { procurementRouter } from './procurement.js'
+import { getUsdCdfRate } from './exchange-rate.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -111,13 +112,27 @@ app.get('/api/me', authenticate, asyncRoute(async (req: AuthRequest, res) => {
   res.json({ user: req.kitchenUser, balance })
 }))
 
+app.get('/api/exchange-rate', authenticate, asyncRoute(async (req, res) => {
+  try {
+    res.json(await getUsdCdfRate(req.query.refresh === 'true'))
+  } catch {
+    res.status(503).json({ message: 'The USD/CDF exchange rate is temporarily unavailable' })
+  }
+}))
+
 app.get('/api/directory', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR'), asyncRoute(async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase()
   const people = await loadDirectory(req.query.refresh === 'true')
-  const filtered = q ? people.filter(person =>
-    [person.fullName, person.email, person.phone, person.displayId, person.className].some(value => value?.toLowerCase().includes(q))
+  const kind = String(req.query.kind || '').trim().toUpperCase()
+  const className = String(req.query.className || '').trim().toLowerCase()
+  const searched = q ? people.filter(person =>
+    [person.fullName, person.email, person.phone, person.displayId, person.className, person.department, person.jobTitle, person.subject]
+      .some(value => value?.toLowerCase().includes(q))
   ) : people
-  res.json({ people: filtered.slice(0, 100), total: filtered.length })
+  const filtered = searched.filter(person => (!kind || person.kind === kind) && (!className || person.className?.toLowerCase() === className))
+  const classes = [...new Set(people.map(person => person.className).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  const counts = people.reduce<Record<string, number>>((totals, person) => ({ ...totals, [person.kind]: (totals[person.kind] || 0) + 1 }), {})
+  res.json({ people: filtered.slice(0, 250), total: filtered.length, facets: { classes, counts } })
 }))
 
 const productSchema = z.object({
@@ -256,6 +271,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   const productIds = [...new Set(input.items.map(item => item.productId))]
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   if (products.length !== productIds.length) return res.status(400).json({ message: 'One or more products no longer exist' })
+  const exchangeRate = products.some(product => product.currency === 'USD') ? await getUsdCdfRate() : null
   const productMap = new Map(products.map(product => [product.id, product]))
   const lines = input.items.map(item => {
     const product = productMap.get(item.productId)!
@@ -263,10 +279,12 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     if (product.trackInventory && Number(product.stockQuantity) < item.quantity) {
       throw Object.assign(new Error('Insufficient stock for ' + product.name), { statusCode: 409 })
     }
+    const unitPriceCdf = Number(product.currentPrice) * (product.currency === 'USD' ? exchangeRate!.rate : 1)
     return {
       product,
       quantity: item.quantity,
-      subtotal: Number(product.currentPrice) * item.quantity
+      unitPriceCdf,
+      subtotal: unitPriceCdf * item.quantity
     }
   })
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
@@ -334,7 +352,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
         productId: line.product.id,
         productNameSnapshot: line.product.name,
         quantity: new Prisma.Decimal(line.quantity),
-        unitPriceAtPurchase: line.product.currentPrice,
+        unitPriceAtPurchase: new Prisma.Decimal(line.unitPriceCdf),
         subtotal: new Prisma.Decimal(line.subtotal)
       })) },
       discounts: discountResult.rule ? { create: {
