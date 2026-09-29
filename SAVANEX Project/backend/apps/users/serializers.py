@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from .password_policy import validate_ecosystem_password
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from secrets import randbelow
@@ -208,10 +209,20 @@ class UserListSerializer(serializers.ModelSerializer):
 
 class PasswordChangeSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, min_length=8)
+    new_password = serializers.CharField(required=True, min_length=14, max_length=128)
 
     def validate_old_password(self, value):
         user = self.context['request'].user
         if not user.check_password(value):
             raise serializers.ValidationError('Incorrect current password.')
         return value
+
+    def validate_new_password(self, value):
+        user = self.context['request'].user
+        if user.check_password(value):
+            raise serializers.ValidationError('The new password must be different from the current password.')
+        try:
+            return validate_ecosystem_password(value, user=user)
+        except Exception as error:
+            messages = getattr(error, 'messages', [str(error)])
+            raise serializers.ValidationError(messages)

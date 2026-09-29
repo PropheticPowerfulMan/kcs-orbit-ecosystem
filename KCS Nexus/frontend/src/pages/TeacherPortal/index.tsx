@@ -22,7 +22,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import { printOfficialPdf } from '@/utils/officialPdf'
-import { canonicalClassLabel, compareClassLabels, schoolClassOptions } from '@/utils/classLabels'
+import { canonicalClassLabel, compareClassLabels, schoolClassOptions, splitClassLabel } from '@/utils/classLabels'
 import {
   aiSignals,
   aiRecommendations,
@@ -271,9 +271,21 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [supportStudentPool, setSupportStudentPool] = useState<RegistryStudent[]>([])
   const [courseStudentPool, setCourseStudentPool] = useState<RegistryStudent[]>([])
   const [registryStatus, setRegistryStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [homeroomClassName, setHomeroomClassName] = useState('')
 
+  const resolveRosterClass = (className: string) => {
+    const requested = canonicalClassLabel(className)
+    const requestedParts = splitClassLabel(requested)
+    const homeroomParts = splitClassLabel(homeroomClassName)
+    return homeroomParts.grade
+      && homeroomParts.section
+      && requestedParts.grade.toLowerCase() === homeroomParts.grade.toLowerCase()
+      && !requestedParts.section
+      ? homeroomClassName
+      : requested
+  }
   const getRosterForClass = (className: string) => superAdminStudentPool.filter((student) => (
-    toClassKey(student.grade, student.section) === toClassKey(className)
+    toClassKey(student.grade, student.section) === toClassKey(resolveRosterClass(className))
   ))
 
   const [actionMessage, setActionMessage] = useState('')
@@ -461,7 +473,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   useEffect(() => {
     if (!user?.id) return
     let active = true
-    Promise.all([messagesAPI.getContacts(), messagesAPI.getAll({ box: 'all' })]).then(([contactsResponse, messagesResponse]) => {
+    Promise.all([messagesAPI.getContacts(), messagesAPI.getHistory({ box: 'all' })]).then(([contactsResponse, messagesResponse]) => {
       if (!active) return
       const contacts = contactsResponse.data?.data ?? []
       setMessageContacts(contacts)
@@ -507,6 +519,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           overview.scope?.homeroom
           && ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'].includes(overview.scope?.roleStatus),
         )
+        setHomeroomClassName(hasHomeroomScope ? canonicalClassLabel(overview.scope.homeroom.grade, overview.scope.homeroom.section) : '')
         const supportStudents = hasHomeroomScope ? homeroomStudents : scopedStudents
         const officialCourses = (overview.courses ?? []).map((course: any) => {
           const customRoster = String(course.description ?? '').includes(COURSE_SCOPE_CUSTOM) || String(course.grade ?? '').toLowerCase() === 'multi-class'
@@ -549,6 +562,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         setOfficialCourseGrades([])
         setSupportStudentPool([])
         setCourseStudentPool([])
+        setHomeroomClassName('')
         setRegistryStatus('error')
       }
     }
@@ -559,16 +573,6 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       active = false
     }
   }, [])
-
-  useEffect(() => {
-    if (!superAdminStudentPool.length) return
-    setCourses((current) => current.map((course) => course.enrollmentMode === 'class'
-      ? {
-          ...course,
-          studentIds: getRosterForClass(course.className || course.gradeLevels[0]).map((student) => student.id),
-        }
-      : course))
-  }, [superAdminStudentPool, workspaceStatus])
 
   useEffect(() => {
     const firstStudent = supportStudentPool[0] ?? courseStudentPool[0]
@@ -918,6 +922,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (courseSaving) return
     const customRoster = courseDraft.enrollmentMode === 'custom'
     const selectedGrade = customRoster ? 'Multi-class' : canonicalClassLabel(courseDraft.gradeLevels[0] ?? courseDraft.className)
+    const resolvedClass = customRoster ? selectedGrade : resolveRosterClass(courseDraft.className || selectedGrade)
     const errors: { name?: string; grade?: string } = {}
     if (!courseDraft.name.trim()) errors.name = 'Enter the subject name.'
     if (!customRoster && !courseDraft.gradeLevels[0]) errors.grade = 'Select the class taught for this subject.'
@@ -935,7 +940,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setCourseSaving(true)
     const roster = customRoster
       ? superAdminStudentPool.filter((student) => existingCourse?.studentIds.includes(student.id))
-      : getRosterForClass(courseDraft.className || selectedGrade)
+      : getRosterForClass(resolvedClass)
     const abbreviation = courseDraft.abbreviation.trim().toUpperCase() || generateCourseAbbreviation(courseDraft.name)
     let nextCourse = {
       ...(existingCourse ?? {}),
@@ -944,11 +949,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       abbreviation,
       creditHours: normalizeCreditHours(courseDraft.creditHours),
       teacher: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Teacher',
-      className: selectedGrade,
+      className: resolvedClass,
       room: courseDraft.room.trim(),
       gradeLevels: customRoster
         ? Array.from(new Set(roster.map((student) => canonicalClassLabel(student.grade, student.section)))).sort(compareClassLabels)
-        : [selectedGrade],
+        : [resolvedClass],
       studentIds: roster.map((student) => student.id),
       enrollmentMode: customRoster ? 'custom' : 'class',
       status: existingCourse ? 'updated' : 'draft',
@@ -958,8 +963,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         id: nextCourse.id,
         name: nextCourse.name,
         abbreviation: nextCourse.abbreviation,
-        description: courseScopeDescription(nextCourse.name, customRoster ? 'custom' : 'class', selectedGrade),
-        grade: selectedGrade,
+        description: courseScopeDescription(nextCourse.name, customRoster ? 'custom' : 'class', resolvedClass),
+        grade: resolvedClass,
         credits: nextCourse.creditHours,
         room: nextCourse.room,
         studentIds: nextCourse.studentIds,
@@ -1721,11 +1726,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             className="flex h-[100dvh] max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-kcs-blue-200 bg-white shadow-2xl sm:h-auto sm:max-h-[94vh] sm:rounded-3xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <header className="relative flex flex-row items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-4 py-3 text-white sm:px-7 sm:py-5">
-              <div>
+            <header className="relative flex flex-row items-start justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-3 py-2.5 text-white sm:px-7 sm:py-5">
+              <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-300">Official course roster</p>
-                <h3 id="course-enrollment-title" className="mt-1 pr-2 font-display text-xl font-bold sm:text-2xl">{enrollmentDialogCourse.name}</h3>
-                <p className="mt-1 text-sm text-blue-100">
+                <h3 id="course-enrollment-title" className="mt-1 truncate pr-2 font-display text-lg font-bold sm:text-2xl">{enrollmentDialogCourse.name}</h3>
+                <p className="mt-1 text-xs text-blue-100 sm:text-sm">
                   {canonicalClassLabel(enrollmentDialogCourse.className || enrollmentDialogCourse.gradeLevels[0])}
                   {' · '}{enrollmentDraftIds.length} enrolled
                   {' · '}{enrollmentStudentCatalog.length} active students in the school
@@ -1742,7 +1747,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </button>
             </header>
 
-            <div className="grid grid-cols-3 gap-2 border-b border-gray-100 bg-slate-50 px-3 py-3 sm:gap-3 sm:px-7 sm:py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40">
+            <div className="hidden grid-cols-3 gap-2 border-b border-gray-100 bg-slate-50 px-3 py-3 sm:grid sm:gap-3 sm:px-7 sm:py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40">
               <div className="rounded-xl bg-white px-2 py-2 shadow-sm sm:rounded-2xl sm:px-4 sm:py-3 dark:bg-kcs-blue-900">
                 <p className="text-xl font-bold text-kcs-blue-900 sm:text-2xl dark:text-white">{enrollmentDraftIds.length}</p>
                 <p className="text-[10px] font-semibold leading-tight text-gray-500 sm:text-xs dark:text-gray-300">Selected for this course</p>
@@ -1759,7 +1764,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 border-b border-gray-100 px-3 py-3 lg:grid-cols-[minmax(240px,1fr)_190px_180px_auto] lg:items-center sm:gap-3 sm:px-7 sm:py-4 dark:border-kcs-blue-800">
+            <div className="grid flex-shrink-0 grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 lg:grid-cols-[minmax(240px,1fr)_190px_180px_auto] lg:items-center sm:gap-3 sm:px-7 sm:py-4 dark:border-kcs-blue-800">
               <input
                 className={`${inputClass} col-span-2 lg:col-span-1`}
                 value={enrollmentQuery}
@@ -1781,8 +1786,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <button type="button" onClick={deselectVisibleEnrollment} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/30 dark:text-red-200">Deselect visible</button>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-7 sm:py-5">
-              <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-3 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/40">
+            <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto px-2.5 py-2.5 sm:px-7 sm:py-5">
+              <div className="mb-2 flex flex-col gap-2 rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 p-2.5 sm:mb-4 sm:flex-row sm:items-center sm:justify-between sm:rounded-2xl sm:p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/40">
                 <div>
                   <p className="font-bold text-kcs-blue-900 dark:text-white">
                     {enrollmentAutoSync ? 'Automatic class synchronization active' : 'Custom enrollment'}
@@ -1813,7 +1818,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                             {students.filter((student) => enrollmentDraftIds.includes(student.id)).length}/{students.length} selected
                           </span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-2 gap-2 sm:flex">
                           <button type="button" onClick={() => {
                             setEnrollmentAutoSync(false)
                             setEnrollmentDraftIds((current) => [...new Set([...current, ...students.map((student) => student.id)])])
@@ -1833,7 +1838,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                               type="button"
                               key={student.id}
                               onClick={() => toggleEnrollmentDraft(student.id)}
-                              className={`flex min-h-14 items-center gap-2 rounded-xl border px-2.5 py-2.5 text-left transition sm:gap-3 sm:px-3 sm:py-3 ${selected
+                              className={`flex min-h-16 w-full items-center gap-2 rounded-xl border px-2.5 py-2.5 text-left transition sm:min-h-14 sm:gap-3 sm:px-3 sm:py-3 ${selected
                                 ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900'
                                 : 'border-gray-200 bg-white hover:border-kcs-blue-300 hover:bg-slate-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60'}`}
                             >
@@ -1853,7 +1858,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               )}
             </div>
 
-            <footer className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-gray-100 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
+            <footer className="flex flex-shrink-0 flex-col-reverse gap-2 border-t border-gray-100 bg-white px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950">
               <p className="hidden text-xs text-gray-500 sm:block dark:text-gray-400">Changes apply only after saving. Cancel leaves the existing roster untouched.</p>
               <div className="flex w-full gap-2 sm:w-auto">
                 <button type="button" disabled={enrollmentSaving} onClick={() => setEnrollmentDialogCourseId(null)} className="flex-1 rounded-xl border-2 border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 sm:flex-none sm:px-5 dark:border-kcs-gold-400 dark:bg-kcs-blue-800 dark:text-kcs-gold-200 dark:hover:bg-kcs-blue-700">Cancel</button>
@@ -2554,7 +2559,7 @@ const TeacherDashboardHome = () => {
 
   useEffect(() => {
     let active = true
-    Promise.all([teacherWorkspaceAPI.overview(), messagesAPI.getAll({ box: 'all' })])
+    Promise.all([teacherWorkspaceAPI.overview(), messagesAPI.getHistory({ box: 'all' })])
       .then(([overviewResponse, messagesResponse]) => {
         if (!active) return
         setOverview(overviewResponse.data?.data ?? {})

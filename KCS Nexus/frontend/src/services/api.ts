@@ -480,6 +480,26 @@ export const financeAPI = {
 
 export const messagesAPI = {
   getAll: (params?: { q?: string; box?: string; limit?: number; cursor?: string; from?: string; to?: string }) => api.get('/messages', { params, timeout: 20_000 }),
+  getHistory: async (params?: { q?: string; box?: string; from?: string; to?: string }) => {
+    const records: any[] = []
+    const seen = new Set<string>()
+    let cursor = ''
+    let lastResponse: any = null
+    for (let page = 0; page < 40; page += 1) {
+      const response = await api.get('/messages', { params: { ...params, limit: 250, ...(cursor ? { cursor } : {}) }, timeout: 25_000 })
+      lastResponse = response
+      const batch = Array.isArray(response.data?.data) ? response.data.data : []
+      batch.forEach((message: any) => {
+        if (!seen.has(message.id)) { seen.add(message.id); records.push(message) }
+      })
+      const hasMore = String(response.headers?.['x-has-more'] ?? '').toLowerCase() === 'true'
+      const nextCursor = String(response.headers?.['x-next-cursor'] ?? '')
+      if (!hasMore || !nextCursor || nextCursor === cursor) break
+      cursor = nextCursor
+    }
+    if (!lastResponse) return api.get('/messages', { params: { ...params, limit: 250 }, timeout: 25_000 })
+    return { ...lastResponse, data: { ...lastResponse.data, data: records } }
+  },
   getContacts: () => api.get('/messages/contacts'),
   getParentContacts: () => api.get('/messages/parent-contacts', { timeout: 15_000 }),
   deliverToParents: (data: FormData) => api.post('/messages/parent-delivery', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000 }),

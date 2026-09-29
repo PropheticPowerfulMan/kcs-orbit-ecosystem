@@ -43,3 +43,23 @@ export function belongsToTeacherClasses(
   const normalized = normalizeClassParts(student.grade, student.section)
   return classes.some((value) => teacherClassKey(value) === teacherClassKey(normalized))
 }
+
+export function studentBelongsToAssignedClass(
+  student: { grade: string; section?: string | null },
+  assignedClass: TeacherClassParts,
+) {
+  const learner = normalizeClassParts(student.grade, student.section)
+  const assignment = normalizeClassParts(assignedClass.grade, assignedClass.section)
+  return learner.grade.toLowerCase() === assignment.grade.toLowerCase()
+    && (!assignment.section || teacherClassKey(learner) === teacherClassKey(assignment))
+}
+
+export function isTeacherHomeroomForStudent(
+  teacher: { status?: string; homeroomGrade: string | null; homeroomSection: string | null },
+  student: { grade: string; section: string },
+) {
+  if (teacher.status !== undefined && teacher.status !== 'HOMEROOM_TEACHER') return false
+  if (!teacher.homeroomGrade) return false
+  const homeroom = normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection ?? '')
+  return studentBelongsToAssignedClass(student, homeroom)
+}

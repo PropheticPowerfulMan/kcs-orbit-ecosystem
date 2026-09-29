@@ -84,7 +84,15 @@ messagesRouter.get('/', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const to = String(req.query.to ?? '').trim()
   const userId = await resolveMessageActorId(req)
   const targetRole = req.user!.role.toUpperCase() as 'ADMIN' | 'STAFF' | 'TEACHER' | 'STUDENT' | 'PARENT'
-  const direction = box === 'sent' ? { senderId: userId } : box === 'inbox' ? { recipientId: userId } : { OR: [{ senderId: userId }, { recipientId: userId }, { targetRole }] }
+  const direction = box === 'sent'
+    ? { senderId: userId, senderArchivedAt: null }
+    : box === 'inbox'
+      ? { recipientId: userId, recipientArchivedAt: null }
+      : { OR: [
+          { senderId: userId, senderArchivedAt: null },
+          { recipientId: userId, recipientArchivedAt: null },
+          { targetRole },
+        ] }
   const queryTokens = query.split(/\s+/).filter(Boolean)
   const search = queryTokens.length ? {
     AND: queryTokens.map((token) => {
@@ -374,23 +382,17 @@ messagesRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedReques
   })
   if (!owned.length) return success(res, { deletedCount: 0 })
   const ownedIds = owned.map((message) => message.id)
-  const correspondence = await prisma.correspondenceLog.findMany({
-    where: { senderId: actorId },
-    select: { id: true, metadata: true },
+  await prisma.internalMessage.updateMany({
+    where: { id: { in: ownedIds }, senderId: actorId },
+    data: { senderArchivedAt: new Date() },
   })
-  const correspondenceIds = correspondence
-    .filter((row) => ownedIds.includes(String((row.metadata as any)?.internalMessageId || '')))
-    .map((row) => row.id)
-  await prisma.$transaction([
-    prisma.internalMessage.deleteMany({ where: { id: { in: ownedIds }, senderId: actorId } }),
-    prisma.correspondenceLog.deleteMany({ where: { id: { in: correspondenceIds }, senderId: actorId } }),
-  ])
-  return success(res, { deletedCount: ownedIds.length })
+  return success(res, { deletedCount: ownedIds.length, archived: true }, 'Messages hidden from the active mailbox and retained in the immutable communication history')
 }))
 
 messagesRouter.patch('/:id/read', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const id = getRouteParam(req.params.id)
-  const existing = await prisma.internalMessage.findFirst({ where: { id, recipientId: req.user!.sub } })
+  const actorId = await resolveMessageActorId(req)
+  const existing = await prisma.internalMessage.findFirst({ where: { id, recipientId: actorId } })
   if (!existing) throw new ApiError(404, 'Message not found')
   const message = await prisma.internalMessage.update({ where: { id }, data: { readAt: existing.readAt ?? new Date() }, include: { sender: true, recipient: true } })
   const { attachmentData: _attachmentData, ...safeMessage } = message

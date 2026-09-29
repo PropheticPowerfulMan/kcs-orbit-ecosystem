@@ -13,6 +13,7 @@ import { sendSchoolSms } from '../utils/sms.js'
 import { buildSafeUser, signAccessToken, signRefreshToken } from '../utils/tokens.js'
 import { ensureUserAccessCodeColumn, isMissingAccessCodeColumnError } from '../utils/userAccessCode.js'
 import { generateTotpSecret, verifyTotp } from '../utils/totp.js'
+import { assertPasswordDoesNotContainIdentity, strongPasswordSchema } from '../utils/passwordPolicy.js'
 
 const RESET_TOKEN_TTL_MINUTES = 30
 const RESET_TOKEN_BYTES = 32
@@ -166,12 +167,6 @@ type ExternalUserProfile = {
   permissions?: string[]
   staffFunction?: string | null
 }
-
-const strongPasswordSchema = z.string().min(12, 'Password must contain at least 12 characters').max(128)
-  .regex(/[a-z]/, 'Password must include a lowercase letter')
-  .regex(/[A-Z]/, 'Password must include an uppercase letter')
-  .regex(/[0-9]/, 'Password must include a number')
-  .regex(/[^A-Za-z0-9]/, 'Password must include a special character')
 
 const registerSchema = z.object({
   firstName: z.string().min(2),
@@ -516,12 +511,8 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
         ...(canAdoptCanonicalEmail ? { email: canonicalEmail! } : {}),
         ...(typeof entity.phone === 'string' ? { phone: entity.phone.trim() || null } : {}),
         ...(typeof entity.userId === 'string' && entity.userId.trim() ? { orbitUserId: entity.userId.trim(), orbitOrganizationId: env.KCS_ORBIT_ORGANIZATION_ID } : {}),
-        // Directory synchronization must never erase a valid local photo merely
-        // because an upstream projection currently exposes an empty photo field.
-        // Explicit removal is handled by the dedicated avatar update endpoint.
-        ...(user.role !== 'STUDENT' && typeof entity.photoData === 'string' && entity.photoData.trim()
-          ? { avatar: entity.photoData }
-          : {}),
+        // User.avatar is intentionally Nexus-local. Official directory portraits
+        // remain in Orbit (and StudentProfile.officialAvatar for learners).
       },
     })
   } catch (error) {
@@ -529,29 +520,6 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
     return user
   }
 }
-async function updateFederatedPhoto(user: { role: string; accessCode: string | null; email: string; permissions: string[] }, avatar: string) {
-  // Student dashboard avatars are personal. The official portrait is changed
-  // only through the authorized registry/student-dossier workflow.
-  if (user.role === 'STUDENT') return
-
-  const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
-  if (!isFederated || !env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return
-
-  const entityType = user.role === 'PARENT' ? 'parent' : user.role === 'STUDENT' ? 'student' : 'teacher'
-  const identifier = user.accessCode || user.email
-  const url = `${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/registry/${entityType}/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}&identifierType=${user.accessCode ? 'accessCode' : 'email'}`
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': env.KCS_ORBIT_API_KEY, 'x-app-slug': 'KCS_NEXUS' },
-    body: JSON.stringify({ photoData: avatar || null, photoSource: 'self-service:kcs-nexus' }),
-    signal: AbortSignal.timeout(10_000),
-  })
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({} as { message?: string })) as { message?: string }
-    throw new ApiError(response.status, payload.message || 'The ecosystem profile photo could not be synchronized.')
-  }
-}
-
 async function changeFederatedPassword(user: { role: string; accessCode: string | null; email: string }, currentPassword: string, newPassword: string) {
   if (!env.SAVANEX_API_URL || !env.SAVANEX_AUTH_API_KEY) throw new ApiError(503, 'SAVANEX password authority is unavailable.')
   const entityType = user.role === 'PARENT' ? 'parent' : user.role === 'STUDENT' ? 'student' : 'teacher'
@@ -876,6 +844,8 @@ authRouter.post('/reset-password', asyncHandler(async (req, res) => {
   if (!resetToken || resetToken.usedAt || resetToken.expiresAt < new Date() || !resetToken.user.passwordHash) {
     throw new ApiError(400, 'Password reset link is invalid or expired')
   }
+  const identityIssues = assertPasswordDoesNotContainIdentity(password, resetToken.user)
+  if (identityIssues.length) throw new ApiError(400, identityIssues.join(' '))
 
   const passwordHash = await bcrypt.hash(password, 10)
   await prisma.$transaction([
@@ -939,6 +909,9 @@ authRouter.put('/change-password', authenticate, asyncHandler(async (req: Authen
   const { currentPassword, newPassword } = schema.parse(req.body)
   if (isConfiguredSuperAdminUser(req.user!.sub)) {
     const account = await getConfiguredSuperAdminAccount()
+    const identityIssues = assertPasswordDoesNotContainIdentity(newPassword, account)
+    if (identityIssues.length) throw new ApiError(400, identityIssues.join(' '))
+    if (currentPassword === newPassword) throw new ApiError(400, 'The new password must be different from the current password')
     if (!account.passwordHash || !(await bcrypt.compare(currentPassword, account.passwordHash))) {
       throw new ApiError(400, 'Current password is incorrect')
     }
@@ -951,6 +924,9 @@ authRouter.put('/change-password', authenticate, asyncHandler(async (req: Authen
 
   const user = await prisma.user.findUnique({ where: { id: req.user!.sub } })
   if (!user?.passwordHash) throw new ApiError(404, 'User account not found')
+  const identityIssues = assertPasswordDoesNotContainIdentity(newPassword, user)
+  if (identityIssues.length) throw new ApiError(400, identityIssues.join(' '))
+  if (currentPassword === newPassword) throw new ApiError(400, 'The new password must be different from the current password')
   const isFederated = user.permissions.some((permission) => permission.startsWith('ecosystem:'))
   if (isFederated) {
     await changeFederatedPassword(user, currentPassword, newPassword)
@@ -994,7 +970,12 @@ authRouter.put('/access-code', authenticate, asyncHandler(async (req: Authentica
 }))
 
 authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
-  const profileSchema = z.object({ avatar: z.string().max(1_500_000) }).strict()
+  const profileSchema = z.object({
+    avatar: z.string().max(1_500_000).refine(
+      (value) => value === '' || /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/s.test(value),
+      'Only a JPEG, PNG, or WebP profile image is accepted.',
+    ),
+  }).strict()
 
   const data = profileSchema.parse(req.body)
 
@@ -1006,7 +987,6 @@ authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedR
 
   const currentUser = await prisma.user.findUnique({ where: { id: req.user!.sub } })
   if (!currentUser) throw new ApiError(404, 'User not found')
-  if (data.avatar !== undefined) await updateFederatedPhoto(currentUser, data.avatar)
 
   const updated = await prisma.user.update({
     where: { id: req.user!.sub },
@@ -1014,7 +994,7 @@ authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedR
 
   })
 
-  return success(res, await buildSafeUserWithAccess(updated), 'Profile updated successfully')
+  return success(res, await buildSafeUserWithAccess(updated), 'Personal Nexus profile photo updated without changing the official ecosystem portrait')
 }))
 
 authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {

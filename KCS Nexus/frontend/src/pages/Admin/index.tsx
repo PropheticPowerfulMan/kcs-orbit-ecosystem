@@ -1495,7 +1495,7 @@ const AdminSectionView = ({
 
   useEffect(() => {
     if (segment !== 'communications') return
-    messagesAPI.getAll({ box: 'sent' }).then((response) => {
+    messagesAPI.getHistory({ box: 'sent' }).then((response) => {
       const rows = response.data?.data ?? []
       setCommunicationHistory(rows.map((message: any) => ({
         id: message.id,
@@ -1520,7 +1520,7 @@ const AdminSectionView = ({
       const estimatedMinutes = response.data?.data?.estimatedMinutes ?? 0
       setCommunicationSubject(''); setCommunicationBody('')
       setSentNotice(language === 'fr' ? 'Communication enregistrée pour ' + count + ' destinataire(s) ; ' + emailQueued + ' e-mail(s) mis en file (~' + estimatedMinutes + ' min).' : 'Communication recorded for ' + count + ' recipient(s); ' + emailQueued + ' email(s) queued (~' + estimatedMinutes + ' min).')
-      const history = await messagesAPI.getAll({ box: 'sent' })
+      const history = await messagesAPI.getHistory({ box: 'sent' })
       const rows = history.data?.data ?? []
       setCommunicationHistory(rows.map((message: any) => ({ id: message.id, direction: 'Sent', audience: message.recipient ? [message.recipient.lastName,message.recipient.middleName,message.recipient.firstName].filter(Boolean).join(' ')+' ('+message.recipient.role+')' : message.targetRole??'Audience', subject: message.subject, body: message.body, sender: message.sender ? [message.sender.lastName,message.sender.middleName,message.sender.firstName].filter(Boolean).join(' ') : 'Administration', timestamp: new Date(message.createdAt).toLocaleString(), status: message.readAt ? 'Read' : 'Delivered' })))
     } catch (error: any) { setSentNotice(error?.response?.data?.message ?? 'The communication could not be delivered.') }

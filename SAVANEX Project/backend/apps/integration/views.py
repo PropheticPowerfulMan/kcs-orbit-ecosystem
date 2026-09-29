@@ -6,6 +6,7 @@ from django.core import signing
 from django.core.cache import cache
 from django.utils import timezone
 from django.db.models import Q
+from django.core.exceptions import ValidationError
 
 from apps.students.models import Student
 from apps.teachers.models import Teacher
@@ -20,6 +21,7 @@ from apps.users.authentication import authenticate_user_identifier
 from apps.users.serializers import UserMeSerializer
 from apps.users.views import provision_parent_access_identity, provision_student_access_identity, reset_user_access_credentials
 from apps.users.permissions import IsAdminUser
+from apps.users.password_policy import validate_ecosystem_password
 from .orbit import create_registry_entity, delete_registry_entity, fetch_shared_directory, orbit_sync_is_enabled, update_registry_entity
 
 
@@ -245,9 +247,6 @@ def change_ecosystem_identity_password_view(request, entity_type, identifier):
 
     current_password = str(request.data.get('currentPassword') or '')
     new_password = str(request.data.get('newPassword') or '')
-    if len(new_password) < 8:
-        return Response({'detail': 'Le nouveau mot de passe doit contenir au moins 8 caracteres.'}, status=400)
-
     query = Q(username__iexact=identifier) | Q(kcs_card_id__iexact=identifier) | Q(access_code__iexact=identifier) | Q(email__iexact=identifier)
     allowed_roles = {
         'parent': {User.ROLE_PARENT},
@@ -263,6 +262,12 @@ def change_ecosystem_identity_password_view(request, entity_type, identifier):
         return Response({'detail': 'Compte SAVANEX introuvable pour cette entite.'}, status=404)
     if not user.check_password(current_password):
         return Response({'detail': 'Mot de passe actuel incorrect.'}, status=400)
+    if current_password == new_password:
+        return Response({'detail': 'Le nouveau mot de passe doit être différent du mot de passe actuel.'}, status=400)
+    try:
+        validate_ecosystem_password(new_password, user=user)
+    except ValidationError as error:
+        return Response({'detail': ' '.join(error.messages)}, status=400)
 
     user.set_password(new_password)
     user.must_change_password = False

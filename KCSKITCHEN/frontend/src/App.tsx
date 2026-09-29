@@ -38,7 +38,16 @@ const text = {
     productCreated: 'Le produit a été créé avec succès.', productUpdated: 'Le produit a été mis à jour avec succès.',
     name: 'Nom du produit', description: 'Description détaillée', category: 'Catégorie', currency: 'Devise', unit: 'Unité',
     openingStock: 'Stock initial', reorderLevel: 'Seuil de réapprovisionnement', minimumStock: 'Stock minimum',
-    trackInventory: 'Suivre le stock', updateReason: 'Motif de la modification', saveChanges: 'Enregistrer les modifications', unavailable: 'Indisponible'
+    trackInventory: 'Suivre le stock', updateReason: 'Motif de la modification', saveChanges: 'Enregistrer les modifications', unavailable: 'Indisponible',
+    secureAccess: 'ACCÈS SÉCURISÉ', smartManagement: 'Gestion intelligente de la cantine',
+    identityProof: 'Identité Orbit · Session chiffrée · Accès audité',
+    managerHint: 'Gestionnaires : utilisez votre identité Admin Nexus institutionnelle. Aucun compte Kitchen séparé n’est créé.',
+    live: 'EN DIRECT', verified: 'Orbit vérifié', lightMode: 'Mode soleil', darkMode: 'Mode lune',
+    personalAccount: 'COMPTE KITCHEN PERSONNEL', welcome: 'Bienvenue', consumptionLive: 'Votre relevé de consommation est à jour, exact et vérifiable.',
+    thisMonth: 'Ce mois-ci', recentActivity: 'ACTIVITÉ RÉCENTE', kitchenNotifications: 'Notifications Kitchen',
+    controlCenter: 'CENTRE DE CONTRÔLE DE LA CANTINE', controlHeadline: 'Un bon service commence par une traçabilité parfaite.',
+    controlSummary: 'Ventes, crédits, paiements, stock et contestations dans une vue unique et auditée.',
+    popularProducts: 'PRODUITS POPULAIRES', topConsumption: 'Consommations principales', secureLoading: 'Chargement sécurisé des données Kitchen…'
   },
   en: {
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
@@ -62,7 +71,16 @@ const text = {
     productCreated: 'The product was created successfully.', productUpdated: 'The product was updated successfully.',
     name: 'Product name', description: 'Detailed description', category: 'Category', currency: 'Currency', unit: 'Unit',
     openingStock: 'Opening stock', reorderLevel: 'Reorder level', minimumStock: 'Minimum stock',
-    trackInventory: 'Track inventory', updateReason: 'Reason for update', saveChanges: 'Save changes', unavailable: 'Unavailable'
+    trackInventory: 'Track inventory', updateReason: 'Reason for update', saveChanges: 'Save changes', unavailable: 'Unavailable',
+    secureAccess: 'SECURE ACCESS', smartManagement: 'Smart canteen management',
+    identityProof: 'Orbit identity · Encrypted session · Audited access',
+    managerHint: 'Managers: use your institutional Nexus Admin identity. No separate Kitchen account is created.',
+    live: 'LIVE', verified: 'Orbit verified', lightMode: 'Light mode', darkMode: 'Dark mode',
+    personalAccount: 'PERSONAL KITCHEN ACCOUNT', welcome: 'Welcome', consumptionLive: 'Your consumption ledger is live, exact and verifiable.',
+    thisMonth: 'This month', recentActivity: 'RECENT ACTIVITY', kitchenNotifications: 'Kitchen notifications',
+    controlCenter: 'SMART CANTEEN CONTROL CENTER', controlHeadline: 'Good service starts with perfect traceability.',
+    controlSummary: 'Sales, credit, payments, inventory and disputes in one audited view.',
+    popularProducts: 'POPULAR PRODUCTS', topConsumption: 'Top consumption', secureLoading: 'Secure Kitchen data loading…'
   }
 }
 
@@ -113,19 +131,19 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <span>KCS ORBIT ECOSYSTEM</span>
       <h1>KCS <strong>KITCHEN</strong></h1>
       <p>{t.trace}</p>
-      <div className="brand-line"><ChefHat /> Smart Canteen Management</div>
+      <div className="brand-line"><ChefHat /> {t.smartManagement}</div>
     </section>
     <section className="login-card">
-      <div><span className="eyebrow">SECURE ACCESS</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
+      <div><span className="eyebrow">{t.secureAccess}</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
       <form onSubmit={submit}>
         <label>{t.identifier}<input name="identifier" autoComplete="username" required /></label>
         <label>{t.password}<span className="password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>{showPassword ? <EyeOff /> : <Eye />}</button></span></label>
         {error && <div className="form-error">{error}</div>}
         <button className="primary large" disabled={loading}>{loading ? '…' : t.enter}</button>
       </form>
-      <small>🔒 Orbit identity · Encrypted session · Audited access</small>
+      <small>🔒 {t.identityProof}</small>
     </section>
-      <p className="manager-hint">Gestionnaires : utilisez votre identité Admin Nexus institutionnelle. Aucun compte Kitchen séparé n’est créé.</p>
+      <p className="manager-hint">{t.managerHint}</p>
   </main>
 }
 
@@ -154,18 +172,18 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   ]
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
-      <div className="sidebar-brand"><img src="./images/kcs-seal.svg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
-      <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{user.role.replaceAll('_', ' ')}</small></div></div>
+      <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-seal.svg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
+      <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
         <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages /> {lang.toUpperCase()}</button>
-        <button onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />} {dark ? 'Light' : 'Dark'}</button>
+        <button onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />} {dark ? t.lightMode : t.darkMode}</button>
         <button className="danger-text" onClick={onLogout}><LogOut /> {t.logout}</button>
       </div>
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-seal.svg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> Orbit verified</div></div></header>
+      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-seal.svg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
@@ -184,6 +202,15 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   </div>
 }
 
+const translatedRole = (role: Role, lang: Lang) => {
+  const labels: Record<Role, [string, string]> = {
+    KITCHEN_ADMIN: ['Gestionnaire Kitchen', 'Kitchen manager'], CASHIER: ['Caissier', 'Cashier'],
+    FINANCE: ['Finance', 'Finance'], AUDITOR: ['Auditeur', 'Auditor'], TEACHER: ['Enseignant', 'Teacher'],
+    STAFF: ['Personnel', 'Staff'], STUDENT: ['Élève', 'Student'],
+  }
+  return labels[role]?.[lang === 'fr' ? 0 : 1] ?? role.replaceAll('_', ' ')
+}
+
 function Stat({ icon, label, value, tone = '' }: { icon: ReactNode; label: string; value: ReactNode; tone?: string }) {
   return <article className={'stat-card ' + tone}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>
 }
@@ -195,19 +222,19 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
   if (error) return <div className="empty error">{error}</div>
   if (!data) return <Loading />
   if (data.mode === 'personal') return <>
-    <section className="hero"><div><span className="eyebrow">PERSONAL KITCHEN ACCOUNT</span><h2>Welcome, {user.fullName.split(' ').at(-1)}</h2><p>Your consumption ledger is live, exact and verifiable.</p></div><ChefHat size={70} /></section>
+    <section className="hero"><div><span className="eyebrow">{t.personalAccount}</span><h2>{t.welcome}, {user.fullName.split(' ').at(-1)}</h2><p>{t.consumptionLive}</p></div><ChefHat size={70} /></section>
     <div className="stats">
       <Stat icon={<ShoppingCart />} label={t.today} value={<DisplayMoney value={data.today._sum.total} />} />
-      <Stat icon={<ClipboardList />} label="This month" value={<DisplayMoney value={data.month._sum.total} />} />
+      <Stat icon={<ClipboardList />} label={t.thisMonth} value={<DisplayMoney value={data.month._sum.total} />} />
       <Stat icon={<Wallet />} label={t.outstanding} value={<DisplayMoney value={data.balance} />} tone={Number(data.balance) > 0 ? 'warn' : 'good'} />
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} />
     </div>
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h2>Kitchen notifications</h2></div></div>
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div>
       {data.notifications.length ? <div className="activity-list">{data.notifications.map((item: any) => <div key={item.id}><ShieldCheck /><span><b>{item.eventType.replaceAll('_', ' ')}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData} />}
     </section>
   </>
   return <>
-    <section className="hero"><div><span className="eyebrow">SMART CANTEEN CONTROL CENTER</span><h2>Good service starts with perfect traceability.</h2><p>Sales, credit, payments, inventory and disputes in one audited view.</p></div><ChefHat size={70} /></section>
+    <section className="hero"><div><span className="eyebrow">{t.controlCenter}</span><h2>{t.controlHeadline}</h2><p>{t.controlSummary}</p></div><ChefHat size={70} /></section>
     <div className="stats">
       <Stat icon={<ShoppingCart />} label={t.sales + ' · ' + t.today} value={<DisplayMoney value={data.today._sum.total} />} tone="good" />
       <Stat icon={<CreditCard />} label={t.credit} value={<DisplayMoney value={data.credit._sum.total} />} tone="warn" />
@@ -216,7 +243,7 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} tone={data.disputes ? 'warn' : ''} />
       <Stat icon={<Archive />} label={t.lowStock} value={data.lowStock} />
     </div>
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">POPULAR PRODUCTS</span><h2>Top consumption</h2></div></div>
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.popularProducts}</span><h2>{t.topConsumption}</h2></div></div>
       {data.popular.length ? <div className="rank-list">{data.popular.map((item: any, index: number) => <div key={item.productId}><b>{String(index + 1).padStart(2, '0')}</b><span>{item.productNameSnapshot}</span><strong>{Number(item._sum.quantity || 0)}</strong></div>)}</div> : <Empty text={t.noData} />}
     </section>
   </>
@@ -531,7 +558,7 @@ function Access({ t }: { t: Record<string, string> }) {
   {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 
-function Loading() { return <div className="loading"><ChefHat /><span>Secure Kitchen data loading…</span></div> }
+function Loading() { const { t } = useLanguage(); return <div className="loading"><ChefHat /><span>{t.secureLoading}</span></div> }
 function Empty({ text }: { text: string }) { return <div className="empty"><ChefHat /><span>{text}</span></div> }
 
 export default function App() {

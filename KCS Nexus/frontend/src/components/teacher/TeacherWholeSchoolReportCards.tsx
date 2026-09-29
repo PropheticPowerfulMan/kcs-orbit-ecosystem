@@ -90,11 +90,12 @@ export default function TeacherWholeSchoolReportCards() {
   const [conduct, setConduct] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingAction, setSavingAction] = useState<'draft' | 'submit' | null>(null)
   const [printing, setPrinting] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
-  const load = async () => {
+  const load = async (): Promise<Dashboard | null> => {
     setLoading(true)
     setError('')
     try {
@@ -102,8 +103,10 @@ export default function TeacherWholeSchoolReportCards() {
       const next = response.data?.data as Dashboard
       setDashboard(next)
       setSelectedId((current) => next.learners.some((learner) => learner.id === current) ? current : (next.learners.find((learner) => learner.isHomeroomStudent)?.id ?? next.learners[0]?.id ?? ''))
+      return next
     } catch (reason: any) {
       setError(reason?.response?.data?.message ?? 'The whole-school report-card workspace could not be loaded.')
+      return null
     } finally {
       setLoading(false)
     }
@@ -141,24 +144,42 @@ export default function TeacherWholeSchoolReportCards() {
   const updateReport = async (submit: boolean) => {
     if (!selected) return
     setSaving(true)
+    setSavingAction(submit ? 'submit' : 'draft')
     setError('')
     setNotice('')
     try {
       const payload = { academicYear, term, teacherComment, conduct }
       let submission: any = null
+      let draft: any = null
       if (submit) {
         const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload)
         submission = response.data?.data
-        if (submission?.publicationStatus !== 'READY_FOR_REVIEW' || Number(submission?.superAdministrationNotified ?? 0) < 1) {
+        if (submission?.publicationStatus !== 'READY_FOR_REVIEW' || submission?.superAdministrationQueued !== true) {
           throw new Error('The report card was not confirmed in the Super Administration review queue.')
         }
-      } else await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload)
-      setNotice(submit ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced and Super Administration was notified again.' : 'The complete report card was submitted to Super Administration.') : 'The main-teacher draft was saved in KCS Nexus.')
-      await load()
+      } else {
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload)
+        draft = response.data?.data
+        if (draft?.publicationStatus !== 'DRAFT' || draft?.principalStatus !== 'DRAFT') {
+          throw new Error('The report-card draft was not confirmed in the official Nexus register.')
+        }
+      }
+      const refreshed = await load()
+      const refreshedStatus = refreshed?.learners.find((learner) => learner.id === selected.id)?.reportCard?.publicationStatus
+      const expectedStatus = submit ? 'READY_FOR_REVIEW' : 'DRAFT'
+      if (refreshedStatus !== expectedStatus) {
+        throw new Error(submit
+          ? 'The report card submission was saved, but its review-queue confirmation could not be reloaded. Refresh to verify it before resubmitting.'
+          : 'The report-card draft was saved, but its register confirmation could not be reloaded. Refresh before editing it again.')
+      }
+      setNotice(submit
+        ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced in the Super Administration review queue.' : 'The complete report card is confirmed in the Super Administration review queue.')
+        : 'The main-teacher draft is saved and confirmed in the official Nexus register.')
     } catch (reason: any) {
       setError(reason?.response?.data?.message ?? reason?.message ?? 'The report-card operation failed.')
     } finally {
       setSaving(false)
+      setSavingAction(null)
     }
   }
 
@@ -277,7 +298,7 @@ export default function TeacherWholeSchoolReportCards() {
               <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Main teacher comment<textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => setTeacherComment(event.target.value)} placeholder='Synthesize academic progress, effort, strengths, and the next priority.' /></label>
               <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Conduct and learning habits<input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder='Conduct, responsibility, collaboration, punctuality...' /></label>
               {selected.isHomeroomStudent && !selected.allSubjectsSubmitted && <p className='mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'>Submission remains locked: {selected.expectedSubjectCount - selected.submittedSubjectCount} subject teacher(s) still need to submit final grades.</p>}
-              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 disabled:opacity-40 dark:border-kcs-blue-700 dark:text-kcs-blue-200'><Save size={15} />Save draft</button><button type='button' aria-busy={saving} disabled={saving || locked || !selected.allSubjectsSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'>{saving?<RefreshCw size={15} className='animate-spin'/>:<CheckCircle2 size={15} />}{saving?'Submitting…':awaitingReview?'Replace submission to Super Administration':'Submit to Super Administration'}</button></div>}
+              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' aria-busy={savingAction === 'draft'} disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300'>{savingAction === 'draft' ? <RefreshCw size={15} className='animate-spin' /> : <Save size={15} />}{savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}</button><button type='button' aria-busy={savingAction === 'submit'} disabled={saving || locked || !selected.allSubjectsSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'>{savingAction === 'submit'?<RefreshCw size={15} className='animate-spin'/>:<CheckCircle2 size={15} />}{savingAction === 'submit'?'Submitting…':awaitingReview?'Replace submission to Super Administration':'Submit to Super Administration'}</button></div>}
             </div>
           </div>
         </>}

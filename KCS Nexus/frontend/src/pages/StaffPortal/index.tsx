@@ -157,7 +157,7 @@ const StaffPortal = () => {
     const results = await Promise.allSettled([
       adminAPI.getStaffOverview(),
       registryAPI.getDirectory().catch(() => registryAPI.getDirectory(true)),
-      messagesAPI.getAll({ box: 'all' }),
+      messagesAPI.getHistory({ box: 'all' }),
       messagesAPI.getContacts(),
       financeAPI.getEduPaySummary(),
       admissionsAPI.getAll(),

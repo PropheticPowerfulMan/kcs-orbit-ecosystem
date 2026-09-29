@@ -1,5 +1,27 @@
 const normalizeClassPart = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ')
 
+export const splitClassLabel = (value: unknown) => {
+  const clean = normalizeClassPart(value)
+  if (!clean) return { grade: '', section: '' }
+
+  const duplicatedGrade = clean.match(/^grade\s*(1[0-2]|[1-9])\s+grade\s*\1(?:\s+(.+))?$/i)
+  if (duplicatedGrade) return { grade: `Grade ${Number(duplicatedGrade[1])}`, section: normalizeClassPart(duplicatedGrade[2]) }
+
+  const numberedGrade = clean.match(/^grade\s*(1[0-2]|[1-9])(?:\s+(.+))?$/i)
+  if (numberedGrade) return { grade: `Grade ${Number(numberedGrade[1])}`, section: normalizeClassPart(numberedGrade[2]) }
+
+  const ordinalGrade = clean.match(/^(1[0-2]|[1-9])(?:st|nd|rd|th)\s+grade(?:\s+(.+))?$/i)
+  if (ordinalGrade) return { grade: `Grade ${Number(ordinalGrade[1])}`, section: normalizeClassPart(ordinalGrade[2]) }
+
+  const kindergartenGrade = clean.match(/^kindergarten\s+(?:k|grade)\s*([3-5])(?:\s+(.+))?$/i)
+  if (kindergartenGrade) return { grade: `K${kindergartenGrade[1]}`, section: normalizeClassPart(kindergartenGrade[2]) }
+
+  const kindergarten = clean.match(/^k(?:indergarten)?\s*([3-5])(?:\s+(.+))?$/i)
+  if (kindergarten) return { grade: `K${kindergarten[1]}`, section: normalizeClassPart(kindergarten[2]) }
+
+  return { grade: clean, section: '' }
+}
+
 export const schoolClassOptions = [
   'K3',
   'K4',
@@ -8,29 +30,20 @@ export const schoolClassOptions = [
 ]
 
 export const canonicalClassLabel = (gradeValue: unknown, sectionValue: unknown = '') => {
-  const grade = normalizeClassPart(gradeValue)
-  const section = normalizeClassPart(sectionValue)
-  const combined = [grade, section].filter(Boolean).join(' ')
+  const parsedGrade = splitClassLabel(gradeValue)
+  if (!parsedGrade.grade) return 'Unassigned'
 
-  if (!combined) return 'Unassigned'
-
-  const kindergartenContext = /kindergarten|\bk\s*[3-5]\b/i.test(combined)
-  if (kindergartenContext) {
-    const kindergarten = combined.match(/(?:kindergarten\s*)?(?:k|grade)?\s*([3-5])\b/i)
-    if (kindergarten) return 'K' + kindergarten[1]
-  }
-
-  const numberedGrade = combined.match(/\bgrade\s*(1[0-2]|[1-9])\b/i)
-  if (numberedGrade) return 'Grade ' + Number(numberedGrade[1])
-
-  const ordinalGrade = combined.match(/\b(1[0-2]|[1-9])(?:st|nd|rd|th)\s+grade\b/i)
-  if (ordinalGrade) return 'Grade ' + Number(ordinalGrade[1])
-
-  return combined
+  const rawSection = normalizeClassPart(sectionValue)
+  const parsedSection = splitClassLabel(rawSection)
+  const duplicatedGrade = rawSection
+    && parsedSection.grade.toLowerCase() === parsedGrade.grade.toLowerCase()
+    && !parsedSection.section
+  const section = duplicatedGrade ? parsedGrade.section : (rawSection || parsedGrade.section)
+  return [parsedGrade.grade, section].filter(Boolean).join(' ')
 }
 
 export const classRank = (className: string) => {
-  const normalized = canonicalClassLabel(className)
+  const normalized = splitClassLabel(canonicalClassLabel(className)).grade
   const kindergarten = normalized.match(/^K([3-5])$/i)
   if (kindergarten) return Number(kindergarten[1]) - 3
 

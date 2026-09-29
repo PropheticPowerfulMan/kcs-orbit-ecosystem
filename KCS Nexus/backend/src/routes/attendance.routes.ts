@@ -5,7 +5,7 @@ import { env } from '../config/env.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { compareClassParts, normalizeClassParts, splitClassName } from '../utils/className.js'
-import { teacherClassKey } from '../utils/teacherClassAccess.js'
+import { studentBelongsToAssignedClass, teacherClassKey } from '../utils/teacherClassAccess.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { ensureOrbitStudentProfile, type OrbitStudentIdentity } from '../services/orbitStudentMaterialization.js'
 
@@ -78,12 +78,7 @@ async function assignedTeacherClasses(userId: string) {
 const matchesAssignedClass = (
   student: { grade: string; section?: string | null },
   assignedClass: { grade: string; section: string },
-) => {
-  const normalizedStudent = normalizeClassParts(student.grade, student.section)
-  const normalizedAssignment = normalizeClassParts(assignedClass.grade, assignedClass.section)
-  return normalizedStudent.grade.toLowerCase() === normalizedAssignment.grade.toLowerCase()
-    && (!normalizedAssignment.section || teacherClassKey(normalizedStudent) === teacherClassKey(normalizedAssignment))
-}
+) => studentBelongsToAssignedClass(student, assignedClass)
 async function synchronizeAssignedOrbitStudents(assignedClasses: Array<{ grade: string; section: string }>) {
   if (!assignedClasses.length || !env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) return
 

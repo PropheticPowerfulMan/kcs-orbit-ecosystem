@@ -18,7 +18,7 @@ import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGree
 type Grade = { id: string; score: number; maxScore: number; percentage: number; letterGrade: string; period: string; createdAt: string; course?: { name?: string; code?: string } }
 type Assignment = { id: string; status: string; score?: number | null; feedback?: string | null; assignment: { title: string; description?: string; dueDate: string; maxScore?: number; type?: string; cadence?: string; estimatedMinutes?: number|null; resourceUrl?: string|null; resourceName?: string|null; course?: { name?: string; code?: string } } }
 type Schedule = { id?: string; day: string; startTime: string; endTime: string; room: string; teacher?: string; course?: { name?: string; code?: string; description?: string } }
-type Profile = { id: string; studentNumber: string; grade: string; section: string; gpa?: number | null; attendanceRate?: number | null; status: string; user: { firstName: string; middleName?: string | null; lastName: string; email: string; phone?: string | null; avatar?: string | null } }
+type Profile = { id: string; studentNumber: string; grade: string; section: string; officialAvatar?: string | null; gpa?: number | null; attendanceRate?: number | null; status: string; user: { firstName: string; middleName?: string | null; lastName: string; email: string; phone?: string | null; avatar?: string | null } }
 type Notice = { id: string; title: string; message: string; type: string; isRead: boolean; createdAt: string; link?: string }
 type Contact = { id: string; firstName: string; middleName?: string | null; lastName: string; role: string }
 type Message = { id: string; senderId: string; recipientId?: string; subject: string; body: string; createdAt: string; readAt?: string | null; sender?: Contact; recipient?: Contact; targetRole?: string; attachmentName?: string | null; attachmentMime?: string | null; attachmentSize?: number | null; hasAttachment?: boolean }
@@ -62,7 +62,7 @@ export default function StudentPortal() {
 
   const loadDashboard = async () => {
     setLoading(true); setError('')
-    const results = await Promise.allSettled([studentsAPI.getMyOverview(), notificationsAPI.getAll(), messagesAPI.getAll(), messagesAPI.getContacts()])
+    const results = await Promise.allSettled([studentsAPI.getMyOverview(), notificationsAPI.getAll(), messagesAPI.getHistory({ box: 'all' }), messagesAPI.getContacts()])
     if (results[0].status === 'fulfilled') setOverview({ ...initialOverview, ...(results[0].value.data?.data ?? {}) })
     else setError(results[0].reason?.response?.data?.message ?? 'The academic dashboard could not be synchronized.')
     if (results[1].status === 'fulfilled') setNotices(Array.isArray(results[1].value.data?.data) ? results[1].value.data.data : [])

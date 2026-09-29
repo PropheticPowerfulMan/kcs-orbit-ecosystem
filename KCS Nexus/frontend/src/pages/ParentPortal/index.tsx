@@ -137,7 +137,7 @@ export default function ParentPortal() {
 
   useEffect(() => {
     let active = true
-    Promise.allSettled([studentsAPI.getMyChildren(), eventsAPI.getAll(), notificationsAPI.getAll(), messagesAPI.getAll(), messagesAPI.getContacts()])
+    Promise.allSettled([studentsAPI.getMyChildren(), eventsAPI.getAll(), notificationsAPI.getAll(), messagesAPI.getHistory({ box: 'all' }), messagesAPI.getContacts()])
       .then((results) => {
         if (!active) return
         const childPayload = results[0].status === 'fulfilled' ? results[0].value.data?.data : []

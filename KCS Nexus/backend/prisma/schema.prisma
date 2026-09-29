@@ -747,6 +747,8 @@ model InternalMessage {
   priority    String                @default("normal")
   channel     CorrespondenceChannel @default(PORTAL)
   createdAt   DateTime              @default(now())
+  senderArchivedAt DateTime?
+  recipientArchivedAt DateTime?
   sender      User?                 @relation("MessageSender", fields: [senderId], references: [id], onDelete: SetNull)
   recipient   User?                 @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
 
@@ -756,6 +758,8 @@ model InternalMessage {
   @@index([recipientId, createdAt])
   @@index([targetRole, createdAt])
   @@index([createdAt, id])
+  @@index([senderId, senderArchivedAt, createdAt])
+  @@index([recipientId, recipientArchivedAt, createdAt])
 }
 
 model ReportCard {

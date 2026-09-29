@@ -1,6 +1,6 @@
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
-import { formatClassName, splitClassName } from '../utils/className.js'
+import { formatClassName, resolveSynchronizedStudentClass } from '../utils/className.js'
 import { ApiError } from '../utils/api.js'
 
 export type OrbitStudentIdentity = {
@@ -78,7 +78,7 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
   const keys = studentKeys(student)
   const existingProfile = await prisma.studentProfile.findFirst({
     where: { OR: [{ studentNumber: { in: keys } }, { user: { orbitUserId: student.id } }] },
-    select: { id: true, studentNumber: true, userId: true },
+    select: { id: true, studentNumber: true, userId: true, grade: true, section: true },
   })
 
   const normalizedEmail = student.email?.trim().toLowerCase() || null
@@ -130,11 +130,11 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
   const canonicalNumber = student.studentNumber?.trim()
     || student.externalIds?.find((item) => item.appSlug.toUpperCase() === 'SAVANEX')?.externalId
     || student.id
-  const classParts = splitClassName(student.className)
+  const classParts = resolveSynchronizedStudentClass(student.className, existingProfile)
   const profileData = {
     userId: user.id,
     studentNumber: canonicalNumber,
-    ...(student.className?.trim() ? { grade: classParts.grade || student.className.trim(), section: classParts.section } : {}),
+    ...(classParts ? { grade: classParts.grade || student.className?.trim() || 'Unassigned', section: classParts.section } : {}),
     status: (student.status || 'active').toLowerCase(),
     ...(student.photoData !== undefined ? { officialAvatar: student.photoData || null } : {}),
     ...(student.dateOfBirth ? { dateOfBirth: new Date(student.dateOfBirth) } : {}),
@@ -146,7 +146,7 @@ export async function ensureOrbitStudentProfile(student: OrbitStudentIdentity) {
         select: { id: true, studentNumber: true },
       })
     : await prisma.studentProfile.create({
-        data: { ...profileData, grade: classParts.grade || student.className?.trim() || 'Unassigned', section: classParts.section },
+        data: { ...profileData, grade: classParts?.grade || student.className?.trim() || 'Unassigned', section: classParts?.section || '' },
         select: { id: true, studentNumber: true },
       })
 

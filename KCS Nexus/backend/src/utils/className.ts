@@ -18,12 +18,25 @@ export function splitClassName(className?: string | null) {
     }
   }
 
+  const compactGradeSectionMatch = cleanClassName.match(/^grade\s*(\d{1,2})\s*[-/]?\s*([a-z])$/i)
+  if (compactGradeSectionMatch) {
+    const gradeNumber = Number(compactGradeSectionMatch[1])
+    if (gradeNumber >= 1 && gradeNumber <= 12) {
+      return { grade: `Grade ${gradeNumber}`, section: compactGradeSectionMatch[2].toUpperCase() }
+    }
+  }
+
   const gradeWithSectionMatch = cleanClassName.match(/^grade\s*(\d{1,2})(?:\s+(.+))?$/i)
   if (gradeWithSectionMatch) {
     const gradeNumber = Number(gradeWithSectionMatch[1])
     if (gradeNumber >= 1 && gradeNumber <= 12) {
       return { grade: `Grade ${gradeNumber}`, section: gradeWithSectionMatch[2]?.trim() || '' }
     }
+  }
+
+  const compactKindergartenSectionMatch = cleanClassName.match(/^k(?:indergarten)?\s*([3-5])\s*[-/]?\s*([a-z])$/i)
+  if (compactKindergartenSectionMatch) {
+    return { grade: `K${compactKindergartenSectionMatch[1]}`, section: compactKindergartenSectionMatch[2].toUpperCase() }
   }
 
   const kindergartenWithSectionMatch = cleanClassName.match(/^k(?:indergarten)?\s*([3-5])(?:\s+(.+))?$/i)
@@ -61,6 +74,24 @@ export function normalizeClassParts(grade?: string | null, section?: string | nu
     return splitClassName(`${normalizedGrade.grade} ${cleanSection}`)
   }
   return splitClassName(grade)
+}
+
+export function resolveSynchronizedStudentClass(
+  incomingClassName?: string | null,
+  existing?: { grade: string; section?: string | null } | null,
+) {
+  if (!incomingClassName?.trim()) return existing ? normalizeClassParts(existing.grade, existing.section) : null
+  const incoming = splitClassName(incomingClassName)
+  if (!existing) return incoming
+  const current = normalizeClassParts(existing.grade, existing.section)
+  if (
+    current.section
+    && !incoming.section
+    && current.grade.toLowerCase() === incoming.grade.toLowerCase()
+  ) {
+    return current
+  }
+  return incoming
 }
 
 export function classAssignmentsOverlap(

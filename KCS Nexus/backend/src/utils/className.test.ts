@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { classAssignmentsOverlap, compareClassParts, formatClassName, normalizeClassParts, splitClassName } from './className.js'
+import { classAssignmentsOverlap, compareClassParts, formatClassName, normalizeClassParts, resolveSynchronizedStudentClass, splitClassName } from './className.js'
 
 test('normalizes duplicated Grade names used by imported student records', () => {
   assert.deepEqual(splitClassName('Grade 10 Grade 10'), { grade: 'Grade 10', section: '' })
@@ -13,6 +13,9 @@ test('preserves canonical grades and normalizes kindergarten names', () => {
   assert.deepEqual(splitClassName('Kindergarten K3'), { grade: 'K3', section: '' })
   assert.deepEqual(splitClassName('Kindergarten Grade 3'), { grade: 'K3', section: '' })
   assert.deepEqual(splitClassName('K3 B'), { grade: 'K3', section: 'B' })
+  assert.deepEqual(splitClassName('Grade 9A'), { grade: 'Grade 9', section: 'A' })
+  assert.deepEqual(splitClassName('Grade 9-B'), { grade: 'Grade 9', section: 'B' })
+  assert.deepEqual(splitClassName('K3C'), { grade: 'K3', section: 'C' })
 })
 
 test('normalizes imported grade and section fields into one class identity', () => {
@@ -46,4 +49,22 @@ test('sorts classes from K3 through Grade 12', () => {
   ].sort(compareClassParts)
 
   assert.deepEqual(classes.map((item) => item.grade), ['K3', 'K4', 'K5', 'Grade 1', 'Grade 2', 'Grade 12'])
+})
+
+test('does not erase an official class section when Orbit temporarily returns only the base grade', () => {
+  assert.deepEqual(
+    resolveSynchronizedStudentClass('Grade 9', { grade: 'Grade 9', section: 'A' }),
+    { grade: 'Grade 9', section: 'A' },
+  )
+})
+
+test('accepts an explicit section or a genuine grade change from Orbit', () => {
+  assert.deepEqual(
+    resolveSynchronizedStudentClass('Grade 9B', { grade: 'Grade 9', section: 'A' }),
+    { grade: 'Grade 9', section: 'B' },
+  )
+  assert.deepEqual(
+    resolveSynchronizedStudentClass('Grade 10', { grade: 'Grade 9', section: 'A' }),
+    { grade: 'Grade 10', section: '' },
+  )
 })

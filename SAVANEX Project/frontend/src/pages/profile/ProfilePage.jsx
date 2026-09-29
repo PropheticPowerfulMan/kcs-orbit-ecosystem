@@ -4,6 +4,7 @@ import { Eye, EyeOff, KeyRound, Save, UserRound } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { authService } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
+import { evaluatePassword } from '../../utils/passwordStrength';
 
 const emptyIdentity = { first_name: '', middle_name: '', last_name: '', email: '', phone: '' };
 const emptyPasswords = { oldPassword: '', newPassword: '', confirmPassword: '' };
@@ -43,6 +44,7 @@ const ProfilePage = () => {
   const updateIdentityField = (field) => (event) => setIdentity((current) => ({ ...current, [field]: event.target.value }));
   const updatePasswordField = (field) => (event) => setPasswords((current) => ({ ...current, [field]: event.target.value }));
   const toggleVisibility = (field) => setVisible((current) => ({ ...current, [field]: !current[field] }));
+  const passwordStrength = evaluatePassword(passwords.newPassword, [identity.first_name, identity.middle_name, identity.last_name, identity.email, storedUser?.access_code]);
 
   const saveIdentity = async (event) => {
     event.preventDefault(); setSavingIdentity(true); setError(''); setIdentityMessage('');
@@ -54,6 +56,7 @@ const ProfilePage = () => {
   const savePassword = async (event) => {
     event.preventDefault(); setError(''); setPasswordMessage('');
     if (passwords.newPassword !== passwords.confirmPassword) { setError('Les nouveaux mots de passe ne correspondent pas.'); return; }
+    if (!passwordStrength.strong) { setError('Le nouveau mot de passe reste vulnérable. Respectez toutes les règles affichées en rouge.'); return; }
     setSavingPassword(true);
     try { await authService.changePassword(passwords.oldPassword, passwords.newPassword); setPasswords(emptyPasswords); updateUser({ ...storedUser, must_change_password: false, password_generated_by_system: false }); setPasswordMessage('Mot de passe modifié avec succès.'); }
     catch (requestError) { const data=requestError?.response?.data; setError(data?.old_password?.[0] || data?.new_password?.[0] || data?.detail || 'Modification du mot de passe impossible.'); }
@@ -79,10 +82,11 @@ const ProfilePage = () => {
           <button disabled={savingIdentity} className="flex w-full items-center justify-center gap-2 rounded-xl bg-kcs-blue px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"><Save size={16}/>{savingIdentity ? 'Enregistrement...' : 'Enregistrer mon identité'}</button>
         </form>
         <form onSubmit={savePassword} className="card space-y-4 p-6">
-          <div className="flex items-center gap-3"><KeyRound className="text-emerald-300"/><div><h3 className="font-display text-xl font-bold text-slate-100">Mot de passe</h3><p className="text-xs text-slate-400">Utilisez au moins 8 caractères.</p></div></div>
+          <div className="flex items-center gap-3"><KeyRound className="text-emerald-300"/><div><h3 className="font-display text-xl font-bold text-slate-100">Mot de passe</h3><p className="text-xs text-slate-400">Utilisez une phrase de passe forte, unique et conforme à toutes les règles.</p></div></div>
           <PasswordInput label="Mot de passe actuel" value={passwords.oldPassword} onChange={updatePasswordField('oldPassword')} visible={visible.oldPassword} onToggle={() => toggleVisibility('oldPassword')} autoComplete="current-password" />
           <PasswordInput label="Nouveau mot de passe" value={passwords.newPassword} onChange={updatePasswordField('newPassword')} visible={visible.newPassword} onToggle={() => toggleVisibility('newPassword')} autoComplete="new-password" />
           <PasswordInput label="Confirmer le nouveau mot de passe" value={passwords.confirmPassword} onChange={updatePasswordField('confirmPassword')} visible={visible.confirmPassword} onToggle={() => toggleVisibility('confirmPassword')} autoComplete="new-password" />
+          {passwords.newPassword && <div className="rounded-xl border border-slate-700 bg-slate-950/55 p-3"><div className="flex items-center justify-between text-xs font-bold"><span className={passwordStrength.strong ? 'text-emerald-300' : 'text-rose-300'}>{passwordStrength.strong ? 'Fort et conforme' : 'Encore vulnérable'}</span><span className="text-slate-300">{passwordStrength.score}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-700"><div className={`h-full transition-all ${passwordStrength.strong ? 'bg-emerald-400' : passwordStrength.score >= 65 ? 'bg-amber-400' : 'bg-rose-500'}`} style={{width: `${passwordStrength.score}%`}}/></div><div className="mt-3 grid gap-1 sm:grid-cols-2">{passwordStrength.checks.map(([label, passed]) => <span key={label} className={`text-[11px] ${passed ? 'text-emerald-300' : 'text-rose-300'}`}>{passed ? '✓' : '✕'} {label}</span>)}</div><p className="mt-3 text-[11px] text-slate-400">Utilisez une phrase de passe différente sur chaque service. Aucun mot de passe n’est absolument inviolable, mais ces règles réduisent fortement le risque.</p></div>}
           {passwordMessage && <p className="text-sm text-emerald-300">{passwordMessage}</p>}
           <button disabled={savingPassword} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"><KeyRound size={16}/>{savingPassword ? 'Modification...' : 'Changer le mot de passe'}</button>
         </form>

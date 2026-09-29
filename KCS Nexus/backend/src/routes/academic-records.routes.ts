@@ -9,7 +9,7 @@ import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { getParentAcademicClearance } from './finance.routes.js'
 import { normalizeClassParts } from '../utils/className.js'
-import { teacherClassKey } from '../utils/teacherClassAccess.js'
+import { isTeacherHomeroomForStudent } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
@@ -34,13 +34,6 @@ const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:num
  const credits=grades.reduce((sum,item)=>sum+Math.max(item.course.credits||1,1),0)
  return credits?Number((grades.reduce((sum,item)=>sum+(item.percentage*Math.max(item.course.credits||1,1)),0)/credits).toFixed(2)):0
 }
-const isTeacherHomeroomFor=(teacher:{status?:string;homeroomGrade:string|null;homeroomSection:string|null},student:{grade:string;section:string})=>{
- if(teacher.status !== undefined && teacher.status !== 'HOMEROOM_TEACHER')return false
- if(!teacher.homeroomGrade)return false
- const home=normalizeClassParts(teacher.homeroomGrade,teacher.homeroomSection??'')
- const learner=normalizeClassParts(student.grade,student.section)
- return home.section?teacherClassKey(home)===teacherClassKey(learner):home.grade===learner.grade
-}
 const homeroomReportContext=async(userId:string,studentId:string,academicYear:string,term:string)=>{
  await ensureTeacherProfile(userId)
  const [teacher,student]=await Promise.all([
@@ -52,7 +45,7 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  ])
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
  if(!student)throw new ApiError(404,'Student not found')
- if(!isTeacherHomeroomFor(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
+  if(!isTeacherHomeroomForStudent(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
  const submittedGrades=await prisma.grade.findMany({
   where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
   include:{course:true},
@@ -285,7 +278,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    user:student.user,
    grade:student.grade,
    section:student.section,
-   isHomeroomStudent:isTeacherHomeroomFor(teacher,student),
+    isHomeroomStudent:isTeacherHomeroomForStudent(teacher,student),
    subjects,
    expectedSubjectCount:subjects.length,
    submittedSubjectCount:submitted.length,
@@ -350,7 +343,9 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
   if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
   return{saved,notified:recipients.length}
  })
- return success(res,{...result.saved,superAdministrationNotified:result.notified,replacesPreviousSubmission},replacesPreviousSubmission?'Previous submission replaced and updated report card sent to Super Administration':'Complete report card submitted to Super Administration')
+  const confirmed=await prisma.reportCard.findUnique({where:{id:result.saved.id},select:{id:true,publicationStatus:true,principalStatus:true}})
+  if(!confirmed||confirmed.publicationStatus!=='READY_FOR_REVIEW'||confirmed.principalStatus!=='READY_FOR_REVIEW')throw new ApiError(500,'The report card could not be confirmed in the Super Administration review queue')
+  return success(res,{...result.saved,superAdministrationQueued:true,superAdministrationNotified:result.notified,replacesPreviousSubmission},replacesPreviousSubmission?'Previous submission replaced and updated report card sent to Super Administration':'Complete report card submitted to Super Administration')
 }))
 
 academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{

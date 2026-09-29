@@ -179,14 +179,14 @@ class EcosystemIdentifierAuthenticationTests(TestCase):
         )
         response = self.client.post(
             '/api/integration/entities/parent/ACC-PAR-PASSWORD/change-password/',
-            {'currentPassword': 'OldPassword123!', 'newPassword': 'NewPassword456!'},
+            {'currentPassword': 'OldPassword123!', 'newPassword': 'Lynx!Quartz7Violet#92'},
             format='json',
             HTTP_X_API_KEY='nexus-test-key',
         )
         self.assertEqual(response.status_code, 200, response.data)
         parent.refresh_from_db()
         self.assertFalse(parent.check_password('OldPassword123!'))
-        self.assertTrue(parent.check_password('NewPassword456!'))
+        self.assertTrue(parent.check_password('Lynx!Quartz7Violet#92'))
         self.assertFalse(parent.must_change_password)
         self.assertFalse(parent.password_generated_by_system)
         sync_parent.assert_called_once_with(parent)
