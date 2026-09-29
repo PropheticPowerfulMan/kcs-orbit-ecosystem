@@ -1,5 +1,6 @@
 import { env } from './config.js'
 import { classifyDirectoryEmployee } from './identity.js'
+import { normalizeClassName } from './class-name.js'
 
 export type DirectoryPerson = {
   id: string
@@ -38,7 +39,7 @@ export async function loadDirectory(force = false): Promise<DirectoryPerson[]> {
     if (!response.ok) throw new Error('Orbit directory returned ' + response.status)
     const body = await response.json() as Directory
     const people: DirectoryPerson[] = [
-      ...(body.students || []).map(person => ({ ...person, kind: 'STUDENT' as const })),
+      ...(body.students || []).map(person => ({ ...person, className: normalizeClassName(person.className), kind: 'STUDENT' as const })),
       ...(body.teachers || []).map(person => ({ ...person, kind: classifyDirectoryEmployee(person) })),
       ...(body.staff || []).map(person => ({ ...person, kind: 'STAFF' as const }))
     ].filter(person => !person.status || person.status === 'ACTIVE')

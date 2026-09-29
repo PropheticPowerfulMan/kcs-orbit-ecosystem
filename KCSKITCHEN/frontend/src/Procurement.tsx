@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Building2, CircleDollarSign, PackagePlus, Plus, ReceiptText, RefreshCw, Truck, X } from 'lucide-react'
-import { api, dateTime, money } from './api'
+import { api, dateTime } from './api'
+import { DisplayMoney } from './ExchangeRate'
 import type { Product, User } from './types'
 
 type Supplier = { id: string; name: string; contactName?: string; phone?: string; email?: string }
@@ -31,6 +32,7 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
   const [supplierOpen, setSupplierOpen] = useState(false)
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [payment, setPayment] = useState<Purchase | null>(null)
+  const [purchaseCurrency, setPurchaseCurrency] = useState('CDF')
   const [lines, setLines] = useState<Line[]>([{ productId: '', description: '', quantity: 1, unit: 'UNIT', unitCost: 0 }])
 
   const load = async () => {
@@ -77,7 +79,7 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
         notes: data.get('notes') || null,
         items: lines.map(line => ({ ...line, productId: line.productId || null }))
       }) })
-      setPurchaseOpen(false); setLines([{ productId: '', description: '', quantity: 1, unit: 'UNIT', unitCost: 0 }])
+      setPurchaseOpen(false); setPurchaseCurrency('CDF'); setLines([{ productId: '', description: '', quantity: 1, unit: 'UNIT', unitCost: 0 }])
       await load(); setMessage(fr ? 'Approvisionnement reçu, stock et dette mis à jour.' : 'Purchase received; inventory and debt updated.')
     } catch (error) { setMessage((error as Error).message) } finally { setBusy(false) }
   }
@@ -103,7 +105,7 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
     <div className="stats procurement-stats">
       <article className="stat-card"><span><Building2/></span><div><small>{fr ? 'Fournisseurs actifs' : 'Active suppliers'}</small><strong>{suppliers.length}</strong></div></article>
       <article className="stat-card"><span><ReceiptText/></span><div><small>{fr ? 'Achats enregistrés' : 'Recorded purchases'}</small><strong>{purchases.length}</strong></div></article>
-      <article className="stat-card warn"><span><CircleDollarSign/></span><div><small>{fr ? 'Dette fournisseurs' : 'Supplier debt'}</small><strong>{money(debt)}</strong></div></article>
+      <article className="stat-card warn"><span><CircleDollarSign/></span><div><small>{fr ? 'Dette fournisseurs' : 'Supplier debt'}</small><strong><DisplayMoney value={debt} /></strong></div></article>
       <article className="stat-card"><span><PackagePlus/></span><div><small>{fr ? 'Échéances dépassées' : 'Overdue invoices'}</small><strong>{overdue}</strong></div></article>
     </div>
     <section className="panel">
@@ -114,7 +116,7 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
       </div>
       {message && <div className="form-message">{message}</div>}
       <div className="data-table procurement-table"><div className="table-head"><span>Reference</span><span>{fr ? 'Fournisseur' : 'Supplier'}</span><span>{fr ? 'Date / échéance' : 'Date / due'}</span><span>Total</span><span>{fr ? 'Solde' : 'Balance'}</span><span>Status</span></div>
-        {purchases.map(row => <div className="table-row" key={row.id}><span data-label="Reference"><b>{row.purchaseNumber}</b><small>{row.invoiceNumber || '—'}</small></span><span data-label={fr ? 'Fournisseur' : 'Supplier'}>{row.supplier.name}</span><span data-label={fr ? 'Date / échéance' : 'Date / due'}>{new Date(row.invoiceDate).toLocaleDateString()}<small>{row.dueDate ? new Date(row.dueDate).toLocaleDateString() : '—'}</small></span><span data-label="Total"><b>{money(row.total, row.currency)}</b></span><span data-label={fr ? 'Solde' : 'Balance'}><b>{money(row.balance, row.currency)}</b></span><span data-label="Status"><em className={'badge ' + (row.status === 'PAID' ? 'good' : 'warn')}>{row.status}</em>{canWrite && Number(row.balance) > 0 && <button className="mini-action" onClick={() => setPayment(row)}>{fr ? 'Payer' : 'Pay'}</button>}</span></div>)}
+        {purchases.map(row => <div className="table-row" key={row.id}><span data-label="Reference"><b>{row.purchaseNumber}</b><small>{row.invoiceNumber || '—'}</small></span><span data-label={fr ? 'Fournisseur' : 'Supplier'}>{row.supplier.name}</span><span data-label={fr ? 'Date / échéance' : 'Date / due'}>{new Date(row.invoiceDate).toLocaleDateString()}<small>{row.dueDate ? new Date(row.dueDate).toLocaleDateString() : '—'}</small></span><span data-label="Total"><b><DisplayMoney value={row.total} currency={row.currency} /></b></span><span data-label={fr ? 'Solde' : 'Balance'}><b><DisplayMoney value={row.balance} currency={row.currency} /></b></span><span data-label="Status"><em className={'badge ' + (row.status === 'PAID' ? 'good' : 'warn')}>{row.status}</em>{canWrite && Number(row.balance) > 0 && <button className="mini-action" onClick={() => setPayment(row)}>{fr ? 'Payer' : 'Pay'}</button>}</span></div>)}
       </div>
       {!loading && !purchases.length && <div className="empty"><Truck/><span>{fr ? 'Aucun approvisionnement enregistré.' : 'No purchase recorded yet.'}</span></div>}
     </section>
@@ -125,11 +127,11 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
       <div className="form-grid"><label>{fr ? 'Fournisseur' : 'Supplier'}<select name="supplierId" required><option value="">{fr ? 'Choisir…' : 'Choose…'}</option>{suppliers.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>{fr ? 'Facture' : 'Invoice'}<input name="invoiceNumber"/></label><label>{fr ? 'Date facture' : 'Invoice date'}<input name="invoiceDate" type="date" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>{fr ? 'Échéance' : 'Due date'}<input name="dueDate" type="date"/></label></div>
       <div className="purchase-lines">{lines.map((line,index)=><div className="purchase-line" key={index}><select value={line.productId} onChange={event=>chooseProduct(index,event.target.value)}><option value="">{fr ? 'Article libre' : 'Unlinked item'}</option>{products.map(product=><option value={product.id} key={product.id}>{product.name}</option>)}</select><input value={line.description} onChange={event=>updateLine(index,{description:event.target.value})} placeholder={fr?'Description':'Description'} required/><input type="number" min=".001" step=".001" value={line.quantity} onChange={event=>updateLine(index,{quantity:Number(event.target.value)})}/><input type="number" min="0" value={line.unitCost} onChange={event=>updateLine(index,{unitCost:Number(event.target.value)})}/>{lines.length>1&&<button type="button" onClick={()=>setLines(current=>current.filter((_,i)=>i!==index))}><X/></button>}</div>)}</div>
       <button type="button" onClick={()=>setLines(current=>[...current,{productId:'',description:'',quantity:1,unit:'UNIT',unitCost:0}])}><Plus/>{fr ? 'Ajouter une ligne' : 'Add line'}</button>
-      <div className="form-grid"><label>{fr ? 'Devise' : 'Currency'}<select name="currency"><option>CDF</option><option>USD</option></select></label><label>{fr ? 'Déjà payé' : 'Already paid'}<input name="paidAmount" type="number" min="0" max={total} defaultValue="0"/></label><label>{fr ? 'Mode de paiement' : 'Payment method'}<select name="paymentMethod"><option>CASH</option><option>MOBILE_MONEY</option><option>BANK</option><option>EDUPAY</option></select></label><label>{fr ? 'Référence paiement' : 'Payment reference'}<input name="paymentReference"/></label></div>
-      <label>Notes<textarea name="notes"/></label><div className="purchase-total"><span>Total</span><strong>{money(total)}</strong></div>
+      <div className="form-grid"><label>{fr ? 'Devise' : 'Currency'}<select name="currency" value={purchaseCurrency} onChange={event => setPurchaseCurrency(event.target.value)}><option>CDF</option><option>USD</option></select></label><label>{fr ? 'Déjà payé' : 'Already paid'}<input name="paidAmount" type="number" min="0" max={total} defaultValue="0"/></label><label>{fr ? 'Mode de paiement' : 'Payment method'}<select name="paymentMethod"><option>CASH</option><option>MOBILE_MONEY</option><option>BANK</option><option>EDUPAY</option></select></label><label>{fr ? 'Référence paiement' : 'Payment reference'}<input name="paymentReference"/></label></div>
+      <label>Notes<textarea name="notes"/></label><div className="purchase-total"><span>Total</span><strong><DisplayMoney value={total} currency={purchaseCurrency} /></strong></div>
       <button className="primary large" disabled={busy || total<=0}>{busy ? '…' : fr ? 'Réceptionner et mettre à jour le stock' : 'Receive and update inventory'}</button>
     </form></Modal>}
 
-    {payment && <Modal close={() => setPayment(null)}><form className="modal-form" onSubmit={paySupplier}><span className="eyebrow">SUPPLIER PAYMENT</span><h2>{payment.supplier.name}</h2><p>{payment.purchaseNumber} · {fr ? 'solde' : 'balance'} <b>{money(payment.balance,payment.currency)}</b></p><label>{fr ? 'Montant' : 'Amount'}<input name="amount" type="number" min=".01" max={Number(payment.balance)} required/></label><label>{fr ? 'Mode' : 'Method'}<select name="method"><option>CASH</option><option>MOBILE_MONEY</option><option>BANK</option><option>EDUPAY</option></select></label><label>{fr ? 'Référence' : 'Reference'}<input name="reference"/></label><label>Notes<textarea name="notes"/></label><button className="primary large" disabled={busy}>{busy ? '…' : fr ? 'Enregistrer le paiement' : 'Record payment'}</button></form></Modal>}
+    {payment && <Modal close={() => setPayment(null)}><form className="modal-form" onSubmit={paySupplier}><span className="eyebrow">SUPPLIER PAYMENT</span><h2>{payment.supplier.name}</h2><p>{payment.purchaseNumber} · {fr ? 'solde' : 'balance'} <b><DisplayMoney value={payment.balance} currency={payment.currency} /></b></p><label>{fr ? 'Montant' : 'Amount'}<input name="amount" type="number" min=".01" max={Number(payment.balance)} required/></label><label>{fr ? 'Mode' : 'Method'}<select name="method"><option>CASH</option><option>MOBILE_MONEY</option><option>BANK</option><option>EDUPAY</option></select></label><label>{fr ? 'Référence' : 'Reference'}<input name="reference"/></label><label>Notes<textarea name="notes"/></label><button className="primary large" disabled={busy}>{busy ? '…' : fr ? 'Enregistrer le paiement' : 'Record payment'}</button></form></Modal>}
   </div>
 }

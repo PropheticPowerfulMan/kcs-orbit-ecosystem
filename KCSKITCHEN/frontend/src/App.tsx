@@ -4,12 +4,13 @@ import {
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
   Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X, Pencil, LoaderCircle
 } from 'lucide-react'
-import { api, dateTime, getToken, money, setToken } from './api'
+import { QRCodeSVG } from 'qrcode.react'
+import { api, dateTime, getToken, setToken } from './api'
 import type { Person, Product, Role, Transaction, User } from './types'
 import Procurement from './Procurement'
 import InstallAppButton from './InstallApp'
 import PersonSelector from './PersonSelector'
-import { DualMoney, ExchangeRateCard, useExchangeRate } from './ExchangeRate'
+import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
 type Page = 'dashboard' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
@@ -153,7 +154,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   ]
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
-      <div className="sidebar-brand"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
+      <div className="sidebar-brand"><img src="./images/kcs-seal.svg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
       <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{user.role.replaceAll('_', ' ')}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
@@ -162,8 +163,9 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         <button className="danger-text" onClick={onLogout}><LogOut /> {t.logout}</button>
       </div>
     </aside>
+    <CurrencyDisplayProvider userKey={user.userId}>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-logo.png" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> Orbit verified</div></div></header>
+      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-seal.svg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · LIVE</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> Orbit verified</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
@@ -178,6 +180,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
     </main>
+    </CurrencyDisplayProvider>
   </div>
 }
 
@@ -194,9 +197,9 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
   if (data.mode === 'personal') return <>
     <section className="hero"><div><span className="eyebrow">PERSONAL KITCHEN ACCOUNT</span><h2>Welcome, {user.fullName.split(' ').at(-1)}</h2><p>Your consumption ledger is live, exact and verifiable.</p></div><ChefHat size={70} /></section>
     <div className="stats">
-      <Stat icon={<ShoppingCart />} label={t.today} value={money(data.today._sum.total)} />
-      <Stat icon={<ClipboardList />} label="This month" value={money(data.month._sum.total)} />
-      <Stat icon={<Wallet />} label={t.outstanding} value={money(data.balance)} tone={Number(data.balance) > 0 ? 'warn' : 'good'} />
+      <Stat icon={<ShoppingCart />} label={t.today} value={<DisplayMoney value={data.today._sum.total} />} />
+      <Stat icon={<ClipboardList />} label="This month" value={<DisplayMoney value={data.month._sum.total} />} />
+      <Stat icon={<Wallet />} label={t.outstanding} value={<DisplayMoney value={data.balance} />} tone={Number(data.balance) > 0 ? 'warn' : 'good'} />
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} />
     </div>
     <section className="panel"><div className="section-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h2>Kitchen notifications</h2></div></div>
@@ -206,10 +209,10 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
   return <>
     <section className="hero"><div><span className="eyebrow">SMART CANTEEN CONTROL CENTER</span><h2>Good service starts with perfect traceability.</h2><p>Sales, credit, payments, inventory and disputes in one audited view.</p></div><ChefHat size={70} /></section>
     <div className="stats">
-      <Stat icon={<ShoppingCart />} label={t.sales + ' · ' + t.today} value={money(data.today._sum.total)} tone="good" />
-      <Stat icon={<CreditCard />} label={t.credit} value={money(data.credit._sum.total)} tone="warn" />
-      <Stat icon={<Wallet />} label={t.outstanding} value={money(data.outstanding)} />
-      <Stat icon={<ReceiptText />} label={t.payments} value={money(data.payments._sum.amount)} />
+      <Stat icon={<ShoppingCart />} label={t.sales + ' · ' + t.today} value={<DisplayMoney value={data.today._sum.total} />} tone="good" />
+      <Stat icon={<CreditCard />} label={t.credit} value={<DisplayMoney value={data.credit._sum.total} />} tone="warn" />
+      <Stat icon={<Wallet />} label={t.outstanding} value={<DisplayMoney value={data.outstanding} />} />
+      <Stat icon={<ReceiptText />} label={t.payments} value={<DisplayMoney value={data.payments._sum.amount} />} />
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} tone={data.disputes ? 'warn' : ''} />
       <Stat icon={<Archive />} label={t.lowStock} value={data.lowStock} />
     </div>
@@ -227,7 +230,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const { rate } = useExchangeRate()
+  const { rate } = useCurrencyDisplay()
   useEffect(() => { api<{ products: Product[] }>('/products').then(result => setProducts(result.products)) }, [])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
@@ -256,15 +259,15 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
         <PersonSelector value={person} onChange={setPerson} lang={lang} />
         <div className="step-title"><span>2</span><div><small>CATALOG</small><h2>{t.chooseItems}</h2></div></div>
         <div className="product-grid">{products.map(product => <button key={product.id} className="product-tile" onClick={() => add(product.id)} disabled={!product.isAvailable}>
-          <span className="product-icon"><ChefHat /></span><b>{product.name}</b><small>{product.category}</small><DualMoney value={product.currentPrice} currency={product.currency} rate={rate} compact />{cart[product.id] ? <em>{cart[product.id]}</em> : null}
+          <span className="product-icon"><ChefHat /></span><b>{product.name}</b><small>{product.category}</small><DisplayMoney value={product.currentPrice} currency={product.currency} />{cart[product.id] ? <em>{cart[product.id]}</em> : null}
         </button>)}</div>
       </div>
       <aside className="basket panel">
         <div className="step-title"><span>3</span><div><small>CHECKOUT</small><h2>{t.basket}</h2></div></div>
-        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><DualMoney value={product.currentPrice} currency={product.currency} rate={rate} compact /></span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DualMoney value={Number(product.currentPrice) * cart[product.id]} currency={product.currency} rate={rate} compact /></div>)}</div>
+        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><DisplayMoney value={product.currentPrice} currency={product.currency} /></span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DisplayMoney value={Number(product.currentPrice) * cart[product.id]} currency={product.currency} /></div>)}</div>
         {!total && <Empty text={t.noData} />}
         <div className="payment-switch"><button className={paymentMode !== 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CASH')}><Wallet />{t.payNow}</button><button className={paymentMode === 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CREDIT')}><CreditCard />{t.onCredit}</button></div>
-        <div className="total-row"><span>{t.total}</span><DualMoney value={total} currency="CDF" rate={rate} /></div>
+        <div className="total-row"><span>{t.total}</span><DisplayMoney value={total} currency="CDF" /></div>
         <button className="primary large" onClick={checkout} disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
       </aside>
     </section>
@@ -281,7 +284,6 @@ function Catalog({ canEdit, t, lang }: { canEdit: boolean; t: Record<string, str
   const [pendingDelete, setPendingDelete] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const { rate } = useExchangeRate()
   const load = () => api<{ products: Product[] }>('/products?all=true').then(result => setProducts(result.products))
   useEffect(() => { load() }, [])
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -318,7 +320,7 @@ function Catalog({ canEdit, t, lang }: { canEdit: boolean; t: Record<string, str
       {products.map(product => <div className="table-row" key={product.id}>
         <span data-label={t.name}><b>{product.name}</b><small>{product.description}</small></span>
         <span data-label={t.category}>{product.category}</span>
-        <span data-label={t.price}><DualMoney value={product.currentPrice} currency={product.currency} rate={rate} compact /></span>
+        <span data-label={t.price}><DisplayMoney value={product.currentPrice} currency={product.currency} /></span>
         <span data-label="Stock">{product.trackInventory ? product.stockQuantity + ' ' + product.unit : '—'}</span>
         <span data-label="Status"><em className={product.isAvailable ? 'badge good' : 'badge'}>{product.isAvailable ? t.available : t.unavailable}</em></span>
         <span className="catalog-actions" data-label={t.actions}>{canEdit ? <><button className="catalog-edit" onClick={() => { setEditing(product); setShow(true) }}><Pencil />{t.editProduct}</button><button className="catalog-delete" onClick={() => setPendingDelete(product)}><Trash2 />{t.deleteProduct}</button></> : '—'}</span>
@@ -347,7 +349,7 @@ function Transactions({ user, t }: { user: User; t: Record<string, string> }) {
   const filtered = rows.filter(row => [row.transactionNumber, row.personNameSnapshot, row.cashierNameSnapshot].some(value => value.toLowerCase().includes(query.toLowerCase())))
   return <section className="panel"><div className="section-heading"><div><span className="eyebrow">IMMUTABLE REGISTER</span><h2>{t.history}</h2></div><div className="search-inline"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} /></div></div>
     <div className="data-table transaction-table"><div className="table-head"><span>Transaction</span><span>Date</span><span>Person</span><span>Mode</span><span>{t.total}</span><span>Status</span></div>
-      {filtered.map(row => <button className="table-row" key={row.id} onClick={() => setSelected(row)}><span data-label="Transaction"><b>{row.transactionNumber}</b></span><span data-label="Date">{dateTime(row.createdAt)}</span><span data-label="Person">{row.personNameSnapshot}</span><span data-label="Mode">{row.paymentMode}</span><span data-label={t.total}><b>{money(row.total)}</b></span><span data-label="Status"><em className={'badge ' + (row.status === 'CONFIRMED' ? 'good' : 'warn')}>{row.status}</em></span></button>)}
+      {filtered.map(row => <button className="table-row" key={row.id} onClick={() => setSelected(row)}><span data-label="Transaction"><b>{row.transactionNumber}</b></span><span data-label="Date">{dateTime(row.createdAt)}</span><span data-label="Person">{row.personNameSnapshot}</span><span data-label="Mode">{row.paymentMode}</span><span data-label={t.total}><b><DisplayMoney value={row.total} /></b></span><span data-label="Status"><em className={'badge ' + (row.status === 'CONFIRMED' ? 'good' : 'warn')}>{row.status}</em></span></button>)}
     </div>{!filtered.length && <Empty text={t.noData} />}
     {selected && <Receipt transaction={selected} onClose={() => setSelected(null)} allowDispute={['TEACHER', 'STAFF', 'STUDENT'].includes(user.role)} />}
   </section>
@@ -366,8 +368,8 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
   return <Modal wide onClose={onClose}><div className="receipt" id={'receipt-' + transaction.id}>
     <div className="receipt-head"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h2>KCS KITCHEN RECEIPT</h2><b>{transaction.transactionNumber}</b></div></div>
     <div className="receipt-meta"><div><small>PERSON</small><b>{transaction.personNameSnapshot}</b></div><div><small>DATE / TIME</small><b>{dateTime(transaction.createdAt)}</b></div><div><small>CASHIER</small><b>{transaction.cashierNameSnapshot}</b></div><div><small>PAYMENT</small><b>{transaction.paymentMode} · {transaction.paymentStatus}</b></div></div>
-    <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.quantity}</td><td>{money(item.unitPriceAtPurchase)}</td><td>{money(item.subtotal)}</td></tr>)}</tbody></table>
-    <div className="receipt-totals"><span>Subtotal <b>{money(transaction.subtotal)}</b></span><span>Discount <b>− {money(transaction.discount)}</b></span><strong>Total <b>{money(transaction.total)}</b></strong></div>
+    <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.quantity}</td><td><DisplayMoney value={item.unitPriceAtPurchase} /></td><td><DisplayMoney value={item.subtotal} /></td></tr>)}</tbody></table>
+    <div className="receipt-totals"><span>Subtotal <b><DisplayMoney value={transaction.subtotal} /></b></span><span>Discount <b>− <DisplayMoney value={transaction.discount} /></b></span><strong>Total <b><DisplayMoney value={transaction.total} /></b></strong></div>
     <div className="receipt-proof"><ShieldCheck /> Digitally registered, timestamped and auditable. Original transaction records are never silently deleted.</div>
     {message && <div className="form-message">{message}</div>}
     <div className="receipt-actions"><button onClick={() => window.print()}><ReceiptText /> Print / PDF</button>{allowDispute && <button className="warning" onClick={() => setDispute(!dispute)}><AlertTriangle /> Dispute</button>}<button className="primary" onClick={onClose}>Close</button></div>
@@ -377,13 +379,54 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
 
 function Ledger({ user, t }: { user: User; t: Record<string, string> }) {
   const [data, setData] = useState<any>(null)
+  const [officialOpen, setOfficialOpen] = useState(false)
   useEffect(() => { api<any>('/ledger/' + encodeURIComponent(user.orbitPersonId)).then(setData) }, [user.orbitPersonId])
   if (!data) return <Loading />
-  return <section className="panel statement"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN LEDGER</span><h2>{user.fullName}</h2><p>Every amount below is linked to an auditable operation.</p></div><button onClick={() => window.print()}><ReceiptText /> {t.print}</button></div>
-    <div className="statement-balance"><small>{t.outstanding}</small><strong>{money(data.closingBalance)}</strong></div>
-    <div className="data-table ledger-table"><div className="table-head"><span>Date</span><span>Type</span><span>Description</span><span>Amount</span></div>{data.entries.map((entry: any) => <div className="table-row" key={entry.id}><span data-label="Date">{dateTime(entry.createdAt)}</span><span data-label="Type"><em className="badge">{entry.type}</em></span><span data-label="Description">{entry.description}</span><span data-label="Amount" className={Number(entry.amount) < 0 ? 'negative' : 'positive'}><b>{money(entry.amount)}</b></span></div>)}</div>
-    {!data.entries.length && <Empty text={t.noData} />}
-  </section>
+  return <>
+    <section className="panel statement"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN LEDGER</span><h2>{user.fullName}</h2><p>Every amount below is linked to an auditable operation.</p></div><button onClick={() => setOfficialOpen(true)}><ReceiptText /> {t.print}</button></div>
+      <div className="statement-balance"><small>{t.outstanding}</small><strong><DisplayMoney value={data.closingBalance} /></strong></div>
+      <div className="data-table ledger-table"><div className="table-head"><span>Date</span><span>Type</span><span>Description</span><span>Amount</span></div>{data.entries.map((entry: any) => <div className="table-row" key={entry.id}><span data-label="Date">{dateTime(entry.createdAt)}</span><span data-label="Type"><em className="badge">{entry.type}</em></span><span data-label="Description">{entry.description}</span><span data-label="Amount" className={Number(entry.amount) < 0 ? 'negative' : 'positive'}><b><DisplayMoney value={entry.amount} /></b></span></div>)}</div>
+      {!data.entries.length && <Empty text={t.noData} />}
+    </section>
+    {officialOpen && <OfficialLedgerStatement user={user} data={data} onClose={() => setOfficialOpen(false)} />}
+  </>
+}
+
+function OfficialLedgerStatement({ user, data, onClose }: { user: User; data: any; onClose: () => void }) {
+  const fr = document.documentElement.lang === 'fr'
+  const issued = new Date()
+  const documentId = 'KCS-KIT-STMT-' + user.orbitPersonId.replace(/[^a-z0-9]/gi, '').slice(-10).toUpperCase() + '-' + issued.toISOString().slice(0, 10).replaceAll('-', '')
+  const qrValue = JSON.stringify({ issuer: 'Kinshasa Christian School', application: 'KCS Kitchen', documentId, orbitPersonId: user.orbitPersonId, entries: data.entries.length, closingBalance: String(data.closingBalance), issuedAt: issued.toISOString() })
+  return <Modal wide onClose={onClose}>
+    <article className="official-statement">
+      <img className="statement-watermark" src="./images/kcs-seal.svg" alt="" />
+      <header className="statement-official-head">
+        <img src="./images/kcs-logo.png" alt="Kinshasa Christian School" />
+        <div><span>KINSHASA CHRISTIAN SCHOOL</span><h1>{fr ? 'RELEVÉ OFFICIEL KCS KITCHEN' : 'OFFICIAL KCS KITCHEN STATEMENT'}</h1><b>{documentId}</b></div>
+        <QRCodeSVG className="statement-qr" value={qrValue} size={92} level="M" includeMargin title={fr ? 'QR de référence du document' : 'Document reference QR'} />
+      </header>
+      <div className="statement-document-status"><ShieldCheck /> {fr ? 'DOCUMENT GÉNÉRÉ DEPUIS LE REGISTRE AUDITÉ KCS ORBIT' : 'DOCUMENT GENERATED FROM THE AUDITED KCS ORBIT REGISTER'}</div>
+      <section className="statement-holder">
+        <div><small>{fr ? 'TITULAIRE' : 'ACCOUNT HOLDER'}</small><strong>{user.fullName}</strong><span>{user.email || '—'}</span></div>
+        <div><small>ORBIT ID</small><strong>{user.orbitPersonId}</strong><span>{user.role.replaceAll('_', ' ')}</span></div>
+        <div><small>{fr ? 'DATE D’ÉMISSION' : 'ISSUE DATE'}</small><strong>{issued.toLocaleDateString(fr ? 'fr-CD' : 'en-US', { dateStyle: 'long' })}</strong><span>{issued.toLocaleTimeString(fr ? 'fr-CD' : 'en-US')}</span></div>
+        <div className="official-balance"><small>{fr ? 'SOLDE DE CLÔTURE' : 'CLOSING BALANCE'}</small><strong><DisplayMoney value={data.closingBalance} /></strong><span>{fr ? 'Devise d’affichage sélectionnée' : 'Selected display currency'}</span></div>
+      </section>
+      <section className="statement-register">
+        <h2>{fr ? 'Mouvements du compte' : 'Account movements'}</h2>
+        <table><thead><tr><th>{fr ? 'Date' : 'Date'}</th><th>{fr ? 'Nature' : 'Type'}</th><th>{fr ? 'Description' : 'Description'}</th><th>{fr ? 'Montant' : 'Amount'}</th></tr></thead>
+          <tbody>{data.entries.map((entry: any) => <tr key={entry.id}><td>{dateTime(entry.createdAt)}</td><td>{entry.type.replaceAll('_', ' ')}</td><td>{entry.description}</td><td className={Number(entry.amount) < 0 ? 'negative' : 'positive'}><DisplayMoney value={entry.amount} /></td></tr>)}</tbody>
+        </table>
+        {!data.entries.length && <p className="statement-empty">{fr ? 'Aucun mouvement enregistré pour ce compte.' : 'No movement is recorded for this account.'}</p>}
+      </section>
+      <footer className="statement-official-foot">
+        <p><ShieldCheck /> {fr ? 'Ce relevé reflète les écritures présentes dans KCS Kitchen à la date d’émission. Le QR contient la référence institutionnelle et les éléments de contrôle du document.' : 'This statement reflects the KCS Kitchen ledger at issuance time. The QR contains the institutional reference and document control elements.'}</p>
+        <div className="statement-signatures"><span>{fr ? 'Gestionnaire KCS Kitchen' : 'KCS Kitchen Manager'}</span><span>{fr ? 'Administration / Finance' : 'Administration / Finance'}</span></div>
+        <div className="statement-address"><b>Kinshasa Christian School</b><span>Macampagne, Ngaliema · Kinshasa, RDC</span><span>KCS Orbit Ecosystem · KCS Kitchen</span></div>
+      </footer>
+    </article>
+    <div className="official-statement-actions"><button onClick={onClose}>{fr ? 'Fermer' : 'Close'}</button><button className="primary" onClick={() => window.print()}><ReceiptText />{fr ? 'Imprimer / Enregistrer en PDF' : 'Print / Save as PDF'}</button></div>
+  </Modal>
 }
 
 function Inventory({ canEdit, t }: { canEdit: boolean; t: Record<string, string> }) {

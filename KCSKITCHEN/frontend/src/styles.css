@@ -257,3 +257,125 @@ body[data-theme=dark] .dual-money b{color:#89ddff}
 }
 @media(max-width:380px){.product-grid{grid-template-columns:1fr}.workspace>header h1{max-width:27vw}.install-app.compact{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* Kitchen visual system: eye-friendly daylight, branded scrolling and stable navigation. */
+:root{
+  --scroll-track:#d9ebf4;
+  --scroll-thumb:#398ab3;
+  --scroll-hover:#126b9b;
+}
+html,body,#root{min-height:100%;background:#dfeef6}
+html{overscroll-behavior-y:none}
+body{overflow-x:hidden;overscroll-behavior-y:none}
+*{scrollbar-width:thin;scrollbar-color:var(--scroll-thumb) var(--scroll-track)}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:var(--scroll-track);border-radius:999px}
+*::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#55b9d1,#217fa9);border:2px solid var(--scroll-track);border-radius:999px}
+*::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#349fbd,var(--scroll-hover))}
+*::-webkit-scrollbar-corner{background:var(--scroll-track)}
+body[data-theme=dark]{
+  --scroll-track:#092d49;
+  --scroll-thumb:#2e8fb8;
+  --scroll-hover:#52bdd8;
+}
+body[data-theme=light]{
+  --ink:#123149;
+  --muted:#58758a;
+  --surface:#eff8fc;
+  --surface2:#deedf5;
+  --border:#b9d7e6;
+  --shadow:0 18px 48px rgba(23,76,108,.11);
+  background:#dfeef6;
+}
+body[data-theme=light] .panel,
+body[data-theme=light] .stat-card,
+body[data-theme=light] .product-tile,
+body[data-theme=light] .modal,
+body[data-theme=light] .notice,
+body[data-theme=light] .entity-results>button{background:rgba(239,248,252,.97)}
+body[data-theme=light] input,
+body[data-theme=light] select,
+body[data-theme=light] textarea{background:#e8f4f9;color:#123149;border-color:#b5d5e4}
+body[data-theme=light] .workspace{
+  background-color:#dfeef6;
+  background-image:linear-gradient(rgba(224,240,247,.91),rgba(220,237,246,.94)),url('/images/kitchen-culinary-hero.jpg');
+}
+.app-shell{min-height:100dvh;align-items:start}
+.workspace{min-width:0;min-height:100dvh}
+.sidebar{
+  position:sticky;
+  top:0;
+  height:100dvh;
+  max-height:100dvh;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+.sidebar nav{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:.18rem}
+.sidebar-footer{flex:0 0 auto;position:sticky;bottom:0;z-index:2;padding-top:.7rem;background:linear-gradient(180deg,rgba(3,48,79,0),#06365f 18%)}
+body[data-theme=dark] .sidebar-footer{background:linear-gradient(180deg,rgba(2,28,48,0),#04243d 18%)}
+.header-logo,.sidebar-brand img{
+  width:52px;
+  height:52px;
+  object-fit:contain;
+  object-position:center;
+  border-radius:50%;
+  background:transparent;
+  padding:0;
+  box-shadow:none;
+  filter:drop-shadow(0 7px 15px rgba(0,0,0,.22));
+}
+.sidebar.collapsed .sidebar-brand img{width:48px;height:48px;object-fit:contain;object-position:center}
+.display-money{white-space:nowrap;font-variant-numeric:tabular-nums}
+.fx-card.compact{width:min(100%,580px)}
+.fx-toggle{display:grid;grid-template-columns:auto auto auto;align-items:center;gap:.25rem;margin-left:auto;padding:.25rem;border:1px solid var(--border);border-radius:12px;background:var(--surface2)}
+.fx-toggle>svg{width:15px;height:15px;margin:0 .2rem;color:var(--blue)}
+.fx-toggle button{min-width:48px;padding:.36rem .5rem;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:.62rem;font-weight:900;box-shadow:none}
+.fx-toggle button:hover{transform:none;box-shadow:none;background:rgba(13,123,187,.08)}
+.fx-toggle button.active{background:var(--blue);color:white}
+.fx-card .fx-refresh{margin-left:.15rem;padding:.42rem;background:transparent}
+
+/* Official KCS Kitchen statement and PDF. */
+.official-statement{position:relative;isolation:isolate;overflow:hidden;padding:1.35rem;background:#f8fcfe;color:#102b43;border:1px solid #b9d7e6;border-radius:18px}
+.statement-watermark{position:absolute;z-index:-1;left:50%;top:52%;width:min(46%,330px);height:auto;transform:translate(-50%,-50%);opacity:.055;filter:grayscale(.2)}
+.statement-official-head{display:grid;grid-template-columns:190px 1fr auto;align-items:center;gap:1rem;padding-bottom:1rem;border-bottom:3px solid #075f91}
+.statement-official-head>img{width:180px;max-height:62px;object-fit:contain;object-position:left center}
+.statement-official-head>div{text-align:center}.statement-official-head span{font-size:.58rem;font-weight:900;letter-spacing:.14em;color:#39718f}.statement-official-head h1{margin:.25rem 0;color:#06365f;font-size:clamp(1rem,2.3vw,1.45rem)}.statement-official-head b{font-size:.58rem;color:#8a5c00}
+.statement-qr{padding:4px;background:white;border:1px solid #b9d7e6;border-radius:10px}
+.statement-document-status{display:flex;align-items:center;justify-content:center;gap:.45rem;margin:.8rem 0;padding:.55rem;border-radius:9px;background:#e1f3f7;color:#075d76;font-size:.58rem;font-weight:900;letter-spacing:.07em}.statement-document-status svg{width:16px}
+.statement-holder{display:grid;grid-template-columns:1.25fr 1fr 1fr 1fr;gap:.65rem;margin:1rem 0}.statement-holder>div{display:grid;align-content:start;gap:.2rem;padding:.75rem;border:1px solid #c4deea;border-radius:11px;background:rgba(231,244,249,.82)}.statement-holder small{font-size:.5rem;font-weight:900;color:#5b7b8e;letter-spacing:.08em}.statement-holder strong{font-size:.7rem;overflow-wrap:anywhere}.statement-holder span{font-size:.56rem;color:#5b7180;overflow-wrap:anywhere}.statement-holder .official-balance{background:#073b62;color:white}.statement-holder .official-balance small,.statement-holder .official-balance span{color:#c7e4ef}.statement-holder .official-balance strong{font-size:1rem}
+.statement-register h2{margin:1.1rem 0 .55rem;color:#06365f;font-size:.86rem;text-transform:uppercase;letter-spacing:.07em}.statement-register table{width:100%;border-collapse:collapse;font-size:.62rem}.statement-register th{padding:.55rem;text-align:left;background:#075f91;color:white;font-size:.52rem;letter-spacing:.06em}.statement-register td{padding:.55rem;border-bottom:1px solid #c8dee9}.statement-register th:last-child,.statement-register td:last-child{text-align:right}.statement-empty{text-align:center;padding:1.2rem;border:1px dashed #b9d7e6;border-radius:10px;color:#637b8f}
+.statement-official-foot{margin-top:1rem;padding-top:.8rem;border-top:1px solid #9fc7da}.statement-official-foot>p{display:flex;align-items:flex-start;gap:.45rem;margin:0;font-size:.56rem;color:#536f81}.statement-official-foot>p svg{flex:0 0 auto;width:15px}.statement-signatures{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;margin:2rem 0 .9rem}.statement-signatures span{padding-top:.4rem;border-top:1px solid #36586d;text-align:center;font-size:.52rem;color:#5f7888}.statement-address{display:flex;justify-content:space-between;gap:.6rem;padding-top:.55rem;border-top:2px solid #e2a92f;font-size:.5rem}.statement-address span{color:#617989}
+.official-statement-actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:1rem}
+
+@media(max-width:820px){
+  html,body,#root{background:#dfeef6!important}
+  .sidebar{position:fixed;top:0;bottom:0;height:100dvh;max-height:100dvh}
+  .sidebar-footer{padding-bottom:max(.7rem,env(safe-area-inset-bottom))}
+  .login-page>.install-app{left:1rem;right:auto;top:1rem}
+  .language-fab{right:1rem;top:1rem}
+  .header-logo{width:44px!important;height:44px!important;object-fit:contain!important;object-position:center!important}
+  .fx-card.compact{display:grid;grid-template-columns:auto 1fr auto;width:100%}
+  .fx-toggle{grid-column:1/-1;width:100%;grid-template-columns:auto 1fr 1fr;margin:0}
+  .fx-refresh{grid-column:3;grid-row:1}
+  .statement-official-head{grid-template-columns:120px 1fr}.statement-official-head>img{width:115px}.statement-qr{grid-column:1/-1;justify-self:center}
+  .statement-holder{grid-template-columns:1fr 1fr}
+}
+@media(max-width:520px){
+  .login-page>.install-app{top:.75rem;left:.75rem;right:auto}
+  .language-fab{top:.75rem;right:.75rem}
+  .sidebar-brand img,.sidebar.collapsed .sidebar-brand img{width:48px;height:48px;object-fit:contain}
+  .statement-holder{grid-template-columns:1fr}.statement-official-head{grid-template-columns:1fr;text-align:center}.statement-official-head>img{justify-self:center;width:170px}.statement-address{display:grid;text-align:center}.statement-signatures{gap:1rem}
+}
+@media print{
+  @page{size:A4 portrait;margin:10mm}
+  body{background:white!important}
+  body *{visibility:hidden!important}
+  .receipt,.receipt *,.official-statement,.official-statement *{visibility:visible!important}
+  .receipt,.official-statement{position:absolute!important;inset:0!important;width:100%!important;max-width:none!important;min-height:0!important;margin:0!important;padding:8mm!important;border:0!important;border-radius:0!important;box-shadow:none!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .official-statement-actions,.modal-close{display:none!important}
+  .statement-watermark{opacity:.075!important}
+  .statement-official-head{grid-template-columns:160px 1fr 92px}.statement-official-head>img{width:155px}
+  .statement-holder{grid-template-columns:1.25fr 1fr 1fr 1fr}
+  .statement-register tr{break-inside:avoid}.statement-official-foot{break-inside:avoid}
+}

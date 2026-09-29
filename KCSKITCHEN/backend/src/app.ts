@@ -11,6 +11,7 @@ import { prisma } from './db.js'
 import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentity } from './auth.js'
 import { calculateDiscount } from './discount.js'
 import { loadDirectory, resolvePerson } from './directory.js'
+import { compareClassNames } from './class-name.js'
 import { processNotificationOutbox } from './notifications.js'
 import { procurementRouter } from './procurement.js'
 import { getUsdCdfRate } from './exchange-rate.js'
@@ -130,7 +131,7 @@ app.get('/api/directory', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINAN
       .some(value => value?.toLowerCase().includes(q))
   ) : people
   const filtered = searched.filter(person => (!kind || person.kind === kind) && (!className || person.className?.toLowerCase() === className))
-  const classes = [...new Set(people.map(person => person.className).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  const classes = [...new Set(people.map(person => person.className).filter((value): value is string => Boolean(value)))].sort(compareClassNames)
   const counts = people.reduce<Record<string, number>>((totals, person) => ({ ...totals, [person.kind]: (totals[person.kind] || 0) + 1 }), {})
   res.json({ people: filtered.slice(0, 250), total: filtered.length, facets: { classes, counts } })
 }))
