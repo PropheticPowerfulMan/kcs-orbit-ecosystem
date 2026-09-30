@@ -376,7 +376,7 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-            {['records', 'admissions', 'announcements', 'reports', 'finance', 'messages', 'permissions'].map((segment) => (
+            {['records', 'admissions', 'announcements', 'reports', 'finance', 'messages', 'permissions', 'settings'].map((segment) => (
               <Route
                 key={segment}
                 path={`/portal/staff/${segment}`}

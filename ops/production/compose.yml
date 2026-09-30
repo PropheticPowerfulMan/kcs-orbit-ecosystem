@@ -19,7 +19,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api, kitchen_web, kitchen_api, staging_web]
+    depends_on: [orbit_api, nexus_web, nexus_api, edupay_web, edupay_api, savanex_web, savanex_api, edusync_web, edusync_api, kitchen_web, kitchen_api, lessonplan_web, lessonplan_api, staging_web]
 
   staging_web:
     <<: *service-defaults
@@ -130,6 +130,21 @@ services:
     image: kcs/kitchen-web:${KITCHEN_WEB_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge]
     depends_on: { kitchen_api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
+
+  lessonplan_api:
+    <<: *service-defaults
+    image: kcs/lessonplan-api:${LESSONPLAN_API_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
+    networks: [kcs_edge, kcs_private]
+    env_file: /etc/kcs-orbit/lessonplan.env
+    depends_on: { nexus_api: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"], interval: 15s, timeout: 5s, retries: 12, start_period: 20s }
+
+  lessonplan_web:
+    <<: *service-defaults
+    image: kcs/lessonplan-web:${LESSONPLAN_WEB_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
+    networks: [kcs_edge]
+    depends_on: { lessonplan_api: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/health"], interval: 15s, timeout: 5s, retries: 10 }
 
   academy:

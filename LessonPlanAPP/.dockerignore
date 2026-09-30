@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.env
+.env.*
+.gh-pages-deploy
+deployment
+Installable_Distribution
+server
+*.tsbuildinfo

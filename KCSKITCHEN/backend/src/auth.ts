@@ -10,6 +10,7 @@ export type KitchenIdentity = {
   email: string | null
   personType: PersonType
   role: KitchenRole
+  hasOfficialPhoto: boolean
 }
 
 export type AuthRequest = Request & { kitchenUser?: KitchenIdentity }

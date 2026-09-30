@@ -4,15 +4,16 @@ import { evaluatePassword } from '@/utils/passwordStrength'
 
 export default function PasswordStrengthMeter({ password, identityValues = [] }: { password: string; identityValues?: Array<string | null | undefined> }) {
   const language = useUIStore((state) => state.language)
-  if (!password) return null
   const result = evaluatePassword(password, identityValues)
   const tone = result.strong ? 'bg-emerald-500' : result.score >= 65 ? 'bg-amber-500' : 'bg-red-500'
-  const label = result.strong
+  const label = !password
+    ? (language === 'fr' ? 'Saisissez un nouveau mot de passe pour lancer la vérification' : 'Enter a new password to start the security check')
+    : result.strong
     ? (language === 'fr' ? 'Fort et conforme' : 'Strong and compliant')
     : (language === 'fr' ? 'Encore vulnérable' : 'Still vulnerable')
   return <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50">
     <div className="flex items-center justify-between gap-3 text-xs font-bold">
-      <span className={result.strong ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}>
+      <span className={result.strong ? 'text-emerald-700 dark:text-emerald-300' : password ? 'text-red-700 dark:text-red-300' : 'text-slate-600 dark:text-slate-200'}>
         {result.strong ? <CheckCircle2 className="mr-1 inline" size={15}/> : <ShieldAlert className="mr-1 inline" size={15}/>}
         {label}
       </span>

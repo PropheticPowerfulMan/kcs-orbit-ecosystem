@@ -113,6 +113,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/staff/finance', label: t('portalNav.feeTracking'), icon: WalletCards },
         { to: '/portal/staff/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/staff/permissions', label: t('portalNav.permissions'), icon: Shield },
+        { to: '/portal/staff/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'admin':
       return [
@@ -346,6 +347,14 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
             <GraduationCap size={18} />
             {(isMobile || !sidebarCollapsed) && <span>KCS Nexus Academy</span>}
           </button>
+        )}
+        {(accessRoles.includes('teacher') || user.role === 'admin') && (
+          <a href="/lesson-plan/"
+            className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
+            title={!isMobile && sidebarCollapsed ? "KCS Lesson Plan" : undefined}>
+            <BookOpenCheck size={18} />
+            {(isMobile || !sidebarCollapsed) && <span>KCS Lesson Plan</span>}
+          </a>
         )}
 
         <button

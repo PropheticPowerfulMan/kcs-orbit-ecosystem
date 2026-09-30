@@ -33,6 +33,14 @@
   handle_path /kitchen/* {
     reverse_proxy kitchen_web:80
   }
+  redir /lesson-plan /lesson-plan/ 308
+  handle /lesson-plan/api/* {
+    uri strip_prefix /lesson-plan
+    reverse_proxy lessonplan_api:3001
+  }
+  handle_path /lesson-plan/* {
+    reverse_proxy lessonplan_web:80
+  }
   handle {
     reverse_proxy nexus_web:80
   }

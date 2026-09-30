@@ -103,7 +103,8 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     fullName: person?.fullName || [nexusUser.lastName, nexusUser.firstName].filter(Boolean).join(' ') || 'KCS Administrator',
     email: person?.email || nexusUser.email || null,
     personType: access?.personType || type,
-    role: access?.role || defaultRole(String(nexusUser.role), type)
+    role: access?.role || defaultRole(String(nexusUser.role), type),
+    hasOfficialPhoto: Boolean(person?.photoData)
   }
   res.json({ token: signSession(identity), user: identity })
 }))
@@ -111,6 +112,16 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
 app.get('/api/me', authenticate, asyncRoute(async (req: AuthRequest, res) => {
   const balance = await balanceFor(req.kitchenUser!.orbitPersonId)
   res.json({ user: req.kitchenUser, balance })
+}))
+
+app.get('/api/me/avatar', authenticate, asyncRoute(async (req: AuthRequest, res) => {
+  const people = await loadDirectory()
+  const photoData = people.find(person => person.id === req.kitchenUser!.orbitPersonId)?.photoData
+  const match = photoData?.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s)
+  if (!match) return res.status(404).json({ message: 'Official profile photo not found' })
+  const image = Buffer.from(match[2], 'base64')
+  res.type(match[1]).set('Content-Length', String(image.length)).set('Cache-Control', 'private, max-age=3600').set('X-Content-Type-Options', 'nosniff')
+  return res.send(image)
 }))
 
 app.get('/api/exchange-rate', authenticate, asyncRoute(async (req, res) => {
@@ -133,7 +144,8 @@ app.get('/api/directory', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINAN
   const filtered = searched.filter(person => (!kind || person.kind === kind) && (!className || person.className?.toLowerCase() === className))
   const classes = [...new Set(people.map(person => person.className).filter((value): value is string => Boolean(value)))].sort(compareClassNames)
   const counts = people.reduce<Record<string, number>>((totals, person) => ({ ...totals, [person.kind]: (totals[person.kind] || 0) + 1 }), {})
-  res.json({ people: filtered.slice(0, 250), total: filtered.length, facets: { classes, counts } })
+  const publicPeople = filtered.slice(0, 250).map(({ photoData: _photoData, ...person }) => person)
+  res.json({ people: publicPeople, total: filtered.length, facets: { classes, counts } })
 }))
 
 const productSchema = z.object({

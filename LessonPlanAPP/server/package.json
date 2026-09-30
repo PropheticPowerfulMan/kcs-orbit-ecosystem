@@ -1,0 +1,16 @@
+{
+  "name": "kcs-eduplanner-mail-service",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.mjs",
+    "check": "node --check index.mjs && node --check emailTemplate.mjs && node --check send-test-email.mjs",
+    "send:test": "node send-test-email.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
+    "dotenv": "^16.6.1",
+    "nodemailer": "^9.0.5"
+  }
+}

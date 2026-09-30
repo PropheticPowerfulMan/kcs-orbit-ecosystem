@@ -15,6 +15,7 @@ export type DirectoryPerson = {
   department?: string | null
   jobTitle?: string | null
   subject?: string | null
+  photoData?: string | null
   kind: 'STUDENT' | 'TEACHER' | 'STAFF'
 }
 

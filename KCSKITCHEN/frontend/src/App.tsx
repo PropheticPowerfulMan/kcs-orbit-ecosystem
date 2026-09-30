@@ -5,7 +5,7 @@ import {
   Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X, Pencil, LoaderCircle
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { api, dateTime, getToken, setToken } from './api'
+import { api, apiBlob, dateTime, getToken, setToken } from './api'
 import type { Person, Product, Role, Transaction, User } from './types'
 import Procurement from './Procurement'
 import InstallAppButton from './InstallApp'
@@ -156,6 +156,21 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [dark, setDark] = useState(() => localStorage.getItem('kcs-kitchen-theme') === 'dark')
   useEffect(() => { document.body.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kcs-kitchen-theme', dark ? 'dark' : 'light') }, [dark])
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('kcs-kitchen-sidebar') === 'collapsed')
+  const [officialAvatar, setOfficialAvatar] = useState('')
+  useEffect(() => {
+    if (!user.hasOfficialPhoto) return
+    let active = true
+    let objectUrl = ''
+    void apiBlob('/me/avatar').then(blob => {
+      if (!active || !blob.size) return
+      objectUrl = URL.createObjectURL(blob)
+      setOfficialAvatar(objectUrl)
+    }).catch(() => setOfficialAvatar(''))
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [user.hasOfficialPhoto, user.userId])
   const isPrivileged = privileged.includes(user.role)
   useEffect(() => { localStorage.setItem('kcs-kitchen-sidebar', collapsed ? 'collapsed' : 'expanded') }, [collapsed])
   const nav: Array<[Page, string, ReactNode, boolean]> = [
@@ -172,8 +187,8 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   ]
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
-      <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-seal.svg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
-      <div className="identity"><span>{user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
+      <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
+      <div className="identity"><span>{officialAvatar ? <img src={officialAvatar} alt={user.fullName}/> : user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
         <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages /> {lang.toUpperCase()}</button>
@@ -183,7 +198,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-seal.svg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
+      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} />}

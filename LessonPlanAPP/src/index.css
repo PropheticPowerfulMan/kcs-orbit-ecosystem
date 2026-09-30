@@ -1,0 +1,556 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&family=Sora:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 198 25% 86%;
+  --foreground: 203 44% 15%;
+  --glass-bg: linear-gradient(135deg, rgba(218, 232, 236, 0.92), rgba(199, 218, 224, 0.86));
+  --glass-border: rgba(14, 116, 144, 0.22);
+  --card: 197 30% 90%;
+  --card-foreground: 203 44% 16%;
+  --primary: 192 76% 37%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 166 60% 34%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 197 24% 78%;
+  --muted-foreground: 202 22% 39%;
+  --accent: 42 85% 48%;
+  --accent-foreground: 203 44% 16%;
+  --destructive: 0 75% 57%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 192 27% 70%;
+  --input: 198 28% 88%;
+  --ring: var(--primary);
+  --ink: #18313f;
+  --ink-dim: #496574;
+  --brand-light: #075985;
+  --brand: #0f5f78;
+  --brand-deep: #0f3f53;
+  --success: #047857;
+}
+
+.dark {
+  --background: 203 79% 5%;
+  --foreground: 192 55% 92%;
+  --glass-bg-dark: linear-gradient(135deg, rgba(7, 24, 36, 0.94), rgba(3, 13, 20, 0.9));
+  --glass-border: rgba(125, 232, 255, 0.18);
+  --card: 199 46% 10%;
+  --card-foreground: 192 55% 92%;
+  --primary: 191 78% 48%;
+  --primary-foreground: 198 76% 6%;
+  --secondary: 160 84% 39%;
+  --secondary-foreground: 164 75% 95%;
+  --muted: 199 43% 15%;
+  --muted-foreground: 196 19% 69%;
+  --accent: 43 96% 56%;
+  --accent-foreground: 203 79% 5%;
+  --destructive: 0 72% 56%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 190 53% 22%;
+  --input: 198 48% 12%;
+  --brand-light: #7de8ff;
+  --brand: #14b8de;
+  --brand-deep: #0786ad;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+/* KCS branded scrollbars: page, dialogs, editors, menus and horizontal rails. */
+:root {
+  --scrollbar-track: #c7dce3;
+  --scrollbar-thumb: #0f5f78;
+  --scrollbar-thumb-hover: #0b7897;
+  --scrollbar-border: #c7dce3;
+}
+
+:root.dark,
+.theme-dark-panel {
+  --scrollbar-track: #031725;
+  --scrollbar-thumb: #1285a5;
+  --scrollbar-thumb-hover: #25c7e8;
+  --scrollbar-border: #031725;
+}
+
+html {
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: auto;
+}
+
+html,
+body,
+#root,
+* {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: auto;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+  background: var(--scrollbar-track);
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+#root::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  border-radius: 0;
+  background-color: var(--scrollbar-track);
+  box-shadow: inset 0 0 0 1px rgba(20, 184, 222, 0.12);
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+#root::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  min-width: 38px;
+  min-height: 38px;
+  border: 3px solid var(--scrollbar-border);
+  border-radius: 8px;
+  background-color: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+#root::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner,
+#root::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background-color: var(--scrollbar-track);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(14, 116, 144, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, #dce9ed 0%, #d2e1e6 46%, #c9d9df 100%);
+  background-size: 28px 28px, 28px 28px, auto;
+  color: hsl(var(--foreground));
+  font-family: "Times New Roman", "Bell MT", Georgia, serif;
+  overflow-x: hidden;
+}
+
+.dark body {
+  background:
+    linear-gradient(rgba(125, 232, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 232, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, #031b34 0%, #04141f 38%, #030d14 100%);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.login-edupay {
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Sora", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-body-tracking: 0;
+  --font-heading-tracking: -0.01em;
+  --font-body-weight: 500;
+  --font-heading-weight: 700;
+  font-family: var(--font-body);
+  font-weight: var(--font-body-weight);
+  letter-spacing: var(--font-body-tracking);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.login-edupay .font-display {
+  font-family: var(--font-heading) !important;
+  font-weight: var(--font-heading-weight) !important;
+  letter-spacing: var(--font-heading-tracking) !important;
+}
+
+.login-edupay .font-mono {
+  font-family: var(--font-mono) !important;
+}
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 18px 48px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+:root {
+  --app-accent-1: 192 97% 75%;
+  --app-accent-2: 191 78% 48%;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, hsl(var(--foreground)), var(--brand) 48%, var(--brand-deep));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(125, 232, 255, 0.34);
+  background: rgba(20, 184, 222, 0.12);
+  color: var(--brand-light);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+:root:not(.dark) .text-cyan-100,
+:root:not(.dark) .text-cyan-200,
+:root:not(.dark) .text-cyan-300,
+:root:not(.dark) .text-cyan-50\/80,
+:root:not(.dark) .text-cyan-50 {
+  color: #0f4c5c !important;
+}
+
+:root:not(.dark) .border-cyan-300\/20,
+:root:not(.dark) .border-cyan-300\/25 {
+  border-color: rgba(15, 76, 92, 0.32) !important;
+}
+
+:root:not(.dark) .bg-cyan-500\/10,
+:root:not(.dark) .bg-cyan-500\/15 {
+  background-color: rgba(15, 95, 120, 0.12) !important;
+}
+
+.theme-dark-panel {
+  color: #e7faff;
+}
+
+.theme-dark-panel .badge {
+  border-color: rgba(156, 236, 255, 0.42);
+  background: rgba(231, 250, 255, 0.12);
+  color: #e7faff;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
+}
+
+:root:not(.dark) .theme-dark-panel .text-white,
+:root:not(.dark) .theme-dark-panel .text-cyan-50,
+:root:not(.dark) .theme-dark-panel .text-cyan-50\/80,
+:root:not(.dark) .theme-dark-panel .text-cyan-100,
+:root:not(.dark) .theme-dark-panel .text-cyan-100\/80,
+:root:not(.dark) .theme-dark-panel .text-cyan-200,
+:root:not(.dark) .theme-dark-panel .text-cyan-300 {
+  color: #e7faff !important;
+}
+
+:root:not(.dark) .theme-dark-panel .text-cyan-200 {
+  color: #9cecff !important;
+}
+
+:root:not(.dark) .theme-dark-panel .text-muted-foreground {
+  color: rgba(231, 250, 255, 0.78) !important;
+}
+
+:root:not(.dark) .theme-dark-panel .border-cyan-300\/10,
+:root:not(.dark) .theme-dark-panel .border-cyan-300\/12,
+:root:not(.dark) .theme-dark-panel .border-cyan-300\/15,
+:root:not(.dark) .theme-dark-panel .border-cyan-300\/20,
+:root:not(.dark) .theme-dark-panel .border-cyan-300\/25 {
+  border-color: rgba(156, 236, 255, 0.24) !important;
+}
+
+:root:not(.dark) .theme-dark-panel .bg-cyan-500\/10,
+:root:not(.dark) .theme-dark-panel .bg-cyan-500\/15 {
+  background-color: rgba(20, 184, 222, 0.16) !important;
+}
+
+.dark .glass {
+  background: var(--glass-bg-dark);
+  border-color: var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+.dark .text-gradient {
+  background: linear-gradient(135deg, #fff, var(--brand-light) 36%, var(--brand) 74%, var(--brand-deep));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-white {
+  color: hsl(var(--foreground)) !important;
+}
+
+.dark .text-white {
+  color: #fff !important;
+}
+
+select option {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  color-scheme: dark;
+}
+
+@media (max-width: 640px) {
+  .glass {
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+  }
+}
+
+.print-page {
+  width: 297mm;
+  height: 210mm;
+  box-sizing: border-box;
+  background: white;
+  color: #111827;
+  position: relative;
+  overflow: hidden;
+}
+
+.lesson-print-document .print-page + .print-page {
+  page-break-before: always;
+  break-before: page;
+}
+
+.pdf-export-root .print-page {
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+.print-page table {
+  height: auto;
+}
+
+.print-page .lesson-table-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.print-page .lesson-table {
+  height: 100%;
+  min-height: 0;
+}
+
+.print-page .print-meta-table {
+  height: auto;
+}
+
+.print-page .print-meta-table .meta-cell {
+  box-sizing: border-box;
+  display: block;
+  height: 4.8mm;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+  text-align: left;
+  width: 100%;
+}
+
+.print-page .print-meta-table .meta-cell > span {
+  box-sizing: border-box;
+  display: block;
+  left: 0;
+  line-height: 1;
+  padding: 0 1mm;
+  position: absolute;
+  text-align: left;
+  top: 40%;
+  transform: translateY(-50%);
+  width: 100%;
+}
+
+.pdf-export-capture .print-meta-table td {
+  vertical-align: middle !important;
+}
+
+.pdf-export-capture .print-meta-table td > div {
+  min-height: 4.8mm !important;
+  height: 4.8mm !important;
+}
+
+.pdf-export-capture .print-meta-table td > div > span {
+  display: block !important;
+  min-height: 4.8mm !important;
+  height: 4.8mm !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  position: relative !important;
+  text-align: left !important;
+  transform: none !important;
+  width: 100% !important;
+}
+
+.pdf-export-capture .print-meta-table .meta-cell > span {
+  display: block !important;
+  left: 0 !important;
+  line-height: 1 !important;
+  padding: 0 1mm !important;
+  position: absolute !important;
+  text-align: left !important;
+  top: 40% !important;
+  transform: translateY(-50%) !important;
+  width: 100% !important;
+}
+
+.pdf-export-capture .print-meta-table td > div > span:last-child {
+  text-align: left !important;
+}
+
+.print-page tr,
+.print-page td,
+.print-page th {
+  height: auto;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  vertical-align: top;
+}
+
+.print-page .lesson-table thead th {
+  height: 6.8mm;
+  min-height: 6.8mm;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.print-page .lesson-table .day-header {
+  letter-spacing: 0;
+}
+
+.print-page .lesson-table .row-label {
+  width: 12%;
+}
+
+.print-page .duration-badge {
+  position: relative;
+  display: inline-block;
+  width: 13.5mm;
+  height: 4.2mm;
+  white-space: nowrap;
+  overflow: visible;
+  font-size: 0;
+  line-height: 0;
+  letter-spacing: 0;
+  vertical-align: -0.6mm;
+}
+
+.print-page .duration-badge-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 18%;
+  display: block;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 6.4px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.print-preview-shell .duration-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.print-preview-shell .duration-badge-text {
+  position: static;
+  display: inline-block;
+  transform: translateY(-0.02mm);
+  text-align: center;
+}
+
+.print-density-comfortable table {
+  font-size: 7.7px;
+  line-height: 1.1;
+}
+
+.print-density-compact table {
+  font-size: 7.15px;
+  line-height: 1.05;
+}
+
+.print-density-ultra-compact table {
+  font-size: 6.7px;
+  line-height: 1.02;
+}
+
+.print-density-compact .print-header,
+.print-density-ultra-compact .print-header {
+  font-size: 92%;
+}
+
+.print-density-compact .duration-badge,
+.print-density-ultra-compact .duration-badge {
+  width: 12.5mm;
+  height: 4mm;
+}
+
+.print-density-compact .duration-badge-text,
+.print-density-ultra-compact .duration-badge-text {
+  font-size: 5.9px;
+}
+
+.print-density-ultra-compact .signature-block {
+  margin-top: 1mm;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  body {
+    background: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    background: white !important;
+    color: #111827 !important;
+  }
+
+  /* Disable glass effects for printing */
+  .glass, .print-page.glass {
+    background: white !important;
+    border: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+}

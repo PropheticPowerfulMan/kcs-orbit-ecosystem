@@ -38,6 +38,14 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   throw lastError
 }
 
+export async function apiBlob(path: string): Promise<Blob> {
+  const response = await fetch(API_BASE + path, {
+    headers: getToken() ? { authorization: 'Bearer ' + getToken() } : {}
+  })
+  if (!response.ok) throw new Error('Official profile photo is unavailable')
+  return response.blob()
+}
+
 export function money(value: unknown, currency = 'CDF') {
   return new Intl.NumberFormat('fr-CD', { style: 'currency', currency, maximumFractionDigits: currency === 'CDF' ? 0 : 2 }).format(Number(value || 0))
 }
