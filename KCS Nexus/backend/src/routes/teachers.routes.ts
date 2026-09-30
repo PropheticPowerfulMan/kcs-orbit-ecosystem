@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import OpenAI from 'openai'
 import { z } from 'zod'
-import { Prisma } from '@prisma/client'
+import { DiagnosticDifficulty, DiagnosticQuestionType, Prisma } from '@prisma/client'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
@@ -12,6 +12,7 @@ import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
+import { generateInteractiveAssignmentDraft } from '../services/assignmentAssessment.service.js'
 
 export const teachersRouter = Router()
 
@@ -182,6 +183,22 @@ const attendanceBulkSchema = z.object({
   })).min(1).max(500),
 })
 
+const assignmentQuestionCreateSchema = z.object({
+  questionText: z.string().trim().min(3).max(2000),
+  questionType: z.nativeEnum(DiagnosticQuestionType),
+  options: z.array(z.string().trim().min(1).max(500)).max(8).optional().nullable(),
+  correctAnswer: z.union([z.string().max(5000), z.number(), z.boolean(), z.array(z.string().max(500)).max(20)]),
+  points: z.coerce.number().positive().max(100),
+  difficulty: z.nativeEnum(DiagnosticDifficulty).default(DiagnosticDifficulty.MEDIUM),
+  competencyTag: z.string().trim().min(2).max(160),
+  explanation: z.string().trim().max(2000).optional(),
+}).superRefine((question, ctx) => {
+  if (question.questionType === DiagnosticQuestionType.MULTIPLE_CHOICE) {
+    if (!question.options || question.options.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['options'], message: 'A multiple-choice question requires at least two options' })
+    if (question.options && !question.options.some((option) => option.trim().toLowerCase() === String(question.correctAnswer).trim().toLowerCase())) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['correctAnswer'], message: 'The correct answer must match one multiple-choice option' })
+  }
+})
+
 const assignmentCreateSchema = z.object({
   courseId: z.string().min(1),
   title: z.string().min(2).max(180),
@@ -193,6 +210,21 @@ const assignmentCreateSchema = z.object({
   estimatedMinutes: z.coerce.number().int().min(1).max(10080).optional(),
   resourceUrl: z.string().url().max(2000).optional().or(z.literal('')),
   resourceName: z.string().trim().max(180).optional(),
+  passingScore: z.coerce.number().min(0).max(100).default(70),
+  shuffleQuestions: z.boolean().default(false),
+  aiGenerated: z.boolean().default(false),
+  aiSource: z.string().max(120).optional(),
+  questions: z.array(assignmentQuestionCreateSchema).max(50).default([]),
+})
+
+const assignmentAiDraftSchema = z.object({
+  courseId: z.string().min(1),
+  topic: z.string().trim().min(3).max(500),
+  objectives: z.string().trim().max(2000).optional(),
+  questionCount: z.coerce.number().int().min(3).max(30).default(10),
+  difficulty: z.nativeEnum(DiagnosticDifficulty).default(DiagnosticDifficulty.MEDIUM),
+  language: z.enum(['fr', 'en']).default('en'),
+  questionTypes: z.array(z.nativeEnum(DiagnosticQuestionType)).min(1).max(5).default([DiagnosticQuestionType.MULTIPLE_CHOICE, DiagnosticQuestionType.TRUE_FALSE, DiagnosticQuestionType.SHORT_ANSWER]),
 })
 
 const teacherCourseSyncSchema = z.object({
@@ -218,7 +250,7 @@ const ownedCourse = async (userId: string, courseId: string) => {
     include: {
       enrollments: { include: { student: { include: { user: true, parentLinks: { select: { parentId: true } } } } } },
       assignments: {
-        include: { submissions: { include: { student: { include: { user: true } } } } },
+        include: { questions: { orderBy: { order: 'asc' } }, submissions: { include: { answers: true, student: { include: { user: true } } } } },
         orderBy: { dueDate: 'desc' },
       },
     },
@@ -464,7 +496,7 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
           id: true, name: true, code: true, description: true, grade: true, credits: true,
           schedules: { select: { id: true, day: true, startTime: true, endTime: true, room: true } },
           enrollments: { select: { studentId: true, student: { select: { id: true, studentNumber: true, grade: true, section: true, status: true, gpa: true, attendanceRate: true, user: { select: { id: true, firstName: true, middleName: true, lastName: true } } } } } },
-          assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true, cadence: true, estimatedMinutes: true, resourceUrl: true, resourceName: true, publishedAt: true, submissions: { select: { id: true, studentId: true, submittedAt: true, score: true, status: true } } }, orderBy: { dueDate: 'asc' } },
+          assignments: { select: { id: true, title: true, description: true, dueDate: true, maxScore: true, type: true, cadence: true, estimatedMinutes: true, resourceUrl: true, resourceName: true, publishedAt: true, isInteractive: true, aiGenerated: true, aiSource: true, passingScore: true, shuffleQuestions: true, resultsPublishedAt: true, gradebookSyncedAt: true, questions: { orderBy: { order: 'asc' } }, submissions: { select: { id: true, studentId: true, submittedAt: true, startedAt: true, score: true, autoScore: true, percentage: true, feedback: true, aiFeedback: true, gradedAt: true, status: true, answers: true } } }, orderBy: { dueDate: 'asc' } },
           grades: { select: { id: true, studentId: true, assignmentId: true, score: true, maxScore: true, percentage: true, letterGrade: true, period: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
         },
       },
@@ -656,7 +688,35 @@ teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), as
   const payload = assignmentCreateSchema.parse(req.body)
   const course = await ownedCourse(req.user!.sub, payload.courseId)
   const assignment = await prisma.$transaction(async (tx) => {
-    const created = await tx.assignment.create({ data: { courseId: course.id, title: payload.title, description: payload.description, dueDate: payload.dueDate, maxScore: payload.maxScore, type: payload.type, cadence: payload.cadence, estimatedMinutes: payload.estimatedMinutes, resourceUrl: payload.resourceUrl || null, resourceName: payload.resourceName || null } })
+    const interactiveScore = payload.questions.reduce((sum, question) => sum + question.points, 0)
+    const created = await tx.assignment.create({ data: {
+      courseId: course.id,
+      title: payload.title,
+      description: payload.description,
+      dueDate: payload.dueDate,
+      maxScore: payload.questions.length ? Number(interactiveScore.toFixed(2)) : payload.maxScore,
+      type: payload.type,
+      cadence: payload.cadence,
+      estimatedMinutes: payload.estimatedMinutes,
+      resourceUrl: payload.resourceUrl || null,
+      resourceName: payload.resourceName || null,
+      isInteractive: payload.questions.length > 0,
+      aiGenerated: payload.aiGenerated,
+      aiSource: payload.aiSource || null,
+      passingScore: payload.passingScore,
+      shuffleQuestions: payload.shuffleQuestions,
+      questions: payload.questions.length ? { create: payload.questions.map((question, order) => ({
+        questionText: question.questionText,
+        questionType: question.questionType,
+        options: question.options == null ? Prisma.JsonNull : question.options,
+        correctAnswer: question.correctAnswer == null ? Prisma.JsonNull : question.correctAnswer,
+        points: question.points,
+        difficulty: question.difficulty,
+        competencyTag: question.competencyTag,
+        explanation: question.explanation || null,
+        order,
+      })) } : undefined,
+    } })
     if (course.enrollments.length) await tx.assignmentSubmission.createMany({ data: course.enrollments.map(({ studentId }) => ({ assignmentId: created.id, studentId })), skipDuplicates: true })
     const studentUserIds = course.enrollments.map(({ student }) => student.user.id)
     const parentUserIds = [...new Set(course.enrollments.flatMap(({ student }) => student.parentLinks.map(({ parentId }) => parentId)))]
@@ -665,10 +725,35 @@ teachersRouter.post('/me/assignments', authenticate, requireRoles('teacher'), as
       ...parentUserIds.map((userId) => ({ userId, title: `New work published: ${payload.title}`, message: `A ${payload.type.toLowerCase()} for ${course.name} is due ${payload.dueDate.toLocaleDateString()}. Open your child's Performance page for details.`, type: 'INFO' as const, link: '/portal/parent/performance' })),
     ]
     if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_CREATED', targetType: 'Assignment', targetId: created.id, metadata: { courseId: course.id, students: studentUserIds.length, parents: parentUserIds.length, cadence: payload.cadence } } })
-    return tx.assignment.findUnique({ where: { id: created.id }, include: { submissions: { include: { student: { include: { user: true } } } } } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_CREATED', targetType: 'Assignment', targetId: created.id, metadata: { courseId: course.id, students: studentUserIds.length, parents: parentUserIds.length, cadence: payload.cadence, interactive: payload.questions.length > 0, questionCount: payload.questions.length, aiGenerated: payload.aiGenerated } } })
+    return tx.assignment.findUnique({ where: { id: created.id }, include: { questions: { orderBy: { order: 'asc' } }, submissions: { include: { student: { include: { user: true } } } } } })
   })
   return success(res, assignment, 'Assignment published to enrolled students', 201)
+}))
+
+teachersRouter.post('/me/assignments/ai-draft', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = assignmentAiDraftSchema.parse(req.body)
+  const course = await ownedCourse(req.user!.sub, payload.courseId)
+  try {
+    const draft = await generateInteractiveAssignmentDraft({
+      courseName: course.name,
+      grade: course.grade,
+      topic: payload.topic,
+      objectives: payload.objectives,
+      questionCount: payload.questionCount,
+      difficulty: payload.difficulty,
+      language: payload.language,
+      questionTypes: payload.questionTypes,
+    })
+    if (!draft) throw new ApiError(503, 'AI composition is temporarily unavailable. You can still compose the questions manually.')
+    const maxScore = Number(draft.questions.reduce((sum, question) => sum + question.points, 0).toFixed(2))
+    await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_AI_DRAFT_GENERATED', targetType: 'Course', targetId: course.id, metadata: { topic: payload.topic, questionCount: draft.questions.length, source: draft.source } } })
+    return success(res, { ...draft, maxScore }, 'AI assessment draft generated for teacher review')
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    console.error('[assignment-ai] Draft generation failed.', error)
+    throw new ApiError(503, 'AI composition is temporarily unavailable. Nothing was published; please retry or compose manually.')
+  }
 }))
 
 teachersRouter.patch('/me/assignments/:assignmentId/submissions/:studentId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -681,14 +766,51 @@ teachersRouter.patch('/me/assignments/:assignmentId/submissions/:studentId', aut
   const percentage = Number(((payload.score / assignment.maxScore) * 100).toFixed(2))
   const letterGrade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F'
   const result = await prisma.$transaction(async (tx) => {
-    const submission = await tx.assignmentSubmission.update({ where: { assignmentId_studentId: { assignmentId, studentId } }, data: { score: payload.score, feedback: payload.feedback, status: 'GRADED' } })
-    await tx.grade.deleteMany({ where: { assignmentId, studentId, courseId: assignment.courseId } })
-    const grade = await tx.grade.create({ data: { assignmentId, studentId, courseId: assignment.courseId, score: payload.score, maxScore: assignment.maxScore, percentage, letterGrade, period: 'CURRENT' } })
-    await synchronizeStudentAcademicMetrics(tx, [studentId])
+    const submission = await tx.assignmentSubmission.update({ where: { assignmentId_studentId: { assignmentId, studentId } }, data: { score: payload.score, autoScore: payload.score, percentage, feedback: payload.feedback, status: 'GRADED', gradedAt: new Date() } })
+    let grade = null
+    if (!assignment.isInteractive) {
+      await tx.grade.deleteMany({ where: { assignmentId, studentId, courseId: assignment.courseId } })
+      grade = await tx.grade.create({ data: { assignmentId, studentId, courseId: assignment.courseId, score: payload.score, maxScore: assignment.maxScore, percentage, letterGrade, period: 'CURRENT' } })
+      await synchronizeStudentAcademicMetrics(tx, [studentId])
+    }
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_SUBMISSION_GRADED', targetType: 'AssignmentSubmission', targetId: submission.id, metadata: { assignmentId, studentId, percentage } } })
+    await tx.assignment.update({ where: { id: assignmentId }, data: { resultsPublishedAt: new Date(), ...(!assignment.isInteractive ? { gradebookSyncedAt: new Date() } : {}) } })
     return { submission, grade }
   })
-  return success(res, result, 'Submission graded and synchronized with the gradebook')
+  return success(res, result, assignment.isInteractive ? 'Result reviewed. Confirm the Gradebook transfer when the class is ready.' : 'Submission graded and synchronized with the gradebook')
+}))
+
+teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const assignmentId = getRouteParam(req.params.assignmentId)
+  const assignment = await prisma.assignment.findFirst({
+    where: { id: assignmentId, course: { teacher: { userId: req.user!.sub } } },
+    include: { course: true, submissions: { where: { status: 'GRADED', score: { not: null } }, include: { student: { include: { user: true, parentLinks: { select: { parentId: true } } } } } } },
+  })
+  if (!assignment) throw new ApiError(403, 'This assignment is not assigned to the authenticated teacher')
+  if (!assignment.submissions.length) throw new ApiError(409, 'No corrected result is ready for the Gradebook')
+  const synchronizedAt = new Date()
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.grade.deleteMany({ where: { assignmentId, courseId: assignment.courseId } })
+    await tx.grade.createMany({ data: assignment.submissions.map((submission) => {
+      const score = Number(submission.score)
+      const percentage = Number(((score / assignment.maxScore) * 100).toFixed(2))
+      const letterGrade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F'
+      return { assignmentId, studentId: submission.studentId, courseId: assignment.courseId, score, maxScore: assignment.maxScore, percentage, letterGrade, period: 'CURRENT' }
+    }) })
+    await tx.assignment.update({ where: { id: assignmentId }, data: { gradebookSyncedAt: synchronizedAt, resultsPublishedAt: synchronizedAt } })
+    await synchronizeStudentAcademicMetrics(tx, assignment.submissions.map((submission) => submission.studentId))
+    const notificationRows = assignment.submissions.flatMap((submission) => {
+      const percentage = Number((((submission.score ?? 0) / assignment.maxScore) * 100).toFixed(1))
+      return [
+        { userId: submission.student.user.id, title: `Result published: ${assignment.title}`, message: `${assignment.course.name}: ${submission.score}/${assignment.maxScore} (${percentage}%). The verified result is now in your Gradebook.`, type: 'SUCCESS' as const, link: '/portal/student/assignments' },
+        ...submission.student.parentLinks.map(({ parentId }) => ({ userId: parentId, title: `Result published: ${assignment.title}`, message: `${submission.student.user.firstName} received ${submission.score}/${assignment.maxScore} (${percentage}%) in ${assignment.course.name}.`, type: 'SUCCESS' as const, link: '/portal/parent/performance' })),
+      ]
+    })
+    if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ASSIGNMENT_RESULTS_SYNCED_TO_GRADEBOOK', targetType: 'Assignment', targetId: assignmentId, metadata: { resultCount: assignment.submissions.length, synchronizedAt: synchronizedAt.toISOString() } } })
+    return { synchronized: assignment.submissions.length, synchronizedAt }
+  })
+  return success(res, result, `${result.synchronized} corrected result(s) sent to the official Gradebook`)
 }))
 
 teachersRouter.delete('/me/assignments/:assignmentId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {

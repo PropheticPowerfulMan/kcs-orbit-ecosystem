@@ -2,6 +2,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'node:crypto'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
@@ -14,6 +15,7 @@ import { KCS_ACADEMIC_PASSING_SCORE_PERCENT, meetsKcsAcademicPassingScore } from
 import { resolveStudentProfileId } from '../services/studentIdentity.js'
 import { academicScheduleForGrade } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
+import { gradeInteractiveAssignment, gradeSubjectiveAssignmentAnswers } from '../services/assignmentAssessment.service.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -35,6 +37,9 @@ import { getRouteParam } from '../utils/request.js'
 export const studentsRouter = Router()
 const assignmentSubmissionSchema = z.object({
   fileName: z.string().trim().min(1).max(255),
+})
+const interactiveAssignmentSubmissionSchema = z.object({
+  answers: z.array(z.object({ questionId: z.string().min(1), answer: z.union([z.string().max(20000), z.number(), z.boolean()]) })).min(1).max(100),
 })
 
 const schoolLevels = [
@@ -916,10 +921,98 @@ studentsRouter.get('/me/assignments', authenticate, requireRoles('student'), asy
   if (!studentProfileId) throw new ApiError(404, 'Student profile not found')
   const submissions = await prisma.assignmentSubmission.findMany({
     where: { studentId: studentProfileId },
-    include: { assignment: { include: { course: true } } },
+    include: {
+      answers: { select: { questionId: true, answer: true, isCorrect: true, pointsAwarded: true, feedback: true } },
+      assignment: { include: { course: true, questions: { select: { id: true, questionText: true, questionType: true, options: true, points: true, difficulty: true, competencyTag: true, order: true }, orderBy: { order: 'asc' } } } },
+    },
     orderBy: { assignment: { dueDate: 'asc' } },
   })
   return success(res, submissions)
+}))
+
+studentsRouter.post('/me/assignments/:submissionId/start', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const submissionId = getRouteParam(req.params.submissionId)
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  if (!studentProfileId) throw new ApiError(404, 'Student profile not found')
+  const existing = await prisma.assignmentSubmission.findFirst({ where: { id: submissionId, studentId: studentProfileId }, include: { assignment: true } })
+  if (!existing) throw new ApiError(404, 'Assignment submission not found')
+  if (!existing.assignment.isInteractive) throw new ApiError(409, 'This assignment does not use the interactive questionnaire')
+  if (existing.status !== 'PENDING') return success(res, existing, 'The questionnaire was already started or submitted')
+  const updated = await prisma.assignmentSubmission.update({ where: { id: submissionId }, data: { startedAt: existing.startedAt ?? new Date() } })
+  return success(res, updated, 'Interactive assignment started')
+}))
+
+studentsRouter.post('/me/assignments/:submissionId/submit-quiz', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const submissionId = getRouteParam(req.params.submissionId)
+  const payload = interactiveAssignmentSubmissionSchema.parse(req.body)
+  const studentProfileId = await resolveStudentProfileId(req.user!.sub)
+  if (!studentProfileId) throw new ApiError(404, 'Student profile not found')
+  const submission = await prisma.assignmentSubmission.findFirst({
+    where: { id: submissionId, studentId: studentProfileId },
+    include: {
+      student: { include: { user: true, parentLinks: { select: { parentId: true } } } },
+      assignment: { include: { course: { include: { teacher: { select: { userId: true } } } }, questions: { orderBy: { order: 'asc' } } } },
+    },
+  })
+  if (!submission) throw new ApiError(404, 'Assignment submission not found')
+  if (!submission.assignment.isInteractive || !submission.assignment.questions.length) throw new ApiError(409, 'This assignment has no interactive questionnaire')
+  if (submission.status !== 'PENDING') throw new ApiError(409, 'This questionnaire has already been submitted')
+  const questionIds = new Set(submission.assignment.questions.map((question) => question.id))
+  if (payload.answers.some((answer) => !questionIds.has(answer.questionId))) throw new ApiError(400, 'The submission contains a question outside this assignment')
+  if (new Set(payload.answers.map((answer) => answer.questionId)).size !== payload.answers.length) throw new ApiError(400, 'Each question may be answered only once')
+
+  const subjectiveQuestions = submission.assignment.questions.filter((question) => question.questionType === 'ESSAY_OPTIONAL')
+  let subjectiveGrades: Awaited<ReturnType<typeof gradeSubjectiveAssignmentAnswers>> = []
+  if (subjectiveQuestions.length) {
+    try {
+      subjectiveGrades = await gradeSubjectiveAssignmentAnswers({ questions: subjectiveQuestions, answers: payload.answers as Array<{ questionId: string; answer: unknown }> })
+    } catch (error) {
+      console.error('[assignment-ai] Subjective grading unavailable; preserving teacher review.', error)
+    }
+  }
+  const grading = gradeInteractiveAssignment({ questions: submission.assignment.questions, answers: payload.answers as Array<{ questionId: string; answer: unknown }>, subjectiveGrades })
+  const now = new Date()
+  const status = grading.pendingTeacherReview ? 'SUBMITTED' as const : 'GRADED' as const
+  const feedback = grading.pendingTeacherReview
+    ? 'Objective questions were checked. An open response is waiting for the teacher’s final review.'
+    : `AI-assisted correction completed. ${grading.score}/${grading.totalPossible} (${grading.percentage}%). The teacher may review this result before sending it to the Gradebook.`
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.assignmentSubmissionAnswer.deleteMany({ where: { submissionId } })
+    const saved = await tx.assignmentSubmission.update({
+      where: { id: submissionId },
+      data: {
+        startedAt: submission.startedAt ?? now,
+        submittedAt: now,
+        score: grading.pendingTeacherReview ? null : grading.score,
+        autoScore: grading.score,
+        percentage: grading.percentage,
+        feedback,
+        aiFeedback: feedback,
+        answersJson: payload.answers as Prisma.InputJsonValue,
+        gradedAt: grading.pendingTeacherReview ? null : now,
+        status,
+        answers: { create: grading.gradedAnswers.map((answer) => ({
+          questionId: answer.questionId,
+          answer: answer.answer == null ? Prisma.JsonNull : answer.answer as Prisma.InputJsonValue,
+          isCorrect: answer.isCorrect,
+          pointsAwarded: answer.pointsAwarded,
+          feedback: answer.feedback,
+        })) },
+      },
+      include: { answers: true, assignment: { include: { course: true, questions: { select: { id: true, questionText: true, questionType: true, options: true, points: true, difficulty: true, competencyTag: true, order: true }, orderBy: { order: 'asc' } } } } },
+    })
+    if (!grading.pendingTeacherReview) await tx.assignment.update({ where: { id: submission.assignmentId }, data: { resultsPublishedAt: now } })
+    const notificationRows = [
+      { userId: submission.assignment.course.teacher.userId, title: `Assignment received: ${submission.assignment.title}`, message: `${submission.student.user.firstName} ${submission.student.user.lastName} submitted ${submission.assignment.title}.${grading.pendingTeacherReview ? ' An open response requires your review.' : ` AI-assisted result: ${grading.percentage}%. Confirm before Gradebook transfer.`}`, type: grading.pendingTeacherReview ? 'WARNING' as const : 'INFO' as const, link: '/portal/teacher/assignments' },
+      { userId: submission.student.user.id, title: grading.pendingTeacherReview ? 'Assignment submitted' : 'Result available', message: grading.pendingTeacherReview ? `${submission.assignment.title} is waiting for teacher review.` : `${submission.assignment.title}: ${grading.score}/${grading.totalPossible} (${grading.percentage}%).`, type: grading.pendingTeacherReview ? 'INFO' as const : 'SUCCESS' as const, link: '/portal/student/assignments' },
+      ...(!grading.pendingTeacherReview ? submission.student.parentLinks.map(({ parentId }) => ({ userId: parentId, title: `Result available: ${submission.assignment.title}`, message: `${submission.student.user.firstName} received ${grading.score}/${grading.totalPossible} (${grading.percentage}%) in ${submission.assignment.course.name}.`, type: 'SUCCESS' as const, link: '/portal/parent/performance' })) : []),
+    ]
+    await tx.notification.createMany({ data: notificationRows })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'STUDENT_INTERACTIVE_ASSIGNMENT_SUBMITTED', targetType: 'AssignmentSubmission', targetId: submissionId, metadata: { assignmentId: submission.assignmentId, status, score: grading.score, percentage: grading.percentage, pendingTeacherReview: grading.pendingTeacherReview } } })
+    return saved
+  })
+  return success(res, updated, grading.pendingTeacherReview ? 'Assignment submitted for teacher review' : 'Assignment submitted and corrected')
 }))
 
 studentsRouter.get('/me/timetable', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -941,6 +1034,8 @@ studentsRouter.patch('/me/assignments/:submissionId/submit', authenticate, requi
   if (!studentProfileId) throw new ApiError(404, 'Student profile not found')
   const existing = await prisma.assignmentSubmission.findFirst({ where: { id: submissionId, studentId: studentProfileId } })
   if (!existing) throw new ApiError(404, 'Assignment submission not found')
+  const assignment = await prisma.assignment.findUnique({ where: { id: existing.assignmentId }, select: { isInteractive: true } })
+  if (assignment?.isInteractive) throw new ApiError(409, 'Use the interactive questionnaire to submit this assignment')
   const updated = await prisma.assignmentSubmission.update({
     where: { id: submissionId },
     data: { status: 'SUBMITTED', submittedAt: new Date(), feedback: `Student file: ${payload.fileName}` },
@@ -1000,7 +1095,10 @@ studentsRouter.get('/:id/assignments', authenticate, asyncHandler(async (req: Au
   await assertStudentAccess(req, studentId, { requireFinancialClearance: true })
   const submissions = await prisma.assignmentSubmission.findMany({
     where: { studentId },
-    include: { assignment: { include: { course: true } } },
+    include: {
+      answers: { select: { questionId: true, isCorrect: true, pointsAwarded: true, feedback: true } },
+      assignment: { include: { course: true, questions: { select: { id: true, questionText: true, questionType: true, points: true, competencyTag: true, order: true }, orderBy: { order: 'asc' } } } },
+    },
     orderBy: { assignment: { dueDate: 'asc' } },
   })
   return success(res, submissions)

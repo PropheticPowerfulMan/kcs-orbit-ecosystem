@@ -35,59 +35,61 @@ enum ImportJobStatus {
 }
 
 model ImportJob {
-  id String @id @default(cuid())
-  actorId String
-  organizationId String?
-  sourceSystem String @default("GENERIC")
-  entityType String
+  id               String          @id @default(cuid())
+  actorId          String
+  organizationId   String?
+  sourceSystem     String          @default("GENERIC")
+  entityType       String
   originalFileName String
-  fileHash String
-  status ImportJobStatus @default(UPLOADED)
-  mapping Json?
-  report Json?
-  totalRows Int @default(0)
-  createdRows Int @default(0)
-  updatedRows Int @default(0)
-  skippedRows Int @default(0)
-  failedRows Int @default(0)
-  mergedRows Int @default(0)
-  invitationsSent Boolean @default(false)
-  confirmedAt DateTime?
-  completedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  fileHash         String
+  status           ImportJobStatus @default(UPLOADED)
+  mapping          Json?
+  report           Json?
+  totalRows        Int             @default(0)
+  createdRows      Int             @default(0)
+  updatedRows      Int             @default(0)
+  skippedRows      Int             @default(0)
+  failedRows       Int             @default(0)
+  mergedRows       Int             @default(0)
+  invitationsSent  Boolean         @default(false)
+  confirmedAt      DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
   @@index([actorId, createdAt])
   @@index([organizationId, createdAt])
   @@index([status])
 }
 
 model ImportMappingTemplate {
-  id String @id @default(cuid())
-  name String
-  actorId String
+  id             String   @id @default(cuid())
+  name           String
+  actorId        String
   organizationId String?
-  sourceSystem String @default("GENERIC")
-  entityType String
-  sourceColumns String[]
-  mapping Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sourceSystem   String   @default("GENERIC")
+  entityType     String
+  sourceColumns  String[]
+  mapping        Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   @@unique([organizationId, name, entityType])
   @@index([organizationId, entityType])
 }
 
-
 model ImportChange {
-  id String @id @default(cuid())
-  importJobId String
-  entityType String
-  entityId String
-  operation String
-  oldValue Json?
-  newValue Json?
-  changedAt DateTime @default(now())
-  rolledBackAt DateTime?
+  id            String    @id @default(cuid())
+  importJobId   String
+  entityType    String
+  entityId      String
+  operation     String
+  oldValue      Json?
+  newValue      Json?
+  changedAt     DateTime  @default(now())
+  rolledBackAt  DateTime?
   rollbackError String?
+
   @@index([importJobId, changedAt])
   @@index([entityType, entityId])
 }
@@ -298,67 +300,67 @@ enum DisciplineResolutionStatus {
 }
 
 model User {
-  id                     String                 @id @default(cuid())
-  email                  String                 @unique
-  accessCode             String                 @unique
-  passwordHash           String?
-  firstName              String
-  middleName             String?
-  lastName               String
-  role                   UserRole
-  staffFunction          String?
-  permissions            String[]               @default([])
-  avatar                 String?
-  phone                  String?
-  googleId               String?                @unique
-  orbitUserId            String?                @unique
-  orbitOrganizationId    String?
-  accountBlockedAt       DateTime?
-  accountBlockedReason   String?
-  accountBlockedBy       String?
-  failedLoginAttempts    Int                    @default(0)
-  loginLockedUntil       DateTime?
-  lastFailedLoginAt      DateTime?
-  lastLoginAt            DateTime?
-  passwordChangedAt      DateTime?
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  studentProfile         StudentProfile?
-  teacherProfile         TeacherProfile?
-  parentLinks            ParentStudentLink[]    @relation("ParentLinks")
-  notifications          Notification[]
-  authoredNews           NewsPost[]             @relation("NewsAuthor")
-  contactMessages        ContactMessage[]
-  refreshTokens          RefreshToken[]
-  passwordResetTokens    PasswordResetToken[]
-  forumPosts             ParentForumPost[]      @relation("ForumPostAuthor")
-  forumComments          ParentForumComment[]   @relation("ForumCommentAuthor")
-  aiForumReports         AIForumReport[]        @relation("AIForumReportReviewer")
-  studentForumPosts      StudentForumPost[]     @relation("StudentForumPostAuthor")
-  studentForumComments   StudentForumComment[]  @relation("StudentForumCommentAuthor")
-  studentForumLikes      StudentForumLike[]     @relation("StudentForumLikeUser")
-  aiStudentForumReports  AIStudentForumReport[] @relation("AIStudentForumReportReviewer")
-  auditLogs              AuditLog[]             @relation("AuditActor")
-  staffProfile           StaffProfile?
-  attendanceRecorded     AttendanceRecord[]     @relation("AttendanceRecorder")
-  staffAttendanceRecorded StaffAttendanceRecord[] @relation("StaffAttendanceRecorder")
-  sentMessages           InternalMessage[]      @relation("MessageSender")
-  receivedMessages       InternalMessage[]      @relation("MessageRecipient")
-  approvedReportCards    ReportCard[]           @relation("ReportCardApprover")
-  teacherWorkspace       TeacherWorkspace?
-  suggestions            Suggestion[]           @relation("SuggestionAuthor")
-  diagnosticTestsCreated DiagnosticTest[]       @relation("DiagnosticTestCreator")
-  diagnosticApprovals    DiagnosticApproval[]   @relation("DiagnosticApprovalActor")
-  teacherReviewsGiven    TeacherReview[]        @relation("TeacherReviewReviewer")
-  correspondenceSent     CorrespondenceLog[]    @relation("CorrespondenceSender")
-  disciplineReported     DisciplineCase[]       @relation("DisciplineReporter")
-  disciplineResolved     DisciplineCase[]       @relation("DisciplineResolver")
-  twoFactorEnabled       Boolean                @default(false)
-  twoFactorSecret        String?
-  twoFactorVerifiedAt    DateTime?
-  electiveCyclesCreated  ElectiveCycle[] @relation("ElectiveCycleCreator")
-  electiveOfferingsTaught ElectiveOffering[] @relation("ElectiveOfferingTeacher")
-  electiveOfferingsProposed ElectiveOffering[] @relation("ElectiveOfferingProposer")
+  id                             String                   @id @default(cuid())
+  email                          String                   @unique
+  accessCode                     String                   @unique
+  passwordHash                   String?
+  firstName                      String
+  middleName                     String?
+  lastName                       String
+  role                           UserRole
+  staffFunction                  String?
+  permissions                    String[]                 @default([])
+  avatar                         String?
+  phone                          String?
+  googleId                       String?                  @unique
+  orbitUserId                    String?                  @unique
+  orbitOrganizationId            String?
+  accountBlockedAt               DateTime?
+  accountBlockedReason           String?
+  accountBlockedBy               String?
+  failedLoginAttempts            Int                      @default(0)
+  loginLockedUntil               DateTime?
+  lastFailedLoginAt              DateTime?
+  lastLoginAt                    DateTime?
+  passwordChangedAt              DateTime?
+  createdAt                      DateTime                 @default(now())
+  updatedAt                      DateTime                 @updatedAt
+  studentProfile                 StudentProfile?
+  teacherProfile                 TeacherProfile?
+  parentLinks                    ParentStudentLink[]      @relation("ParentLinks")
+  notifications                  Notification[]
+  authoredNews                   NewsPost[]               @relation("NewsAuthor")
+  contactMessages                ContactMessage[]
+  refreshTokens                  RefreshToken[]
+  passwordResetTokens            PasswordResetToken[]
+  forumPosts                     ParentForumPost[]        @relation("ForumPostAuthor")
+  forumComments                  ParentForumComment[]     @relation("ForumCommentAuthor")
+  aiForumReports                 AIForumReport[]          @relation("AIForumReportReviewer")
+  studentForumPosts              StudentForumPost[]       @relation("StudentForumPostAuthor")
+  studentForumComments           StudentForumComment[]    @relation("StudentForumCommentAuthor")
+  studentForumLikes              StudentForumLike[]       @relation("StudentForumLikeUser")
+  aiStudentForumReports          AIStudentForumReport[]   @relation("AIStudentForumReportReviewer")
+  auditLogs                      AuditLog[]               @relation("AuditActor")
+  staffProfile                   StaffProfile?
+  attendanceRecorded             AttendanceRecord[]       @relation("AttendanceRecorder")
+  staffAttendanceRecorded        StaffAttendanceRecord[]  @relation("StaffAttendanceRecorder")
+  sentMessages                   InternalMessage[]        @relation("MessageSender")
+  receivedMessages               InternalMessage[]        @relation("MessageRecipient")
+  approvedReportCards            ReportCard[]             @relation("ReportCardApprover")
+  teacherWorkspace               TeacherWorkspace?
+  suggestions                    Suggestion[]             @relation("SuggestionAuthor")
+  diagnosticTestsCreated         DiagnosticTest[]         @relation("DiagnosticTestCreator")
+  diagnosticApprovals            DiagnosticApproval[]     @relation("DiagnosticApprovalActor")
+  teacherReviewsGiven            TeacherReview[]          @relation("TeacherReviewReviewer")
+  correspondenceSent             CorrespondenceLog[]      @relation("CorrespondenceSender")
+  disciplineReported             DisciplineCase[]         @relation("DisciplineReporter")
+  disciplineResolved             DisciplineCase[]         @relation("DisciplineResolver")
+  twoFactorEnabled               Boolean                  @default(false)
+  twoFactorSecret                String?
+  twoFactorVerifiedAt            DateTime?
+  electiveCyclesCreated          ElectiveCycle[]          @relation("ElectiveCycleCreator")
+  electiveOfferingsTaught        ElectiveOffering[]       @relation("ElectiveOfferingTeacher")
+  electiveOfferingsProposed      ElectiveOffering[]       @relation("ElectiveOfferingProposer")
   shiningStudentSchedulesCreated ShiningStudentSchedule[] @relation("ShiningStudentScheduleCreator")
 }
 
@@ -423,37 +425,37 @@ model RefreshToken {
 }
 
 model StudentProfile {
-  id                    String                 @id @default(cuid())
-  userId                String                 @unique
-  studentNumber         String                 @unique
-  grade                 String
-  section               String
-  dateOfBirth           DateTime?
-  enrollmentDate        DateTime               @default(now())
-  status                String                 @default("active")
-  transcriptVisible     Boolean                @default(false)
+  id                      String                   @id @default(cuid())
+  userId                  String                   @unique
+  studentNumber           String                   @unique
+  grade                   String
+  section                 String
+  dateOfBirth             DateTime?
+  enrollmentDate          DateTime                 @default(now())
+  status                  String                   @default("active")
+  transcriptVisible       Boolean                  @default(false)
   /// Official registry portrait managed by authorized school staff.
   /// The student's self-service dashboard avatar remains on User.avatar.
-  officialAvatar        String?
-  gpa                   Float?
-  attendanceRate        Float?
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentLinks           ParentStudentLink[]    @relation("StudentLinks")
-  enrollments           Enrollment[]
-  grades                Grade[]
-  submissions           AssignmentSubmission[]
-  aiSessions            AITutorSession[]
-  aiRecommendations     AIRecommendation[]
-  attendanceRecords     AttendanceRecord[]
+  officialAvatar          String?
+  gpa                     Float?
+  attendanceRate          Float?
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentLinks             ParentStudentLink[]      @relation("StudentLinks")
+  enrollments             Enrollment[]
+  grades                  Grade[]
+  submissions             AssignmentSubmission[]
+  aiSessions              AITutorSession[]
+  aiRecommendations       AIRecommendation[]
+  attendanceRecords       AttendanceRecord[]
   legacyTranscriptRecords LegacyTranscriptRecord[]
-  reportCards           ReportCard[]
-  transcripts           Transcript[]
-  feeInvoices           FeeInvoice[]
-  diagnosticAssignments DiagnosticAssignment[]
-  diagnosticSubmissions DiagnosticSubmission[]
-  disciplineCases       DisciplineCase[]
-  electiveChoices        ElectiveChoice[]
-  electiveAllocations    ElectiveAllocation[]
+  reportCards             ReportCard[]
+  transcripts             Transcript[]
+  feeInvoices             FeeInvoice[]
+  diagnosticAssignments   DiagnosticAssignment[]
+  diagnosticSubmissions   DiagnosticSubmission[]
+  disciplineCases         DisciplineCase[]
+  electiveChoices         ElectiveChoice[]
+  electiveAllocations     ElectiveAllocation[]
   shiningStudentSchedules ShiningStudentSchedule[]
 }
 
@@ -501,16 +503,16 @@ model ParentStudentLink {
 }
 
 model TeacherProfile {
-  id                String           @id @default(cuid())
-  userId            String           @unique
-  employeeNumber    String           @unique
+  id                String                  @id @default(cuid())
+  userId            String                  @unique
+  employeeNumber    String                  @unique
   department        String
   qualification     String
   yearsOfExperience Int
   bio               String?
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   courses           Course[]
-  status            TeacherStatus    @default(TEACHER)
+  status            TeacherStatus           @default(TEACHER)
   homeroomGrade     String?
   homeroomSection   String?
   diagnosticTests   DiagnosticTest[]
@@ -581,22 +583,50 @@ model Enrollment {
 }
 
 model Assignment {
-  id          String                 @id @default(cuid())
-  courseId    String
-  title       String
-  description String
-  dueDate     DateTime
-  maxScore    Float
-  type        AssignmentType
-  cadence     AssignmentCadence @default(ONE_TIME)
-  estimatedMinutes Int?
-  resourceUrl String?
-  resourceName String?
-  publishedAt DateTime @default(now())
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  submissions AssignmentSubmission[]
+  id                 String                 @id @default(cuid())
+  courseId           String
+  title              String
+  description        String
+  dueDate            DateTime
+  maxScore           Float
+  type               AssignmentType
+  cadence            AssignmentCadence      @default(ONE_TIME)
+  estimatedMinutes   Int?
+  resourceUrl        String?
+  resourceName       String?
+  isInteractive      Boolean                @default(false)
+  aiGenerated        Boolean                @default(false)
+  aiSource           String?
+  passingScore       Float                  @default(70)
+  shuffleQuestions   Boolean                @default(false)
+  resultsPublishedAt DateTime?
+  gradebookSyncedAt  DateTime?
+  publishedAt        DateTime               @default(now())
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  course             Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions        AssignmentSubmission[]
+  questions          AssignmentQuestion[]
+}
+
+model AssignmentQuestion {
+  id            String                       @id @default(cuid())
+  assignmentId  String
+  questionText  String
+  questionType  DiagnosticQuestionType
+  options       Json?
+  correctAnswer Json?
+  points        Float                        @default(1)
+  difficulty    DiagnosticDifficulty         @default(MEDIUM)
+  competencyTag String
+  explanation   String?
+  order         Int                          @default(0)
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  assignment    Assignment                   @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  answers       AssignmentSubmissionAnswer[]
+
+  @@index([assignmentId, order])
 }
 
 model TeacherActivityReport {
@@ -622,15 +652,22 @@ model TeacherActivityReport {
 }
 
 model AssignmentSubmission {
-  id           String           @id @default(cuid())
+  id           String                       @id @default(cuid())
   assignmentId String
   studentId    String
   submittedAt  DateTime?
+  startedAt    DateTime?
   score        Float?
+  autoScore    Float?
+  percentage   Float?
   feedback     String?
-  status       SubmissionStatus @default(PENDING)
-  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student      StudentProfile   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  aiFeedback   String?
+  answersJson  Json?
+  gradedAt     DateTime?
+  status       SubmissionStatus             @default(PENDING)
+  assignment   Assignment                   @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      StudentProfile               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers      AssignmentSubmissionAnswer[]
 
   @@unique([assignmentId, studentId])
 }
@@ -733,24 +770,24 @@ model StaffAttendanceRecord {
 }
 
 model InternalMessage {
-  id          String                @id @default(cuid())
-  senderId    String?
-  recipientId String?
-  subject     String
-  body        String
-  attachmentName String?
-  attachmentMime String?
-  attachmentSize Int?
-  attachmentData Bytes?
-  targetRole  UserRole?
-  readAt      DateTime?
-  priority    String                @default("normal")
-  channel     CorrespondenceChannel @default(PORTAL)
-  createdAt   DateTime              @default(now())
-  senderArchivedAt DateTime?
+  id                  String                @id @default(cuid())
+  senderId            String?
+  recipientId         String?
+  subject             String
+  body                String
+  attachmentName      String?
+  attachmentMime      String?
+  attachmentSize      Int?
+  attachmentData      Bytes?
+  targetRole          UserRole?
+  readAt              DateTime?
+  priority            String                @default("normal")
+  channel             CorrespondenceChannel @default(PORTAL)
+  createdAt           DateTime              @default(now())
+  senderArchivedAt    DateTime?
   recipientArchivedAt DateTime?
-  sender      User?                 @relation("MessageSender", fields: [senderId], references: [id], onDelete: SetNull)
-  recipient   User?                 @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+  sender              User?                 @relation("MessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  recipient           User?                 @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
 
   @@index([targetRole])
   @@index([createdAt])
@@ -760,6 +797,22 @@ model InternalMessage {
   @@index([createdAt, id])
   @@index([senderId, senderArchivedAt, createdAt])
   @@index([recipientId, recipientArchivedAt, createdAt])
+}
+
+model AssignmentSubmissionAnswer {
+  id            String               @id @default(cuid())
+  submissionId  String
+  questionId    String
+  answer        Json?
+  isCorrect     Boolean?
+  pointsAwarded Float                @default(0)
+  feedback      String?
+  createdAt     DateTime             @default(now())
+  submission    AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question      AssignmentQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, questionId])
+  @@index([questionId])
 }
 
 model ReportCard {
@@ -789,25 +842,25 @@ model ReportCard {
 }
 
 model LegacyTranscriptRecord {
-  id             String         @id @default(cuid())
-  studentId      String
-  academicYear   String
-  gradeLevel     String
-  term           String
-  courseCode     String
-  courseName     String
-  credits        Float
-  percentage     Float
-  letterGrade    String
-  sourceSchool   String
-  sourceSystem   String         @default("QUICKSCHOOLS")
-  sourceDocument String
-  fileHash       String
-  verificationStatus String     @default("VERIFIED")
-  importedBy     String
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  id                 String         @id @default(cuid())
+  studentId          String
+  academicYear       String
+  gradeLevel         String
+  term               String
+  courseCode         String
+  courseName         String
+  credits            Float
+  percentage         Float
+  letterGrade        String
+  sourceSchool       String
+  sourceSystem       String         @default("QUICKSCHOOLS")
+  sourceDocument     String
+  fileHash           String
+  verificationStatus String         @default("VERIFIED")
+  importedBy         String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  student            StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, academicYear, term, courseCode])
   @@index([studentId, academicYear])
@@ -962,38 +1015,38 @@ model AIRecommendation {
 }
 
 model ParentForumPost {
-  id        String               @id @default(cuid())
-  authorId  String
-  title     String
-  content   String
-  category  String
-  status    String               @default("open")
-  sentiment String               @default("neutral")
-  priority  String               @default("normal")
+  id             String               @id @default(cuid())
+  authorId       String
+  title          String
+  content        String
+  category       String
+  status         String               @default("open")
+  sentiment      String               @default("neutral")
+  priority       String               @default("normal")
   attachmentType String?
   attachmentData String?
   attachmentName String?
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-  author    User                 @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  comments  ParentForumComment[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  author         User                 @relation("ForumPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments       ParentForumComment[]
 
   @@index([category])
   @@index([createdAt])
 }
 
 model ParentForumComment {
-  id        String          @id @default(cuid())
-  postId    String
-  authorId  String
-  content   String
-  sentiment String          @default("neutral")
+  id             String          @id @default(cuid())
+  postId         String
+  authorId       String
+  content        String
+  sentiment      String          @default("neutral")
   attachmentType String?
   attachmentData String?
   attachmentName String?
-  createdAt DateTime        @default(now())
-  post      ParentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User            @relation("ForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+  post           ParentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author         User            @relation("ForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([postId])
 }
@@ -1036,17 +1089,17 @@ model StudentForumPost {
 }
 
 model StudentForumComment {
-  id        String           @id @default(cuid())
-  postId    String
-  authorId  String
-  content   String
-  sentiment String           @default("neutral")
+  id             String           @id @default(cuid())
+  postId         String
+  authorId       String
+  content        String
+  sentiment      String           @default("neutral")
   attachmentType String?
   attachmentData String?
   attachmentName String?
-  createdAt DateTime         @default(now())
-  post      StudentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User             @relation("StudentForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  post           StudentForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author         User             @relation("StudentForumCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([postId])
 }
@@ -1329,39 +1382,41 @@ model CorrespondenceLog {
   @@index([disciplineCaseId])
 }
 
-
 enum IncidentReportStatus {
   SUBMITTED
   UNDER_REVIEW
   CLOSED
 }
+
 enum IncidentConfidentiality {
   STANDARD
   CONFIDENTIAL
 }
+
 model IncidentReport {
-  id String @id @default(cuid())
-  reference String @unique
-  title String
-  category String
-  occurredAt DateTime
-  location String
-  description String
-  peopleInvolved String?
+  id               String                  @id @default(cuid())
+  reference        String                  @unique
+  title            String
+  category         String
+  occurredAt       DateTime
+  location         String
+  description      String
+  peopleInvolved   String?
   immediateActions String?
-  confidentiality IncidentConfidentiality @default(STANDARD)
-  status IncidentReportStatus @default(SUBMITTED)
-  adminNotes String?
-  authorId String
-  authorRole UserRole
-  authorName String
-  attachmentName String?
-  attachmentMime String?
-  attachmentSize Int?
-  attachmentData Bytes?
-  verificationHash String @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  confidentiality  IncidentConfidentiality @default(STANDARD)
+  status           IncidentReportStatus    @default(SUBMITTED)
+  adminNotes       String?
+  authorId         String
+  authorRole       UserRole
+  authorName       String
+  attachmentName   String?
+  attachmentMime   String?
+  attachmentSize   Int?
+  attachmentData   Bytes?
+  verificationHash String                  @unique
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
   @@index([authorId, createdAt])
   @@index([status, createdAt])
 }
