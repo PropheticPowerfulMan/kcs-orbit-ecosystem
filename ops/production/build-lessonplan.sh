@@ -9,9 +9,13 @@ LESSONPLAN_ENV_FILE="${LESSONPLAN_ENV_FILE:-/etc/kcs-orbit/lessonplan.env}"
 [[ -z "$(git -C "$ROOT_DIR" status --porcelain)" ]] || { echo "Refusing to build a dirty worktree." >&2; exit 1; }
 [[ -f "$LESSONPLAN_ENV_FILE" ]] || { echo "Missing $LESSONPLAN_ENV_FILE" >&2; exit 1; }
 
-set -a
-. "$LESSONPLAN_ENV_FILE"
-set +a
+read_env_value() {
+  local key="$1"
+  sed -n "s/^${key}=//p" "$LESSONPLAN_ENV_FILE" | tail -n 1 | tr -d '\r'
+}
+
+SUPABASE_URL="$(read_env_value SUPABASE_URL)"
+SUPABASE_ANON_KEY="$(read_env_value SUPABASE_ANON_KEY)"
 
 : "${SUPABASE_URL:?Set SUPABASE_URL}"
 : "${SUPABASE_ANON_KEY:?Set SUPABASE_ANON_KEY}"
