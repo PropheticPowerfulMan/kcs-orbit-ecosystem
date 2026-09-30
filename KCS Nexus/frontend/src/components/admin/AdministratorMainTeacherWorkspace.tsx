@@ -145,12 +145,9 @@ export default function AdministratorMainTeacherWorkspace() {
       return
     }
     setBusyKey('bulk')
-    let completed = 0
     try {
-      for (const studentId of selectedStudentIds) {
-        await mainTeacherAPI.assignStudentSection(studentId, section)
-        completed += 1
-      }
+      const completed = selectedStudentIds.length
+      await mainTeacherAPI.assignStudentSections(selectedStudentIds, section)
       setSelectedStudentIds([])
       setBulkSection('')
       setResult({ ok: true, message: tr(`${completed} élève(s) affecté(s) à ${selectedGrade} ${section}.`, `${completed} learner(s) assigned to ${selectedGrade} ${section}.`) })
@@ -159,10 +156,7 @@ export default function AdministratorMainTeacherWorkspace() {
       await load()
       setResult({
         ok: false,
-        message: tr(
-          `${completed} affectation(s) enregistrée(s), puis l’opération a été interrompue. Vous pouvez reprendre les élèves restants.`,
-          `${completed} assignment(s) were saved before the operation stopped. You can resume with the remaining learners.`,
-        ),
+        message: error?.response?.data?.message ?? tr('Aucune affectation n’a été appliquée. Le registre précédent a été conservé.', 'No assignment was applied. The previous roster was preserved.'),
       })
     } finally {
       setBusyKey('')

@@ -537,6 +537,7 @@ export const mainTeacherAPI = {
   list: () => api.get('/school-management/teachers/main-assignments'),
   assign: (teacherId: string, data: { status: 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER' | 'TEACHER'; homeroomGrade?: string; homeroomSection?: string }) => api.patch('/school-management/teachers/' + teacherId + '/status', data),
   roster: () => api.get('/school-management/teachers/class-rosters'),
+  assignStudentSections: (studentIds: string[], section: string) => api.patch('/school-management/teachers/class-rosters', { studentIds, section }),
   assignStudentSection: (studentId: string, section: string) => api.patch('/school-management/teachers/class-rosters/' + studentId, { section }),
 }
 

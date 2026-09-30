@@ -48,6 +48,14 @@ const teacherStatusSchema = z.object({
 const studentClassSectionSchema = z.object({
   section: z.string().trim().max(40).transform((value) => value.replace(/\s+/g, ' ')),
 })
+const studentClassSectionBulkSchema = z.object({
+  studentIds: z.array(z.string().min(1)).min(1).max(200),
+  section: z.string().trim().max(40).transform((value) => value.replace(/\s+/g, ' ')),
+}).superRefine((value, context) => {
+  if (new Set(value.studentIds).size !== value.studentIds.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['studentIds'], message: 'A learner can only be selected once.' })
+  }
+})
 
 
 const teacherReviewSchema = z.object({
@@ -248,6 +256,76 @@ schoolManagementRouter.get('/teachers/class-rosters', requireOperationalAdminist
         ...normalizeClassParts(teacher.homeroomGrade, teacher.homeroomSection),
       })),
   }, 'Official class-section roster loaded')
+}))
+
+schoolManagementRouter.patch('/teachers/class-rosters', requireOperationalAdministrator, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = studentClassSectionBulkSchema.parse(req.body)
+  const students = await prisma.studentProfile.findMany({
+    where: { id: { in: payload.studentIds } },
+    select: { id: true, grade: true, section: true, studentNumber: true, user: { select: { orbitUserId: true } } },
+  })
+  if (students.length !== payload.studentIds.length) throw new ApiError(404, 'One or more learners no longer exist in the official Nexus register')
+
+  const assignments = students.map((student) => ({
+    student,
+    normalized: normalizeClassParts(student.grade, payload.section),
+    orbitReference: { orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, grade: student.grade, section: student.section },
+  }))
+  const grades = new Set(assignments.map((entry) => entry.normalized.grade.toLowerCase()))
+  if (grades.size !== 1) throw new ApiError(400, 'Bulk section assignment is limited to learners from one grade')
+
+  const orbitUpdates: typeof assignments = []
+  try {
+    for (const assignment of assignments) {
+      const orbitSync = await updateOrbitStudentClassAssignment(
+        assignment.orbitReference,
+        assignment.normalized.grade,
+        assignment.normalized.section,
+      )
+      if (orbitSync.synchronized) orbitUpdates.push(assignment)
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const rows = []
+      for (const assignment of assignments) {
+        rows.push(await tx.studentProfile.update({
+          where: { id: assignment.student.id },
+          data: { grade: assignment.normalized.grade, section: assignment.normalized.section },
+          select: { id: true, studentNumber: true, grade: true, section: true },
+        }))
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId: getActorId(req),
+          action: 'STUDENT_CLASS_SECTION_BULK_ASSIGNED',
+          targetType: 'ClassRoster',
+          targetId: [assignments[0].normalized.grade, assignments[0].normalized.section || 'WHOLE_CLASS'].join(':'),
+          metadata: {
+            grade: assignments[0].normalized.grade,
+            section: assignments[0].normalized.section,
+            count: rows.length,
+            studentIds: rows.map((row) => row.id),
+            orbitSynchronized: orbitUpdates.length,
+          },
+        },
+      })
+      return rows
+    })
+    return success(res, updated, `${updated.length} learners assigned to the official class section`)
+  } catch (error) {
+    for (const assignment of [...orbitUpdates].reverse()) {
+      try {
+        await updateOrbitStudentClassAssignment(
+          assignment.orbitReference,
+          assignment.student.grade,
+          assignment.student.section,
+        )
+      } catch (rollbackError) {
+        console.error('[class-roster] Orbit bulk rollback failed.', rollbackError)
+      }
+    }
+    throw error
+  }
 }))
 
 schoolManagementRouter.patch('/teachers/class-rosters/:studentId', requireOperationalAdministrator, asyncHandler(async (req: AuthenticatedRequest, res) => {
