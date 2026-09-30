@@ -5,25 +5,34 @@ import { createClient } from "@supabase/supabase-js";
 import { recoveryEmail } from "./emailTemplate.mjs";
 
 const required = [
-  "APP_URL", "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "NEXUS_API_URL",
+  "APP_URL", "SUPABASE_URL", "SUPABASE_ANON_KEY", "NEXUS_API_URL",
   "LWS_SMTP_HOST", "LWS_SMTP_USER", "LWS_SMTP_PASSWORD",
   "MAIL_FROM_ADDRESS", "PUBLIC_LOGO_URL"
 ];
 const missing = required.filter((name) => !process.env[name]);
 if (missing.length) throw new Error("Missing environment variables: " + missing.join(", "));
-if (process.env.SUPABASE_SERVICE_ROLE_KEY.startsWith("sb_publishable_")) {
-  throw new Error("SUPABASE_SERVICE_ROLE_KEY must be a secret/service_role key, not a publishable key.");
-}
+const configuredServiceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+const hasServiceRoleKey = Boolean(
+  configuredServiceRoleKey &&
+  configuredServiceRoleKey !== process.env.SUPABASE_ANON_KEY &&
+  !configuredServiceRoleKey.startsWith("sb_publishable_") &&
+  !configuredServiceRoleKey.includes("your-service-role-key")
+);
 
 const port = Number(process.env.PORT || 3001);
 const appUrl = process.env.APP_URL.replace(/\/$/, "");
 const allowedOrigins = new Set((process.env.ALLOWED_ORIGINS || appUrl).split(",").map((value) => value.trim()));
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false }
-});
+const supabase = hasServiceRoleKey
+  ? createClient(process.env.SUPABASE_URL, configuredServiceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  : null;
 const supabasePublic = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
+if (!supabase) {
+  console.warn("KCS Lesson Plan started in legacy-access mode: a real Supabase service_role/secret key is required for institutional federation.");
+}
 const transporter = nodemailer.createTransport({
   host: process.env.LWS_SMTP_HOST,
   port: Number(process.env.LWS_SMTP_PORT || 465),
@@ -31,6 +40,13 @@ const transporter = nodemailer.createTransport({
   auth: { user: process.env.LWS_SMTP_USER, pass: process.env.LWS_SMTP_PASSWORD }
 });
 const attempts = new Map();
+
+const requireSupabaseAdmin = () => {
+  if (supabase) return supabase;
+  const error = new Error("Institutional KCS access is temporarily unavailable. Existing Lesson Plan accounts can still sign in with their Lesson Plan email and password.");
+  error.status = 503;
+  throw error;
+};
 
 const sendJson = (response, status, body, origin) => {
   response.writeHead(status, {
@@ -80,8 +96,9 @@ const profileNameFor = (nexusUser) => [nexusUser.lastName, nexusUser.middleName,
   .trim() || String(nexusUser.name || "KCS Teacher");
 
 const findAuthUserByEmail = async (email) => {
+  const admin = requireSupabaseAdmin();
   for (let page = 1; page <= 10; page += 1) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw error;
     const match = data.users.find((user) => String(user.email || "").toLowerCase() === email);
     if (match) return match;
@@ -91,23 +108,24 @@ const findAuthUserByEmail = async (email) => {
 };
 
 const ensureSupabaseProfile = async (nexusUser) => {
+  const admin = requireSupabaseAdmin();
   const email = String(nexusUser.email || "").trim().toLowerCase();
   if (!email) throw new Error("The institutional account does not have an email address.");
   const role = profileRoleFor(nexusUser);
   if (!role) throw new Error("Only teachers and authorized school leaders may use KCS Lesson Plan.");
 
-  const { data: rows, error: profileError } = await supabase.from("profiles").select("*").ilike("email", email).limit(2);
+  const { data: rows, error: profileError } = await admin.from("profiles").select("*").ilike("email", email).limit(2);
   if (profileError) throw profileError;
   if ((rows || []).length > 1) throw new Error("Multiple lesson-plan profiles use this email. Ask the Super Administration to reconcile them.");
 
   let profile = rows?.[0] || null;
-  let authUser = profile ? await supabase.auth.admin.getUserById(profile.id).then(({ data, error }) => {
+  let authUser = profile ? await admin.auth.admin.getUserById(profile.id).then(({ data, error }) => {
     if (error) throw error;
     return data.user;
   }) : await findAuthUserByEmail(email);
 
   if (!authUser) {
-    const { data, error } = await supabase.auth.admin.createUser({
+    const { data, error } = await admin.auth.admin.createUser({
       email,
       email_confirm: true,
       user_metadata: { name: profileNameFor(nexusUser), role, source: "kcs-orbit" }
@@ -117,7 +135,7 @@ const ensureSupabaseProfile = async (nexusUser) => {
   }
 
   if (!profile) {
-    const { data, error } = await supabase.from("profiles").upsert({
+    const { data, error } = await admin.from("profiles").upsert({
       id: authUser.id,
       name: profileNameFor(nexusUser),
       email,
@@ -131,7 +149,7 @@ const ensureSupabaseProfile = async (nexusUser) => {
     if (error) throw error;
     profile = data;
   } else if (profile.status !== "active") {
-    const { data, error } = await supabase.from("profiles")
+    const { data, error } = await admin.from("profiles")
       .update({ status: "active", updated_at: new Date().toISOString() })
       .eq("id", profile.id)
       .select("*")
@@ -143,7 +161,8 @@ const ensureSupabaseProfile = async (nexusUser) => {
 };
 
 const createSupabaseSession = async (email) => {
-  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({ type: "magiclink", email });
+  const admin = requireSupabaseAdmin();
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({ type: "magiclink", email });
   const tokenHash = linkData?.properties?.hashed_token;
   if (linkError || !tokenHash) throw linkError || new Error("Unable to create the secure lesson-plan session.");
   const { data, error } = await supabasePublic.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
@@ -181,7 +200,11 @@ const server = http.createServer(async (request, response) => {
   const pathname = new URL(request.url || "/", "http://lesson-plan.local").pathname;
   if (request.method === "OPTIONS") return sendJson(response, 204, {}, corsOrigin);
   if (request.method === "GET" && pathname === "/api/health") {
-    return sendJson(response, 200, { status: "ok" }, corsOrigin);
+    return sendJson(response, 200, {
+      status: "ok",
+      federatedAuth: supabase ? "ready" : "needs_service_role",
+      legacySupabaseAccess: "ready"
+    }, corsOrigin);
   }
   if (request.method !== "POST" || !["/api/auth/recovery", "/api/auth/ecosystem-login"].includes(pathname)) {
     return sendJson(response, 404, { error: "Not found" }, corsOrigin);
@@ -204,7 +227,8 @@ const server = http.createServer(async (request, response) => {
       return sendJson(response, 400, { error: "Adresse email invalide." }, corsOrigin);
     }
 
-    const { data, error } = await supabase.auth.admin.generateLink({
+    const admin = requireSupabaseAdmin();
+    const { data, error } = await admin.auth.admin.generateLink({
       type: "recovery",
       email,
       options: { redirectTo: appUrl + "/#/login" }
