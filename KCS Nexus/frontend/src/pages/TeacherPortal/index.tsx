@@ -337,6 +337,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [enrollmentAutoSync, setEnrollmentAutoSync] = useState(true)
   const [enrollmentSaving, setEnrollmentSaving] = useState(false)
   const [courseSaving, setCourseSaving] = useState(false)
+  const [registryRefreshKey, setRegistryRefreshKey] = useState(0)
   const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState('')
   const [gradebookColumnsByCourse, setGradebookColumnsByCourse] = useState<Record<string, GradebookColumn[]>>({})
   const [gradebookScores, setGradebookScores] = useState<Record<string, string>>({})
@@ -557,12 +558,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         setRegistryStatus('ready')
       } catch {
         if (!active) return
-        setSuperAdminStudentPool([])
-        setOfficialCourseAssignments([])
-        setOfficialCourseGrades([])
-        setSupportStudentPool([])
-        setCourseStudentPool([])
-        setHomeroomClassName('')
+        // Keep the last verified snapshot visible when a background refresh is
+        // interrupted by a weak connection. A transient network error must not
+        // make a teacher's roster disappear from the Gradebook.
         setRegistryStatus('error')
       }
     }
@@ -572,7 +570,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     return () => {
       active = false
     }
-  }, [])
+  }, [registryRefreshKey])
 
   useEffect(() => {
     const firstStudent = supportStudentPool[0] ?? courseStudentPool[0]
@@ -890,6 +888,26 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setCourseAbbreviationManual(false)
   }
 
+  const updateCourseName = (name: string) => {
+    const previousAutoValue = generateCourseAbbreviation(courseDraft.name)
+    const shouldKeepGenerating = !courseAbbreviationManual
+      || !courseDraft.abbreviation.trim()
+      || courseDraft.abbreviation === previousAutoValue
+    if (shouldKeepGenerating) setCourseAbbreviationManual(false)
+    setCourseDraft((draft) => ({
+      ...draft,
+      name,
+      abbreviation: shouldKeepGenerating ? generateCourseAbbreviation(name) : draft.abbreviation,
+    }))
+    if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined }))
+  }
+
+  const updateCourseAbbreviation = (value: string) => {
+    const abbreviation = value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 30)
+    setCourseAbbreviationManual(Boolean(abbreviation) && abbreviation !== generateCourseAbbreviation(courseDraft.name))
+    setCourseDraft((draft) => ({ ...draft, abbreviation }))
+  }
+
   const generateReportCard = async () => {
     const studentName = reportCardStudent?.name ?? 'Selected student'
     const summary = `${studentName} earned ${reportCardAverage}% for ${reportCardTerm}. Mention: ${reportCardMention}. Decision: ${reportCardDecision}.`
@@ -982,14 +1000,17 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       : [nextCourse, ...courses]
     const existingIds = new Set(teacherStudents.map((student) => student.id))
     const nextStudents = [...roster.filter((student) => !existingIds.has(student.id)), ...teacherStudents]
+    // Update every Gradebook dependency immediately. The relational refresh
+    // below reconciles canonical Nexus profile ids without blocking the UI.
+    setCourses(nextCourses)
+    setTeacherStudents(nextStudents)
+    setSelectedGradebookCourseId(nextCourse.id)
     const persisted = await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents }, customRoster
       ? `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} as a multi-class course; ${roster.length} selected student(s) retained.`
       : `${nextCourse.name} ${existingCourse ? 'updated' : 'created'} for ${selectedGrade}; ${roster.length} official student(s) enrolled.`)
     setCourseSaving(false)
+    setRegistryRefreshKey((current) => current + 1)
     if (!persisted) return
-    setCourses(nextCourses)
-    setTeacherStudents(nextStudents)
-    setSelectedGradebookCourseId(nextCourse.id)
     resetCourseDraft()
     if (customRoster && !existingCourse) {
       setEnrollmentDialogCourseId(nextCourse.id)
@@ -1015,8 +1036,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
       studentId: course.studentIds[0] ?? superAdminStudentPool[0]?.id ?? '',
       enrollmentMode: course.enrollmentMode === 'custom' ? 'custom' : 'class',
     })
-    setCourseAbbreviationManual(true)
-    runAction(`${course.name} loaded for editing.`)
+    setCourseAbbreviationManual(course.abbreviation !== generateCourseAbbreviation(course.name))
   }
 
   const deleteCourse = async (courseId: string) => {
@@ -1233,6 +1253,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (!saved) return
     setCourses(nextCourses)
     setTeacherStudents(nextStudents)
+    setRegistryRefreshKey((current) => current + 1)
     setEnrollmentDialogCourseId(null)
   }
 
@@ -1270,6 +1291,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (!await persistWorkspace({ courses: nextCourses, teacherStudents: nextStudents })) return
     setCourses(nextCourses)
     setTeacherStudents(nextStudents)
+    setRegistryRefreshKey((current) => current + 1)
   }
 
   const selectedGradebookCourse = courses.find((course) => course.id === selectedGradebookCourseId) ?? courses[0]
@@ -1456,7 +1478,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
         <AdvancedGradebook
           courses={courses}
-          students={courseStudentPool}
+          students={teacherStudents.length ? teacherStudents : courseStudentPool}
           selectedCourseId={selectedGradebookCourseId}
           onSelectCourse={setSelectedGradebookCourseId}
           onAction={runAction}
@@ -1540,13 +1562,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                   <div className="mt-4 grid gap-3">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                       Subject name
-                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => { const name = event.target.value; setCourseDraft((draft) => ({ ...draft, name, abbreviation: courseAbbreviationManual ? draft.abbreviation : generateCourseAbbreviation(name) })); if (courseErrors.name) setCourseErrors((current) => ({ ...current, name: undefined })) }} />
+                      <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => updateCourseName(event.target.value)} />
                       {courseErrors.name && <p className="field-error" role="alert">{courseErrors.name}</p>}
                     </label>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Abbreviation
-                        <input className={`${inputClass} bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-950/70`} value={courseDraft.abbreviation} maxLength={30} onChange={(event) => { setCourseAbbreviationManual(true); const abbreviation = event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 30); setCourseDraft((draft) => ({ ...draft, abbreviation })) }} />
+                        <input className={`${inputClass} bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-950/70`} value={courseDraft.abbreviation} maxLength={30} onChange={(event) => updateCourseAbbreviation(event.target.value)} />
                         <span className="flex items-center justify-between gap-2 text-[11px] font-normal text-gray-400"><span>{tr('Générée automatiquement, puis modifiable librement.', 'Generated automatically, then freely editable.')}</span><button type="button" className="font-bold text-kcs-blue-700 hover:underline dark:text-kcs-gold-300" onClick={() => { setCourseAbbreviationManual(false); setCourseDraft((draft) => ({ ...draft, abbreviation: generateCourseAbbreviation(draft.name) })) }}>{tr('Régénérer', 'Regenerate')}</button></span>
                       </label>
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
@@ -1710,6 +1732,72 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {segment === 'courses' && editingCourseId && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:p-6"
+          onMouseDown={() => { if (!courseSaving) resetCourseDraft() }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-course-title"
+            className="max-h-[94dvh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-kcs-blue-200 bg-[#f4f9ff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-kcs-blue-100 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-5 py-4 text-white sm:px-7">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-300">{tr('Cours officiel', 'Official course')}</p>
+                <h3 id="edit-course-title" className="mt-1 font-display text-xl font-bold sm:text-2xl">{tr('Modifier le cours', 'Edit course')}</h3>
+                <p className="mt-1 text-sm text-blue-100">{tr('Les changements seront synchronisés avec le Gradebook et les inscriptions.', 'Changes will synchronize with the Gradebook and enrollment roster.')}</p>
+              </div>
+              <button type="button" disabled={courseSaving} onClick={resetCourseDraft} className="rounded-full bg-white/10 p-2 hover:bg-white/20 disabled:opacity-50" aria-label={tr('Fermer', 'Close')}><X size={20} /></button>
+            </header>
+            <div className="grid gap-5 p-5 sm:p-7">
+              <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
+                {tr('Nom du cours', 'Course name')}
+                <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + ' border-red-500 ring-2 ring-red-100' : inputClass} value={courseDraft.name} onChange={(event) => updateCourseName(event.target.value)} autoFocus />
+                {courseErrors.name && <span className="field-error" role="alert">{courseErrors.name}</span>}
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
+                  {tr('Abréviation', 'Abbreviation')}
+                  <input className={`${inputClass} bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-900/70`} value={courseDraft.abbreviation} maxLength={30} onChange={(event) => updateCourseAbbreviation(event.target.value)} />
+                  <span className="flex items-center justify-between gap-2 text-[11px] font-normal text-gray-500 dark:text-gray-400"><span>{tr('Automatique tant qu’aucune valeur personnalisée n’est conservée.', 'Automatic until a custom value is retained.')}</span><button type="button" className="font-bold text-kcs-blue-700 hover:underline dark:text-kcs-gold-300" onClick={() => { setCourseAbbreviationManual(false); setCourseDraft((draft) => ({ ...draft, abbreviation: generateCourseAbbreviation(draft.name) })) }}>{tr('Régénérer', 'Regenerate')}</button></span>
+                </label>
+                <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
+                  {tr('Crédits', 'Credit hours')}
+                  <input className={inputClass} type="number" min={1} max={60} value={courseDraft.creditHours} onChange={(event) => setCourseDraft((draft) => ({ ...draft, creditHours: event.target.value.replace(/^0+(?=\d)/, '') }))} onBlur={() => setCourseDraft((draft) => ({ ...draft, creditHours: String(normalizeCreditHours(draft.creditHours)) }))} />
+                </label>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
+                  {tr('Salle', 'Room')}
+                  <input className={inputClass} value={courseDraft.room} onChange={(event) => setCourseDraft((draft) => ({ ...draft, room: event.target.value }))} />
+                </label>
+                <label className="grid gap-1.5 text-sm font-semibold text-kcs-blue-900 dark:text-blue-100">
+                  {tr('Classe / portée', 'Class / scope')}
+                  {courseDraft.enrollmentMode === 'class' ? (
+                    <select ref={courseGradeRef as any} className={courseErrors.grade ? inputClass + ' border-red-500 ring-2 ring-red-100' : inputClass} value={courseDraft.gradeLevels[0] ?? ''} onChange={(event) => toggleCourseGrade(event.target.value)}>
+                      <option value="">{tr('Choisir une classe', 'Choose a class')}</option>
+                      {gradeOptions.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+                    </select>
+                  ) : <div className={`${inputClass} flex items-center bg-kcs-blue-50 font-semibold dark:bg-kcs-blue-900/60`}>{tr('Groupe multi-classes — effectif géré séparément', 'Multi-class group — roster managed separately')}</div>}
+                  {courseErrors.grade && <span className="field-error" role="alert">{courseErrors.grade}</span>}
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={() => setCourseDraft((draft) => ({ ...draft, enrollmentMode: 'class' }))} className={`rounded-2xl border p-4 text-left ${courseDraft.enrollmentMode === 'class' ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900/60' : 'border-slate-200 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30'}`}><b className="block dark:text-white">{tr('Classe officielle', 'Official class')}</b><span className="mt-1 block text-xs text-slate-500 dark:text-slate-300">{tr('Synchronisation automatique de la classe sélectionnée.', 'Automatically synchronize the selected class.')}</span></button>
+                <button type="button" onClick={() => { setCourseDraft((draft) => ({ ...draft, enrollmentMode: 'custom', className: '', gradeLevels: [] })); setCourseErrors((current) => ({ ...current, grade: undefined })) }} className={`rounded-2xl border p-4 text-left ${courseDraft.enrollmentMode === 'custom' ? 'border-kcs-blue-600 bg-kcs-blue-50 ring-1 ring-kcs-blue-500 dark:bg-kcs-blue-900/60' : 'border-slate-200 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/30'}`}><b className="block dark:text-white">{tr('Groupe multi-classes', 'Multi-class group')}</b><span className="mt-1 block text-xs text-slate-500 dark:text-slate-300">{tr('Conserve puis permet d’ajuster un effectif personnalisé.', 'Keeps and then allows adjusting a custom roster.')}</span></button>
+              </div>
+              <footer className="flex flex-col-reverse gap-3 border-t border-kcs-blue-100 pt-5 sm:flex-row sm:justify-end dark:border-kcs-blue-800">
+                <button type="button" disabled={courseSaving} onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-300 px-5 py-3 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 disabled:opacity-50 dark:border-kcs-blue-600 dark:text-blue-100 dark:hover:bg-kcs-blue-900">{tr('Annuler', 'Cancel')}</button>
+                <button type="button" disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70">{courseSaving ? tr('Enregistrement sécurisé…', 'Saving securely…') : tr('Enregistrer les modifications', 'Save changes')}</button>
+              </footer>
+            </div>
           </div>
         </div>
       )}
