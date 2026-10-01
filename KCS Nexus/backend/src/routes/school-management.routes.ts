@@ -8,6 +8,7 @@ import { getRouteParam } from '../utils/request.js'
 import { sendSchoolSms } from '../utils/sms.js'
 import { classAssignmentsOverlap, normalizeClassParts } from '../utils/className.js'
 import { updateOrbitStudentClassAssignment } from '../services/orbitStudentMaterialization.js'
+import { reconcileOfficialClassCourseEnrollments } from '../services/officialClassRoster.js'
 
 const enumValue = <T extends readonly [string, ...string[]]>(values: T) => z.enum(values)
 
@@ -294,6 +295,7 @@ schoolManagementRouter.patch('/teachers/class-rosters', requireOperationalAdmini
           select: { id: true, studentNumber: true, grade: true, section: true },
         }))
       }
+      const courseRoster = await reconcileOfficialClassCourseEnrollments(tx, rows.map((row) => row.id), assignments[0].normalized)
       await tx.auditLog.create({
         data: {
           actorId: getActorId(req),
@@ -306,6 +308,7 @@ schoolManagementRouter.patch('/teachers/class-rosters', requireOperationalAdmini
             count: rows.length,
             studentIds: rows.map((row) => row.id),
             orbitSynchronized: orbitUpdates.length,
+            courseRoster,
           },
         },
       })
@@ -347,13 +350,14 @@ schoolManagementRouter.patch('/teachers/class-rosters/:studentId', requireOperat
         data: { grade: normalized.grade, section: normalized.section },
         select: { id: true, studentNumber: true, grade: true, section: true },
       })
+      const courseRoster = await reconcileOfficialClassCourseEnrollments(tx, [studentId], normalized)
       await tx.auditLog.create({
         data: {
           actorId: getActorId(req),
           action: 'STUDENT_CLASS_SECTION_ASSIGNED',
           targetType: 'StudentProfile',
           targetId: studentId,
-          metadata: { grade: normalized.grade, previousSection: student.section, section: normalized.section, orbitSynchronized: orbitSync.synchronized },
+          metadata: { grade: normalized.grade, previousSection: student.section, section: normalized.section, orbitSynchronized: orbitSync.synchronized, courseRoster },
         },
       })
       return saved

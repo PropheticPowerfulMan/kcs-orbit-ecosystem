@@ -115,8 +115,14 @@ const mergeStudentDirectory = (...groups: any[][]) => {
       // the class and identity data, but it must never replace the local
       // StudentProfile id used by Enrollment foreign keys.
       const nexusStudentProfileId = existing.id
+      const nexusGrade = existing.grade
+      const nexusSection = existing.section
+      const nexusUserId = existing.user?.id
       Object.assign(existing, student)
       existing.id = nexusStudentProfileId
+      existing.grade = nexusGrade
+      existing.section = nexusSection
+      if (existing.user && nexusUserId) existing.user.id = nexusUserId
       keys.forEach((key) => identities.set(key, existing))
       continue
     }
@@ -486,6 +492,7 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
 }))
 
 teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const teacher = await prisma.teacherProfile.findUnique({
     where: { userId: req.user!.sub },
     select: {
