@@ -1,6 +1,6 @@
-import { prisma } from '../src/config/prisma.js'
-import { normalizeClassParts } from '../src/utils/className.js'
-import { reconcileOfficialClassCourseEnrollments } from '../src/services/officialClassRoster.js'
+import { prisma } from '../config/prisma.js'
+import { normalizeClassParts } from '../utils/className.js'
+import { reconcileOfficialClassCourseEnrollments } from '../services/officialClassRoster.js'
 
 async function main() {
   const students = await prisma.studentProfile.findMany({
