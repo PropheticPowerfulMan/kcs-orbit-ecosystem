@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Brain, Camera, Heart, Loader2, MessageCircle, Mic, Paperclip, Plus, Send, ShieldCheck, Users, Video, X } from 'lucide-react'
+import { Brain, Camera, Globe2, Heart, Loader2, MessageCircle, Mic, Paperclip, Search, Send, ShieldCheck, Sparkles, Video, X } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -40,6 +40,8 @@ const StudentForumPage = () => {
   const [loading, setLoading] = useState(true)
   const [busyAction, setBusyAction] = useState('')
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('ALL')
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
@@ -75,6 +77,11 @@ const StudentForumPage = () => {
       summary: `${posts.length} student threads, ${concerned} concern signals, ${urgent} urgent threads.`,
     }
   }, [posts])
+  const visiblePosts = useMemo(() => posts.filter((post) => {
+    const matchesCategory = categoryFilter === 'ALL' || post.category === categoryFilter
+    const searchable = `${post.title} ${post.content} ${post.author} ${post.category}`.toLowerCase()
+    return matchesCategory && (!query.trim() || searchable.includes(query.trim().toLowerCase()))
+  }), [posts, query, categoryFilter])
 
   const createPost = async (event: FormEvent) => {
     event.preventDefault()
@@ -172,19 +179,17 @@ const StudentForumPage = () => {
           <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {tr('Un espace sécurisé pour échanger, commenter et faire entendre la voix des élèves.', 'A secure space to discuss, comment, and amplify student voice.')}</p>
         </div>
 
-        <div className="grid min-w-0 gap-5 p-3 sm:p-6 xl:grid-cols-[0.85fr_1.35fr]">
-          <header className="xl:col-span-2">
-            <h2 className="font-display text-3xl font-bold text-kcs-blue-950 dark:text-white">{tr('Forum des élèves', 'Student Forum')}</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{tr('Discussions réelles modérées avec suivi IA du bien-être.', 'Real moderated discussions with AI-assisted wellbeing monitoring.')}</p>
+        <div className="grid min-w-0 gap-5 p-3 sm:p-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-900 to-cyan-800 p-5 text-white shadow-xl sm:p-7 xl:col-span-2">
+            <div className="pointer-events-none absolute -right-14 -top-20 h-64 w-64 rounded-full bg-cyan-300/15 blur-2xl"/>
+            <div className="relative max-w-3xl"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-300"><ShieldCheck size={16}/>{tr('Communauté étudiante KCS','KCS student community')}</p><h2 className="mt-2 font-display text-3xl font-black sm:text-4xl">{tr('Forum des élèves', 'Student Forum')}</h2><p className="mt-2 text-sm leading-6 text-kcs-blue-100">{tr('Un fil social sécurisé pour partager, collaborer et faire entendre la voix des élèves avec une modération bienveillante.', 'A secure social feed to share, collaborate, and amplify student voice with supportive moderation.')}</p></div>
+            <div className="relative mt-6 grid max-w-xl grid-cols-3 gap-2 sm:gap-3"><StudentForumMetric value={posts.length} label={tr('Discussions','Discussions')}/><StudentForumMetric value={posts.reduce((sum,post)=>sum+post.comments.length,0)} label={tr('Réponses','Replies')}/><StudentForumMetric value={posts.reduce((sum,post)=>sum+post.likeCount,0)} label={tr('Réactions','Reactions')}/></div>
           </header>
           {error && <div className="xl:col-span-2 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100 sm:flex-row sm:items-center sm:justify-between" role="alert"><span>{error}</span><button type="button" onClick={() => void load()} className="rounded-xl bg-red-700 px-4 py-2 text-white">{tr('Actualiser','Refresh')}</button></div>}
           <div className="space-y-6">
-            <form onSubmit={createPost} className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-              <div className="mb-5 flex items-center gap-3">
-                <Plus className="text-kcs-blue-600" size={20} />
-                <h2 className="font-bold text-kcs-blue-900 dark:text-white">Start a Student Discussion</h2>
-              </div>
-              <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Discussion title" className="input-kcs mb-3" />
+            <form onSubmit={createPost} className="min-w-0 rounded-3xl border border-kcs-blue-100 bg-white p-4 shadow-lg sm:p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/70">
+              <div className="mb-5 flex items-center gap-3"><StudentForumAvatar name={`${user?.firstName??''} ${user?.lastName??''}`}/><div><p className="text-xs font-bold text-cyan-700 dark:text-cyan-300">{tr('Publier dans la communauté','Post to the community')}</p><h2 className="font-display text-lg font-black text-kcs-blue-950 dark:text-white">{tr('Lancer une discussion','Start a discussion')}</h2></div></div>
+              <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={tr('Titre de la discussion','Discussion title')} className="input-kcs mb-3" />
               <select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} className="input-kcs mb-3">
                 <option>Academics</option>
                 <option>Wellbeing</option>
@@ -193,7 +198,7 @@ const StudentForumPage = () => {
                 <option>Clubs</option>
                 <option>Events</option>
               </select>
-              <textarea value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder="Share an idea, question, or concern" className="input-kcs min-h-32 resize-none" />
+              <textarea value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} placeholder={tr('Partage une idée, une question ou une préoccupation…','Share an idea, question, or concern…')} className="input-kcs min-h-32 resize-none rounded-2xl" />
               <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => readMedia(event.target.files?.[0], 'image')} /><input ref={videoInputRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={(event) => readMedia(event.target.files?.[0], 'video')} /><input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={(event) => readMedia(event.target.files?.[0], 'audio')} />
               <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => imageInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Camera size={16}/> Photo</button><button type="button" onClick={() => videoInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Video size={16}/> Video</button><button type="button" onClick={() => audioInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-kcs-blue-700"><Mic size={16}/> Audio</button></div>
               {attachment && <div className="mt-3 flex items-center justify-between rounded-xl bg-kcs-blue-50 p-3 text-sm"><span>{attachment.name}</span><button type="button" onClick={() => setAttachment(null)}><X size={16}/></button></div>}
@@ -202,57 +207,50 @@ const StudentForumPage = () => {
                 {publishing && <span className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/25 to-transparent" />}
                 <span className="relative inline-flex items-center gap-2">
                   {publishing ? <Loader2 size={17} className="animate-spin" /> : <Send size={16} />}
-                  {publishing ? tr('Publication…', 'Publishing…') : tr('Publier', 'Publish')}
+                  {publishing ? tr('Publication sécurisée…', 'Secure publishing…') : tr('Publier maintenant', 'Post now')}
                 </span>
               </button>
             </form>
 
-            <div className="rounded-2xl border border-kcs-blue-100 bg-kcs-blue-50 p-6 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/40">
+            <div className="rounded-3xl border border-kcs-blue-100 bg-gradient-to-br from-kcs-blue-50 to-cyan-50 p-5 dark:border-kcs-blue-800 dark:from-kcs-blue-900 dark:to-kcs-blue-950">
               <div className="mb-3 flex items-center gap-2 text-kcs-blue-800 dark:text-kcs-blue-200">
                 <Brain size={18} />
-                <h2 className="font-bold">AI Student Voice Monitor</h2>
+                <h2 className="font-bold">{tr('Veille IA de la voix des élèves','AI Student Voice Monitor')}</h2>
               </div>
               <p className="text-sm text-kcs-blue-900 dark:text-kcs-blue-100">{report.summary}</p>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Current pulse: {report.sentiment}</p>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">{tr('Tendance actuelle','Current pulse')}: {report.sentiment}</p>
             </div>
+            <div className="rounded-3xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="mb-3 flex items-center gap-2"><Sparkles size={17} className="text-cyan-600"/><p className="text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Explorer le fil','Explore the feed')}</p></div><div className="relative"><Search className="absolute left-3 top-3 text-gray-400" size={17}/><input value={query} onChange={(event)=>setQuery(event.target.value)} className="input-kcs pl-10" placeholder={tr('Sujet, auteur ou contenu…','Topic, author, or content…')}/></div><select value={categoryFilter} onChange={(event)=>setCategoryFilter(event.target.value)} className="input-kcs mt-3"><option value="ALL">{tr('Toutes les catégories','All categories')}</option>{['Academics','Wellbeing','Student Life','Safety','Clubs','Events'].map((item)=><option key={item}>{item}</option>)}</select></div>
           </div>
 
           <section className="min-w-0 space-y-4">
             {loading && posts.length === 0 && <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-8 text-center font-semibold text-kcs-blue-800 dark:border-cyan-800 dark:bg-kcs-blue-900 dark:text-cyan-100"><Loader2 className="mx-auto mb-3 animate-spin"/> {tr('Chargement sécurisé du forum…','Secure forum loading…')}</div>}
-            {!loading && posts.length === 0 && <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-600 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-gray-300">No real student discussion has been published yet.</div>}
-            {posts.map((post, index) => (
+            {!loading && visiblePosts.length === 0 && <div className="rounded-3xl border border-gray-200 bg-white p-8 text-center text-gray-600 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-gray-300">{tr('Aucune discussion ne correspond à cette recherche.','No discussion matches this search.')}</div>}
+            {visiblePosts.map((post, index) => (
               <motion.article
                 key={post.id}
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.04 }}
-                className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"
+                className="min-w-0 overflow-hidden rounded-3xl border border-kcs-blue-100 bg-white p-4 shadow-sm transition hover:shadow-lg sm:p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/70"
               >
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-300">{post.category}</p>
-                    <h2 className="font-display text-lg font-bold text-kcs-blue-900 dark:text-white">{post.title}</h2>
-                    <p className="text-xs text-gray-400">Started by {post.author}</p>
-                  </div>
+                  <div className="flex min-w-0 items-center gap-3"><StudentForumAvatar name={post.author}/><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{post.author}</p><p className="flex items-center gap-1 text-xs text-gray-400"><Globe2 size={12}/>{tr('Visible par la communauté étudiante','Visible to the student community')} · {post.category}</p></div></div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${post.priority === 'urgent' ? 'bg-red-100 text-red-700' : post.priority === 'elevated' ? 'bg-kcs-gold-100 text-kcs-gold-700' : 'bg-green-100 text-green-700'}`}>
                     {post.priority}
                   </span>
                 </div>
-                <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300">{post.content}</p>
+                <h2 className="mt-4 font-display text-xl font-black text-kcs-blue-950 dark:text-white">{post.title}</h2>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-gray-600 dark:text-gray-300">{post.content}</p>
                 <ForumMedia type={post.attachmentType} name={post.attachmentName} hasAttachment={post.hasAttachment} load={() => studentForumAPI.getPostAttachment(post.id)} language={language}/>
-                <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                  <button type="button" onClick={() => void toggleLike(post.id)} className={`flex items-center gap-1.5 ${post.likedByMe ? 'font-bold text-red-500' : ''}`}><Heart size={15} fill={post.likedByMe ? 'currentColor' : 'none'}/> {post.likeCount} {post.likeCount === 1 ? 'Like' : 'Likes'}</button>
-                  <span className="flex items-center gap-1.5"><MessageCircle size={14} /> {post.comments.length} comments</span>
-                  <span className="flex items-center gap-1.5"><ShieldCheck size={14} /> AI: {post.sentiment}</span>
-                  <span className="flex items-center gap-1.5"><Users size={14} /> Student visible</span>
+                <div className="mt-5 grid grid-cols-3 border-y border-slate-100 py-1 text-xs font-bold text-gray-500 dark:border-kcs-blue-800 dark:text-gray-300">
+                  <button type="button" onClick={() => void toggleLike(post.id)} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-xl transition hover:bg-slate-50 dark:hover:bg-kcs-blue-950 ${post.likedByMe ? 'font-black text-red-500' : ''}`}><Heart size={16} fill={post.likedByMe ? 'currentColor' : 'none'}/> {post.likeCount} <span className="hidden sm:inline">{tr('J’aime','Like')}</span></button>
+                  <span className="flex min-h-10 items-center justify-center gap-1.5"><MessageCircle size={15} /> {post.comments.length} <span className="hidden sm:inline">{tr('Réponses','Replies')}</span></span>
+                  <span className="flex min-h-10 items-center justify-center gap-1.5"><ShieldCheck size={15} /> IA: {post.sentiment}</span>
                 </div>
                 <div className="mt-4 space-y-2">
                   {post.comments.map((comment) => (
-                    <div key={comment.id} className="rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30">
-                      <span className="font-semibold text-kcs-blue-900 dark:text-white">{comment.author}: </span>
-                      <span className="text-gray-600 dark:text-gray-300">{comment.content}</span>
-                      <ForumMedia compact type={comment.attachmentType} name={comment.attachmentName} hasAttachment={comment.hasAttachment} load={() => studentForumAPI.getCommentAttachment(comment.id)} language={language}/>
-                    </div>
+                    <div key={comment.id} className="flex items-start gap-2.5"><StudentForumAvatar name={comment.author} small/><div className="min-w-0 flex-1 rounded-2xl rounded-tl-md bg-gray-50 p-3 text-sm dark:bg-kcs-blue-800/30"><span className="font-semibold text-kcs-blue-900 dark:text-white">{comment.author}</span><p className="mt-1 whitespace-pre-wrap text-gray-600 dark:text-gray-300">{comment.content}</p><ForumMedia compact type={comment.attachmentType} name={comment.attachmentName} hasAttachment={comment.hasAttachment} load={() => studentForumAPI.getCommentAttachment(comment.id)} language={language}/></div></div>
                   ))}
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input value={commentDrafts[post.id] ?? ''} onChange={(event) => setCommentDrafts({ ...commentDrafts, [post.id]: event.target.value })} placeholder={tr('Répondre à cette discussion','Reply to this discussion')} className="input-kcs" />
@@ -274,3 +272,12 @@ const StudentForumPage = () => {
 }
 
 export default StudentForumPage
+
+function StudentForumAvatar({ name, small = false }: { name: string; small?: boolean }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0,2).map((part)=>part[0]).join('').toUpperCase() || 'KCS'
+  return <div className={`${small ? 'h-9 w-9 text-[11px]' : 'h-11 w-11 text-xs'} grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-kcs-blue-700 to-cyan-500 font-black text-white shadow-md ring-2 ring-white dark:ring-kcs-blue-800`} title={name}>{initials}</div>
+}
+
+function StudentForumMetric({ value, label }: { value: number; label: string }) {
+  return <div className="rounded-2xl border border-white/15 bg-white/10 p-3 text-center backdrop-blur"><p className="font-display text-xl font-black sm:text-2xl">{value}</p><p className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wide text-kcs-blue-100 sm:text-xs">{label}</p></div>
+}
