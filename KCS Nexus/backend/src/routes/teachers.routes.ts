@@ -493,6 +493,15 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
 
 teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+  const assignmentRoster = await prisma.course.findMany({
+    where: { teacher: { userId: req.user!.sub } },
+    select: { enrollments: { select: { studentId: true } }, assignments: { select: { id: true, submissions: { select: { studentId: true } } } } },
+  })
+  const missingSubmissions = assignmentRoster.flatMap((course) => course.assignments.flatMap((assignment) => {
+    const submitted = new Set(assignment.submissions.map((submission) => submission.studentId))
+    return course.enrollments.filter((enrollment) => !submitted.has(enrollment.studentId)).map((enrollment) => ({ assignmentId: assignment.id, studentId: enrollment.studentId }))
+  }))
+  if (missingSubmissions.length) await prisma.assignmentSubmission.createMany({ data: missingSubmissions, skipDuplicates: true })
   const teacher = await prisma.teacherProfile.findUnique({
     where: { userId: req.user!.sub },
     select: {

@@ -76,7 +76,8 @@ const copy = {
 const communicationCachePrefix = 'kcs:nexus:communications:v3'
 const readCommunicationCache = (cacheKey: string) => {
   try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(cacheKey) || 'null')
+    const raw = window.sessionStorage.getItem(cacheKey) || window.localStorage.getItem(cacheKey) || 'null'
+    const parsed = JSON.parse(raw)
     return parsed && Array.isArray(parsed.parents) && Array.isArray(parsed.history) ? parsed : null
   } catch {
     return null
@@ -164,12 +165,9 @@ export default function ParentCommunicationPanel() {
   useEffect(() => {
     if (!parents.length && !history.length) return
     try {
-      window.sessionStorage.setItem(communicationCacheKey, JSON.stringify({
-        parents,
-        history: history.slice(0, 500),
-        total: historyTotal,
-        savedAt: new Date().toISOString(),
-      }))
+      const reliableSnapshot = { parents, history: history.slice(0, 500), total: historyTotal, savedAt: new Date().toISOString() }
+      window.sessionStorage.setItem(communicationCacheKey, JSON.stringify(reliableSnapshot))
+      window.localStorage.setItem(communicationCacheKey, JSON.stringify({ ...reliableSnapshot, history: reliableSnapshot.history.slice(0, 200) }))
     } catch {
       // A full browser cache must never prevent the live communication screen.
     }
@@ -243,7 +241,7 @@ export default function ParentCommunicationPanel() {
   const parentRows = useMemo(() => {
     const tokens = parentQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
     return parents.filter((parent) => {
-      const haystack = [displayName(parent), parent.email, parent.phone, parent.accessCode, parent.role, parent.department, parent.function, ...(parent.grades ?? []), ...(parent.classes ?? [])].filter(Boolean).join(' ').toLowerCase()
+      const haystack = [displayName(parent), parent.email, parent.phone, parent.accessCode, parent.role, parent.department, parent.function, ...(parent.grades ?? []), ...(parent.classes ?? []), ...((parent.relatedStudents ?? []).flatMap((student: any) => [student.name, student.studentNumber, student.className]))].filter(Boolean).join(' ').toLowerCase()
       return (roleFilter === 'ALL' || parent.role === roleFilter)
         && (gradeFilter === 'ALL' || (parent.grades ?? []).map(normalizeGrade).includes(gradeFilter))
         && (contactFilter === 'ALL' || (contactFilter === 'EMAIL' ? Boolean(parent.email) : contactFilter === 'SMS' ? Boolean(parent.phone) : Boolean(parent.email && parent.phone)))
@@ -395,7 +393,7 @@ export default function ParentCommunicationPanel() {
               return <button key={parent.id} onClick={() => { setQuickClasses([]); toggle(setSelectedParents, parent.id) }} className={`w-full rounded-xl border p-4 text-left transition ${selected ? 'border-kcs-gold-400 bg-kcs-gold-50 shadow-[inset_4px_0_0_#eab308] dark:bg-kcs-gold-900/20' : 'border-gray-100 bg-gray-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30'}`}>
                 <b className="flex items-center gap-2 dark:text-white">{selected ? <CheckSquare size={18} /> : <Square size={18} />}{displayName(parent)}</b>
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-300">{parent.email || c.noEmail} · {parent.phone || c.noPhone}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-kcs-blue-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white">{parent.role}</span>{(parent.grades ?? []).map((grade: string) => <span key={grade} className="rounded-full bg-kcs-gold-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-900 dark:bg-kcs-gold-300 dark:text-kcs-blue-950">{grade}</span>)}{parent.department ? <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700 dark:bg-slate-600 dark:text-white">{parent.department}</span> : null}</div><p className="mt-1 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-100">{parent.accessCode}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5"><span className="rounded-full bg-kcs-blue-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-800 dark:bg-kcs-blue-700 dark:text-white">{parent.role}</span>{(parent.grades ?? []).map((grade: string) => <span key={grade} className="rounded-full bg-kcs-gold-100 px-2 py-1 text-[11px] font-bold text-kcs-blue-900 dark:bg-kcs-gold-300 dark:text-kcs-blue-950">{grade}</span>)}{parent.department ? <span className="rounded-full bg-slate-200 px-2 py-1 text-[11px] font-bold text-slate-700 dark:bg-slate-600 dark:text-white">{parent.department}</span> : null}</div><p className="mt-1 text-xs font-semibold text-kcs-blue-600 dark:text-kcs-blue-100">{parent.accessCode}</p>{parent.relatedStudents?.length ? <p className="mt-1 line-clamp-2 text-xs text-violet-700 dark:text-violet-200">{language === 'fr' ? 'Enfant(s) : ' : 'Child/children: '}{parent.relatedStudents.map((student: any) => [student.name, student.className].filter(Boolean).join(' · ')).join('; ')}</p> : null}
               </button>
             })}
           </div>

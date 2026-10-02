@@ -12,6 +12,8 @@ import {
   FileText,
   Lightbulb,
   Loader2,
+  Maximize2,
+  Minimize2,
   Plus,
   Search,
   Sparkles,
@@ -209,6 +211,15 @@ const downloadFile = (fileName: string, content: string, type: string) => {
 
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction }: Props) => {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
+
+  useEffect(() => {
+    if (!spreadsheetOpen) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSpreadsheetOpen(false) }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape) }
+  }, [spreadsheetOpen])
   const [cellDialog, setCellDialog] = useState<{ mode: 'ai' | 'note'; assignment: GradebookColumn; student: GradebookStudent } | null>(null)
   const [cellNoteDraft, setCellNoteDraft] = useState('')
   const [assignments, setAssignments] = useState<GradebookColumn[]>([])
@@ -668,7 +679,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 Spreadsheet entry, weighted categories, predictive risk detection, report-card comments, and synchronized parent/student/admin visibility.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-end gap-1.5">
               <input aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" pattern="\\d{4}-\\d{4}" />
               <button disabled={submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
               <button onClick={() => exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
@@ -825,16 +836,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       </div>
 
       {spreadsheetOpen && <div className="fixed inset-0 z-40 bg-kcs-blue-950/85 backdrop-blur-sm" aria-hidden="true" />}
-      <div className={spreadsheetOpen ? "gradebook-focus-window fixed inset-4 z-50 flex flex-col overflow-hidden rounded-3xl border border-kcs-blue-300 bg-[#e8f1fc] text-kcs-blue-950 shadow-2xl dark:border-kcs-gold-500/60 dark:bg-slate-950 dark:text-white sm:inset-8" : "overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"}>
-        <div className={`flex flex-col gap-3 border-b p-4 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
+      <div className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden border border-kcs-blue-300 bg-[#e8f1fc] text-kcs-blue-950 shadow-2xl dark:border-kcs-gold-500/60 dark:bg-slate-950 dark:text-white" : "overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"}>
+        <div className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
           <div>
             <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-end gap-1.5">
             <button type="button" onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
-            {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Eye size={15}/> Dedicated window</button>}
-            {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white">Close</button>}
+            {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Maximize2 size={15}/> Dedicated window</button>}
+            {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white"><Minimize2 size={14}/> Close</button>}
             <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
               {visibleAssignments.map((assignment) => <option key={assignment.id} value={assignment.id}>{assignment.title}</option>)}
             </select></label>
@@ -851,12 +862,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         )}
 
         <div className={spreadsheetOpen ? "flex-1 overflow-auto" : "max-h-[680px] overflow-auto"}>
-          <table className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm">
+          <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-xs">
             <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm dark:bg-kcs-blue-900 dark:text-gray-300">
               <tr>
-                <th className="sticky left-0 z-30 w-64 bg-gray-50 px-4 py-3 text-left dark:bg-kcs-blue-900">Student</th>
+                <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student</th>
                 {visibleAssignments.map((assignment) => (
-                  <th key={assignment.id} className="min-w-36 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
+                  <th key={assignment.id} className="min-w-32 border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800">
                     <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
                     <span className="block normal-case text-gray-400">{assignment.type} - {assignment.maxPoints} pts</span>
                     <button onClick={() => deleteAssignment(assignment.id)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold normal-case text-red-500 hover:text-red-600"><Trash2 size={12} /> Delete</button>
@@ -871,26 +882,26 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <tbody>
               {studentAnalytics.map(({ student, average, missing, projected, risk }) => (
                 <tr key={student.id} className="group">
-                  <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-4 py-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
+                  <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-3 py-1.5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)} - {student.advisor ?? 'Advisor pending'}</p>
                   </td>
                   {visibleAssignments.map((assignment) => {
                     const normalized = getScore(assignment, student.id)
                     return (
-                      <td key={`${student.id}-${assignment.id}`} className="border-l border-t border-gray-100 px-3 py-3 dark:border-kcs-blue-800">
-                        <div className="flex flex-col gap-2">
+                      <td key={`${student.id}-${assignment.id}`} className="border-l border-t border-gray-100 px-2 py-1.5 dark:border-kcs-blue-800">
+                        <div className="flex items-center justify-center gap-1">
                           <input
-                            className={`mx-auto w-20 rounded-lg px-2 py-2 text-center text-sm font-bold outline-none ring-1 transition-colors focus:ring-2 focus:ring-kcs-blue-400 ${toneForScore(normalized)}`}
+                            className={`w-16 rounded-md px-1.5 py-1 text-center text-xs font-bold outline-none ring-1 transition-colors focus:ring-2 focus:ring-kcs-blue-400 ${toneForScore(normalized)}`}
                             value={getRawScore(assignment.id, student.id)}
                             onChange={(event) => updateScore(assignment.id, student.id, event.target.value)}
                             placeholder="I"
                           />
-                          <div className="flex justify-center gap-1">
-                            <button type="button" className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('ai', assignment, student)}>
+                          <div className="flex gap-0.5">
+                            <button type="button" className="rounded-md bg-gray-100 px-1.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('ai', assignment, student)}>
                               AI
                             </button>
-                            <button type="button" className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('note', assignment, student)}>
+                            <button type="button" className="rounded-md bg-gray-100 px-1.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('note', assignment, student)}>
                               Note
                             </button>
                           </div>
@@ -899,15 +910,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                     )
                   })}
                   <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(average)}`}>{formatPercent(average)}</span>
+                    <span className={`inline-flex min-w-20 justify-center rounded-md px-2 py-1 text-xs font-bold ring-1 ${toneForScore(average)}`}>{formatPercent(average)}</span>
                   </td>
-                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800"><span className={`inline-flex min-w-14 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(average)}`}>{internationalGrade(average)}</span></td>
+                  <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800"><span className={`inline-flex min-w-14 justify-center rounded-md px-2 py-1 text-xs font-bold ring-1 ${toneForScore(average)}`}>{internationalGrade(average)}</span></td>
                   <td className="border-l border-t border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">
-                    <span className={`inline-flex min-w-20 justify-center rounded-lg px-3 py-2 text-sm font-bold ring-1 ${toneForScore(projected)}`}>{formatPercent(projected)}</span>
+                    <span className={`inline-flex min-w-20 justify-center rounded-md px-2 py-1 text-xs font-bold ring-1 ${toneForScore(projected)}`}>{formatPercent(projected)}</span>
                   </td>
-                  <td className="border-l border-t border-gray-100 px-3 py-3 dark:border-kcs-blue-800">
-                    <div className="flex flex-col gap-2">
-                      <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${risk === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : risk === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
+                  <td className="border-l border-t border-gray-100 px-2 py-1.5 dark:border-kcs-blue-800">
+                    <div className="flex items-center justify-center gap-1">
+                      <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold ${risk === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : risk === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'}`}>
                         {risk} risk
                       </span>
                       <span className="text-xs text-gray-500 dark:text-gray-400">{missing} missing</span>

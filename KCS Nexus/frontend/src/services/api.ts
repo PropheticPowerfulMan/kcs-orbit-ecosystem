@@ -12,7 +12,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 25000,
+  timeout: 40000,
 })
 
 type AuthenticatedUser = NonNullable<ReturnType<typeof useAuthStore.getState>['user']>
@@ -76,11 +76,17 @@ const isTransientNetworkError = (error: AxiosError) => {
 const mayRetrySafely = (config: ResilientRequestConfig | undefined, error: AxiosError) => {
   const method = config?.method?.toUpperCase() || 'GET'
   const optedOut = config?.headers?.['x-no-network-retry'] === 'true'
-  return Boolean(config && safeReadMethods.has(method) && !optedOut && navigator.onLine && isTransientNetworkError(error) && (config._networkRetryCount || 0) < 3)
+  return Boolean(config && safeReadMethods.has(method) && !optedOut && isTransientNetworkError(error) && (config._networkRetryCount || 0) < 4)
 }
 
-const networkRetryDelay = (attempt: number) => 450 * (2 ** (attempt - 1)) + Math.round(Math.random() * 180)
-const waitForNetworkRetry = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+const networkRetryDelay = (attempt: number) => 650 * (2 ** (attempt - 1)) + Math.round(Math.random() * 250)
+const waitForNetworkRetry = (milliseconds: number) => new Promise<void>((resolve) => {
+  if (navigator.onLine) { window.setTimeout(resolve, milliseconds); return }
+  let settled = false
+  const finish = () => { if (settled) return; settled = true; window.removeEventListener('online', finish); resolve() }
+  window.addEventListener('online', finish, { once: true })
+  window.setTimeout(finish, Math.max(milliseconds, 5000))
+})
 
 const expectsMutationFeedback = (config?: InternalAxiosRequestConfig) => {
   const method = config?.method?.toUpperCase()

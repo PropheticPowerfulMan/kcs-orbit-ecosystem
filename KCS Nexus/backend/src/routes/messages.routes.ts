@@ -167,7 +167,7 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
     select: {
       id: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, accessCode: true, role: true,
       studentProfile: { select: { grade: true, section: true } },
-      parentLinks: { select: { student: { select: { grade: true, section: true, studentNumber: true } } } },
+      parentLinks: { select: { student: { select: { id: true, grade: true, section: true, studentNumber: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } } },
       teacherProfile: { select: { employeeNumber: true, department: true, courses: { select: { grade: true } } } },
       staffProfile: { select: { employeeNumber: true, department: true, function: true } },
     },
@@ -201,9 +201,12 @@ messagesRouter.get('/parent-contacts', asyncHandler(async (req: AuthenticatedReq
       person.studentProfile ? [person.studentProfile.grade, person.studentProfile.section].filter(Boolean).join(' ') : null,
       ...person.parentLinks.map((link) => [link.student.grade, link.student.section].filter(Boolean).join(' ')),
     ].filter((value): value is string => Boolean(value))
+    const nexusStudents = person.parentLinks.map((link) => ({ id: link.student.id, name: [link.student.user.lastName, link.student.user.middleName, link.student.user.firstName].filter(Boolean).join(' '), studentNumber: link.student.studentNumber, className: [link.student.grade, link.student.section].filter(Boolean).join(' ') }))
+    const orbitStudents = person.orbitStudentIds.map((studentId) => orbitStudentsById.get(studentId)).filter(Boolean).map((student: any) => ({ id: student.id, name: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' '), studentNumber: student.accessCode || student.studentNumber || null, className: student.className || null }))
+    const relatedStudents = [...new Map([...nexusStudents, ...orbitStudents].map((student) => [student.id || student.studentNumber || student.name, student])).values()]
     return {
       id: person.id, firstName: person.firstName, middleName: person.middleName, lastName: person.lastName,
-      email: person.email, phone: person.phone, accessCode: person.accessCode, role: person.role,
+      email: person.email, phone: person.phone, accessCode: person.accessCode, role: person.role, relatedStudents,
       grades: [...new Set(gradeValues)], classes: [...new Set(sectionValues)],
       department: person.teacherProfile?.department || person.staffProfile?.department || null,
       function: person.staffProfile?.function || null,
