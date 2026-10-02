@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import {
-  AlertTriangle, Archive, BarChart3, ChefHat, ClipboardList, CreditCard, Languages,
+  AlertTriangle, Archive, BarChart3, CalendarDays, ChefHat, ClipboardList, CreditCard, Languages,
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
   Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X, Pencil, LoaderCircle
 } from 'lucide-react'
@@ -8,18 +8,19 @@ import { QRCodeSVG } from 'qrcode.react'
 import { api, apiBlob, dateTime, getToken, setToken } from './api'
 import type { Person, Product, Role, Transaction, User } from './types'
 import Procurement from './Procurement'
+import DailyMenus from './DailyMenus'
 import InstallAppButton from './InstallApp'
 import PersonSelector from './PersonSelector'
 import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
-type Page = 'dashboard' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
+type Page = 'dashboard' | 'menus' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
 
 const text = {
   fr: {
     signIn: 'Connexion institutionnelle', identifier: 'E-mail ou code institutionnel', password: 'Mot de passe',
     enter: 'Entrer dans KCS Kitchen', trace: 'Chaque consommation. Chaque franc. Une preuve.',
-    powered: 'Propulsé par KCS Orbit', dashboard: 'Tableau de bord', pos: 'Point de vente', catalog: 'Catalogue',
+    powered: 'Propulsé par KCS Orbit', menus: 'Menu du jour', dashboard: 'Tableau de bord', pos: 'Point de vente', catalog: 'Catalogue',
     transactions: 'Transactions', ledger: 'Mon relevé', inventory: 'Stock', procurement: 'Achats et fournisseurs', disputes: 'Contestations',
     reports: 'Rapports', access: 'Accès et crédit', logout: 'Déconnexion', today: 'Aujourd’hui',
     outstanding: 'Solde à recouvrer', sales: 'Ventes', credit: 'Crédit émis', payments: 'Paiements',
@@ -52,7 +53,7 @@ const text = {
   en: {
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
     enter: 'Enter KCS Kitchen', trace: 'Every consumption. Every franc. One proof.',
-    powered: 'Powered by KCS Orbit', dashboard: 'Dashboard', pos: 'Point of sale', catalog: 'Catalog',
+    powered: 'Powered by KCS Orbit', menus: 'Daily menu', dashboard: 'Dashboard', pos: 'Point of sale', catalog: 'Catalog',
     transactions: 'Transactions', ledger: 'My statement', inventory: 'Inventory', procurement: 'Purchasing & suppliers', disputes: 'Disputes',
     reports: 'Reports', access: 'Access and credit', logout: 'Sign out', today: 'Today',
     outstanding: 'Outstanding balance', sales: 'Sales', credit: 'Credit issued', payments: 'Payments',
@@ -175,6 +176,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   useEffect(() => { localStorage.setItem('kcs-kitchen-sidebar', collapsed ? 'collapsed' : 'expanded') }, [collapsed])
   const nav: Array<[Page, string, ReactNode, boolean]> = [
     ['dashboard', t.dashboard, <LayoutDashboard />, true],
+    ['menus', lang === 'fr' ? 'Menu du jour' : 'Daily menu', <CalendarDays />, user.role === 'KITCHEN_ADMIN'],
     ['pos', t.pos, <ShoppingCart />, ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)],
     ['catalog', t.catalog, <ChefHat />, isPrivileged],
     ['transactions', t.transactions, <ReceiptText />, true],
@@ -202,6 +204,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
+        {page === 'menus' && <DailyMenus lang={lang} />}
         {page === 'pos' && <PointOfSale t={t} lang={lang} />}
         {page === 'catalog' && <Catalog canEdit={user.role === 'KITCHEN_ADMIN'} t={t} lang={lang} />}
         {page === 'transactions' && <Transactions user={user} t={t} />}
@@ -266,6 +269,8 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
 
 function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [products, setProducts] = useState<Product[]>([])
+  const [dailyMenuId, setDailyMenuId] = useState('')
+  const [menuTitle, setMenuTitle] = useState('')
   const [person, setPerson] = useState<Person | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
   const [paymentMode, setPaymentMode] = useState('CASH')
@@ -273,7 +278,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const { rate } = useCurrencyDisplay()
-  useEffect(() => { api<{ products: Product[] }>('/products').then(result => setProducts(result.products)) }, [])
+  useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
   function change(id: string, quantity: number) { setCart(current => ({ ...current, [id]: Math.max(0, quantity) })) }
@@ -285,6 +290,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
         method: 'POST',
         body: JSON.stringify({
           orbitPersonId: person.id,
+          dailyMenuId,
           items: Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId, quantity })),
           paymentMode,
           confirmationType: 'DASHBOARD'
@@ -299,7 +305,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
       <div className="panel">
         <div className="step-title"><span>1</span><div><small>IDENTITY</small><h2>{t.identify}</h2></div></div>
         <PersonSelector value={person} onChange={setPerson} lang={lang} />
-        <div className="step-title"><span>2</span><div><small>CATALOG</small><h2>{t.chooseItems}</h2></div></div>
+        <div className="step-title"><span>2</span><div><small>{menuTitle || "DAILY MENU"}</small><h2>{t.chooseItems}</h2></div></div>
         <div className="product-grid">{products.map(product => <button key={product.id} className="product-tile" onClick={() => add(product.id)} disabled={!product.isAvailable}>
           <span className="product-icon"><ChefHat /></span><b>{product.name}</b><small>{product.category}</small><DisplayMoney value={product.currentPrice} currency={product.currency} />{cart[product.id] ? <em>{cart[product.id]}</em> : null}
         </button>)}</div>

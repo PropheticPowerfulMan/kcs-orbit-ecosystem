@@ -1,0 +1,15 @@
+CREATE TYPE "DailyMenuStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'CLOSED');
+CREATE TABLE "DailyMenu" ("id" TEXT NOT NULL,"menuDate" DATE NOT NULL,"title" TEXT NOT NULL,"description" TEXT,"status" "DailyMenuStatus" NOT NULL DEFAULT 'DRAFT',"createdBy" TEXT NOT NULL,"publishedAt" TIMESTAMP(3),"closedAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "DailyMenu_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "DailyMenuItem" ("id" TEXT NOT NULL,"menuId" TEXT NOT NULL,"productId" TEXT NOT NULL,"unitPrice" DECIMAL(14,2) NOT NULL,"currency" TEXT NOT NULL DEFAULT 'CDF',"isAvailable" BOOLEAN NOT NULL DEFAULT true,"displayOrder" INTEGER NOT NULL DEFAULT 0,CONSTRAINT "DailyMenuItem_pkey" PRIMARY KEY ("id"));
+ALTER TABLE "KitchenTransaction" ADD COLUMN "dailyMenuId" TEXT;
+INSERT INTO "DailyMenu" ("id","menuDate","title","description","status","createdBy","publishedAt","createdAt","updatedAt") SELECT 'legacy-menu-'||to_char(d::date,'YYYYMMDD'),d::date,'Historical Kitchen operations','Automatically created during daily-menu migration','CLOSED','SYSTEM',d::date,d::date,now() FROM (SELECT DISTINCT date_trunc('day',"createdAt") d FROM "KitchenTransaction") x;
+UPDATE "KitchenTransaction" SET "dailyMenuId"='legacy-menu-'||to_char("createdAt"::date,'YYYYMMDD') WHERE "dailyMenuId" IS NULL;
+ALTER TABLE "KitchenTransaction" ALTER COLUMN "dailyMenuId" SET NOT NULL;
+CREATE UNIQUE INDEX "DailyMenu_menuDate_key" ON "DailyMenu"("menuDate");
+CREATE INDEX "DailyMenu_status_menuDate_idx" ON "DailyMenu"("status","menuDate");
+CREATE UNIQUE INDEX "DailyMenuItem_menuId_productId_key" ON "DailyMenuItem"("menuId","productId");
+CREATE INDEX "DailyMenuItem_menuId_isAvailable_displayOrder_idx" ON "DailyMenuItem"("menuId","isAvailable","displayOrder");
+CREATE INDEX "KitchenTransaction_dailyMenuId_createdAt_idx" ON "KitchenTransaction"("dailyMenuId","createdAt");
+ALTER TABLE "DailyMenuItem" ADD CONSTRAINT "DailyMenuItem_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES "DailyMenu"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "DailyMenuItem" ADD CONSTRAINT "DailyMenuItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "KitchenTransaction" ADD CONSTRAINT "KitchenTransaction_dailyMenuId_fkey" FOREIGN KEY ("dailyMenuId") REFERENCES "DailyMenu"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -264,8 +264,51 @@ app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyn
   res.json({ access })
 }))
 
+const kitchenDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+const menuDate = (value: string) => new Date(`${value}T00:00:00.000Z`)
+
+app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => {
+  const key = kitchenDateKey()
+  const menu = await prisma.dailyMenu.findUnique({ where: { menuDate: menuDate(key) }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
+  res.setHeader('Cache-Control', 'no-store')
+  if (!menu || menu.status !== 'PUBLISHED') return res.status(404).json({ message: 'No published menu is available for today', date: key })
+  res.json({ menu })
+}))
+
+app.get('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
+  const menus = await prisma.dailyMenu.findMany({ include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } }, orderBy: { menuDate: 'desc' }, take: 90 })
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ menus })
+}))
+
+app.post('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), title: z.string().trim().min(2).max(120), description: z.string().trim().max(500).optional().nullable(), productIds: z.array(z.string().min(1)).min(1).max(80), publish: z.boolean().default(false) }).parse(req.body)
+  const ids = [...new Set(input.productIds)]
+  const products = await prisma.product.findMany({ where: { id: { in: ids }, archivedAt: null, isAvailable: true } })
+  if (products.length !== ids.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
+  const date = menuDate(input.date)
+  const existing = await prisma.dailyMenu.findUnique({ where: { menuDate: date }, include: { _count: { select: { transactions: true } } } })
+  if (existing?._count.transactions) return res.status(409).json({ message: 'A menu linked to recorded transactions is immutable. Close it and create the next menu instead.' })
+  const menu = await prisma.$transaction(async tx => {
+    const saved = await tx.dailyMenu.upsert({ where: { menuDate: date }, create: { menuDate: date, title: input.title, description: input.description, createdBy: req.kitchenUser!.orbitPersonId, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null }, update: { title: input.title, description: input.description, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null, closedAt: null } })
+    await tx.dailyMenuItem.deleteMany({ where: { menuId: saved.id } })
+    await tx.dailyMenuItem.createMany({ data: ids.map((id, index) => { const product = products.find(item => item.id === id)!; return { menuId: saved.id, productId: id, unitPrice: product.currentPrice, currency: product.currency, displayOrder: index } }) })
+    return tx.dailyMenu.findUniqueOrThrow({ where: { id: saved.id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
+  })
+  await audit(req, input.publish ? 'DAILY_MENU_PUBLISHED' : 'DAILY_MENU_SAVED', 'DailyMenu', menu.id, existing, menu)
+  res.status(existing ? 200 : 201).json({ menu })
+}))
+
+app.post('/api/daily-menus/:id/close', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const previous = await prisma.dailyMenu.findUnique({ where: { id: routeParam(req, 'id') } })
+  if (!previous) return res.status(404).json({ message: 'Daily menu not found' })
+  const menu = await prisma.dailyMenu.update({ where: { id: previous.id }, data: { status: 'CLOSED', closedAt: new Date() } })
+  await audit(req, 'DAILY_MENU_CLOSED', 'DailyMenu', menu.id, previous, menu)
+  res.json({ menu })
+}))
 const saleSchema = z.object({
   orbitPersonId: z.string().min(1),
+  dailyMenuId: z.string().min(1),
   items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000) })).min(1).max(50),
   paymentMode: z.enum(['CASH', 'MOBILE_MONEY', 'BANK', 'EDUPAY', 'CREDIT']),
   notes: z.string().trim().max(500).optional(),
@@ -281,7 +324,11 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   const period = await prisma.accountingPeriod.findUnique({ where: { year_month: { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 } } })
   if (period?.status === 'CLOSED') return res.status(409).json({ message: 'This accounting period is closed' })
 
+  const activeMenu = await prisma.dailyMenu.findUnique({ where: { id: input.dailyMenuId }, include: { items: true } })
+  if (!activeMenu || activeMenu.status !== 'PUBLISHED' || activeMenu.menuDate.toISOString().slice(0, 10) !== kitchenDateKey(now)) return res.status(409).json({ message: 'Sales and credit require the published menu for today' })
   const productIds = [...new Set(input.items.map(item => item.productId))]
+  const menuItems = new Map(activeMenu.items.filter(item => item.isAvailable).map(item => [item.productId, item]))
+  if (productIds.some(id => !menuItems.has(id))) return res.status(409).json({ message: 'One or more selected products are not on today’s menu' })
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   if (products.length !== productIds.length) return res.status(400).json({ message: 'One or more products no longer exist' })
   const exchangeRate = products.some(product => product.currency === 'USD') ? await getUsdCdfRate() : null
@@ -292,7 +339,8 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     if (product.trackInventory && Number(product.stockQuantity) < item.quantity) {
       throw Object.assign(new Error('Insufficient stock for ' + product.name), { statusCode: 409 })
     }
-    const unitPriceCdf = Number(product.currentPrice) * (product.currency === 'USD' ? exchangeRate!.rate : 1)
+    const menuItem = menuItems.get(product.id)!
+    const unitPriceCdf = Number(menuItem.unitPrice) * (menuItem.currency === 'USD' ? exchangeRate!.rate : 1)
     return {
       product,
       quantity: item.quantity,
@@ -347,6 +395,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
 
     const created = await tx.kitchenTransaction.create({ data: {
       transactionNumber,
+      dailyMenuId: activeMenu.id,
       orbitPersonId: person.id,
       personType: personTypeFrom(person.kind),
       personNameSnapshot: person.fullName,
@@ -507,6 +556,7 @@ app.post('/api/transactions/:id/void', authenticate, allow('KITCHEN_ADMIN', 'FIN
     const number = 'KITCHEN-REV-' + new Date().getUTCFullYear() + '-' + String(counter.value).padStart(6, '0')
     const reversal = await tx.kitchenTransaction.create({ data: {
       transactionNumber: number,
+      dailyMenuId: original.dailyMenuId,
       orbitPersonId: original.orbitPersonId,
       personType: original.personType,
       personNameSnapshot: original.personNameSnapshot,

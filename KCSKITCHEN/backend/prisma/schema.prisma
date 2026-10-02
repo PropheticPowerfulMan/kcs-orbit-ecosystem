@@ -59,6 +59,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum DailyMenuStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
 enum TransactionStatus {
   CONFIRMED
   VOIDED
@@ -170,6 +176,7 @@ model Product {
   transactionItems KitchenTransactionItem[]
   stockMovements StockMovement[]
   purchaseItems KitchenPurchaseItem[]
+  dailyMenuItems DailyMenuItem[]
   archivedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -282,9 +289,41 @@ model KitchenCounter {
   value Int @default(0)
 }
 
+
+model DailyMenu {
+  id String @id @default(cuid())
+  menuDate DateTime @unique @db.Date
+  title String
+  description String?
+  status DailyMenuStatus @default(DRAFT)
+  createdBy String
+  publishedAt DateTime?
+  closedAt DateTime?
+  items DailyMenuItem[]
+  transactions KitchenTransaction[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, menuDate])
+}
+
+model DailyMenuItem {
+  id String @id @default(cuid())
+  menuId String
+  menu DailyMenu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  unitPrice Decimal @db.Decimal(14, 2)
+  currency String @default("CDF")
+  isAvailable Boolean @default(true)
+  displayOrder Int @default(0)
+  @@unique([menuId, productId])
+  @@index([menuId, isAvailable, displayOrder])
+}
 model KitchenTransaction {
   id String @id @default(cuid())
   transactionNumber String @unique
+  dailyMenuId String
+  dailyMenu DailyMenu @relation(fields: [dailyMenuId], references: [id], onDelete: Restrict)
   orbitPersonId String
   personType PersonType
   personNameSnapshot String
@@ -312,6 +351,7 @@ model KitchenTransaction {
   createdAt DateTime @default(now())
   @@index([orbitPersonId, createdAt])
   @@index([cashierOrbitPersonId, createdAt])
+  @@index([dailyMenuId, createdAt])
   @@index([status, createdAt])
 }
 
