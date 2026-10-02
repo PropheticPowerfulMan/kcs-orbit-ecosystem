@@ -2239,8 +2239,8 @@ const AdminSectionView = ({
     return (
       <div className="space-y-6">
         {familyCredentials && createPortal((
-          <div className="kcs-credential-modal fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
-            <section className="kcs-credential-modal-panel max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-6 shadow-[0_35px_120px_rgba(0,20,45,.55)] dark:border-emerald-900 dark:bg-kcs-blue-950">
+          <div className="kcs-credential-modal fixed inset-0 z-[9999] grid place-items-center overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+            <section className="kcs-credential-modal-panel my-auto max-h-[calc(100dvh-1.5rem)] min-h-[min(34rem,calc(100dvh-1.5rem))] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 text-slate-900 shadow-[0_35px_120px_rgba(0,20,45,.65)] dark:border-sky-700/60 dark:from-slate-950 dark:via-kcs-blue-950 dark:to-slate-900 dark:text-slate-100 sm:max-h-[calc(100dvh-3rem)] sm:min-h-[36rem] sm:p-9">
               <button type="button" onClick={() => setFamilyCredentials(null)} className="float-right rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button>
               <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Nouvel enfant enregistré'}</p>
               <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Identifiants générés et propagés'}</h3>
@@ -2419,8 +2419,8 @@ const AdminSectionView = ({
         )}
 
         {editingParent && createPortal((
-          <div className="fixed inset-0 z-[1400] flex items-start justify-center overflow-hidden bg-kcs-blue-950/75 p-0 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label="Modifier parent">
-            <section className="flex h-[100dvh] max-h-[100dvh] w-full max-w-6xl flex-col overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl lg:w-[min(92vw,72rem)]">
+          <div className="fixed inset-0 z-[9998] grid place-items-center overflow-hidden bg-kcs-blue-950/80 p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label="Modifier parent">
+            <section className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-auto sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-[2rem]">
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-kcs-blue-700 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
@@ -2606,8 +2606,8 @@ const AdminSectionView = ({
             </select>
           </div>
           {familyCredentials && createPortal((
-            <div className="kcs-credential-modal fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
-              <section className="kcs-credential-modal-panel relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-6 shadow-[0_35px_120px_rgba(0,20,45,.55)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
+            <div className="kcs-credential-modal fixed inset-0 z-[9999] grid place-items-center overflow-y-auto bg-slate-950/85 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+              <section className="kcs-credential-modal-panel relative my-auto max-h-[calc(100dvh-1.5rem)] min-h-[min(34rem,calc(100dvh-1.5rem))] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 text-slate-900 shadow-[0_35px_120px_rgba(0,20,45,.65)] dark:border-sky-700/60 dark:from-slate-950 dark:via-kcs-blue-950 dark:to-slate-900 dark:text-slate-100 sm:max-h-[calc(100dvh-3rem)] sm:min-h-[36rem] sm:p-9">
                 <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
                 {familyCredentials.loading ? <div className="mt-5 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
                 {familyCredentials.error ? <p className="mt-5 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}
@@ -2914,10 +2914,10 @@ const AdminSectionView = ({
           </div>
         )}
 
-        {editingStudent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-kcs-blue-950/75 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-label="Modifier élève">
-            <section className="max-h-[calc(100dvh-1.5rem)] w-full max-w-none overflow-y-auto rounded-2xl border border-gray-100 bg-white p-5 shadow-2xl dark:border-kcs-blue-800 dark:bg-kcs-blue-900 sm:max-h-[calc(100dvh-3rem)] lg:w-[80vw]">
-              <div className="mb-5 flex items-start justify-between gap-3">
+        {editingStudent && createPortal((
+          <div className="fixed inset-0 z-[9998] grid place-items-center overflow-hidden bg-kcs-blue-950/80 p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label="Modifier élève">
+            <section className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-auto sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-[2rem]">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sky-200 bg-white/80 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Modification</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier l’élève</h3>
@@ -2926,7 +2926,7 @@ const AdminSectionView = ({
                 <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">Fermer</button>
               </div>
 
-              <div className="space-y-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
                   <div className="mt-3">
@@ -3007,13 +3007,13 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-sky-200 bg-white/90 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:justify-end sm:p-5">
                 <button type="button" className="rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? 'Enregistrement...' : 'Enregistrer les modifications'}</button>
                 <button type="button" className="rounded-xl border-2 border-amber-500 bg-amber-100 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-200 dark:border-amber-300 dark:bg-amber-400 dark:text-kcs-blue-950 dark:hover:bg-amber-300" onClick={() => setEditingStudent(null)}>Annuler</button>
               </div>
             </section>
           </div>
-        )}
+        ), document.body)}
       </div>
     )
   }
