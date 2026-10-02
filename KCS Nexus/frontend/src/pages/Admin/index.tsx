@@ -1310,7 +1310,7 @@ const MainTeacherAssignmentPanel = () => {
     try {
       await mainTeacherAPI.assignStudentSection(student.id, section)
       setResult({ ok: true, message: section
-        ? tr(`${name(student)} est maintenant affect�(e) � ${student.grade} � ${section}.`, `${name(student)} is now assigned to ${student.grade} � ${section}.`)
+        ? tr(`${name(student)} est maintenant affect�(e) � ${student.grade} � ${section}.`, `${name(student)} is now assigned to ${student.grade} � ${section}.`)
         : tr(`${name(student)} est maintenant sans sous-classe et ne figurera dans aucun registre de titulaire.`, `${name(student)} is now unassigned and will not appear in a main-teacher register.`) })
       await load()
     } catch (error: any) {
@@ -1350,24 +1350,24 @@ const MainTeacherAssignmentPanel = () => {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-kcs-gold-600">{tr('Registre officiel des sous-classes', 'Official class-section roster')}</p>
-          <h3 className="mt-2 text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Affecter chaque �l�ve � une sous-classe unique', 'Assign every learner to one class section')}</h3>
-          <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr('Les sections sont libres et illimit�es : A, B, Sciences 1, Groupe Bleu, etc. Orbit ne peut plus effacer une affectation officielle lorsque son registre ne fournit que le niveau g�n�ral.', 'Sections are free-form and unlimited: A, B, Science 1, Blue Group, etc. Orbit can no longer erase an official assignment when its directory only provides the general grade.')}</p>
+          <h3 className="mt-2 text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Affecter chaque �l�ve � une sous-classe unique', 'Assign every learner to one class section')}</h3>
+          <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">{tr('Les sections sont libres et illimit�es : A, B, Sciences 1, Groupe Bleu, etc. Orbit ne peut plus effacer une affectation officielle lorsque son registre ne fournit que le niveau g�n�ral.', 'Sections are free-form and unlimited: A, B, Science 1, Blue Group, etc. Orbit can no longer erase an official assignment when its directory only provides the general grade.')}</p>
         </div>
         <div className="rounded-xl bg-white px-4 py-3 text-center shadow-sm dark:bg-kcs-blue-950"><strong className="block text-xl text-kcs-blue-950 dark:text-white">{rosterStudents.filter((student) => student.grade === rosterGrade && !student.section).length}</strong><span className="text-xs font-bold text-amber-700 dark:text-amber-300">{tr('sans sous-classe', 'unassigned')}</span></div>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-[220px_1fr]">
         <select value={rosterGrade} onChange={(event) => setRosterGrade(event.target.value)} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{gradeOptions.map((grade) => <option key={String(grade)} value={String(grade)}>{String(grade)}</option>)}</select>
-        <input value={rosterQuery} onChange={(event) => setRosterQuery(event.target.value)} placeholder={tr('Recherche pr�cise : nom, matricule, section&', 'Precise search: name, number, section&')} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
+        <input value={rosterQuery} onChange={(event) => setRosterQuery(event.target.value)} placeholder={tr('Recherche pr�cise : nom, matricule, section&', 'Precise search: name, number, section&')} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">{rosterClasses.filter((item) => item.grade === rosterGrade).map((item) => <span key={item.teacherId + item.role} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-kcs-blue-800 shadow-sm dark:bg-kcs-blue-950 dark:text-sky-100">{item.section || tr('Sans section', 'No section')} � {item.role === 'HOMEROOM_TEACHER' ? 'Main Teacher' : tr('Assistant', 'Assistant')} � {item.teacherName}</span>)}</div>
+      <div className="mt-3 flex flex-wrap gap-2">{rosterClasses.filter((item) => item.grade === rosterGrade).map((item) => <span key={item.teacherId + item.role} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-kcs-blue-800 shadow-sm dark:bg-kcs-blue-950 dark:text-sky-100">{item.section || tr('Sans section', 'No section')} � {item.role === 'HOMEROOM_TEACHER' ? 'Main Teacher' : tr('Assistant', 'Assistant')} � {item.teacherName}</span>)}</div>
       <div className="mt-5 divide-y overflow-hidden rounded-2xl border border-slate-200 bg-white dark:divide-kcs-blue-800 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/60">
         {visibleRoster.map((student) => <article key={student.id} className="grid gap-3 p-4 md:grid-cols-[minmax(13rem,1.4fr)_minmax(8rem,.7fr)_minmax(12rem,1fr)_auto] md:items-center">
-          <div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(student)}</p><p className="text-xs text-slate-500">{student.studentNumber} � {student.grade}</p></div>
-          <span className={"w-fit rounded-full px-3 py-1 text-xs font-bold " + (student.section ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>{student.section || tr('Non affect�', 'Unassigned')}</span>
+          <div><p className="font-bold text-kcs-blue-950 dark:text-white">{name(student)}</p><p className="text-xs text-slate-500">{student.studentNumber} � {student.grade}</p></div>
+          <span className={"w-fit rounded-full px-3 py-1 text-xs font-bold " + (student.section ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>{student.section || tr('Non affect�', 'Unassigned')}</span>
           <input list="main-teacher-section-options" value={rosterDrafts[student.id] || ''} maxLength={40} onChange={(event) => setRosterDrafts((current) => ({ ...current, [student.id]: event.target.value }))} placeholder={tr('Sous-classe officielle', 'Official class section')} className="rounded-xl border bg-white px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white"/>
           <button type="button" disabled={rosterBusyId === student.id || (rosterDrafts[student.id] || '').trim() === (student.section || '').trim()} onClick={() => void saveRosterSection(student)} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40">{rosterBusyId === student.id ? tr('Enregistrement&', 'Saving&') : tr('Affecter', 'Assign')}</button>
         </article>)}
-        {!visibleRoster.length && <p className="p-8 text-center text-sm text-slate-500">{tr('Aucun �l�ve ne correspond � cette recherche.', 'No learner matches this search.')}</p>}
+        {!visibleRoster.length && <p className="p-8 text-center text-sm text-slate-500">{tr('Aucun �l�ve ne correspond � cette recherche.', 'No learner matches this search.')}</p>}
       </div>
     </section>
   </div>
@@ -2239,8 +2239,8 @@ const AdminSectionView = ({
     return (
       <div className="space-y-6">
         {familyCredentials && createPortal((
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
-            <section className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-2xl dark:border-emerald-900 dark:bg-kcs-blue-950">
+          <div className="kcs-credential-modal fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+            <section className="kcs-credential-modal-panel max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-6 shadow-[0_35px_120px_rgba(0,20,45,.55)] dark:border-emerald-900 dark:bg-kcs-blue-950">
               <button type="button" onClick={() => setFamilyCredentials(null)} className="float-right rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button>
               <p className="text-xs font-bold uppercase text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Nouvel enfant enregistré'}</p>
               <h3 className="mt-2 text-2xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Identifiants générés et propagés'}</h3>
@@ -2606,8 +2606,8 @@ const AdminSectionView = ({
             </select>
           </div>
           {familyCredentials && createPortal((
-            <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
-              <section className="relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-white p-6 shadow-[0_30px_100px_rgba(0,0,0,0.45)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
+            <div className="kcs-credential-modal fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Identifiants générés">
+              <section className="kcs-credential-modal-panel relative my-auto max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-emerald-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-6 shadow-[0_35px_120px_rgba(0,20,45,.55)] dark:border-emerald-900 dark:bg-kcs-blue-950 sm:p-8">
                 <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">{familyCredentials.loading ? 'Réinitialisation en cours' : familyCredentials.error ? 'Réinitialisation impossible' : familyCredentials.reset ? 'Réinitialisation terminée' : 'Identifiants générés'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{familyCredentials.loading ? 'Préparation du nouvel accès…' : familyCredentials.error ? 'Le nouvel accès n’a pas pu être généré' : familyCredentials.reset ? `Nouvel accès de ${familyCredentials.reset.identifier}` : 'Accès de la nouvelle famille'}</h3><p className="mt-2 text-sm text-gray-500 dark:text-gray-300">{familyCredentials.reset ? 'Conservez ces informations dans un canal sûr. Le mot de passe doit être changé à la prochaine connexion.' : 'Le parent accède aux portails autorisés sauf SAVANEX. Les élèves n’accèdent ni à SAVANEX ni à EduPay.'}</p></div><button type="button" onClick={() => setFamilyCredentials(null)} className="rounded-lg border px-3 py-2 text-sm dark:text-white">Fermer</button></div>
                 {familyCredentials.loading ? <div className="mt-5 flex items-center gap-3 rounded-2xl bg-sky-50 p-5 font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white"><RefreshCw className="animate-spin" size={20}/>Synchronisation des accès et des notifications…</div> : null}
                 {familyCredentials.error ? <p className="mt-5 rounded-2xl bg-red-50 p-5 font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">{familyCredentials.message}</p> : null}

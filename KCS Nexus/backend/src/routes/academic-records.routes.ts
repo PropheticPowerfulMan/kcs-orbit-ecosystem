@@ -72,9 +72,17 @@ academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) =
  const record = await prisma.auditLog.findFirst({ where: { action: 'TRANSCRIPT_VERIFICATION_ISSUED', targetType: 'OfficialTranscript', targetId: documentId }, orderBy: { createdAt: 'desc' } })
  const metadata = (record?.metadata ?? {}) as Record<string, unknown>
  if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Transcript authenticity record not found')
- return success(res, { valid: true, documentId, fingerprint, studentName: metadata.studentName, studentNumber: metadata.studentNumber, grade: metadata.grade, issuedAt: record.createdAt }, 'Authentic KCS transcript verified')
+ return success(res, { valid: true, documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt }, 'Authentic KCS transcript verified')
 }))
 
+academicRecordsRouter.get('/report-cards/verify', asyncHandler(async (req, res) => {
+ const documentId = z.string().regex(new RegExp('^KCS-RC-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
+ const fingerprint = z.string().regex(/^[A-F0-9]{64}$/i).parse(req.query.fingerprint)
+ const record = await prisma.auditLog.findFirst({ where: { action: 'REPORT_CARD_VERIFICATION_ISSUED', targetType: 'OfficialReportCard', targetId: documentId }, orderBy: { createdAt: 'desc' } })
+ const metadata = (record?.metadata ?? {}) as Record<string, unknown>
+ if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Report-card authenticity record not found')
+ return success(res, { valid: true, documentType: 'REPORT_CARD', documentId, publicationStatus: metadata.publicationStatus, issuedAt: record.createdAt }, 'Authentic KCS report card verified')
+}))
 academicRecordsRouter.use(authenticate)
 const legacyHeaders=['studentNumber','academicYear','gradeLevel','term','courseCode','courseName','credits','percentage','letterGrade','sourceSchool','sourceDocument']
 const legacyCell=(row:Record<string,unknown>,key:string)=>{
@@ -152,6 +160,16 @@ academicRecordsRouter.post('/transcripts/verification', requireRoles('admin','st
  return success(res, { registered: true, documentId: payload.documentId, fingerprint: payload.fingerprint }, 'Transcript registered for public verification')
 }))
 
+academicRecordsRouter.post('/report-cards/verification', requireRoles('admin','staff','teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+ const payload = z.object({ documentId: z.string().regex(new RegExp('^KCS-RC-[0-9]{8}-[A-Z0-9-]+$','i')), fingerprint: z.string().regex(/^[A-F0-9]{64}$/i), reportCardId: z.string().min(1) }).parse(req.body)
+ const reportCard = await prisma.reportCard.findUnique({ where: { id: payload.reportCardId }, include: { student: true } })
+ if (!reportCard) throw new ApiError(404, 'Report card not found')
+ if (req.user!.role === 'teacher') { await ensureTeacherProfile(req.user!.sub); const teacher = await prisma.teacherProfile.findUnique({ where: { userId: req.user!.sub }, select: { id: true, status: true, homeroomGrade: true, homeroomSection: true } }); if (!teacher || !isTeacherHomeroomForStudent(teacher, reportCard.student)) throw new ApiError(403, 'Only the assigned main teacher may register this report card') }
+ const configuredActor = req.user!.sub === 'configured-superadmin' ? await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } }) : null
+ const actorId = configuredActor?.id ?? (req.user!.sub === 'configured-superadmin' ? null : req.user!.sub)
+ await prisma.auditLog.create({ data: { actorId, action: 'REPORT_CARD_VERIFICATION_ISSUED', targetType: 'OfficialReportCard', targetId: payload.documentId, metadata: { fingerprint: payload.fingerprint, reportCardId: reportCard.id, studentId: reportCard.studentId, publicationStatus: reportCard.publicationStatus } } })
+ return success(res, { registered: true, documentId: payload.documentId }, 'Report card registered for public verification')
+}))
 academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=submissionSchema.parse(req.body)
  const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:true,enrollments:{select:{studentId:true,student:{select:{studentNumber:true,user:{select:{orbitUserId:true}}}}}}}})

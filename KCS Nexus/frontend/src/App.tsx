@@ -115,10 +115,11 @@ const TranscriptVerificationPage = () => {
   const params = new URLSearchParams(location.search)
   const documentId = params.get('document') ?? ''
   const fingerprint = params.get('fingerprint') ?? ''
-  const referenceIsValid = /^KCS-TR-\d{8}-[A-Z0-9-]+$/i.test(documentId) && /^[A-Z0-9-]{6,}$/i.test(fingerprint)
+  const isReportCard = location.pathname.includes('report-card')
+  const referenceIsValid = (isReportCard ? /^KCS-RC-\d{8}-[A-Z0-9-]+$/i : /^KCS-TR-\d{8}-[A-Z0-9-]+$/i).test(documentId) && /^[A-F0-9]{6,}$/i.test(fingerprint)
   const [verification,setVerification]=useState<any>(null)
   const [checking,setChecking]=useState(true)
-  useEffect(()=>{if(!referenceIsValid){setChecking(false);return}academicRecordsAPI.verifyTranscript(documentId,fingerprint).then(response=>setVerification(response.data.data)).catch(()=>setVerification(null)).finally(()=>setChecking(false))},[documentId,fingerprint,referenceIsValid])
+  useEffect(()=>{if(!referenceIsValid){setChecking(false);return}(isReportCard ? academicRecordsAPI.verifyReportCard(documentId,fingerprint) : academicRecordsAPI.verifyTranscript(documentId,fingerprint)).then(response=>setVerification(response.data.data)).catch(()=>setVerification(null)).finally(()=>setChecking(false))},[documentId,fingerprint,referenceIsValid,isReportCard])
 
   return (
     <main className="mx-auto min-h-[70vh] w-full max-w-3xl px-4 py-12 sm:px-6">
@@ -126,7 +127,7 @@ const TranscriptVerificationPage = () => {
         <div className="h-3 bg-kcs-blue-900" />
         <div className="p-6 sm:p-10">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-kcs-gold-600">KCS Nexus · Academic Records</p>
-          <h1 className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">Transcript verification</h1>
+          <h1 className="mt-3 font-display text-3xl font-bold text-kcs-blue-900 dark:text-white">{isReportCard ? 'Report-card verification' : 'Transcript verification'}</h1>
           <div className={`mt-6 rounded-2xl border p-5 ${referenceIsValid ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-red-200 bg-red-50 text-red-900'}`}>
             <p className="font-bold">{checking ? 'Verification in progress...' : verification?.valid ? 'Authentic document: verified against the official KCS registry.' : 'This document is not registered or is invalid.'}</p>
             <p className="mt-2 text-sm">The QR code performs a live verification against the official KCS Nexus registry.</p>
@@ -208,6 +209,7 @@ const App = () => {
             <Route path="/sitemap" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/verify/transcript" element={<TranscriptVerificationPage />} />
+            <Route path="/verify/report-card" element={<TranscriptVerificationPage />} />
 
 
             <Route

@@ -587,6 +587,8 @@ export const academicRecordsAPI = {
   importLegacyRecords: (data: FormData) => api.post('/academic-records/legacy-records/import', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000 }),
   setTranscriptVisibility: (studentId: string, visible: boolean) => api.patch('/academic-records/transcripts/' + studentId + '/visibility', { visible }),
   registerTranscriptVerification: (data: { documentId: string; fingerprint: string; studentId: string }) => api.post('/academic-records/transcripts/verification', data),
+  registerReportCardVerification: (data: { documentId: string; fingerprint: string; reportCardId: string }) => api.post('/academic-records/report-cards/verification', data),
+  verifyReportCard: (document: string, fingerprint: string) => api.get('/academic-records/report-cards/verify', { params: { document, fingerprint } }),
   verifyTranscript: (document: string, fingerprint: string) => api.get('/academic-records/transcripts/verify', { params: { document, fingerprint } }),
 }
 

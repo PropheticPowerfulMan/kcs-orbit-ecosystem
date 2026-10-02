@@ -1,3 +1,5 @@
+import QRCode from 'qrcode'
+import { academicRecordsAPI } from '@/services/api'
 type ReportSubject = {
   id: string
   percentage: number
@@ -43,7 +45,7 @@ const printableAsset = (value?: string | null) => {
   return new URL(value, window.location.origin).href
 }
 
-export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
+export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
   const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const dateLocale = language === 'fr' ? 'fr-FR' : 'en-GB'
@@ -55,7 +57,18 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   const photo = printableAsset(card.student.officialAvatar ?? card.student.user.avatar)
   const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
   const issuedAt = new Date()
-  const documentId = `KCS-RC-${issuedAt.toISOString().slice(0,10).replace(/-/g,'')}-${card.student.studentNumber.replace(/[^a-z0-9]/gi,'').toUpperCase()}`
+  const canonicalRecord = JSON.stringify({ id: card.id, student: card.student.studentNumber, term: card.term, average: card.average, status: card.publicationStatus, subjects: (card.subjects ?? []).map(({ course, percentage, letterGrade }) => [course.code, course.credits ?? 0, percentage, letterGrade]) })
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRecord))
+  const fingerprint = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase()
+  const documentId = `KCS-RC-${issuedAt.toISOString().slice(0,10).replace(/-/g,'')}-${fingerprint.slice(0,16)}`
+  try {
+    await academicRecordsAPI.registerReportCardVerification({ documentId, fingerprint, reportCardId: card.id })
+  } catch {
+    onBlocked(tr('Le registre d’authenticité est momentanément indisponible. Réessayez avant d’imprimer.', 'The authenticity registry is temporarily unavailable. Try again before printing.'))
+    return
+  }
+  const verificationUrl = `${window.location.origin}/verify/report-card?document=${encodeURIComponent(documentId)}&fingerprint=${encodeURIComponent(fingerprint)}`
+  const qrCode = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 1, width: 320, color: { dark: '#052F5F', light: '#FFFFFF' } })
   const statusLabel = ({
     DRAFT: tr('BROUILLON', 'DRAFT'),
     READY_FOR_REVIEW: tr('PRÊT POUR EXAMEN', 'READY FOR REVIEW'),
@@ -87,7 +100,7 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   .attendance{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.stat{padding:8px;text-align:center;border:1px solid #d5e2eb;border-radius:7px;background:#fff}.stat span{display:block;color:#6d8193;font-size:7px;font-weight:800;text-transform:uppercase}.stat b{display:block;margin-top:3px;color:#073b70;font-size:14px}
   .comments{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}.comment{min-height:58px;padding:10px;border:1px solid #d2e0e9;border-left:4px solid #20a995;border-radius:7px;background:#fbfdfe;font-size:9px;line-height:1.5}.comment b{display:block;margin-bottom:4px;color:#073b70;text-transform:uppercase}
   .empty{padding:18px;text-align:center;color:#725b15;background:#fff7dc;border:1px solid #ead99d;border-radius:8px;font-size:9px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:24px}.signature{padding-top:7px;border-top:1px solid #496178;text-align:center;color:#52677d;font-size:9px}
-  footer{display:flex;justify-content:space-between;margin-top:18px;padding-top:8px;border-top:2px solid #20a995;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
+  .authenticity{display:grid;grid-template-columns:24mm 1fr;gap:10px;align-items:center;margin-top:14px;padding:9px;border:1px solid #b8cfdf;border-radius:8px;background:#f4f9fc}.authenticity img{width:22mm;height:22mm}.authenticity b{color:#073b70}.authenticity p{margin:2px 0;font-size:7.5px;line-height:1.35;word-break:break-all}footer{display:flex;justify-content:space-between;margin-top:18px;padding-top:8px;border-top:2px solid #20a995;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
   @media print{body{background:#fff}.sheet{width:auto;min-height:0;margin:0;border:0;box-shadow:none}.content{padding:10mm 9mm 7mm}}
   </style></head><body><main class="sheet"><div class="top-line"></div><div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div>
   <div class="content"><header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
@@ -100,6 +113,7 @@ export function printOfficialReportCard(card: PrintableReportCard, onBlocked: (m
   <h3>${tr('Résumé des présences', 'Attendance summary')}</h3>${attendance?`<div class="attendance"><div class="stat"><span>${tr('Présent', 'Present')}</span><b>${attendance.present}</b></div><div class="stat"><span>${tr('Absent', 'Absent')}</span><b>${attendance.absent}</b></div><div class="stat"><span>${tr('Retard', 'Late')}</span><b>${attendance.late}</b></div><div class="stat"><span>${tr('Excusé', 'Excused')}</span><b>${attendance.excused}</b></div><div class="stat"><span>${tr('Taux', 'Rate')}</span><b>${attendance.attendanceRate??'—'}%</b></div></div>`:`<div class="empty">${tr('Le résumé des présences n’est pas disponible pour cette période.', 'Attendance summary is not available for this reporting period.')}</div>`}
   <h3>${tr('Appréciation de la direction de classe', 'Class leadership review')}</h3><div class="comments"><div class="comment"><b>${tr('Commentaire du titulaire', 'Main Teacher comment')}</b>${escapeHtml(card.teacherComment||tr('Aucun commentaire saisi.', 'No comment entered.'))}</div><div class="comment"><b>${tr('Conduite', 'Conduct')}</b>${escapeHtml(card.conduct||tr('Non renseignée.', 'Not entered.'))}</div></div>
   <div class="signatures"><div class="signature">${tr('Titulaire de classe', 'Main Teacher')}</div><div class="signature">${tr('Préfet / Signature autorisée', 'Principal / Authorized signature')}</div></div>
+  <section class="authenticity"><img src="${escapeHtml(qrCode)}" alt="QR verification"><div><b>${tr('Authentification numérique internationale', 'International digital authentication')}</b><p>${tr('Scannez pour vérifier ce document directement dans le registre officiel KCS Nexus.', 'Scan to verify this document directly against the official KCS Nexus registry.')}</p><p><strong>Document ID:</strong> ${escapeHtml(documentId)}</p><p><strong>SHA-256:</strong> ${escapeHtml(fingerprint)}</p><p><strong>UTC:</strong> ${escapeHtml(issuedAt.toISOString())} · QR ISO/IEC 18004 · ECC H</p></div></section>
   <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, ${tr('République démocratique du Congo', 'Democratic Republic of Congo')}</div><div style="text-align:right">KCS Nexus AI · ${tr('Bulletin officiel', 'Official Report Card')}<br>${escapeHtml(issuedAt.toLocaleDateString(dateLocale))}</div></footer>
   </div></main><script>addEventListener('load',function(){var i=Array.prototype.slice.call(document.images);Promise.all(i.map(function(x){if(x.complete)return Promise.resolve();return new Promise(function(r){x.onload=r;x.onerror=r})})).then(function(){setTimeout(function(){window.focus();window.print()},250)})});<\/script></body></html>`
   const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}))

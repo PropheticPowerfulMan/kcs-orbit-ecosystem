@@ -1848,3 +1848,9 @@ html:not(.dark) [data-suggestion-box] select {
     max-height: calc(100dvh - 4.4rem);
   }
 }
+
+@keyframes kcs-credential-backdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kcs-credential-enter { from { opacity: 0; transform: translateY(24px) scale(.94); filter: blur(5px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+.kcs-credential-modal { animation: kcs-credential-backdrop .22s ease-out both; }
+.kcs-credential-modal-panel { animation: kcs-credential-enter .42s cubic-bezier(.16,1,.3,1) both; }
+@media (prefers-reduced-motion: reduce) { .kcs-credential-modal,.kcs-credential-modal-panel { animation-duration: .01ms; } }
