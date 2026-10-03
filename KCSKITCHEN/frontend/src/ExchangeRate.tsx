@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeftRight, RefreshCw, TrendingUp } from 'lucide-react'
 import { api, money } from './api'
 
@@ -15,18 +15,86 @@ type CurrencyDisplayState = {
 }
 
 const CurrencyDisplayContext = createContext<CurrencyDisplayState | null>(null)
+const RATE_CACHE_KEY = 'kcs-kitchen-usd-cdf-rate:v1'
+const RATE_CACHE_MAX_AGE_MS = 72 * 60 * 60_000
+const AUTO_REFRESH_MS = 10 * 60_000
+const FORCE_REFRESH_AFTER_MS = 30 * 60_000
+const MIN_RETRY_GAP_MS = 60_000
+
+function readCachedRate(): ExchangeRate | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RATE_CACHE_KEY) || 'null') as ExchangeRate | null
+    const fetchedAt = parsed ? Date.parse(parsed.fetchedAt) : Number.NaN
+    if (!parsed || parsed.base !== 'USD' || parsed.quote !== 'CDF' || !Number.isFinite(parsed.rate) || parsed.rate <= 0 || !Number.isFinite(fetchedAt)) return null
+    if (Date.now() - fetchedAt > RATE_CACHE_MAX_AGE_MS) return null
+    return { ...parsed, stale: true }
+  } catch {
+    return null
+  }
+}
+
+function cacheRate(rate: ExchangeRate) {
+  try { localStorage.setItem(RATE_CACHE_KEY, JSON.stringify(rate)) } catch { /* Private mode or full storage: memory state remains available. */ }
+}
 
 export function useExchangeRate() {
-  const [rate, setRate] = useState<ExchangeRate | null>(null)
-  const [loading, setLoading] = useState(true)
+  const initialRate = useMemo(() => readCachedRate(), [])
+  const [rate, setRate] = useState<ExchangeRate | null>(initialRate)
+  const [loading, setLoading] = useState(!initialRate)
   const [error, setError] = useState('')
-  async function refresh(force = false) {
-    setLoading(true); setError('')
-    try { setRate(await api<ExchangeRate>('/exchange-rate' + (force ? '?refresh=true' : ''))) }
-    catch (err) { setError((err as Error).message) }
-    finally { setLoading(false) }
-  }
-  useEffect(() => { void refresh(); const timer = window.setInterval(() => void refresh(), 15 * 60_000); return () => window.clearInterval(timer) }, [])
+  const rateRef = useRef<ExchangeRate | null>(initialRate)
+  const lastAttemptRef = useRef(0)
+  const inFlightRef = useRef<Promise<void> | null>(null)
+
+  const refresh = useCallback(async (force = false) => {
+    if (inFlightRef.current) return inFlightRef.current
+    const task = (async () => {
+      lastAttemptRef.current = Date.now()
+      setLoading(true)
+      setError('')
+      try {
+        const latest = await api<ExchangeRate>('/exchange-rate' + (force ? '?refresh=true' : ''))
+        rateRef.current = latest
+        setRate(latest)
+        cacheRate(latest)
+      } catch (err) {
+        setError((err as Error).message)
+        if (!rateRef.current) {
+          const cached = readCachedRate()
+          rateRef.current = cached
+          setRate(cached)
+        }
+      } finally {
+        setLoading(false)
+      }
+    })()
+    inFlightRef.current = task
+    try { await task } finally { inFlightRef.current = null }
+  }, [])
+
+  const refreshIfNeeded = useCallback(() => {
+    if (Date.now() - lastAttemptRef.current < MIN_RETRY_GAP_MS) return
+    const fetchedAt = rateRef.current ? Date.parse(rateRef.current.fetchedAt) : Number.NaN
+    const mustRefreshProvider = !Number.isFinite(fetchedAt) || Date.now() - fetchedAt >= FORCE_REFRESH_AFTER_MS
+    void refresh(mustRefreshProvider)
+  }, [refresh])
+
+  useEffect(() => {
+    void refresh()
+    const timer = window.setInterval(refreshIfNeeded, AUTO_REFRESH_MS)
+    const resume = () => refreshIfNeeded()
+    const visible = () => { if (document.visibilityState === 'visible') refreshIfNeeded() }
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [refresh, refreshIfNeeded])
+
   return { rate, loading, error, refresh }
 }
 

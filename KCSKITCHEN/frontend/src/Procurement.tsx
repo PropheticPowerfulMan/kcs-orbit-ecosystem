@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Building2, CircleDollarSign, PackagePlus, Plus, ReceiptText, RefreshCw, Truck, X } from 'lucide-react'
-import { api, dateTime } from './api'
-import { DisplayMoney } from './ExchangeRate'
+import { api, money } from './api'
+import { DisplayMoney, useCurrencyDisplay } from './ExchangeRate'
 import type { Product, User } from './types'
 
 type Supplier = { id: string; name: string; contactName?: string; phone?: string; email?: string }
@@ -12,6 +12,18 @@ type Purchase = {
   supplier: Supplier; items: PurchaseItem[]
 }
 type Line = { productId: string; description: string; quantity: number; unit: string; unitCost: number }
+type DebtSummary = {
+  byCurrency: { CDF: number; USD: number }
+  otherCurrencies: Record<string, number>
+  convertedTotals: { CDF: number; USD: number } | null
+  rateApplied: number | null
+}
+const emptyDebt: DebtSummary = { byCurrency: { CDF: 0, USD: 0 }, otherCurrencies: {}, convertedTotals: null, rateApplied: null }
+function normalizeDebt(value: unknown): DebtSummary {
+  if (value && typeof value === 'object' && 'byCurrency' in value) return value as DebtSummary
+  const legacyCdf = Number(value || 0)
+  return { ...emptyDebt, byCurrency: { CDF: Number.isFinite(legacyCdf) ? legacyCdf : 0, USD: 0 } }
+}
 
 function Modal({ children, close }: { children: ReactNode; close: () => void }) {
   return <div className="modal-backdrop" role="dialog" aria-modal="true"><div className="modal wide">
@@ -22,10 +34,11 @@ function Modal({ children, close }: { children: ReactNode; close: () => void }) 
 export default function Procurement({ user, lang }: { user: User; lang: 'fr' | 'en' }) {
   const fr = lang === 'fr'
   const canWrite = ['KITCHEN_ADMIN', 'FINANCE'].includes(user.role)
+  const { displayCurrency } = useCurrencyDisplay()
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [products, setProducts] = useState<Product[]>([])
-  const [debt, setDebt] = useState(0)
+  const [debt, setDebt] = useState<DebtSummary>(emptyDebt)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -40,17 +53,23 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
     try {
       const [supplierResult, purchaseResult, productResult] = await Promise.all([
         api<{ suppliers: Supplier[] }>('/suppliers'),
-        api<{ purchases: Purchase[]; outstandingSupplierDebt: string }>('/purchases'),
+        api<{ purchases: Purchase[]; outstandingSupplierDebt: DebtSummary }>('/purchases'),
         api<{ products: Product[] }>('/products?all=true')
       ])
       setSuppliers(supplierResult.suppliers); setPurchases(purchaseResult.purchases)
-      setDebt(Number(purchaseResult.outstandingSupplierDebt || 0)); setProducts(productResult.products)
+      setDebt(normalizeDebt(purchaseResult.outstandingSupplierDebt)); setProducts(productResult.products)
     } catch (error) { setMessage((error as Error).message) } finally { setLoading(false) }
   }
   useEffect(() => { void load() }, [])
   const total = useMemo(() => lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitCost || 0), 0), [lines])
   const due = purchases.filter(item => Number(item.balance) > 0)
   const overdue = due.filter(item => item.dueDate && new Date(item.dueDate) < new Date()).length
+  const convertedDebt = debt.convertedTotals?.[displayCurrency] ?? null
+  const exactDebt = [
+    debt.byCurrency.CDF > 0 ? money(debt.byCurrency.CDF, 'CDF') : '',
+    debt.byCurrency.USD > 0 ? money(debt.byCurrency.USD, 'USD') : '',
+    ...Object.entries(debt.otherCurrencies).filter(([, value]) => value > 0).map(([currency, value]) => `${value} ${currency}`)
+  ].filter(Boolean)
 
   const updateLine = (index: number, patch: Partial<Line>) => setLines(current => current.map((line, i) => i === index ? { ...line, ...patch } : line))
   const chooseProduct = (index: number, productId: string) => {
@@ -105,7 +124,7 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
     <div className="stats procurement-stats">
       <article className="stat-card"><span><Building2/></span><div><small>{fr ? 'Fournisseurs actifs' : 'Active suppliers'}</small><strong>{suppliers.length}</strong></div></article>
       <article className="stat-card"><span><ReceiptText/></span><div><small>{fr ? 'Achats enregistrés' : 'Recorded purchases'}</small><strong>{purchases.length}</strong></div></article>
-      <article className="stat-card warn"><span><CircleDollarSign/></span><div><small>{fr ? 'Dette fournisseurs' : 'Supplier debt'}</small><strong><DisplayMoney value={debt} /></strong></div></article>
+      <article className="stat-card warn supplier-debt-card"><span><CircleDollarSign/></span><div><small>{fr ? 'Dette fournisseurs' : 'Supplier debt'}</small><strong>{convertedDebt !== null ? money(convertedDebt, displayCurrency) : (exactDebt.join(' + ') || money(0, 'CDF'))}</strong>{exactDebt.length > 1 && <small className="supplier-debt-detail">{fr ? 'Soldes exacts' : 'Exact balances'} : {exactDebt.join(' + ')}</small>}{debt.rateApplied && <small className="supplier-debt-detail">1 USD = {money(debt.rateApplied, 'CDF')}</small>}</div></article>
       <article className="stat-card"><span><PackagePlus/></span><div><small>{fr ? 'Échéances dépassées' : 'Overdue invoices'}</small><strong>{overdue}</strong></div></article>
     </div>
     <section className="panel">
@@ -125,7 +144,13 @@ export default function Procurement({ user, lang }: { user: User; lang: 'fr' | '
 
     {purchaseOpen && <Modal close={() => setPurchaseOpen(false)}><form className="modal-form" onSubmit={createPurchase}><span className="eyebrow">AUDITED PURCHASE</span><h2>{fr ? 'Réceptionner un approvisionnement' : 'Receive a purchase'}</h2>
       <div className="form-grid"><label>{fr ? 'Fournisseur' : 'Supplier'}<select name="supplierId" required><option value="">{fr ? 'Choisir…' : 'Choose…'}</option>{suppliers.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>{fr ? 'Facture' : 'Invoice'}<input name="invoiceNumber"/></label><label>{fr ? 'Date facture' : 'Invoice date'}<input name="invoiceDate" type="date" required defaultValue={new Date().toISOString().slice(0,10)}/></label><label>{fr ? 'Échéance' : 'Due date'}<input name="dueDate" type="date"/></label></div>
-      <div className="purchase-lines">{lines.map((line,index)=><div className="purchase-line" key={index}><select value={line.productId} onChange={event=>chooseProduct(index,event.target.value)}><option value="">{fr ? 'Article libre' : 'Unlinked item'}</option>{products.map(product=><option value={product.id} key={product.id}>{product.name}</option>)}</select><input value={line.description} onChange={event=>updateLine(index,{description:event.target.value})} placeholder={fr?'Description':'Description'} required/><input type="number" min=".001" step=".001" value={line.quantity} onChange={event=>updateLine(index,{quantity:Number(event.target.value)})}/><input type="number" min="0" value={line.unitCost} onChange={event=>updateLine(index,{unitCost:Number(event.target.value)})}/>{lines.length>1&&<button type="button" onClick={()=>setLines(current=>current.filter((_,i)=>i!==index))}><X/></button>}</div>)}</div>
+      <div className="purchase-lines">{lines.map((line,index)=><div className="purchase-line" key={index}>
+        <select value={line.productId} onChange={event=>chooseProduct(index,event.target.value)} aria-label={fr ? 'Produit du catalogue' : 'Catalog product'}><option value="">{fr ? 'Article libre' : 'Unlinked item'}</option>{products.map(product=><option value={product.id} key={product.id}>{product.name}</option>)}</select>
+        <input value={line.description} onChange={event=>updateLine(index,{description:event.target.value})} placeholder={fr?'Description de l’article':'Item description'} aria-label={fr ? 'Description de l’article' : 'Item description'} required/>
+        <label className="purchase-line-field"><span>{fr ? 'Quantité achetée' : 'Purchased quantity'}</span><input type="number" min=".001" step=".001" value={line.quantity} onChange={event=>updateLine(index,{quantity:Number(event.target.value)})}/></label>
+        <label className="purchase-line-field"><span>{fr ? `Prix unitaire (${purchaseCurrency})` : `Unit price (${purchaseCurrency})`}</span><input type="number" min="0" step="0.01" value={line.unitCost} onChange={event=>updateLine(index,{unitCost:Number(event.target.value)})}/></label>
+        {lines.length>1&&<button type="button" onClick={()=>setLines(current=>current.filter((_,i)=>i!==index))} aria-label={fr ? 'Supprimer cette ligne' : 'Remove this line'}><X/></button>}
+      </div>)}</div>
       <button type="button" onClick={()=>setLines(current=>[...current,{productId:'',description:'',quantity:1,unit:'UNIT',unitCost:0}])}><Plus/>{fr ? 'Ajouter une ligne' : 'Add line'}</button>
       <div className="form-grid"><label>{fr ? 'Devise' : 'Currency'}<select name="currency" value={purchaseCurrency} onChange={event => setPurchaseCurrency(event.target.value)}><option>CDF</option><option>USD</option></select></label><label>{fr ? 'Déjà payé' : 'Already paid'}<input name="paidAmount" type="number" min="0" max={total} defaultValue="0"/></label><label>{fr ? 'Mode de paiement' : 'Payment method'}<select name="paymentMethod"><option>CASH</option><option>MOBILE_MONEY</option><option>BANK</option><option>EDUPAY</option></select></label><label>{fr ? 'Référence paiement' : 'Payment reference'}<input name="paymentReference"/></label></div>
       <label>Notes<textarea name="notes"/></label><div className="purchase-total"><span>Total</span><strong><DisplayMoney value={total} currency={purchaseCurrency} /></strong></div>

@@ -11,7 +11,7 @@ import { prisma } from './db.js'
 import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentity } from './auth.js'
 import { calculateDiscount } from './discount.js'
 import { loadDirectory, resolvePerson } from './directory.js'
-import { compareClassNames } from './class-name.js'
+import { compareClassNames, normalizeClassName } from './class-name.js'
 import { processNotificationOutbox } from './notifications.js'
 import { procurementRouter } from './procurement.js'
 import { getUsdCdfRate } from './exchange-rate.js'
@@ -125,6 +125,7 @@ app.get('/api/me/avatar', authenticate, asyncRoute(async (req: AuthRequest, res)
 }))
 
 app.get('/api/exchange-rate', authenticate, asyncRoute(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store')
   try {
     res.json(await getUsdCdfRate(req.query.refresh === 'true'))
   } catch {
@@ -136,13 +137,18 @@ app.get('/api/directory', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINAN
   const q = String(req.query.q || '').trim().toLowerCase()
   const people = await loadDirectory(req.query.refresh === 'true')
   const kind = String(req.query.kind || '').trim().toUpperCase()
-  const className = String(req.query.className || '').trim().toLowerCase()
+  const className = (normalizeClassName(String(req.query.className || '')) || '').toLowerCase()
   const searched = q ? people.filter(person =>
     [person.fullName, person.email, person.phone, person.displayId, person.className, person.department, person.jobTitle, person.subject]
       .some(value => value?.toLowerCase().includes(q))
   ) : people
-  const filtered = searched.filter(person => (!kind || person.kind === kind) && (!className || person.className?.toLowerCase() === className))
-  const classes = [...new Set(people.map(person => person.className).filter((value): value is string => Boolean(value)))].sort(compareClassNames)
+  const filtered = searched.filter(person => (!kind || person.kind === kind) && (!className || normalizeClassName(person.className)?.toLowerCase() === className))
+  const classesByKey = new Map<string, string>()
+  people.filter(person => person.kind === 'STUDENT').forEach(person => {
+    const canonical = normalizeClassName(person.className)
+    if (canonical) classesByKey.set(canonical.toLowerCase(), canonical)
+  })
+  const classes = [...classesByKey.values()].sort(compareClassNames)
   const counts = people.reduce<Record<string, number>>((totals, person) => ({ ...totals, [person.kind]: (totals[person.kind] || 0) + 1 }), {})
   const publicPeople = filtered.slice(0, 250).map(({ photoData: _photoData, ...person }) => person)
   res.json({ people: publicPeople, total: filtered.length, facets: { classes, counts } })
@@ -276,29 +282,79 @@ app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => 
 }))
 
 app.get('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
-  const menus = await prisma.dailyMenu.findMany({ include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } }, orderBy: { menuDate: 'desc' }, take: 90 })
+  const [menus, deletedMenus] = await Promise.all([
+    prisma.dailyMenu.findMany({ include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } }, orderBy: { menuDate: 'desc' }, take: 90 }),
+    prisma.auditLog.findMany({
+      where: { entityType: 'DailyMenu', action: 'DAILY_MENU_DELETED' },
+      orderBy: { createdAt: 'desc' },
+      take: 90,
+      select: { id: true, entityId: true, actorId: true, actorRole: true, action: true, oldValue: true, reason: true, createdAt: true }
+    })
+  ])
   res.setHeader('Cache-Control', 'no-store')
-  res.json({ menus })
+  res.json({ menus, deletedMenus })
 }))
+const dailyMenuSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), title: z.string().trim().min(2).max(120), description: z.string().trim().max(500).optional().nullable(), productIds: z.array(z.string().min(1)).min(1).max(80), publish: z.boolean().default(false) })
+const auditJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 
 app.post('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
-  const input = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), title: z.string().trim().min(2).max(120), description: z.string().trim().max(500).optional().nullable(), productIds: z.array(z.string().min(1)).min(1).max(80), publish: z.boolean().default(false) }).parse(req.body)
+  const input = dailyMenuSchema.parse(req.body)
   const ids = [...new Set(input.productIds)]
   const products = await prisma.product.findMany({ where: { id: { in: ids }, archivedAt: null, isAvailable: true } })
   if (products.length !== ids.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
   const date = menuDate(input.date)
-  const existing = await prisma.dailyMenu.findUnique({ where: { menuDate: date }, include: { _count: { select: { transactions: true } } } })
-  if (existing?._count.transactions) return res.status(409).json({ message: 'A menu linked to recorded transactions is immutable. Close it and create the next menu instead.' })
+  const existing = await prisma.dailyMenu.findUnique({ where: { menuDate: date }, select: { id: true } })
+  if (existing) return res.status(409).json({ message: 'A menu already exists for this service date. Open it with Edit to preserve its complete audit history.' })
   const menu = await prisma.$transaction(async tx => {
-    const saved = await tx.dailyMenu.upsert({ where: { menuDate: date }, create: { menuDate: date, title: input.title, description: input.description, createdBy: req.kitchenUser!.orbitPersonId, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null }, update: { title: input.title, description: input.description, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null, closedAt: null } })
-    await tx.dailyMenuItem.deleteMany({ where: { menuId: saved.id } })
+    const saved = await tx.dailyMenu.create({ data: { menuDate: date, title: input.title, description: input.description, createdBy: req.kitchenUser!.orbitPersonId, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null } })
     await tx.dailyMenuItem.createMany({ data: ids.map((id, index) => { const product = products.find(item => item.id === id)!; return { menuId: saved.id, productId: id, unitPrice: product.currentPrice, currency: product.currency, displayOrder: index } }) })
-    return tx.dailyMenu.findUniqueOrThrow({ where: { id: saved.id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
+    const complete = await tx.dailyMenu.findUniqueOrThrow({ where: { id: saved.id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
+    await tx.auditLog.create({ data: { actorId: req.kitchenUser!.orbitPersonId, actorRole: req.kitchenUser!.role, action: input.publish ? 'DAILY_MENU_PUBLISHED' : 'DAILY_MENU_SAVED', entityType: 'DailyMenu', entityId: saved.id, newValue: auditJson(complete), ipAddress: req.ip } })
+    return complete
   })
-  await audit(req, input.publish ? 'DAILY_MENU_PUBLISHED' : 'DAILY_MENU_SAVED', 'DailyMenu', menu.id, existing, menu)
-  res.status(existing ? 200 : 201).json({ menu })
+  res.status(201).json({ menu })
 }))
 
+app.get('/api/daily-menus/:id/audit', authenticate, allow('KITCHEN_ADMIN', 'AUDITOR'), asyncRoute(async (req, res) => {
+  const id = routeParam(req, 'id')
+  const logs = await prisma.auditLog.findMany({ where: { entityType: 'DailyMenu', entityId: id }, orderBy: { createdAt: 'desc' }, take: 100 })
+  res.json({ logs })
+}))
+
+app.put('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = routeParam(req, 'id')
+  const input = dailyMenuSchema.parse(req.body)
+  const previous = await prisma.dailyMenu.findUnique({ where: { id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
+  if (!previous) return res.status(404).json({ message: 'Daily menu not found' })
+  if (previous._count.transactions) return res.status(409).json({ message: 'A menu linked to recorded transactions is immutable and cannot be edited.' })
+  const date = menuDate(input.date)
+  const conflicting = await prisma.dailyMenu.findFirst({ where: { menuDate: date, id: { not: id } }, select: { id: true } })
+  if (conflicting) return res.status(409).json({ message: 'Another menu already exists for this service date.' })
+  const productIds = [...new Set(input.productIds)]
+  const products = await prisma.product.findMany({ where: { id: { in: productIds }, archivedAt: null, isAvailable: true } })
+  if (products.length !== productIds.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
+  const menu = await prisma.$transaction(async tx => {
+    await tx.dailyMenu.update({ where: { id }, data: { menuDate: date, title: input.title, description: input.description, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null, closedAt: null } })
+    await tx.dailyMenuItem.deleteMany({ where: { menuId: id } })
+    await tx.dailyMenuItem.createMany({ data: productIds.map((productId, index) => { const product = products.find(item => item.id === productId)!; return { menuId: id, productId, unitPrice: product.currentPrice, currency: product.currency, displayOrder: index } }) })
+    const updated = await tx.dailyMenu.findUniqueOrThrow({ where: { id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
+    await tx.auditLog.create({ data: { actorId: req.kitchenUser!.orbitPersonId, actorRole: req.kitchenUser!.role, action: 'DAILY_MENU_UPDATED', entityType: 'DailyMenu', entityId: id, oldValue: auditJson(previous), newValue: auditJson(updated), ipAddress: req.ip } })
+    return updated
+  })
+  res.json({ menu })
+}))
+
+app.delete('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = routeParam(req, 'id')
+  const previous = await prisma.dailyMenu.findUnique({ where: { id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
+  if (!previous) return res.status(404).json({ message: 'Daily menu not found' })
+  if (previous._count.transactions) return res.status(409).json({ message: 'A menu linked to recorded transactions is retained for accounting traceability and cannot be deleted.' })
+  await prisma.$transaction(async tx => {
+    await tx.dailyMenu.delete({ where: { id } })
+    await tx.auditLog.create({ data: { actorId: req.kitchenUser!.orbitPersonId, actorRole: req.kitchenUser!.role, action: 'DAILY_MENU_DELETED', entityType: 'DailyMenu', entityId: id, oldValue: auditJson(previous), reason: String(req.body?.reason || 'Deleted by Kitchen administration'), ipAddress: req.ip } })
+  })
+  res.json({ id, deleted: true })
+}))
 app.post('/api/daily-menus/:id/close', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
   const previous = await prisma.dailyMenu.findUnique({ where: { id: routeParam(req, 'id') } })
   if (!previous) return res.status(404).json({ message: 'Daily menu not found' })
@@ -331,7 +387,14 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   if (productIds.some(id => !menuItems.has(id))) return res.status(409).json({ message: 'One or more selected products are not on today’s menu' })
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   if (products.length !== productIds.length) return res.status(400).json({ message: 'One or more products no longer exist' })
-  const exchangeRate = products.some(product => product.currency === 'USD') ? await getUsdCdfRate() : null
+  const needsUsdRate = input.items.some(item => menuItems.get(item.productId)?.currency === 'USD')
+  let exchangeRate: Awaited<ReturnType<typeof getUsdCdfRate>> | null = null
+  if (needsUsdRate) {
+    try { exchangeRate = await getUsdCdfRate() }
+    catch {
+      return res.status(503).json({ message: 'USD sales are temporarily paused because no reliable server exchange rate is available. No transaction was recorded.' })
+    }
+  }
   const productMap = new Map(products.map(product => [product.id, product]))
   const lines = input.items.map(item => {
     const product = productMap.get(item.productId)!

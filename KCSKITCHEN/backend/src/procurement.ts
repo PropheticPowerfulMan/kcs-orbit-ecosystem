@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from './db.js'
 import { allow, authenticate, type AuthRequest } from './auth.js'
+import { getUsdCdfRate } from './exchange-rate.js'
+import { summarizeSupplierDebt } from './supplier-debt.js'
 
 const router = Router()
 const asyncRoute = (handler: (req: any, res: Response, next: NextFunction) => Promise<unknown>) =>
@@ -58,16 +60,28 @@ const purchaseSchema = z.object({
 })
 
 router.get('/purchases', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
-  const [purchases, debt] = await Promise.all([
+  const [purchases, debtByCurrency] = await Promise.all([
     prisma.kitchenPurchase.findMany({
       include: { supplier: true, items: { include: { product: { select: { name: true } } } }, payments: { orderBy: { paidAt: 'desc' } } },
       orderBy: { createdAt: 'desc' }, take: 500
     }),
-    prisma.kitchenPurchase.aggregate({ where: { status: { in: ['RECEIVED', 'PARTIALLY_PAID'] } }, _sum: { balance: true } })
+    prisma.kitchenPurchase.groupBy({
+      by: ['currency'],
+      where: { status: { in: ['RECEIVED', 'PARTIALLY_PAID'] }, balance: { gt: 0 } },
+      _sum: { balance: true }
+    })
   ])
-  res.json({ purchases, outstandingSupplierDebt: debt._sum.balance || 0 })
+  let exchangeRate: Awaited<ReturnType<typeof getUsdCdfRate>> | null = null
+  if (debtByCurrency.length) {
+    try { exchangeRate = await getUsdCdfRate() } catch { /* Exact per-currency totals remain available without unsafe addition. */ }
+  }
+  const outstandingSupplierDebt = summarizeSupplierDebt(
+    debtByCurrency.map(row => ({ currency: row.currency, balance: row._sum.balance })),
+    exchangeRate?.rate ?? null
+  )
+  res.setHeader('Cache-Control', 'private, no-store')
+  res.json({ purchases, outstandingSupplierDebt, exchangeRate })
 }))
-
 router.post('/purchases', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
   const input = purchaseSchema.parse(req.body)
   const supplier = await prisma.supplier.findFirst({ where: { id: input.supplierId, isActive: true } })

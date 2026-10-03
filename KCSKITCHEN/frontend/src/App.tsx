@@ -15,6 +15,12 @@ import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDis
 
 type Lang = 'fr' | 'en'
 type Page = 'dashboard' | 'menus' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
+const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access'])
+function requestedPage(): Page {
+  if (typeof window === 'undefined') return 'dashboard'
+  const value = new URLSearchParams(window.location.search).get('page') as Page | null
+  return value && pageNames.has(value) ? value : 'dashboard'
+}
 
 const text = {
   fr: {
@@ -113,17 +119,26 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [credentials, setCredentials] = useState({ identifier: '', password: '' })
+  const [locked, setLocked] = useState({ identifier: true, password: true })
+
+  function unlock(field: 'identifier' | 'password') {
+    if (!locked[field]) return
+    setLocked(current => ({ ...current, [field]: false }))
+    setCredentials(current => ({ ...current, [field]: '' }))
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError('')
-    const data = new FormData(event.currentTarget)
     try {
       const result = await api<{ token: string; user: User }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier: data.get('identifier'), password: data.get('password') })
+        body: JSON.stringify({ identifier: credentials.identifier.trim(), password: credentials.password })
       })
       setToken(result.token); onLogin(result.user)
     } catch (err) { setError((err as Error).message) } finally { setLoading(false) }
   }
+
   return <main className="login-page">
     <button className="language-fab" onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages size={18} /> {lang.toUpperCase()}</button>
     <InstallAppButton lang={lang} />
@@ -136,15 +151,36 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     </section>
     <section className="login-card">
       <div><span className="eyebrow">{t.secureAccess}</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
-      <form onSubmit={submit}>
-        <label>{t.identifier}<input name="identifier" autoComplete="username" required /></label>
-        <label>{t.password}<span className="password-field"><input name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>{showPassword ? <EyeOff /> : <Eye />}</button></span></label>
+      <form onSubmit={submit} autoComplete="off" data-lpignore="true" data-form-type="other">
+        <label>{t.identifier}<input
+          name="kcs-kitchen-identifier"
+          value={credentials.identifier}
+          readOnly={locked.identifier}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          onPointerDown={() => unlock('identifier')}
+          onFocus={() => unlock('identifier')}
+          onChange={event => setCredentials(current => ({ ...current, identifier: event.target.value }))}
+          required
+        /></label>
+        <label>{t.password}<span className="password-field"><input
+          name="kcs-kitchen-password"
+          value={credentials.password}
+          readOnly={locked.password}
+          type={showPassword ? 'text' : 'password'}
+          autoComplete="new-password"
+          onPointerDown={() => unlock('password')}
+          onFocus={() => unlock('password')}
+          onChange={event => setCredentials(current => ({ ...current, password: event.target.value }))}
+          required
+        /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? (lang === 'fr' ? 'Masquer le mot de passe' : 'Hide password') : (lang === 'fr' ? 'Afficher le mot de passe' : 'Show password')}>{showPassword ? <EyeOff /> : <Eye />}</button></span></label>
         {error && <div className="form-error">{error}</div>}
         <button className="primary large" disabled={loading}>{loading ? '…' : t.enter}</button>
       </form>
       <small>🔒 {t.identityProof}</small>
     </section>
-      <p className="manager-hint">{t.managerHint}</p>
+    <p className="manager-hint">{t.managerHint}</p>
   </main>
 }
 
@@ -152,7 +188,7 @@ const privileged: Role[] = ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR']
 
 function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { lang, setLang, t } = useLanguage()
-  const [page, setPage] = useState<Page>('dashboard')
+  const [page, setPage] = useState<Page>(requestedPage)
   const [open, setOpen] = useState(false)
   const [dark, setDark] = useState(() => localStorage.getItem('kcs-kitchen-theme') === 'dark')
   useEffect(() => { document.body.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kcs-kitchen-theme', dark ? 'dark' : 'light') }, [dark])
@@ -187,11 +223,31 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN']
   ]
+  function navigateToPage(nextPage: Page, replace = false) {
+    setPage(nextPage)
+    setOpen(false)
+    const url = new URL(window.location.href)
+    if (nextPage === 'dashboard') url.searchParams.delete('page')
+    else url.searchParams.set('page', nextPage)
+    if (replace) window.history.replaceState({}, '', url)
+    else window.history.pushState({}, '', url)
+  }
+  useEffect(() => {
+    if (!nav.some(item => item[0] === page && item[3])) navigateToPage('dashboard', true)
+  }, [page, user.role])
+  useEffect(() => {
+    const restorePage = () => {
+      const nextPage = requestedPage()
+      setPage(nav.some(item => item[0] === nextPage && item[3]) ? nextPage : 'dashboard')
+    }
+    window.addEventListener('popstate', restorePage)
+    return () => window.removeEventListener('popstate', restorePage)
+  }, [user.role])
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
     <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
       <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
       <div className="identity"><span>{officialAvatar ? <img src={officialAvatar} alt={user.fullName}/> : user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
-      <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => { setPage(item[0]); setOpen(false) }}>{item[2]}<span>{item[1]}</span></button>)}</nav>
+      <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => navigateToPage(item[0])}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
         <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}><Languages /> {lang.toUpperCase()}</button>
         <button onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />} {dark ? t.lightMode : t.darkMode}</button>
