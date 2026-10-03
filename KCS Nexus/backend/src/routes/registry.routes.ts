@@ -8,6 +8,12 @@ import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedReques
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { sendSchoolMail } from '../utils/mail.js'
 import { sendSchoolSms } from '../utils/sms.js'
+import {
+  getOrbitSharedDirectory as getSharedDirectoryFromOrbit,
+  invalidateOrbitSharedDirectory,
+  type OrbitSharedDirectory,
+} from '../services/orbitSharedDirectory.js'
+import { assertOrbitEntityUpdateCanSynchronize, buildOrbitRollbackPatch, synchronizeOrbitEntityToNexus, type OrbitRegistryEntitySnapshot } from '../services/orbitEntitySynchronization.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -31,67 +37,7 @@ function generateTemporaryPassword() {
   return `KCS-${randomInt(100000, 1000000)}`
 }
 
-type SharedDirectoryResponse = {
-  source: 'orbit'
-  visibility: 'shared-directory'
-  counts?: {
-    families: number
-    parents: number
-    students: number
-    teachers: number
-  }
-  parents: Array<{
-    id: string
-    fullName: string
-    firstName?: string
-    middleName?: string | null
-    lastName?: string
-    phone?: string | null
-    email?: string | null
-    photoData?: string | null
-    familyContacts?: Array<{ email?: string | null; phone?: string | null }>
-    mustChangePassword?: boolean
-    organizationId?: string | null
-    studentIds: string[]
-    externalIds: Array<{ appSlug: string; externalId: string }>
-  }>
-  students: Array<{
-    id: string
-    fullName: string
-    firstName: string
-    middleName?: string | null
-    lastName: string
-    studentNumber?: string
-    email?: string | null
-    phone?: string | null
-    dateOfBirth?: string | null
-    status?: string | null
-    photoData?: string | null
-    mustChangePassword?: boolean
-    classId?: string | null
-    className?: string | null
-    parentId?: string | null
-    organizationId?: string | null
-    externalIds: Array<{ appSlug: string; externalId: string }>
-  }>
-  teachers: Array<{
-    id: string
-    fullName: string
-    firstName?: string
-    middleName?: string | null
-    lastName?: string
-    phone?: string | null
-    email?: string | null
-    subject?: string | null
-    employeeId?: string | null
-    employeeType?: string | null
-    department?: string | null
-    jobTitle?: string | null
-    mustChangePassword?: boolean
-    organizationId?: string | null
-    externalIds: Array<{ appSlug: string; externalId: string }>
-  }>
-}
+type SharedDirectoryResponse = OrbitSharedDirectory
 
 type RegistryEntityType = 'parent' | 'student' | 'teacher'
 
@@ -120,71 +66,7 @@ async function getFamiliesFromOrbit() {
   return response.json() as Promise<{ families: unknown[]; source: 'orbit' }>
 }
 
-let sharedDirectoryCache: { value: SharedDirectoryResponse; expiresAt: number } | null = null
-let lastCoherentSharedDirectory: SharedDirectoryResponse | null = null
-
-function canonicalSharedDirectory(value: SharedDirectoryResponse): SharedDirectoryResponse {
-  const parents = Array.isArray(value.parents) ? value.parents : []
-  const students = Array.isArray(value.students) ? value.students : []
-  const teachers = Array.isArray(value.teachers) ? value.teachers : []
-  const families = Array.isArray((value as SharedDirectoryResponse & { families?: unknown[] }).families)
-    ? (value as SharedDirectoryResponse & { families: unknown[] }).families
-    : parents
-  return {
-    ...value,
-    counts: { families: families.length, parents: parents.length, students: students.length, teachers: teachers.length },
-    parents,
-    students,
-    teachers,
-  }
-}
-
-async function getSharedDirectoryFromOrbit(force = false) {
-  if (!force && sharedDirectoryCache && sharedDirectoryCache.expiresAt > Date.now()) return sharedDirectoryCache.value
-  try {
-  const response = await fetch(
-    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
-    {
-      headers: {
-        'x-api-key': env.KCS_ORBIT_API_KEY!,
-        'x-app-slug': 'KCS_NEXUS',
-      },
-      signal: AbortSignal.timeout(15_000),
-    },
-  )
-
-  if (!response.ok) {
-    throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
-  }
-
-  const value = canonicalSharedDirectory(await response.json() as SharedDirectoryResponse)
-  const previousTotal = lastCoherentSharedDirectory ? lastCoherentSharedDirectory.students.length + lastCoherentSharedDirectory.parents.length : 0
-  const nextTotal = value.students.length + value.parents.length
-  if (lastCoherentSharedDirectory && previousTotal >= 10 && nextTotal < Math.floor(previousTotal * 0.7)) {
-    console.warn('[registry] Abnormal Orbit directory collapse blocked', { previousTotal, nextTotal })
-    sharedDirectoryCache = { value: lastCoherentSharedDirectory, expiresAt: Date.now() + 30_000 }
-    return lastCoherentSharedDirectory
-  }
-  if (nextTotal > 0) lastCoherentSharedDirectory = value
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 30_000 }
-  return value
-  } catch (error) {
-    if (lastCoherentSharedDirectory) {
-      console.warn('[registry] Orbit unavailable; serving the last coherent in-memory directory')
-      sharedDirectoryCache = { value: lastCoherentSharedDirectory, expiresAt: Date.now() + 15_000 }
-      return lastCoherentSharedDirectory
-    }
-    throw error
-  }
-}
-
-type ChangeDeliveryEntity = {
-  id?: string
-  fullName?: string
-  accessCode?: string | null
-  email?: string | null
-  phone?: string | null
-  parentId?: string | null
+type ChangeDeliveryEntity = OrbitRegistryEntitySnapshot & {
   familyContacts?: Array<{ email?: string | null; phone?: string | null }>
 }
 
@@ -463,8 +345,9 @@ registryRouter.get('/families', authenticate, requireRoles('admin', 'teacher'), 
 registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
-    const force = ['1', 'true', 'yes'].includes(String(req.query.force ?? '').toLowerCase())
-    const orbitData = await getSharedDirectoryFromOrbit(force)
+    const requireFresh = ['1', 'true', 'yes'].includes(String(req.query.requireFresh ?? '').toLowerCase())
+    const force = requireFresh || ['1', 'true', 'yes'].includes(String(req.query.force ?? '').toLowerCase())
+    const orbitData = await getSharedDirectoryFromOrbit(force, requireFresh)
     return success(res, orbitData, 'Shared directory loaded from Orbit')
   }
 
@@ -479,6 +362,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => 
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
     }),
     prisma.teacherProfile.findMany({
+      where: { user: { role: 'TEACHER' } },
       include: { user: true },
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
     }),
@@ -602,43 +486,102 @@ registryRouter.post('/entities/:entityType', authenticate, requireSuperAdmin(), 
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const payload = { ...req.body, organizationId: env.KCS_ORBIT_ORGANIZATION_ID }
   const created = await createRegistryEntityInOrbit(entityType, payload)
-  sharedDirectoryCache = null
+  invalidateOrbitSharedDirectory()
   const directory = await getSharedDirectoryFromOrbit(true)
-  const notificationDelivery = await deliverEntityChange(directory, entityType, findDirectoryEntity(directory, entityType, String((created as any).orbitId)), 'created')
+  const notificationDelivery = await deliverEntityChange(directory, entityType, findDirectoryEntity(directory, entityType, String((created as any).orbitId)), 'created').catch((error) => {
+    const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
+    console.error('[registry-create] Entity created, but secondary delivery is degraded', { entityType, reason })
+    return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
+  })
   return success(res, { ...(created as object), notificationDelivery }, 'Shared entity created through Orbit', 201)
 }))
 
-registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType) as RegistryEntityType
   const identifierType = z.enum(['orbitId', 'externalId']).default('orbitId').parse(req.query.identifierType)
+  const identifier = String(req.params.identifier)
   const directoryBefore = orbitRegistryIsEnabled() ? await getSharedDirectoryFromOrbit() : null
 
   if (orbitRegistryIsEnabled()) {
-    const updated = await updateRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
-    sharedDirectoryCache = null
-    const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, String(req.params.identifier)) : undefined
-    const updatedEntity = (updated as { entity?: ChangeDeliveryEntity }).entity
-    if (entityType === 'teacher' && updatedEntity?.accessCode) {
-      const localTeacher = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { orbitUserId: String(req.params.identifier) },
-            ...(updatedEntity.email ? [{ email: { equals: updatedEntity.email, mode: 'insensitive' as const } }] : []),
-            ...(before?.accessCode ? [{ accessCode: before.accessCode }] : []),
-          ],
-        },
-        select: { id: true, accessCode: true },
-      })
-      if (localTeacher && localTeacher.accessCode !== updatedEntity.accessCode) {
-        const codeOwner = await prisma.user.findUnique({ where: { accessCode: updatedEntity.accessCode }, select: { id: true } })
-        if (!codeOwner || codeOwner.id === localTeacher.id) {
-          await prisma.user.update({ where: { id: localTeacher.id }, data: { accessCode: updatedEntity.accessCode } })
+    const before = directoryBefore ? findDirectoryEntity(directoryBefore, entityType, identifier) : undefined
+    if (entityType === 'parent' && Array.isArray(req.body?.studentIds)) {
+      const requestedStudentIds = [...new Set(req.body.studentIds.map((value: unknown) => String(value || '').trim()).filter(Boolean))]
+      if (requestedStudentIds.length !== req.body.studentIds.length) throw new ApiError(400, 'Every selected child must have one unique Orbit student identifier.')
+      const selectedStudents = directoryBefore?.students.filter((student) => requestedStudentIds.includes(student.id)) ?? []
+      if (selectedStudents.length !== requestedStudentIds.length) throw new ApiError(404, 'One or more selected children are missing from the official Orbit directory; no update was performed.')
+      for (const student of selectedStudents) {
+        const childPreflight = await assertOrbitEntityUpdateCanSynchronize({
+          entityType: 'student',
+          entity: student,
+          previous: student,
+          identifier: student.id,
+          patch: {},
+        })
+        if (childPreflight.requiresMaterialization) {
+          throw new ApiError(409, `The selected child ${student.fullName || student.id} has no local Nexus account yet. Synchronize that student first; no parent update was performed.`)
         }
       }
     }
-    const canonicalEntity = updatedEntity || { ...before, ...(req.body ?? {}) }
-    const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, canonicalEntity, 'updated')
-    return success(res, { ...(updated as object), notificationDelivery }, 'Shared entity updated through Orbit')
+    await assertOrbitEntityUpdateCanSynchronize({
+      entityType,
+      entity: before ?? { id: identifierType === 'orbitId' ? identifier : undefined },
+      previous: before,
+      identifier,
+      patch: req.body ?? {},
+    })
+    const updated = await updateRegistryEntityInOrbit(entityType, identifier, env.KCS_ORBIT_ORGANIZATION_ID!, req.body ?? {}, identifierType)
+    invalidateOrbitSharedDirectory()
+
+    let updatedEntity: OrbitRegistryEntitySnapshot
+    let localSynchronization: Awaited<ReturnType<typeof synchronizeOrbitEntityToNexus>>
+    try {
+      const responseEntity = (updated as { entity?: OrbitRegistryEntitySnapshot }).entity
+      if (responseEntity) updatedEntity = { ...(before ?? {}), ...(req.body ?? {}), ...responseEntity }
+      else {
+        const refreshedDirectory = await getSharedDirectoryFromOrbit(true)
+        const refreshed = findDirectoryEntity(refreshedDirectory, entityType, String((updated as { orbitId?: string }).orbitId || identifier))
+        if (!refreshed) throw new ApiError(502, 'Orbit confirmed the update but returned no canonical entity for Nexus synchronization.')
+        updatedEntity = refreshed
+      }
+      localSynchronization = await synchronizeOrbitEntityToNexus({
+        entityType,
+        entity: updatedEntity,
+        previous: before,
+        patch: req.body ?? {},
+        identifier,
+        actorId: req.user!.sub,
+      })
+    } catch (syncError) {
+      const rollback = buildOrbitRollbackPatch(before ?? {}, req.body ?? {})
+      let rollbackSucceeded = false
+      let rollbackFailure: unknown = null
+      try {
+        if (Object.keys(rollback.patch).length > 0) {
+          await updateRegistryEntityInOrbit(entityType, identifier, env.KCS_ORBIT_ORGANIZATION_ID!, rollback.patch, identifierType)
+          rollbackSucceeded = true
+        }
+      } catch (error) {
+        rollbackFailure = error
+      } finally {
+        invalidateOrbitSharedDirectory()
+      }
+      const reason = syncError instanceof Error ? syncError.message : 'Unknown Nexus synchronization failure'
+      console.error('[registry-update] Orbit to Nexus synchronization failed', { entityType, identifier, rollbackSucceeded, rollbackComplete: rollback.complete, missingFields: rollback.missingFields, syncError, rollbackFailure })
+      if (rollbackSucceeded && rollback.complete) {
+        throw new ApiError(502, `The Orbit update was rolled back because Nexus synchronization failed: ${reason}`)
+      }
+      if (rollbackSucceeded) {
+        throw new ApiError(502, `Nexus synchronization failed and Orbit was only partially rolled back. Manual reconciliation is required for: ${rollback.missingFields.join(', ') || 'unknown fields'}. Cause: ${reason}`)
+      }
+      throw new ApiError(502, `Orbit was updated, but Nexus synchronization and automatic rollback failed. Manual reconciliation is required. Cause: ${reason}`)
+    }
+
+    const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, updatedEntity, 'updated').catch((error) => {
+      const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
+      console.error('[registry-update] Entity saved, but secondary delivery is degraded', { entityType, identifier, reason })
+      return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
+    })
+    return success(res, { ...(updated as object), localSynchronization, notificationDelivery }, 'Shared entity updated through Orbit and synchronized in Nexus')
   }
 
   if (entityType !== 'parent') {
@@ -654,11 +597,14 @@ registryRouter.patch('/entities/:entityType/:identifier', authenticate, requireS
     photoData: z.string().max(8_000_000).nullable().optional(),
   }).parse(req.body ?? {})
 
-  const updated = await updateLocalParentEntity(String(req.params.identifier), payload)
-  const notificationDelivery = await deliverEntityChange(null, entityType, { ...updated, fullName: composeAdministrativeName(updated) }, 'updated')
+  const updated = await updateLocalParentEntity(identifier, payload)
+  const notificationDelivery = await deliverEntityChange(null, entityType, { ...updated, fullName: composeAdministrativeName(updated) }, 'updated').catch((error) => {
+    const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
+    console.error('[registry-update] Local parent saved, but secondary delivery is degraded', { identifier, reason })
+    return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
+  })
   return success(res, { ...updated, notificationDelivery }, 'Parent updated in local registry')
 }))
-
 registryRouter.post('/entities/:entityType/:identifier/reset-access', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
   const entityType = z.enum(['parent', 'student', 'teacher']).parse(req.params.entityType)
   const identifier = String(req.params.identifier)
@@ -815,6 +761,7 @@ registryRouter.post('/entities/:entityType/:identifier/reset-access', authentica
 
   if (entity?.id && orbitRegistryIsEnabled()) {
     await updateRegistryEntityInOrbit(entityType, entity.id, env.KCS_ORBIT_ORGANIZATION_ID!, { mustChangePassword: true }, 'orbitId')
+    invalidateOrbitSharedDirectory()
   }
   const subject = 'Nouveaux identifiants temporaires KCS Nexus'
   const message = `Bonjour ${entity.fullName || user.firstName},\n\nVotre mot de passe a été réinitialisé par le superadministrateur.\nIdentifiant: ${user.email}\nCode d'accès: ${user.accessCode || 'non défini'}\nMot de passe temporaire: ${temporaryPassword}\n\nChangez ce mot de passe lors de votre prochaine connexion.`
@@ -857,8 +804,12 @@ registryRouter.delete('/entities/:entityType/:identifier', authenticate, require
   }
 
   const deleted = await deleteRegistryEntityInOrbit(entityType, String(req.params.identifier), env.KCS_ORBIT_ORGANIZATION_ID!, identifierType)
-  sharedDirectoryCache = null
-  const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, before, 'deleted')
+  invalidateOrbitSharedDirectory()
+  const notificationDelivery = await deliverEntityChange(directoryBefore, entityType, before, 'deleted').catch((error) => {
+    const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
+    console.error('[registry-delete] Entity deleted, but secondary delivery is degraded', { entityType, identifier: req.params.identifier, reason })
+    return { email: [], sms: [], dashboard: false, degraded: true as const, reason }
+  })
   return success(res, { ...(deleted as object), notificationDelivery }, 'Shared entity deleted through Orbit')
 }))
 
@@ -903,7 +854,7 @@ registryRouter.post('/families', authenticate, requireSuperAdmin(), asyncHandler
       status: 'ACTIVE',
       dateOfBirth: student.dateOfBirth,
     })
-    sharedDirectoryCache = null
+    invalidateOrbitSharedDirectory()
     await getSharedDirectoryFromOrbit(true)
 
     return success(res, {

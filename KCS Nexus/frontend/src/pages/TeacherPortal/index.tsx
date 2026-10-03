@@ -389,6 +389,8 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [courseErrors, setCourseErrors] = useState<{ name?: string; grade?: string }>({})
   const courseNameRef = useRef<HTMLInputElement>(null)
   const courseGradeRef = useRef<HTMLDivElement>(null)
+  const workspaceLoadedUserRef = useRef('')
+  const workspaceRequestTokenRef = useRef(0)
   const [selectedStudentId, setSelectedStudentId] = useState('')
   const [attendanceDraft, setAttendanceDraft] = useState({
     studentId: '',
@@ -440,11 +442,13 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   })
 
   useEffect(() => {
-    if (!user?.id) return
+    if (!user?.id || ['attendance', 'assignments', 'report-card', 'messages'].includes(segment)) return
+    if (workspaceLoadedUserRef.current === user.id) return
+    const requestToken = ++workspaceRequestTokenRef.current
     let active = true
     setWorkspaceStatus('loading')
     teacherWorkspaceAPI.get().then((response) => {
-      if (!active) return
+      if (!active || workspaceRequestTokenRef.current !== requestToken) return
       const workspace = response.data?.data
       const state = workspace?.state as Record<string, any> | undefined
       if (state) {
@@ -463,35 +467,30 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         if (state.gradebookColumnsByCourse && typeof state.gradebookColumnsByCourse === 'object') setGradebookColumnsByCourse(state.gradebookColumnsByCourse)
         if (state.gradebookScores && typeof state.gradebookScores === 'object') setGradebookScores(state.gradebookScores)
       }
+      workspaceLoadedUserRef.current = user.id
       setWorkspaceRevision(workspace?.revision)
       setWorkspaceStatus('ready')
     }).catch(() => {
-      if (active) setWorkspaceStatus('error')
+      if (!active || workspaceRequestTokenRef.current !== requestToken) return
+      workspaceLoadedUserRef.current = ''
+      setWorkspaceStatus('error')
     })
-    return () => { active = false }
-  }, [user?.id])
-
+    return () => {
+      active = false
+      if (workspaceRequestTokenRef.current === requestToken) workspaceRequestTokenRef.current += 1
+    }
+  }, [user?.id, segment])
   useEffect(() => {
-    if (!user?.id) return
+    if (!user?.id || segment !== 'reports') return
     let active = true
-    Promise.all([messagesAPI.getContacts(), messagesAPI.getHistory({ box: 'all' })]).then(([contactsResponse, messagesResponse]) => {
+    messagesAPI.getContacts().then((contactsResponse) => {
       if (!active) return
       const contacts = contactsResponse.data?.data ?? []
       setMessageContacts(contacts)
       setMessageDraft((draft) => ({ ...draft, to: draft.to || contacts[0]?.id || '' }))
-      const liveMessages = (messagesResponse.data?.data ?? []).map((message: any) => ({
-        id: message.id,
-        from: message.senderId === user.id ? `To ${[message.recipient?.firstName, message.recipient?.middleName, message.recipient?.lastName].filter(Boolean).join(' ')} — ${message.recipient?.role ?? 'SCHOOL'}` : `${[message.sender?.firstName, message.sender?.middleName, message.sender?.lastName].filter(Boolean).join(' ')} — ${message.sender?.role ?? 'SCHOOL'}`,
-        subject: message.subject,
-        body: message.body,
-        time: new Date(message.createdAt).toLocaleString(),
-        requiresResponse: !message.readAt && message.recipientId === user.id,
-      }))
-      setInbox(liveMessages)
     }).catch(() => undefined)
     return () => { active = false }
-  }, [user?.id])
-
+  }, [user?.id, segment])
   const findStudent = (studentId: string) => teacherStudents.find((student) => student.id === studentId)
     ?? supportStudentPool.find((student) => student.id === studentId)
     ?? superAdminStudentPool.find((student) => student.id === studentId)
@@ -502,6 +501,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   useEffect(() => {
+    if (['attendance', 'assignments', 'report-card', 'messages'].includes(segment)) {
+      setRegistryStatus('ready')
+      return
+    }
     let active = true
 
     const loadStudents = async () => {
@@ -570,7 +573,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     return () => {
       active = false
     }
-  }, [registryRefreshKey])
+  }, [registryRefreshKey, segment])
 
   useEffect(() => {
     const firstStudent = supportStudentPool[0] ?? courseStudentPool[0]
@@ -2647,7 +2650,7 @@ const TeacherDashboardHome = () => {
 
   useEffect(() => {
     let active = true
-    Promise.all([teacherWorkspaceAPI.overview(), messagesAPI.getHistory({ box: 'all' })])
+    Promise.all([teacherWorkspaceAPI.overview(), messagesAPI.getAll({ box: 'all', limit: 4 })])
       .then(([overviewResponse, messagesResponse]) => {
         if (!active) return
         setOverview(overviewResponse.data?.data ?? {})

@@ -16,6 +16,17 @@ import { resolveStudentProfileId } from '../services/studentIdentity.js'
 import { academicScheduleForGrade } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 import { gradeInteractiveAssignment, gradeSubjectiveAssignmentAnswers } from '../services/assignmentAssessment.service.js'
+import {
+  getOrbitSharedDirectory as getSharedDirectoryFromOrbit,
+  invalidateOrbitSharedDirectory,
+  type OrbitSharedDirectory as SharedOrbitDirectory,
+} from '../services/orbitSharedDirectory.js'
+import {
+  assertOrbitEntityUpdateCanSynchronize,
+  buildOrbitRollbackPatch,
+  synchronizeOrbitEntityToNexus,
+  type OrbitRegistryEntitySnapshot,
+} from '../services/orbitEntitySynchronization.js'
 
 function generateAccessCode(role: string) {
   return `ACC-${role.slice(0, 3).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
@@ -64,53 +75,17 @@ const familyContactSchema = z.object({
 })
 
 
-type OrbitPerson = {
-  id: string
-  displayId?: string | null
-  fullName: string
-  firstName?: string | null
-  middleName?: string | null
-  lastName?: string | null
-  email?: string | null
-  phone?: string | null
-  photoData?: string | null
-  accessCode?: string | null
-  studentIds?: string[]
-  externalIds?: Array<{ appSlug: string; externalId: string }>
-  familyContacts?: Array<z.infer<typeof familyContactSchema>>
-}
-
-type OrbitStudent = {
-  id: string
-  fullName: string
-  firstName?: string | null
-  middleName?: string | null
-  lastName?: string | null
-  studentNumber?: string | null
-  email?: string | null
-  phone?: string | null
-  photoData?: string | null
-  status?: string | null
-  dateOfBirth?: string | null
-  accessCode?: string | null
-  className?: string | null
-  parentId?: string | null
-  externalIds?: Array<{ appSlug: string; externalId: string }>
-}
-
-type OrbitSharedDirectory = {
-  parents: OrbitPerson[]
-  students: OrbitStudent[]
-}
+type OrbitStudent = SharedOrbitDirectory['students'][number]
+type OrbitSharedDirectory = Pick<SharedOrbitDirectory, 'parents' | 'students'>
 
 const studentUpdateSchema = z.object({
   firstName: z.string().min(1).optional(),
   middleName: z.string().nullable().optional(),
   lastName: z.string().min(1).optional(),
-  email: z.string().email().optional(),
+  email: z.string().email().nullable().optional(),
   studentNumber: z.string().min(2).optional(),
   grade: z.enum(schoolLevels).optional(),
-  section: z.string().max(10).optional(),
+  section: z.string().trim().max(40).optional(),
   status: z.string().min(1).optional(),
   dateOfBirth: z.coerce.date().nullable().optional(),
   photoData: z.string().max(8_000_000).optional(),
@@ -128,30 +103,6 @@ function orbitStudentKeys(student: OrbitStudent) {
     student.studentNumber,
     ...(student.externalIds?.map((item) => item.externalId) ?? []),
   ].filter((key): key is string => Boolean(key))
-}
-
-let sharedDirectoryCache: { value: OrbitSharedDirectory; expiresAt: number } | null = null
-
-async function getSharedDirectoryFromOrbit(force = false) {
-  if (!force && sharedDirectoryCache && sharedDirectoryCache.expiresAt > Date.now()) return sharedDirectoryCache.value
-  const response = await fetch(
-    `${env.KCS_ORBIT_API_URL!.replace(/\/$/, '')}/api/integration/read/shared-directory?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID!)}`,
-    {
-      headers: {
-        'x-api-key': env.KCS_ORBIT_API_KEY!,
-        'x-app-slug': 'KCS_NEXUS',
-      },
-      signal: AbortSignal.timeout(3_000),
-    }
-  )
-
-  if (!response.ok) {
-    throw new ApiError(response.status, `Orbit shared directory request failed with status ${response.status}`)
-  }
-
-  const value = await response.json() as OrbitSharedDirectory
-  sharedDirectoryCache = { value, expiresAt: Date.now() + 1_000 }
-  return value
 }
 
 function splitName(person: { fullName?: string | null; firstName?: string | null; lastName?: string | null }) {
@@ -429,6 +380,24 @@ async function deliverFamilyCredentials(input: {
   return { email, sms, dashboard: { parent: true, students: input.studentCredentials.length } }
 }
 
+async function deliverFamilyCredentialsSafely(input: Parameters<typeof deliverFamilyCredentials>[0]) {
+  try {
+    return await deliverFamilyCredentials(input)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Unknown credential delivery failure'
+    console.error('[family-create] Family saved, but credential delivery is degraded', {
+      parentUserId: input.parentUserId,
+      reason,
+    })
+    return {
+      email: { sent: false as const, reason: 'NOTIFICATION_DELIVERY_DEGRADED' as const },
+      sms: { sent: false as const, reason: 'NOTIFICATION_DELIVERY_DEGRADED' as const },
+      dashboard: { parent: false, students: 0 },
+      degraded: true as const,
+      reason,
+    }
+  }
+}
 async function deliverStudentUpdate(input: {
   studentUserId?: string
   studentEmail?: string | null
@@ -458,6 +427,28 @@ async function deliverStudentUpdate(input: {
   }
 }
 
+async function deliverStudentUpdateSafely(
+  input: Parameters<typeof deliverStudentUpdate>[0],
+  action: Parameters<typeof deliverStudentUpdate>[1] = 'updated',
+) {
+  try {
+    return await deliverStudentUpdate(input, action)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Unknown notification delivery failure'
+    console.error('[student-update] Student mutation committed, but secondary delivery is degraded', {
+      studentUserId: input.studentUserId,
+      action,
+      reason,
+    })
+    return {
+      dashboard: false,
+      email: { sent: false as const, reason: 'NOTIFICATION_DELIVERY_DEGRADED' as const },
+      sms: { sent: false as const, reason: 'NOTIFICATION_DELIVERY_DEGRADED' as const },
+      degraded: true as const,
+      reason,
+    }
+  }
+}
 function normalizeCreateStudentPayload(payload: unknown) {
   const asFamily = createFamilySchema.safeParse(payload)
   if (asFamily.success) return asFamily.data
@@ -756,10 +747,10 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
       studentDeliveryCredentials.push({ userId: localStudentUser.id, displayName: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' '), studentId: student.studentNumber, username: studentEmail, accessCode: studentAccessCode, temporaryPassword: studentTemporaryPassword })
     }
 
-    sharedDirectoryCache = null
+    invalidateOrbitSharedDirectory()
     const directory = await getSharedDirectoryFromOrbit(true)
     const createdStudents = orbitStudentsToProfiles(directory).filter((student) => studentNumbers.includes(student.studentNumber))
-    const delivery = await deliverFamilyCredentials({
+    const delivery = await deliverFamilyCredentialsSafely({
       parentUserId: localParentUser.id,
       parentName: [parent.firstName, parent.middleName, parent.lastName].filter(Boolean).join(' '),
       parentEmail: parent.email,
@@ -897,7 +888,7 @@ studentsRouter.post('/', authenticate, requireSuperAdmin(), asyncHandler(async (
   })
 
   const localStudentUsers = await prisma.user.findMany({ where: { email: { in: temporaryCredentials.students.map((credential) => credential.username) } }, select: { id: true, email: true, accessCode: true, firstName: true, lastName: true } })
-  const delivery = await deliverFamilyCredentials({
+  const delivery = await deliverFamilyCredentialsSafely({
     parentUserId: family.parent.id,
     parentName: `${parent.firstName} ${parent.lastName}`.trim(),
     parentEmail: parent.email,
@@ -1153,9 +1144,10 @@ studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req: Auth
   return success(res, { studentId: student.id, overallPercentage, attendanceRate, assignmentCompletion, evidence: { grades: student.grades.length, attendance: student.attendanceRecords.length, assignments: student.submissions.length }, riskLevel, recommendations: student.aiRecommendations, performanceTrend })
 }))
 
-studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
   const payload = studentUpdateSchema.parse(req.body)
+  if (payload.email === null) throw new ApiError(422, 'The institutional login email cannot be cleared because Nexus requires it. Replace it with another valid email instead.')
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
@@ -1163,7 +1155,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
     if (!target) throw new ApiError(404, 'Student not found')
 
     const currentClass = splitClassName(target.className)
-    const updated = await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, {
+    const orbitPayload: OrbitRegistryEntitySnapshot = {
       ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
       ...(payload.middleName !== undefined ? { middleName: payload.middleName } : {}),
       ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
@@ -1175,31 +1167,85 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       ...(payload.grade !== undefined || payload.section !== undefined
         ? { className: `${payload.grade ?? currentClass.grade} ${payload.section ?? currentClass.section}`.trim() }
         : {}),
-    })
-    sharedDirectoryCache = null
-    const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
-    if (payload.photoData !== undefined) {
-      await prisma.studentProfile.updateMany({
-        where: { user: { OR: [{ orbitUserId: target.id }, ...(target.email ? [{ email: target.email }] : [])] } },
-        data: { officialAvatar: payload.photoData || null },
-      })
     }
-    const localUsers = await prisma.user.findMany({
-      where: { email: { in: [target.email, parent?.email].filter(Boolean) as string[] } },
-      select: { id: true, email: true, role: true },
+    await assertOrbitEntityUpdateCanSynchronize({
+      entityType: 'student',
+      entity: target,
+      previous: target,
+      identifier: studentId,
+      patch: orbitPayload,
     })
-    const notificationDelivery = await deliverStudentUpdate({
-      studentUserId: localUsers.find((user) => user.role === 'STUDENT')?.id,
-      studentEmail: payload.email || target.email,
-      studentName: [payload.firstName ?? target.firstName, payload.middleName ?? target.middleName, payload.lastName ?? target.lastName].filter(Boolean).join(' '),
-      parentUserIds: localUsers.filter((user) => user.role === 'PARENT').map((user) => user.id),
-      parentEmails: [parent?.email, ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[],
+    const updated = await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, orbitPayload)
+    invalidateOrbitSharedDirectory()
+
+    let updatedEntity: OrbitRegistryEntitySnapshot
+    let localSynchronization: Awaited<ReturnType<typeof synchronizeOrbitEntityToNexus>>
+    try {
+      const responseEntity = (updated as { entity?: OrbitRegistryEntitySnapshot }).entity
+      if (responseEntity) updatedEntity = { ...target, ...orbitPayload, ...responseEntity }
+      else {
+        const refreshed = await getSharedDirectoryFromOrbit(true)
+        const canonical = refreshed.students.find((student) => student.id === studentId)
+        if (!canonical) throw new ApiError(502, 'Orbit confirmed the student update but returned no canonical entity for Nexus synchronization.')
+        updatedEntity = canonical
+      }
+      localSynchronization = await synchronizeOrbitEntityToNexus({
+        entityType: 'student',
+        entity: updatedEntity,
+        previous: target,
+        patch: orbitPayload,
+        identifier: studentId,
+        actorId: req.user!.sub,
+      })
+    } catch (syncError) {
+      const rollback = buildOrbitRollbackPatch(target, orbitPayload)
+      let rollbackSucceeded = false
+      let rollbackFailure: unknown = null
+      try {
+        if (Object.keys(rollback.patch).length > 0) {
+          await updateRegistryEntityInOrbit(studentId, env.KCS_ORBIT_ORGANIZATION_ID!, rollback.patch)
+          rollbackSucceeded = true
+        }
+      } catch (error) {
+        rollbackFailure = error
+      } finally {
+        invalidateOrbitSharedDirectory()
+      }
+      const reason = syncError instanceof Error ? syncError.message : 'Unknown Nexus synchronization failure'
+      console.error('[student-update] Orbit to Nexus synchronization failed', { studentId, rollbackSucceeded, rollbackComplete: rollback.complete, missingFields: rollback.missingFields, syncError, rollbackFailure })
+      if (rollbackSucceeded && rollback.complete) {
+        throw new ApiError(502, `The Orbit student update was rolled back because Nexus synchronization failed: ${reason}`)
+      }
+      if (rollbackSucceeded) {
+        throw new ApiError(502, `Nexus synchronization failed and Orbit was only partially rolled back. Manual reconciliation is required for: ${rollback.missingFields.join(', ') || 'unknown fields'}. Cause: ${reason}`)
+      }
+      throw new ApiError(502, `Orbit was updated, but Nexus student synchronization and automatic rollback failed. Manual reconciliation is required. Cause: ${reason}`)
+    }
+
+    const parentId = updatedEntity.parentId ?? target.parentId
+    const parent = parentId ? directory.parents.find((candidate) => candidate.id === parentId) : undefined
+    const parentEmails = [parent?.email, ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[]
+    const localParents = await prisma.user.findMany({
+      where: {
+        role: 'PARENT',
+        OR: [
+          ...(parentId ? [{ orbitUserId: parentId }] : []),
+          ...(parentEmails.length ? [{ email: { in: parentEmails } }] : []),
+        ],
+      },
+      select: { id: true },
+    })
+    const notificationDelivery = await deliverStudentUpdateSafely({
+      studentUserId: localSynchronization.localUserId,
+      studentEmail: updatedEntity.email || target.email,
+      studentName: [updatedEntity.firstName, updatedEntity.middleName, updatedEntity.lastName].filter(Boolean).join(' ') || updatedEntity.fullName || target.fullName,
+      parentUserIds: localParents.map((user) => user.id),
+      parentEmails,
       parentPhones: [parent?.phone, ...(parent?.familyContacts?.map((contact) => contact.phone) ?? [])].filter(Boolean) as string[],
     })
 
-    return success(res, { ...(updated as object), notificationDelivery }, 'Student updated through Orbit')
+    return success(res, { ...(updated as object), localSynchronization, notificationDelivery }, 'Student updated through Orbit and synchronized in Nexus')
   }
-
   const currentStudent = await prisma.studentProfile.findUnique({
     where: { id: studentId },
     include: {
@@ -1243,7 +1289,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
           ...(payload.firstName !== undefined ? { firstName: payload.firstName } : {}),
           ...(payload.middleName !== undefined ? { middleName: payload.middleName || null } : {}),
           ...(payload.lastName !== undefined ? { lastName: payload.lastName } : {}),
-          ...(payload.email !== undefined ? { email: payload.email } : {}),
+          ...(payload.email !== undefined && payload.email !== null ? { email: payload.email } : {}),
         },
       })
     }
@@ -1255,6 +1301,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
         ...(payload.grade !== undefined ? { grade: payload.grade } : {}),
         ...(payload.section !== undefined ? { section: payload.section } : {}),
         ...(payload.status !== undefined ? { status: payload.status.toLowerCase() } : {}),
+        ...(payload.dateOfBirth !== undefined ? { dateOfBirth: payload.dateOfBirth } : {}),
         ...(payload.photoData !== undefined ? { officialAvatar: payload.photoData || null } : {}),
       },
       include: {
@@ -1263,7 +1310,7 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
       },
     })
   })
-  const notificationDelivery = await deliverStudentUpdate({
+  const notificationDelivery = await deliverStudentUpdateSafely({
     studentUserId: student.userId,
     studentEmail: student.user.email,
     studentName: `${student.user.firstName} ${student.user.lastName}`.trim(),
@@ -1291,7 +1338,7 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
     }) : []
 
     await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
-    sharedDirectoryCache = null
+    invalidateOrbitSharedDirectory()
     await prisma.user.deleteMany({
       where: {
         role: 'STUDENT',
@@ -1301,7 +1348,7 @@ studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(as
         ],
       },
     })
-    const notificationDelivery = await deliverStudentUpdate({
+    const notificationDelivery = await deliverStudentUpdateSafely({
       studentEmail: target.email,
       studentName: target.fullName,
       parentUserIds: localParents.map((user) => user.id),

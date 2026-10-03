@@ -850,7 +850,7 @@ teachersRouter.get('/workspaces', authenticate, requireRoles('staff'), asyncHand
 }))
 
 teachersRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
-  const teachers = await prisma.teacherProfile.findMany({ include: { user: true, courses: true } })
+  const teachers = await prisma.teacherProfile.findMany({ where: { user: { role: 'TEACHER' } }, include: { user: true, courses: true } })
   return success(res, teachers)
 }))
 

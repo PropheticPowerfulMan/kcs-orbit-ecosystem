@@ -49,7 +49,7 @@ adminRouter.get('/overview', asyncHandler(async (_req, res) => {
   const eightMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 7, 1)
   const [students, teachers, courses, applications, events, incidents, audits] = await Promise.all([
     prisma.studentProfile.findMany({ select: { id: true, grade: true, section: true, gpa: true, attendanceRate: true, enrollmentDate: true } }),
-    prisma.teacherProfile.findMany({ select: { id: true, department: true, user: { select: { firstName: true, lastName: true } }, courses: { select: { id: true } } } }),
+    prisma.teacherProfile.findMany({ where: { user: { role: 'TEACHER' } }, select: { id: true, department: true, user: { select: { firstName: true, lastName: true } }, courses: { select: { id: true } } } }),
     prisma.course.findMany({ select: { id: true, name: true, grade: true, grades: { select: { percentage: true } } } }),
     prisma.admissionApplication.findMany({ where: { submittedAt: { gte: eightMonthsAgo } }, select: { status: true, submittedAt: true } }),
     prisma.event.findMany({ where: { endDate: { gte: now } }, orderBy: { startDate: 'asc' }, take: 8 }),

@@ -289,7 +289,12 @@ export const studentsAPI = {
 // --- Registry API ---
 export const registryAPI = {
   getFamilies: () => api.get('/registry/families'),
-  getDirectory: (force = false) => api.get('/registry/directory', { timeout: 60_000, params: force ? { force: '1', _fresh: Date.now() } : undefined }),
+  getDirectory: (forceRefresh = false, requireFresh = false) => api.get('/registry/directory', {
+    timeout: 60_000,
+    params: forceRefresh || requireFresh
+      ? { force: '1', ...(requireFresh ? { requireFresh: '1' } : {}), _fresh: Date.now() }
+      : undefined,
+  }),
   createEntity: (entityType: 'parent' | 'student' | 'teacher', data: object) => api.post(`/registry/entities/${entityType}`, data),
   updateEntity: (entityType: 'parent' | 'student' | 'teacher', identifier: string, data: object, identifierType: 'orbitId' | 'externalId' = 'orbitId') => api.patch(`/registry/entities/${entityType}/${identifier}`, data, { params: { identifierType } }),
   resetAccess: (entityType: 'parent' | 'student' | 'teacher', identifier: string) => api.post(`/registry/entities/${entityType}/${encodeURIComponent(identifier)}/reset-access`),
@@ -581,6 +586,7 @@ export const academicRecordsAPI = {
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
   myFinalGrades: () => api.get('/academic-records/final-grades/me'),
   teacherReportDashboard: (params: { academicYear: string; term: string }) => api.get('/academic-records/report-cards/teacher-dashboard', { params, timeout: 30_000 }),
+  teacherReportStudentPhoto: (studentId: string) => api.get('/academic-records/report-cards/student-photo/' + studentId, { timeout: 15_000 }),
   saveTeacherReportDraft: (studentId: string, data: object) => api.put(`/academic-records/report-cards/teacher-draft/${studentId}`, data),
   submitTeacherReport: (studentId: string, data: object) => api.post(`/academic-records/report-cards/teacher-submit/${studentId}`, data),
   review: (params?: object) => api.get('/academic-records/review', { params, timeout: 60_000 }),

@@ -233,30 +233,48 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
  await ensureTeacherProfile(req.user!.sub)
  const teacher=await prisma.teacherProfile.findUnique({
   where:{userId:req.user!.sub},
-  select:{id:true,status:true,homeroomGrade:true,homeroomSection:true,user:{select:{firstName:true,lastName:true}}},
+  select:{
+   id:true,status:true,homeroomGrade:true,homeroomSection:true,
+   user:{select:{firstName:true,lastName:true}},
+   courses:{select:{enrollments:{select:{studentId:true}}}},
+  },
  })
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
+
+ const courseStudentIds=teacher.courses.flatMap(course=>course.enrollments.map(enrollment=>enrollment.studentId))
+ const homeroomCandidates=teacher.homeroomGrade
+  ? await prisma.studentProfile.findMany({where:{status:{equals:'active',mode:'insensitive'}},select:{id:true,grade:true,section:true}})
+  : []
+ const homeroomStudentIds=homeroomCandidates.filter(student=>isTeacherHomeroomForStudent(teacher,student)).map(student=>student.id)
+ const scopedStudentIds=[...new Set([...courseStudentIds,...homeroomStudentIds])]
  const termLabel=reportCardTerm(cycle.academicYear,cycle.term)
  const submittedPeriod=periodKey(cycle.academicYear,cycle.term,'SUBMITTED')
  const window=attendanceWindow(cycle.academicYear,cycle.term)
- const [students,submittedGrades]=await Promise.all([
+
+ const [students,submittedGrades]=scopedStudentIds.length?await Promise.all([
   prisma.studentProfile.findMany({
-   where:{status:{equals:'active',mode:'insensitive'}},
-   include:{
-    user:{select:{firstName:true,middleName:true,lastName:true,avatar:true}},
-    enrollments:{include:{course:{select:{id:true,name:true,code:true,grade:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}}},
+   where:{id:{in:scopedStudentIds},status:{equals:'active',mode:'insensitive'}},
+   select:{
+    id:true,studentNumber:true,grade:true,section:true,
+    user:{select:{firstName:true,middleName:true,lastName:true}},
+    enrollments:{select:{course:{select:{id:true,name:true,code:true,grade:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}}},
     reportCards:{where:{term:termLabel},take:1},
     attendanceRecords:{where:{date:window},select:{status:true}},
    },
    orderBy:[{grade:'asc'},{section:'asc'},{user:{lastName:'asc'}}],
   }),
   prisma.grade.findMany({
-   where:{assignmentId:null,period:submittedPeriod},
-   include:{course:{select:{id:true,name:true,code:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}},
+   where:{studentId:{in:scopedStudentIds},assignmentId:null,period:submittedPeriod},
+   select:{id:true,studentId:true,courseId:true,percentage:true,letterGrade:true,createdAt:true,course:{select:{id:true,name:true,code:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}},
    orderBy:{createdAt:'desc'},
   }),
- ])
- const gradeByEnrollment=new Map(submittedGrades.map(item=>[`${item.studentId}:${item.courseId}`,item]))
+ ]):[[],[]]
+
+ const gradeByEnrollment=new Map<string,(typeof submittedGrades)[number]>()
+ for(const item of submittedGrades){
+  const key=item.studentId+':'+item.courseId
+  if(!gradeByEnrollment.has(key))gradeByEnrollment.set(key,item)
+ }
  const learners=students.map(student=>{
   const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
    const subjectKey=[
@@ -266,13 +284,13 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
     enrollment.course.teacher.user.firstName,
    ].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
    const current=bySubject.get(subjectKey)
-   const currentGrade=current?gradeByEnrollment.get(`${student.id}:${current.courseId}`):null
-   const candidateGrade=gradeByEnrollment.get(`${student.id}:${enrollment.courseId}`)
+   const currentGrade=current?gradeByEnrollment.get(student.id+':'+current.course.id):null
+   const candidateGrade=gradeByEnrollment.get(student.id+':'+enrollment.course.id)
    if(!current||(!currentGrade&&candidateGrade))bySubject.set(subjectKey,enrollment)
    return bySubject
   },new Map<string,(typeof student.enrollments)[number]>()).values()]
   const subjects=uniqueEnrollments.map(enrollment=>{
-   const grade=gradeByEnrollment.get(`${student.id}:${enrollment.courseId}`)
+   const grade=gradeByEnrollment.get(student.id+':'+enrollment.course.id)
    return{
     courseId:enrollment.course.id,
     courseName:enrollment.course.name,
@@ -285,18 +303,20 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    }
   })
   const submitted=subjects.filter(subject=>subject.percentage!==null)
-  const expectedCourseIds=new Set(uniqueEnrollments.map(item=>item.courseId))
-  const weightedGrades=submittedGrades.filter(item=>item.studentId===student.id&&expectedCourseIds.has(item.courseId))
+  const weightedGrades=uniqueEnrollments.flatMap(enrollment=>{
+   const grade=gradeByEnrollment.get(student.id+':'+enrollment.course.id)
+   return grade?[grade]:[]
+  })
   const reportCard=student.reportCards[0]??null
   return{
    id:student.id,
    studentNumber:student.studentNumber,
    name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),
-   officialAvatar:student.officialAvatar,
+   officialAvatar:null,
    user:student.user,
    grade:student.grade,
    section:student.section,
-    isHomeroomStudent:isTeacherHomeroomForStudent(teacher,student),
+   isHomeroomStudent:isTeacherHomeroomForStudent(teacher,student),
    subjects,
    expectedSubjectCount:subjects.length,
    submittedSubjectCount:submitted.length,
@@ -306,14 +326,38 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    reportCard,
   }
  })
+ res.setHeader('Cache-Control','private, no-store')
  return success(res,{
   cycle,
   teacher:{status:teacher.status,homeroomGrade:teacher.homeroomGrade,homeroomSection:teacher.homeroomSection,name:[teacher.user.lastName,teacher.user.firstName].filter(Boolean).join(' ')},
   learners,
   hierarchy:{subjectTeachers:'Submit final course grades',homeroomTeacher:'Reviews the complete class file, writes the main comment, and submits it',superAdmin:'Approves, publishes report cards, and controls Grade 9-12 transcripts'},
- },'Whole-school report-card workspace loaded')
+ },'Scoped teacher report-card workspace loaded')
 }))
 
+academicRecordsRouter.get('/report-cards/student-photo/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const studentId=getRouteParam(req.params.studentId)
+ await ensureTeacherProfile(req.user!.sub)
+ const [teacher,student]=await Promise.all([
+  prisma.teacherProfile.findUnique({
+   where:{userId:req.user!.sub},
+   select:{
+    status:true,homeroomGrade:true,homeroomSection:true,
+    courses:{where:{enrollments:{some:{studentId}}},select:{id:true},take:1},
+   },
+  }),
+  prisma.studentProfile.findUnique({
+   where:{id:studentId},
+   select:{id:true,grade:true,section:true,officialAvatar:true,user:{select:{avatar:true}}},
+  }),
+ ])
+ if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
+ if(!student)throw new ApiError(404,'Student not found')
+ const allowed=isTeacherHomeroomForStudent(teacher,student)||teacher.courses.length>0
+ if(!allowed)throw new ApiError(403,'This learner is outside the assigned teacher scope')
+ res.setHeader('Cache-Control','private, max-age=300')
+ return success(res,{officialAvatar:student.officialAvatar,avatar:student.user.avatar},'Official learner portrait loaded')
+}))
 academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const studentId=getRouteParam(req.params.studentId)
  const payload=teacherReportDraftSchema.parse(req.body)

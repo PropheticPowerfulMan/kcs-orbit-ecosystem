@@ -68,3 +68,8 @@ test('accepts an explicit section or a genuine grade change from Orbit', () => {
     { grade: 'Grade 10', section: '' },
   )
 })
+
+test('accepts free-form future class sections without limiting them to A-D', () => {
+  assert.deepEqual(splitClassName('Grade 9 Advanced STEM 2'), { grade: 'Grade 9', section: 'Advanced STEM 2' })
+  assert.deepEqual(splitClassName('Grade 9 Section 12'), { grade: 'Grade 9', section: 'Section 12' })
+})

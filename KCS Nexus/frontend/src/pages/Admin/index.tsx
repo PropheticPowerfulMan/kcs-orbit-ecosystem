@@ -4,7 +4,7 @@ import ParentCommunicationPanel from './ParentCommunicationPanel'
 import EmployeesPanel from './EmployeesPanel'
 import DateSelect from '@/components/shared/DateSelect'
 import PhotoCaptureField from '@/components/shared/PhotoCaptureField'
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -68,7 +68,7 @@ const SCHOOL_NAME = 'Kinshasa Christian School'
 const SCHOOL_SEAL_SRC = getAssetUrl('images/kcs.jpg')
 
 const ProfilePhoto = ({ src, name, size = 'large' }: { src?: string | null; name: string; size?: 'small' | 'large' }) => {
-  const initials = name.split(/s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'KCS'
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'KCS'
   const sizeClass = size === 'small' ? 'h-14 w-14 text-sm' : 'h-32 w-32 text-2xl'
   return (
     <div className={`${sizeClass} shrink-0 overflow-hidden rounded-2xl border-4 border-white bg-gradient-to-br from-kcs-blue-700 to-kcs-blue-950 shadow-lg ring-1 ring-kcs-blue-200 dark:border-kcs-blue-900 dark:ring-kcs-blue-700`} aria-label={`Photo de ${name}`}>
@@ -275,13 +275,69 @@ const createAdminStudentEditForm = (student: AdminStudentRecord | null): AdminSt
   photoData: student?.photoData ?? '',
 })
 
+const editablePhysicalAddress = (value?: string | null) => {
+  const trimmed = String(value ?? '').trim()
+  const normalized = trimmed.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ')
+  return ['adresse non renseignee', 'address not provided', 'address unavailable'].includes(normalized) ? '' : trimmed
+}
+
+const familyContactLabel = (kind: FamilyContactDraft['kind']) => kind === 'MOTHER'
+  ? 'Mère de l’élève'
+  : kind === 'RELATIVE' ? 'Membre de la famille' : 'Agent de la famille'
+
+const prepareFamilyContactsForSave = (contacts: FamilyContactDraft[]) => {
+  const prepared: Array<Record<string, unknown>> = []
+  for (const contact of contacts) {
+    const firstName = String(contact.firstName ?? '').trim()
+    const middleName = String(contact.middleName ?? '').trim()
+    const lastName = String(contact.lastName ?? '').trim()
+    const email = String(contact.email ?? '').trim()
+    const phone = String(contact.phone ?? '').trim()
+    const physicalAddress = editablePhysicalAddress(contact.physicalAddress)
+    const relationship = String(contact.relationship ?? '').trim()
+    const role = String(contact.role ?? '').trim()
+    const defaultRelationship = contact.kind === 'MOTHER' ? 'Mère' : ''
+    const defaultRole = contact.kind === 'HOUSEHOLD_AGENT' ? 'Nounou' : ''
+    const authorizedPickup = Boolean(contact.authorizedPickup)
+    const emergencyContact = contact.emergencyContact ?? (contact.kind === 'MOTHER')
+    const hasMeaningfulInput = Boolean(
+      firstName || middleName || lastName || email || phone || physicalAddress
+      || (relationship && relationship !== defaultRelationship)
+      || (role && role !== defaultRole)
+      || authorizedPickup
+      || emergencyContact !== (contact.kind === 'MOTHER'),
+    )
+    if (!hasMeaningfulInput) continue
+    if (!firstName || !lastName || (!email && !phone)) {
+      return {
+        contacts: [] as Array<Record<string, unknown>>,
+        error: `Le contact « ${familyContactLabel(contact.kind)} » est incomplet. Renseignez obligatoirement le prénom, le nom et au moins un e-mail ou un téléphone.`,
+      }
+    }
+    prepared.push({
+      ...contact,
+      firstName,
+      middleName: middleName || undefined,
+      lastName,
+      relationship: relationship || (contact.kind === 'MOTHER' ? 'Mère' : contact.kind === 'RELATIVE' ? 'Membre de la famille' : 'Agent de la famille'),
+      role: role || undefined,
+      email: email || undefined,
+      phone: phone || undefined,
+      physicalAddress: physicalAddress || undefined,
+      authorizedPickup,
+      emergencyContact,
+    })
+  }
+  return { contacts: prepared, error: '' }
+}
+
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
   firstName: splitPersonName(parent?.name).firstName,
   middleName: splitPersonName(parent?.name).middleName,
   lastName: splitPersonName(parent?.name).lastName,
   email: parent?.email === 'Email non renseigne' ? '' : (parent?.email ?? ''),
   phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
-  physicalAddress: parent?.physicalAddress ?? '',
+  physicalAddress: editablePhysicalAddress(parent?.physicalAddress),
   photoData: parent?.photoData ?? '',
   familyContacts: parent?.familyContacts ?? [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')],
 })
@@ -295,7 +351,7 @@ const createFamilyContactDraft = (kind: FamilyContactDraft['kind']): FamilyConta
 })
 
 const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactDraft[]; onChange: (contacts: FamilyContactDraft[]) => void }) => {
-  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: 'Mère de l’élève', RELATIVE: 'Membre de la famille', HOUSEHOLD_AGENT: 'Agent de la famille' }
+  const labels: Record<FamilyContactDraft['kind'], string> = { MOTHER: familyContactLabel('MOTHER'), RELATIVE: familyContactLabel('RELATIVE'), HOUSEHOLD_AGENT: familyContactLabel('HOUSEHOLD_AGENT') }
   const update = (index: number, values: Partial<FamilyContactDraft>) => onChange(contacts.map((contact, itemIndex) => itemIndex === index ? { ...contact, ...values } : contact))
   return (
     <section className="min-w-0 rounded-2xl border border-gray-100 bg-gray-50 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40 sm:p-4">
@@ -303,7 +359,7 @@ const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactD
       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Renseignez au moins un e-mail ou un téléphone pour chaque personne ajoutée.</p>
       <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
         {contacts.map((contact, index) => (
-          <article key={contact.kind} className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:p-4">
+          <article key={contact.kind + '-' + index} className="min-w-0 rounded-xl border border-gray-200 bg-white p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:p-4">
             <p className="mb-3 text-sm font-bold text-kcs-blue-900 dark:text-white">{labels[contact.kind]}</p>
             <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">
               <input value={contact.lastName} onChange={(event) => update(index, { lastName: event.target.value })} className="min-w-0 rounded-xl border border-gray-200 px-3 py-2.5 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom" />
@@ -324,6 +380,38 @@ const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactD
   )
 }
 
+const FamilyContactsReadOnly = ({ contacts }: { contacts: FamilyContactDraft[] }) => {
+  const visibleContacts = contacts.filter((contact) => [
+    contact.firstName, contact.middleName, contact.lastName, contact.email, contact.phone,
+    editablePhysicalAddress(contact.physicalAddress), contact.role,
+    contact.relationship !== (contact.kind === 'MOTHER' ? 'Mère' : '') ? contact.relationship : '',
+    contact.authorizedPickup ? 'pickup' : '',
+    contact.emergencyContact !== (contact.kind === 'MOTHER') ? 'emergency' : '',
+  ].some((value) => String(value ?? '').trim()))
+
+  return (
+    <section className="min-w-0 rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40 sm:p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Contacts familiaux complémentaires</p>
+      <p className="mt-1 rounded-xl border border-sky-200 bg-white/80 px-3 py-2 text-xs font-semibold leading-5 text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/70 dark:text-kcs-blue-100">Lecture seule dans le dossier Élève. Pour modifier ces contacts, ouvrez le dossier du parent responsable dans « Parents », puis choisissez « Modifier ».</p>
+      {visibleContacts.length ? (
+        <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2 2xl:grid-cols-3">{visibleContacts.map((contact, index) => {
+          const fullName = [contact.lastName, contact.middleName, contact.firstName].map((value) => String(value ?? '').trim()).filter(Boolean).join(' ')
+          const address = editablePhysicalAddress(contact.physicalAddress)
+          return <article key={contact.kind + '-' + index} className="min-w-0 rounded-xl border border-sky-200 bg-white p-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:p-4">
+            <p className="font-bold text-kcs-blue-950 dark:text-white">{fullName || familyContactLabel(contact.kind)}</p>
+            <p className="mt-1 text-xs font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">{contact.relationship || contact.role || familyContactLabel(contact.kind)}</p>
+            <div className="mt-3 grid gap-1.5 text-xs text-gray-700 dark:text-gray-200">
+              {contact.email ? <p className="break-words"><b>E-mail :</b> {contact.email}</p> : null}
+              {contact.phone ? <p><b>Téléphone :</b> {contact.phone}</p> : null}
+              {address ? <p><b>Adresse :</b> {address}</p> : null}
+              {(contact.authorizedPickup || contact.emergencyContact) ? <p><b>Autorisations :</b> {[contact.authorizedPickup ? 'récupération' : '', contact.emergencyContact ? 'urgence' : ''].filter(Boolean).join(' · ')}</p> : null}
+            </div>
+          </article>
+        })}</div>
+      ) : <p className="mt-3 rounded-xl border border-dashed border-sky-300 bg-white/70 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50 dark:text-gray-300">Aucun contact familial complémentaire enregistré.</p>}
+    </section>
+  )
+}
 type AdminAdmissionRequest = {
   id: string
   applicationNumber: string
@@ -535,7 +623,12 @@ const readStoredRoster = () => {
   if (typeof window === 'undefined') return [] as AdminStudentRecord[]
   try {
     const stored = JSON.parse(window.localStorage.getItem(ADMIN_ROSTER_STORAGE_KEY) || '[]') as AdminStudentRecord[]
-    return Array.isArray(stored) ? stored : []
+    if (!Array.isArray(stored)) return []
+    const lightweightItems = stored.map((item) => ({ ...item, photoData: undefined }))
+    if (stored.some((item) => Boolean(item?.photoData))) {
+      try { window.localStorage.setItem(ADMIN_ROSTER_STORAGE_KEY, JSON.stringify(lightweightItems)) } catch { /* Cache remains optional. */ }
+    }
+    return lightweightItems
   } catch {
     return [] as AdminStudentRecord[]
   }
@@ -571,7 +664,20 @@ const apiAdmissionToAdminRequest = (item: any): AdminAdmissionRequest => ({
 })
 
 const saveRoster = (items: AdminStudentRecord[]) => {
-  if (typeof window !== 'undefined') window.localStorage.setItem(ADMIN_ROSTER_STORAGE_KEY, JSON.stringify(items))
+  if (typeof window === 'undefined') return
+  // Registry portraits can be multi-megabyte data URLs. Keeping them in the
+  // synchronous localStorage snapshot blocks the UI and quickly exceeds the
+  // browser quota. The live API response remains authoritative for photos.
+  const lightweightItems = items.map((item) => ({ ...item, photoData: undefined }))
+  const serialized = JSON.stringify(lightweightItems)
+  try {
+    window.localStorage.setItem(ADMIN_ROSTER_STORAGE_KEY, serialized)
+  } catch {
+    // A cache write must never turn a successful registry refresh into a
+    // failed screen load (for example after an older photo-heavy snapshot).
+    window.localStorage.removeItem(ADMIN_ROSTER_STORAGE_KEY)
+    try { window.localStorage.setItem(ADMIN_ROSTER_STORAGE_KEY, serialized) } catch { /* Cache remains optional. */ }
+  }
 }
 
 const createStudentFromAdmission = (application: AdminAdmissionRequest): AdminStudentRecord => ({
@@ -795,13 +901,40 @@ const buildAdminParentRecordsFromDirectory = (
 }
 
 
-const attachFamilyContacts = (roster: AdminStudentRecord[], directory?: SharedDirectoryPayload | null) => roster.map((student) => {
-  const key = student.parentEmail?.trim().toLowerCase()
-  const responsibleParentIds = new Set((student.responsibleParents ?? []).map((item) => item.id))
-  const parent = directory?.parents?.find((item) => responsibleParentIds.has(item.id) || item.studentIds?.includes(student.id) || (key && item.email?.trim().toLowerCase() === key) || item.fullName === student.parent)
-  const directoryContacts = parent?.familyContacts ?? []
-  return parent ? { ...student, familyContacts: directoryContacts.length ? directoryContacts : (student.familyContacts ?? []) } : student
-})
+const attachFamilyContacts = (roster: AdminStudentRecord[], directory?: SharedDirectoryPayload | null) => {
+  const parents = directory?.parents ?? []
+  if (!parents.length || !roster.length) return roster
+
+  const parentsById = new Map(parents.map((parent) => [parent.id, parent]))
+  const parentsByStudentId = new Map<string, SharedDirectoryParent>()
+  const parentsByEmail = new Map<string, SharedDirectoryParent>()
+  const parentsByName = new Map<string, SharedDirectoryParent>()
+  parents.forEach((parent) => {
+    parent.studentIds?.forEach((studentId) => {
+      if (!parentsByStudentId.has(studentId)) parentsByStudentId.set(studentId, parent)
+    })
+    const email = parent.email?.trim().toLowerCase()
+    const name = parent.fullName?.trim().toLowerCase()
+    if (email && !parentsByEmail.has(email)) parentsByEmail.set(email, parent)
+    if (name && !parentsByName.has(name)) parentsByName.set(name, parent)
+  })
+
+  return roster.map((student) => {
+    const responsibleParent = (student.responsibleParents ?? [])
+      .map((item) => parentsById.get(item.id))
+      .find((parent): parent is SharedDirectoryParent => Boolean(parent))
+    const parentEmail = student.parentEmail?.trim().toLowerCase()
+    const parentName = student.parent?.trim().toLowerCase()
+    const parent = responsibleParent
+      ?? parentsByStudentId.get(student.id)
+      ?? (parentEmail ? parentsByEmail.get(parentEmail) : undefined)
+      ?? (parentName ? parentsByName.get(parentName) : undefined)
+    const directoryContacts = parent?.familyContacts ?? []
+    return parent
+      ? { ...student, familyContacts: directoryContacts.length ? directoryContacts : (student.familyContacts ?? []) }
+      : student
+  })
+}
 
 const buildAdminReportDocument = (
   title: string,
@@ -1423,6 +1556,7 @@ const AdminSectionView = ({
   const [parentAccessBusy, setParentAccessBusy] = useState('')
   const [apiSynced, setApiSynced] = useState(false)
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
+  const sharedDirectoryRef = useRef<SharedDirectoryPayload | null>(null)
   const [showCreateStudent, setShowCreateStudent] = useState(false)
   const [selectedTranscriptId, setSelectedTranscriptId] = useState('')
   const [transcriptQuery, setTranscriptQuery] = useState('')
@@ -1460,18 +1594,23 @@ const AdminSectionView = ({
   })
 
   useEffect(() => {
-    if (!editingParent) return
-    const previousOverflow = document.body.style.overflow
+    if (!editingParent && !editingStudent) return
+    const previousBodyOverflow = document.body.style.overflow
+    const previousHtmlOverflow = document.documentElement.style.overflow
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !savingParentEdit) setEditingParent(null)
+      if (event.key !== 'Escape' || savingParentEdit || savingStudentEdit) return
+      setEditingParent(null)
+      setEditingStudent(null)
     }
     document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
     window.addEventListener('keydown', closeOnEscape)
     return () => {
-      document.body.style.overflow = previousOverflow
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousHtmlOverflow
       window.removeEventListener('keydown', closeOnEscape)
     }
-  }, [editingParent, savingParentEdit])
+  }, [editingParent, editingStudent, savingParentEdit, savingStudentEdit])
 
   const shouldLoadRoster = adminRosterSegments.has(segment)
 
@@ -1543,6 +1682,7 @@ const AdminSectionView = ({
     ])
     const directory = directoryResponse?.data?.data
     if (directory?.parents) {
+      sharedDirectoryRef.current = directory
       setSharedDirectory(directory)
     }
     const profiles = response.data?.data
@@ -1555,7 +1695,7 @@ const AdminSectionView = ({
       setApiSynced(false)
       return [] as AdminStudentRecord[]
     }
-    const apiRoster = attachFamilyContacts(profiles.map(apiProfileToRosterRecord), directory ?? sharedDirectory)
+    const apiRoster = attachFamilyContacts(profiles.map(apiProfileToRosterRecord), directory ?? sharedDirectoryRef.current ?? sharedDirectory)
     setOfficialRoster(apiRoster)
     saveRoster(apiRoster)
     setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? null)
@@ -1573,13 +1713,14 @@ const AdminSectionView = ({
     let mounted = true
     Promise.all([
       getAdminRoster(),
-      registryAPI.getDirectory(true).catch(() => null),
+      registryAPI.getDirectory().catch(() => null),
     ])
       .then(([response, directoryResponse]) => {
         const profiles = response.data?.data
         if (!mounted) return
         const directory = directoryResponse?.data?.data
         if (directory?.parents) {
+          sharedDirectoryRef.current = directory
           setSharedDirectory(directory)
         }
         if (!Array.isArray(profiles)) {
@@ -1591,7 +1732,7 @@ const AdminSectionView = ({
           setApiSynced(false)
           return
         }
-        const apiRoster = attachFamilyContacts(profiles.map(apiProfileToRosterRecord), directory ?? sharedDirectory)
+        const apiRoster = attachFamilyContacts(profiles.map(apiProfileToRosterRecord), directory ?? sharedDirectoryRef.current ?? sharedDirectory)
         setOfficialRoster(apiRoster)
         saveRoster(apiRoster)
         setSelectedStudent((current) => apiRoster.find((item) => item.id === current?.id) ?? apiRoster[0] ?? null)
@@ -1603,7 +1744,7 @@ const AdminSectionView = ({
         setOfficialRoster(roster)
         setSelectedStudent((current) => roster.find((item) => item.id === current?.id) ?? roster[0] ?? null)
         setViewingStudent(null)
-        setSharedDirectory(null)
+        // Keep the last verified directory visible while the network recovers.
         setApiSynced(false)
         setStudentNotice('La synchronisation du registre est indisponible. Verifiez que KCS Orbit API est bien lance pour voir les eleves provenant des autres applications.')
       })
@@ -1614,19 +1755,15 @@ const AdminSectionView = ({
       try {
         await refreshOfficialRoster(true)
       } catch {
-        // Le prochain cycle retentera sans vider le registre affiché.
+        // Keep the verified snapshot visible; the next focus will retry.
       } finally {
         refreshInFlight = false
       }
     }
-    const timer = window.setInterval(() => void refresh(), 15000)
     window.addEventListener('focus', refresh)
-    window.addEventListener('ecosystem:mutation-success', refresh)
     return () => {
       mounted = false
-      window.clearInterval(timer)
       window.removeEventListener('focus', refresh)
-      window.removeEventListener('ecosystem:mutation-success', refresh)
     }
   }, [setOfficialRoster, shouldLoadRoster])
 
@@ -1637,6 +1774,11 @@ const AdminSectionView = ({
     const readyStudents = newFamily.students.map((student) => ({ ...student, name: [student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ').trim() })).filter((student) => student.lastName.trim() && student.firstName.trim())
     if (readyStudents.length === 0 || !newFamily.parentLastName.trim() || !newFamily.parentFirstName.trim()) {
       setStudentNotice('Le parent et au moins un élève sont requis avant l’enregistrement.')
+      return
+    }
+    const preparedFamilyContacts = prepareFamilyContactsForSave(newFamily.familyContacts)
+    if (preparedFamilyContacts.error) {
+      setStudentNotice(preparedFamilyContacts.error)
       return
     }
 
@@ -1691,7 +1833,7 @@ const AdminSectionView = ({
           phone: parentPhone,
           relationship: 'Parent',
           photoData: newFamily.parentPhotoData || undefined,
-          familyContacts: newFamily.familyContacts.filter((contact) => contact.firstName.trim() && contact.lastName.trim() && (contact.email.trim() || contact.phone.trim())).map((contact) => ({ ...contact, email: contact.email.trim() || undefined, phone: contact.phone.trim() || undefined, physicalAddress: contact.physicalAddress.trim() || undefined, role: contact.role.trim() || undefined })),
+          familyContacts: preparedFamilyContacts.contacts,
         },
         students: readyStudents.map((student) => {
           return {
@@ -1737,9 +1879,10 @@ const AdminSectionView = ({
     setViewingStudent(null)
     const existingContacts = student.familyContacts ?? []
     const contactKinds: FamilyContactDraft['kind'][] = ['MOTHER', 'RELATIVE', 'HOUSEHOLD_AGENT']
+    const missingContacts = contactKinds.filter((kind) => !existingContacts.some((contact) => contact.kind === kind)).map(createFamilyContactDraft)
     setEditingStudent({
       ...student,
-      familyContacts: contactKinds.map((kind) => existingContacts.find((contact) => contact.kind === kind) ?? createFamilyContactDraft(kind)),
+      familyContacts: [...existingContacts, ...missingContacts],
     })
     setStudentEditForm(createAdminStudentEditForm(student))
     setStudentNotice('')
@@ -1795,7 +1938,7 @@ const AdminSectionView = ({
     if (!editingStudent) return
 
     const normalizedName = `${studentEditForm.lastName} ${studentEditForm.middleName} ${studentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
-    if (!normalizedName) {
+    if (!studentEditForm.firstName.trim() || !studentEditForm.lastName.trim()) {
       setStudentNotice('Le prénom et le nom de l’élève sont obligatoires pour enregistrer les modifications.')
       return
     }
@@ -1805,13 +1948,18 @@ const AdminSectionView = ({
       return
     }
 
+    if (!studentEditForm.email.trim()) {
+      setStudentNotice("L’adresse e-mail institutionnelle de l’élève est obligatoire pour garantir son identité et la propagation de son compte dans l’écosystème.")
+      return
+    }
+
     setSavingStudentEdit(true)
     try {
       const response = await studentsAPI.update(editingStudent.id, {
         firstName: studentEditForm.firstName.trim(),
         middleName: studentEditForm.middleName.trim() || null,
         lastName: studentEditForm.lastName.trim() || 'Student',
-        email: studentEditForm.email.trim() || undefined,
+        ...(studentEditForm.email.trim() ? { email: studentEditForm.email.trim() } : {}),
         studentNumber: studentEditForm.studentNumber.trim(),
         grade: studentEditForm.grade,
         section: studentEditForm.section,
@@ -1821,25 +1969,16 @@ const AdminSectionView = ({
           ? { photoData: studentEditForm.photoData ?? '' }
           : {}),
       })
-      const parentId = editingStudent.responsibleParents?.[0]?.id
-      const familyContacts = (editingStudent.familyContacts ?? [])
-        .filter((contact) => contact.firstName.trim() && contact.lastName.trim() && (contact.email.trim() || contact.phone.trim()))
-        .map((contact) => ({
-          ...contact,
-          middleName: contact.middleName.trim() || undefined,
-          relationship: contact.relationship.trim() || (contact.kind === 'MOTHER' ? 'Mère' : contact.kind === 'RELATIVE' ? 'Membre de la famille' : 'Agent de la famille'),
-          role: contact.role.trim() || undefined,
-          email: contact.email.trim() || undefined,
-          phone: contact.phone.trim() || undefined,
-          physicalAddress: contact.physicalAddress.trim() || undefined,
-        }))
-      if (parentId) {
-        await registryAPI.updateEntity('parent', parentId, { familyContacts }, 'orbitId')
-      } else if (familyContacts.length > 0) {
-        throw new Error('Aucun parent responsable officiel ne permet d’enregistrer ces contacts familiaux.')
+      let updatedStudent: AdminStudentRecord | null = null
+      try {
+        const roster = await refreshOfficialRoster(true)
+        updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
+      } catch (refreshError) {
+        setEditingStudent(null)
+        const successMessage = response.data?.message || `${normalizedName} a été mis à jour avec succès.`
+        setStudentNotice(`${successMessage} Le rafraîchissement de l’écran a échoué ; utilisez Actualiser sans soumettre de nouveau le formulaire. ${extractStudentApiMessage(refreshError, '')}`.trim())
+        return
       }
-      const roster = await refreshOfficialRoster(true)
-      const updatedStudent = roster.find((student) => student.id === editingStudent.id) ?? null
       if (updatedStudent) {
         setSelectedStudent(updatedStudent)
         if (viewingStudent?.id === updatedStudent.id) {
@@ -1899,47 +2038,127 @@ const AdminSectionView = ({
     if (!editingParent) return
 
     const normalizedName = `${parentEditForm.lastName} ${parentEditForm.middleName} ${parentEditForm.firstName}`.replace(/\s+/g, ' ').trim()
-    if (!normalizedName) {
+    if (!parentEditForm.firstName.trim() || !parentEditForm.lastName.trim()) {
       setParentNotice('Le prénom et le nom du parent sont obligatoires pour enregistrer les modifications.')
       return
     }
 
+    const invalidLinkedStudent = parentEditStudents.find((student) => !student.firstName.trim() || !student.lastName.trim() || !student.studentNumber.trim())
+    if (invalidLinkedStudent) {
+      setParentNotice('Chaque enfant lié doit avoir un nom, un prénom et un identifiant avant toute modification.')
+      return
+    }
+    if (!parentEditForm.email.trim()) {
+      setParentNotice("L’adresse e-mail institutionnelle du parent est obligatoire pour garantir son identité et la propagation de son compte dans l’écosystème.")
+      return
+    }
+    const linkedStudentWithoutEmail = parentEditStudents.find((student) => !student.email.trim())
+    if (linkedStudentWithoutEmail) {
+      setParentNotice("Chaque enfant modifié doit conserver une adresse e-mail institutionnelle afin que son identité reste cohérente dans tout l’écosystème.")
+      return
+    }
+    const readyNewStudents = parentNewStudents.filter((student) => student.firstName.trim() || student.lastName.trim())
+    if (readyNewStudents.some((student) => !student.firstName.trim() || !student.lastName.trim() || !student.dateOfBirth)) {
+      setParentNotice('Complétez le nom, le prénom et la date de naissance de chaque nouvel enfant avant toute modification.')
+      return
+    }
+    if (readyNewStudents.length > 0 && !parentEditForm.email.trim()) {
+      setParentNotice('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
+      return
+    }
+    const preparedFamilyContacts = prepareFamilyContactsForSave(parentEditForm.familyContacts)
+    if (preparedFamilyContacts.error) {
+      setParentNotice(preparedFamilyContacts.error)
+      return
+    }
+    const normalizedParentAddress = editablePhysicalAddress(parentEditForm.physicalAddress)
+    const changedStudentPlans = parentEditStudents.flatMap((student) => {
+      const original = editingParent.students.find((item) => item.id === student.id)
+      const originalForm = createAdminStudentEditForm(original ?? null)
+      const changed = (student.photoData ?? '') !== (originalForm.photoData ?? '')
+        || (['firstName', 'middleName', 'lastName', 'email', 'studentNumber', 'grade', 'section', 'status', 'dateOfBirth'] as const).some((field) => student[field] !== originalForm[field])
+      if (!changed) return []
+      return [{
+        id: student.id,
+        update: {
+          firstName: student.firstName.trim(),
+          middleName: student.middleName.trim() || null,
+          lastName: student.lastName.trim(),
+          ...(student.email.trim() ? { email: student.email.trim() } : {}),
+          studentNumber: student.studentNumber.trim(),
+          grade: student.grade,
+          section: student.section,
+          status: student.status,
+          dateOfBirth: student.dateOfBirth || null,
+          ...(student.photoData !== originalForm.photoData ? { photoData: student.photoData ?? '' } : {}),
+        },
+        emailAddedWithoutOriginal: !originalForm.email.trim() && Boolean(student.email.trim()),
+        rollback: {
+          firstName: originalForm.firstName.trim(),
+          middleName: originalForm.middleName.trim() || null,
+          lastName: originalForm.lastName.trim() || 'Student',
+          ...(originalForm.email.trim() ? { email: originalForm.email.trim() } : {}),
+          studentNumber: originalForm.studentNumber.trim(),
+          grade: originalForm.grade,
+          section: originalForm.section,
+          status: originalForm.status,
+          dateOfBirth: originalForm.dateOfBirth || null,
+          photoData: originalForm.photoData ?? '',
+        },
+      }]
+    })
+    const changedStudentWithoutEmail = changedStudentPlans.find((plan) => !String(plan.update.email ?? '').trim())
+    if (changedStudentWithoutEmail) {
+      setParentNotice("Chaque enfant modifié doit avoir une adresse e-mail institutionnelle avant l’enregistrement.")
+      return
+    }
+
     setSavingParentEdit(true)
+    setParentNotice('')
+
+    let directoryAtSave: SharedDirectoryPayload
     try {
-      for (const student of parentEditStudents) {
-        if (!student.firstName.trim() || !student.lastName.trim() || !student.studentNumber.trim()) {
-          throw new Error('Chaque enfant lié doit avoir un nom, un prénom et un identifiant.')
-        }
-        const original = editingParent.students.find((item) => item.id === student.id)
-        const originalForm = createAdminStudentEditForm(original ?? null)
-        const changed = (student.photoData ?? '') !== (originalForm.photoData ?? '')
-          || (['firstName', 'middleName', 'lastName', 'email', 'studentNumber', 'grade', 'section', 'status', 'dateOfBirth'] as const).some((field) => student[field] !== originalForm[field])
-        if (changed) {
-          await studentsAPI.update(student.id, {
-            firstName: student.firstName.trim(),
-            middleName: student.middleName.trim() || null,
-            lastName: student.lastName.trim(),
-            email: student.email.trim() || undefined,
-            studentNumber: student.studentNumber.trim(),
-            grade: student.grade,
-            section: student.section,
-            status: student.status,
-            dateOfBirth: student.dateOfBirth || null,
-            ...(student.photoData !== originalForm.photoData
-              ? { photoData: student.photoData ?? '' }
-              : {}),
-          })
-        }
+      const directoryResponse = await registryAPI.getDirectory(true, true)
+      directoryAtSave = directoryResponse?.data?.data as SharedDirectoryPayload
+      if (!directoryAtSave || !Array.isArray(directoryAtSave.parents)) throw new Error('Réponse du registre officiel incomplète.')
+    } catch (error) {
+      setParentNotice(`Enregistrement bloqué avant toute modification : le registre officiel actualisé est indisponible. ${extractStudentApiMessage(error, 'Réessayez lorsque la connexion est stable.')}`)
+      setSavingParentEdit(false)
+      return
+    }
+
+    const freshParent = directoryAtSave.parents.find((parent) =>
+      parent.id === editingParent.id
+      || parent.displayId === editingParent.id
+      || parent.externalIds?.some((link) => link.externalId === editingParent.id),
+    )
+    if (!freshParent) {
+      setParentNotice('Enregistrement bloqué avant toute modification : ce parent n’a pas été retrouvé dans le registre officiel actualisé. Actualisez la page puis réessayez.')
+      setSavingParentEdit(false)
+      return
+    }
+
+    const initiallyLinkedIds = new Set(editingParent.students.map((student) => student.id))
+    const retainedIds = new Set(parentEditStudents.map((student) => student.id))
+    const explicitlyRemovedIds = new Set([...initiallyLinkedIds].filter((id) => !retainedIds.has(id)))
+    const freshStudentIds = (freshParent.studentIds ?? []).filter((id) => !explicitlyRemovedIds.has(id))
+    const freshStudentIdSet = new Set(freshParent.studentIds ?? [])
+    const concurrentlyDetachedIds = [...retainedIds].filter((id) => initiallyLinkedIds.has(id) && !freshStudentIdSet.has(id))
+    if (concurrentlyDetachedIds.length > 0) {
+      setParentNotice(`Enregistrement bloqué : ${concurrentlyDetachedIds.length} enfant(s) ont été détachés de cette famille depuis l’ouverture de la fenêtre. Fermez-la, actualisez le registre et recommencez afin de ne pas annuler une modification plus récente.`)
+      setSavingParentEdit(false)
+      return
+    }
+    const updatedPlans: typeof changedStudentPlans = []
+    let createdStudentIds: string[] = []
+    let parentCommitted = false
+
+    try {
+      for (const plan of changedStudentPlans) {
+        await studentsAPI.update(plan.id, plan.update)
+        updatedPlans.push(plan)
       }
 
-      const readyNewStudents = parentNewStudents.filter((student) => student.firstName.trim() || student.lastName.trim())
-      if (readyNewStudents.some((student) => !student.firstName.trim() || !student.lastName.trim() || !student.dateOfBirth)) {
-        throw new Error('Complétez le nom, le prénom et la date de naissance de chaque nouvel enfant.')
-      }
-      if (readyNewStudents.length > 0 && !parentEditForm.email.trim()) {
-        throw new Error('L’e-mail du parent est requis pour créer et transmettre les accès du nouvel enfant.')
-      }
-      let createdStudentIds: string[] = []
       if (readyNewStudents.length > 0) {
         const creation = await studentsAPI.create({
           parent: {
@@ -1949,7 +2168,7 @@ const AdminSectionView = ({
             lastName: parentEditForm.lastName.trim() || 'Parent',
             email: parentEditForm.email.trim(),
             phone: parentEditForm.phone.trim() || undefined,
-            physicalAddress: parentEditForm.physicalAddress.trim() || undefined,
+            physicalAddress: normalizedParentAddress || undefined,
             relationship: 'Parent',
           },
           students: readyNewStudents.map((student) => ({
@@ -1971,30 +2190,54 @@ const AdminSectionView = ({
         firstName: parentEditForm.firstName.trim(),
         middleName: parentEditForm.middleName.trim() || null,
         lastName: parentEditForm.lastName.trim() || 'Parent',
-        email: parentEditForm.email.trim() || undefined,
+        ...(parentEditForm.email.trim() ? { email: parentEditForm.email.trim() } : {}),
         phone: parentEditForm.phone.trim() || null,
-        physicalAddress: parentEditForm.physicalAddress.trim() || null,
-        studentIds: Array.from(new Set([...parentEditStudents.map((student) => student.id), ...createdStudentIds])),
-        familyContacts: parentEditForm.familyContacts.filter((contact) => contact.firstName.trim() && contact.lastName.trim() && (contact.email.trim() || contact.phone.trim())).map((contact) => ({ ...contact, email: contact.email.trim() || undefined, phone: contact.phone.trim() || undefined, physicalAddress: contact.physicalAddress.trim() || undefined, role: contact.role.trim() || undefined })),
-        ...(parentEditForm.photoData !== (editingParent.photoData ?? '')
-          ? { photoData: parentEditForm.photoData }
-          : {}),
+        physicalAddress: normalizedParentAddress || null,
+        studentIds: Array.from(new Set([...freshStudentIds, ...createdStudentIds])),
+        familyContacts: preparedFamilyContacts.contacts,
+        ...(parentEditForm.photoData !== (editingParent.photoData ?? '') ? { photoData: parentEditForm.photoData } : {}),
       }, editingParent.identifierType)
+      parentCommitted = true
+
       const roster = await refreshOfficialRoster(true)
-      const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectory, roster)
-      const updatedParent = refreshedParents.find((parent) => parent.id === editingParent.id) ?? null
+      const refreshedParents = buildAdminParentRecordsFromDirectory(sharedDirectoryRef.current ?? sharedDirectory, roster)
+      const updatedParent = refreshedParents.find((parent) => parent.id === editingParent.id || parent.displayId === editingParent.id) ?? null
       setEditingParent(null)
-      if (updatedParent) {
-        setSelectedParent(updatedParent)
-      }
-      setParentNotice(response.data?.message || `${normalizedName} a ete mis a jour avec succes.`)
+      if (updatedParent) setSelectedParent(updatedParent)
+      setParentNotice(response.data?.message || `${normalizedName} a été mis à jour avec succès.`)
     } catch (error) {
-      setParentNotice(extractStudentApiMessage(error, 'Impossible de modifier ce parent pour le moment.'))
+      if (parentCommitted) {
+        setParentNotice(`Les modifications ont été enregistrées, mais le rafraîchissement de l’écran a échoué. Ne soumettez pas de nouveau le formulaire ; utilisez Actualiser. ${extractStudentApiMessage(error, '')}`.trim())
+      } else {
+        const rollbackFailures: string[] = []
+        const nonReversibleEmailAdds: string[] = []
+        for (const plan of [...updatedPlans].reverse()) {
+          try {
+            await studentsAPI.update(plan.id, plan.rollback)
+            if (plan.emailAddedWithoutOriginal) nonReversibleEmailAdds.push(plan.id)
+          } catch {
+            rollbackFailures.push(plan.id)
+          }
+        }
+        const rollbackMessage = updatedPlans.length === 0
+          ? ''
+          : rollbackFailures.length === 0 && nonReversibleEmailAdds.length === 0
+            ? ' Les modifications déjà appliquées aux enfants ont été annulées automatiquement.'
+            : rollbackFailures.length > 0
+              ? ' ATTENTION : la restauration automatique a échoué pour ' + rollbackFailures.length + ' enfant(s) (' + rollbackFailures.join(', ') + '). Actualisez le registre avant toute nouvelle tentative.'
+              : ' Les autres modifications des enfants ont été restaurées, mais l’e-mail nouvellement ajouté pour ' + nonReversibleEmailAdds.length + ' enfant(s) (' + nonReversibleEmailAdds.join(', ') + ') ne peut pas être retiré automatiquement : le backend refuse une valeur e-mail vide. Vérifiez et corrigez ces dossiers avant toute nouvelle tentative.'
+        const emailRollbackWarning = rollbackFailures.length > 0 && nonReversibleEmailAdds.length > 0
+          ? ' De plus, l’e-mail nouvellement ajouté pour ' + nonReversibleEmailAdds.length + ' enfant(s) (' + nonReversibleEmailAdds.join(', ') + ') n’a pas pu être retiré automatiquement. Vérifiez ces dossiers.'
+          : ''
+        const creationWarning = readyNewStudents.length > 0
+          ? ' Si la connexion a été interrompue pendant la création d’un enfant, actualisez le registre avant de recommencer afin d’éviter un doublon.'
+          : ''
+        setParentNotice(`${extractStudentApiMessage(error, 'Impossible de modifier ce parent pour le moment.')}${rollbackMessage}${emailRollbackWarning}${creationWarning}`)
+      }
     } finally {
       setSavingParentEdit(false)
     }
   }
-
   const deleteParentRecord = async (parent: AdminParentRecord) => {
     const confirmed = window.confirm(`Supprimer ${parent.name} du registre parent ?`)
     if (!confirmed) return
@@ -2419,9 +2662,9 @@ const AdminSectionView = ({
         )}
 
         {editingParent && createPortal((
-          <div className="fixed inset-0 z-[9998] grid place-items-center overflow-hidden bg-kcs-blue-950/80 p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label="Modifier parent">
-            <section className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-auto sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-[2rem]">
-              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4 dark:border-kcs-blue-700 sm:p-5">
+          <div className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier parent">
+            <section className="my-0 flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] min-h-0 w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-[calc(100svh-2.5rem)] sm:max-h-[calc(100svh-2.5rem)] sm:max-w-6xl sm:rounded-[2rem]">
+              <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 bg-sky-50/95 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-kcs-blue-600 dark:text-kcs-blue-300">Gestion parent</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier le parent</h3>
@@ -2433,7 +2676,7 @@ const AdminSectionView = ({
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5">                {parentNotice ? <p role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">{parentNotice}</p> : null}
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité du parent</p>
                   <div className="mt-3">
@@ -2464,7 +2707,7 @@ const AdminSectionView = ({
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Email
-                      <input value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email du parent" />
+                      <input type="email" autoComplete="email" value={parentEditForm.email} onChange={(event) => setParentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email du parent" />
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Téléphone
@@ -2499,7 +2742,7 @@ const AdminSectionView = ({
                           <input type="email" value={student.email} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, email: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail scolaire" />
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance<DateSelect value={student.dateOfBirth} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" /></label>
                           <select value={student.grade} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
-                          <select value={student.section} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}</select>
+                          <input value={student.section} maxLength={40} onChange={(event) => setParentEditStudents((current) => current.map((item) => item.id === student.id ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
                         </div>
                       </article>
                     ))}
@@ -2516,7 +2759,7 @@ const AdminSectionView = ({
                           <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">Date de naissance *<DateSelect value={student.dateOfBirth} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, dateOfBirth: event.target.value } : item))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" required /></label>
                           <input value={schoolEmailPreview(student)} readOnly className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300" placeholder="E-mail scolaire généré automatiquement" />
                           <select value={student.grade} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, grade: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select>
-                          <select value={student.section} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">{CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}</select>
+                          <input value={student.section} maxLength={40} onChange={(event) => setParentNewStudents((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, section: event.target.value } : item))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
                         </div>
                       </article>)}</div>
                     </section> : null}
@@ -2524,7 +2767,7 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
+              <div className="sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-gray-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:flex-row sm:justify-end sm:p-5">
                 <button type="button" onClick={() => setEditingParent(null)} className="rounded-xl border-2 border-slate-400 bg-white px-5 py-2.5 text-sm font-bold text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-300 dark:bg-kcs-blue-950 dark:text-white dark:hover:bg-kcs-blue-800">Annuler</button>
                 <button type="button" onClick={() => void saveEditedParent()} disabled={savingParentEdit} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-emerald-500 dark:text-kcs-blue-950 dark:hover:bg-emerald-400 dark:focus:ring-offset-kcs-blue-900">{savingParentEdit ? 'Enregistrement...' : 'Enregistrer'}</button>
               </div>
@@ -2666,9 +2909,7 @@ const AdminSectionView = ({
                       <select value={student.grade} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, grade: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                         {SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}
                       </select>
-                      <select value={student.section} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, section: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                        {CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}
-                      </select>
+                      <input value={student.section} maxLength={40} onChange={(event) => setNewFamily((item) => ({ ...item, students: item.students.map((draft, studentIndex) => studentIndex === index ? { ...draft, section: event.target.value } : draft) }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Section libre : A, B, Sciences 1… ou vide" />
                     </div>
                   </div>
                 ))}
@@ -2915,9 +3156,9 @@ const AdminSectionView = ({
         )}
 
         {editingStudent && createPortal((
-          <div className="fixed inset-0 z-[9998] grid place-items-center overflow-hidden bg-kcs-blue-950/80 p-2 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true" aria-label="Modifier élève">
-            <section className="flex h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-auto sm:max-h-[calc(100dvh-2.5rem)] sm:rounded-[2rem]">
-              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-sky-200 bg-white/80 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
+          <div className="fixed inset-0 z-[9998] flex items-start justify-center overflow-y-auto overscroll-contain bg-kcs-blue-950/80 px-2 pb-2 pt-2 backdrop-blur-md sm:px-5 sm:pb-5 sm:pt-5" role="dialog" aria-modal="true" aria-label="Modifier élève">
+            <section className="my-0 flex h-[calc(100svh-1rem)] max-h-[calc(100svh-1rem)] min-h-0 w-full max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-sky-200 bg-sky-50 shadow-[0_30px_100px_rgba(0,20,45,.65)] dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:h-[calc(100svh-2.5rem)] sm:max-h-[calc(100svh-2.5rem)] sm:max-w-6xl sm:rounded-[2rem]">
+              <div className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-3 border-b border-sky-200 bg-white/95 p-4 backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:p-5">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300">Modification</p>
                   <h3 className="mt-2 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">Modifier l’élève</h3>
@@ -2926,7 +3167,7 @@ const AdminSectionView = ({
                 <button type="button" onClick={() => setEditingStudent(null)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-100 dark:hover:bg-kcs-blue-800">Fermer</button>
               </div>
 
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch] sm:p-5">                {studentNotice ? <p role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">{studentNotice}</p> : null}
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Identité de l’élève</p>
                   <div className="mt-3">
@@ -2956,7 +3197,7 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">
                       Email élève
-                      <input value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Email élève, optionnel" />
+                      <input type="email" autoComplete="email" value={studentEditForm.email} onChange={(event) => setStudentEditForm((current) => ({ ...current, email: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="E-mail institutionnel obligatoire" required />
                     </label>
                   </div>
                 </section>
@@ -2981,13 +3222,11 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300">
                       Suffixe / section
-                      <select value={studentEditForm.section} onChange={(event) => setStudentEditForm((current) => ({ ...current, section: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
-                        {CLASS_SECTIONS.map((section) => <option key={section || 'none'} value={section}>{sectionLabel(section)}</option>)}
-                      </select>
+                      <input value={studentEditForm.section} maxLength={40} onChange={(event) => setStudentEditForm((current) => ({ ...current, section: event.target.value }))} className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Vide pour une classe entière" />
                     </label>
                   </div>
                 </section>
-                <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40"><FamilyContactsEditor contacts={editingStudent.familyContacts ?? []} onChange={(familyContacts) => setEditingStudent((current) => current ? { ...current, familyContacts } : current)} /></section>
+                <FamilyContactsReadOnly contacts={editingStudent.familyContacts ?? []} />
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-700 dark:text-kcs-blue-200">Famille liée</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -3007,7 +3246,7 @@ const AdminSectionView = ({
                 </section>
               </div>
 
-              <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-sky-200 bg-white/90 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:justify-end sm:p-5">
+              <div className="sticky bottom-0 z-20 flex shrink-0 flex-col-reverse gap-2 border-t border-sky-200 bg-white/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-900/95 sm:flex-row sm:justify-end sm:p-5">
                 <button type="button" className="rounded-xl border border-kcs-blue-900 bg-kcs-blue-800 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-kcs-blue-900/25 hover:bg-kcs-blue-950 disabled:opacity-60" onClick={() => void saveEditedStudent()} disabled={savingStudentEdit}>{savingStudentEdit ? 'Enregistrement...' : 'Enregistrer les modifications'}</button>
                 <button type="button" className="rounded-xl border-2 border-amber-500 bg-amber-100 px-5 py-3 text-sm font-bold text-amber-950 shadow-sm hover:bg-amber-200 dark:border-amber-300 dark:bg-amber-400 dark:text-kcs-blue-950 dark:hover:bg-amber-300" onClick={() => setEditingStudent(null)}>Annuler</button>
               </div>
@@ -3461,11 +3700,17 @@ const AdminDashboard = () => {
       .catch((error: any) => {
         setDashboardAction(error?.response?.data?.message ?? 'Unable to load online admissions from the central registry.')
       })
+  }, [])
+
+  useEffect(() => {
+    if (activeSegment !== 'dashboard') return
+    let active = true
     void registryAPI.getDirectory()
-      .then((response) => setDashboardDirectory(response.data?.data ?? null))
-      .catch(() => setDashboardDirectory(null))
+      .then((response) => { if (active) setDashboardDirectory(response.data?.data ?? null) })
+      .catch(() => { if (active) setDashboardDirectory(null) })
     void getAdminRoster()
       .then((response) => {
+        if (!active) return
         const records = Array.isArray(response.data?.data) ? response.data.data : Array.isArray(response.data) ? response.data : []
         const roster = records.map(apiProfileToRosterRecord)
         setOfficialRoster(roster)
@@ -3473,7 +3718,8 @@ const AdminDashboard = () => {
       })
       .catch(() => {
       })
-  }, [])
+    return () => { active = false }
+  }, [activeSegment])
 
   const rejectAdmission = async (application: AdminAdmissionRequest) => {
     try {

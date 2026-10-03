@@ -203,6 +203,7 @@ schoolManagementRouter.get('/teachers/main-assignments', requireOperationalAdmin
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const [profiles, orbitTeachers] = await Promise.all([
     prisma.teacherProfile.findMany({
+      where: { user: { role: 'TEACHER' } },
       orderBy: { user: { lastName: 'asc' } },
       select: { id: true, status: true, homeroomGrade: true, homeroomSection: true, user: { select: { firstName: true, middleName: true, lastName: true, email: true, orbitUserId: true } }, _count: { select: { courses: true } } },
     }),
@@ -236,7 +237,7 @@ schoolManagementRouter.get('/teachers/class-rosters', requireOperationalAdminist
       orderBy: [{ grade: 'asc' }, { user: { lastName: 'asc' } }],
     }),
     prisma.teacherProfile.findMany({
-      where: { status: { in: ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'] } },
+      where: { status: { in: ['HOMEROOM_TEACHER', 'ASSISTANT_TEACHER'] }, user: { role: 'TEACHER' } },
       select: {
         id: true,
         status: true,
@@ -403,6 +404,7 @@ schoolManagementRouter.patch('/teachers/:id/status', requireOperationalAdministr
       where: {
         id: { not: teacherId },
         status: payload.status as 'HOMEROOM_TEACHER' | 'ASSISTANT_TEACHER',
+        user: { role: 'TEACHER' },
       },
       select: {
         homeroomGrade: true,

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Clock3, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
+import { useAuthStore } from '@/store/authStore'
 import { printOfficialReportCard } from '@/utils/officialReportCardPrint'
 import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels'
 
@@ -65,23 +66,36 @@ const workflowLabel = (learner: LearnerRecord) => {
   if (status === 'DRAFT') return 'Main-teacher draft'
   return learner.allSubjectsSubmitted ? 'Ready for main teacher' : 'Waiting for subject grades'
 }
-const requestReportDashboard = async (params: { academicYear: string; term: string }) => {
+const reportDashboardCacheKey = (userId: string, academicYear: string, term: string) =>
+  'kcs:nexus:teacher-report-card:v2:' + userId + ':' + academicYear + ':' + term
+
+const readReportDashboardCache = (userId: string, academicYear: string, term: string): Dashboard | null => {
+  if (typeof window === 'undefined' || !userId) return null
   try {
-    return await academicRecordsAPI.teacherReportDashboard(params)
-  } catch (reason: any) {
-    const status = Number(reason?.response?.status ?? 0)
-    const retryable = reason?.code === 'ECONNABORTED' || !reason?.response || [502, 503, 504].includes(status)
-    if (!retryable) throw reason
-    await new Promise((resolve) => window.setTimeout(resolve, 700))
-    return academicRecordsAPI.teacherReportDashboard(params)
+    const raw = window.sessionStorage.getItem(reportDashboardCacheKey(userId, academicYear, term))
+    if (!raw) return null
+    const cached = JSON.parse(raw) as { savedAt: number; value: Dashboard }
+    if (!cached?.value || Date.now() - Number(cached.savedAt || 0) > 6 * 60 * 60 * 1000) return null
+    return cached.value
+  } catch {
+    return null
   }
 }
 
+const writeReportDashboardCache = (userId: string, academicYear: string, term: string, value: Dashboard) => {
+  if (typeof window === 'undefined' || !userId) return
+  try {
+    window.sessionStorage.setItem(reportDashboardCacheKey(userId, academicYear, term), JSON.stringify({ savedAt: Date.now(), value }))
+  } catch {
+    // A cache failure must never block the official live register.
+  }
+}
 
 export default function TeacherWholeSchoolReportCards() {
+  const userId = useAuthStore((state) => state.user?.id ?? '')
   const [academicYear, setAcademicYear] = useState('2026-2027')
   const [term, setTerm] = useState(sessions[0])
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null)
+  const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]))
   const [selectedId, setSelectedId] = useState('')
   const [query, setQuery] = useState('')
   const [classFilter, setClassFilter] = useState('All classes')
@@ -94,26 +108,45 @@ export default function TeacherWholeSchoolReportCards() {
   const [printing, setPrinting] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
+  const latestDashboardRequestRef = useRef(0)
+  const activeCycleKey = `${userId}|${academicYear}|${term}`
+  const activeCycleKeyRef = useRef(activeCycleKey)
+  activeCycleKeyRef.current = activeCycleKey
+
+  const applyDashboard = (next: Dashboard, persist = true) => {
+    setDashboard(next)
+    if (persist) writeReportDashboardCache(userId, academicYear, term, next)
+    setSelectedId((current) => next.learners.some((learner) => learner.id === current) ? current : (next.learners.find((learner) => learner.isHomeroomStudent)?.id ?? next.learners[0]?.id ?? ''))
+  }
 
   const load = async (): Promise<Dashboard | null> => {
+    const requestCycleKey = `${userId}|${academicYear}|${term}`
+    if (requestCycleKey !== activeCycleKeyRef.current) return null
+    const requestToken = ++latestDashboardRequestRef.current
     setLoading(true)
     setError('')
     try {
-      const response = await requestReportDashboard({ academicYear, term })
+      const response = await academicRecordsAPI.teacherReportDashboard({ academicYear, term })
+      if (latestDashboardRequestRef.current !== requestToken || activeCycleKeyRef.current !== requestCycleKey) return null
       const next = response.data?.data as Dashboard
-      setDashboard(next)
-      setSelectedId((current) => next.learners.some((learner) => learner.id === current) ? current : (next.learners.find((learner) => learner.isHomeroomStudent)?.id ?? next.learners[0]?.id ?? ''))
+      applyDashboard(next)
       return next
     } catch (reason: any) {
-      setError(reason?.response?.data?.message ?? 'The whole-school report-card workspace could not be loaded.')
+      if (latestDashboardRequestRef.current !== requestToken || activeCycleKeyRef.current !== requestCycleKey) return null
+      setError(reason?.response?.data?.message ?? (dashboard ? 'Live refresh failed; the last verified report-card snapshot remains visible.' : 'The report-card workspace could not be loaded.'))
       return null
     } finally {
-      setLoading(false)
+      if (latestDashboardRequestRef.current === requestToken && activeCycleKeyRef.current === requestCycleKey) setLoading(false)
     }
   }
 
-  useEffect(() => { void load() }, [academicYear, term])
-
+  useEffect(() => {
+    const cached = readReportDashboardCache(userId, academicYear, term)
+    if (cached) applyDashboard(cached, false)
+    else setDashboard(null)
+    void load()
+    return () => { latestDashboardRequestRef.current += 1 }
+  }, [academicYear, term, userId])
   const learners = dashboard?.learners ?? []
   const classes = useMemo(() => Array.from(new Set(learners.map((learner) => canonicalClassLabel(learner.grade, learner.section)))).sort(compareClassLabels), [learners])
   const visibleLearners = useMemo(() => {
@@ -164,14 +197,25 @@ export default function TeacherWholeSchoolReportCards() {
           throw new Error('The report-card draft was not confirmed in the official Nexus register.')
         }
       }
-      const refreshed = await load()
-      const refreshedStatus = refreshed?.learners.find((learner) => learner.id === selected.id)?.reportCard?.publicationStatus
-      const expectedStatus = submit ? 'READY_FOR_REVIEW' : 'DRAFT'
-      if (refreshedStatus !== expectedStatus) {
-        throw new Error(submit
-          ? 'The report card submission was saved, but its review-queue confirmation could not be reloaded. Refresh to verify it before resubmitting.'
-          : 'The report-card draft was saved, but its register confirmation could not be reloaded. Refresh before editing it again.')
-      }
+      const savedCard = submission ?? draft
+      setDashboard((current) => {
+        if (!current || !savedCard) return current
+        const next: Dashboard = {
+          ...current,
+          learners: current.learners.map((learner) => learner.id === selected.id ? {
+            ...learner,
+            reportCard: {
+              id: savedCard.id,
+              teacherComment: savedCard.teacherComment,
+              conduct: savedCard.conduct,
+              principalStatus: savedCard.principalStatus,
+              publicationStatus: savedCard.publicationStatus,
+            },
+          } : learner),
+        }
+        writeReportDashboardCache(userId, academicYear, term, next)
+        return next
+      })
       setNotice(submit
         ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced in the Super Administration review queue.' : 'The complete report card is confirmed in the Super Administration review queue.')
         : 'The main-teacher draft is saved and confirmed in the official Nexus register.')
@@ -183,35 +227,46 @@ export default function TeacherWholeSchoolReportCards() {
     }
   }
 
-  const printSelectedReportCard = () => {
-    if (!selected) return
-    if (printing) return
+  const printSelectedReportCard = async () => {
+    if (!selected || printing) return
     setPrinting(true)
-    printOfficialReportCard({
-      id: selected.reportCard?.id ?? `draft-${selected.id}`,
-      term: `${academicYear} · ${term}`,
-      average: selected.average ?? 0,
-      teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
-      conduct: selected.reportCard?.conduct ?? conduct,
-      publicationStatus: selected.reportCard?.publicationStatus ?? 'DRAFT',
-      attendanceSummary: selected.attendance,
-      subjects: selected.subjects.filter((subject) => subject.percentage !== null).map((subject) => ({
-        id: subject.courseId,
-        percentage: subject.percentage as number,
-        letterGrade: subject.letterGrade ?? letterGrade(subject.percentage as number),
-        course: { name: subject.courseName, code: subject.courseCode, credits: subject.credits },
-      })),
-      student: {
-        studentNumber: selected.studentNumber,
-        grade: selected.grade,
-        section: selected.section,
-        officialAvatar: selected.officialAvatar,
-        user: selected.user,
-      },
-    }, setError)
-    window.setTimeout(() => setPrinting(false), 900)
+    setError('')
+    try {
+      let officialAvatar = selected.officialAvatar
+      let userAvatar = selected.user.avatar
+      try {
+        const response = await academicRecordsAPI.teacherReportStudentPhoto(selected.id)
+        officialAvatar = response.data?.data?.officialAvatar ?? officialAvatar
+        userAvatar = response.data?.data?.avatar ?? userAvatar
+      } catch {
+        // The report remains printable if the portrait service is temporarily unavailable.
+      }
+      await printOfficialReportCard({
+        id: selected.reportCard?.id ?? 'draft-' + selected.id,
+        term: academicYear + ' · ' + term,
+        average: selected.average ?? 0,
+        teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
+        conduct: selected.reportCard?.conduct ?? conduct,
+        publicationStatus: selected.reportCard?.publicationStatus ?? 'DRAFT',
+        attendanceSummary: selected.attendance,
+        subjects: selected.subjects.filter((subject) => subject.percentage !== null).map((subject) => ({
+          id: subject.courseId,
+          percentage: subject.percentage as number,
+          letterGrade: subject.letterGrade ?? letterGrade(subject.percentage as number),
+          course: { name: subject.courseName, code: subject.courseCode, credits: subject.credits },
+        })),
+        student: {
+          studentNumber: selected.studentNumber,
+          grade: selected.grade,
+          section: selected.section,
+          officialAvatar,
+          user: { ...selected.user, avatar: userAvatar },
+        },
+      }, setError)
+    } finally {
+      setPrinting(false)
+    }
   }
-
   const homeroomCount = learners.filter((learner) => learner.isHomeroomStudent).length
   const readyCount = learners.filter((learner) => learner.allSubjectsSubmitted).length
   const submittedCount = learners.filter((learner) => learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT').length
