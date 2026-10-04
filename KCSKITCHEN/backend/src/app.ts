@@ -15,14 +15,77 @@ import { compareClassNames, normalizeClassName } from './class-name.js'
 import { processNotificationOutbox } from './notifications.js'
 import { procurementRouter } from './procurement.js'
 import { getUsdCdfRate } from './exchange-rate.js'
+import {
+  buildStatementArtifact,
+  canIssueStatement,
+  createStatementDeduplicationKey,
+  createStatementDocumentId,
+  KITCHEN_STATEMENT_CURRENCY,
+  KITCHEN_STATEMENT_DEFAULT_KEY_ID,
+  KITCHEN_STATEMENT_LEGACY_KEY_ID,
+  KITCHEN_STATEMENT_MAX_ENTRIES,
+  resolveStatementPeriod,
+  type StatementSigningKey,
+  verifyStoredStatement
+} from './statement-verification.js'
 
 const app = express()
+// Kitchen is exposed through exactly one Caddy hop; this keeps IP-based limits
+// per caller without accepting an arbitrary X-Forwarded-For chain.
+app.set('trust proxy', 1)
 app.disable('x-powered-by')
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }))
 app.use(cors({ origin: env.FRONTEND_URL, credentials: false }))
 app.use(express.json({ limit: '250kb' }))
 app.use(morgan('combined'))
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: true, legacyHeaders: false }))
+
+const statementVerificationLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { valid: false, status: 'RATE_LIMITED', message: 'Too many verification requests' }
+})
+
+const statementIssueLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 60,
+  keyGenerator: req => (req as AuthRequest).kitchenUser?.orbitPersonId || 'unauthenticated',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many statement issue requests' }
+})
+
+const statementSigningKey: StatementSigningKey = env.STATEMENT_SIGNING_SECRET
+  ? {
+      keyId: env.STATEMENT_SIGNING_KEY_ID || KITCHEN_STATEMENT_DEFAULT_KEY_ID,
+      secret: env.STATEMENT_SIGNING_SECRET
+    }
+  : { keyId: KITCHEN_STATEMENT_LEGACY_KEY_ID, secret: env.QR_SIGNING_SECRET }
+
+function loadStatementVerificationKeys() {
+  const keys: Record<string, string> = {}
+  if (env.STATEMENT_VERIFICATION_KEYS) {
+    let historical: unknown
+    try { historical = JSON.parse(env.STATEMENT_VERIFICATION_KEYS) }
+    catch { throw new Error('STATEMENT_VERIFICATION_KEYS must be a JSON object') }
+    if (!historical || Array.isArray(historical) || typeof historical !== 'object') {
+      throw new Error('STATEMENT_VERIFICATION_KEYS must be a JSON object')
+    }
+    for (const [keyId, secret] of Object.entries(historical)) {
+      if (!/^[a-z0-9][a-z0-9._-]{1,63}$/i.test(keyId) || typeof secret !== 'string' || secret.length < 16) {
+        throw new Error('STATEMENT_VERIFICATION_KEYS contains an invalid key')
+      }
+      keys[keyId] = secret
+    }
+  }
+  keys[KITCHEN_STATEMENT_LEGACY_KEY_ID] = env.QR_SIGNING_SECRET
+  keys[statementSigningKey.keyId] = statementSigningKey.secret
+  return Object.freeze(keys)
+}
+
+const statementVerificationKeys = loadStatementVerificationKeys()
 
 const asyncRoute = (handler: (req: any, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => void handler(req, res, next).catch(next)
@@ -748,6 +811,296 @@ app.get('/api/ledger/:orbitPersonId', authenticate, asyncRoute(async (req: AuthR
   res.json({ openingBalance: opening, entries, closingBalance: closing })
 }))
 
+const issueStatementInput = z.object({
+  orbitPersonId: z.string().trim().min(1).max(180).optional(),
+  from: z.string().trim().min(1).max(64).optional(),
+  to: z.string().trim().min(1).max(64).optional()
+})
+
+function statementHttpError(statusCode: number, message: string, code: string) {
+  return Object.assign(new Error(message), { statusCode, code })
+}
+
+async function runStatementTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+      })
+    } catch (error: any) {
+      lastError = error
+      if (error?.code !== 'P2034' || attempt === 2) throw error
+    }
+  }
+  throw lastError
+}
+
+app.post('/api/statements/issue', authenticate, statementIssueLimiter, asyncRoute(async (req: AuthRequest, res) => {
+  const input = issueStatementInput.parse(req.body ?? {})
+  const requester = req.kitchenUser!
+  const requestedOrbitPersonId = (input.orbitPersonId || requester.orbitPersonId).trim()
+  let person: Awaited<ReturnType<typeof resolvePerson>>
+  try { person = await resolvePerson(requestedOrbitPersonId, true) }
+  catch {
+    try { person = await resolvePerson(requestedOrbitPersonId) }
+    catch { throw statementHttpError(503, 'The official Orbit identity registry is temporarily unavailable', 'ORBIT_IDENTITY_UNAVAILABLE') }
+  }
+  if (!person || person.id.toLowerCase() !== requestedOrbitPersonId.toLowerCase()) {
+    return res.status(404).json({ message: 'Active Orbit identity not found' })
+  }
+  if (!canIssueStatement(requester, person.id)) {
+    return res.status(403).json({ message: 'Only the account owner or a Kitchen administrator may issue this statement' })
+  }
+  if (!person.fullName.trim()) {
+    throw statementHttpError(409, 'The official Orbit identity is incomplete', 'STATEMENT_IDENTITY_INCOMPLETE')
+  }
+
+  const issuedAt = new Date()
+  let period: ReturnType<typeof resolveStatementPeriod>
+  try {
+    period = resolveStatementPeriod({ from: input.from, to: input.to }, issuedAt)
+  } catch (error) {
+    throw statementHttpError(
+      400,
+      error instanceof Error ? error.message : 'Invalid statement period',
+      'INVALID_STATEMENT_PERIOD'
+    )
+  }
+
+  const holder = {
+    orbitPersonId: person.id,
+    displayId: person.displayId?.trim() || null,
+    fullName: person.fullName.trim(),
+    email: person.email?.trim() || null,
+    kind: person.kind
+  }
+  const documentId = createStatementDocumentId(issuedAt)
+  const record = await runStatementTransaction(async tx => {
+    const [entries, openingGroups] = await Promise.all([
+      tx.kitchenLedgerEntry.findMany({
+        where: {
+          orbitPersonId: person.id,
+          createdAt: { gte: period.from, lt: period.toExclusive }
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: KITCHEN_STATEMENT_MAX_ENTRIES + 1
+      }),
+      tx.kitchenLedgerEntry.groupBy({
+        by: ['currency'],
+        where: { orbitPersonId: person.id, createdAt: { lt: period.from } },
+        _sum: { amount: true }
+      })
+    ])
+    if (entries.length > KITCHEN_STATEMENT_MAX_ENTRIES) {
+      throw statementHttpError(
+        422,
+        `A statement cannot contain more than ${KITCHEN_STATEMENT_MAX_ENTRIES} ledger entries`,
+        'STATEMENT_TOO_LARGE'
+      )
+    }
+
+    const observedCurrencies = new Set([
+      ...openingGroups.map(row => row.currency.trim().toUpperCase()),
+      ...entries.map(entry => entry.currency.trim().toUpperCase())
+    ])
+    if ([...observedCurrencies].some(currency => currency !== KITCHEN_STATEMENT_CURRENCY)) {
+      throw statementHttpError(
+        409,
+        'Mixed or non-CDF ledger entries must be corrected before issuing an official statement',
+        'STATEMENT_MIXED_CURRENCY'
+      )
+    }
+
+    const openingBalance = openingGroups.reduce(
+      (total, row) => total.plus(row._sum.amount ?? 0),
+      new Prisma.Decimal(0)
+    )
+    const closingBalance = entries.reduce(
+      (total, entry) => total.plus(entry.amount),
+      openingBalance
+    )
+    const artifact = buildStatementArtifact({
+      documentId,
+      holder,
+      issuedBy: requester.orbitPersonId,
+      issuedAt,
+      periodFrom: period.from,
+      periodToExclusive: period.toExclusive,
+      expiresAt: null,
+      currency: KITCHEN_STATEMENT_CURRENCY,
+      openingBalance: openingBalance.toFixed(2),
+      closingBalance: closingBalance.toFixed(2),
+      entries: entries.map(entry => ({
+        id: entry.id,
+        transactionId: entry.transactionId,
+        paymentId: entry.paymentId,
+        type: entry.type,
+        amount: entry.amount.toFixed(2),
+        currency: KITCHEN_STATEMENT_CURRENCY,
+        description: entry.description,
+        reason: entry.reason,
+        performedBy: entry.performedBy,
+        createdAt: entry.createdAt.toISOString()
+      }))
+    }, statementSigningKey)
+    const deduplicationKey = createStatementDeduplicationKey(
+      person.id,
+      period.from,
+      period.toExclusive,
+      artifact.payloadHash
+    )
+
+    const statement = await tx.kitchenStatementVerification.upsert({
+      where: { deduplicationKey },
+      create: {
+        documentId,
+        deduplicationKey,
+        orbitPersonId: person.id,
+        issuedBy: requester.orbitPersonId,
+        issuedAt,
+        periodFrom: period.from,
+        periodTo: period.toExclusive,
+        expiresAt: null,
+        keyId: statementSigningKey.keyId,
+        currency: KITCHEN_STATEMENT_CURRENCY,
+        openingBalance,
+        closingBalance,
+        entryCount: entries.length,
+        entriesHash: artifact.entriesHash,
+        canonicalPayload: artifact.canonicalPayload,
+        payloadHash: artifact.payloadHash,
+        signature: artifact.signature,
+        version: artifact.payload.version
+      },
+      update: {}
+    })
+    const reused = statement.documentId !== documentId
+    if (!reused) {
+      await tx.auditLog.create({
+        data: {
+          actorId: requester.orbitPersonId,
+          actorRole: requester.role,
+          action: 'STATEMENT_ISSUED',
+          entityType: 'KitchenStatementVerification',
+          entityId: statement.id,
+          newValue: {
+            documentId,
+            orbitPersonId: person.id,
+            periodFrom: period.from.toISOString(),
+            periodToExclusive: period.toExclusive.toISOString(),
+            currency: KITCHEN_STATEMENT_CURRENCY,
+            entryCount: entries.length,
+            payloadHash: artifact.payloadHash,
+            keyId: statementSigningKey.keyId
+          },
+          ipAddress: req.ip
+        }
+      })
+    }
+    return { statement, reused }
+  })
+
+  const verification = verifyStoredStatement(
+    record.statement,
+    record.statement.signature,
+    statementVerificationKeys,
+    issuedAt
+  )
+  if (!verification.valid) {
+    throw statementHttpError(409, 'The stored statement proof could not be verified', 'STATEMENT_PROOF_INVALID')
+  }
+  const payload = verification.payload
+  res.status(record.reused ? 200 : 201).json({
+    statement: {
+      documentId: payload.documentId,
+      issuer: payload.issuer,
+      application: payload.application,
+      holder: payload.holder,
+      issuedAt: payload.issuedAt,
+      periodFrom: payload.periodFrom,
+      periodToExclusive: payload.periodToExclusive,
+      currency: payload.currency,
+      openingBalance: payload.openingBalance,
+      closingBalance: payload.closingBalance,
+      entryCount: payload.entryCount,
+      entries: payload.entries,
+      payloadHash: payload.payloadHash,
+      keyId: payload.keyId,
+      version: payload.version,
+      signature: record.statement.signature,
+      reused: record.reused
+    }
+  })
+}))
+
+app.get('/api/statements/verify/:documentId', statementVerificationLimiter, asyncRoute(async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  const documentId = z.string()
+    .regex(/^KCS-KIT-STMT-\d{8}-[A-F0-9]{24}$/)
+    .parse(routeParam(req, 'documentId'))
+  const signature = z.string().regex(/^[A-Za-z0-9_-]{43}$/).parse(req.query.signature)
+  const statement = await prisma.kitchenStatementVerification.findUnique({ where: { documentId } })
+  if (!statement) return res.status(404).json({ valid: false, status: 'NOT_FOUND', documentId })
+
+  const verification = verifyStoredStatement(statement, signature, statementVerificationKeys)
+  if (!verification.valid) {
+    return res.json({ valid: false, status: verification.status, documentId })
+  }
+  const payload = verification.payload
+  res.json({
+    valid: true,
+    status: verification.status,
+    document: {
+      documentId: payload.documentId,
+      issuer: payload.issuer,
+      application: payload.application,
+      issuedAt: payload.issuedAt,
+      periodFrom: payload.periodFrom,
+      periodToExclusive: payload.periodToExclusive,
+      currency: payload.currency,
+      entryCount: payload.entryCount,
+      payloadHash: payload.payloadHash,
+      keyId: payload.keyId,
+      version: payload.version
+    }
+  })
+}))
+
+app.get('/api/statements/verify/:documentId/details', authenticate, statementVerificationLimiter, asyncRoute(async (req: AuthRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  const documentId = z.string()
+    .regex(/^KCS-KIT-STMT-\d{8}-[A-F0-9]{24}$/)
+    .parse(routeParam(req, 'documentId'))
+  const signature = z.string().regex(/^[A-Za-z0-9_-]{43}$/).parse(req.query.signature)
+  const statement = await prisma.kitchenStatementVerification.findUnique({ where: { documentId } })
+  if (!statement) return res.status(404).json({ valid: false, status: 'NOT_FOUND', documentId })
+  const verification = verifyStoredStatement(statement, signature, statementVerificationKeys)
+  if (!verification.valid) return res.json({ valid: false, status: verification.status, documentId })
+  const payload = verification.payload
+  if (!canIssueStatement(req.kitchenUser!, payload.holder.orbitPersonId)) {
+    return res.status(403).json({ message: 'Only the account owner or a Kitchen administrator may view statement details' })
+  }
+  res.json({
+    valid: true,
+    status: verification.status,
+    details: {
+      holder: {
+        fullName: payload.holder.fullName,
+        displayId: payload.holder.displayId,
+        kind: payload.holder.kind
+      },
+      currency: payload.currency,
+      openingBalance: payload.openingBalance,
+      closingBalance: payload.closingBalance
+    }
+  })
+}))
+
 app.get('/api/dashboard', authenticate, asyncRoute(async (req: AuthRequest, res) => {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -860,7 +1213,10 @@ app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
   if (error?.code === 'P2025') return res.status(404).json({ message: 'Record not found' })
   const status = Number(error?.statusCode || 500)
   if (status >= 500) console.error(error)
-  res.status(status).json({ message: status >= 500 ? 'KCS Kitchen could not complete this request' : error.message })
+  res.status(status).json({
+    message: status >= 500 ? 'KCS Kitchen could not complete this request' : error.message,
+    ...(status < 500 && typeof error?.code === 'string' ? { code: error.code } : {})
+  })
 })
 
 export { app }

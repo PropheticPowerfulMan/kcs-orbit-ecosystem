@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   AlertTriangle, Archive, BarChart3, CalendarDays, ChefHat, ClipboardList, CreditCard, Languages,
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
@@ -15,6 +15,56 @@ import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDis
 
 type Lang = 'fr' | 'en'
 type Page = 'dashboard' | 'menus' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
+
+type StatementHolder = {
+  orbitPersonId: string
+  displayId: string | null
+  fullName: string
+  email: string | null
+  kind: 'STUDENT' | 'TEACHER' | 'STAFF'
+}
+
+type OfficialStatement = {
+  documentId: string
+  issuer: string
+  application: string
+  holder: StatementHolder
+  issuedAt: string
+  periodFrom: string
+  periodToExclusive: string
+  currency: string
+  openingBalance: string
+  closingBalance: string
+  entryCount: number
+  entries: Array<{
+    id: string
+    transactionId: string | null
+    paymentId: string | null
+    type: string
+    amount: string
+    currency: string
+    description: string
+    createdAt: string
+  }>
+  payloadHash: string
+  keyId: string
+  version: number
+  signature: string
+  reused: boolean
+}
+
+type StatementVerificationResult = {
+  valid: boolean
+  status: 'VALID' | 'INVALID_SIGNATURE' | 'CORRUPTED' | 'UNKNOWN_KEY' | 'EXPIRED' | 'REVOKED' | 'NOT_FOUND' | 'RATE_LIMITED' | 'UNAVAILABLE'
+  documentId?: string
+  document?: Pick<OfficialStatement, 'documentId' | 'issuer' | 'application' | 'issuedAt' | 'periodFrom' | 'periodToExclusive' | 'currency' | 'entryCount' | 'payloadHash' | 'keyId' | 'version'>
+  details?: {
+    holder: Pick<StatementHolder, 'fullName' | 'displayId' | 'kind'>
+    currency: string
+    openingBalance: string
+    closingBalance: string
+  }
+}
 const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access'])
 function requestedPage(): Page {
   if (typeof window === 'undefined') return 'dashboard'
@@ -22,6 +72,71 @@ function requestedPage(): Page {
   return value && pageNames.has(value) ? value : 'dashboard'
 }
 
+function requestedStatementVerification() {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const documentId = params.get('verifyStatement')?.trim()
+  const signature = params.get('signature')?.trim()
+  return documentId && signature ? { documentId, signature } : null
+}
+
+function statementVerificationUrl(statement: Pick<OfficialStatement, 'documentId' | 'signature'>) {
+  const url = new URL('/kitchen/', window.location.origin)
+  url.searchParams.set('verifyStatement', statement.documentId)
+  url.searchParams.set('signature', statement.signature)
+  return url.toString()
+}
+
+function statementMoney(value: unknown, currency = 'CDF') {
+  return new Intl.NumberFormat('fr-CD', {
+    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2
+  }).format(Number(value || 0))
+}
+
+function statementDate(value: string | Date, lang: Lang, withTime = false) {
+  return new Intl.DateTimeFormat(lang === 'fr' ? 'fr-CD' : 'en-US', {
+    dateStyle: 'medium', ...(withTime ? { timeStyle: 'short' as const } : {}), timeZone: 'Africa/Kinshasa'
+  }).format(new Date(value))
+}
+
+async function printStandaloneDocument(elementId: string, title: string) {
+  const source = document.getElementById(elementId)
+  if (!source) throw new Error('The official document is unavailable')
+  const popup = window.open('', '_blank', 'width=1080,height=900')
+  if (!popup) throw new Error('Please allow pop-ups to print this document')
+  popup.opener = null
+
+  const printable = source.cloneNode(true) as HTMLElement
+  printable.querySelectorAll('img').forEach(image => {
+    if (image.src) image.setAttribute('src', new URL(image.src, window.location.href).toString())
+  })
+  const styles = [...document.querySelectorAll<HTMLLinkElement | HTMLStyleElement>('link[rel="stylesheet"],style')]
+    .map(node => node instanceof HTMLLinkElement
+      ? `<link rel="stylesheet" href="${new URL(node.href, window.location.href)}">`
+      : `<style>${node.textContent || ''}</style>`)
+    .join('')
+  popup.document.open()
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title>${styles}<style>html,body{margin:0!important;background:#fff!important;overflow:visible!important}.print-shell{padding:8mm}.official-statement{max-width:1020px;margin:0 auto;overflow:visible!important}@page{size:A4 portrait;margin:8mm}</style></head><body><main class="print-shell">${printable.outerHTML}</main></body></html>`)
+  popup.document.close()
+
+  const links = [...popup.document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
+  await Promise.all(links.map(link => new Promise<void>(resolve => {
+    if (link.sheet) return resolve()
+    link.addEventListener('load', () => resolve(), { once: true })
+    link.addEventListener('error', () => resolve(), { once: true })
+    window.setTimeout(resolve, 2500)
+  })))
+  await Promise.all([...popup.document.images].map(image => image.complete
+    ? Promise.resolve()
+    : new Promise<void>(resolve => {
+        image.addEventListener('load', () => resolve(), { once: true })
+        image.addEventListener('error', () => resolve(), { once: true })
+        window.setTimeout(resolve, 2500)
+      })))
+  await popup.document.fonts?.ready.catch(() => undefined)
+  popup.focus()
+  popup.print()
+}
 const text = {
   fr: {
     signIn: 'Connexion institutionnelle', identifier: 'E-mail ou code institutionnel', password: 'Mot de passe',
@@ -190,6 +305,9 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { lang, setLang, t } = useLanguage()
   const [page, setPage] = useState<Page>(requestedPage)
   const [open, setOpen] = useState(false)
+  const sidebarRef = useRef<HTMLElement | null>(null)
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [drawerViewport, setDrawerViewport] = useState(() => window.matchMedia('(max-width: 900px)').matches)
   const [dark, setDark] = useState(() => localStorage.getItem('kcs-kitchen-theme') === 'dark')
   useEffect(() => { document.body.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kcs-kitchen-theme', dark ? 'dark' : 'light') }, [dark])
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('kcs-kitchen-sidebar') === 'collapsed')
@@ -210,6 +328,56 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   }, [user.hasOfficialPhoto, user.userId])
   const isPrivileged = privileged.includes(user.role)
   useEffect(() => { localStorage.setItem('kcs-kitchen-sidebar', collapsed ? 'collapsed' : 'expanded') }, [collapsed])
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual'
+    window.scrollTo({ top: 0, left: 0 })
+  }, [])
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }) }, [page])
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 900px)')
+    const syncViewport = () => {
+      setDrawerViewport(media.matches)
+      if (!media.matches) setOpen(false)
+    }
+    syncViewport()
+    media.addEventListener('change', syncViewport)
+    return () => media.removeEventListener('change', syncViewport)
+  }, [])
+  useEffect(() => {
+    const sidebar = sidebarRef.current
+    if (!sidebar) return
+    if (drawerViewport && !open) {
+      sidebar.setAttribute('inert', '')
+      sidebar.setAttribute('aria-hidden', 'true')
+    } else {
+      sidebar.removeAttribute('inert')
+      sidebar.removeAttribute('aria-hidden')
+    }
+  }, [drawerViewport, open])
+  useEffect(() => {
+    if (!open || !drawerViewport) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+      const sidebar = sidebarRef.current
+      if (event.key !== 'Tab' || !sidebar) return
+      const controls = [...sidebar.querySelectorAll<HTMLElement>('button,[href],input,select,textarea,[tabindex]')]
+        .filter(control => control.tabIndex >= 0)
+      if (!controls.length) return
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    sidebarRef.current?.querySelector<HTMLElement>('button')?.focus()
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKeyDown)
+      menuButtonRef.current?.focus()
+    }
+  }, [drawerViewport, open])
   const nav: Array<[Page, string, ReactNode, boolean]> = [
     ['dashboard', t.dashboard, <LayoutDashboard />, true],
     ['menus', lang === 'fr' ? 'Menu du jour' : 'Daily menu', <CalendarDays />, user.role === 'KITCHEN_ADMIN'],
@@ -239,13 +407,16 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     const restorePage = () => {
       const nextPage = requestedPage()
       setPage(nav.some(item => item[0] === nextPage && item[3]) ? nextPage : 'dashboard')
+      setOpen(false)
+      window.scrollTo({ top: 0, left: 0 })
     }
     window.addEventListener('popstate', restorePage)
     return () => window.removeEventListener('popstate', restorePage)
   }, [user.role])
   return <div className={collapsed ? 'app-shell collapsed' : 'app-shell'}>
-    <aside className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
-      <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)}><X /></button></div>
+    {open && drawerViewport && <button className="sidebar-scrim" aria-label={lang === 'fr' ? 'Fermer le menu' : 'Close navigation'} onClick={() => setOpen(false)} />}
+    <aside id="kitchen-navigation" ref={sidebarRef} aria-label={lang === 'fr' ? 'Navigation principale' : 'Main navigation'} className={(open ? 'sidebar open' : 'sidebar') + (collapsed ? ' collapsed' : '')}>
+      <div className="sidebar-brand"><img className="sidebar-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School" /><div><b>KCS KITCHEN</b><small>{t.powered}</small></div><button onClick={() => setOpen(false)} aria-label={lang === 'fr' ? 'Fermer le menu' : 'Close navigation'}><X /></button></div>
       <div className="identity"><span>{officialAvatar ? <img src={officialAvatar} alt={user.fullName}/> : user.fullName.split(' ').map(v => v[0]).slice(0, 2).join('')}</span><div><b>{user.fullName}</b><small>{translatedRole(user.role, lang)}</small></div></div>
       <nav>{nav.filter(item => item[3]).map(item => <button key={item[0]} title={item[1]} aria-label={item[1]} className={page === item[0] ? 'active' : ''} onClick={() => navigateToPage(item[0])}>{item[2]}<span>{item[1]}</span></button>)}</nav>
       <div className="sidebar-footer">
@@ -256,7 +427,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>
     <main className="workspace">
-      <header><button className="menu-button" onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
+      <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} />}
@@ -267,7 +438,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'ledger' && <Ledger user={user} t={t} />}
         {page === 'inventory' && <Inventory canEdit={user.role === 'KITCHEN_ADMIN'} t={t} />}
         {page === 'disputes' && <Disputes user={user} t={t} />}
-        {page === 'reports' && <Reports t={t} />}
+        {page === 'reports' && <Reports user={user} t={t} />}
         {page === 'access' && <Access t={t} />}
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
@@ -483,56 +654,82 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
 
 function Ledger({ user, t }: { user: User; t: Record<string, string> }) {
   const [data, setData] = useState<any>(null)
-  const [officialOpen, setOfficialOpen] = useState(false)
+  const [statement, setStatement] = useState<OfficialStatement | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   useEffect(() => { api<any>('/ledger/' + encodeURIComponent(user.orbitPersonId)).then(setData) }, [user.orbitPersonId])
+  async function issueStatement() {
+    setGenerating(true)
+    try {
+      const result = await api<{ statement: OfficialStatement }>('/statements/issue', {
+        method: 'POST',
+        body: JSON.stringify({ orbitPersonId: user.orbitPersonId })
+      })
+      setStatement(result.statement)
+    } catch (error) {
+      setNotice({ type: 'error', message: (error as Error).message })
+    } finally {
+      setGenerating(false)
+    }
+  }
   if (!data) return <Loading />
   return <>
-    <section className="panel statement"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN LEDGER</span><h2>{user.fullName}</h2><p>Every amount below is linked to an auditable operation.</p></div><button onClick={() => setOfficialOpen(true)}><ReceiptText /> {t.print}</button></div>
+    <section className="panel statement"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN LEDGER</span><h2>{user.fullName}</h2><p>Every amount below is linked to an auditable operation.</p></div><button disabled={generating} onClick={issueStatement}>{generating ? <LoaderCircle className="spin" /> : <ReceiptText />} {generating ? (document.documentElement.lang === 'fr' ? 'Génération…' : 'Generating…') : t.print}</button></div>
       <div className="statement-balance"><small>{t.outstanding}</small><strong><DisplayMoney value={data.closingBalance} /></strong></div>
       <div className="data-table ledger-table"><div className="table-head"><span>Date</span><span>Type</span><span>Description</span><span>Amount</span></div>{data.entries.map((entry: any) => <div className="table-row" key={entry.id}><span data-label="Date">{dateTime(entry.createdAt)}</span><span data-label="Type"><em className="badge">{entry.type}</em></span><span data-label="Description">{entry.description}</span><span data-label="Amount" className={Number(entry.amount) < 0 ? 'negative' : 'positive'}><b><DisplayMoney value={entry.amount} /></b></span></div>)}</div>
       {!data.entries.length && <Empty text={t.noData} />}
     </section>
-    {officialOpen && <OfficialLedgerStatement user={user} data={data} onClose={() => setOfficialOpen(false)} />}
+    {statement && <OfficialLedgerStatement statement={statement} onClose={() => setStatement(null)} />}
+    {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
   </>
 }
 
-function OfficialLedgerStatement({ user, data, onClose }: { user: User; data: any; onClose: () => void }) {
+function OfficialLedgerStatement({ statement, onClose }: { statement: OfficialStatement; onClose: () => void }) {
   const fr = document.documentElement.lang === 'fr'
-  const issued = new Date()
-  const documentId = 'KCS-KIT-STMT-' + user.orbitPersonId.replace(/[^a-z0-9]/gi, '').slice(-10).toUpperCase() + '-' + issued.toISOString().slice(0, 10).replaceAll('-', '')
-  const qrValue = JSON.stringify({ issuer: 'Kinshasa Christian School', application: 'KCS Kitchen', documentId, orbitPersonId: user.orbitPersonId, entries: data.entries.length, closingBalance: String(data.closingBalance), issuedAt: issued.toISOString() })
+  const [printError, setPrintError] = useState('')
+  const qrValue = statementVerificationUrl(statement)
+  const printId = 'official-statement-' + statement.documentId
+  const issued = new Date(statement.issuedAt)
+  const periodEnd = new Date(new Date(statement.periodToExclusive).getTime() - 1)
+
+  async function printDocument() {
+    setPrintError('')
+    try { await printStandaloneDocument(printId, statement.documentId) }
+    catch (error) { setPrintError((error as Error).message) }
+  }
   return <Modal wide onClose={onClose}>
-    <article className="official-statement">
+    <article className="official-statement" id={printId}>
       <img className="statement-watermark" src="./images/kcs-seal.svg" alt="" />
       <header className="statement-official-head">
         <img src="./images/kcs-logo.png" alt="Kinshasa Christian School" />
-        <div><span>KINSHASA CHRISTIAN SCHOOL</span><h1>{fr ? 'RELEVÉ OFFICIEL KCS KITCHEN' : 'OFFICIAL KCS KITCHEN STATEMENT'}</h1><b>{documentId}</b></div>
-        <QRCodeSVG className="statement-qr" value={qrValue} size={92} level="M" includeMargin title={fr ? 'QR de référence du document' : 'Document reference QR'} />
+        <div><span>KINSHASA CHRISTIAN SCHOOL</span><h1>{fr ? 'RELEVÉ OFFICIEL KCS KITCHEN' : 'OFFICIAL KCS KITCHEN STATEMENT'}</h1><b>{statement.documentId}</b></div>
+        <QRCodeSVG className="statement-qr" value={qrValue} size={92} level="M" includeMargin title={fr ? 'Vérifier ce document' : 'Verify this document'} />
       </header>
-      <div className="statement-document-status"><ShieldCheck /> {fr ? 'DOCUMENT GÉNÉRÉ DEPUIS LE REGISTRE AUDITÉ KCS ORBIT' : 'DOCUMENT GENERATED FROM THE AUDITED KCS ORBIT REGISTER'}</div>
+      <div className="statement-document-status"><ShieldCheck /> {fr ? 'DOCUMENT SIGNÉ · QR DE VÉRIFICATION EN LIGNE' : 'SIGNED DOCUMENT · ONLINE VERIFICATION QR'}</div>
       <section className="statement-holder">
-        <div><small>{fr ? 'TITULAIRE' : 'ACCOUNT HOLDER'}</small><strong>{user.fullName}</strong><span>{user.email || '—'}</span></div>
-        <div><small>ORBIT ID</small><strong>{user.orbitPersonId}</strong><span>{user.role.replaceAll('_', ' ')}</span></div>
-        <div><small>{fr ? 'DATE D’ÉMISSION' : 'ISSUE DATE'}</small><strong>{issued.toLocaleDateString(fr ? 'fr-CD' : 'en-US', { dateStyle: 'long' })}</strong><span>{issued.toLocaleTimeString(fr ? 'fr-CD' : 'en-US')}</span></div>
-        <div className="official-balance"><small>{fr ? 'SOLDE DE CLÔTURE' : 'CLOSING BALANCE'}</small><strong><DisplayMoney value={data.closingBalance} /></strong><span>{fr ? 'Devise d’affichage sélectionnée' : 'Selected display currency'}</span></div>
+        <div><small>{fr ? 'TITULAIRE' : 'ACCOUNT HOLDER'}</small><strong>{statement.holder.fullName}</strong><span>{statement.holder.email || statement.holder.displayId || '—'}</span></div>
+        <div><small>ORBIT ID</small><strong>{statement.holder.orbitPersonId}</strong><span>{statement.holder.kind}</span></div>
+        <div><small>{fr ? 'PÉRIODE / ÉMISSION' : 'PERIOD / ISSUE DATE'}</small><strong>{statementDate(statement.periodFrom, fr ? 'fr' : 'en')} — {statementDate(periodEnd, fr ? 'fr' : 'en')}</strong><span>{statementDate(issued, fr ? 'fr' : 'en', true)}</span></div>
+        <div className="official-balance"><small>{fr ? 'SOLDE DE CLÔTURE' : 'CLOSING BALANCE'}</small><strong>{statementMoney(statement.closingBalance, statement.currency)}</strong><span>{fr ? 'Ouverture' : 'Opening'}: {statementMoney(statement.openingBalance, statement.currency)} · {statement.entryCount} {fr ? 'écriture(s)' : 'entry/entries'}</span></div>
       </section>
       <section className="statement-register">
         <h2>{fr ? 'Mouvements du compte' : 'Account movements'}</h2>
         <table><thead><tr><th>{fr ? 'Date' : 'Date'}</th><th>{fr ? 'Nature' : 'Type'}</th><th>{fr ? 'Description' : 'Description'}</th><th>{fr ? 'Montant' : 'Amount'}</th></tr></thead>
-          <tbody>{data.entries.map((entry: any) => <tr key={entry.id}><td>{dateTime(entry.createdAt)}</td><td>{entry.type.replaceAll('_', ' ')}</td><td>{entry.description}</td><td className={Number(entry.amount) < 0 ? 'negative' : 'positive'}><DisplayMoney value={entry.amount} /></td></tr>)}</tbody>
+          <tbody>{statement.entries.map(entry => <tr key={entry.id}><td>{statementDate(entry.createdAt, fr ? 'fr' : 'en', true)}</td><td>{entry.type.replaceAll('_', ' ')}</td><td>{entry.description}<small className="statement-entry-ref">{entry.transactionId || entry.paymentId || entry.id}</small></td><td className={Number(entry.amount) < 0 ? 'negative' : 'positive'}>{statementMoney(entry.amount, entry.currency)}</td></tr>)}</tbody>
         </table>
-        {!data.entries.length && <p className="statement-empty">{fr ? 'Aucun mouvement enregistré pour ce compte.' : 'No movement is recorded for this account.'}</p>}
+        {!statement.entries.length && <p className="statement-empty">{fr ? 'Aucun mouvement enregistré pour cette période.' : 'No movement is recorded for this period.'}</p>}
       </section>
       <footer className="statement-official-foot">
-        <p><ShieldCheck /> {fr ? 'Ce relevé reflète les écritures présentes dans KCS Kitchen à la date d’émission. Le QR contient la référence institutionnelle et les éléments de contrôle du document.' : 'This statement reflects the KCS Kitchen ledger at issuance time. The QR contains the institutional reference and document control elements.'}</p>
+        <p><ShieldCheck /> {fr ? 'Ce relevé provient du registre audité KCS Orbit. Scannez le QR pour contrôler la signature numérique et la référence du document.' : 'This statement comes from the audited KCS Orbit register. Scan the QR to validate its digital signature and document reference.'}</p>
+        <code className="statement-proof">SHA-256 {statement.payloadHash} · {statement.keyId} · v{statement.version}</code>
         <div className="statement-signatures"><span>{fr ? 'Gestionnaire KCS Kitchen' : 'KCS Kitchen Manager'}</span><span>{fr ? 'Administration / Finance' : 'Administration / Finance'}</span></div>
         <div className="statement-address"><b>Kinshasa Christian School</b><span>Macampagne, Ngaliema · Kinshasa, RDC</span><span>KCS Orbit Ecosystem · KCS Kitchen</span></div>
       </footer>
     </article>
-    <div className="official-statement-actions"><button onClick={onClose}>{fr ? 'Fermer' : 'Close'}</button><button className="primary" onClick={() => window.print()}><ReceiptText />{fr ? 'Imprimer / Enregistrer en PDF' : 'Print / Save as PDF'}</button></div>
+    {printError && <div className="form-message error">{printError}</div>}
+    <div className="official-statement-actions"><button onClick={onClose}>{fr ? 'Fermer' : 'Close'}</button><button className="primary" onClick={printDocument}><ReceiptText />{fr ? 'Imprimer / Enregistrer en PDF' : 'Print / Save as PDF'}</button></div>
   </Modal>
 }
-
 function Inventory({ canEdit, t }: { canEdit: boolean; t: Record<string, string> }) {
   const [products, setProducts] = useState<Product[]>([])
   const [movements, setMovements] = useState<any[]>([])
@@ -580,9 +777,21 @@ function Disputes({ user, t }: { user: User; t: Record<string, string> }) {
   {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 
-function Reports({ t }: { t: Record<string, string> }) {
+function Reports({ user, t }: { user: User; t: Record<string, string> }) {
   const [periods, setPeriods] = useState<any[]>([])
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [statementPerson, setStatementPerson] = useState<Person | null>(null)
+  const [statement, setStatement] = useState<OfficialStatement | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [from, setFrom] = useState(() => {
+    const value = new Date(); value.setDate(1)
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-01`
+  })
+  const [to, setTo] = useState(() => {
+    const value = new Date()
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+  })
+  const lang: Lang = document.documentElement.lang === 'fr' ? 'fr' : 'en'
   const load = () => api<{ periods: any[] }>('/periods').then(result => setPeriods(result.periods))
   useEffect(() => { load() }, [])
   async function downloadCsv() {
@@ -599,15 +808,40 @@ function Reports({ t }: { t: Record<string, string> }) {
     try { await api('/periods/' + year + '/' + month, { method: 'PUT', body: JSON.stringify({ status }) }); load(); setNotice({ type: 'success', message: t.success }) }
     catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
   }
+  async function generateStatement() {
+    if (!statementPerson) {
+      setNotice({ type: 'error', message: lang === 'fr' ? 'Sélectionnez d’abord une entité.' : 'Select an entity first.' })
+      return
+    }
+    setGenerating(true)
+    try {
+      const result = await api<{ statement: OfficialStatement }>('/statements/issue', {
+        method: 'POST',
+        body: JSON.stringify({ orbitPersonId: statementPerson.id, from, to })
+      })
+      setStatement(result.statement)
+    } catch (error) {
+      setNotice({ type: 'error', message: (error as Error).message })
+    } finally {
+      setGenerating(false)
+    }
+  }
   const now = new Date()
-  return <><section className="report-grid">
-    <article className="panel report-card"><ReceiptText /><span className="eyebrow">FINANCE EXPORT</span><h2>Transaction register</h2><p>Auditable export with person, cashier, price, discount, mode and status.</p><button className="primary" onClick={downloadCsv}>Download CSV</button></article>
-    <article className="panel report-card"><Wallet /><span className="eyebrow">MONTH END</span><h2>Close accounting period</h2><p>Review and close a period. Confirmed history remains immutable.</p><div className="button-row"><button onClick={() => setPeriod(now.getFullYear(), now.getMonth() + 1, 'REVIEW')}>Mark review</button><button className="warning" onClick={() => setPeriod(now.getFullYear(), now.getMonth() + 1, 'CLOSED')}>Close month</button></div></article>
-  </section>
-  <section className="panel"><div className="section-heading"><div><span className="eyebrow">PERIOD CONTROL</span><h2>Monthly status</h2></div></div><div className="activity-list">{periods.map(period => <div key={period.id}><Archive /><span><b>{String(period.month).padStart(2, '0')} / {period.year}</b><small>{period.closedAt ? dateTime(period.closedAt) : 'Active workflow'}</small></span><em className={'badge ' + (period.status === 'CLOSED' ? 'good' : '')}>{period.status}</em></div>)}</div>{!periods.length && <Empty text={t.noData} />}</section>
-  {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
+  return <>
+    <section className="report-grid">
+      <article className="panel report-card"><ReceiptText /><span className="eyebrow">FINANCE EXPORT</span><h2>Transaction register</h2><p>Auditable export with person, cashier, price, discount, mode and status.</p><button className="primary" onClick={downloadCsv}>Download CSV</button></article>
+      <article className="panel report-card"><Wallet /><span className="eyebrow">MONTH END</span><h2>Close accounting period</h2><p>Review and close a period. Confirmed history remains immutable.</p><div className="button-row"><button onClick={() => setPeriod(now.getFullYear(), now.getMonth() + 1, 'REVIEW')}>Mark review</button><button className="warning" onClick={() => setPeriod(now.getFullYear(), now.getMonth() + 1, 'CLOSED')}>Close month</button></div></article>
+    </section>
+    {user.role === 'KITCHEN_ADMIN' && <section className="panel admin-statement-builder">
+      <div className="section-heading"><div><span className="eyebrow">{lang === 'fr' ? 'RELEVÉ OFFICIEL PAR ENTITÉ' : 'OFFICIAL ENTITY STATEMENT'}</span><h2>{lang === 'fr' ? 'Consommations sur une période précise' : 'Consumption over a precise period'}</h2><p>{lang === 'fr' ? 'Recherchez l’élève ou le membre du personnel, choisissez la période, puis générez un document signé et vérifiable.' : 'Find the student or staff member, choose the period, then generate a signed and verifiable document.'}</p></div></div>
+      <div className={generating ? 'entity-selector-lock locked' : 'entity-selector-lock'}><PersonSelector value={statementPerson} onChange={person => { setStatementPerson(person); setStatement(null) }} lang={lang} /></div>
+      <div className="statement-period-controls"><label>{lang === 'fr' ? 'Du' : 'From'}<input type="date" value={from} max={to} onChange={event => setFrom(event.target.value)} /></label><label>{lang === 'fr' ? 'Au' : 'To'}<input type="date" value={to} min={from} onChange={event => setTo(event.target.value)} /></label><button className="primary" disabled={!statementPerson || generating || !from || !to} onClick={generateStatement}>{generating ? <LoaderCircle className="spin" /> : <ReceiptText />}{generating ? (lang === 'fr' ? 'Génération…' : 'Generating…') : (lang === 'fr' ? 'Générer le relevé officiel' : 'Generate official statement')}</button></div>
+    </section>}
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">PERIOD CONTROL</span><h2>Monthly status</h2></div></div><div className="activity-list">{periods.map(period => <div key={period.id}><Archive /><span><b>{String(period.month).padStart(2, '0')} / {period.year}</b><small>{period.closedAt ? dateTime(period.closedAt) : 'Active workflow'}</small></span><em className={'badge ' + (period.status === 'CLOSED' ? 'good' : '')}>{period.status}</em></div>)}</div>{!periods.length && <Empty text={t.noData} />}</section>
+    {statement && <OfficialLedgerStatement statement={statement} onClose={() => setStatement(null)} />}
+    {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
+  </>
 }
-
 function Access({ t }: { t: Record<string, string> }) {
   const [query, setQuery] = useState('')
   const [people, setPeople] = useState<Person[]>([])
@@ -635,6 +869,54 @@ function Access({ t }: { t: Record<string, string> }) {
   {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 
+function PublicStatementVerification({ request }: { request: { documentId: string; signature: string } }) {
+  const { lang } = useLanguage()
+  const fr = lang === 'fr'
+  const [result, setResult] = useState<StatementVerificationResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  async function verify() {
+    setLoading(true)
+    try {
+      const path = '/statements/verify/' + encodeURIComponent(request.documentId) + '?signature=' + encodeURIComponent(request.signature)
+      const publicResult = await api<StatementVerificationResult>(path)
+      if (publicResult.valid && getToken()) {
+        try {
+          const privateResult = await api<StatementVerificationResult>('/statements/verify/' + encodeURIComponent(request.documentId) + '/details?signature=' + encodeURIComponent(request.signature))
+          setResult({ ...publicResult, details: privateResult.details })
+        } catch { setResult(publicResult) }
+      } else setResult(publicResult)
+    } catch (error: any) {
+      const status: StatementVerificationResult['status'] = error?.status === 404
+        ? 'NOT_FOUND'
+        : error?.status === 429
+          ? 'RATE_LIMITED'
+          : error?.status && error.status < 500
+            ? 'CORRUPTED'
+            : 'UNAVAILABLE'
+      setResult({ valid: false, status, documentId: request.documentId })
+    } finally {
+      setLoading(false)
+    }
+  }
+  useEffect(() => { void verify() }, [request.documentId, request.signature])
+  const temporary = result?.status === 'RATE_LIMITED' || result?.status === 'UNAVAILABLE'
+  return <main className="statement-verification-page">
+    <section className="statement-verification-card">
+      <img src="./images/kcs-logo.png" alt="Kinshasa Christian School" />
+      <span className="eyebrow">KCS ORBIT · KCS KITCHEN</span>
+      <h1>{fr ? 'Vérification du relevé officiel' : 'Official statement verification'}</h1>
+      {loading && <div className="verification-state loading"><LoaderCircle className="spin" /><b>{fr ? 'Vérification cryptographique en cours…' : 'Cryptographic verification in progress…'}</b></div>}
+      {!loading && result?.valid && result.document && <>
+        <div className="verification-state valid"><ShieldCheck /><b>{fr ? 'Document authentique et intègre' : 'Authentic and intact document'}</b><span>{fr ? 'La signature numérique correspond au registre officiel.' : 'The digital signature matches the official register.'}</span></div>
+        <dl><div><dt>{fr ? 'Référence' : 'Reference'}</dt><dd>{result.document.documentId}</dd></div><div><dt>{fr ? 'Émis le' : 'Issued on'}</dt><dd>{statementDate(result.document.issuedAt, lang, true)}</dd></div><div><dt>{fr ? 'Période' : 'Period'}</dt><dd>{statementDate(result.document.periodFrom, lang)} — {statementDate(new Date(new Date(result.document.periodToExclusive).getTime() - 1), lang)}</dd></div><div><dt>{fr ? 'Écritures' : 'Entries'}</dt><dd>{result.document.entryCount} · {result.document.currency}</dd></div><div><dt>SHA-256</dt><dd><code>{result.document.payloadHash}</code></dd></div><div><dt>{fr ? 'Clé / version' : 'Key / version'}</dt><dd>{result.document.keyId} · v{result.document.version}</dd></div></dl>
+        {result.details ? <div className="verification-comparison"><b>{fr ? 'Comparaison autorisée' : 'Authorized comparison'}</b><span>{result.details.holder.fullName} · {result.details.holder.displayId || result.details.holder.kind}</span><span>{fr ? 'Solde d’ouverture' : 'Opening balance'}: {statementMoney(result.details.openingBalance, result.details.currency)}</span><strong>{fr ? 'Solde de clôture' : 'Closing balance'}: {statementMoney(result.details.closingBalance, result.details.currency)}</strong></div> : <p className="verification-private-note">{fr ? 'Pour comparer le titulaire et les soldes, ouvrez ce QR dans la session Kitchen du titulaire ou du gestionnaire.' : 'To compare the holder and balances, open this QR in the holder or Kitchen manager session.'}</p>}
+      </>}
+      {!loading && result && !result.valid && <div className={'verification-state ' + (temporary ? 'temporary' : 'invalid')}><AlertTriangle /><b>{temporary ? (fr ? 'Vérification temporairement indisponible' : 'Verification temporarily unavailable') : (fr ? 'Document non validé' : 'Document not validated')}</b><span>{temporary ? (fr ? 'Le document n’est pas déclaré invalide. Réessayez lorsque la connexion est disponible.' : 'The document is not declared invalid. Retry when the connection is available.') : `${fr ? 'Statut' : 'Status'}: ${result.status}`}</span></div>}
+      <div className="verification-actions">{temporary && <button className="primary" onClick={verify}>{fr ? 'Réessayer' : 'Retry'}</button>}<a href="/kitchen/">{fr ? 'Ouvrir KCS Kitchen' : 'Open KCS Kitchen'}</a></div>
+      <small>Kinshasa Christian School · Macampagne, Ngaliema · Kinshasa, RDC</small>
+    </section>
+  </main>
+}
 function Loading() { const { t } = useLanguage(); return <div className="loading"><ChefHat /><span>{t.secureLoading}</span></div> }
 function Empty({ text }: { text: string }) { return <div className="empty"><ChefHat /><span>{text}</span></div> }
 
@@ -645,6 +927,8 @@ export default function App() {
     if (!getToken()) return setChecking(false)
     api<{ user: User }>('/me').then(result => setUser(result.user)).catch(() => setToken(null)).finally(() => setChecking(false))
   }, [])
+  const verificationRequest = requestedStatementVerification()
+  if (verificationRequest) return <PublicStatementVerification request={verificationRequest} />
   if (checking) return <Loading />
   if (!user) return <Login onLogin={setUser} />
   return <Shell user={user} onLogout={() => { setToken(null); setUser(null) }} />

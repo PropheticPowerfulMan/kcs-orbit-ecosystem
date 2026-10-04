@@ -401,6 +401,33 @@ model KitchenLedgerEntry {
   @@index([transactionId])
 }
 
+model KitchenStatementVerification {
+  id String @id @default(cuid())
+  documentId String @unique
+  deduplicationKey String @unique
+  orbitPersonId String
+  issuedBy String
+  issuedAt DateTime
+  periodFrom DateTime?
+  periodTo DateTime?
+  expiresAt DateTime?
+  revokedAt DateTime?
+  keyId String @default("qr-v1")
+  currency String @default("CDF")
+  openingBalance Decimal @db.Decimal(14, 2)
+  closingBalance Decimal @db.Decimal(14, 2)
+  entryCount Int
+  entriesHash String
+  canonicalPayload String @db.Text
+  payloadHash String
+  signature String
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  @@index([orbitPersonId, issuedAt])
+  @@index([orbitPersonId, periodFrom, periodTo])
+  @@index([issuedAt])
+}
+
 model KitchenPayment {
   id String @id @default(cuid())
   orbitPersonId String

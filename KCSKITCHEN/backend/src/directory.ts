@@ -47,14 +47,14 @@ export async function loadDirectory(force = false): Promise<DirectoryPerson[]> {
     cached = { at: Date.now(), people }
     return people
   } catch (error) {
-    if (cached && Date.now() - cached.at < 15 * 60_000) return cached.people
+    if (!force && cached && Date.now() - cached.at < 15 * 60_000) return cached.people
     throw error
   }
 }
 
-export async function resolvePerson(identifier: string) {
+export async function resolvePerson(identifier: string, force = false) {
   const needle = identifier.trim().toLowerCase()
-  const people = await loadDirectory()
+  const people = await loadDirectory(force)
   return people.find(person =>
     person.id.toLowerCase() === needle ||
     person.email?.toLowerCase() === needle ||

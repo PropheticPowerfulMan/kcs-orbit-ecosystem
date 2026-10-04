@@ -16,6 +16,9 @@ const schema = z.object({
   NOTIFICATION_WORKER_ENABLED: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
   NOTIFICATION_INTERVAL_MS: z.coerce.number().int().min(5_000).max(300_000).default(30_000),
   QR_SIGNING_SECRET: z.string().min(16),
+  STATEMENT_SIGNING_SECRET: z.string().min(32).optional(),
+  STATEMENT_SIGNING_KEY_ID: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,63}$/i).optional(),
+  STATEMENT_VERIFICATION_KEYS: z.string().optional(),
   DIRECTORY_CACHE_SECONDS: z.coerce.number().int().positive().default(60)
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === 'production' && value.JWT_SECRET.length < 32) {
@@ -23,6 +26,12 @@ const schema = z.object({
   }
   if (value.NOTIFICATION_WORKER_ENABLED && !value.NEXUS_INTEGRATION_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['NEXUS_INTEGRATION_KEY'], message: 'Notification delivery key is required' })
+  }
+  if (value.STATEMENT_SIGNING_KEY_ID && !value.STATEMENT_SIGNING_SECRET) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['STATEMENT_SIGNING_KEY_ID'], message: 'A dedicated statement key id requires STATEMENT_SIGNING_SECRET' })
+  }
+  if (value.STATEMENT_SIGNING_SECRET && value.STATEMENT_SIGNING_KEY_ID === 'qr-v1') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['STATEMENT_SIGNING_KEY_ID'], message: 'qr-v1 is reserved for the production QR fallback key' })
   }
 })
 
