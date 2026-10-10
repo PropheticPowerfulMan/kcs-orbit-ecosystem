@@ -202,7 +202,7 @@ services:
 
   edusync_web:
     <<: *service-defaults
-    image: kcs/edusync-web:${KCS_RELEASE:?set KCS_RELEASE}
+    image: kcs/edusync-web:${EDUSYNC_WEB_RELEASE:-${KCS_RELEASE:?set KCS_RELEASE}}
     networks: [kcs_edge]
     healthcheck: { test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"], interval: 15s, timeout: 5s, retries: 10 }
 
