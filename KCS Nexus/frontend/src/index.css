@@ -1854,3 +1854,68 @@ html:not(.dark) [data-suggestion-box] select {
 .kcs-credential-modal { animation: kcs-credential-backdrop .22s ease-out both; }
 .kcs-credential-modal-panel { animation: kcs-credential-enter .42s cubic-bezier(.16,1,.3,1) both; }
 @media (prefers-reduced-motion: reduce) { .kcs-credential-modal,.kcs-credential-modal-panel { animation-duration: .01ms; } }
+/* KCS ecosystem mobile typography - Academy aligned */
+@media screen and (max-width: 767px) {
+  #root {
+    --kcs-mobile-copy: clamp(.875rem, .84rem + .18vw, .9375rem);
+    --kcs-mobile-caption: clamp(.6875rem, .67rem + .1vw, .75rem);
+    --kcs-mobile-small: .8125rem;
+    --kcs-mobile-title: clamp(1.25rem, 5.6vw, 1.55rem);
+    font-size: var(--kcs-mobile-copy);
+    line-height: 1.5;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #root :where(h1, h2, h3, h4, p, li, dd, dt, label, th, td, button, a) {
+    overflow-wrap: anywhere;
+  }
+
+  #root :where(p, li, dd, dt, label, th, td) {
+    line-height: 1.45;
+  }
+
+  #root :where(small, .eyebrow, .badge, .text-xs) {
+    font-size: var(--kcs-mobile-caption) !important;
+    line-height: 1.4;
+  }
+
+  #root .text-sm {
+    font-size: var(--kcs-mobile-small);
+    line-height: 1.45;
+  }
+
+  #root .text-base {
+    font-size: .875rem;
+    line-height: 1.5;
+  }
+
+  #root .text-lg {
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  #root .text-xl {
+    font-size: 1.125rem;
+    line-height: 1.35;
+  }
+
+  #root .text-2xl {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+
+  #root :where(.text-3xl, .text-4xl) {
+    font-size: var(--kcs-mobile-title);
+    line-height: 1.2;
+  }
+
+  #root :where(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+    font-size: 16px !important;
+    line-height: 1.4;
+  }
+
+  #root :where(button, [role='button']) {
+    line-height: 1.25;
+  }
+}
