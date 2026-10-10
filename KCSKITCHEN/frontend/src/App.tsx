@@ -556,6 +556,7 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
       <Stat icon={<ShoppingCart />} label={t.sales + ' · ' + t.today} value={<DisplayMoney value={data.today._sum.total} />} tone="good" />
       <Stat icon={<CreditCard />} label={t.credit} value={<DisplayMoney value={data.credit._sum.total} />} tone="warn" />
       <Stat icon={<Wallet />} label={t.outstanding} value={<DisplayMoney value={data.outstanding} />} />
+      <Stat icon={<ShieldCheck />} label="Subventions dues par KCS" value={<DisplayMoney value={data.schoolSubsidies?._sum?.schoolSubsidy || 0} />} tone="warn" />
       <Stat icon={<ReceiptText />} label={t.payments} value={<DisplayMoney value={data.payments._sum.amount} />} />
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} tone={data.disputes ? 'warn' : ''} />
       <Stat icon={<Archive />} label={t.lowStock} value={data.lowStock} />
@@ -579,6 +580,8 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const { rate } = useCurrencyDisplay()
   useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
+  const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
+  const subsidy = person && ['TEACHER', 'STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? (eligibleTotal >= 20000 ? 8000 : eligibleTotal >= 10000 ? 4000 : eligibleTotal >= 5000 ? 2000 : 0) : 0
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
   function change(id: string, quantity: number) { setCart(current => ({ ...current, [id]: Math.max(0, quantity) })) }
   async function checkout() {
@@ -614,7 +617,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
         <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><DisplayMoney value={product.currentPrice} currency={product.currency} /></span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DisplayMoney value={Number(product.currentPrice) * cart[product.id]} currency={product.currency} /></div>)}</div>
         {!total && <Empty text={t.noData} />}
         <div className="payment-switch"><button className={paymentMode !== 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CASH')}><Wallet />{t.payNow}</button><button className={paymentMode === 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CREDIT')}><CreditCard />{t.onCredit}</button></div>
-        <div className="total-row"><span>{t.total}</span><DisplayMoney value={total} currency="CDF" /></div>
+        <div className="receipt-totals"><span>{lang === 'fr' ? 'Sous-total' : 'Subtotal'} <b><DisplayMoney value={total} currency="CDF" /></b></span>{subsidy > 0 && <span>{lang === 'fr' ? 'Pris en charge par KCS' : 'KCS school subsidy'} <b>− <DisplayMoney value={subsidy} currency="CDF" /></b></span>}</div><div className="total-row"><span>{lang === 'fr' ? 'À payer' : 'Customer payable'}</span><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF" /></div>
         <button className="primary large" onClick={checkout} disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
       </aside>
     </section>
@@ -716,7 +719,7 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
     <div className="receipt-head"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h2>KCS KITCHEN RECEIPT</h2><b>{transaction.transactionNumber}</b></div></div>
     <div className="receipt-meta"><div><small>PERSON</small><b>{transaction.personNameSnapshot}</b></div><div><small>DATE / TIME</small><b>{dateTime(transaction.createdAt)}</b></div><div><small>CASHIER</small><b>{transaction.cashierNameSnapshot}</b></div><div><small>PAYMENT</small><b>{transaction.paymentMode} · {transaction.paymentStatus}</b></div></div>
     <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.quantity}</td><td><DisplayMoney value={item.unitPriceAtPurchase} /></td><td><DisplayMoney value={item.subtotal} /></td></tr>)}</tbody></table>
-    <div className="receipt-totals"><span>Subtotal <b><DisplayMoney value={transaction.subtotal} /></b></span><span>Discount <b>− <DisplayMoney value={transaction.discount} /></b></span><strong>Total <b><DisplayMoney value={transaction.total} /></b></strong></div>
+    <div className="receipt-totals"><span>Subtotal <b><DisplayMoney value={transaction.subtotal} /></b></span><span>School subsidy / Prise en charge KCS <b>− <DisplayMoney value={transaction.schoolSubsidy || transaction.discount} /></b></span><strong>Customer payable / À payer <b><DisplayMoney value={transaction.total} /></b></strong></div>
     <div className="receipt-proof"><ShieldCheck /> Digitally registered, timestamped and auditable. Original transaction records are never silently deleted.</div>
     {message && <div className="form-message">{message}</div>}
     <div className="receipt-actions"><button onClick={() => window.print()}><ReceiptText /> Print / PDF</button>{allowDispute && <button className="warning" onClick={() => setDispute(!dispute)}><AlertTriangle /> Dispute</button>}<button className="primary" onClick={onClose}>Close</button></div>

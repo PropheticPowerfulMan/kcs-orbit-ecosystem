@@ -9,7 +9,8 @@ import { z } from 'zod'
 import { env } from './config.js'
 import { prisma } from './db.js'
 import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentity } from './auth.js'
-import { calculateDiscount } from './discount.js'
+import { calculateSchoolSubsidy } from './staff-subsidy.js'
+import { ensureOfficialMenu } from './kcs-menu-2026.js'
 import { loadDirectory, resolvePerson } from './directory.js'
 import { compareClassNames, normalizeClassName } from './class-name.js'
 import { processNotificationOutbox } from './notifications.js'
@@ -347,7 +348,7 @@ const menuDate = (value: string) => new Date(`${value}T00:00:00.000Z`)
 
 app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => {
   const key = kitchenDateKey()
-  const menu = await prisma.dailyMenu.findUnique({ where: { menuDate: menuDate(key) }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
+  const menu = await ensureOfficialMenu(prisma, key)
   res.setHeader('Cache-Control', 'no-store')
   if (!menu || menu.status !== 'PUBLISHED') return res.status(404).json({ message: 'No published menu is available for today', date: key })
   res.json({ menu })
@@ -486,33 +487,13 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
 
   const personAccess = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: person.id } })
-  const purchaseRole = personAccess?.role || (person.kind === 'TEACHER' ? 'TEACHER' : person.kind === 'STUDENT' ? 'STUDENT' : 'STAFF')
-  const rules = await prisma.discountRule.findMany({
-    where: {
-      isActive: true,
-      AND: [
-        { OR: [{ eligibleRole: null }, { eligibleRole: purchaseRole }] },
-        { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
-        { OR: [{ validUntil: null }, { validUntil: { gte: now } }] }
-      ]
-    },
-    orderBy: { priority: 'asc' }
-  })
-  const discountResult = calculateDiscount(subtotal, rules.map(rule => ({
-    id: rule.id,
-    name: rule.name,
-    type: rule.type,
-    thresholdAmount: rule.thresholdAmount == null ? null : Number(rule.thresholdAmount),
-    fixedAmount: rule.fixedAmount == null ? null : Number(rule.fixedAmount),
-    targetAmount: rule.targetAmount == null ? null : Number(rule.targetAmount),
-    percentage: rule.percentage == null ? null : Number(rule.percentage),
-    requiresApproval: rule.requiresApproval
-  })))
-
+  const subsidyRole = person.kind === 'TEACHER' ? 'TEACHER' : ['STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? 'STAFF' : person.kind
+  const eligibleSubtotal = lines.filter(line => line.product.discountEligible && line.product.category !== 'DRINK').reduce((sum, line) => sum + line.subtotal, 0)
+  const schoolSubsidy = calculateSchoolSubsidy(eligibleSubtotal, subsidyRole)
   if (input.paymentMode === 'CREDIT') {
     if (!personAccess?.creditEnabled) return res.status(403).json({ message: 'Credit is not enabled for this person' })
     const currentBalance = await balanceFor(person.id)
-    if (personAccess.creditLimit != null && currentBalance + discountResult.finalAmount > Number(personAccess.creditLimit)) {
+    if (personAccess.creditLimit != null && currentBalance + Math.max(0, subtotal - schoolSubsidy) > Number(personAccess.creditLimit)) {
       return res.status(409).json({ message: 'Credit limit would be exceeded', currentBalance, creditLimit: personAccess.creditLimit })
     }
   }
@@ -525,7 +506,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       update: { value: { increment: 1 } }
     })
     const transactionNumber = 'KITCHEN-' + now.getUTCFullYear() + '-' + String(counter.value).padStart(6, '0')
-    const total = discountResult.finalAmount
+    const total = Math.max(0, subtotal - schoolSubsidy)
     const isCredit = input.paymentMode === 'CREDIT'
 
     const created = await tx.kitchenTransaction.create({ data: {
@@ -537,7 +518,9 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       cashierOrbitPersonId: req.kitchenUser!.orbitPersonId,
       cashierNameSnapshot: req.kitchenUser!.fullName,
       subtotal: new Prisma.Decimal(subtotal),
-      discount: new Prisma.Decimal(discountResult.discount),
+      eligibleSubtotal: new Prisma.Decimal(eligibleSubtotal),
+      discount: new Prisma.Decimal(schoolSubsidy),
+      schoolSubsidy: new Prisma.Decimal(schoolSubsidy),
       total: new Prisma.Decimal(total),
       paymentMode: input.paymentMode,
       paymentStatus: isCredit ? 'CREDIT' : 'PAID',
@@ -552,17 +535,16 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
         unitPriceAtPurchase: new Prisma.Decimal(line.unitPriceCdf),
         subtotal: new Prisma.Decimal(line.subtotal)
       })) },
-      discounts: discountResult.rule ? { create: {
-        discountRuleId: discountResult.rule.id,
-        originalAmount: new Prisma.Decimal(subtotal),
-        discountAmount: new Prisma.Decimal(discountResult.discount),
+      discounts: schoolSubsidy > 0 ? { create: {
+        originalAmount: new Prisma.Decimal(eligibleSubtotal),
+        discountAmount: new Prisma.Decimal(schoolSubsidy),
         finalAmount: new Prisma.Decimal(total),
-        reason: discountResult.rule.name,
+        reason: 'KCS staff/teacher school subsidy',
         appliedAutomatically: true
       } } : undefined,
       ledgerEntries: { create: [
         { orbitPersonId: person.id, type: 'PURCHASE', amount: new Prisma.Decimal(subtotal), description: 'Consumption ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId },
-        ...(discountResult.discount > 0 ? [{ orbitPersonId: person.id, type: 'DISCOUNT' as const, amount: new Prisma.Decimal(-discountResult.discount), description: 'Discount ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : []),
+        ...(schoolSubsidy > 0 ? [{ orbitPersonId: person.id, type: 'DISCOUNT' as const, amount: new Prisma.Decimal(-schoolSubsidy), description: 'School subsidy ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : []),
         ...(!isCredit ? [{ orbitPersonId: person.id, type: 'PAYMENT' as const, amount: new Prisma.Decimal(-total), description: 'Immediate payment ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : [])
       ] }
     }, include: { items: true, discounts: true } })
@@ -583,7 +565,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       orbitPersonId: person.id,
       eventType: 'KITCHEN_TRANSACTION_CREATED',
       channels: ['IN_APP', 'EMAIL'],
-      payload: { transactionNumber, total, currency: 'CDF', paymentMode: input.paymentMode }
+      payload: { transactionNumber, subtotal, schoolSubsidy, total, currency: 'CDF', paymentMode: input.paymentMode }
     } })
     return created
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
@@ -1125,19 +1107,20 @@ app.get('/api/dashboard', authenticate, asyncRoute(async (req: AuthRequest, res)
     return res.json({ mode: 'personal', today, month, balance: await balanceFor(orbitPersonId), disputes, notifications })
   }
 
-  const [today, credit, outstanding, payments, discounts, disputes, lowStock, unavailable, cashiers, popular] = await Promise.all([
+  const [today, credit, outstanding, payments, discounts, schoolSubsidies, disputes, lowStock, unavailable, cashiers, popular] = await Promise.all([
     prisma.kitchenTransaction.aggregate({ where: { status: 'CONFIRMED', createdAt: { gte: start } }, _sum: { total: true }, _count: true }),
     prisma.kitchenTransaction.aggregate({ where: { status: 'CONFIRMED', paymentMode: 'CREDIT', createdAt: { gte: start } }, _sum: { total: true } }),
     prisma.kitchenLedgerEntry.aggregate({ _sum: { amount: true } }),
     prisma.kitchenPayment.aggregate({ where: { createdAt: { gte: start } }, _sum: { amount: true } }),
     prisma.discountApplication.aggregate({ where: { createdAt: { gte: start } }, _sum: { discountAmount: true } }),
+    prisma.kitchenTransaction.aggregate({ where: { status: 'CONFIRMED', schoolSubsidy: { gt: 0 } }, _sum: { schoolSubsidy: true } }),
     prisma.kitchenDispute.count({ where: { status: { in: ['OPEN', 'UNDER_REVIEW'] } } }),
     prisma.product.findMany({ where: { trackInventory: true }, select: { stockQuantity: true, reorderLevel: true } }).then(rows => rows.filter(row => Number(row.stockQuantity) <= Number(row.reorderLevel)).length),
     prisma.product.count({ where: { isAvailable: false } }),
     prisma.kitchenAccess.count({ where: { role: 'CASHIER', isActive: true } }),
     prisma.kitchenTransactionItem.groupBy({ by: ['productId', 'productNameSnapshot'], _sum: { quantity: true }, orderBy: { _sum: { quantity: 'desc' } }, take: 5 })
   ])
-  res.json({ mode: 'operations', today, credit, outstanding: outstanding._sum.amount || 0, payments, discounts, disputes, lowStock, unavailable, cashiers, popular })
+  res.json({ mode: 'operations', today, credit, outstanding: outstanding._sum.amount || 0, payments, discounts, schoolSubsidies, disputes, lowStock, unavailable, cashiers, popular })
 }))
 
 app.get('/api/reports/monthly/:orbitPersonId', authenticate, asyncRoute(async (req: AuthRequest, res) => {
@@ -1174,8 +1157,8 @@ app.get('/api/reports/transactions.csv', authenticate, allow('KITCHEN_ADMIN', 'F
   const from = req.query.from ? new Date(String(req.query.from)) : new Date(Date.now() - 30 * 24 * 60 * 60_000)
   const to = req.query.to ? new Date(String(req.query.to)) : new Date()
   const rows = await prisma.kitchenTransaction.findMany({ where: { createdAt: { gte: from, lte: to } }, orderBy: { createdAt: 'desc' } })
-  const header = ['Transaction', 'Date', 'Person', 'Cashier', 'Subtotal', 'Discount', 'Total', 'Mode', 'Status']
-  const csv = [header, ...rows.map(row => [row.transactionNumber, row.createdAt.toISOString(), row.personNameSnapshot, row.cashierNameSnapshot, row.subtotal, row.discount, row.total, row.paymentMode, row.status])]
+  const header = ['Transaction', 'Date', 'Person', 'Cashier', 'Subtotal', 'Eligible subtotal', 'School subsidy', 'Customer payable', 'Mode', 'Status']
+  const csv = [header, ...rows.map(row => [row.transactionNumber, row.createdAt.toISOString(), row.personNameSnapshot, row.cashierNameSnapshot, row.subtotal, row.eligibleSubtotal, row.schoolSubsidy, row.total, row.paymentMode, row.status])]
     .map(row => row.map(csvCell).join(',')).join('\r\n')
   res.setHeader('content-type', 'text/csv; charset=utf-8')
   res.setHeader('content-disposition', 'attachment; filename="kcs-kitchen-transactions.csv"')

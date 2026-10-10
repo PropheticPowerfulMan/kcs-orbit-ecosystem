@@ -167,6 +167,7 @@ model Product {
   currency String @default("CDF")
   photoUrl String?
   isAvailable Boolean @default(true)
+  discountEligible Boolean @default(true)
   trackInventory Boolean @default(false)
   stockQuantity Decimal @default(0) @db.Decimal(14, 3)
   unit InventoryUnit @default(UNIT)
@@ -330,7 +331,9 @@ model KitchenTransaction {
   cashierOrbitPersonId String
   cashierNameSnapshot String
   subtotal Decimal @db.Decimal(14, 2)
+  eligibleSubtotal Decimal @default(0) @db.Decimal(14, 2)
   discount Decimal @default(0) @db.Decimal(14, 2)
+  schoolSubsidy Decimal @default(0) @db.Decimal(14, 2)
   total Decimal @db.Decimal(14, 2)
   currency String @default("CDF")
   paymentMode PaymentMode
