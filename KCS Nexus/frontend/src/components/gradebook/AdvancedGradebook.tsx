@@ -230,7 +230,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const saveSpreadsheet = async (silent = false) => {
     const savedAt = new Date().toISOString()
     const snapshot: GradebookSnapshot = { scores, comments, assignments, categories, savedAt }
-    localStorage.setItem(`kcs-live-gradebook-${selectedCourseId}`, JSON.stringify(snapshot))
+    localStorage.setItem(browserStorageKey, JSON.stringify(snapshot))
     try {
       const latest = await teacherWorkspaceAPI.get()
       const workspace = latest.data?.data
@@ -252,6 +252,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         advancedGradebookByCourse: {
           ...(state.advancedGradebookByCourse ?? {}),
           [selectedCourseId]: snapshot,
+        },
+        advancedGradebookByCycle: {
+          ...(state.advancedGradebookByCycle ?? {}),
+          [cycleKey]: snapshot,
         },
         gradebookColumnsByCourse: {
           ...(state.gradebookColumnsByCourse ?? {}),
@@ -278,6 +282,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [saveNotice, setSaveNotice] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
   const [addingAssignment, setAddingAssignment] = useState(false)
+  const cycleKey = `${selectedCourseId}::${academicYear}`
+  const browserStorageKey = `kcs-live-gradebook-${cycleKey}`
   const [submittingFinals, setSubmittingFinals] = useState(false)
   const [officialFinalGrades, setOfficialFinalGrades] = useState<OfficialFinalGrade[]>([])
   const [draft, setDraft] = useState({
@@ -296,24 +302,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     let active = true
     const loadGradebook = async () => {
       let saved: Partial<GradebookSnapshot> = {}
+      setAssignments([])
+      setCategories(defaultCategories)
+      setComments({})
+      setScores({})
+      setSelectedAssignmentId('')
       try {
-        saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
-        if (!saved.assignments?.length && selectedCourse?.studentIds?.length) {
-          const enrolledIds = new Set(selectedCourse.studentIds)
-          const browserSnapshots: Array<{ snapshot: Partial<GradebookSnapshot>; overlap: number }> = []
-          for (let index = 0; index < localStorage.length; index += 1) {
-            const key = localStorage.key(index)
-            if (!key?.startsWith('kcs-live-gradebook-') || key === `kcs-live-gradebook-${selectedCourseId}`) continue
-            try {
-              const snapshot = JSON.parse(localStorage.getItem(key) || '{}') as Partial<GradebookSnapshot>
-              const overlap = Object.keys(snapshot.scores ?? {}).filter((scoreKey) => enrolledIds.has(scoreKey.slice(scoreKey.lastIndexOf(':') + 1))).length
-              if (snapshot.assignments?.length && overlap > 0) browserSnapshots.push({ snapshot, overlap })
-            } catch {
-              // Ignore a damaged legacy browser entry and keep looking.
-            }
-          }
-          browserSnapshots.sort((left, right) => right.overlap - left.overlap)
-          if (browserSnapshots[0] && (!browserSnapshots[1] || browserSnapshots[0].overlap > browserSnapshots[1].overlap)) saved = browserSnapshots[0].snapshot
+        saved = JSON.parse(localStorage.getItem(browserStorageKey) || '{}') as Partial<GradebookSnapshot>
+        if (!saved.assignments?.length && academicYear === '2026-2027') {
+          saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
         }
         const [response, officialResponse] = await Promise.all([
           teacherWorkspaceAPI.get(),
@@ -321,7 +318,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         ])
         const state = (response.data?.data?.state ?? {}) as Record<string, any>
         const snapshots = (state.advancedGradebookByCourse ?? {}) as Record<string, Partial<GradebookSnapshot>>
-        let serverSnapshot = snapshots[selectedCourseId]
+        const cycleSnapshots = (state.advancedGradebookByCycle ?? {}) as Record<string, Partial<GradebookSnapshot>>
+        let serverSnapshot = cycleSnapshots[cycleKey]
+          ?? (academicYear === '2026-2027' ? snapshots[selectedCourseId] : undefined)
 
         if (!serverSnapshot && selectedCourse) {
           const legacyCourse = Array.isArray(state.courses)
@@ -365,16 +364,6 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           }
         }
 
-        if (!serverSnapshot && selectedCourse?.studentIds?.length) {
-          const enrolledIds = new Set(selectedCourse.studentIds)
-          const ranked = Object.entries(snapshots).map(([key, snapshot]) => ({
-            key,
-            snapshot,
-            overlap: Object.keys(snapshot.scores ?? {}).filter((scoreKey) => enrolledIds.has(scoreKey.slice(scoreKey.lastIndexOf(':') + 1))).length,
-          })).filter((item) => item.overlap > 0).sort((left, right) => right.overlap - left.overlap)
-          if (ranked[0] && (!ranked[1] || ranked[0].overlap > ranked[1].overlap)) serverSnapshot = ranked[0].snapshot
-        }
-
         if (serverSnapshot) saved = serverSnapshot
         if (active) setOfficialFinalGrades((officialResponse?.data?.data?.submissions ?? []) as OfficialFinalGrade[])
       } catch {
@@ -392,7 +381,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
     void loadGradebook()
     return () => { active = false }
-  }, [selectedCourseId, selectedCourse, students])
+  }, [academicYear, browserStorageKey, cycleKey, selectedCourseId, selectedCourse, students])
 
   useEffect(() => {
     if (!spreadsheetOpen) return
