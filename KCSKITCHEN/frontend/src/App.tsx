@@ -65,6 +65,63 @@ type StatementVerificationResult = {
     closingBalance: string
   }
 }
+type AccountingPeriod = {
+  id: string
+  year: number
+  month: number
+  status: 'OPEN' | 'REVIEW' | 'CLOSED'
+  reviewedBy: string | null
+  reviewedAt: string | null
+  closedBy: string | null
+  closedAt: string | null
+  archivedBy: string | null
+  archivedAt: string | null
+  archiveReason: string | null
+}
+
+type OfficialTransactionReport = {
+  documentId: string
+  issuer: string
+  application: string
+  issuedAt: string
+  issuedBy: string
+  periodFrom: string
+  periodToExclusive: string
+  filters: { status: string | null; paymentMode: string | null }
+  currency: string
+  transactionCount: number
+  confirmedSubtotal: string
+  confirmedDiscount: string
+  confirmedTotal: string
+  voidedCount: number
+  rowsHash: string
+  payloadHash: string
+  keyId: string
+  version: number
+  signature: string
+  rows: Array<{
+    id: string
+    transactionNumber: string
+    createdAt: string
+    personName: string
+    cashierName: string
+    subtotal: string
+    discount: string
+    total: string
+    currency: string
+    paymentMode: string
+    paymentStatus: string
+    status: string
+  }>
+}
+
+type TransactionReportVerificationResult = {
+  valid: boolean
+  status: 'VALID' | 'INVALID_SIGNATURE' | 'CORRUPTED' | 'UNKNOWN_KEY' | 'REVOKED' | 'NOT_FOUND' | 'RATE_LIMITED' | 'UNAVAILABLE'
+  documentId?: string
+  document?: Omit<OfficialTransactionReport, 'rows' | 'signature' | 'rowsHash' | 'issuedBy' | 'confirmedSubtotal' | 'confirmedDiscount'>
+}
+
 const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access'])
 function requestedPage(): Page {
   if (typeof window === 'undefined') return 'dashboard'
@@ -87,6 +144,21 @@ function statementVerificationUrl(statement: Pick<OfficialStatement, 'documentId
   return url.toString()
 }
 
+function requestedTransactionReportVerification() {
+  if (typeof window === 'undefined') return null
+  const params = new URLSearchParams(window.location.search)
+  const documentId = params.get('verifyRegister')?.trim()
+  const signature = params.get('signature')?.trim()
+  return documentId && signature ? { documentId, signature } : null
+}
+
+function transactionReportVerificationUrl(report: Pick<OfficialTransactionReport, 'documentId' | 'signature'>) {
+  const url = new URL('/kitchen/', window.location.origin)
+  url.searchParams.set('verifyRegister', report.documentId)
+  url.searchParams.set('signature', report.signature)
+  return url.toString()
+}
+
 function statementMoney(value: unknown, currency = 'CDF') {
   return new Intl.NumberFormat('fr-CD', {
     style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2
@@ -99,7 +171,7 @@ function statementDate(value: string | Date, lang: Lang, withTime = false) {
   }).format(new Date(value))
 }
 
-async function printStandaloneDocument(elementId: string, title: string) {
+async function printStandaloneDocument(elementId: string, title: string, orientation: 'portrait' | 'landscape' = 'portrait') {
   const source = document.getElementById(elementId)
   if (!source) throw new Error('The official document is unavailable')
   const popup = window.open('', '_blank', 'width=1080,height=900')
@@ -116,7 +188,7 @@ async function printStandaloneDocument(elementId: string, title: string) {
       : `<style>${node.textContent || ''}</style>`)
     .join('')
   popup.document.open()
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title>${styles}<style>html,body{margin:0!important;background:#fff!important;overflow:visible!important}.print-shell{padding:8mm}.official-statement{max-width:1020px;margin:0 auto;overflow:visible!important}@page{size:A4 portrait;margin:8mm}</style></head><body><main class="print-shell">${printable.outerHTML}</main></body></html>`)
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title>${styles}<style>html,body{margin:0!important;background:#fff!important;overflow:visible!important}.print-shell{padding:8mm}.official-statement{max-width:1020px;margin:0 auto;overflow:visible!important}@page{size:A4 ${orientation};margin:8mm}</style></head><body><main class="print-shell">${printable.outerHTML}</main></body></html>`)
   popup.document.close()
 
   const links = [...popup.document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
@@ -777,12 +849,39 @@ function Disputes({ user, t }: { user: User; t: Record<string, string> }) {
   {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 
+function OfficialTransactionRegister({ report, onClose }: { report: OfficialTransactionReport; onClose: () => void }) {
+  const fr = document.documentElement.lang === 'fr'
+  const qrValue = transactionReportVerificationUrl(report)
+  const periodEnd = new Date(new Date(report.periodToExclusive).getTime() - 1)
+  const printDocument = () => printStandaloneDocument('official-transaction-register', report.documentId, 'landscape')
+  return <div className="official-statement-shell"><div id="official-transaction-register" className="official-statement transaction-register-document">
+    <header className="statement-masthead"><img src="/kitchen/kcs-logo.png" alt="KCS" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h1>{fr ? 'REGISTRE OFFICIEL DES TRANSACTIONS' : 'OFFICIAL TRANSACTION REGISTER'}</h1><small>{report.documentId}</small></div><QRCodeSVG className="statement-qr" value={qrValue} size={92} level="M" includeMargin /></header>
+    <section className="statement-summary"><div><small>{fr ? 'PÉRIODE' : 'PERIOD'}</small><strong>{statementDate(report.periodFrom, fr ? 'fr' : 'en')} — {statementDate(periodEnd, fr ? 'fr' : 'en')}</strong></div><div><small>{fr ? 'TRANSACTIONS' : 'TRANSACTIONS'}</small><strong>{report.transactionCount}</strong></div><div><small>{fr ? 'TOTAL CONFIRMÉ' : 'CONFIRMED TOTAL'}</small><strong>{statementMoney(report.confirmedTotal, report.currency)}</strong></div><div><small>{fr ? 'ANNULÉES' : 'VOIDED'}</small><strong>{report.voidedCount}</strong></div></section>
+    <div className="statement-table-wrap"><table className="statement-table"><thead><tr><th>{fr ? 'Référence' : 'Reference'}</th><th>{fr ? 'Date' : 'Date'}</th><th>{fr ? 'Entité' : 'Person'}</th><th>{fr ? 'Caissier' : 'Cashier'}</th><th>{fr ? 'Paiement' : 'Payment'}</th><th>{fr ? 'Statut' : 'Status'}</th><th>{fr ? 'Total' : 'Total'}</th></tr></thead><tbody>{report.rows.map(row => <tr key={row.id}><td>{row.transactionNumber}</td><td>{statementDate(row.createdAt, fr ? 'fr' : 'en', true)}</td><td>{row.personName}</td><td>{row.cashierName}</td><td>{row.paymentMode}</td><td>{row.status}</td><td>{statementMoney(row.total,row.currency)}</td></tr>)}</tbody></table></div>
+    <footer className="statement-footer"><p><ShieldCheck /> {fr ? 'Document signé numériquement. Scannez le QR code pour vérifier son authenticité.' : 'Digitally signed document. Scan the QR code to verify authenticity.'}</p><code>SHA-256 · {report.payloadHash}</code></footer>
+  </div><div className="official-statement-actions"><button onClick={onClose}>{fr ? 'Fermer' : 'Close'}</button><button className="primary" onClick={printDocument}><ReceiptText />{fr ? 'Imprimer / Enregistrer en PDF' : 'Print / Save as PDF'}</button></div></div>
+}
+
 function Reports({ user, t }: { user: User; t: Record<string, string> }) {
-  const [periods, setPeriods] = useState<any[]>([])
+  const [periods, setPeriods] = useState<AccountingPeriod[]>([])
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [statementPerson, setStatementPerson] = useState<Person | null>(null)
   const [statement, setStatement] = useState<OfficialStatement | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [transactionReport, setTransactionReport] = useState<OfficialTransactionReport | null>(null)
+  const [reportGenerating, setReportGenerating] = useState(false)
+  const [reportStatus, setReportStatus] = useState('')
+  const [reportPaymentMode, setReportPaymentMode] = useState('')
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const [periodBusy, setPeriodBusy] = useState(false)
+  const [periodAction, setPeriodAction] = useState<{
+    mode: 'edit' | 'archive' | 'restore'
+    period?: AccountingPeriod
+    year: number
+    month: number
+    status: AccountingPeriod['status']
+    reason: string
+  } | null>(null)
   const [from, setFrom] = useState(() => {
     const value = new Date(); value.setDate(1)
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-01`
@@ -792,21 +891,77 @@ function Reports({ user, t }: { user: User; t: Record<string, string> }) {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
   })
   const lang: Lang = document.documentElement.lang === 'fr' ? 'fr' : 'en'
-  const load = () => api<{ periods: any[] }>('/periods').then(result => setPeriods(result.periods))
-  useEffect(() => { load() }, [])
+  const canManagePeriods = user.role === 'KITCHEN_ADMIN' || user.role === 'FINANCE'
+  const load = () => api<{ periods: AccountingPeriod[] }>('/periods?includeArchived=' + includeArchived).then(result => setPeriods(result.periods))
+  useEffect(() => { void load() }, [includeArchived])
+  function reportQuery() {
+    const params = new URLSearchParams({ from, to })
+    if (reportStatus) params.set('status', reportStatus)
+    if (reportPaymentMode) params.set('paymentMode', reportPaymentMode)
+    return params
+  }
   async function downloadCsv() {
     try {
       const base = import.meta.env.VITE_API_URL || '/kitchen/api'
-      const response = await fetch(base + '/reports/transactions.csv', { headers: { authorization: 'Bearer ' + getToken() } })
-      if (!response.ok) throw new Error('Export failed')
+      const response = await fetch(base + '/reports/transactions.csv?' + reportQuery(), { headers: { authorization: 'Bearer ' + getToken() } })
+      if (!response.ok) throw new Error(lang === 'fr' ? "Échec de l'export CSV." : 'CSV export failed.')
       const url = URL.createObjectURL(await response.blob())
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'kcs-kitchen-transactions.csv'; anchor.click(); URL.revokeObjectURL(url)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `kcs-kitchen-transactions-${from}-${to}.csv`
+      anchor.click()
+      URL.revokeObjectURL(url)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
   }
-  async function setPeriod(year: number, month: number, status: string) {
-    if (status === 'CLOSED' && !confirm('Close this month? Future corrections will require audited adjustments.')) return
-    try { await api('/periods/' + year + '/' + month, { method: 'PUT', body: JSON.stringify({ status }) }); load(); setNotice({ type: 'success', message: t.success }) }
-    catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+  async function generateTransactionReport() {
+    setReportGenerating(true)
+    try {
+      const result = await api<{ report: OfficialTransactionReport }>('/reports/transactions/issue', {
+        method: 'POST',
+        body: JSON.stringify({ from, to, status: reportStatus || null, paymentMode: reportPaymentMode || null })
+      })
+      setTransactionReport(result.report)
+    } catch (error) {
+      setNotice({ type: 'error', message: (error as Error).message })
+    } finally {
+      setReportGenerating(false)
+    }
+  }
+  function editPeriod(period?: AccountingPeriod) {
+    const now = new Date()
+    setPeriodAction({
+      mode: 'edit',
+      period,
+      year: period?.year ?? now.getFullYear(),
+      month: period?.month ?? now.getMonth() + 1,
+      status: period?.status ?? 'OPEN',
+      reason: ''
+    })
+  }
+  async function submitPeriodAction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!periodAction || periodAction.reason.trim().length < 5) return
+    setPeriodBusy(true)
+    try {
+      if (periodAction.mode === 'edit') {
+        await api('/periods/' + periodAction.year + '/' + periodAction.month, {
+          method: 'PUT',
+          body: JSON.stringify({ status: periodAction.status, reason: periodAction.reason.trim() })
+        })
+      } else if (periodAction.period) {
+        await api('/periods/' + periodAction.period.id + (periodAction.mode === 'restore' ? '/restore' : ''), {
+          method: periodAction.mode === 'restore' ? 'POST' : 'DELETE',
+          body: JSON.stringify({ reason: periodAction.reason.trim() })
+        })
+      }
+      setPeriodAction(null)
+      await load()
+      setNotice({ type: 'success', message: t.success })
+    } catch (error) {
+      setNotice({ type: 'error', message: (error as Error).message })
+    } finally {
+      setPeriodBusy(false)
+    }
   }
   async function generateStatement() {
     if (!statementPerson) {
@@ -826,19 +981,36 @@ function Reports({ user, t }: { user: User; t: Record<string, string> }) {
       setGenerating(false)
     }
   }
-  const now = new Date()
   return <>
     <section className="report-grid">
-      <article className="panel report-card"><ReceiptText /><span className="eyebrow">FINANCE EXPORT</span><h2>Transaction register</h2><p>Auditable export with person, cashier, price, discount, mode and status.</p><button className="primary" onClick={downloadCsv}>Download CSV</button></article>
-      <article className="panel report-card"><Wallet /><span className="eyebrow">MONTH END</span><h2>Close accounting period</h2><p>Review and close a period. Confirmed history remains immutable.</p><div className="button-row"><button onClick={() => setPeriod(now.getFullYear(), now.getMonth() + 1, 'REVIEW')}>Mark review</button><button className="warning" onClick={() => setPeriod(now.getFullYear(), now.getMonth() + 1, 'CLOSED')}>Close month</button></div></article>
+      <article className="panel report-card transaction-export-card">
+        <ReceiptText />
+        <span className="eyebrow">{lang === 'fr' ? 'EXPORT FINANCIER' : 'FINANCE EXPORT'}</span>
+        <h2>{lang === 'fr' ? 'Registre des transactions' : 'Transaction register'}</h2>
+        <p>{lang === 'fr' ? 'Export auditable avec période, statut et mode de paiement.' : 'Auditable export with period, status and payment mode.'}</p>
+        <div className="transaction-report-filters">
+          <label>{lang === 'fr' ? 'Du' : 'From'}<input type="date" value={from} max={to} onChange={event => setFrom(event.target.value)} /></label>
+          <label>{lang === 'fr' ? 'Au' : 'To'}<input type="date" value={to} min={from} onChange={event => setTo(event.target.value)} /></label>
+          <label>{lang === 'fr' ? 'Statut' : 'Status'}<select value={reportStatus} onChange={event => setReportStatus(event.target.value)}><option value="">{lang === 'fr' ? 'Tous les statuts' : 'All statuses'}</option><option value="CONFIRMED">{lang === 'fr' ? 'Confirmée' : 'Confirmed'}</option><option value="VOIDED">{lang === 'fr' ? 'Annulée' : 'Voided'}</option><option value="REVERSED">{lang === 'fr' ? 'Contrepassée' : 'Reversed'}</option><option value="REFUNDED">{lang === 'fr' ? 'Remboursée' : 'Refunded'}</option></select></label>
+          <label>{lang === 'fr' ? 'Mode de paiement' : 'Payment mode'}<select value={reportPaymentMode} onChange={event => setReportPaymentMode(event.target.value)}><option value="">{lang === 'fr' ? 'Tous les modes' : 'All modes'}</option><option value="CASH">{lang === 'fr' ? 'Espèces' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{lang === 'fr' ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option><option value="CREDIT">{lang === 'fr' ? 'Crédit' : 'Credit'}</option></select></label>
+        </div>
+        <div className="button-row"><button onClick={downloadCsv}>{lang === 'fr' ? 'Télécharger CSV' : 'Download CSV'}</button><button className="primary" disabled={reportGenerating || !from || !to} onClick={generateTransactionReport}>{reportGenerating ? <LoaderCircle className="spin" /> : <ReceiptText />}{reportGenerating ? (lang === 'fr' ? 'Génération…' : 'Generating.') : (lang === 'fr' ? 'PDF officiel vérifiable' : 'Verifiable official PDF')}</button></div>
+      </article>
+      <article className="panel report-card"><Wallet /><span className="eyebrow">{lang === 'fr' ? 'FIN DE MOIS' : 'MONTH END'}</span><h2>{lang === 'fr' ? 'Piloter une période comptable' : 'Control an accounting period'}</h2><p>{lang === 'fr' ? 'Ouvrez, révisez ou clôturez un mois avec un motif audité.' : 'Open, review or close a month with an audited reason.'}</p>{canManagePeriods && <button className="primary" onClick={() => editPeriod()}><Plus />{lang === 'fr' ? 'Créer / modifier une période' : 'Create / edit a period'}</button>}</article>
     </section>
     {user.role === 'KITCHEN_ADMIN' && <section className="panel admin-statement-builder">
       <div className="section-heading"><div><span className="eyebrow">{lang === 'fr' ? 'RELEVÉ OFFICIEL PAR ENTITÉ' : 'OFFICIAL ENTITY STATEMENT'}</span><h2>{lang === 'fr' ? 'Consommations sur une période précise' : 'Consumption over a precise period'}</h2><p>{lang === 'fr' ? 'Recherchez l’élève ou le membre du personnel, choisissez la période, puis générez un document signé et vérifiable.' : 'Find the student or staff member, choose the period, then generate a signed and verifiable document.'}</p></div></div>
       <div className={generating ? 'entity-selector-lock locked' : 'entity-selector-lock'}><PersonSelector value={statementPerson} onChange={person => { setStatementPerson(person); setStatement(null) }} lang={lang} /></div>
       <div className="statement-period-controls"><label>{lang === 'fr' ? 'Du' : 'From'}<input type="date" value={from} max={to} onChange={event => setFrom(event.target.value)} /></label><label>{lang === 'fr' ? 'Au' : 'To'}<input type="date" value={to} min={from} onChange={event => setTo(event.target.value)} /></label><button className="primary" disabled={!statementPerson || generating || !from || !to} onClick={generateStatement}>{generating ? <LoaderCircle className="spin" /> : <ReceiptText />}{generating ? (lang === 'fr' ? 'Génération…' : 'Generating…') : (lang === 'fr' ? 'Générer le relevé officiel' : 'Generate official statement')}</button></div>
     </section>}
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">PERIOD CONTROL</span><h2>Monthly status</h2></div></div><div className="activity-list">{periods.map(period => <div key={period.id}><Archive /><span><b>{String(period.month).padStart(2, '0')} / {period.year}</b><small>{period.closedAt ? dateTime(period.closedAt) : 'Active workflow'}</small></span><em className={'badge ' + (period.status === 'CLOSED' ? 'good' : '')}>{period.status}</em></div>)}</div>{!periods.length && <Empty text={t.noData} />}</section>
+    <section className="panel period-control-panel">
+      <div className="section-heading"><div><span className="eyebrow">PERIOD CONTROL</span><h2>{lang === 'fr' ? 'Statut mensuel traçable' : 'Traceable monthly status'}</h2><p>{lang === 'fr' ? 'La suppression archive la période sans effacer les transactions ni le journal d'audit.' : 'Delete archives the period without erasing transactions or its audit trail.'}</p></div><div className="period-heading-actions"><label className="check"><input type="checkbox" checked={includeArchived} onChange={event => setIncludeArchived(event.target.checked)} />{lang === 'fr' ? 'Voir les archives' : 'Show archives'}</label>{canManagePeriods && <button className="primary" onClick={() => editPeriod()}><Plus />{lang === 'fr' ? 'Nouvelle période' : 'New period'}</button>}</div></div>
+      <div className="period-list">{periods.map(period => <article key={period.id} className={period.archivedAt ? 'period-row archived' : 'period-row'}><Archive /><span><b>{String(period.month).padStart(2, '0')} / {period.year}</b><small>{period.archivedAt ? (lang === 'fr' ? 'Archivée' : 'Archived') + ' · ' + dateTime(period.archivedAt) : period.closedAt ? (lang === 'fr' ? 'Clôturée' : 'Closed') + ' · ' + dateTime(period.closedAt) : period.reviewedAt ? (lang === 'fr' ? 'En révision' : 'In review') + ' · ' + dateTime(period.reviewedAt) : (lang === 'fr' ? 'Flux actif' : 'Active workflow')}</small>{period.archiveReason && <small>{period.archiveReason}</small>}</span><em className={'badge ' + (period.status === 'CLOSED' ? 'good' : period.status === 'REVIEW' ? 'warn' : '')}>{period.status}</em>{canManagePeriods && <div className="period-row-actions">{!period.archivedAt && <button title={lang === 'fr' ? 'Modifier' : 'Edit'} onClick={() => editPeriod(period)}><Pencil /></button>}{!period.archivedAt ? <button className="danger" title={lang === 'fr' ? 'Supprimer (archiver)' : 'Delete (archive)'} onClick={() => setPeriodAction({ mode: 'archive', period, year: period.year, month: period.month, status: period.status, reason: '' })}><Trash2 /></button> : <button title={lang === 'fr' ? 'Restaurer' : 'Restore'} onClick={() => setPeriodAction({ mode: 'restore', period, year: period.year, month: period.month, status: period.status, reason: '' })}><Archive /></button>}</div>}</article>)}</div>
+      {!periods.length && <Empty text={t.noData} />}
+    </section>
     {statement && <OfficialLedgerStatement statement={statement} onClose={() => setStatement(null)} />}
+    {transactionReport && <OfficialTransactionRegister report={transactionReport} onClose={() => setTransactionReport(null)} />}
+    {periodAction && <Modal onClose={() => setPeriodAction(null)}><form className="modal-form" onSubmit={submitPeriodAction}><span className="eyebrow">{lang === 'fr' ? 'PÉRIODE COMPTABLE' : 'ACCOUNTING PERIOD'}</span><h2>{periodAction.mode === 'edit' ? (lang === 'fr' ? 'Créer ou modifier la période' : 'Create or edit period') : periodAction.mode === 'archive' ? (lang === 'fr' ? 'Archiver la période' : 'Archive period') : (lang === 'fr' ? 'Restaurer la période' : 'Restore period')}</h2>{periodAction.mode === 'edit' && <><label>{lang === 'fr' ? 'Année' : 'Year'}<input type="number" min="2020" max="2100" value={periodAction.year} onChange={event => setPeriodAction({...periodAction,year:Number(event.target.value)})} /></label><label>{lang === 'fr' ? 'Mois' : 'Month'}<input type="number" min="1" max="12" value={periodAction.month} onChange={event => setPeriodAction({...periodAction,month:Number(event.target.value)})} /></label><label>{lang === 'fr' ? 'Statut' : 'Status'}<select value={periodAction.status} onChange={event => setPeriodAction({...periodAction,status:event.target.value as AccountingPeriod['status']})}><option value="OPEN">OPEN</option><option value="REVIEW">REVIEW</option><option value="CLOSED">CLOSED</option></select></label></>}<label>{lang === 'fr' ? 'Motif auditable (5 caractères minimum)' : 'Auditable reason (minimum 5 characters)'}<textarea required minLength={5} value={periodAction.reason} onChange={event => setPeriodAction({...periodAction,reason:event.target.value})} /></label><button className="primary large" disabled={periodBusy || periodAction.reason.trim().length < 5}>{periodBusy ? <LoaderCircle className="spin" /> : <ShieldCheck />}{periodBusy ? (lang === 'fr' ? 'Traitement…' : 'Processing…') : t.save}</button></form></Modal>}
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
   </>
 }

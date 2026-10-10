@@ -28,6 +28,15 @@ import {
   type StatementSigningKey,
   verifyStoredStatement
 } from './statement-verification.js'
+import {
+  buildTransactionReportArtifact,
+  createTransactionReportDeduplicationKey,
+  createTransactionReportDocumentId,
+  KITCHEN_TRANSACTION_REPORT_MAX_ROWS,
+  type TransactionReportFilters,
+  type TransactionReportRowSnapshot,
+  verifyStoredTransactionReport
+} from './transaction-report-verification.js'
 
 const app = express()
 // Kitchen is exposed through exactly one Caddy hop; this keeps IP-based limits
@@ -1173,22 +1182,275 @@ app.get('/api/reports/transactions.csv', authenticate, allow('KITCHEN_ADMIN', 'F
   res.send('\ufeff' + csv)
 }))
 
-app.get('/api/periods', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
-  res.json({ periods: await prisma.accountingPeriod.findMany({ orderBy: [{ year: 'desc' }, { month: 'desc' }] }) })
+const transactionReportInput = z.object({
+  from: z.string().trim().min(1).max(64).optional(),
+  to: z.string().trim().min(1).max(64).optional(),
+  status: z.enum(['CONFIRMED', 'VOIDED', 'REVERSED', 'REFUNDED']).nullable().optional(),
+  paymentMode: z.enum(['CASH', 'MOBILE_MONEY', 'BANK', 'EDUPAY', 'CREDIT']).nullable().optional()
+}).strict()
+
+app.post('/api/reports/transactions/issue', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), statementIssueLimiter, asyncRoute(async (req: AuthRequest, res) => {
+  const input = transactionReportInput.parse(req.body ?? {})
+  const issuedAt = new Date()
+  let period: ReturnType<typeof resolveStatementPeriod>
+  try {
+    period = resolveStatementPeriod({ from: input.from, to: input.to }, issuedAt)
+  } catch (error) {
+    throw statementHttpError(
+      400,
+      error instanceof Error ? error.message : 'Invalid transaction register period',
+      'INVALID_TRANSACTION_REGISTER_PERIOD'
+    )
+  }
+  const filters: TransactionReportFilters = {
+    status: input.status || null,
+    paymentMode: input.paymentMode || null
+  }
+  const where: Prisma.KitchenTransactionWhereInput = {
+    createdAt: { gte: period.from, lt: period.toExclusive },
+    ...(filters.status ? { status: filters.status as any } : {}),
+    ...(filters.paymentMode ? { paymentMode: filters.paymentMode as any } : {})
+  }
+  const sourceRows = await prisma.kitchenTransaction.findMany({
+    where,
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    take: KITCHEN_TRANSACTION_REPORT_MAX_ROWS + 1
+  })
+  if (sourceRows.length > KITCHEN_TRANSACTION_REPORT_MAX_ROWS) {
+    throw statementHttpError(
+      422,
+      `A transaction register cannot contain more than ${KITCHEN_TRANSACTION_REPORT_MAX_ROWS} rows`,
+      'TRANSACTION_REGISTER_TOO_LARGE'
+    )
+  }
+  const currencies = new Set(sourceRows.map(row => row.currency.trim().toUpperCase()))
+  if ([...currencies].some(currency => currency !== KITCHEN_STATEMENT_CURRENCY)) {
+    throw statementHttpError(
+      409,
+      'Mixed or non-CDF transactions must be corrected before issuing an official register',
+      'TRANSACTION_REGISTER_MIXED_CURRENCY'
+    )
+  }
+
+  const rows: TransactionReportRowSnapshot[] = sourceRows.map(row => ({
+    id: row.id,
+    transactionNumber: row.transactionNumber,
+    createdAt: row.createdAt.toISOString(),
+    personName: row.personNameSnapshot,
+    cashierName: row.cashierNameSnapshot,
+    subtotal: row.subtotal.toFixed(2),
+    discount: row.discount.toFixed(2),
+    total: row.total.toFixed(2),
+    currency: KITCHEN_STATEMENT_CURRENCY,
+    paymentMode: row.paymentMode,
+    paymentStatus: row.paymentStatus,
+    status: row.status
+  }))
+  const confirmedRows = sourceRows.filter(row => row.status === 'CONFIRMED')
+  const confirmedSubtotal = confirmedRows.reduce((sum, row) => sum.plus(row.subtotal), new Prisma.Decimal(0))
+  const confirmedDiscount = confirmedRows.reduce((sum, row) => sum.plus(row.discount), new Prisma.Decimal(0))
+  const confirmedTotal = confirmedRows.reduce((sum, row) => sum.plus(row.total), new Prisma.Decimal(0))
+  const voidedCount = sourceRows.length - confirmedRows.length
+  const documentId = createTransactionReportDocumentId(issuedAt)
+  const artifact = buildTransactionReportArtifact({
+    documentId,
+    issuedBy: req.kitchenUser!.orbitPersonId,
+    issuedAt,
+    periodFrom: period.from,
+    periodToExclusive: period.toExclusive,
+    filters,
+    currency: KITCHEN_STATEMENT_CURRENCY,
+    confirmedSubtotal: confirmedSubtotal.toFixed(2),
+    confirmedDiscount: confirmedDiscount.toFixed(2),
+    confirmedTotal: confirmedTotal.toFixed(2),
+    voidedCount,
+    rows
+  }, statementSigningKey)
+  const deduplicationKey = createTransactionReportDeduplicationKey(
+    period.from,
+    period.toExclusive,
+    filters,
+    artifact.rowsHash
+  )
+
+  const proof = await runStatementTransaction(async tx => {
+    const stored = await tx.kitchenTransactionReportVerification.upsert({
+      where: { deduplicationKey },
+      create: {
+        documentId,
+        deduplicationKey,
+        issuedBy: req.kitchenUser!.orbitPersonId,
+        issuedAt,
+        periodFrom: period.from,
+        periodTo: period.toExclusive,
+        statusFilter: filters.status,
+        paymentModeFilter: filters.paymentMode,
+        currency: KITCHEN_STATEMENT_CURRENCY,
+        transactionCount: rows.length,
+        confirmedSubtotal,
+        confirmedDiscount,
+        confirmedTotal,
+        voidedCount,
+        rowsHash: artifact.rowsHash,
+        canonicalPayload: artifact.canonicalPayload,
+        payloadHash: artifact.payloadHash,
+        signature: artifact.signature,
+        keyId: statementSigningKey.keyId,
+        version: artifact.payload.version
+      },
+      update: {}
+    })
+    if (stored.documentId === documentId) {
+      await tx.auditLog.create({
+        data: {
+          actorId: req.kitchenUser!.orbitPersonId,
+          actorRole: req.kitchenUser!.role,
+          action: 'TRANSACTION_REGISTER_ISSUED',
+          entityType: 'KitchenTransactionReportVerification',
+          entityId: stored.id,
+          newValue: {
+            documentId,
+            periodFrom: period.from.toISOString(),
+            periodToExclusive: period.toExclusive.toISOString(),
+            filters,
+            transactionCount: rows.length,
+            payloadHash: artifact.payloadHash
+          },
+          ipAddress: req.ip
+        }
+      })
+    }
+    return stored
+  })
+  const verification = verifyStoredTransactionReport(proof, proof.signature, statementVerificationKeys)
+  if (!verification.valid) {
+    throw statementHttpError(409, 'The stored transaction-register proof could not be verified', 'TRANSACTION_REGISTER_PROOF_INVALID')
+  }
+  const payload = verification.payload
+  res.status(proof.documentId === documentId ? 201 : 200).json({
+    report: {
+      ...payload,
+      signature: proof.signature,
+      rows
+    }
+  })
+}))
+
+app.get('/api/reports/transactions/verify/:documentId', statementVerificationLimiter, asyncRoute(async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  const documentId = z.string().regex(/^KCS-KIT-REG-\d{8}-[A-F0-9]{24}$/).parse(routeParam(req, 'documentId'))
+  const signature = z.string().regex(/^[A-Za-z0-9_-]{43}$/).parse(req.query.signature)
+  const proof = await prisma.kitchenTransactionReportVerification.findUnique({ where: { documentId } })
+  if (!proof) return res.status(404).json({ valid: false, status: 'NOT_FOUND', documentId })
+  const verification = verifyStoredTransactionReport(proof, signature, statementVerificationKeys)
+  if (!verification.valid) return res.json({ valid: false, status: verification.status, documentId })
+  const payload = verification.payload
+  res.json({
+    valid: true,
+    status: verification.status,
+    document: {
+      documentId: payload.documentId,
+      issuer: payload.issuer,
+      application: payload.application,
+      issuedAt: payload.issuedAt,
+      periodFrom: payload.periodFrom,
+      periodToExclusive: payload.periodToExclusive,
+      filters: payload.filters,
+      currency: payload.currency,
+      transactionCount: payload.transactionCount,
+      confirmedTotal: payload.confirmedTotal,
+      voidedCount: payload.voidedCount,
+      payloadHash: payload.payloadHash,
+      keyId: payload.keyId,
+      version: payload.version
+    }
+  })
+}))
+
+app.get('/api/periods', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), asyncRoute(async (req, res) => {
+  const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true'
+  const periods = await prisma.accountingPeriod.findMany({
+    where: includeArchived ? {} : { archivedAt: null },
+    orderBy: [{ year: 'desc' }, { month: 'desc' }]
+  })
+  res.json({ periods })
 }))
 
 app.put('/api/periods/:year/:month', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
   const year = z.coerce.number().int().min(2020).max(2100).parse(req.params.year)
   const month = z.coerce.number().int().min(1).max(12).parse(req.params.month)
-  const status = z.enum(['OPEN', 'REVIEW', 'CLOSED']).parse(req.body.status)
+  const input = z.object({
+    status: z.enum(['OPEN', 'REVIEW', 'CLOSED']),
+    reason: z.string().trim().min(5).max(500)
+  }).strict().parse(req.body)
   const old = await prisma.accountingPeriod.findUnique({ where: { year_month: { year, month } } })
-  if (old?.status === 'CLOSED' && status !== 'CLOSED') return res.status(409).json({ message: 'A closed period cannot be reopened through the standard workflow' })
+  if (old?.archivedAt) return res.status(409).json({ message: 'Restore this archived period before modifying it' })
+  if (old?.status === 'CLOSED' && input.status !== 'CLOSED') {
+    return res.status(409).json({ message: 'A closed period cannot be reopened through the standard workflow' })
+  }
+  const actor = req.kitchenUser!.orbitPersonId
+  const now = new Date()
   const period = await prisma.accountingPeriod.upsert({
     where: { year_month: { year, month } },
-    create: { year, month, status, reviewedBy: status === 'REVIEW' ? req.kitchenUser!.orbitPersonId : undefined, reviewedAt: status === 'REVIEW' ? new Date() : undefined, closedBy: status === 'CLOSED' ? req.kitchenUser!.orbitPersonId : undefined, closedAt: status === 'CLOSED' ? new Date() : undefined },
-    update: { status, reviewedBy: status === 'REVIEW' ? req.kitchenUser!.orbitPersonId : undefined, reviewedAt: status === 'REVIEW' ? new Date() : undefined, closedBy: status === 'CLOSED' ? req.kitchenUser!.orbitPersonId : undefined, closedAt: status === 'CLOSED' ? new Date() : undefined }
+    create: {
+      year,
+      month,
+      status: input.status,
+      reviewedBy: input.status === 'REVIEW' ? actor : undefined,
+      reviewedAt: input.status === 'REVIEW' ? now : undefined,
+      closedBy: input.status === 'CLOSED' ? actor : undefined,
+      closedAt: input.status === 'CLOSED' ? now : undefined
+    },
+    update: {
+      status: input.status,
+      reviewedBy: input.status === 'REVIEW' ? actor : input.status === 'OPEN' ? null : undefined,
+      reviewedAt: input.status === 'REVIEW' ? now : input.status === 'OPEN' ? null : undefined,
+      closedBy: input.status === 'CLOSED' ? actor : undefined,
+      closedAt: input.status === 'CLOSED' ? now : undefined
+    }
   })
-  await audit(req, status === 'CLOSED' ? 'MONTH_CLOSED' : 'MONTH_STATUS_CHANGED', 'AccountingPeriod', period.id, old, period)
+  await audit(
+    req,
+    input.status === 'CLOSED' ? 'MONTH_CLOSED' : old ? 'MONTH_STATUS_CHANGED' : 'ACCOUNTING_PERIOD_CREATED',
+    'AccountingPeriod',
+    period.id,
+    old,
+    period,
+    input.reason
+  )
+  res.json({ period })
+}))
+
+app.delete('/api/periods/:id', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = z.string().trim().min(1).max(100).parse(routeParam(req, 'id'))
+  const { reason } = z.object({ reason: z.string().trim().min(5).max(500) }).strict().parse(req.body)
+  const old = await prisma.accountingPeriod.findUnique({ where: { id } })
+  if (!old) return res.status(404).json({ message: 'Accounting period not found' })
+  if (old.archivedAt) return res.json({ period: old, alreadyArchived: true })
+  const period = await prisma.accountingPeriod.update({
+    where: { id },
+    data: {
+      archivedAt: new Date(),
+      archivedBy: req.kitchenUser!.orbitPersonId,
+      archiveReason: reason
+    }
+  })
+  await audit(req, 'ACCOUNTING_PERIOD_ARCHIVED', 'AccountingPeriod', id, old, period, reason)
+  res.json({ period })
+}))
+
+app.post('/api/periods/:id/restore', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = z.string().trim().min(1).max(100).parse(routeParam(req, 'id'))
+  const { reason } = z.object({ reason: z.string().trim().min(5).max(500) }).strict().parse(req.body)
+  const old = await prisma.accountingPeriod.findUnique({ where: { id } })
+  if (!old) return res.status(404).json({ message: 'Accounting period not found' })
+  if (!old.archivedAt) return res.json({ period: old, alreadyActive: true })
+  const period = await prisma.accountingPeriod.update({
+    where: { id },
+    data: { archivedAt: null, archivedBy: null, archiveReason: null }
+  })
+  await audit(req, 'ACCOUNTING_PERIOD_RESTORED', 'AccountingPeriod', id, old, period, reason)
   res.json({ period })
 }))
 

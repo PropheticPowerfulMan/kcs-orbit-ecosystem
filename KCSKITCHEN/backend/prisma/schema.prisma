@@ -428,6 +428,34 @@ model KitchenStatementVerification {
   @@index([issuedAt])
 }
 
+model KitchenTransactionReportVerification {
+  id String @id @default(cuid())
+  documentId String @unique
+  deduplicationKey String @unique
+  issuedBy String
+  issuedAt DateTime
+  periodFrom DateTime
+  periodTo DateTime
+  statusFilter String?
+  paymentModeFilter String?
+  currency String @default("CDF")
+  transactionCount Int
+  confirmedSubtotal Decimal @db.Decimal(14, 2)
+  confirmedDiscount Decimal @db.Decimal(14, 2)
+  confirmedTotal Decimal @db.Decimal(14, 2)
+  voidedCount Int @default(0)
+  rowsHash String
+  canonicalPayload String @db.Text
+  payloadHash String
+  signature String
+  keyId String @default("qr-v1")
+  version Int @default(1)
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([issuedAt])
+  @@index([periodFrom, periodTo])
+}
+
 model KitchenPayment {
   id String @id @default(cuid())
   orbitPersonId String
@@ -482,6 +510,9 @@ model AccountingPeriod {
   reviewedAt DateTime?
   closedBy String?
   closedAt DateTime?
+  archivedBy String?
+  archivedAt DateTime?
+  archiveReason String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([year, month])
