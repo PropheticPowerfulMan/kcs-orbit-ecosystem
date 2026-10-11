@@ -180,11 +180,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
 
   const handleAvatarError = () => {
     if (!user?.id) return
-    const staleUrl = sessionAvatarUrls.get(user.id)
-    if (staleUrl) URL.revokeObjectURL(staleUrl)
-    sessionAvatarUrls.delete(user.id)
-    sessionAvatarRequests.delete(user.id)
-    updateUser({ avatar: undefined })
+    // Keep the last valid portrait through transient network or decoding errors.
     if (avatarLoadVersion === 0) setAvatarLoadVersion(1)
   }
 
@@ -569,7 +565,7 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
       {/* User Profile */}
       <div className={`border-b border-white/60 p-4 dark:border-white/10 ${sidebarCollapsed ? 'items-center' : ''}`}>
         <div className={`flex items-center gap-3 rounded-[22px] border border-white/60 bg-white/50 p-2.5 backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/30 ${sidebarCollapsed ? 'justify-center' : ''}`}>
-          {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-10 w-10 flex-shrink-0 rounded-xl object-cover" onError={handleAvatarError}/> : <div className={`w-10 h-10 rounded-xl ${roleColor} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
+          {user.avatar ? <img src={user.avatar} alt={[user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')} className="h-10 w-10 min-h-10 min-w-10 flex-none aspect-square rounded-full object-cover" onError={handleAvatarError}/> : <div className={`h-10 w-10 min-h-10 min-w-10 flex-none aspect-square rounded-full ${roleColor} flex items-center justify-center text-white font-bold text-sm`}>{user.firstName?.[0]}{user.lastName?.[0]}</div>}
           <AnimatePresence>
             {!sidebarCollapsed && (
               <motion.div

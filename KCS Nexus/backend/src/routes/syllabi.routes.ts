@@ -23,7 +23,7 @@ const input = z.object({
   title: z.string().trim().min(2).max(180),
   description: z.string().trim().max(2000).optional(),
 })
-type Meta = {
+type SyllabusVersion = {
   academicYear: string
   title: string
   description?: string
@@ -33,6 +33,7 @@ type Meta = {
   fileSize: number
   publishedAt: string
 }
+type Meta = SyllabusVersion & { history?: SyllabusVersion[] }
 const parse = (value: string | null): Meta | null => {
   if (!value) return null
   try { return JSON.parse(value) as Meta } catch { return null }
@@ -43,6 +44,11 @@ const item = (course: any) => ({
   course: { id: course.id, name: course.name, code: course.code, grade: course.grade, teacher: course.teacher },
 })
 
+const versionSnapshot = (meta: Meta): SyllabusVersion => ({
+  academicYear: meta.academicYear, title: meta.title, description: meta.description,
+  fileName: meta.fileName, storedName: meta.storedName, mimeType: meta.mimeType,
+  fileSize: meta.fileSize, publishedAt: meta.publishedAt,
+})
 syllabiRouter.get('/', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const role = req.user!.role
   const where: any = {}
@@ -93,6 +99,7 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     mimeType: req.file?.mimetype ?? previous!.mimeType,
     fileSize: req.file?.size ?? previous!.fileSize,
     publishedAt: new Date().toISOString(),
+    history: previous ? [versionSnapshot(previous), ...(previous.history ?? [])].slice(0, 50) : [],
   }
   const saved = await prisma.$transaction(async (transaction) => {
     const updated = await transaction.course.update({
@@ -121,9 +128,6 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     })
     return updated
   })
-  if (req.file && previous?.storedName && previous.storedName !== meta.storedName) {
-    await unlink(path.join(root, previous.storedName)).catch(() => undefined)
-  }
   return success(res, item(saved), previous ? 'Syllabus updated and learners notified' : 'Syllabus published and learners notified', 201)
 }))
 
@@ -137,9 +141,12 @@ syllabiRouter.get('/:courseId/download', authenticate, asyncHandler(async (req: 
   if (!permitted) throw new ApiError(403, 'You are not enrolled in this course')
   const meta = parse(course.syllabus)
   if (!meta) throw new ApiError(404, 'No syllabus has been published for this course')
-  res.setHeader('Content-Type', meta.mimeType)
-  res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(meta.fileName))
-  return res.sendFile(path.join(root, meta.storedName))
+  const requestedVersion = String(req.query.version ?? '')
+  const document = requestedVersion ? meta.history?.find((entry) => entry.publishedAt === requestedVersion) : meta
+  if (!document) throw new ApiError(404, 'This syllabus version is no longer available')
+  res.setHeader('Content-Type', document.mimeType)
+  res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(document.fileName))
+  return res.sendFile(path.join(root, document.storedName))
 }))
 
 syllabiRouter.delete('/:courseId', authenticate, requireRoles('teacher', 'admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -173,6 +180,6 @@ syllabiRouter.delete('/:courseId', authenticate, requireRoles('teacher', 'admin'
       },
     })
   })
-  await unlink(path.join(root, meta.storedName)).catch(() => undefined)
+  await Promise.all([meta, ...(meta.history ?? [])].map((entry) => unlink(path.join(root, entry.storedName)).catch(() => undefined)))
   return success(res, { id: course.id }, 'Syllabus removed')
 }))

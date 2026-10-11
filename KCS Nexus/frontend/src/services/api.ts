@@ -609,6 +609,6 @@ export const syllabiAPI = {
   list: () => api.get('/syllabi'),
   teacherCourses: () => api.get('/syllabi/teacher-courses'),
   publish: (courseId: string, data: FormData) => api.post('/syllabi/' + courseId, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  download: (courseId: string) => api.get('/syllabi/' + courseId + '/download', { responseType: 'blob' }),
+  download: (courseId: string, version?: string) => api.get('/syllabi/' + courseId + '/download', { params: version ? { version } : undefined, responseType: 'blob' }),
   remove: (courseId: string) => api.delete('/syllabi/' + courseId),
 }
