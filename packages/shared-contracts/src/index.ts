@@ -7,6 +7,7 @@ const TrimmedStringSchema = z.string().trim().min(1);
 export const AppSlugSchema = z.enum([
   "KCS_NEXUS",
   "KCS_KITCHEN",
+  "KCS_SENTINEL",
   "EDUPAY",
   "EDUSYNCAI",
   "SAVANEX"
@@ -22,6 +23,7 @@ export const RegistryEntityTypeSchema = z.enum([
 export const CanonicalIdAppPrefix = {
   KCS_NEXUS: "KCSNEX",
   KCS_KITCHEN: "KCSKIT",
+  KCS_SENTINEL: "KCSSEN",
   EDUPAY: "EDUPAY",
   EDUSYNCAI: "EDUSAI",
   SAVANEX: "SAV"
