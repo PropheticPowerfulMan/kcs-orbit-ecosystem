@@ -854,6 +854,19 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
 
   const reportPreview = buildTeacherOperationalReport()
+  const selectedReportCourse = reportCourseId === 'all' ? undefined : courses.find((course) => course.id === reportCourseId)
+  const reportScopedStudents = useMemo(() => {
+    if (!selectedReportCourse) return teacherStudents
+    const scopedIds = new Set(selectedReportCourse.studentIds)
+    return teacherStudents.filter((student) => scopedIds.has(student.id))
+  }, [selectedReportCourse, teacherStudents])
+
+  useEffect(() => {
+    setSelectedAiStudent((current) => current && reportScopedStudents.some((student) => student.id === current.id) ? current : null)
+    setReportDraft((draft) => reportScopedStudents.some((student) => student.name === draft.student)
+      ? draft
+      : { ...draft, student: reportScopedStudents[0]?.name ?? '' })
+  }, [reportScopedStudents])
   const addReportCardCourse = () => {
     setReportCardRows((current) => [
       ...current,
@@ -1440,6 +1453,21 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const inputClass = 'input-kcs py-2 text-sm'
   const panelClass = 'rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
   const compactButton = 'rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-kcs-blue-800'
+  useEffect(() => {
+    const saveWithKeyboard = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's' || event.repeat) return
+      const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      const activeRegion = activeElement?.closest<HTMLElement>('[data-teacher-save-region]')
+      const scopedButton = activeRegion?.querySelector<HTMLButtonElement>('[data-teacher-save-primary]:not(:disabled)')
+      const fallbackButton = document.querySelector<HTMLButtonElement>('[data-teacher-save-primary]:not(:disabled)')
+      const button = scopedButton ?? fallbackButton
+      if (!button || button.offsetParent === null) return
+      event.preventDefault()
+      button.click()
+    }
+    document.addEventListener('keydown', saveWithKeyboard)
+    return () => document.removeEventListener('keydown', saveWithKeyboard)
+  }, [segment])
 
   if (segment === 'attendance') return <TeacherClassAttendance />
 
@@ -1468,7 +1496,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
+              <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
               <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
             </div>
           </div>
@@ -1505,7 +1533,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
+            <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
             <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
           </div>
         </div>
@@ -1627,7 +1655,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       {courseErrors.grade && <p className="field-error mt-1" role="alert">{courseErrors.grade}</p>}
                     </div>}
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? 'Saving securely…' : editingCourseId ? 'Save course' : 'Create course'}</button>
+                      <button type="button" data-teacher-save-primary disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-green-700 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-400 dark:text-emerald-950 dark:shadow-[0_0_0_1px_rgba(110,231,183,0.55),0_0_22px_rgba(52,211,153,0.32)] dark:hover:bg-emerald-300">{courseSaving ? 'Saving securely…' : editingCourseId ? 'Save course' : 'Create course'}</button>
                       {editingCourseId && <button onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-600 bg-white px-4 py-2 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 dark:border-kcs-gold-400 dark:bg-kcs-blue-950 dark:text-kcs-gold-300 dark:hover:bg-kcs-blue-800">Cancel edit</button>}
                     </div>
                   </div>
@@ -1799,7 +1827,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
               <footer className="flex flex-col-reverse gap-3 border-t border-kcs-blue-100 pt-5 sm:flex-row sm:justify-end dark:border-kcs-blue-800">
                 <button type="button" disabled={courseSaving} onClick={resetCourseDraft} className="rounded-xl border-2 border-kcs-blue-300 px-5 py-3 text-sm font-bold text-kcs-blue-800 hover:bg-kcs-blue-50 disabled:opacity-50 dark:border-kcs-blue-600 dark:text-blue-100 dark:hover:bg-kcs-blue-900">{tr('Annuler', 'Cancel')}</button>
-                <button type="button" disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70">{courseSaving ? tr('Enregistrement sécurisé…', 'Saving securely…') : tr('Enregistrer les modifications', 'Save changes')}</button>
+                <button type="button" data-teacher-save-primary disabled={courseSaving} aria-busy={courseSaving} onClick={() => void createCourse()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-70">{courseSaving ? tr('Enregistrement sécurisé…', 'Saving securely…') : tr('Enregistrer les modifications', 'Save changes')}</button>
               </footer>
             </div>
           </div>
@@ -2406,7 +2434,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={printTeacherReport} className={compactButton}><Printer size={16}/> {tr('Imprimer / PDF', 'Print / PDF')}</button>
-                <button type="button" disabled={reportSaving} onClick={() => void saveTeacherOperationalReport(false)} className="rounded-xl border border-kcs-blue-300 bg-white px-4 py-2 text-sm font-semibold text-kcs-blue-800 disabled:opacity-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-kcs-blue-100"><FileText size={16} className="mr-2 inline"/>{tr('Enregistrer le brouillon', 'Save draft')}</button>
+                <button type="button" data-teacher-save-primary disabled={reportSaving} onClick={() => void saveTeacherOperationalReport(false)} className="rounded-xl border border-kcs-blue-300 bg-white px-4 py-2 text-sm font-semibold text-kcs-blue-800 disabled:opacity-50 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-kcs-blue-100"><FileText size={16} className="mr-2 inline"/>{tr('Enregistrer le brouillon', 'Save draft')}</button>
                 <button type="button" disabled={reportSaving} onClick={() => void saveTeacherOperationalReport(true)} className={`${compactButton} disabled:opacity-50`}><Upload size={16}/> {reportSaving ? tr('Traitement…', 'Processing…') : tr('Transmettre et notifier', 'Submit and notify')}</button>
               </div>
             </div>
@@ -2477,21 +2505,20 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>}
           </div>
-          <div className={panelClass}><h3 className="font-bold text-kcs-blue-900 dark:text-white">AI student reports and recommendations</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Select a learner to generate an individual analysis.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{teacherStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · Average {student.average ?? 'N/A'} · Attendance {student.attendance ?? 'N/A'}%</p></button>)}</div></div>
+          <div className={panelClass}><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Rapports IA et recommandations des élèves', 'AI student reports and recommendations')}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Seuls les élèves du cours ou du périmètre sélectionné ci-dessus apparaissent ici.', 'Only learners from the course or scope selected above appear here.')}</p></div><span className="w-fit rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-800 dark:text-kcs-blue-100">{reportScopedStudents.length} {tr('élève(s)', 'learner(s)')}</span></div>{reportScopedStudents.length ? <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{reportScopedStudents.map((student) => <button type="button" key={student.id} onClick={() => setSelectedAiStudent(student)} className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left hover:border-kcs-blue-300 hover:bg-kcs-blue-50 dark:border-kcs-blue-800 dark:bg-kcs-blue-800/30"><p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p><p className="mt-1 text-xs text-gray-500">{canonicalClassLabel(student.grade, student.section)} · {tr('Moyenne', 'Average')} {student.average ?? 'N/A'} · {tr('Présence', 'Attendance')} {student.attendance ?? 'N/A'}%</p></button>)}</div> : <p className="mt-4 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">{tr('Aucun élève n’est inscrit dans le périmètre sélectionné.', 'No learner is enrolled in the selected scope.')}</p>}</div>
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <div className={panelClass}>
-            <h3 className="font-bold text-kcs-blue-900 dark:text-white">Draft report card</h3>
-            <div className="mt-4 grid gap-3">
-              <select className={inputClass} value={reportDraft.student} onChange={(event) => setReportDraft((draft) => ({ ...draft, student: event.target.value }))}>
-                {teacherStudents.map((student) => <option key={student.id} value={student.name}>{student.name}</option>)}
-              </select>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input className={inputClass} value={reportDraft.term} onChange={(event) => setReportDraft((draft) => ({ ...draft, term: event.target.value }))} />
-                <input className={inputClass} type="number" value={reportDraft.average} onChange={(event) => setReportDraft((draft) => ({ ...draft, average: Number(event.target.value) }))} />
+          <div className={panelClass} data-teacher-save-region>
+            <h3 className="font-bold text-kcs-blue-900 dark:text-white">{tr('Brouillon du bulletin', 'Draft report card')}</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{tr('Préparez un brouillon clairement identifié pour révision. Ctrl + S enregistre ce formulaire.', 'Prepare a clearly identified draft for review. Ctrl + S saves this form.')}</p>
+            <div className="mt-4 grid gap-4">
+              <label className="grid gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{tr('Élève concerné', 'Learner')}<select className={inputClass} value={reportDraft.student} onChange={(event) => setReportDraft((draft) => ({ ...draft, student: event.target.value }))} disabled={!reportScopedStudents.length}><option value="">{tr('Sélectionner un élève', 'Select a learner')}</option>{reportScopedStudents.map((student) => <option key={student.id} value={student.name}>{student.name} · {canonicalClassLabel(student.grade, student.section)}</option>)}</select><span className="text-[11px] font-normal text-gray-400">{tr('Liste limitée au cours ou périmètre choisi.', 'Limited to the selected course or scope.')}</span></label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{tr('Période académique', 'Academic period')}<input className={inputClass} value={reportDraft.term} onChange={(event) => setReportDraft((draft) => ({ ...draft, term: event.target.value }))} placeholder={tr('Ex. Semestre 1 · Trimestre 1', 'E.g. Semester 1 · Trimester 1')} /></label>
+                <label className="grid gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{tr('Moyenne générale (%)', 'Overall average (%)')}<input className={inputClass} type="number" min="0" max="100" step="0.01" value={reportDraft.average} onChange={(event) => setReportDraft((draft) => ({ ...draft, average: Number(event.target.value) }))} placeholder="0–100" /></label>
               </div>
-              <input className={inputClass} value={reportDraft.conduct} onChange={(event) => setReportDraft((draft) => ({ ...draft, conduct: event.target.value }))} />
-              <textarea className={inputClass} value={reportDraft.teacherComment} onChange={(event) => setReportDraft((draft) => ({ ...draft, teacherComment: event.target.value }))} rows={4} />
-              <button onClick={createReport} className={compactButton}>Create report draft</button>
+              <label className="grid gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{tr('Appréciation de conduite', 'Conduct assessment')}<input className={inputClass} value={reportDraft.conduct} onChange={(event) => setReportDraft((draft) => ({ ...draft, conduct: event.target.value }))} placeholder={tr('Ex. Excellent, Très bien, À améliorer…', 'E.g. Excellent, Very good, Needs improvement…')} /></label>
+              <label className="grid gap-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{tr('Commentaire pédagogique de l’enseignant', 'Teacher academic comment')}<textarea className={`${inputClass} min-h-28`} value={reportDraft.teacherComment} onChange={(event) => setReportDraft((draft) => ({ ...draft, teacherComment: event.target.value }))} rows={4} placeholder={tr('Résumez les progrès, points forts, difficultés et recommandations.', 'Summarize progress, strengths, challenges and recommendations.')} /></label>
+              <button type="button" data-teacher-save-primary disabled={!reportDraft.student || workspaceStatus === 'saving'} onClick={createReport} className={`${compactButton} disabled:cursor-not-allowed disabled:opacity-50`}><FileText size={16} className="mr-2 inline"/>{workspaceStatus === 'saving' ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer le brouillon', 'Save report draft')} <span className="ml-2 text-[10px] opacity-75">Ctrl + S</span></button>
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -2561,7 +2588,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
               </select>
-              <button onClick={createDisciplineReport} className={compactButton}>Create detailed report</button>
+              <button data-teacher-save-primary onClick={createDisciplineReport} className={compactButton}>Create detailed report</button>
             </div>
           </div>
           <div className="space-y-4">
