@@ -2,6 +2,9 @@ import { app } from './app.js'
 import { env } from './config.js'
 import { prisma } from './db.js'
 import { startNotificationWorker } from './notifications.js'
+import { ensureOfficialMenuSchedule } from './kcs-menu-2026.js'
+
+await ensureOfficialMenuSchedule(prisma)
 
 const server = app.listen(env.PORT, () => console.log('KCS Kitchen API listening on ' + env.PORT))
 const stopNotificationWorker = startNotificationWorker()

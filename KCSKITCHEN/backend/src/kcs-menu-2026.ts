@@ -1,6 +1,8 @@
-﻿import { Prisma, PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 type MenuLine = { name: string; price: number; category: 'FOOD' | 'SNACK' | 'DESSERT' }
+type OfficialProductRef = { id: string }
+
 const monday: MenuLine[] = [
   { name: 'Chicken & Fries / Cuisse & Frites', price: 10000, category: 'FOOD' },
   { name: 'Samoussas', price: 2500, category: 'SNACK' },
@@ -24,24 +26,119 @@ const menus: Record<number, { title: string; items: MenuLine[] }> = {
   4: { title: 'Thursday / Jeudi', items: tuesday.map(line => line.name.includes('French Toast') ? { ...line, price: 1000 } : line) },
   5: { title: 'Friday / Vendredi', items: monday }
 }
+const officialProducts = [...monday, ...tuesday].filter((line, index, all) =>
+  all.findIndex(candidate => candidate.name === line.name) === index
+)
 
-export async function ensureOfficialMenu(prisma: PrismaClient, key: string) {
+async function ensureOfficialProducts(prisma: PrismaClient) {
+  const products = new Map<string, OfficialProductRef>()
+  for (const line of officialProducts) {
+    let product = await prisma.product.findFirst({
+      where: { name: line.name, archivedAt: null },
+      orderBy: { createdAt: 'asc' }
+    })
+    product = product
+      ? await prisma.product.update({
+          where: { id: product.id },
+          data: {
+            currentPrice: new Prisma.Decimal(line.price),
+            currency: 'CDF',
+            category: line.category,
+            isAvailable: true,
+            discountEligible: true
+          }
+        })
+      : await prisma.product.create({
+          data: {
+            name: line.name,
+            currentPrice: new Prisma.Decimal(line.price),
+            currency: 'CDF',
+            category: line.category,
+            isAvailable: true,
+            discountEligible: true
+          }
+        })
+    products.set(line.name, { id: product.id })
+  }
+  return products
+}
+
+export async function ensureOfficialMenu(
+  prisma: PrismaClient,
+  key: string,
+  preparedProducts?: Map<string, OfficialProductRef>
+) {
   const date = new Date(`${key}T00:00:00.000Z`)
   const definition = menus[date.getUTCDay()]
   if (!definition) return null
-  const existing = await prisma.dailyMenu.findUnique({ where: { menuDate: date }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
-  if (existing) return existing
-  return prisma.$transaction(async tx => {
-    const products = []
-    for (const line of definition.items) {
-      let product = await tx.product.findFirst({ where: { name: line.name, archivedAt: null }, orderBy: { createdAt: 'asc' } })
-      product = product
-        ? await tx.product.update({ where: { id: product.id }, data: { currentPrice: new Prisma.Decimal(line.price), currency: 'CDF', category: line.category, isAvailable: true, discountEligible: true } })
-        : await tx.product.create({ data: { name: line.name, currentPrice: new Prisma.Decimal(line.price), currency: 'CDF', category: line.category, isAvailable: true, discountEligible: true } })
-      products.push(product)
+  const existing = await prisma.dailyMenu.findUnique({
+    where: { menuDate: date },
+    include: {
+      items: {
+        where: { isAvailable: true },
+        include: { product: true },
+        orderBy: { displayOrder: 'asc' }
+      }
     }
-    const menu = await tx.dailyMenu.create({ data: { menuDate: date, title: definition.title, description: 'Official KCS Kitchen weekday menu 2026', status: 'PUBLISHED', createdBy: 'SYSTEM_KCS_MENU_2026', publishedAt: new Date() } })
-    await tx.dailyMenuItem.createMany({ data: products.map((product, index) => ({ menuId: menu.id, productId: product.id, unitPrice: product.currentPrice, currency: 'CDF', displayOrder: index })) })
-    return tx.dailyMenu.findUniqueOrThrow({ where: { id: menu.id }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
   })
+  if (existing) return existing
+  const products = preparedProducts ?? await ensureOfficialProducts(prisma)
+  return prisma.$transaction(async tx => {
+    const menu = await tx.dailyMenu.create({
+      data: {
+        menuDate: date,
+        title: definition.title,
+        description: 'Official KCS Kitchen weekday menu 2026',
+        status: 'PUBLISHED',
+        createdBy: 'SYSTEM_KCS_MENU_2026',
+        publishedAt: new Date()
+      }
+    })
+    await tx.dailyMenuItem.createMany({
+      data: definition.items.map((line, index) => ({
+        menuId: menu.id,
+        productId: products.get(line.name)!.id,
+        unitPrice: new Prisma.Decimal(line.price),
+        currency: 'CDF',
+        displayOrder: index
+      }))
+    })
+    return tx.dailyMenu.findUniqueOrThrow({
+      where: { id: menu.id },
+      include: {
+        items: {
+          where: { isAvailable: true },
+          include: { product: true },
+          orderBy: { displayOrder: 'asc' }
+        }
+      }
+    })
+  })
+}
+
+const kinshasaDateKey = (date: Date) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Africa/Kinshasa',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(date)
+
+export async function ensureOfficialMenuSchedule(
+  prisma: PrismaClient,
+  start = new Date(),
+  businessDays = 15
+) {
+  const products = await ensureOfficialProducts(prisma)
+  const cursor = new Date(`${kinshasaDateKey(start)}T00:00:00.000Z`)
+  let created = 0
+  let inspected = 0
+  while (created < businessDays && inspected < 45) {
+    const day = cursor.getUTCDay()
+    if (day >= 1 && day <= 5) {
+      await ensureOfficialMenu(prisma, cursor.toISOString().slice(0, 10), products)
+      created += 1
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+    inspected += 1
+  }
 }
