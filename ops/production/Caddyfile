@@ -33,6 +33,14 @@
   handle_path /kitchen/* {
     reverse_proxy kitchen_web:80
   }
+  redir /sentinel /sentinel/ 308
+  handle /sentinel/api/* {
+    uri strip_prefix /sentinel
+    reverse_proxy sentinel_api:4000
+  }
+  handle_path /sentinel/* {
+    reverse_proxy sentinel_web:80
+  }
   redir /lesson-plan /lesson-plan/ 308
   handle /lesson-plan/api/* {
     uri strip_prefix /lesson-plan

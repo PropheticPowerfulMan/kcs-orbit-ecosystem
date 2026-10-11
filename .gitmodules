@@ -2,3 +2,6 @@
 	path = KCS Nexus Academy
 	url = https://github.com/PropheticPowerfulMan/KCS-Nexus-Academy.git
 	branch = feature/orbit-sso-integration
+[submodule "KCS Sentinel"]
+	path = KCS Sentinel
+	url = https://github.com/PropheticPowerfulMan/kcs-sentinel.git

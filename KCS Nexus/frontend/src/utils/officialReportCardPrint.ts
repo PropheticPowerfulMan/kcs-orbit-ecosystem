@@ -48,6 +48,15 @@ const printableAsset = (value?: string | null) => {
 export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
   const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  // Reserve the window synchronously in the click event. Opening it after the
+  // photo, authenticity-registry and QR awaits is blocked by some browsers.
+  const printWindow = window.open('', '_blank', 'width=1100,height=900')
+  if (!printWindow) {
+    onBlocked(tr('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres contextuelles puis réessayez.', 'The browser blocked the print window. Allow pop-ups and try again.'))
+    return
+  }
+  printWindow.document.write(`<!doctype html><html><head><title>${tr('Préparation du bulletin…', 'Preparing report card…')}</title></head><body style="font-family:system-ui;padding:2rem;color:#053665">${tr('Préparation sécurisée du bulletin officiel…', 'Securely preparing the official report card…')}</body></html>`)
+  printWindow.document.close()
   const dateLocale = language === 'fr' ? 'fr-FR' : 'en-GB'
   const localizedTerm = (value: string) => language === 'fr'
     ? value.replace(/Semester/g, 'Semestre').replace(/Trimester/g, 'Trimestre').replace(/Annual final/gi, 'Final annuel')
@@ -64,6 +73,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   try {
     await academicRecordsAPI.registerReportCardVerification({ documentId, fingerprint, reportCardId: card.id })
   } catch {
+    printWindow.close()
     onBlocked(tr('Le registre d’authenticité est momentanément indisponible. Réessayez avant d’imprimer.', 'The authenticity registry is temporarily unavailable. Try again before printing.'))
     return
   }
@@ -117,7 +127,6 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, ${tr('République démocratique du Congo', 'Democratic Republic of Congo')}</div><div style="text-align:right">KCS Nexus AI · ${tr('Bulletin officiel', 'Official Report Card')}<br>${escapeHtml(issuedAt.toLocaleDateString(dateLocale))}</div></footer>
   </div></main><script>addEventListener('load',function(){var i=Array.prototype.slice.call(document.images);Promise.all(i.map(function(x){if(x.complete)return Promise.resolve();return new Promise(function(r){x.onload=r;x.onerror=r})})).then(function(){setTimeout(function(){window.focus();window.print()},250)})});<\/script></body></html>`
   const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}))
-  const printWindow=window.open(url,'_blank','width=1100,height=900')
-  if(!printWindow){URL.revokeObjectURL(url);onBlocked(tr('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres contextuelles puis réessayez.', 'The browser blocked the print window. Allow pop-ups and try again.'));return}
+  printWindow.location.replace(url)
   window.setTimeout(()=>URL.revokeObjectURL(url),60_000)
 }

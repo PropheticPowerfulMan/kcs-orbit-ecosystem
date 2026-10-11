@@ -19,6 +19,7 @@ enum Role {
 enum AppSlug {
   KCS_NEXUS
   KCS_KITCHEN
+  KCS_SENTINEL
   EDUPAY
   EDUSYNCAI
   SAVANEX
