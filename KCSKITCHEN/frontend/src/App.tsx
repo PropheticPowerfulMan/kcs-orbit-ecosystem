@@ -502,7 +502,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
-        {page === 'dashboard' && <Dashboard user={user} t={t} />}
+        {page === 'dashboard' && <Dashboard user={user} t={t} lang={lang} />}
         {page === 'menus' && <DailyMenus lang={lang} />}
         {page === 'pos' && <PointOfSale t={t} lang={lang} />}
         {page === 'catalog' && <Catalog canEdit={user.role === 'KITCHEN_ADMIN'} t={t} lang={lang} />}
@@ -532,14 +532,65 @@ function Stat({ icon, label, value, tone = '' }: { icon: ReactNode; label: strin
   return <article className={'stat-card ' + tone}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>
 }
 
-function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
+type PersonalMenu = { id: string; title: string; items: Array<{ product: Product; unitPrice: string; currency: string }> }
+
+const menuPhotoFor = (product: Product) => {
+  if (product.photoUrl) return product.photoUrl
+  const name = product.name.toLowerCase()
+  if (/(waffle|gaufre|crêpe|crepe|toast|pain perdu|samoussa|sandwich)/.test(name)) return './images/kitchen-menu-snacks-desserts.jpg'
+  if (/(shawarma|chawarma|meatball|boulette|skewer|brochette|macaroni|rice|riz|plantain)/.test(name)) return './images/kitchen-menu-savory-selection.jpg'
+  return './images/kitchen-culinary-hero.jpg'
+}
+function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; onOrdered: () => void }) {
+  const fr = lang === 'fr'
+  const [menu, setMenu] = useState<PersonalMenu | null>(null)
+  const [cart, setCart] = useState<Record<string, number>>({})
+  const [confirming, setConfirming] = useState(false)
+  const [orderType, setOrderType] = useState<'CASH' | 'CREDIT'>('CASH')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const { rate } = useCurrencyDisplay()
+  useEffect(() => { api<{ menu: PersonalMenu }>('/daily-menus/today').then(result => setMenu(result.menu)).catch(error => setNotice({ type: 'error', message: error.message })) }, [])
+  const products = menu?.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency })) ?? []
+  const total = products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0)
+  const eligibleTotal = products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0)
+  const subsidy = ['TEACHER', 'STAFF'].includes(user.role) ? (eligibleTotal >= 20000 ? 8000 : eligibleTotal >= 10000 ? 4000 : eligibleTotal >= 5000 ? 2000 : 0) : 0
+  const change = (id: string, delta: number) => setCart(current => ({ ...current, [id]: Math.max(0, (current[id] || 0) + delta) }))
+  async function submitOrder() {
+    if (!menu || !total || busy) return
+    setBusy(true)
+    try {
+      const result = await api<{ transaction: Transaction }>('/transactions', { method: 'POST', body: JSON.stringify({ orbitPersonId: user.orbitPersonId, dailyMenuId: menu.id, items: Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId, quantity })), paymentMode: orderType, confirmationType: 'DASHBOARD', notes: 'Online order from KCS Kitchen dashboard' }) })
+      setCart({}); setConfirming(false); onOrdered()
+      setNotice({ type: 'success', message: fr ? `Commande ${result.transaction.transactionNumber} enregistrée. Kitchen et votre compte ont été notifiés.` : `Order ${result.transaction.transactionNumber} recorded. Kitchen and your account were notified.` })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
+  if (!menu) return null
+  return <>
+    <section className="panel personal-daily-menu">
+      <div className="daily-menu-cover"><img src="./images/kitchen-culinary-hero.jpg" alt="KCS Kitchen daily meal"/><div><span className="eyebrow">{fr ? 'MENU DU JOUR' : "TODAY'S MENU"}</span><h2>{menu.title}</h2><p>{fr ? 'Choisissez vos plats et boissons, puis commandez en achat ou en dette autorisée.' : 'Choose meals and drinks, then order as a purchase or authorized debt.'}</p></div></div>
+      <div className="personal-menu-grid">{products.map(product => <article key={product.id} className="personal-menu-card">
+        <img src={menuPhotoFor(product)} alt={product.name} loading="lazy" />
+        <div><small>{product.category}</small><h3>{product.name}</h3><DisplayMoney value={product.currentPrice} currency={product.currency}/></div>
+        <div className="personal-menu-qty"><button type="button" onClick={() => change(product.id, -1)} aria-label={fr ? 'Retirer' : 'Remove'}>−</button><b>{cart[product.id] || 0}</b><button type="button" onClick={() => change(product.id, 1)} aria-label={fr ? 'Ajouter' : 'Add'}>+</button></div>
+      </article>)}</div>
+      <div className="personal-order-summary"><span>{fr ? 'Total estimé' : 'Estimated total'} <b><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></b></span>{subsidy > 0 && <small>{fr ? `Prise en charge KCS : ${subsidy.toLocaleString('fr-FR')} CDF` : `KCS subsidy: ${subsidy.toLocaleString('en-US')} CDF`}</small>}<button className="primary" type="button" disabled={!total} onClick={() => setConfirming(true)}><ShoppingCart/>{fr ? 'Commander maintenant' : 'Order now'}</button></div>
+    </section>
+    {confirming && <Modal onClose={() => !busy && setConfirming(false)}><div className="modal-form online-order-dialog"><span className="eyebrow">{fr ? 'CONFIRMATION SÉCURISÉE' : 'SECURE CONFIRMATION'}</span><h2>{fr ? 'Comment enregistrer cette commande ?' : 'How should this order be recorded?'}</h2><p>{fr ? 'Choisissez Achat pour payer maintenant, ou Dette pour débiter votre compte Kitchen si le crédit est autorisé.' : 'Choose Purchase to pay now, or Debt to charge your Kitchen account if credit is authorized.'}</p><div className="payment-switch"><button type="button" className={orderType === 'CASH' ? 'active' : ''} onClick={() => setOrderType('CASH')}><Wallet/>{fr ? 'Achat' : 'Purchase'}</button><button type="button" className={orderType === 'CREDIT' ? 'active' : ''} onClick={() => setOrderType('CREDIT')}><CreditCard/>{fr ? 'Dette' : 'Debt'}</button></div><div className="total-row"><span>{fr ? 'Montant à votre charge' : 'Amount payable'}</span><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></div><button className="primary large" type="button" disabled={busy} onClick={submitOrder}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Confirmer la commande' : 'Confirm order'}</button></div></Modal>}
+    {notice && <Notice {...notice} onClose={() => setNotice(null)}/>} 
+  </>
+}
+function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; lang: Lang }) {
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState('')
-  useEffect(() => { api<any>('/dashboard').then(setData).catch(err => setError(err.message)) }, [])
+  const loadDashboard = () => api<any>('/dashboard').then(setData).catch(err => setError(err.message))
+  useEffect(() => { void loadDashboard() }, [])
   if (error) return <div className="empty error">{error}</div>
   if (!data) return <Loading />
   if (data.mode === 'personal') return <>
     <section className="hero"><div><span className="eyebrow">{t.personalAccount}</span><h2>{t.welcome}, {user.fullName.split(' ').at(-1)}</h2><p>{t.consumptionLive}</p></div><ChefHat size={70} /></section>
+    <PersonalDailyMenu user={user} lang={lang} onOrdered={() => { void loadDashboard() }} />
     <div className="stats">
       <Stat icon={<ShoppingCart />} label={t.today} value={<DisplayMoney value={data.today._sum.total} />} />
       <Stat icon={<ClipboardList />} label={t.thisMonth} value={<DisplayMoney value={data.month._sum.total} />} />
@@ -563,6 +614,9 @@ function Dashboard({ user, t }: { user: User; t: Record<string, string> }) {
     </div>
     <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.popularProducts}</span><h2>{t.topConsumption}</h2></div></div>
       {data.popular.length ? <div className="rank-list">{data.popular.map((item: any, index: number) => <div key={item.productId}><b>{String(index + 1).padStart(2, '0')}</b><span>{item.productNameSnapshot}</span><strong>{Number(item._sum.quantity || 0)}</strong></div>)}</div> : <Empty text={t.noData} />}
+    </section>
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div>
+      {data.notifications?.length ? <div className="activity-list">{data.notifications.map((item: any) => <div key={item.id}><ShieldCheck/><span><b>{item.eventType.replaceAll('_', ' ')}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData}/>}
     </section>
   </>
 }

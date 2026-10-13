@@ -343,7 +343,11 @@ app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyn
   res.json({ access })
 }))
 
-const kitchenDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+const kitchenDateKey = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
+  return [part('year'), part('month'), part('day')].join('-')
+}
 const menuDate = (value: string) => new Date(`${value}T00:00:00.000Z`)
 
 app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => {
@@ -444,8 +448,11 @@ const saleSchema = z.object({
   confirmationType: z.enum(['NONE', 'PIN', 'DASHBOARD', 'QR', 'SIGNATURE']).default('NONE')
 })
 
-app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
+app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'TEACHER', 'STAFF', 'STUDENT'), asyncRoute(async (req: AuthRequest, res) => {
   const input = saleSchema.parse(req.body)
+  const isPersonalOrder = ['TEACHER', 'STAFF', 'STUDENT'].includes(req.kitchenUser!.role)
+  if (isPersonalOrder && input.orbitPersonId !== req.kitchenUser!.orbitPersonId) return res.status(403).json({ message: 'A personal Kitchen order may only be placed for the authenticated account' })
+  if (isPersonalOrder && !['CASH', 'CREDIT'].includes(input.paymentMode)) return res.status(400).json({ message: 'Choose purchase or debt for a personal Kitchen order' })
   const person = await resolvePerson(input.orbitPersonId)
   if (!person) return res.status(404).json({ message: 'Active Orbit identity not found' })
 
@@ -561,12 +568,12 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       } })
     }
 
-    await tx.notificationOutbox.create({ data: {
-      orbitPersonId: person.id,
-      eventType: 'KITCHEN_TRANSACTION_CREATED',
-      channels: ['IN_APP', 'EMAIL'],
-      payload: { transactionNumber, subtotal, schoolSubsidy, total, currency: 'CDF', paymentMode: input.paymentMode }
-    } })
+    const notificationPayload = { transactionNumber, subtotal, schoolSubsidy, total, currency: 'CDF', paymentMode: input.paymentMode, personName: person.fullName, onlineOrder: isPersonalOrder, items: lines.map(line => `${line.quantity} × ${line.product.name}`) }
+    const kitchenManagers = isPersonalOrder ? await tx.kitchenAccess.findMany({ where: { role: 'KITCHEN_ADMIN', isActive: true }, select: { orbitPersonId: true } }) : []
+    await tx.notificationOutbox.createMany({ data: [
+      { orbitPersonId: person.id, eventType: 'KITCHEN_TRANSACTION_CREATED', channels: ['IN_APP', 'EMAIL', 'SMS'], payload: notificationPayload },
+      ...kitchenManagers.filter(manager => manager.orbitPersonId !== person.id).map(manager => ({ orbitPersonId: manager.orbitPersonId, eventType: 'KITCHEN_ONLINE_ORDER_PLACED', channels: ['IN_APP', 'EMAIL', 'SMS'], payload: notificationPayload }))
+    ] })
     return created
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
@@ -1107,7 +1114,7 @@ app.get('/api/dashboard', authenticate, asyncRoute(async (req: AuthRequest, res)
     return res.json({ mode: 'personal', today, month, balance: await balanceFor(orbitPersonId), disputes, notifications })
   }
 
-  const [today, credit, outstanding, payments, discounts, schoolSubsidies, disputes, lowStock, unavailable, cashiers, popular] = await Promise.all([
+  const [today, credit, outstanding, payments, discounts, schoolSubsidies, disputes, lowStock, unavailable, cashiers, popular, notifications] = await Promise.all([
     prisma.kitchenTransaction.aggregate({ where: { status: 'CONFIRMED', createdAt: { gte: start } }, _sum: { total: true }, _count: true }),
     prisma.kitchenTransaction.aggregate({ where: { status: 'CONFIRMED', paymentMode: 'CREDIT', createdAt: { gte: start } }, _sum: { total: true } }),
     prisma.kitchenLedgerEntry.aggregate({ _sum: { amount: true } }),
@@ -1118,9 +1125,10 @@ app.get('/api/dashboard', authenticate, asyncRoute(async (req: AuthRequest, res)
     prisma.product.findMany({ where: { trackInventory: true }, select: { stockQuantity: true, reorderLevel: true } }).then(rows => rows.filter(row => Number(row.stockQuantity) <= Number(row.reorderLevel)).length),
     prisma.product.count({ where: { isAvailable: false } }),
     prisma.kitchenAccess.count({ where: { role: 'CASHIER', isActive: true } }),
-    prisma.kitchenTransactionItem.groupBy({ by: ['productId', 'productNameSnapshot'], _sum: { quantity: true }, orderBy: { _sum: { quantity: 'desc' } }, take: 5 })
+    prisma.kitchenTransactionItem.groupBy({ by: ['productId', 'productNameSnapshot'], _sum: { quantity: true }, orderBy: { _sum: { quantity: 'desc' } }, take: 5 }),
+    prisma.notificationOutbox.findMany({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId }, orderBy: { createdAt: 'desc' }, take: 20 })
   ])
-  res.json({ mode: 'operations', today, credit, outstanding: outstanding._sum.amount || 0, payments, discounts, schoolSubsidies, disputes, lowStock, unavailable, cashiers, popular })
+  res.json({ mode: 'operations', today, credit, outstanding: outstanding._sum.amount || 0, payments, discounts, schoolSubsidies, disputes, lowStock, unavailable, cashiers, popular, notifications })
 }))
 
 app.get('/api/reports/monthly/:orbitPersonId', authenticate, asyncRoute(async (req: AuthRequest, res) => {

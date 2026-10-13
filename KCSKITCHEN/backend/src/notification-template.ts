@@ -19,6 +19,15 @@ export function buildKitchenNotification(eventType: string, payload: Payload) {
       ].join('\n')
     }
   }
+  if (eventType === 'KITCHEN_ONLINE_ORDER_PLACED') {
+    const reference = String(payload.transactionNumber || 'KCS Kitchen')
+    const person = String(payload.personName || 'KCS member')
+    const items = Array.isArray(payload.items) ? payload.items.join(', ') : ''
+    return {
+      title: 'KCS Kitchen · Nouvelle commande / New order',
+      text: [`${person} a passé une commande Kitchen (${reference}).`, items, `Montant: ${amount(payload.total)} · ${String(payload.paymentMode || '')}.`, '', `${person} placed a Kitchen order (${reference}).`].filter(Boolean).join('\n')
+    }
+  }
   if (eventType === 'KITCHEN_PAYMENT_RECORDED') {
     return {
       title: 'KCS Kitchen · Paiement enregistré',

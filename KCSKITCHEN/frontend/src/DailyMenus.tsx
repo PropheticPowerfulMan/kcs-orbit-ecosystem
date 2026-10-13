@@ -18,7 +18,12 @@ type Menu = {
 }
 type AuditEntry = { id: string; action: string; actorId: string; actorRole: string; createdAt: string; reason?: string | null }
 type DeletedMenuAudit = AuditEntry & { entityId: string; oldValue?: Partial<Menu> | null }
-const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+const dateKeyInKinshasa = (value = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(value)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
+  return [part('year'), part('month'), part('day')].join('-')
+}
+const today = () => dateKeyInKinshasa()
 const dateKey = (value: string) => new Date(value).toISOString().slice(0, 10)
 
 function AuditTrail({ logs, fr }: { logs: AuditEntry[]; fr: boolean }) {
@@ -33,6 +38,7 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
   const [menus, setMenus] = useState<Menu[]>([])
   const [deletedMenus, setDeletedMenus] = useState<DeletedMenuAudit[]>([])
   const [selected, setSelected] = useState<string[]>([])
+  const [menuPrices, setMenuPrices] = useState<Record<string, { value: string; currency: string }>>({})
   const [date, setDate] = useState(today())
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -51,6 +57,11 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     setProducts(productResult.products.filter(product => product.isAvailable))
     setMenus(menuResult.menus)
     setDeletedMenus(menuResult.deletedMenus || [])
+    if (!editingId) {
+      const activeProducts = productResult.products.filter(product => product.isAvailable)
+      const todayMenu = menuResult.menus.find(menu => dateKey(menu.menuDate) === today())
+      if (todayMenu) populateEditor(todayMenu, activeProducts)
+    }
   }
 
   useEffect(() => { void load().catch(error => setMessage(error.message)) }, [])
@@ -61,7 +72,20 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     setTitle('')
     setDescription('')
     setSelected([])
+    setMenuPrices({})
     setPublish(true)
+  }
+
+  function populateEditor(menu: Menu, availableProducts = products) {
+    const activeProductIds = new Set(availableProducts.map(product => product.id))
+    const menuProductIds = menu.items.map(item => item.product.id)
+    setEditingId(menu.id)
+    setDate(dateKey(menu.menuDate))
+    setTitle(menu.title)
+    setDescription(menu.description || '')
+    setSelected(menuProductIds.filter(id => activeProductIds.has(id)))
+    setMenuPrices(Object.fromEntries(menu.items.map(item => [item.product.id, { value: item.unitPrice, currency: item.currency }])))
+    setPublish(menu.status === 'PUBLISHED')
   }
 
   function edit(menu: Menu) {
@@ -73,12 +97,7 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     const menuProductIds = menu.items.map(item => item.product.id)
     const selectableProductIds = menuProductIds.filter(id => activeProductIds.has(id))
     const unavailableCount = menuProductIds.length - selectableProductIds.length
-    setEditingId(menu.id)
-    setDate(dateKey(menu.menuDate))
-    setTitle(menu.title)
-    setDescription(menu.description || '')
-    setSelected(selectableProductIds)
-    setPublish(menu.status === 'PUBLISHED')
+    populateEditor(menu)
     setMessage(unavailableCount > 0
       ? (fr ? unavailableCount + ' ancien(s) produit(s) indisponible(s) ont été retiré(s) de l’éditeur. Choisissez au moins un produit actif avant d’enregistrer.' : unavailableCount + ' unavailable historical product(s) were removed from the editor. Select at least one active product before saving.')
       : '')
@@ -132,9 +151,9 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     <section className="menu-workspace">
       <form className="panel menu-editor" onSubmit={save}>
         <div className="menu-editor-heading"><div><span className="eyebrow">{editingId ? (fr ? 'MODIFICATION CONTRÔLÉE' : 'CONTROLLED UPDATE') : (fr ? 'NOUVEAU MENU' : 'NEW MENU')}</span><h2>{editingId ? (fr ? 'Modifier le menu' : 'Edit menu') : (fr ? 'Composer le menu' : 'Compose menu')}</h2></div>{editingId && <button type="button" className="secondary compact" onClick={resetEditor}><RotateCcw />{fr ? 'Annuler' : 'Cancel'}</button>}</div>
-        <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" value={date} onChange={event => setDate(event.target.value)} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
+        <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" value={date} onChange={event => { const nextDate = event.target.value; setDate(nextDate); const existing = menus.find(menu => dateKey(menu.menuDate) === nextDate); if (existing) populateEditor(existing) }} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
         <label>{fr ? 'Description' : 'Description'}<textarea value={description} onChange={event => setDescription(event.target.value)} /></label>
-        <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{product.category}</small><DisplayMoney value={product.currentPrice} currency={product.currency} /></button>)}</div>
+        <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{product.category}</small><DisplayMoney value={menuPrices[product.id]?.value ?? product.currentPrice} currency={menuPrices[product.id]?.currency ?? product.currency} /></button>)}</div>
         <label className="publish-choice"><input type="checkbox" checked={publish} onChange={event => setPublish(event.target.checked)} /><span>{fr ? 'Publier immédiatement et figer les prix' : 'Publish now and freeze prices'}</span></label>
         {message && <p className="status-message">{message}</p>}
         <button className="primary large" disabled={busy || !selected.length}>{busy ? <LoaderCircle className="spin" /> : <CheckCircle2 />}{editingId ? (fr ? 'Enregistrer les modifications' : 'Save changes') : (fr ? 'Enregistrer le menu' : 'Save menu')}</button>

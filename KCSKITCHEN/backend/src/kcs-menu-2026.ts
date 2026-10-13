@@ -63,6 +63,19 @@ async function ensureOfficialProducts(prisma: PrismaClient) {
   return products
 }
 
+async function attachAvailableDrinks(prisma: PrismaClient, menuId: string, startOrder: number) {
+  const [drinks, existingItems] = await Promise.all([
+    prisma.product.findMany({ where: { category: 'DRINK', archivedAt: null, isAvailable: true }, orderBy: [{ name: 'asc' }, { createdAt: 'asc' }] }),
+    prisma.dailyMenuItem.findMany({ where: { menuId }, select: { productId: true } })
+  ])
+  const existingIds = new Set(existingItems.map(item => item.productId))
+  const missing = drinks.filter(drink => !existingIds.has(drink.id))
+  if (missing.length) await prisma.dailyMenuItem.createMany({
+    data: missing.map((drink, index) => ({ menuId, productId: drink.id, unitPrice: drink.currentPrice, currency: drink.currency, displayOrder: startOrder + index })),
+    skipDuplicates: true
+  })
+  return prisma.dailyMenu.findUniqueOrThrow({ where: { id: menuId }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
+}
 export async function ensureOfficialMenu(
   prisma: PrismaClient,
   key: string,
@@ -81,9 +94,9 @@ export async function ensureOfficialMenu(
       }
     }
   })
-  if (existing) return existing
+  if (existing) return attachAvailableDrinks(prisma, existing.id, existing.items.length)
   const products = preparedProducts ?? await ensureOfficialProducts(prisma)
-  return prisma.$transaction(async tx => {
+  const menu = await prisma.$transaction(async tx => {
     const menu = await tx.dailyMenu.create({
       data: {
         menuDate: date,
@@ -103,25 +116,21 @@ export async function ensureOfficialMenu(
         displayOrder: index
       }))
     })
-    return tx.dailyMenu.findUniqueOrThrow({
-      where: { id: menu.id },
-      include: {
-        items: {
-          where: { isAvailable: true },
-          include: { product: true },
-          orderBy: { displayOrder: 'asc' }
-        }
-      }
-    })
+    return menu
   })
+  return attachAvailableDrinks(prisma, menu.id, definition.items.length)
 }
 
-const kinshasaDateKey = (date: Date) => new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Africa/Kinshasa',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit'
-}).format(date)
+const kinshasaDateKey = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Africa/Kinshasa',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
+  return [part('year'), part('month'), part('day')].join('-')
+}
 
 export async function ensureOfficialMenuSchedule(
   prisma: PrismaClient,
