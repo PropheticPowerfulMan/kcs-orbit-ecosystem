@@ -251,6 +251,7 @@ const submissionGradeSchema = z.object({
 })
 
 const ownedCourse = async (userId: string, courseId: string) => {
+  await ensureTeacherProfile(userId)
   const course = await prisma.course.findFirst({
     where: { id: courseId, teacher: { userId } },
     include: {
@@ -492,6 +493,7 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
 }))
 
 teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  await ensureTeacherProfile(req.user!.sub)
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   const assignmentRoster = await prisma.course.findMany({
     where: { teacher: { userId: req.user!.sub } },

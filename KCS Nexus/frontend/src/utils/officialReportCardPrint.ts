@@ -45,12 +45,12 @@ const printableAsset = (value?: string | null) => {
   return new URL(value, window.location.origin).href
 }
 
-export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void) {
+export async function printOfficialReportCard(card: PrintableReportCard, onBlocked: (message: string) => void, reservedWindow?: Window | null) {
   const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   // Reserve the window synchronously in the click event. Opening it after the
   // photo, authenticity-registry and QR awaits is blocked by some browsers.
-  const printWindow = window.open('', '_blank', 'width=1100,height=900')
+  const printWindow = reservedWindow ?? window.open('', '_blank', 'width=1100,height=900')
   if (!printWindow) {
     onBlocked(tr('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres contextuelles puis réessayez.', 'The browser blocked the print window. Allow pop-ups and try again.'))
     return

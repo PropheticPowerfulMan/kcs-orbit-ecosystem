@@ -37,6 +37,7 @@ import {
 import { printOfficialPdf } from '@/utils/officialPdf'
 import { academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { canonicalClassLabel } from '@/utils/classLabels'
+import { useUIStore } from '@/store/uiStore'
 
 type Course = {
   id: string
@@ -211,6 +212,12 @@ const downloadFile = (fileName: string, content: string, type: string) => {
 
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction }: Props) => {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
+  const language = useUIStore((state) => state.language)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  const [draggedAssignmentId, setDraggedAssignmentId] = useState('')
+  const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<GradebookColumn | null>(null)
+  const [skipDeleteConfirmation, setSkipDeleteConfirmation] = useState(() => localStorage.getItem('kcs:nexus:gradebook:skip-delete-confirmation') === 'true')
+  const [rememberDeleteChoice, setRememberDeleteChoice] = useState(false)
 
   useEffect(() => {
     if (!spreadsheetOpen) return
@@ -515,16 +522,45 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
   }
 
-  const deleteAssignment = (assignmentId: string) => {
+  const performDeleteAssignment = (assignmentId: string) => {
     setAssignments((current) => current.filter((assignment) => assignment.id !== assignmentId))
     setScores((current) => {
       const next = { ...current }
-      Object.keys(next).forEach((key) => {
-        if (key.startsWith(`${assignmentId}:`)) delete next[key]
-      })
+      Object.keys(next).forEach((key) => { if (key.startsWith(`${assignmentId}:`)) delete next[key] })
       return next
     })
-    onAction('Assignment deleted, calculations refreshed, and audit event recorded.')
+    setPendingDeleteAssignment(null)
+    onAction(tr('Évaluation supprimée, calculs actualisés et trace d’audit enregistrée.', 'Assignment deleted, calculations refreshed, and audit event recorded.'))
+  }
+
+  const deleteAssignment = (assignment: GradebookColumn) => {
+    if (skipDeleteConfirmation) return performDeleteAssignment(assignment.id)
+    setRememberDeleteChoice(false)
+    setPendingDeleteAssignment(assignment)
+  }
+
+  const confirmDeleteAssignment = () => {
+    if (!pendingDeleteAssignment) return
+    if (rememberDeleteChoice) {
+      localStorage.setItem('kcs:nexus:gradebook:skip-delete-confirmation', 'true')
+      setSkipDeleteConfirmation(true)
+    }
+    performDeleteAssignment(pendingDeleteAssignment.id)
+  }
+
+  const moveAssignment = (targetId: string) => {
+    if (!draggedAssignmentId || draggedAssignmentId === targetId) return setDraggedAssignmentId('')
+    setAssignments((current) => {
+      const sourceIndex = current.findIndex((item) => item.id === draggedAssignmentId)
+      const targetIndex = current.findIndex((item) => item.id === targetId)
+      if (sourceIndex < 0 || targetIndex < 0) return current
+      const next = [...current]
+      const [moved] = next.splice(sourceIndex, 1)
+      next.splice(targetIndex, 0, moved)
+      return next
+    })
+    setDraggedAssignmentId('')
+    onAction(tr('Ordre des colonnes mis à jour. Enregistrez pour le synchroniser.', 'Column order updated. Save to synchronize it.'))
   }
 
   const updateScore = (assignmentId: string, studentId: string, value: string) => {
@@ -856,10 +892,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <tr>
                 <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student</th>
                 {visibleAssignments.map((assignment) => (
-                  <th key={assignment.id} className="min-w-32 border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800">
+                  <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour déplacer cette colonne', 'Drag to move this column')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
                     <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
-                    <span className="block normal-case text-gray-400">{assignment.type} - {assignment.maxPoints} pts</span>
-                    <button onClick={() => deleteAssignment(assignment.id)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold normal-case text-red-500 hover:text-red-600"><Trash2 size={12} /> Delete</button>
+                    <span className="block normal-case text-gray-400">{assignment.type} · {assignment.maxPoints} pts</span><span className="mt-0.5 block normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{assignment.date ? new Date(`${assignment.date}T12:00:00`).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB') : tr('Date non définie', 'No date')}</span>
+                    <button onClick={() => deleteAssignment(assignment)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold normal-case text-red-500 hover:text-red-600"><Trash2 size={12} /> Delete</button>
                   </th>
                 ))}
                 <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Average</th>
@@ -950,6 +986,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </table>
         </div>
       </div>
+      {pendingDeleteAssignment && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-xl rounded-3xl border border-red-100 bg-white p-6 shadow-2xl dark:border-red-900/50 dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-red-600">{tr('Suppression contrôlée', 'Controlled deletion')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Supprimer réellement cette évaluation ?', 'Really delete this assignment?')}</h3><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{tr(`« ${pendingDeleteAssignment.title} » et tous ses points saisis seront retirés de ce Gradebook.`, `“${pendingDeleteAssignment.title}” and all entered scores will be removed from this Gradebook.`)}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-700 dark:bg-kcs-blue-950 dark:text-gray-200"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={rememberDeleteChoice} onChange={(event) => setRememberDeleteChoice(event.target.checked)}/><span><b className="block">{tr('Ne plus demander sur cet appareil', 'Do not ask again on this device')}</b><small>{tr('Vous pourrez réactiver cette confirmation en supprimant les préférences locales du navigateur.', 'You can restore this prompt by clearing the browser’s local preferences.')}</small></span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteAssignment(null)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-900 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" onClick={confirmDeleteAssignment} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"><Trash2 size={15} className="mr-2 inline"/>{tr('Supprimer définitivement', 'Delete permanently')}</button></div></div></div>}
       {cellDialog && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-kcs-blue-950/75 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-bold uppercase text-kcs-gold-600">{cellDialog.mode === 'ai' ? 'AI grade suggestion' : 'Teacher cell note'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{cellDialog.student.name} · {cellDialog.assignment.title}</h3>{cellDialog.mode === 'ai' ? <><div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-sm text-gray-600 dark:text-gray-300">Current score: <strong>{getRawScore(cellDialog.assignment.id, cellDialog.student.id) || 'Not entered'}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Suggested score: <strong>{suggestGrade(cellDialog.assignment, cellDialog.student)}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-xs text-gray-500">Based on the learner's weighted average and class trend. It is never applied without teacher confirmation.</p></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Keep current score</button><button type="button" onClick={applyAiSuggestion} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Apply suggestion</button></div></> : <><textarea autoFocus value={cellNoteDraft} onChange={(event) => setCellNoteDraft(event.target.value)} className="input-kcs mt-5 min-h-32" placeholder="Write an observation, correction note, accommodation, or follow-up..."/><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Cancel</button><button type="button" onClick={saveCellNote} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white">Save note</button></div></>}</div></div>}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">

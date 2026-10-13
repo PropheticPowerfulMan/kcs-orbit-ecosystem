@@ -229,9 +229,32 @@ export default function TeacherWholeSchoolReportCards() {
 
   const printSelectedReportCard = async () => {
     if (!selected || printing) return
+    const reservedWindow = window.open('', '_blank', 'width=1100,height=900')
+    if (!reservedWindow) {
+      setError('The browser blocked the print window. Allow pop-ups and try again.')
+      return
+    }
+    reservedWindow.document.write('<!doctype html><html><body style="font-family:system-ui;padding:2rem;color:#053665">Securely preparing the official report card…</body></html>')
+    reservedWindow.document.close()
     setPrinting(true)
     setError('')
     try {
+      let reportCardId = selected.reportCard?.id
+      let publicationStatus = selected.reportCard?.publicationStatus ?? 'DRAFT'
+      if (!reportCardId) {
+        if (!selected.isHomeroomStudent) throw new Error('The main teacher must save this report card before it can be printed as an official document.')
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct })
+        const savedCard = response.data?.data
+        if (!savedCard?.id) throw new Error('The official report-card register did not confirm the saved draft.')
+        reportCardId = savedCard.id
+        publicationStatus = savedCard.publicationStatus ?? 'DRAFT'
+        setDashboard((current) => {
+          if (!current) return current
+          const next: Dashboard = { ...current, learners: current.learners.map((learner) => learner.id === selected.id ? { ...learner, reportCard: { id: savedCard.id, teacherComment: savedCard.teacherComment, conduct: savedCard.conduct, principalStatus: savedCard.principalStatus, publicationStatus } } : learner) }
+          writeReportDashboardCache(userId, academicYear, term, next)
+          return next
+        })
+      }
       let officialAvatar = selected.officialAvatar
       let userAvatar = selected.user.avatar
       try {
@@ -242,12 +265,12 @@ export default function TeacherWholeSchoolReportCards() {
         // The report remains printable if the portrait service is temporarily unavailable.
       }
       await printOfficialReportCard({
-        id: selected.reportCard?.id ?? 'draft-' + selected.id,
+        id: reportCardId!,
         term: academicYear + ' · ' + term,
         average: selected.average ?? 0,
         teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
         conduct: selected.reportCard?.conduct ?? conduct,
-        publicationStatus: selected.reportCard?.publicationStatus ?? 'DRAFT',
+        publicationStatus,
         attendanceSummary: selected.attendance,
         subjects: selected.subjects.filter((subject) => subject.percentage !== null).map((subject) => ({
           id: subject.courseId,
@@ -262,7 +285,10 @@ export default function TeacherWholeSchoolReportCards() {
           officialAvatar,
           user: { ...selected.user, avatar: userAvatar },
         },
-      }, setError)
+      }, setError, reservedWindow)
+    } catch (reason: any) {
+      reservedWindow.close()
+      setError(reason?.response?.data?.message ?? reason?.message ?? 'The official report card could not be prepared.')
     } finally {
       setPrinting(false)
     }
