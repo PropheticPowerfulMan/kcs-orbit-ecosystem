@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { pickPreferredExternalId } from "@ecosystem/shared-contracts";
+import { resolveSharedStudentClassName } from "./student-class-assignment";
 
 type ExternalIdEntry = {
   appSlug: string;
@@ -324,7 +325,11 @@ export async function loadSharedDirectory(organizationId?: string): Promise<Shar
         photoData: student.photoData,
         photoSource: student.photoSource,
         classId: student.classId,
-        className: student.class?.name || student.className || student.classId || null,
+        className: resolveSharedStudentClassName({
+          className: student.className,
+          relatedClassName: student.class?.name,
+          classId: student.classId,
+        }),
         parentId: student.parentId,
         organizationId: student.organizationId,
         externalIds,

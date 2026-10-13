@@ -3,6 +3,11 @@ import { buildCanonicalExternalId, RegistryEntityTypeSchema } from "@ecosystem/s
 import { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db";
+import {
+  buildStudentClassUpdate,
+  normalizeClassKey,
+  type OrbitClassReference,
+} from "../services/student-class-assignment";
 
 const entityTypeSchema = RegistryEntityTypeSchema;
 
@@ -654,10 +659,33 @@ export async function updateRegistryEntity(req: Request, res: Response) {
     if (!parent) return res.status(404).json({ message: "Parent not found" });
   }
 
+  let resolvedClass: OrbitClassReference | null = null;
   if (studentPayload.classOrbitId) {
-    const klass = await prisma.class.findFirst({ where: { id: studentPayload.classOrbitId, organizationId: query.organizationId } });
-    if (!klass) return res.status(404).json({ message: "Class not found" });
+    resolvedClass = await prisma.class.findFirst({
+      where: { id: studentPayload.classOrbitId, organizationId: query.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!resolvedClass) return res.status(404).json({ message: "Class not found" });
+  } else if (studentPayload.className) {
+    const requestedClassKey = normalizeClassKey(studentPayload.className);
+    const classes = await prisma.class.findMany({
+      where: { organizationId: query.organizationId },
+      select: { id: true, name: true },
+      orderBy: { createdAt: "asc" },
+    });
+    resolvedClass = classes.find((klass) => normalizeClassKey(klass.name) === requestedClassKey) ?? null;
   }
+
+  if (
+    resolvedClass
+    && studentPayload.className
+    && normalizeClassKey(studentPayload.className) !== normalizeClassKey(resolvedClass.name)
+  ) {
+    return res.status(409).json({
+      message: `Class name does not match the selected class: ${resolvedClass.name}`,
+    });
+  }
+  const classUpdate = buildStudentClassUpdate(studentPayload, resolvedClass);
 
   const duplicateFilters: Prisma.StudentWhereInput[] = [];
   if (studentPayload.studentNumber) {
@@ -703,9 +731,8 @@ export async function updateRegistryEntity(req: Request, res: Response) {
         ...(studentPayload.dateOfBirth !== undefined ? { dateOfBirth: studentPayload.dateOfBirth } : {}),
         ...(studentPayload.status !== undefined ? { status: studentPayload.status } : {}),
         ...(studentPayload.mustChangePassword !== undefined ? { mustChangePassword: studentPayload.mustChangePassword } : {}),
-        ...(studentPayload.className !== undefined ? { className: studentPayload.className } : {}),
+        ...classUpdate,
         ...(studentPayload.parentOrbitId !== undefined ? { parentId: studentPayload.parentOrbitId } : {}),
-        ...(studentPayload.classOrbitId !== undefined ? { classId: studentPayload.classOrbitId } : {}),
         ...(studentPayload.photoData !== undefined ? { photoData: studentPayload.photoData } : {}),
         ...(studentPayload.photoSource !== undefined ? { photoSource: studentPayload.photoSource } : {}),
       },
