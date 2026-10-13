@@ -27,7 +27,7 @@ docker build --build-arg "VITE_API_URL=$NEXUS_API_URL" -t "kcs/nexus-web:$RELEAS
 docker build -f "$ROOT_DIR/ops/staging/docker/kitchen-api.Dockerfile" -t "kcs/kitchen-api:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/ops/staging/docker/kitchen-web.Dockerfile" --build-arg "VITE_API_URL=/kitchen/api" --build-arg "VITE_BASE_PATH=/kitchen/" -t "kcs/kitchen-web:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/KCS Sentinel/apps/api/Dockerfile" -t "kcs/sentinel-api:$RELEASE" "$ROOT_DIR/KCS Sentinel"
-docker build -f "$ROOT_DIR/KCS Sentinel/apps/web/Dockerfile" --build-arg "VITE_API_URL=/sentinel/api" -t "kcs/sentinel-web:$RELEASE" "$ROOT_DIR/KCS Sentinel"
+docker build -f "$ROOT_DIR/KCS Sentinel/apps/web/Dockerfile" --build-arg "VITE_API_URL=/sentinel/api" --build-arg "VITE_BASE_PATH=/sentinel/" -t "kcs/sentinel-web:$RELEASE" "$ROOT_DIR/KCS Sentinel"
 docker build -t "kcs/academy:$RELEASE" "$ROOT_DIR/KCS Nexus Academy"
 docker build -f "$ROOT_DIR/ops/production/docker/edupay-api.Dockerfile" -t "kcs/edupay-api:$RELEASE" "$ROOT_DIR"
 docker build -f "$ROOT_DIR/ops/production/docker/edupay-web.Dockerfile" --build-arg "VITE_API_BASE_URL=$EDUPAY_API_URL" --build-arg "VITE_RECEIPT_VERIFICATION_BASE_URL=$EDUPAY_PUBLIC_URL" --build-arg "VITE_NEXUS_URL=https://$NEXUS_DOMAIN" --build-arg "VITE_BASE_PATH=/" -t "kcs/edupay-web:$RELEASE" "$ROOT_DIR"
