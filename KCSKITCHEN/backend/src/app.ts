@@ -348,6 +348,8 @@ const kitchenDateKey = (date = new Date()) => {
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
   return [part('year'), part('month'), part('day')].join('-')
 }
+const receiptSignature = (reference: string) => crypto.createHmac('sha256', env.QR_SIGNING_SECRET).update(`receipt:${reference}`).digest('base64url')
+const withReceiptSignature = <T extends { transactionNumber: string }>(transaction: T) => ({ ...transaction, receiptSignature: receiptSignature(transaction.transactionNumber) })
 const menuDate = (value: string) => new Date(`${value}T00:00:00.000Z`)
 
 app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => {
@@ -599,7 +601,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
   await audit(req, 'TRANSACTION_CREATED', 'KitchenTransaction', transaction.id, undefined, transaction)
-  res.status(201).json({ transaction, balance: await balanceFor(person.id) })
+  res.status(201).json({ transaction: withReceiptSignature(transaction), balance: await balanceFor(person.id) })
 }))
 
 app.get('/api/transactions', authenticate, asyncRoute(async (req: AuthRequest, res) => {
@@ -616,7 +618,20 @@ app.get('/api/transactions', authenticate, asyncRoute(async (req: AuthRequest, r
     orderBy: { createdAt: 'desc' },
     take: 500
   })
-  res.json({ transactions })
+  res.json({ transactions: transactions.map(withReceiptSignature) })
+}))
+
+app.get('/api/transactions/verify/:reference', asyncRoute(async (req, res) => {
+  const reference = routeParam(req, 'reference').trim().toUpperCase()
+  const signature = String(req.query.signature || '')
+  const expected = receiptSignature(reference)
+  if (!signature || signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return res.status(400).json({ valid: false, status: 'INVALID_SIGNATURE' })
+  }
+  const transaction = await prisma.kitchenTransaction.findUnique({ where: { transactionNumber: reference }, select: { transactionNumber: true, status: true } })
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300')
+  if (!transaction) return res.status(404).json({ valid: false, status: 'NOT_FOUND' })
+  res.json({ valid: true, documentType: 'KCS_KITCHEN_RECEIPT', reference: transaction.transactionNumber, status: transaction.status })
 }))
 
 app.get('/api/transactions/:id', authenticate, asyncRoute(async (req: AuthRequest, res) => {
@@ -624,7 +639,7 @@ app.get('/api/transactions/:id', authenticate, asyncRoute(async (req: AuthReques
   if (!transaction) return res.status(404).json({ message: 'Transaction not found' })
   const personal = ['TEACHER', 'STAFF', 'STUDENT'].includes(req.kitchenUser!.role)
   if (personal && transaction.orbitPersonId !== req.kitchenUser!.orbitPersonId) return res.status(403).json({ message: 'Forbidden' })
-  res.json({ transaction, balance: await balanceFor(transaction.orbitPersonId) })
+  res.json({ transaction: withReceiptSignature(transaction), balance: await balanceFor(transaction.orbitPersonId) })
 }))
 
 app.get('/api/people/:orbitPersonId/qr', authenticate, allow('KITCHEN_ADMIN', 'CASHIER'), asyncRoute(async (req, res) => {

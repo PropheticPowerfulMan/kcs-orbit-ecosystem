@@ -772,6 +772,15 @@ function Transactions({ user, t }: { user: User; t: Record<string, string> }) {
 function Receipt({ transaction, onClose, allowDispute = false }: { transaction: Transaction; onClose: () => void; allowDispute?: boolean }) {
   const [dispute, setDispute] = useState(false)
   const [message, setMessage] = useState('')
+  const [printing, setPrinting] = useState(false)
+  const receiptId = 'receipt-' + transaction.id
+  const verificationUrl = `${window.location.origin}/kitchen/api/transactions/verify/${encodeURIComponent(transaction.transactionNumber)}?signature=${encodeURIComponent(transaction.receiptSignature || '')}`
+  async function printReceipt() {
+    setPrinting(true); setMessage('')
+    try { await printStandaloneDocument(receiptId, transaction.transactionNumber) }
+    catch (error) { setMessage((error as Error).message) }
+    finally { setPrinting(false) }
+  }
   async function sendDispute(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const data = new FormData(event.currentTarget)
     try {
@@ -779,14 +788,15 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
       setMessage('Dispute submitted for audited review.'); setDispute(false)
     } catch (err) { setMessage((err as Error).message) }
   }
-  return <Modal wide onClose={onClose}><div className="receipt" id={'receipt-' + transaction.id}>
+  return <Modal wide onClose={onClose}><div className="receipt" id={receiptId}>
     <div className="receipt-head"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h2>KCS KITCHEN RECEIPT</h2><b>{transaction.transactionNumber}</b></div></div>
     <div className="receipt-meta"><div><small>PERSON</small><b>{transaction.personNameSnapshot}</b></div><div><small>DATE / TIME</small><b>{dateTime(transaction.createdAt)}</b></div><div><small>CASHIER</small><b>{transaction.cashierNameSnapshot}</b></div><div><small>PAYMENT</small><b>{transaction.paymentMode} · {transaction.paymentStatus}</b></div></div>
     <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.quantity}</td><td><DisplayMoney value={item.unitPriceAtPurchase} /></td><td><DisplayMoney value={item.subtotal} /></td></tr>)}</tbody></table>
     <div className="receipt-totals"><span>Subtotal <b><DisplayMoney value={transaction.subtotal} /></b></span><span>School subsidy / Prise en charge KCS <b>− <DisplayMoney value={transaction.schoolSubsidy || transaction.discount} /></b></span><strong>Customer payable / À payer <b><DisplayMoney value={transaction.total} /></b></strong></div>
+    <div className="receipt-verification"><QRCodeSVG value={verificationUrl} size={92} level="M" includeMargin title="Verify this KCS Kitchen receipt"/><div><b>SCAN TO VERIFY</b><span>Authenticity and current status are checked against the official Kitchen register without exposing private financial data.</span><code>{transaction.transactionNumber}</code></div></div>
     <div className="receipt-proof"><ShieldCheck /> Digitally registered, timestamped and auditable. Original transaction records are never silently deleted.</div>
     {message && <div className="form-message">{message}</div>}
-    <div className="receipt-actions"><button onClick={() => window.print()}><ReceiptText /> Print / PDF</button>{allowDispute && <button className="warning" onClick={() => setDispute(!dispute)}><AlertTriangle /> Dispute</button>}<button className="primary" onClick={onClose}>Close</button></div>
+    <div className="receipt-actions"><button disabled={printing} onClick={() => void printReceipt()}>{printing ? <LoaderCircle className="spin"/> : <ReceiptText />} {printing ? 'Preparing PDf&' : 'Print / PDF'}</button>{allowDispute && <button className="warning" onClick={() => setDispute(!dispute)}><AlertTriangle /> Dispute</button>}<button className="primary" onClick={onClose}>Close</button></div>
     {dispute && <form className="dispute-form" onSubmit={sendDispute}><select name="reason"><option value="I_DID_NOT_TAKE_THIS">I did not take this</option><option value="WRONG_ITEM">Wrong item</option><option value="WRONG_QUANTITY">Wrong quantity</option><option value="WRONG_PRICE">Wrong price</option><option value="WRONG_DATE">Wrong date</option><option value="OTHER">Other</option></select><textarea name="comment" placeholder="Explain the issue…" /><button className="warning">Submit dispute</button></form>}
   </div></Modal>
 }
