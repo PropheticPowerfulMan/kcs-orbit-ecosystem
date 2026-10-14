@@ -535,11 +535,21 @@ function Stat({ icon, label, value, tone = '' }: { icon: ReactNode; label: strin
 type PersonalMenu = { id: string; title: string; items: Array<{ product: Product; unitPrice: string; currency: string }> }
 
 const menuPhotoFor = (product: Product) => {
-  if (product.photoUrl) return product.photoUrl
   const name = product.name.toLowerCase()
-  if (/(waffle|gaufre|crêpe|crepe|toast|pain perdu|samoussa|sandwich)/.test(name)) return './images/kitchen-menu-snacks-desserts.jpg'
-  if (/(shawarma|chawarma|meatball|boulette|skewer|brochette|macaroni|rice|riz|plantain)/.test(name)) return './images/kitchen-menu-savory-selection.jpg'
-  return './images/kitchen-culinary-hero.jpg'
+  const dedicated: Array<[RegExp, string]> = [
+    [/chicken.*fries|cuisse.*frite/, 'chicken-fries'], [/samoussa/, 'samoussas'],
+    [/macaroni/, 'macaronis'], [/cr.pe|crepe/, 'crepes'], [/sandwich/, 'sandwich'],
+    [/waffle|gaufre/, 'waffles'], [/shawarma|chawarma/, 'shawarma-meat'],
+    [/meatball|boulette/, 'chicken-meatballs'], [/skewer|brochette/, 'beef-skewers'],
+    [/french toast|pain perdu/, 'french-toast'], [/plantain/, 'plantain'],
+    [/flavored rice|riz assaisonn/, 'flavored-rice'], [/lait caill|curdled milk/, 'lait-caille'],
+    [/yaourt|yogurt/, 'yaourt'], [/bavaria/, 'bavaria'], [/bisap|bissap/, 'bisap'],
+    [/vitalo/, 'vitalo'], [/fanta/, 'fanta'], [/coca/, 'coca'], [/bora/, 'bora'],
+    [/water|eau/, 'water'],
+  ]
+  const match = dedicated.find(([pattern]) => pattern.test(name))
+  if (match) return `./images/menu-items/${match[1]}.jpg`
+  return product.photoUrl || './images/kitchen-culinary-hero.jpg'
 }
 function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; onOrdered: () => void }) {
   const fr = lang === 'fr'
@@ -570,11 +580,11 @@ function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; 
   return <>
     <section className="panel personal-daily-menu">
       <div className="daily-menu-cover"><img src="./images/kitchen-culinary-hero.jpg" alt="KCS Kitchen daily meal"/><div><span className="eyebrow">{fr ? 'MENU DU JOUR' : "TODAY'S MENU"}</span><h2>{menu.title}</h2><p>{fr ? 'Choisissez vos plats et boissons, puis commandez en achat ou en dette autorisée.' : 'Choose meals and drinks, then order as a purchase or authorized debt.'}</p></div></div>
-      <div className="personal-menu-grid">{products.map(product => <article key={product.id} className="personal-menu-card">
+      <div className="personal-menu-grid">{products.map(product => { const purchasable = product.isAvailable && Number(product.currentPrice) > 0; return <article key={product.id} className="personal-menu-card">
         <img src={menuPhotoFor(product)} alt={product.name} loading="lazy" />
-        <div><small>{product.category}</small><h3>{product.name}</h3><DisplayMoney value={product.currentPrice} currency={product.currency}/></div>
-        <div className="personal-menu-qty"><button type="button" onClick={() => change(product.id, -1)} aria-label={fr ? 'Retirer' : 'Remove'}>−</button><b>{cart[product.id] || 0}</b><button type="button" onClick={() => change(product.id, 1)} aria-label={fr ? 'Ajouter' : 'Add'}>+</button></div>
-      </article>)}</div>
+        <div><small>{product.category}</small><h3>{product.name}</h3>{purchasable ? <DisplayMoney value={product.currentPrice} currency={product.currency}/> : <b>{fr ? 'Prix à configurer' : 'Price to configure'}</b>}</div>
+        <div className="personal-menu-qty"><button type="button" disabled={!purchasable} onClick={() => change(product.id, -1)} aria-label={fr ? 'Retirer' : 'Remove'}>−</button><b>{cart[product.id] || 0}</b><button type="button" disabled={!purchasable} onClick={() => change(product.id, 1)} aria-label={fr ? 'Ajouter' : 'Add'}>+</button></div>
+      </article>})}</div>
       <div className="personal-order-summary"><span>{fr ? 'Total estimé' : 'Estimated total'} <b><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></b></span>{subsidy > 0 && <small>{fr ? `Prise en charge KCS : ${subsidy.toLocaleString('fr-FR')} CDF` : `KCS subsidy: ${subsidy.toLocaleString('en-US')} CDF`}</small>}<button className="primary" type="button" disabled={!total} onClick={() => setConfirming(true)}><ShoppingCart/>{fr ? 'Commander maintenant' : 'Order now'}</button></div>
     </section>
     {confirming && <Modal onClose={() => !busy && setConfirming(false)}><div className="modal-form online-order-dialog"><span className="eyebrow">{fr ? 'CONFIRMATION SÉCURISÉE' : 'SECURE CONFIRMATION'}</span><h2>{fr ? 'Comment enregistrer cette commande ?' : 'How should this order be recorded?'}</h2><p>{fr ? 'Choisissez Achat pour payer maintenant, ou Dette pour débiter votre compte Kitchen si le crédit est autorisé.' : 'Choose Purchase to pay now, or Debt to charge your Kitchen account if credit is authorized.'}</p><div className="payment-switch"><button type="button" className={orderType === 'CASH' ? 'active' : ''} onClick={() => setOrderType('CASH')}><Wallet/>{fr ? 'Achat' : 'Purchase'}</button><button type="button" className={orderType === 'CREDIT' ? 'active' : ''} onClick={() => setOrderType('CREDIT')}><CreditCard/>{fr ? 'Dette' : 'Debt'}</button></div><div className="total-row"><span>{fr ? 'Montant à votre charge' : 'Amount payable'}</span><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></div><button className="primary large" type="button" disabled={busy} onClick={submitOrder}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Confirmer la commande' : 'Confirm order'}</button></div></Modal>}

@@ -458,7 +458,25 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
 
   const now = new Date()
   const period = await prisma.accountingPeriod.findUnique({ where: { year_month: { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 } } })
-  if (period?.status === 'CLOSED') return res.status(409).json({ message: 'This accounting period is closed' })
+  if (period?.status === 'CLOSED') {
+    await prisma.$transaction(async tx => {
+      const reopened = await tx.accountingPeriod.update({
+        where: { id: period.id },
+        data: { status: 'OPEN', closedAt: null, closedBy: null, archivedAt: null, archivedBy: null, archiveReason: null },
+      })
+      await tx.auditLog.create({ data: {
+        actorId: req.kitchenUser!.orbitPersonId,
+        actorRole: req.kitchenUser!.role,
+        action: 'CURRENT_MONTH_AUTO_REOPENED_FOR_OPERATION',
+        entityType: 'AccountingPeriod',
+        entityId: period.id,
+        oldValue: auditJson(period),
+        newValue: auditJson(reopened),
+        reason: 'The active calendar month had been closed prematurely; Kitchen operations resumed with a full audit trail.',
+        ipAddress: req.ip,
+      } })
+    })
+  }
 
   const activeMenu = await prisma.dailyMenu.findUnique({ where: { id: input.dailyMenuId }, include: { items: true } })
   if (!activeMenu || activeMenu.status !== 'PUBLISHED' || activeMenu.menuDate.toISOString().slice(0, 10) !== kitchenDateKey(now)) return res.status(409).json({ message: 'Sales and credit require the published menu for today' })
@@ -484,6 +502,9 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     }
     const menuItem = menuItems.get(product.id)!
     const unitPriceCdf = Number(menuItem.unitPrice) * (menuItem.currency === 'USD' ? exchangeRate!.rate : 1)
+    if (!Number.isFinite(unitPriceCdf) || unitPriceCdf <= 0) {
+      throw Object.assign(new Error(product.name + ' requires a manager-configured price before it can be ordered'), { statusCode: 409 })
+    }
     return {
       product,
       quantity: item.quantity,

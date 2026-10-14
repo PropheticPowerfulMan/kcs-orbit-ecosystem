@@ -2,6 +2,19 @@ import { Prisma, PrismaClient } from '@prisma/client'
 
 type MenuLine = { name: string; price: number; category: 'FOOD' | 'SNACK' | 'DESSERT' }
 type OfficialProductRef = { id: string }
+type OfficialDrink = { name: string; slug: string; comingSoon?: boolean }
+
+const officialDrinks: OfficialDrink[] = [
+  { name: 'Bora', slug: 'bora' },
+  { name: 'Coca', slug: 'coca' },
+  { name: 'Fanta', slug: 'fanta' },
+  { name: 'Vitalo', slug: 'vitalo' },
+  { name: 'Lait caille / Curdled milk', slug: 'lait-caille', comingSoon: true },
+  { name: 'Yaourt / Yogurt', slug: 'yaourt', comingSoon: true },
+  { name: 'Water / Eau', slug: 'water' },
+  { name: 'Bavaria', slug: 'bavaria' },
+  { name: 'Bisap', slug: 'bisap' },
+]
 
 const monday: MenuLine[] = [
   { name: 'Chicken & Fries / Cuisse & Frites', price: 10000, category: 'FOOD' },
@@ -63,9 +76,42 @@ async function ensureOfficialProducts(prisma: PrismaClient) {
   return products
 }
 
+async function ensureOfficialDrinks(prisma: PrismaClient) {
+  const products = []
+  for (const drink of officialDrinks) {
+    const existing = await prisma.product.findFirst({
+      where: { name: drink.name, archivedAt: null },
+      orderBy: { createdAt: 'asc' },
+    })
+    const description = drink.comingSoon
+      ? 'Official KCS Kitchen drink - coming soon - no discount'
+      : 'Official KCS Kitchen drink - manager must configure price - no discount'
+    const photoUrl = `/kitchen/images/menu-items/${drink.slug}.jpg`
+    const product = existing
+      ? await prisma.product.update({
+          where: { id: existing.id },
+          data: { category: 'DRINK', discountEligible: false, photoUrl, description },
+        })
+      : await prisma.product.create({
+          data: {
+            name: drink.name,
+            description,
+            category: 'DRINK',
+            currentPrice: new Prisma.Decimal(0),
+            currency: 'CDF',
+            photoUrl,
+            isAvailable: false,
+            discountEligible: false,
+          },
+        })
+    products.push(product)
+  }
+  return products
+}
+
 async function attachAvailableDrinks(prisma: PrismaClient, menuId: string, startOrder: number) {
   const [drinks, existingItems] = await Promise.all([
-    prisma.product.findMany({ where: { category: 'DRINK', archivedAt: null, isAvailable: true }, orderBy: [{ name: 'asc' }, { createdAt: 'asc' }] }),
+    ensureOfficialDrinks(prisma),
     prisma.dailyMenuItem.findMany({ where: { menuId }, select: { productId: true } })
   ])
   const existingIds = new Set(existingItems.map(item => item.productId))
@@ -74,6 +120,10 @@ async function attachAvailableDrinks(prisma: PrismaClient, menuId: string, start
     data: missing.map((drink, index) => ({ menuId, productId: drink.id, unitPrice: drink.currentPrice, currency: drink.currency, displayOrder: startOrder + index })),
     skipDuplicates: true
   })
+  await Promise.all(drinks.map((drink, index) => prisma.dailyMenuItem.update({
+    where: { menuId_productId: { menuId, productId: drink.id } },
+    data: { unitPrice: drink.currentPrice, currency: drink.currency, displayOrder: startOrder + index, isAvailable: true },
+  })))
   return prisma.dailyMenu.findUniqueOrThrow({ where: { id: menuId }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
 }
 export async function ensureOfficialMenu(
