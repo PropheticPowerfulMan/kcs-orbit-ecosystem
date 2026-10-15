@@ -14,7 +14,9 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Pencil,
   Plus,
+  RotateCcw,
   Search,
   Sparkles,
   Trash2,
@@ -128,7 +130,15 @@ type GradebookSnapshot = {
   categories: Category[]
   scores: Record<string, string>
   comments: Record<string, string>
+  archivedAssignments?: ArchivedAssignment[]
   savedAt?: string
+}
+
+type ArchivedAssignment = {
+  assignment: GradebookColumn
+  scores: Record<string, string>
+  comments: Record<string, string>
+  deletedAt: string
 }
 
 type OfficialFinalGrade = {
@@ -143,7 +153,16 @@ type OfficialFinalGrade = {
 
 const legacyDemoAssignmentIds = new Set(['gb-lab', 'gb-quiz', 'gb-homework', 'gb-exam', 'gb-participation'])
 const sanitizeAssignments = (assignments: GradebookColumn[] | undefined) => (
-  (assignments ?? []).filter((assignment) => !legacyDemoAssignmentIds.has(assignment.id))
+  (assignments ?? [])
+    .filter((assignment) => !legacyDemoAssignmentIds.has(assignment.id))
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.date || '')
+      const rightTime = Date.parse(right.date || '')
+      if (!Number.isFinite(leftTime) && !Number.isFinite(rightTime)) return 0
+      if (!Number.isFinite(leftTime)) return 1
+      if (!Number.isFinite(rightTime)) return -1
+      return leftTime - rightTime
+    })
 )
 
 const buildMissingScoreCells = (
@@ -216,6 +235,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [draggedAssignmentId, setDraggedAssignmentId] = useState('')
   const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<GradebookColumn | null>(null)
+  const [editingAssignment, setEditingAssignment] = useState<GradebookColumn | null>(null)
+  const [archivedAssignments, setArchivedAssignments] = useState<ArchivedAssignment[]>([])
   const [skipDeleteConfirmation, setSkipDeleteConfirmation] = useState(() => localStorage.getItem('kcs:nexus:gradebook:skip-delete-confirmation') === 'true')
   const [rememberDeleteChoice, setRememberDeleteChoice] = useState(false)
 
@@ -236,7 +257,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   })
   const saveSpreadsheet = async (silent = false) => {
     const savedAt = new Date().toISOString()
-    const snapshot: GradebookSnapshot = { scores, comments, assignments, categories, savedAt }
+    const snapshot: GradebookSnapshot = { scores, comments, assignments, categories, archivedAssignments, savedAt }
     localStorage.setItem(browserStorageKey, JSON.stringify(snapshot))
     try {
       const latest = await teacherWorkspaceAPI.get()
@@ -381,6 +402,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       const savedCategories = saved.categories?.length ? saved.categories : defaultCategories
       const completeCategories = defaultCategories.map((category) => savedCategories.find((item) => item.id === category.id) ?? category)
       setAssignments(savedAssignments)
+      setArchivedAssignments(saved.archivedAssignments ?? [])
       setCategories(completeCategories)
       setComments(saved.comments ?? {})
       setScores(buildMissingScoreCells(savedAssignments, students, saved.scores ?? {}))
@@ -523,14 +545,42 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const performDeleteAssignment = (assignmentId: string) => {
+    const assignment = assignments.find((item) => item.id === assignmentId)
+    if (!assignment) return
+    const removedScores = Object.fromEntries(Object.entries(scores).filter(([key]) => key.startsWith(assignmentId + ':')))
+    const removedComments = Object.fromEntries(Object.entries(comments).filter(([key]) => key.startsWith(assignmentId + ':')))
+    setArchivedAssignments((current) => [{ assignment, scores: removedScores, comments: removedComments, deletedAt: new Date().toISOString() }, ...current].slice(0, 25))
     setAssignments((current) => current.filter((assignment) => assignment.id !== assignmentId))
     setScores((current) => {
       const next = { ...current }
       Object.keys(next).forEach((key) => { if (key.startsWith(`${assignmentId}:`)) delete next[key] })
       return next
     })
+    setComments((current) => {
+      const next = { ...current }
+      Object.keys(next).forEach((key) => { if (key.startsWith(assignmentId + ':')) delete next[key] })
+      return next
+    })
     setPendingDeleteAssignment(null)
     onAction(tr('Évaluation supprimée, calculs actualisés et trace d’audit enregistrée.', 'Assignment deleted, calculations refreshed, and audit event recorded.'))
+  }
+
+  const restoreAssignment = (archived: ArchivedAssignment) => {
+    setAssignments((current) => sanitizeAssignments([...current, archived.assignment]))
+    setScores((current) => ({ ...current, ...archived.scores }))
+    setComments((current) => ({ ...current, ...archived.comments }))
+    setArchivedAssignments((current) => current.filter((item) => item.deletedAt !== archived.deletedAt || item.assignment.id !== archived.assignment.id))
+    setSelectedAssignmentId(archived.assignment.id)
+    onAction(tr('Evaluation et points restaures. Cliquez sur Enregistrer.', 'Assignment and scores restored. Click Save to synchronize.'))
+  }
+
+  const saveAssignmentEdit = () => {
+    if (!editingAssignment?.title.trim() || !editingAssignment.date || editingAssignment.maxPoints < 1) {
+      return onAction(tr('Renseignez le titre, la date et un maximum de points valide.', 'Enter a title, date, and valid maximum score.'), true)
+    }
+    setAssignments((current) => sanitizeAssignments(current.map((item) => item.id === editingAssignment.id ? { ...editingAssignment, title: editingAssignment.title.trim() } : item)))
+    setEditingAssignment(null)
+    onAction(tr('Colonne modifiee. Cliquez sur Enregistrer.', 'Column updated. Click Save to synchronize.'))
   }
 
   const deleteAssignment = (assignment: GradebookColumn) => {
@@ -890,12 +940,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-xs">
             <thead className="sticky top-0 z-20 bg-gray-50 text-xs uppercase text-gray-500 shadow-sm dark:bg-kcs-blue-900 dark:text-gray-300">
               <tr>
-                <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student</th>
+                <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student<span className="mt-1 block text-[10px] font-semibold normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{canonicalClassLabel(selectedCourse?.className || selectedCourse?.gradeLevels?.[0])} - Official course enrollment</span></th>
                 {visibleAssignments.map((assignment) => (
                   <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour déplacer cette colonne', 'Drag to move this column')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
                     <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
                     <span className="block normal-case text-gray-400">{assignment.type} · {assignment.maxPoints} pts</span><span className="mt-0.5 block normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{assignment.date ? new Date(`${assignment.date}T12:00:00`).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB') : tr('Date non définie', 'No date')}</span>
-                    <button onClick={() => deleteAssignment(assignment)} className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold normal-case text-red-500 hover:text-red-600"><Trash2 size={12} /> Delete</button>
+                    <span className="mt-1 flex items-center justify-center gap-2 normal-case"><button type="button" onClick={() => setEditingAssignment({ ...assignment })} className="inline-flex items-center gap-1 text-[11px] font-bold text-kcs-blue-600 hover:text-kcs-blue-800 dark:text-sky-300"><Pencil size={12} /> {tr('Modifier','Edit')}</button><button type="button" onClick={() => deleteAssignment(assignment)} className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 hover:text-red-600"><Trash2 size={12} /> {tr('Supprimer','Delete')}</button></span>
                   </th>
                 ))}
                 <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Average</th>
@@ -909,7 +959,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 <tr key={student.id} className="group">
                   <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-3 py-1.5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)} - {student.advisor ?? 'Advisor pending'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)}</p>
                   </td>
                   {visibleAssignments.map((assignment) => {
                     const normalized = getScore(assignment, student.id)
@@ -989,6 +1039,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       {pendingDeleteAssignment && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-xl rounded-3xl border border-red-100 bg-white p-6 shadow-2xl dark:border-red-900/50 dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-red-600">{tr('Suppression contrôlée', 'Controlled deletion')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Supprimer réellement cette évaluation ?', 'Really delete this assignment?')}</h3><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{tr(`« ${pendingDeleteAssignment.title} » et tous ses points saisis seront retirés de ce Gradebook.`, `“${pendingDeleteAssignment.title}” and all entered scores will be removed from this Gradebook.`)}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-700 dark:bg-kcs-blue-950 dark:text-gray-200"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={rememberDeleteChoice} onChange={(event) => setRememberDeleteChoice(event.target.checked)}/><span><b className="block">{tr('Ne plus demander sur cet appareil', 'Do not ask again on this device')}</b><small>{tr('Vous pourrez réactiver cette confirmation en supprimant les préférences locales du navigateur.', 'You can restore this prompt by clearing the browser’s local preferences.')}</small></span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteAssignment(null)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-900 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" onClick={confirmDeleteAssignment} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"><Trash2 size={15} className="mr-2 inline"/>{tr('Supprimer définitivement', 'Delete permanently')}</button></div></div></div>}
       {cellDialog && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-kcs-blue-950/75 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-bold uppercase text-kcs-gold-600">{cellDialog.mode === 'ai' ? 'AI grade suggestion' : 'Teacher cell note'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{cellDialog.student.name} · {cellDialog.assignment.title}</h3>{cellDialog.mode === 'ai' ? <><div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-sm text-gray-600 dark:text-gray-300">Current score: <strong>{getRawScore(cellDialog.assignment.id, cellDialog.student.id) || 'Not entered'}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Suggested score: <strong>{suggestGrade(cellDialog.assignment, cellDialog.student)}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-xs text-gray-500">Based on the learner's weighted average and class trend. It is never applied without teacher confirmation.</p></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Keep current score</button><button type="button" onClick={applyAiSuggestion} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Apply suggestion</button></div></> : <><textarea autoFocus value={cellNoteDraft} onChange={(event) => setCellNoteDraft(event.target.value)} className="input-kcs mt-5 min-h-32" placeholder="Write an observation, correction note, accommodation, or follow-up..."/><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Cancel</button><button type="button" onClick={saveCellNote} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white">Save note</button></div></>}</div></div>}
 
+      {archivedAssignments.length > 0 && <section className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/20"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">{tr('Corbeille du Gradebook','Gradebook recycle bin')}</p><p className="text-xs text-amber-800/80 dark:text-amber-200/80">{tr('Les evaluations supprimees et leurs points restent restaurables.','Deleted assignments and their scores remain restorable.')}</p></div><div className="flex flex-wrap gap-2">{archivedAssignments.map((archived) => <button key={archived.assignment.id + archived.deletedAt} type="button" onClick={() => restoreAssignment(archived)} className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-amber-800 shadow-sm dark:bg-kcs-blue-950 dark:text-amber-200"><RotateCcw size={13}/>{tr('Restaurer','Restore')} {archived.assignment.title}</button>)}</div></div></section>}
+      {editingAssignment && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-kcs-blue-600 dark:text-sky-300">{tr('Modifier la colonne','Edit grade column')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{editingAssignment.title}</h3><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Titre','Title')}<input className="input-kcs" value={editingAssignment.title} onChange={(event) => setEditingAssignment({...editingAssignment,title:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Date','Date')}<DateSelect className="input-kcs" value={editingAssignment.date} onChange={(event) => setEditingAssignment({...editingAssignment,date:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Type','Type')}<select className="input-kcs" value={editingAssignment.type} onChange={(event) => {const type=event.target.value as AssignmentType;setEditingAssignment({...editingAssignment,type,category:type})}}>{assignmentTypes.map((item)=><option key={item} value={item}>{assignmentTypeLabels[item].name}</option>)}</select></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Maximum de points','Maximum points')}<input className="input-kcs" type="number" min={1} value={editingAssignment.maxPoints} onChange={(event)=>setEditingAssignment({...editingAssignment,maxPoints:Math.max(1,Number(event.target.value)||1)})}/></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={()=>setEditingAssignment(null)} className="rounded-xl border px-4 py-2.5 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr('Annuler','Cancel')}</button><button type="button" onClick={saveAssignmentEdit} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white"><Pencil size={15} className="mr-2 inline"/>{tr('Enregistrer','Save changes')}</button></div></div></div>}
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">

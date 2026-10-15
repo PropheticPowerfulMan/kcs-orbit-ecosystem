@@ -343,6 +343,18 @@ app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyn
   res.json({ access })
 }))
 
+app.get('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), asyncRoute(async (req, res) => {
+  const person = await resolvePerson(routeParam(req, 'orbitPersonId'))
+  if (!person) return res.status(404).json({ message: 'Active Orbit identity not found' })
+  const [access, payments, balance] = await Promise.all([
+    prisma.kitchenAccess.findUnique({ where: { orbitPersonId: person.id } }),
+    prisma.kitchenPayment.findMany({ where: { orbitPersonId: person.id }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    balanceFor(person.id)
+  ])
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ person, access, payments, balance })
+}))
+
 const kitchenDateKey = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''

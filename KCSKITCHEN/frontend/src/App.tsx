@@ -1092,12 +1092,20 @@ function Reports({ user, t }: { user: User; t: Record<string, string> }) {
   </>
 }
 function Access({ t }: { t: Record<string, string> }) {
+  const { lang } = useLanguage()
   const [query, setQuery] = useState('')
   const [people, setPeople] = useState<Person[]>([])
   const [selected, setSelected] = useState<Person | null>(null)
+  const [details, setDetails] = useState<any>(null)
+  const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   async function search() {
     try { const result = await api<{ people: Person[] }>('/directory?q=' + encodeURIComponent(query)); setPeople(result.people) }
+    catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+  }
+  async function openPerson(person: Person) {
+    setSelected(person); setDetails(null)
+    try { setDetails(await api('/access/' + encodeURIComponent(person.id))) }
     catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
   }
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -1107,14 +1115,24 @@ function Access({ t }: { t: Record<string, string> }) {
         role: data.get('role'), isActive: data.get('active') === 'on', creditEnabled: data.get('credit') === 'on',
         creditLimit: data.get('limit') ? Number(data.get('limit')) : null
       }) })
-      setSelected(null); setNotice({ type: 'success', message: t.success })
+      setDetails(await api('/access/' + encodeURIComponent(selected!.id))); setNotice({ type: 'success', message: t.success })
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+  }
+  async function recordPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!selected || busy) return
+    const data = new FormData(event.currentTarget); setBusy(true)
+    try {
+      await api('/payments', { method: 'POST', body: JSON.stringify({ orbitPersonId: selected.id, amount: Number(data.get('amount')), method: data.get('method'), reference: data.get('reference') || undefined, notes: data.get('notes') || undefined }) })
+      setDetails(await api('/access/' + encodeURIComponent(selected.id)))
+      event.currentTarget.reset(); setNotice({ type: 'success', message: lang === 'fr' ? 'Paiement enregistre et solde actualise.' : 'Payment recorded and balance updated.' })
+    } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+    finally { setBusy(false) }
   }
   return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KITCHEN RBAC</span><h2>{t.access}</h2><p>Roles and credit rules are attached to the institutional Orbit ID, never to a duplicate identity.</p></div></div>
     <div className="search-toolbar"><div className="search-box"><Search /><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && search()} placeholder={t.searchPerson} /></div><button className="primary" onClick={search}>{t.search}</button></div>
-    <div className="person-cards">{people.map(person => <button key={person.id} onClick={() => setSelected(person)}><div className="avatar">{person.fullName.slice(0, 2).toUpperCase()}</div><span><b>{person.fullName}</b><small>{person.kind} · {person.displayId || person.email}</small></span><ShieldCheck /></button>)}</div>
+    <div className="person-cards">{people.map(person => <button key={person.id} onClick={() => void openPerson(person)}><div className="avatar">{person.fullName.slice(0, 2).toUpperCase()}</div><span><b>{person.fullName}</b><small>{person.kind} · {person.displayId || person.email}</small></span><ShieldCheck /></button>)}</div>
   </section>
-  {selected && <Modal onClose={() => setSelected(null)}><form className="modal-form" onSubmit={save}><span className="eyebrow">KITCHEN ACCESS</span><h2>{selected.fullName}</h2><label>{t.role}<select name="role"><option>KITCHEN_ADMIN</option><option>CASHIER</option><option>FINANCE</option><option>AUDITOR</option><option>{selected.kind === 'TEACHER' ? 'TEACHER' : selected.kind === 'STUDENT' ? 'STUDENT' : 'STAFF'}</option></select></label><label className="check"><input name="active" type="checkbox" defaultChecked />{t.active}</label><label className="check"><input name="credit" type="checkbox" />{t.creditAllowed}</label><label>Credit limit (CDF)<input name="limit" type="number" min="1" /></label><button className="primary large">{t.save}</button></form></Modal>}
+  {selected && <Modal wide onClose={() => setSelected(null)}><div className="modal-form"><span className="eyebrow">KITCHEN ACCESS · DEBT REGISTER</span><h2>{selected.fullName}</h2>{!details ? <Loading/> : <><div className="stats"><Stat icon={<Wallet/>} label={lang === 'fr' ? 'Dette actuelle' : 'Current debt'} value={<DisplayMoney value={details.balance || 0}/>} tone={Number(details.balance) > 0 ? 'warn' : 'good'}/><Stat icon={<ShieldCheck/>} label={lang === 'fr' ? 'Credit autorise' : 'Credit enabled'} value={details.access?.creditEnabled ? (lang === 'fr' ? 'Oui' : 'Yes') : (lang === 'fr' ? 'Non' : 'No')}/></div><form className="modal-form" onSubmit={save}><label>{t.role}<select name="role" defaultValue={details.access?.role || (selected.kind === 'TEACHER' ? 'TEACHER' : selected.kind === 'STUDENT' ? 'STUDENT' : 'STAFF')}><option>KITCHEN_ADMIN</option><option>CASHIER</option><option>FINANCE</option><option>AUDITOR</option><option>TEACHER</option><option>STAFF</option><option>STUDENT</option></select></label><label className="check"><input name="active" type="checkbox" defaultChecked={details.access?.isActive ?? true}/>{t.active}</label><label className="check"><input name="credit" type="checkbox" defaultChecked={details.access?.creditEnabled ?? false}/>{t.creditAllowed}</label><label>{lang === 'fr' ? 'Plafond de credit (CDF)' : 'Credit limit (CDF)'}<input name="limit" type="number" min="1" defaultValue={details.access?.creditLimit || ''}/></label><button className="primary large">{t.save}</button></form>{Number(details.balance) > 0 && <form className="modal-form" onSubmit={recordPayment}><span className="eyebrow">{lang === 'fr' ? 'RECOUVREMENT DE DETTE' : 'DEBT PAYMENT'}</span><p>{lang === 'fr' ? 'Enregistrez un paiement partiel ou total. Le nouveau solde sera immediatement visible dans le dashboard de cette personne.' : 'Record a partial or full payment. The new balance will immediately appear in this person dashboard.'}</p><label>{lang === 'fr' ? 'Montant recu (CDF)' : 'Amount received (CDF)'}<input name="amount" type="number" min="1" max={Number(details.balance)} required/></label><label>{lang === 'fr' ? 'Mode' : 'Method'}<select name="method"><option value="CASH">{lang === 'fr' ? 'Especes' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{lang === 'fr' ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option></select></label><label>{lang === 'fr' ? 'Reference' : 'Reference'}<input name="reference" maxLength={160}/></label><label>{lang === 'fr' ? 'Note' : 'Note'}<textarea name="notes" maxLength={500}/></label><button className="primary large" disabled={busy}>{busy ? <LoaderCircle className="spin"/> : <ReceiptText/>}{lang === 'fr' ? 'Enregistrer le paiement' : 'Record payment'}</button></form>}</>}</div></Modal>}
   {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 
