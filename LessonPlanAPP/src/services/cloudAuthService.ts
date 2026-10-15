@@ -6,6 +6,8 @@ const configuredSupabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | unde
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 const configuredPublicAppUrl = import.meta.env.VITE_PUBLIC_APP_URL as string | undefined;
 const configuredFederatedAuthUrl = import.meta.env.VITE_FEDERATED_AUTH_URL as string | undefined;
+const configuredFederatedSsoUrl = (import.meta.env.VITE_FEDERATED_SSO_URL as string | undefined)
+  || configuredFederatedAuthUrl?.replace(/ecosystem-login$/, "ecosystem-sso");
 const sessionKey = "powerful-lesson-planner:supabase-session";
 
 interface SupabaseSession {
@@ -174,6 +176,27 @@ export const cloudAuthService = {
     return rows.map(toProfile);
   },
   clearSession,
+  async signInWithTicket(ticket: string) {
+    if (!configuredFederatedSsoUrl) throw new Error("Institutional single sign-on is not configured.");
+    const response = await fetch(configuredFederatedSsoUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket })
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || "Institutional single sign-on failed.");
+    const session = payload as SupabaseSession;
+    writeSession(session);
+    const profile = await fetchCurrentProfile(session.user.id, session.access_token).catch((error) => {
+      clearSession();
+      throw error;
+    });
+    if (!profile || profile.status !== "active") {
+      clearSession();
+      throw new Error("This account is waiting for activation by the school authority.");
+    }
+    return profile;
+  },
   async getCurrentUser() {
     if (!enabled) return null;
     const session = readSession();

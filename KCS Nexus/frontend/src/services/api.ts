@@ -567,6 +567,10 @@ export const academyAPI = {
   launch: () => api.post<{ data: { url: string } }>("/academy/launch"),
 }
 
+export const lessonPlanAPI = {
+  launch: () => api.post<{ data: { url: string } }>("/lesson-plan/launch"),
+}
+
 export const academicCalendarAPI = {
   current: () => api.get('/academic-calendar/current'),
   list: () => api.get('/academic-calendar'),

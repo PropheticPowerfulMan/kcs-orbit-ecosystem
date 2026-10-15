@@ -11,6 +11,7 @@ interface AuthContextValue {
   authMode: AuthMode;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithTicket: (ticket: string) => Promise<void>;
   signUp: (profile: SignUpProfileInput) => Promise<void>;
   resetPassword: (email: string) => Promise<string | void>;
   changePassword: (currentPassword: string, nextPassword: string) => Promise<void>;
@@ -43,12 +44,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         mockAuthService.signOut();
         return;
       }
-      cloudAuthService.clearSession();
       setLoading(true);
       try {
-        const nextUsers = profilePhotoService.applyAll(await cloudAuthService.listUsers().catch(() => []));
+        const [sessionUser, listedUsers] = await Promise.all([
+          cloudAuthService.getCurrentUser(),
+          cloudAuthService.listUsers().catch(() => [])
+        ]);
+        const nextUsers = profilePhotoService.applyAll(listedUsers);
         if (!mounted) return;
-        setCurrentUser(null);
+        setCurrentUser(sessionUser ? profilePhotoService.apply(sessionUser) : null);
         setUsers(nextUsers);
       } finally {
         if (mounted) setLoading(false);
@@ -62,6 +66,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     const user = cloudAuthService.enabled ? await cloudAuthService.signIn(email, password) : mockAuthService.signIn(email, password);
+    setCurrentUser(profilePhotoService.apply(user));
+    await refreshUsers();
+  };
+
+  const signInWithTicket = async (ticket: string) => {
+    if (!cloudAuthService.enabled) throw new Error("Institutional single sign-on requires the online service.");
+    const user = await cloudAuthService.signInWithTicket(ticket);
     setCurrentUser(profilePhotoService.apply(user));
     await refreshUsers();
   };
@@ -151,6 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       authMode,
       loading,
       signIn,
+      signInWithTicket,
       signUp,
       resetPassword,
       changePassword,

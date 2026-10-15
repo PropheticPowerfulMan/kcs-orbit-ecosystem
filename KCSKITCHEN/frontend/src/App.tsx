@@ -14,7 +14,7 @@ import PersonSelector from './PersonSelector'
 import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
-type Page = 'dashboard' | 'menus' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access'
+type Page = 'dashboard' | 'menus' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues'
 
 type StatementHolder = {
   orbitPersonId: string
@@ -122,7 +122,7 @@ type TransactionReportVerificationResult = {
   document?: Omit<OfficialTransactionReport, 'rows' | 'signature' | 'rowsHash' | 'issuedBy' | 'confirmedSubtotal' | 'confirmedDiscount'>
 }
 
-const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access'])
+const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access', 'school-dues'])
 function requestedPage(): Page {
   if (typeof window === 'undefined') return 'dashboard'
   const value = new URLSearchParams(window.location.search).get('page') as Page | null
@@ -211,11 +211,12 @@ async function printStandaloneDocument(elementId: string, title: string, orienta
 }
 const text = {
   fr: {
+    schoolDues: 'Montants dus par KCS',
     signIn: 'Connexion institutionnelle', identifier: 'E-mail ou code institutionnel', password: 'Mot de passe',
     enter: 'Entrer dans KCS Kitchen', trace: 'Chaque consommation. Chaque franc. Une preuve.',
     powered: 'Propulsé par KCS Orbit', menus: 'Menu du jour', dashboard: 'Tableau de bord', pos: 'Point de vente', catalog: 'Catalogue',
     transactions: 'Transactions', ledger: 'Mon relevé', inventory: 'Stock', procurement: 'Achats et fournisseurs', disputes: 'Contestations',
-    reports: 'Rapports', access: 'Accès et crédit', logout: 'Déconnexion', today: 'Aujourd’hui',
+    reports: 'Rapports', access: 'Dettes et règlements', logout: 'Déconnexion', today: 'Aujourd’hui',
     outstanding: 'Solde à recouvrer', sales: 'Ventes', credit: 'Crédit émis', payments: 'Paiements',
     discounts: 'Réductions', openDisputes: 'Contestations ouvertes', lowStock: 'Stock faible',
     identify: 'Identifier la personne', searchPerson: 'Nom, matricule, e-mail, téléphone…',
@@ -244,11 +245,12 @@ const text = {
     popularProducts: 'PRODUITS POPULAIRES', topConsumption: 'Consommations principales', secureLoading: 'Chargement sécurisé des données Kitchen…'
   },
   en: {
+    schoolDues: 'Amounts owed by KCS',
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
     enter: 'Enter KCS Kitchen', trace: 'Every consumption. Every franc. One proof.',
     powered: 'Powered by KCS Orbit', menus: 'Daily menu', dashboard: 'Dashboard', pos: 'Point of sale', catalog: 'Catalog',
     transactions: 'Transactions', ledger: 'My statement', inventory: 'Inventory', procurement: 'Purchasing & suppliers', disputes: 'Disputes',
-    reports: 'Reports', access: 'Access and credit', logout: 'Sign out', today: 'Today',
+    reports: 'Reports', access: 'Debts and payments', logout: 'Sign out', today: 'Today',
     outstanding: 'Outstanding balance', sales: 'Sales', credit: 'Credit issued', payments: 'Payments',
     discounts: 'Discounts', openDisputes: 'Open disputes', lowStock: 'Low stock',
     identify: 'Identify person', searchPerson: 'Name, ID, email, phone…',
@@ -461,7 +463,8 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['disputes', t.disputes, <AlertTriangle />, true],
     ['reports', t.reports, <BarChart3 />, isPrivileged],
     ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
-    ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN']
+    ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN'],
+    ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)]
   ]
   function navigateToPage(nextPage: Page, replace = false) {
     setPage(nextPage)
@@ -499,7 +502,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>
     <main className="workspace">
-      <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
+      <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page === 'school-dues' ? 'schoolDues' : page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} lang={lang} />}
@@ -512,6 +515,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'disputes' && <Disputes user={user} t={t} />}
         {page === 'reports' && <Reports user={user} t={t} />}
         {page === 'access' && <Access t={t} />}
+        {page === 'school-dues' && <SchoolDues lang={lang} />}
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
     </main>
@@ -1091,6 +1095,31 @@ function Reports({ user, t }: { user: User; t: Record<string, string> }) {
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
   </>
 }
+function SchoolDues({ lang }: { lang: Lang }) {
+  const fr = lang === 'fr'
+  const now = new Date()
+  const [from, setFrom] = useState(`${now.getFullYear()}-01-01`)
+  const [to, setTo] = useState(now.toISOString().slice(0, 10))
+  const [data, setData] = useState<any>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function load() {
+    setBusy(true); setError('')
+    try { setData(await api(`/school-subsidies?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to + 'T23:59:59.999Z')}`)) }
+    catch (err) { setError((err as Error).message) }
+    finally { setBusy(false) }
+  }
+  useEffect(() => { void load() }, [])
+  return <>
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · SCHOOL SUBSIDY REGISTER</span><h2>{fr ? 'Montants dus par KCS a la cuisine' : 'Amounts owed by KCS to the kitchen'}</h2><p>{fr ? 'Chaque reduction accordee au personnel est conservee ici comme une creance detaillee de la cuisine envers l ecole.' : 'Every staff discount is retained here as a detailed amount owed by the school to the kitchen.'}</p></div><button className="primary" disabled={!data?.rows?.length} onClick={() => void printStandaloneDocument('school-dues-invoice', fr ? 'Facture KCS Kitchen' : 'KCS Kitchen invoice')}><ReceiptText/>{fr ? 'Imprimer / PDF' : 'Print / PDF'}</button></div>
+      <div className="search-toolbar"><label>{fr ? 'Du' : 'From'}<input type="date" value={from} onChange={event => setFrom(event.target.value)}/></label><label>{fr ? 'Au' : 'To'}<input type="date" value={to} onChange={event => setTo(event.target.value)}/></label><button className="primary" disabled={busy} onClick={() => void load()}>{busy ? <LoaderCircle className="spin"/> : <Search/>}{fr ? 'Actualiser' : 'Refresh'}</button></div>
+      {error && <div className="empty error">{error}</div>}
+      {!data && !error ? <Loading/> : data && <div className="stats"><Stat icon={<Wallet/>} label={fr ? 'Total a payer par KCS' : 'Total payable by KCS'} value={<DisplayMoney value={data.total}/>} tone="warn"/><Stat icon={<ReceiptText/>} label={fr ? 'Reductions detaillees' : 'Detailed subsidies'} value={data.count}/></div>}
+    </section>
+    {data && <section id="school-dues-invoice" className="panel official-statement"><div className="section-heading"><div><span className="eyebrow">KINSHASA CHRISTIAN SCHOOL · KCS KITCHEN</span><h2>{fr ? 'ETAT OFFICIEL DES PRISES EN CHARGE' : 'OFFICIAL SCHOOL SUBSIDY STATEMENT'}</h2><p>{from} — {to}</p></div><img src="./images/kcs-emblem.jpg" alt="KCS" style={{width:72,height:72,objectFit:'contain',borderRadius:'50%'}}/></div><div className="stats"><Stat icon={<ShieldCheck/>} label={fr ? 'Montant total du par l ecole' : 'Total amount owed by the school'} value={<DisplayMoney value={data.total}/>} tone="warn"/><Stat icon={<ClipboardList/>} label={fr ? 'Nombre d operations' : 'Number of entries'} value={data.count}/></div><div className="rank-list">{data.rows.map((row:any)=><div key={row.id}><b>{new Date(row.createdAt).toLocaleDateString(fr ? 'fr-CD' : 'en-US')}</b><span><strong>{row.personNameSnapshot}</strong><small>{row.transactionNumber} · {fr ? 'Base eligible' : 'Eligible base'}: {Number(row.eligibleSubtotal).toLocaleString()} CDF</small></span><strong><DisplayMoney value={row.schoolSubsidy}/></strong></div>)}</div><footer><small>{fr ? 'Document produit depuis le registre audite de KCS Kitchen.' : 'Document generated from the audited KCS Kitchen register.'}</small></footer></section>}
+  </>
+}
+
 function Access({ t }: { t: Record<string, string> }) {
   const { lang } = useLanguage()
   const [query, setQuery] = useState('')
@@ -1098,7 +1127,13 @@ function Access({ t }: { t: Record<string, string> }) {
   const [selected, setSelected] = useState<Person | null>(null)
   const [details, setDetails] = useState<any>(null)
   const [busy, setBusy] = useState(false)
+  const [debts, setDebts] = useState<any>({ debts: [], total: 0, count: 0 })
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  async function loadDebts() {
+    try { setDebts(await api('/debts')) }
+    catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
+  }
+  useEffect(() => { void loadDebts() }, [])
   async function search() {
     try { const result = await api<{ people: Person[] }>('/directory?q=' + encodeURIComponent(query)); setPeople(result.people) }
     catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
@@ -1124,11 +1159,14 @@ function Access({ t }: { t: Record<string, string> }) {
     try {
       await api('/payments', { method: 'POST', body: JSON.stringify({ orbitPersonId: selected.id, amount: Number(data.get('amount')), method: data.get('method'), reference: data.get('reference') || undefined, notes: data.get('notes') || undefined }) })
       setDetails(await api('/access/' + encodeURIComponent(selected.id)))
+      await loadDebts()
       event.currentTarget.reset(); setNotice({ type: 'success', message: lang === 'fr' ? 'Paiement enregistre et solde actualise.' : 'Payment recorded and balance updated.' })
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
     finally { setBusy(false) }
   }
-  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KITCHEN RBAC</span><h2>{t.access}</h2><p>Roles and credit rules are attached to the institutional Orbit ID, never to a duplicate identity.</p></div></div>
+  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · DEBT CONTROL</span><h2>{lang === 'fr' ? 'Dettes, paiements et acces au credit' : 'Debts, payments and credit access'}</h2><p>{lang === 'fr' ? 'Paiement partiel ou total avec actualisation immediate du solde dans tous les dashboards concernes.' : 'Partial or full payment with immediate balance refresh across every concerned dashboard.'}</p></div><button className="primary" onClick={() => void loadDebts()}><ShieldCheck/>{t.refresh}</button></div>
+    <div className="stats"><Stat icon={<Wallet/>} label={lang === 'fr' ? 'Dette totale des entites' : 'Total entity debt'} value={<DisplayMoney value={debts.total}/>} tone="warn"/><Stat icon={<Users/>} label={lang === 'fr' ? 'Comptes debiteurs' : 'Debtor accounts'} value={debts.count}/></div>
+    <div className="person-cards">{debts.debts.map((row:any) => row.person && <button key={row.orbitPersonId} onClick={() => void openPerson(row.person)}><div className="avatar">{row.person.fullName.slice(0,2).toUpperCase()}</div><span><b>{row.person.fullName}</b><small>{row.person.kind} · {row.person.displayId || row.person.email}</small></span><strong><DisplayMoney value={row.balance}/></strong></button>)}</div>
     <div className="search-toolbar"><div className="search-box"><Search /><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && search()} placeholder={t.searchPerson} /></div><button className="primary" onClick={search}>{t.search}</button></div>
     <div className="person-cards">{people.map(person => <button key={person.id} onClick={() => void openPerson(person)}><div className="avatar">{person.fullName.slice(0, 2).toUpperCase()}</div><span><b>{person.fullName}</b><small>{person.kind} · {person.displayId || person.email}</small></span><ShieldCheck /></button>)}</div>
   </section>

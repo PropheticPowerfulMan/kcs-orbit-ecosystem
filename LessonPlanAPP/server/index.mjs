@@ -194,6 +194,29 @@ const ecosystemLogin = async (body) => {
   return createSupabaseSession(email);
 };
 
+const ecosystemSso = async (body) => {
+  const ticket = String(body.ticket || "").trim();
+  if (!/^[A-Za-z0-9_-]{40,128}$/.test(ticket)) {
+    const error = new Error("Invalid institutional launch ticket.");
+    error.status = 400;
+    throw error;
+  }
+  const nexusResponse = await fetch(new URL("/api/lesson-plan/exchange", process.env.NEXUS_API_URL), {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-kcs-client": "KCS_LESSON_PLAN" },
+    body: JSON.stringify({ ticket }),
+    signal: AbortSignal.timeout(12_000)
+  });
+  const nexusBody = await nexusResponse.json().catch(() => null);
+  if (!nexusResponse.ok || !nexusBody?.data) {
+    const error = new Error(nexusBody?.message || "Institutional launch ticket expired or already used.");
+    error.status = nexusResponse.status === 400 ? 400 : 401;
+    throw error;
+  }
+  const { email } = await ensureSupabaseProfile(nexusBody.data);
+  return createSupabaseSession(email);
+};
+
 const server = http.createServer(async (request, response) => {
   const origin = request.headers.origin || "";
   const corsOrigin = allowedOrigins.has(origin) ? origin : appUrl;
@@ -206,7 +229,7 @@ const server = http.createServer(async (request, response) => {
       legacySupabaseAccess: "ready"
     }, corsOrigin);
   }
-  if (request.method !== "POST" || !["/api/auth/recovery", "/api/auth/ecosystem-login"].includes(pathname)) {
+  if (request.method !== "POST" || !["/api/auth/recovery", "/api/auth/ecosystem-login", "/api/auth/ecosystem-sso"].includes(pathname)) {
     return sendJson(response, 404, { error: "Not found" }, corsOrigin);
   }
   if (origin && !allowedOrigins.has(origin)) {
@@ -220,6 +243,10 @@ const server = http.createServer(async (request, response) => {
     const body = await readJson(request);
     if (pathname === "/api/auth/ecosystem-login") {
       const session = await ecosystemLogin(body);
+      return sendJson(response, 200, session, corsOrigin);
+    }
+    if (pathname === "/api/auth/ecosystem-sso") {
+      const session = await ecosystemSso(body);
       return sendJson(response, 200, session, corsOrigin);
     }
     const email = String(body.email || "").trim().toLowerCase();
@@ -248,7 +275,7 @@ const server = http.createServer(async (request, response) => {
       console.error("Recovery link generation failed:", error.message);
     }
   } catch (error) {
-    if (pathname === "/api/auth/ecosystem-login") {
+    if (pathname === "/api/auth/ecosystem-login" || pathname === "/api/auth/ecosystem-sso") {
       console.error("Ecosystem login failed:", error instanceof Error ? error.message : error);
       const status = Number(error?.status || 500);
       const message = status < 500 && error instanceof Error

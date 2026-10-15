@@ -355,6 +355,43 @@ app.get('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN', 'FINA
   res.json({ person, access, payments, balance })
 }))
 
+app.get('/api/debts', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
+  const [grouped, people] = await Promise.all([
+    prisma.kitchenLedgerEntry.groupBy({ by: ['orbitPersonId'], _sum: { amount: true } }),
+    loadDirectory()
+  ])
+  const peopleById = new Map(people.map(person => [person.id, person]))
+  const debts = grouped
+    .map(row => ({ orbitPersonId: row.orbitPersonId, balance: Number(row._sum.amount || 0), person: peopleById.get(row.orbitPersonId) || null }))
+    .filter(row => row.balance > 0.005)
+    .sort((left, right) => right.balance - left.balance || (left.person?.fullName || left.orbitPersonId).localeCompare(right.person?.fullName || right.orbitPersonId))
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ debts, total: debts.reduce((sum, row) => sum + row.balance, 0), count: debts.length })
+}))
+
+app.get('/api/school-subsidies', authenticate, allow('KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'), asyncRoute(async (req, res) => {
+  const from = req.query.from ? new Date(String(req.query.from)) : undefined
+  const to = req.query.to ? new Date(String(req.query.to)) : undefined
+  if (from && Number.isNaN(from.getTime())) return res.status(400).json({ message: 'Invalid start date' })
+  if (to && Number.isNaN(to.getTime())) return res.status(400).json({ message: 'Invalid end date' })
+  const rows = await prisma.kitchenTransaction.findMany({
+    where: {
+      status: 'CONFIRMED',
+      schoolSubsidy: { gt: 0 },
+      ...(from || to ? { createdAt: { gte: from, lte: to } } : {})
+    },
+    select: {
+      id: true, transactionNumber: true, createdAt: true, orbitPersonId: true, personNameSnapshot: true,
+      subtotal: true, eligibleSubtotal: true, schoolSubsidy: true, total: true
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 5000
+  })
+  const total = rows.reduce((sum, row) => sum + Number(row.schoolSubsidy), 0)
+  res.setHeader('Cache-Control', 'no-store')
+  res.json({ rows, total, count: rows.length, currency: 'CDF', generatedAt: new Date().toISOString() })
+}))
+
 const kitchenDateKey = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'Africa/Kinshasa', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value ?? ''
@@ -528,12 +565,28 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   })
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
 
-  const personAccess = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: person.id } })
+  let personAccess = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: person.id } })
   const subsidyRole = person.kind === 'TEACHER' ? 'TEACHER' : ['STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? 'STAFF' : person.kind
   const eligibleSubtotal = lines.filter(line => line.product.discountEligible && line.product.category !== 'DRINK').reduce((sum, line) => sum + line.subtotal, 0)
   const schoolSubsidy = calculateSchoolSubsidy(eligibleSubtotal, subsidyRole)
   if (input.paymentMode === 'CREDIT') {
-    if (!personAccess?.creditEnabled) return res.status(403).json({ message: 'Credit is not enabled for this person' })
+    if (personAccess?.isActive === false) return res.status(403).json({ message: 'Kitchen access is explicitly disabled for this person' })
+    if (!personAccess?.creditEnabled) {
+      const previousAccess = personAccess
+      personAccess = await prisma.kitchenAccess.upsert({
+        where: { orbitPersonId: person.id },
+        create: {
+          orbitPersonId: person.id,
+          personType: personTypeFrom(person.kind),
+          role: defaultRole(person.kind, personTypeFrom(person.kind)),
+          isActive: true,
+          creditEnabled: true,
+          createdBy: req.kitchenUser!.orbitPersonId
+        },
+        update: { creditEnabled: true }
+      })
+      await audit(req, 'CREDIT_AUTO_ENABLED_FOR_DEBT_ORDER', 'KitchenAccess', personAccess.id, previousAccess, personAccess, 'Debt is available to every active institutional Kitchen identity; explicit access suspension remains authoritative.')
+    }
     const currentBalance = await balanceFor(person.id)
     if (personAccess.creditLimit != null && currentBalance + Math.max(0, subtotal - schoolSubsidy) > Number(personAccess.creditLimit)) {
       return res.status(409).json({ message: 'Credit limit would be exceeded', currentBalance, creditLimit: personAccess.creditLimit })

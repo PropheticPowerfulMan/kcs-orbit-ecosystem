@@ -9,7 +9,7 @@ import {
   Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { academyAPI, authAPI } from '@/services/api'
+import { academyAPI, authAPI, lessonPlanAPI } from '@/services/api'
 import { useUIStore } from '@/store/uiStore'
 import type { UserRole } from '@/types'
 import { getAssetUrl } from '@/utils/assets'
@@ -345,12 +345,12 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
           </button>
         )}
         {(accessRoles.includes('teacher') || user.role === 'admin') && (
-          <a href="/lesson-plan/"
+          <button type="button" onClick={async () => { const response = await lessonPlanAPI.launch(); window.location.assign(response.data.data.url) }}
             className={isMobile ? "nexus-mobile-action" : `sidebar-link w-full ${!sidebarCollapsed ? "" : "justify-center px-0"}`}
-            title={!isMobile && sidebarCollapsed ? "KCS Lesson Plan" : undefined}>
+            title={!isMobile && sidebarCollapsed ? "KCS EduPlanner" : undefined}>
             <BookOpenCheck size={18} />
-            {(isMobile || !sidebarCollapsed) && <span>KCS Lesson Plan</span>}
-          </a>
+            {(isMobile || !sidebarCollapsed) && <span>KCS EduPlanner</span>}
+          </button>
         )}
 
         <button
