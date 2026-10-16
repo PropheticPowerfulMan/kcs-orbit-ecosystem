@@ -875,7 +875,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             </div>
             <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
               Assessment date
-              <DateSelect className="input-kcs py-2 text-sm" value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
+              <DateSelect max="2700-12-31" className="input-kcs py-2 text-sm" value={draft.date} onChange={(event) => setDraft((item) => ({ ...item, date: event.target.value }))} />
             </label>
             <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
               Instructions or learning objective <span className="font-normal text-gray-500">(optional)</span>

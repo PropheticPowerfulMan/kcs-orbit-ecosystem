@@ -32,12 +32,14 @@ import { shiningStudentsRouter } from './shining-students.routes.js'
 import { syllabiRouter } from './syllabi.routes.js'
 import { kitchenNotificationsRouter } from './kitchen-notifications.routes.js'
 import { lessonPlanRouter } from './lesson-plan.routes.js'
+import { studentGovernmentRouter } from './student-government.routes.js'
 
 export const router = Router()
 
 router.use('/auth', authRouter)
 router.use('/academy', academyRouter)
 router.use('/lesson-plan', lessonPlanRouter)
+router.use('/student-government', studentGovernmentRouter)
 router.use('/news', newsRouter)
 router.use('/events', eventsRouter)
 router.use('/students', studentsRouter)

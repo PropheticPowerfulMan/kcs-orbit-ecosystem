@@ -1501,3 +1501,96 @@ model ElectiveAllocation {
   @@index([cycleId, studentProfileId])
   @@index([offeringId])
 }
+
+/// Official KCS student-government election. Identity is verified by Nexus,
+/// while each ballot stores only the institutional voter id and immutable
+/// candidate snapshots needed for an auditable result.
+model StudentGovernmentElection {
+  id           String                              @id @default(cuid())
+  title        String
+  academicYear String
+  startAt      DateTime
+  endAt        DateTime
+  status       String                              @default("DRAFT")
+  createdById  String
+  publishedAt  DateTime?
+  positions    StudentGovernmentPosition[]
+  candidates   StudentGovernmentCandidate[]
+  votes        StudentGovernmentVote[]
+  createdAt    DateTime                            @default(now())
+  updatedAt    DateTime                            @updatedAt
+
+  @@index([status, startAt, endAt])
+  @@index([academicYear])
+}
+
+model StudentGovernmentPosition {
+  id           String                       @id @default(cuid())
+  electionId   String
+  name         String
+  scope        String                       @default("GLOBAL")
+  grade        String?
+  section      String?
+  displayOrder Int                          @default(0)
+  election     StudentGovernmentElection    @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  candidates   StudentGovernmentCandidate[]
+  choices      StudentGovernmentChoice[]
+  createdAt    DateTime                     @default(now())
+
+  @@unique([electionId, name, grade, section])
+  @@index([electionId, displayOrder])
+}
+
+model StudentGovernmentCandidate {
+  id               String                    @id @default(cuid())
+  electionId       String
+  positionId       String
+  studentProfileId String
+  ballotNumber     Int
+  firstName        String
+  middleName       String?
+  lastName         String
+  grade            String
+  section          String?
+  manifesto        String?
+  photoUrl         String?
+  active           Boolean                   @default(true)
+  election         StudentGovernmentElection @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  position         StudentGovernmentPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  choices          StudentGovernmentChoice[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  @@unique([positionId, studentProfileId])
+  @@unique([positionId, ballotNumber])
+  @@index([electionId, active])
+}
+
+model StudentGovernmentVote {
+  id                      String                    @id @default(cuid())
+  electionId              String
+  voterUserId             String
+  voterStudentProfileId   String
+  voterGrade              String
+  voterSection            String?
+  confirmationCode        String                    @unique
+  election                StudentGovernmentElection @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  choices                 StudentGovernmentChoice[]
+  submittedAt             DateTime                  @default(now())
+
+  @@unique([electionId, voterUserId])
+  @@index([electionId, submittedAt])
+}
+
+model StudentGovernmentChoice {
+  id          String                     @id @default(cuid())
+  voteId      String
+  positionId  String
+  candidateId String
+  vote        StudentGovernmentVote      @relation(fields: [voteId], references: [id], onDelete: Cascade)
+  position    StudentGovernmentPosition  @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  candidate   StudentGovernmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+
+  @@unique([voteId, positionId])
+  @@index([candidateId])
+}

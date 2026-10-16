@@ -153,11 +153,12 @@ export default function SuggestionBox() {
           </span>
         </div>
       </div>
-      <div className="mt-4 grid gap-3 lg:grid-cols-[200px_1fr_auto]">
+      <div className="mt-4 grid items-end gap-2.5 lg:grid-cols-[minmax(145px,180px)_minmax(0,1fr)_auto]">
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           aria-label={language === 'fr' ? 'Catégorie de suggestion' : 'Suggestion category'}
+          className="h-11 rounded-xl border border-white/20 bg-[#0a3b63] px-3 text-sm font-semibold text-white outline-none focus:ring-2 focus:ring-kcs-gold-400"
         >
           <option value="wellbeing">Wellbeing</option>
           <option value="discipline">Discipline</option>
@@ -169,14 +170,15 @@ export default function SuggestionBox() {
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          className="suggestion-message-input min-h-24 rounded-xl border border-white/10 bg-white/10 px-3 py-3 text-sm !text-white outline-none placeholder:!text-[#d8effb] focus:ring-2 focus:ring-kcs-gold-400"
+          rows={2}
+          className="suggestion-message-input min-h-16 max-h-32 resize-y rounded-xl border border-white/20 bg-[#0a3b63] px-3 py-2.5 text-sm !text-white outline-none placeholder:!text-[#d8effb] focus:ring-2 focus:ring-kcs-gold-400"
           placeholder={language === 'fr' ? 'Écrivez votre suggestion confidentielle...' : 'Write your confidential suggestion...'}
         />
         <button
           type="button"
           onClick={submit}
           disabled={isSubmitting || !message.trim()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-5 py-3 text-sm font-black text-kcs-blue-950 transition hover:bg-kcs-gold-300"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 transition hover:bg-kcs-gold-300"
         >
           <Send size={16} /> {isSubmitting ? (language === 'fr' ? 'Envoi...' : 'Sending...') : (language === 'fr' ? 'Envoyer' : 'Send')}
         </button>

@@ -36,6 +36,7 @@ export default function ShiningStudentsPage() {
   const ordinaryAdministrator = user?.role === 'admin' && user?.id !== 'configured-superadmin'
   const [items, setItems] = useState<Schedule[]>([])
   const [loading, setLoading] = useState(true)
+  const [actionId, setActionId] = useState('')
   const [notice, setNotice] = useState('')
   const [startDate, setStartDate] = useState(addDays(7))
   const [endDate, setEndDate] = useState(addDays(37))
@@ -71,20 +72,34 @@ export default function ShiningStudentsPage() {
   const saveTopic = async (item: Schedule) => {
     const draft = topics[item.id]
     if (!draft?.topic.trim()) { setNotice(tr('Choisissez d’abord un sujet.', 'Choose a topic first.')); return }
+    setActionId(`topic:${item.id}`)
     try {
       await shiningStudentsAPI.saveTopic(item.id, { topic: draft.topic.trim(), topicNotes: draft.topicNotes.trim() || null })
       setNotice(tr('Votre sujet est enregistré.', 'Your topic has been saved.'))
       await load()
     } catch (error: any) { setNotice(error?.response?.data?.message || tr('Sujet non enregistré.', 'Topic was not saved.')) }
+    finally { setActionId('') }
   }
   const changeStatus = async (item: Schedule, status: Schedule['status']) => {
-    await shiningStudentsAPI.updateStatus(item.id, status)
-    await load()
+    setActionId(`status:${item.id}`)
+    try {
+      await shiningStudentsAPI.updateStatus(item.id, status)
+      setNotice(tr('Statut mis à jour.', 'Status updated.'))
+      await load()
+    } catch (error: any) {
+      setNotice(error?.response?.data?.message || tr('Le statut n’a pas été mis à jour.', 'The status was not updated.'))
+    } finally { setActionId('') }
   }
   const remove = async (item: Schedule) => {
     if (!window.confirm(tr('Supprimer cette programmation ?', 'Remove this assignment?'))) return
-    await shiningStudentsAPI.remove(item.id)
-    await load()
+    setActionId(`remove:${item.id}`)
+    try {
+      await shiningStudentsAPI.remove(item.id)
+      setNotice(tr('Programmation supprimée.', 'Schedule entry removed.'))
+      await load()
+    } catch (error: any) {
+      setNotice(error?.response?.data?.message || tr('La programmation n’a pas été supprimée.', 'The schedule entry was not removed.'))
+    } finally { setActionId('') }
   }
   const upcoming = useMemo(() => items.filter((item) => new Date(item.date) >= new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z')), [items])
   const canEditTopic = (item: Schedule) => admin || item.student.user.id === user?.id

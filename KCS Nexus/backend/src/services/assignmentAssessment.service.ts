@@ -101,6 +101,45 @@ const openAiClient = async () => {
   return { client: env.OPENAI_API_KEY ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null, model: env.OPENAI_MODEL }
 }
 
+export function buildLocalInteractiveAssignmentDraft(input: {
+  courseName: string
+  grade: string
+  topic: string
+  objectives?: string
+  questionCount: number
+  difficulty: DiagnosticDifficulty
+  language: 'fr' | 'en'
+  questionTypes: DiagnosticQuestionType[]
+}) {
+  const fr = input.language === 'fr'
+  const objective = input.objectives?.trim() || (fr ? `Comprendre et appliquer ${input.topic}.` : `Understand and apply ${input.topic}.`)
+  const types = input.questionTypes.length ? input.questionTypes : [DiagnosticQuestionType.SHORT_ANSWER]
+  const questions = Array.from({ length: input.questionCount }, (_, index) => {
+    const questionType = types[index % types.length]
+    const number = index + 1
+    const base = {
+      difficulty: input.difficulty,
+      competencyTag: input.topic.slice(0, 150),
+      points: 10,
+      explanation: fr ? `Réponse à vérifier selon l’objectif : ${objective}` : `Review against this objective: ${objective}`,
+    }
+    if (questionType === DiagnosticQuestionType.MULTIPLE_CHOICE) {
+      const correctAnswer = fr ? 'Une réponse démontrant une compréhension correcte' : 'An answer demonstrating correct understanding'
+      return { ...base, questionType, questionText: fr ? `${number}. Quelle proposition décrit le mieux ${input.topic} ?` : `${number}. Which statement best describes ${input.topic}?`, options: [correctAnswer, fr ? 'Une affirmation sans rapport' : 'An unrelated statement', fr ? 'Une généralisation incorrecte' : 'An incorrect generalization', fr ? 'Une réponse sans justification' : 'An unsupported answer'], correctAnswer }
+    }
+    if (questionType === DiagnosticQuestionType.TRUE_FALSE) return { ...base, questionType, questionText: fr ? `${number}. Vrai ou faux : expliquez si l’affirmation principale sur ${input.topic} est correcte.` : `${number}. True or false: decide whether the central statement about ${input.topic} is correct.`, options: null, correctAnswer: true }
+    if (questionType === DiagnosticQuestionType.NUMERIC) return { ...base, questionType, questionText: fr ? `${number}. Donnez le nombre d’étapes minimales attendues dans votre démonstration de ${input.topic}.` : `${number}. Give the minimum number of steps expected in your demonstration of ${input.topic}.`, options: null, correctAnswer: 3 }
+    const essay = questionType === DiagnosticQuestionType.ESSAY_OPTIONAL
+    return { ...base, questionType, questionText: essay ? (fr ? `${number}. Analysez ${input.topic} avec un exemple, des preuves et une conclusion.` : `${number}. Analyze ${input.topic} with an example, evidence, and a conclusion.`) : (fr ? `${number}. Expliquez avec vos propres mots un principe essentiel de ${input.topic}.` : `${number}. Explain one essential principle of ${input.topic} in your own words.`), options: null, correctAnswer: essay ? objective : input.topic }
+  })
+  return {
+    title: fr ? `${input.courseName} · Évaluation : ${input.topic}` : `${input.courseName} · Assessment: ${input.topic}`,
+    description: fr ? `Questionnaire préparé pour ${input.grade}. Objectif : ${objective} Le professeur doit relire et adapter chaque question avant publication.` : `Assessment prepared for ${input.grade}. Objective: ${objective} The teacher must review and adapt every question before publishing.`,
+    questions,
+    source: 'kcs-nexus:local-assessment-engine',
+  }
+}
+
 export async function generateInteractiveAssignmentDraft(input: {
   courseName: string
   grade: string
@@ -112,8 +151,9 @@ export async function generateInteractiveAssignmentDraft(input: {
   questionTypes: DiagnosticQuestionType[]
 }) {
   const { client, model } = await openAiClient()
-  if (!client) return null
-  const completion = await client.chat.completions.create({
+  if (!client) return buildLocalInteractiveAssignmentDraft(input)
+  try {
+    const completion = await client.chat.completions.create({
     model,
     temperature: 0.25,
     max_tokens: 3500,
@@ -138,16 +178,20 @@ export async function generateInteractiveAssignmentDraft(input: {
       },
     ],
   })
-  const content = completion.choices[0]?.message?.content
-  if (!content) return null
-  const parsed = generatedAssignmentSchema.parse(jsonFrom(content))
-  for (const question of parsed.questions) {
-    if (question.questionType === DiagnosticQuestionType.MULTIPLE_CHOICE) {
-      if (!question.options || question.options.length < 2) throw new Error('AI returned a multiple-choice question without enough options')
-      if (!question.options.some((option) => normalize(option) === normalize(question.correctAnswer))) throw new Error('AI returned a multiple-choice answer outside its options')
+    const content = completion.choices[0]?.message?.content
+    if (!content) return buildLocalInteractiveAssignmentDraft(input)
+    const parsed = generatedAssignmentSchema.parse(jsonFrom(content))
+    for (const question of parsed.questions) {
+      if (question.questionType === DiagnosticQuestionType.MULTIPLE_CHOICE) {
+        if (!question.options || question.options.length < 2) throw new Error('AI returned a multiple-choice question without enough options')
+        if (!question.options.some((option) => normalize(option) === normalize(question.correctAnswer))) throw new Error('AI returned a multiple-choice answer outside its options')
+      }
     }
+    return { ...parsed, source: `openai:${model}` }
+  } catch (error) {
+    console.warn('[assignment-ai] OpenAI draft unavailable; using the local KCS assessment engine.', error)
+    return buildLocalInteractiveAssignmentDraft(input)
   }
-  return { ...parsed, source: `openai:${model}` }
 }
 
 export async function gradeSubjectiveAssignmentAnswers(input: {

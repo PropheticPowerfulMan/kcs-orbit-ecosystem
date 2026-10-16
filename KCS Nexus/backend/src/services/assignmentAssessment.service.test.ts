@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { DiagnosticDifficulty, DiagnosticQuestionType } from '@prisma/client'
-import { gradeInteractiveAssignment } from './assignmentAssessment.service.js'
+import { buildLocalInteractiveAssignmentDraft, gradeInteractiveAssignment } from './assignmentAssessment.service.js'
 
 const questions = [
   { id: 'q1', questionText: '2 + 2', questionType: DiagnosticQuestionType.NUMERIC, options: null, correctAnswer: 4, points: 2, difficulty: DiagnosticDifficulty.EASY, competencyTag: 'Addition', explanation: '2 + 2 = 4.' },
@@ -25,4 +25,11 @@ test('holds an essay for teacher review when AI is unavailable', () => {
   const result = gradeInteractiveAssignment({ questions: [{ ...questions[0], id: 'essay', questionType: DiagnosticQuestionType.ESSAY_OPTIONAL, correctAnswer: 'Evidence-based rubric' }], answers: [{ questionId: 'essay', answer: 'My response' }] })
   assert.equal(result.pendingTeacherReview, true)
   assert.equal(result.gradedAnswers[0].isCorrect, null)
+})
+
+test('local assessment engine creates a complete teacher-reviewable draft', () => {
+  const draft = buildLocalInteractiveAssignmentDraft({ courseName: 'Algebra II', grade: 'Grade 11', topic: 'quadratic equations', questionCount: 8, difficulty: DiagnosticDifficulty.MEDIUM, language: 'en', questionTypes: [DiagnosticQuestionType.MULTIPLE_CHOICE, DiagnosticQuestionType.SHORT_ANSWER] })
+  assert.equal(draft.questions.length, 8)
+  assert.equal(draft.source, 'kcs-nexus:local-assessment-engine')
+  assert.ok(draft.questions.every((question) => question.questionText && question.correctAnswer !== ''))
 })

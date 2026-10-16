@@ -44,7 +44,18 @@ const authRateLimit = (windowMs: number, maxFailures: number) => {
 
 app.use(helmet())
 const frontendOrigin = (() => { try { return new URL(env.FRONTEND_URL).origin } catch { return env.FRONTEND_URL } })()
-app.use(cors({ origin: frontendOrigin, credentials: true }))
+const trustedOrigins = new Set([
+  frontendOrigin,
+  'https://kinshasachristianschool.org',
+  'https://kcsparentelection.kinshasachristianschool.org',
+])
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || trustedOrigins.has(origin)) return callback(null, true)
+    return callback(new Error('Origin not allowed by KCS Nexus CORS policy'))
+  },
+  credentials: true,
+}))
 app.use(express.json({ limit: '8mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
