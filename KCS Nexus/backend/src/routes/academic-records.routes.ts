@@ -14,6 +14,7 @@ import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
 import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACADEMIC_TERMS } from '../utils/academicCycle.js'
+import { isVisibleInSuperAdministrationQueue, verifyFinalGradePropagation } from '../services/academicSubmissionWorkflow.js'
 
 const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
 const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
@@ -217,10 +218,21 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
    }))
   }
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'FINAL_GRADES_SUBMITTED',targetType:'Course',targetId:course.id,metadata:{academicYear:payload.academicYear,term:payload.term,count:created.length,reportCardDraftsUpdated:draftCards.length,results:canonicalResults}}})
+  const recipients=await tx.user.findMany({
+   where:{OR:[{role:'ADMIN'},{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'}]},
+   select:{id:true},
+  })
+  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:'Final course grades ready for review',message:`${course.code||course.name}: ${created.length} final grade(s) were submitted for ${payload.academicYear} · ${payload.term}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
   await synchronizeStudentAcademicMetrics(tx,canonicalResults.map(item=>item.studentId))
-  return{created,draftCards}
+  return{created,draftCards,notified:recipients.length}
  })
- return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.created.length,officialEnrollmentCount:course.enrollments.length,reportCardDraftsUpdated:saved.draftCards.length},'Final grades submitted and propagated to report-card drafts',201)
+ const [confirmedGradeCount,confirmedCardCount]=await Promise.all([
+  prisma.grade.count({where:{courseId:course.id,studentId:{in:canonicalResults.map(item=>item.studentId)},assignmentId:null,period}}),
+  prisma.reportCard.count({where:{studentId:{in:canonicalResults.map(item=>item.studentId)},term:reportCardTerm(payload.academicYear,payload.term)}}),
+ ])
+ const propagation=verifyFinalGradePropagation({expected:canonicalResults.length,savedGrades:confirmedGradeCount,officialEnrollments:course.enrollments.length,reportCardDrafts:confirmedCardCount})
+ if(!propagation.ok)throw new ApiError(500,`Official propagation verification failed (${propagation.issues.join(', ')})`)
+ return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.created.length,officialEnrollmentCount:course.enrollments.length,reportCardDraftsUpdated:saved.draftCards.length,superAdministrationQueued:true,superAdministrationNotified:saved.notified,propagationVerified:true},'Final grades submitted, verified, and queued for Super Administration review',201)
 }))
 
 academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
@@ -409,12 +421,12 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
    update:{average:context.average,teacherComment:payload.teacherComment,conduct:payload.conduct,attendanceSummary:context.attendanceSummary,principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
   })
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:replacesPreviousSubmission?'MAIN_TEACHER_REPORT_CARD_RESUBMITTED':'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,replacesPreviousSubmission,courseGrades:context.grades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
-  const recipients=await tx.user.findMany({where:{role:'ADMIN'},select:{id:true}})
+  const recipients=await tx.user.findMany({where:{OR:[{role:'ADMIN'},{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'}]},select:{id:true}})
   if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
   return{saved,notified:recipients.length}
  })
   const confirmed=await prisma.reportCard.findUnique({where:{id:result.saved.id},select:{id:true,publicationStatus:true,principalStatus:true}})
-  if(!confirmed||confirmed.publicationStatus!=='READY_FOR_REVIEW'||confirmed.principalStatus!=='READY_FOR_REVIEW')throw new ApiError(500,'The report card could not be confirmed in the Super Administration review queue')
+  if(!confirmed||!isVisibleInSuperAdministrationQueue(confirmed.publicationStatus,confirmed.principalStatus))throw new ApiError(500,'The report card could not be confirmed in the Super Administration review queue')
   return success(res,{...result.saved,superAdministrationQueued:true,superAdministrationNotified:result.notified,replacesPreviousSubmission},replacesPreviousSubmission?'Previous submission replaced and updated report card sent to Super Administration':'Complete report card submitted to Super Administration')
 }))
 
@@ -427,6 +439,7 @@ academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(a
   orderBy:[{period:'desc'},{courseId:'asc'}],
  })
  const filtered=term?grades.filter(item=>parsePeriod(item.period).term===term):grades
+ res.setHeader('Cache-Control','private, no-store, no-cache, must-revalidate')
  return success(res,filtered.map(item=>({...item,cycle:parsePeriod(item.period)})))
 }))
 
@@ -475,6 +488,7 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
   const subjects=[...byCourse.values()].sort((left,right)=>(left.course.code||left.course.name).localeCompare(right.course.code||right.course.name,'en',{numeric:true,sensitivity:'base'}))
   return {...card,student,subjects}
  })
+ res.setHeader('Cache-Control','private, no-store, no-cache, must-revalidate')
  return success(res,enriched)
 }))
 

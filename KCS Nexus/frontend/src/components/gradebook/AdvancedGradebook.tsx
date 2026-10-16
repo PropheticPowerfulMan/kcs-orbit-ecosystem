@@ -726,7 +726,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       })
       const savedCount = Number(response.data?.data?.count ?? 0)
       const propagatedCount = Number(response.data?.data?.reportCardDraftsUpdated ?? 0)
-      if (savedCount !== submissionAnalytics.length || propagatedCount !== submissionAnalytics.length) {
+      const queuedForSuperAdministration = response.data?.data?.superAdministrationQueued === true
+      const propagationVerified = response.data?.data?.propagationVerified === true
+      if (savedCount !== submissionAnalytics.length || propagatedCount !== submissionAnalytics.length || !queuedForSuperAdministration || !propagationVerified) {
         throw new Error(`Propagation check failed: ${savedCount}/${submissionAnalytics.length} grades and ${propagatedCount}/${submissionAnalytics.length} report-card drafts were confirmed.`)
       }
       const confirmation = await academicRecordsAPI.myFinalGrades()
@@ -741,7 +743,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       }
       setOfficialFinalGrades((confirmation.data?.data?.submissions ?? []) as OfficialFinalGrade[])
       window.dispatchEvent(new CustomEvent('kcs-final-grades-submitted', { detail: { courseId: officialCourseId, academicYear, term, count: savedCount } }))
-      onAction(`${submissionAnalytics.length} final grade(s) submitted for administrative review. The official record is now auditable.`)
+      const notified = Number(response.data?.data?.superAdministrationNotified ?? 0)
+      onAction(`${submissionAnalytics.length} final grade(s) submitted and independently verified for Super Administration review${notified ? `; ${notified} administrator notification(s) created` : ''}.`)
     } catch (error: any) {
       onAction(error?.response?.data?.message || error?.message || 'Final-grade submission failed.', true)
     } finally { setSubmittingFinals(false) }
