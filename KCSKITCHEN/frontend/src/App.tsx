@@ -309,13 +309,6 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [credentials, setCredentials] = useState({ identifier: '', password: '' })
-  const [locked, setLocked] = useState({ identifier: true, password: true })
-
-  function unlock(field: 'identifier' | 'password') {
-    if (!locked[field]) return
-    setLocked(current => ({ ...current, [field]: false }))
-    setCredentials(current => ({ ...current, [field]: '' }))
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError('')
@@ -340,27 +333,21 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     </section>
     <section className="login-card">
       <div><span className="eyebrow">{t.secureAccess}</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
-      <form onSubmit={submit} autoComplete="off" data-lpignore="true" data-form-type="other">
+      <form onSubmit={submit} autoComplete="on">
         <label>{t.identifier}<input
-          name="kcs-kitchen-identifier"
+          name="username"
           value={credentials.identifier}
-          readOnly={locked.identifier}
-          autoComplete="off"
+          autoComplete="username"
           autoCapitalize="none"
           spellCheck={false}
-          onPointerDown={() => unlock('identifier')}
-          onFocus={() => unlock('identifier')}
           onChange={event => setCredentials(current => ({ ...current, identifier: event.target.value }))}
           required
         /></label>
         <label>{t.password}<span className="password-field"><input
-          name="kcs-kitchen-password"
+          name="password"
           value={credentials.password}
-          readOnly={locked.password}
           type={showPassword ? 'text' : 'password'}
-          autoComplete="new-password"
-          onPointerDown={() => unlock('password')}
-          onFocus={() => unlock('password')}
+          autoComplete="current-password"
           onChange={event => setCredentials(current => ({ ...current, password: event.target.value }))}
           required
         /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? (lang === 'fr' ? 'Masquer le mot de passe' : 'Hide password') : (lang === 'fr' ? 'Afficher le mot de passe' : 'Show password')}>{showPassword ? <EyeOff /> : <Eye />}</button></span></label>
