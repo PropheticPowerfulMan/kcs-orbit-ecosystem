@@ -22,7 +22,7 @@ const requireCalendarManager = async (req: AuthenticatedRequest, _res: Response,
     })
     const titles = normalized([user?.staffFunction, user?.staffProfile?.function].filter(Boolean).join(' '))
     const permissions = [...(user?.permissions ?? []), ...(user?.staffProfile?.permissions ?? [])].map(normalized)
-    if (user?.role === 'ADMIN' && (titles.includes('principal') || titles.includes('prefet') || permissions.includes('academic_calendar_manage'))) return next()
+    if ((user?.role === 'ADMIN' || user?.role === 'STAFF') && (titles.includes('principal') || titles.includes('prefet') || permissions.includes('academic_calendar_manage'))) return next()
     return next(new ApiError(403, 'Only the Super Administrator or Principal can update the academic calendar.'))
   } catch (error) { return next(error) }
 }
