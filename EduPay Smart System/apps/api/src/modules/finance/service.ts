@@ -1059,6 +1059,9 @@ function groupCurrencyTotals<T extends string | number>(entries: Array<{ key: T;
   return Array.from(bucket.entries()).map(([key, amount]) => ({ key, amount }));
 }
 
+export function tuitionRemindersEnabled() {
+  return String(process.env.TUITION_REMINDERS_ENABLED ?? 'true').trim().toLowerCase() !== 'false';
+}
 export async function runOverdueTuitionReminderSweep(input: {
   schoolId: string;
   parentId?: string;
@@ -1066,6 +1069,21 @@ export async function runOverdueTuitionReminderSweep(input: {
   referenceDate?: Date;
   force?: boolean;
 }) {
+  if (!tuitionRemindersEnabled()) {
+    return {
+      scannedInstallments: 0,
+      overdueInstallments: 0,
+      upcomingInstallments: 0,
+      exemptFamilies: 0,
+      skippedOutsideSchedule: true,
+      debtsUpdated: 0,
+      parentEmails: 0,
+      parentSms: 0,
+      financeAlerts: 0,
+      paused: true,
+      reason: 'TUITION_REMINDERS_DISABLED'
+    };
+  }
   const { academicYear } = await getTargetAcademicYear(input.schoolId, input.academicYearName);
   const now = input.referenceDate ?? new Date();
   const scheduledToday = isTuitionReminderRunDay(now);
