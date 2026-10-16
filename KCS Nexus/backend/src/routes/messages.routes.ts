@@ -321,7 +321,7 @@ messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(asy
   })
   const delivery = req.user!.sub === 'configured-superadmin'
     ? await Promise.all([
-        sendSchoolMail({ to: recipient.email, subject: data.subject, text: data.body, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
+        sendSchoolMail({ to: recipient.email, replyTo: env.SCHOOL_EMAIL, subject: data.subject, text: data.body, branded: true }).catch(() => ({ sent: false as const, reason: 'SMTP_SEND_FAILED' as const })),
         sendSchoolSms(recipient.phone, `${data.subject}\n\n${data.body}`, { brand: false }).catch(() => ({ sent: false as const, reason: 'SMS_SEND_FAILED' as const })),
       ])
     : []

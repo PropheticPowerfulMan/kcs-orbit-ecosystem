@@ -1,9 +1,19 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/kitchen/api'
 
-export function getToken() { return localStorage.getItem('kcs-kitchen-token') }
+const TOKEN_KEY = 'kcs-kitchen-token'
+export function getToken() {
+  const isolated = sessionStorage.getItem(TOKEN_KEY)
+  if (isolated) return isolated
+  const legacy = localStorage.getItem(TOKEN_KEY)
+  if (!legacy) return null
+  sessionStorage.setItem(TOKEN_KEY, legacy)
+  localStorage.removeItem(TOKEN_KEY)
+  return legacy
+}
 export function setToken(token: string | null) {
-  if (token) localStorage.setItem('kcs-kitchen-token', token)
-  else localStorage.removeItem('kcs-kitchen-token')
+  localStorage.removeItem(TOKEN_KEY)
+  if (token) sessionStorage.setItem(TOKEN_KEY, token)
+  else sessionStorage.removeItem(TOKEN_KEY)
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {

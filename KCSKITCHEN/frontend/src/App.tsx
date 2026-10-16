@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   AlertTriangle, Archive, BarChart3, CalendarDays, ChefHat, ClipboardList, CreditCard, Languages,
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
@@ -11,7 +11,7 @@ import Procurement from './Procurement'
 import DailyMenus from './DailyMenus'
 import InstallAppButton from './InstallApp'
 import PersonSelector from './PersonSelector'
-import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
+import { convertAmount, CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
 type Page = 'dashboard' | 'menus' | 'pos' | 'orders' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues' | 'settings'
@@ -459,7 +459,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['orders', t.orders, <BellRing />, true],
     ['catalog', t.catalog, <ChefHat />, isPrivileged],
     ['transactions', t.transactions, <ReceiptText />, true],
-    ['ledger', t.ledger, <Wallet />, true],
+    ['ledger', t.ledger, <Wallet />, user.role !== 'KITCHEN_ADMIN'],
     ['inventory', t.inventory, <Package />, isPrivileged],
     ['disputes', t.disputes, <AlertTriangle />, true],
     ['reports', t.reports, <BarChart3 />, isPrivileged],
@@ -602,9 +602,45 @@ function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; 
 function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; lang: Lang }) {
   const [data, setData] = useState<any>(null)
   const [error, setError] = useState('')
-  const loadDashboard = () => api<any>('/dashboard').then(setData).catch(err => setError(err.message))
-  useEffect(() => { void loadDashboard() }, [])
-  if (error) return <div className="empty error">{error}</div>
+  const [notificationQuery, setNotificationQuery] = useState('')
+  const loadDashboard = useCallback(async () => {
+    try { setData(await api<any>('/dashboard')); setError('') }
+    catch (err) { setError((err as Error).message) }
+  }, [])
+  useEffect(() => {
+    void loadDashboard()
+    const timer = window.setInterval(() => void loadDashboard(), 20_000)
+    const resume = () => void loadDashboard()
+    const visible = () => { if (document.visibilityState === 'visible') void loadDashboard() }
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [loadDashboard])
+  const notificationLabel = (item: any) => {
+    const reference = item.payload?.transactionNumber ? ` · ${item.payload.transactionNumber}` : ''
+    const labels: Record<string, [string, string]> = {
+      KITCHEN_ORDER_PENDING: ['Commande reçue, en attente de préparation', 'Order received, awaiting preparation'],
+      KITCHEN_ONLINE_ORDER_PLACED: ['Nouvelle commande en ligne à traiter', 'New online order to process'],
+      KITCHEN_ORDER_DELIVERED: ['Commande livrée et comptabilisée', 'Order delivered and accounted for'],
+      KITCHEN_ORDER_CANCELLED: ['Commande annulée', 'Order cancelled'],
+      KITCHEN_TRANSACTION_CREATED: ['Opération Kitchen enregistrée', 'Kitchen operation recorded'],
+    }
+    return (labels[item.eventType]?.[lang === 'fr' ? 0 : 1] || item.eventType.replaceAll('_', ' ')) + reference
+  }
+  const filteredNotifications = (data?.notifications ?? []).filter((item: any) => {
+    const query = notificationQuery.trim().toLocaleLowerCase()
+    if (!query) return true
+    const payload = item.payload && typeof item.payload === 'object' ? Object.values(item.payload).flat(Infinity).join(' ') : ''
+    return [notificationLabel(item), item.eventType, payload, item.status, dateTime(item.createdAt), new Date(item.createdAt).toLocaleDateString(lang === 'fr' ? 'fr-CD' : 'en-US')]
+      .join(' ').toLocaleLowerCase().includes(query)
+  })
+  if (error && !data) return <div className="empty error">{error}</div>
   if (!data) return <Loading />
   if (data.mode === 'personal') return <>
     <section className="hero"><div><span className="eyebrow">{t.personalAccount}</span><h2>{t.welcome}, {user.fullName.split(' ').at(-1)}</h2><p>{t.consumptionLive}</p></div><ChefHat size={70} /></section>
@@ -615,8 +651,9 @@ function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; l
       <Stat icon={<Wallet />} label={t.outstanding} value={<DisplayMoney value={data.balance} />} tone={Number(data.balance) > 0 ? 'warn' : 'good'} />
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} />
     </div>
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div>
-      {data.notifications.length ? <div className="activity-list">{data.notifications.map((item: any) => <div key={item.id}><ShieldCheck /><span><b>{item.eventType.replaceAll('_', ' ')}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData} />}
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div><label className="notification-search"><Search/><input value={notificationQuery} onChange={event => setNotificationQuery(event.target.value)} placeholder={lang === 'fr' ? 'Rechercher par opération, référence, personne, date ou statut…' : 'Search by operation, reference, person, date or status…'}/>{notificationQuery && <button type="button" onClick={() => setNotificationQuery('')} aria-label={lang === 'fr' ? 'Effacer la recherche' : 'Clear search'}><X/></button>}</label>
+      {error && <small className="dashboard-sync-warning">{lang === 'fr' ? 'Connexion instable : dernières données fiables conservées, nouvelle tentative automatique.' : 'Unstable connection: last reliable data kept, automatic retry in progress.'}</small>}
+      {filteredNotifications.length ? <div className="activity-list">{filteredNotifications.map((item: any) => <div key={item.id}><ShieldCheck /><span><b>{notificationLabel(item)}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData} />}
     </section>
   </>
   return <>
@@ -630,11 +667,13 @@ function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; l
       <Stat icon={<AlertTriangle />} label={t.openDisputes} value={data.disputes} tone={data.disputes ? 'warn' : ''} />
       <Stat icon={<Archive />} label={t.lowStock} value={data.lowStock} />
     </div>
+    {data.lowStockItems?.length > 0 && <section className="panel low-stock-detail"><div className="section-heading"><div><span className="eyebrow">{lang === 'fr' ? 'ALERTE INVENTAIRE' : 'INVENTORY ALERT'}</span><h2>{lang === 'fr' ? 'Produits précisément en stock faible' : 'Exact low-stock products'}</h2><p>{lang === 'fr' ? 'Quantité réellement disponible comparée au seuil de réapprovisionnement.' : 'Actual quantity on hand compared with the reorder threshold.'}</p></div></div><div className="rank-list">{data.lowStockItems.map((item: any) => <div key={item.id}><AlertTriangle/><span><b>{item.name}</b><small>{lang === 'fr' ? 'Disponible' : 'Available'} : {Number(item.stockQuantity)} {item.unit} · {lang === 'fr' ? 'Seuil' : 'Threshold'} : {Number(item.reorderLevel)} {item.unit}</small></span><strong>{Math.max(0, Number(item.reorderLevel) - Number(item.stockQuantity))} {lang === 'fr' ? 'à prévoir' : 'to replenish'}</strong></div>)}</div></section>}
     <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.popularProducts}</span><h2>{t.topConsumption}</h2></div></div>
       {data.popular.length ? <div className="rank-list">{data.popular.map((item: any, index: number) => <div key={item.productId}><b>{String(index + 1).padStart(2, '0')}</b><span>{item.productNameSnapshot}</span><strong>{Number(item._sum.quantity || 0)}</strong></div>)}</div> : <Empty text={t.noData} />}
     </section>
-    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div>
-      {data.notifications?.length ? <div className="activity-list">{data.notifications.map((item: any) => <div key={item.id}><ShieldCheck/><span><b>{item.eventType.replaceAll('_', ' ')}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData}/>}
+    <section className="panel"><div className="section-heading"><div><span className="eyebrow">{t.recentActivity}</span><h2>{t.kitchenNotifications}</h2></div></div><label className="notification-search"><Search/><input value={notificationQuery} onChange={event => setNotificationQuery(event.target.value)} placeholder={lang === 'fr' ? 'Rechercher par opération, référence, personne, date ou statut…' : 'Search by operation, reference, person, date or status…'}/>{notificationQuery && <button type="button" onClick={() => setNotificationQuery('')} aria-label={lang === 'fr' ? 'Effacer la recherche' : 'Clear search'}><X/></button>}</label>
+      {error && <small className="dashboard-sync-warning">{lang === 'fr' ? 'Connexion instable : dernières données fiables conservées, nouvelle tentative automatique.' : 'Unstable connection: last reliable data kept, automatic retry in progress.'}</small>}
+      {filteredNotifications.length ? <div className="activity-list">{filteredNotifications.map((item: any) => <div key={item.id}><ShieldCheck/><span><b>{notificationLabel(item)}</b><small>{dateTime(item.createdAt)}</small></span></div>)}</div> : <Empty text={t.noData}/>}
     </section>
   </>
 }
@@ -649,8 +688,11 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [overview, setOverview] = useState<any>(null)
   const { rate } = useCurrencyDisplay()
+  const loadOverview = useCallback(() => api<any>('/pos/overview').then(setOverview).catch(() => undefined), [])
   useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
+  useEffect(() => { void loadOverview(); const timer = window.setInterval(() => void loadOverview(), 30_000); return () => window.clearInterval(timer) }, [loadOverview])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
   const [confirming, setConfirming] = useState(false)
   const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
@@ -671,15 +713,32 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPerson(null); setConfirming(false)
+      setReceipt(result.transaction); setCart({}); setPerson(null); setConfirming(false); void loadOverview()
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
     finally { setSubmitting(false) }
   }
   return <>
+    {overview && <section className="stats pos-overview" aria-label={lang === 'fr' ? 'Vue instantanée du point de vente' : 'Point of sale snapshot'}>
+      <Stat icon={<ShoppingCart/>} label={lang === 'fr' ? 'Ventes élèves · aujourd’hui' : 'Student sales · today'} value={<DisplayMoney value={overview.today.students.amount}/>} tone="good"/>
+      <Stat icon={<Users/>} label={lang === 'fr' ? 'Ventes personnel · aujourd’hui' : 'Staff sales · today'} value={<DisplayMoney value={overview.today.others.amount}/>} tone="good"/>
+      <Stat icon={<CalendarDays/>} label={lang === 'fr' ? 'Ventes élèves · mois' : 'Student sales · month'} value={<DisplayMoney value={overview.month.students.amount}/>}/>
+      <Stat icon={<CalendarDays/>} label={lang === 'fr' ? 'Ventes personnel · mois' : 'Staff sales · month'} value={<DisplayMoney value={overview.month.others.amount}/>}/>
+      <Stat icon={<CreditCard/>} label={lang === 'fr' ? 'Dettes élèves' : 'Student debts'} value={<DisplayMoney value={overview.debts.students.amount}/>} tone="warn"/>
+      <Stat icon={<Wallet/>} label={lang === 'fr' ? 'Dettes personnel' : 'Staff debts'} value={<DisplayMoney value={overview.debts.others.amount}/>} tone="warn"/>
+    </section>}
     <section className="pos-grid">
       <div className="panel">
         <div className="step-title"><span>1</span><div><small>IDENTITY</small><h2>{t.identify}</h2></div></div>
-        <PersonSelector value={person} onChange={setPerson} lang={lang} />
+        <PersonSelector value={person} onChange={(nextPerson) => {
+          if (nextPerson?.id !== person?.id) {
+            setCart({})
+            setPaymentMode('CASH')
+            setReceipt(null)
+            setConfirming(false)
+            setNotice(null)
+          }
+          setPerson(nextPerson)
+        }} lang={lang} />
         <div className="step-title"><span>2</span><div><small>{menuTitle || "DAILY MENU"}</small><h2>{t.chooseItems}</h2></div></div>
         <div className="product-grid">{products.map(product => <button key={product.id} className="product-tile" onClick={() => add(product.id)} disabled={!product.isAvailable}>
           <span className="product-icon"><ChefHat /></span><b>{product.name}</b><small>{product.category}</small><DisplayMoney value={product.currentPrice} currency={product.currency} />{cart[product.id] ? <em>{cart[product.id]}</em> : null}
@@ -1106,7 +1165,7 @@ function Orders({ user, lang }: { user: User; lang: Lang }) {
   const manager = ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)
   const [rows, setRows] = useState<Transaction[]>([])
   const [busy, setBusy] = useState('')
-  const [pendingAction, setPendingAction] = useState<{ transaction: Transaction; action: 'deliver' | 'cancel' } | null>(null)
+  const [pendingAction, setPendingAction] = useState<{ transaction: Transaction; action: 'receive' | 'deliver' | 'cancel' } | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   async function load() {
     try { const result = await api<{ transactions: Transaction[] }>('/transactions'); setRows(result.transactions) }
@@ -1118,16 +1177,17 @@ function Orders({ user, lang }: { user: User; lang: Lang }) {
     const { transaction, action } = pendingAction
     setBusy(transaction.id)
     try {
-      await api('/transactions/' + encodeURIComponent(transaction.id) + (action === 'deliver' ? '/deliver' : '/cancel-order'), { method: 'POST' })
+      const suffix = action === 'receive' ? '/confirm-receipt' : action === 'deliver' ? '/deliver' : '/cancel-order'
+      await api('/transactions/' + encodeURIComponent(transaction.id) + suffix, { method: 'POST' })
       setPendingAction(null); await load()
-      setNotice({ type: 'success', message: action === 'deliver' ? (fr ? 'Commande livrée : la comptabilité, le stock, la dette et la prise en charge ont été mis à jour.' : 'Order delivered: accounting, stock, debt and subsidy were updated.') : (fr ? 'Commande annulée sans mouvement comptable ni sortie de stock.' : 'Order cancelled without accounting or inventory movement.') })
+      setNotice({ type: 'success', message: action === 'receive' ? (fr ? 'Votre réception est confirmée. La cuisine doit maintenant valider la remise avant toute comptabilisation.' : 'Your receipt is confirmed. Kitchen must now validate handover before anything is accounted for.') : action === 'deliver' ? (fr ? 'Les deux confirmations sont réunies : la commande est maintenant comptabilisée.' : 'Both confirmations are complete: the order is now accounted for.') : (fr ? 'Commande annulée sans mouvement comptable ni sortie de stock.' : 'Order cancelled without accounting or inventory movement.') })
     } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
     finally { setBusy('') }
   }
   const pending = rows.filter(row => row.status === 'PENDING')
   const history = rows.filter(row => row.status !== 'PENDING')
-  const list = (items: Transaction[]) => <div className="order-list">{items.map(row => <article className="order-card" key={row.id}><div><span className={'badge ' + (row.status === 'CONFIRMED' ? 'good' : row.status === 'PENDING' ? 'warn' : '')}>{row.status}</span><h3>{row.personNameSnapshot}</h3><small>{row.transactionNumber} · {dateTime(row.createdAt)}</small></div><div className="order-items">{row.items.map(item => <span key={item.id}>{Number(item.quantity)} × {item.productNameSnapshot}</span>)}</div><div className="order-total"><small>{row.paymentMode === 'CREDIT' ? (fr ? 'Dette demandée' : 'Credit requested') : (fr ? 'Paiement' : 'Payment')}</small><strong><DisplayMoney value={row.total}/></strong></div>{row.status === 'PENDING' && <div className="order-actions">{manager && <button className="primary" onClick={() => setPendingAction({ transaction: row, action: 'deliver' })}><CheckCircle2/>{fr ? 'Confirmer la livraison' : 'Confirm delivery'}</button>}<button className="danger-action" onClick={() => setPendingAction({ transaction: row, action: 'cancel' })}><X/>{fr ? 'Non livrée / annuler' : 'Not delivered / cancel'}</button></div>}</article>)}</div>
-  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · ORDER CONTROL</span><h2>{fr ? 'Commandes à livrer' : 'Orders awaiting delivery'}</h2><p>{fr ? 'Une commande personnelle ne touche ni la comptabilité, ni le stock, ni la dette avant la confirmation réelle de sa livraison.' : 'A personal order does not affect accounting, inventory or debt until actual delivery is confirmed.'}</p></div><button onClick={() => void load()}><Search/>{fr ? 'Actualiser' : 'Refresh'}</button></div>{pending.length ? list(pending) : <Empty text={fr ? 'Aucune commande en attente.' : 'No pending order.'}/>}</section><section className="panel"><div className="section-heading"><div><span className="eyebrow">{fr ? 'TRAÇABILITÉ' : 'TRACEABILITY'}</span><h2>{fr ? 'Historique des commandes' : 'Order history'}</h2></div></div>{history.length ? list(history.slice(0, 100)) : <Empty text={fr ? 'Aucun historique.' : 'No history.'}/>}</section>{pendingAction && <Modal onClose={() => !busy && setPendingAction(null)}><div className="confirmation-card"><span className="confirmation-icon">{pendingAction.action === 'deliver' ? <CheckCircle2/> : <AlertTriangle/>}</span><h2>{pendingAction.action === 'deliver' ? (fr ? 'Confirmer la livraison réelle' : 'Confirm actual delivery') : (fr ? 'Confirmer la non-livraison' : 'Confirm non-delivery')}</h2><p><b>{pendingAction.transaction.personNameSnapshot}</b><br/>{pendingAction.transaction.transactionNumber}</p><p>{pendingAction.action === 'deliver' ? (fr ? 'Cette action enregistrera maintenant le paiement ou la dette, la prise en charge KCS et la sortie de stock.' : 'This will now record payment or debt, KCS subsidy and inventory movement.') : (fr ? 'La commande sera annulée sans incidence financière.' : 'The order will be cancelled without financial impact.')}</p><div className="button-row"><button disabled={!!busy} onClick={() => setPendingAction(null)}>{fr ? 'Retour' : 'Back'}</button><button className={pendingAction.action === 'deliver' ? 'primary' : 'danger-action'} disabled={!!busy} onClick={() => void act()}>{busy ? <LoaderCircle className="spin"/> : pendingAction.action === 'deliver' ? <CheckCircle2/> : <X/>}{fr ? 'Confirmer' : 'Confirm'}</button></div></div></Modal>}{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
+  const list = (items: Transaction[]) => <div className="order-list">{items.map(row => <article className="order-card" key={row.id}><div><span className={'badge ' + (row.status === 'CONFIRMED' ? 'good' : row.status === 'PENDING' ? 'warn' : '')}>{row.status}</span><h3>{row.personNameSnapshot}</h3><small>{row.transactionNumber} · {dateTime(row.createdAt)}</small>{row.status === 'PENDING' && <small>{row.confirmedByPersonAt ? (fr ? 'Client confirmé · validation Kitchen requise' : 'Customer confirmed · Kitchen approval required') : (fr ? 'Confirmation du client requise' : 'Customer confirmation required')}</small>}</div><div className="order-items">{row.items.map(item => <span key={item.id}>{Number(item.quantity)} × {item.productNameSnapshot}</span>)}</div><div className="order-total"><small>{row.paymentMode === 'CREDIT' ? (fr ? 'Dette demandée' : 'Credit requested') : (fr ? 'Achat comptant' : 'Cash purchase')}</small><strong><DisplayMoney value={row.total}/></strong></div>{row.status === 'PENDING' && <div className="order-actions">{!manager && row.orbitPersonId === user.orbitPersonId && !row.confirmedByPersonAt && <button className="primary" onClick={() => setPendingAction({ transaction: row, action: 'receive' })}><CheckCircle2/>{row.paymentMode === 'CREDIT' ? (fr ? 'J’ai reçu ma commande' : 'I received my order') : (fr ? 'J’ai payé et reçu ma commande' : 'I paid and received my order')}</button>}{manager && <button className="primary" disabled={!row.confirmedByPersonAt} title={!row.confirmedByPersonAt ? (fr ? 'Le client doit d’abord confirmer la réception.' : 'The customer must confirm receipt first.') : ''} onClick={() => setPendingAction({ transaction: row, action: 'deliver' })}><CheckCircle2/>{fr ? 'Valider côté Kitchen' : 'Kitchen approval'}</button>}<button className="danger-action" onClick={() => setPendingAction({ transaction: row, action: 'cancel' })}><X/>{fr ? 'Non livrée / annuler' : 'Not delivered / cancel'}</button></div>}</article>)}</div>
+  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · ORDER CONTROL</span><h2>{fr ? 'Commandes à livrer' : 'Orders awaiting delivery'}</h2><p>{fr ? 'Aucun achat ni dette ne touche la comptabilité avant les deux validations : réception par l’entité, puis remise par Kitchen.' : 'No purchase or debt affects accounting until both approvals are complete: customer receipt, then Kitchen handover.'}</p></div><button onClick={() => void load()}><Search/>{fr ? 'Actualiser' : 'Refresh'}</button></div>{pending.length ? list(pending) : <Empty text={fr ? 'Aucune commande en attente.' : 'No pending order.'}/>}</section><section className="panel"><div className="section-heading"><div><span className="eyebrow">{fr ? 'TRAÇABILITÉ' : 'TRACEABILITY'}</span><h2>{fr ? 'Historique des commandes' : 'Order history'}</h2></div></div>{history.length ? list(history.slice(0, 100)) : <Empty text={fr ? 'Aucun historique.' : 'No history.'}/>}</section>{pendingAction && <Modal onClose={() => !busy && setPendingAction(null)}><div className="confirmation-card"><span className="confirmation-icon">{pendingAction.action !== 'cancel' ? <CheckCircle2/> : <AlertTriangle/>}</span><h2>{pendingAction.action === 'receive' ? (fr ? 'Confirmer paiement et réception' : 'Confirm payment and receipt') : pendingAction.action === 'deliver' ? (fr ? 'Validation finale Kitchen' : 'Final Kitchen approval') : (fr ? 'Confirmer la non-livraison' : 'Confirm non-delivery')}</h2><p><b>{pendingAction.transaction.personNameSnapshot}</b><br/>{pendingAction.transaction.transactionNumber}</p><p>{pendingAction.action === 'receive' ? (pendingAction.transaction.paymentMode === 'CREDIT' ? (fr ? 'Je confirme avoir réellement reçu cette commande. Elle ne sera comptabilisée qu’après validation de Kitchen.' : 'I confirm actual receipt. It will only be accounted for after Kitchen approval.') : (fr ? 'Je confirme avoir remis l’argent et reçu ma commande. Elle ne sera comptabilisée qu’après validation de Kitchen.' : 'I confirm handing over payment and receiving my order. It will only be accounted for after Kitchen approval.')) : pendingAction.action === 'deliver' ? (fr ? 'La confirmation du client est acquise. Cette seconde validation enregistrera maintenant la vente ou la dette, la prise en charge KCS et la sortie de stock.' : 'Customer confirmation is complete. This second approval will now record the sale or debt, KCS subsidy and inventory movement.') : (fr ? 'La commande sera annulée sans incidence financière.' : 'The order will be cancelled without financial impact.')}</p><div className="button-row"><button disabled={!!busy} onClick={() => setPendingAction(null)}>{fr ? 'Retour' : 'Back'}</button><button className={pendingAction.action === 'cancel' ? 'danger-action' : 'primary'} disabled={!!busy} onClick={() => void act()}>{busy ? <LoaderCircle className="spin"/> : pendingAction.action !== 'cancel' ? <CheckCircle2/> : <X/>}{fr ? 'Confirmer' : 'Confirm'}</button></div></div></Modal>}{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
 }
 
 function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: Lang; onPasswordChanged: () => void }) {
@@ -1178,6 +1238,7 @@ function SchoolDues({ user, lang }: { user: User; lang: Lang }) {
 
 function SchoolDuesRegister({ user, lang }: { user: User; lang: Lang }) {
   const fr = lang === 'fr'
+  const { displayCurrency, rate } = useCurrencyDisplay()
   const now = new Date()
   const [from, setFrom] = useState(`${now.getFullYear()}-01-01`)
   const [to, setTo] = useState(now.toISOString().slice(0, 10))
@@ -1189,7 +1250,13 @@ function SchoolDuesRegister({ user, lang }: { user: User; lang: Lang }) {
   useEffect(() => { void load() }, [])
   async function recordPayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return; const form = event.currentTarget; const values = new FormData(form); setBusy(true)
-    try { await api('/school-subsidies/payments', { method: 'POST', body: JSON.stringify({ amount: Number(values.get('amount')), method: values.get('method'), reference: values.get('reference') || undefined, notes: values.get('notes') || undefined }) }); form.reset(); setPaymentOpen(false); await load(); setNotice({ type: 'success', message: fr ? 'Paiement KCS enregistr\u00e9 et solde actualis\u00e9.' : 'KCS payment recorded and balance refreshed.' }) }
+    try {
+      const enteredAmount = Number(values.get('amount'))
+      const amountCdf = convertAmount(enteredAmount, displayCurrency, 'CDF', rate)
+      if (amountCdf === null) throw new Error(fr ? 'Le taux USD/CDF doit être disponible avant un paiement en USD.' : 'The USD/CDF rate must be available before recording a USD payment.')
+      await api('/school-subsidies/payments', { method: 'POST', body: JSON.stringify({ amount: amountCdf, method: values.get('method'), reference: values.get('reference') || undefined, notes: values.get('notes') || undefined }) })
+      form.reset(); setPaymentOpen(false); await load(); setNotice({ type: 'success', message: fr ? 'Paiement KCS enregistr\u00e9 et solde actualis\u00e9.' : 'KCS payment recorded and balance refreshed.' })
+    }
     catch (error) { setNotice({ type: 'error', message: (error as Error).message }) } finally { setBusy(false) }
   }
   return <>
@@ -1198,9 +1265,17 @@ function SchoolDuesRegister({ user, lang }: { user: User; lang: Lang }) {
       {!data ? <Loading/> : <div className="stats"><Stat icon={<ReceiptText/>} label={fr ? 'Prises en charge brutes' : 'Gross subsidies'} value={<DisplayMoney value={data.grossTotal}/>} /><Stat icon={<CheckCircle2/>} label={fr ? 'D\u00e9j\u00e0 pay\u00e9 par KCS' : 'Already paid by KCS'} value={<DisplayMoney value={data.paidTotal}/>} tone="good"/><Stat icon={<Wallet/>} label={fr ? 'Solde restant d\u00fb' : 'Outstanding balance'} value={<DisplayMoney value={data.outstanding}/>} tone="warn"/></div>}
     </section>
     {data && <section id="school-dues-invoice" className="panel official-statement school-dues-statement"><div className="section-heading"><div><span className="eyebrow">KINSHASA CHRISTIAN SCHOOL · KCS KITCHEN</span><h2>{fr ? '\u00c9TAT OFFICIEL DES PRISES EN CHARGE' : 'OFFICIAL SCHOOL SUBSIDY STATEMENT'}</h2><p>{from} — {to}</p></div><img src="./images/kcs-emblem.jpg" alt="KCS" style={{width:72,height:72,objectFit:'contain',borderRadius:'50%'}}/></div><div className="stats"><Stat icon={<ReceiptText/>} label={fr ? 'Montant brut' : 'Gross amount'} value={<DisplayMoney value={data.grossTotal}/>} /><Stat icon={<CheckCircle2/>} label={fr ? 'Paiements re\u00e7us' : 'Payments received'} value={<DisplayMoney value={data.paidTotal}/>} tone="good"/><Stat icon={<Wallet/>} label={fr ? 'Net \u00e0 payer par l\u2019\u00e9cole' : 'Net payable by the school'} value={<DisplayMoney value={data.outstanding}/>} tone="warn"/></div><div className="rank-list">{data.rows.map((row:any)=><div key={row.id}><b>{new Date(row.createdAt).toLocaleDateString(fr ? 'fr-CD' : 'en-US')}</b><span><strong>{row.personNameSnapshot}</strong><small>{row.transactionNumber} · {fr ? 'Base \u00e9ligible' : 'Eligible base'}: {Number(row.eligibleSubtotal).toLocaleString()} CDF</small></span><strong><DisplayMoney value={row.schoolSubsidy}/></strong></div>)}</div>{data.payments?.length > 0 && <><h3>{fr ? 'Paiements effectu\u00e9s par KCS' : 'Payments made by KCS'}</h3><div className="rank-list">{data.payments.map((payment:any)=><div key={payment.id}><b>{new Date(payment.paidAt).toLocaleDateString(fr ? 'fr-CD' : 'en-US')}</b><span><strong>{payment.method}</strong><small>{payment.reference || (fr ? 'Sans r\u00e9f\u00e9rence' : 'No reference')}</small></span><strong><DisplayMoney value={payment.amount}/></strong></div>)}</div></>}<footer><small>{fr ? 'Document produit depuis le registre audit\u00e9 de KCS Kitchen.' : 'Document generated from the audited KCS Kitchen register.'}</small></footer></section>}
-    {paymentOpen && <Modal onClose={() => !busy && setPaymentOpen(false)}><form className="modal-form" onSubmit={recordPayment}><span className="eyebrow">KCS · KITCHEN SETTLEMENT</span><h2>{fr ? 'Paiement de la dette de l\u2019\u00e9cole' : 'School debt payment'}</h2><p>{fr ? 'Le paiement peut couvrir une partie ou la totalit\u00e9 du solde restant.' : 'The payment may cover part or all of the outstanding balance.'}</p><label>{fr ? 'Montant pay\u00e9 (CDF)' : 'Amount paid (CDF)'}<input name="amount" type="number" min="1" max={Number(data?.outstanding || 0)} required/></label><label>{fr ? 'Mode de paiement' : 'Payment method'}<select name="method"><option value="CASH">{fr ? 'Esp\u00e8ces' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{fr ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option></select></label><label>{fr ? 'R\u00e9f\u00e9rence' : 'Reference'}<input name="reference" maxLength={160}/></label><label>{fr ? 'Note justificative' : 'Supporting note'}<textarea name="notes" maxLength={500}/></label><button className="primary large" disabled={busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Confirmer le paiement' : 'Confirm payment'}</button></form></Modal>}
+    {paymentOpen && <Modal onClose={() => !busy && setPaymentOpen(false)}><form className="modal-form" onSubmit={recordPayment}><span className="eyebrow">KCS · KITCHEN SETTLEMENT</span><h2>{fr ? 'Paiement de la dette de l\u2019\u00e9cole' : 'School debt payment'}</h2><p>{fr ? 'Le paiement peut couvrir une partie ou la totalit\u00e9 du solde restant.' : 'The payment may cover part or all of the outstanding balance.'}</p><label>{fr ? `Montant pay\u00e9 (${displayCurrency})` : `Amount paid (${displayCurrency})`}<input name="amount" type="number" min={displayCurrency === 'USD' ? '0.01' : '1'} step={displayCurrency === 'USD' ? '0.01' : '1'} max={convertAmount(Number(data?.outstanding || 0), 'CDF', displayCurrency, rate) ?? undefined} required/></label><small>{fr ? 'La saisie suit la devise affich\u00e9e sur ce dashboard. Le registre conserve automatiquement la valeur officielle en CDF.' : 'The input follows this dashboard display currency. The register automatically keeps the official CDF value.'}</small><label>{fr ? 'Mode de paiement' : 'Payment method'}<select name="method"><option value="CASH">{fr ? 'Esp\u00e8ces' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{fr ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option></select></label><label>{fr ? 'R\u00e9f\u00e9rence' : 'Reference'}<input name="reference" maxLength={160}/></label><label>{fr ? 'Note justificative' : 'Supporting note'}<textarea name="notes" maxLength={500}/></label><button className="primary large" disabled={busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Confirmer le paiement' : 'Confirm payment'}</button></form></Modal>}
     {notice && <Notice {...notice} onClose={() => setNotice(null)}/>}
   </>
+}
+
+const DEBT_CACHE_KEY = 'kcs-kitchen-debt-register:v1'
+const readDebtCache = () => {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(DEBT_CACHE_KEY) || 'null')
+    return parsed?.value && Array.isArray(parsed.value.debts) ? parsed.value : { debts: [], total: 0, count: 0 }
+  } catch { return { debts: [], total: 0, count: 0 } }
 }
 
 function Access({ t }: { t: Record<string, string> }) {
@@ -1210,10 +1285,14 @@ function Access({ t }: { t: Record<string, string> }) {
   const [selected, setSelected] = useState<Person | null>(null)
   const [details, setDetails] = useState<any>(null)
   const [busy, setBusy] = useState(false)
-  const [debts, setDebts] = useState<any>({ debts: [], total: 0, count: 0 })
+  const [debts, setDebts] = useState<any>(() => readDebtCache())
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   async function loadDebts() {
-    try { setDebts(await api('/debts')) }
+    try {
+      const next = await api<any>('/debts')
+      setDebts(next)
+      try { sessionStorage.setItem(DEBT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), value: next })) } catch { /* cache is optional */ }
+    }
     catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
   }
   useEffect(() => { void loadDebts() }, [])

@@ -1,12 +1,12 @@
-const CACHE = 'kcs-kitchen-shell-v3'
+const CACHE = 'kcs-kitchen-culinary-shell-v4'
 const SCOPE_PATH = new URL('./', self.location.href).pathname
 const SHELL = [
   './',
   './manifest.webmanifest',
-  './icons/kitchen-192.png',
-  './icons/kitchen-512.png',
-  './icons/kitchen-maskable-512.png',
-  './icons/kitchen-apple-180.png',
+  './icons/kitchen-culinary-192.png',
+  './icons/kitchen-culinary-512.png',
+  './icons/kitchen-culinary-maskable-512.png',
+  './icons/kitchen-culinary-apple-180.png',
   './images/kcs-logo.png'
 ]
 

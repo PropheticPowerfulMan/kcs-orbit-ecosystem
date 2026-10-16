@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { sendSchoolMail } from '../utils/mail.js'
 
+const OFFICIAL_REPLY_TO = process.env.SCHOOL_EMAIL || 'kinshasachristianschool@gmail.com'
+
 export const MAIL_QUEUE_VERSION = 1
 // Brevo handles campaign traffic; process a controlled batch on each worker pass.
 export const MAIL_QUEUE_INTERVAL_MS = 5_000
@@ -80,6 +82,7 @@ export async function processOutboundMailQueue() {
     const trackingUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || ''}/api/messages/tracking/email/${encodeURIComponent(row.id)}.gif`
     const result = await sendSchoolMail({
       to: row.recipientEmail,
+      replyTo: OFFICIAL_REPLY_TO,
       subject: row.subject,
       text: row.body + attachmentNote,
       html: `${messageHtml}<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`,

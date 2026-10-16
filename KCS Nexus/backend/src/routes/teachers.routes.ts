@@ -352,9 +352,9 @@ teachersRouter.get('/me/workspace', authenticate, requireRoles('teacher'), async
 
 teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = workspaceSchema.parse(req.body)
-  const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { id: true, role: true } })
+  const user = await prisma.user.findUnique({ where: { id: req.user!.sub }, select: { id: true, role: true, teacherProfile: { select: { id: true } } } })
   if (!user) throw new ApiError(404, 'Authenticated user not found')
-  if (user.role !== 'TEACHER' && user.role !== 'ADMIN') throw new ApiError(403, 'Teacher workspace access required')
+  if (user.role !== 'TEACHER' && user.role !== 'ADMIN' && !user.teacherProfile) throw new ApiError(403, 'Teacher workspace access required')
 
   const workspace = await prisma.$transaction(async (tx) => {
     const existing = await tx.teacherWorkspace.findUnique({ where: { userId: user.id } })

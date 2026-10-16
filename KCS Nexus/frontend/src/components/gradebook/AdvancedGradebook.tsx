@@ -96,6 +96,10 @@ type Props = {
 const assignmentTypes: AssignmentType[] = ['homework', 'quiz', 'test', 'exam', 'project', 'participation']
 const terms = ['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3', 'Annual final']
 const scoreScales = [20, 50, 100]
+const academicYearOptions = Array.from({ length: 75 }, (_, index) => {
+  const start = 2026 + index
+  return `${start}-${start + 1}`
+})
 
 const defaultPointsByType: Record<AssignmentType, number> = {
   homework: 20,
@@ -270,7 +274,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
       })
       assignments.forEach((assignment) => {
-        students.forEach((student) => {
+        enrolledCourseStudents.forEach((student) => {
           const value = scores[`${assignment.id}:${student.id}`]
           if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
         })
@@ -318,7 +322,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     title: '',
     type: 'quiz' as AssignmentType,
     category: 'quiz',
-    maxPoints: 20,
+    maxPoints: '' as number | '',
     date: '',
     description: '',
   })
@@ -537,7 +541,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setAssignments((current) => [...current, nextAssignment])
       setScores((current) => buildMissingScoreCells([nextAssignment], courseStudents, current))
       setSelectedAssignmentId(nextAssignment.id)
-      setDraft((current) => ({ ...current, title: '', date: '', description: '' }))
+      setDraft({ title: '', type: 'quiz', category: 'quiz', maxPoints: '', date: '', description: '' })
       onAction(`${nextAssignment.title} ${nextAssignment.type} added to ${selectedCourse?.name ?? 'Gradebook'}; averages will recalculate automatically as scores are entered.`)
     } finally {
       setAddingAssignment(false)
@@ -690,12 +694,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         studentIds: enrolledCourseStudents.map((student) => student.id),
         studentNumbers: enrolledCourseStudents.map((student) => student.studentNumber).filter(Boolean),
       })
+      const officialCourseId = String(synchronizedCourse.data?.data?.id || selectedCourse.id)
       const synchronizedEnrollmentCount = synchronizedCourse.data?.data?.enrollments?.length ?? 0
       if (synchronizedEnrollmentCount !== enrolledCourseStudents.length) {
         throw new Error(`Course roster verification failed: ${synchronizedEnrollmentCount}/${enrolledCourseStudents.length} official enrollments were confirmed.`)
       }
       const response = await academicRecordsAPI.submitFinalGrades({
-        courseId: selectedCourse.id,
+        courseId: officialCourseId,
         academicYear,
         term,
         results: submissionAnalytics.map((item) => ({ studentId: item.student.id, studentNumber: item.student.studentNumber || undefined, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
@@ -705,7 +710,18 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       if (savedCount !== submissionAnalytics.length || propagatedCount !== submissionAnalytics.length) {
         throw new Error(`Propagation check failed: ${savedCount}/${submissionAnalytics.length} grades and ${propagatedCount}/${submissionAnalytics.length} report-card drafts were confirmed.`)
       }
-      window.dispatchEvent(new CustomEvent('kcs-final-grades-submitted', { detail: { courseId: selectedCourse.id, academicYear, term, count: savedCount } }))
+      const confirmation = await academicRecordsAPI.myFinalGrades()
+      const confirmedRows = ((confirmation.data?.data?.submissions ?? []) as OfficialFinalGrade[]).filter((grade) => (
+        grade.courseId === officialCourseId
+        && grade.cycle?.academicYear === academicYear
+        && grade.cycle?.term === term
+        && grade.cycle?.status === 'SUBMITTED'
+      ))
+      if (confirmedRows.length !== submissionAnalytics.length) {
+        throw new Error(`Official verification failed: ${confirmedRows.length}/${submissionAnalytics.length} submitted grades are visible in the server register.`)
+      }
+      setOfficialFinalGrades((confirmation.data?.data?.submissions ?? []) as OfficialFinalGrade[])
+      window.dispatchEvent(new CustomEvent('kcs-final-grades-submitted', { detail: { courseId: officialCourseId, academicYear, term, count: savedCount } }))
       onAction(`${submissionAnalytics.length} final grade(s) submitted for administrative review. The official record is now auditable.`)
     } catch (error: any) {
       onAction(error?.response?.data?.message || error?.message || 'Final-grade submission failed.', true)
@@ -755,7 +771,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-1.5">
-              <input aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-28 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" pattern="\\d{4}-\\d{4}" />
+              <select aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
+                {academicYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
               <button disabled={submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
               <button onClick={() => exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
               <button onClick={() => exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
@@ -851,7 +869,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </label>
               <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
                 Maximum points
-                <input className="input-kcs py-2 text-sm" type="number" min={1} max={10000} value={draft.maxPoints} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: Number(event.target.value) }))} />
+                <input className="input-kcs py-2 text-sm" type="number" inputMode="decimal" min={1} max={10000} value={draft.maxPoints} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setDraft((item) => ({ ...item, maxPoints: event.target.value === '' ? '' : Number(event.target.value.replace(/^0+(?=\d)/, '')) }))} placeholder="20" />
                 <span className="font-normal text-gray-500">Scores are converted automatically to a percentage.</span>
               </label>
             </div>

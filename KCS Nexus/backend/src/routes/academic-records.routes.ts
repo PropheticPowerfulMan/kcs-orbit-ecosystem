@@ -13,18 +13,21 @@ import { isTeacherHomeroomForStudent } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
+import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACADEMIC_TERMS } from '../utils/academicCycle.js'
 
+const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
+const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
 const submissionSchema=z.object({
- courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
+ courseId:z.string().min(1),academicYear:academicYearSchema,term:academicTermSchema,
  results:z.array(z.object({studentId:z.string().min(1),studentNumber:z.string().trim().min(1).max(100).optional(),percentage:z.number().min(0).max(100),comment:z.string().max(1000).optional()})).min(1)
 })
-const cycleSchema=z.object({academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80)})
+const cycleSchema=z.object({academicYear:academicYearSchema,term:academicTermSchema})
 const teacherReportDraftSchema=cycleSchema.extend({
  teacherComment:z.string().trim().max(1500).default(''),
  conduct:z.string().trim().max(500).default(''),
 })
 const letter=(value:number)=>value>=97?'A+':value>=93?'A':value>=90?'A-':value>=87?'B+':value>=83?'B':value>=80?'B-':value>=77?'C+':value>=73?'C':value>=70?'C-':value>=67?'D+':value>=63?'D':value>=60?'D-':'F'
-const periodKey=(year:string,term:string,status:'SUBMITTED'|'APPROVED')=>`${year}::${term}::${status}`
+const periodKey=(year:string,term:string,status:'SUBMITTED'|'APPROVED')=>academicPeriodKey(year,term as Parameters<typeof academicPeriodKey>[1],status)
 const parsePeriod=(period:string)=>{const [academicYear,term,status]=period.split('::');return{academicYear,term,status}}
 
 const attendanceWindow=(year:string,term:string)=>{const key=term.toLowerCase();if(year==='2026-2027'){if(key.includes('trimester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2026-12-18T23:59:59Z')};if(key.includes('trimester 2'))return{gte:new Date('2027-01-05T00:00:00Z'),lte:new Date('2027-03-19T23:59:59Z')};if(key.includes('trimester 3'))return{gte:new Date('2027-04-05T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')};if(key.includes('semester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2027-01-29T23:59:59Z')};if(key.includes('semester 2'))return{gte:new Date('2027-02-01T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')}}const [start,end]=year.split('-');return{gte:new Date(`${start}-08-01T00:00:00Z`),lte:new Date(`${end}-07-31T23:59:59Z`)}}
@@ -190,6 +193,11 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
  const unmatched=canonicalResults.filter(item=>!enrolled.has(item.studentId))
  if(unmatched.length)throw new ApiError(400,`A submitted student could not be matched to the official Nexus course enrollment (${unmatched.slice(0,5).map(item=>item.studentNumber||item.studentId).join(', ')})`)
  if(new Set(canonicalResults.map(item=>item.studentId)).size!==canonicalResults.length)throw new ApiError(400,'Duplicate student in submission after identity reconciliation')
+ const submittedIds=new Set(canonicalResults.map(item=>item.studentId))
+ const missingStudents=course.enrollments.filter(item=>!submittedIds.has(item.studentId))
+ if(missingStudents.length||canonicalResults.length!==course.enrollments.length){
+  throw new ApiError(409,`Submission blocked: ${missingStudents.length} officially enrolled student(s) are missing from this course Gradebook. Refresh My Courses and Gradebook before submitting.`)
+ }
  const lockedCards=await prisma.reportCard.count({where:{studentId:{in:canonicalResults.map(item=>item.studentId)},term:reportCardTerm(payload.academicYear,payload.term),publicationStatus:{in:['APPROVED','EMAILED','POSTED_TO_PORTAL']}}})
  if(lockedCards)throw new ApiError(409,'An approved or published report card is frozen. The Super Administration must reopen it before grades can change')
  const period=periodKey(payload.academicYear,payload.term,'SUBMITTED')
@@ -212,7 +220,7 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
   await synchronizeStudentAcademicMetrics(tx,canonicalResults.map(item=>item.studentId))
   return{created,draftCards}
  })
- return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.created.length,reportCardDraftsUpdated:saved.draftCards.length},'Final grades submitted and propagated to report-card drafts',201)
+ return success(res,{course:{id:course.id,name:course.name,code:course.code},academicYear:payload.academicYear,term:payload.term,count:saved.created.length,officialEnrollmentCount:course.enrollments.length,reportCardDraftsUpdated:saved.draftCards.length},'Final grades submitted and propagated to report-card drafts',201)
 }))
 
 academicRecordsRouter.get('/final-grades/me',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{

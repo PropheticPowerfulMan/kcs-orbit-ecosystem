@@ -2,18 +2,18 @@ import { Prisma, PrismaClient } from '@prisma/client'
 
 type MenuLine = { name: string; price: number; category: 'FOOD' | 'SNACK' | 'DESSERT' }
 type OfficialProductRef = { id: string }
-type OfficialDrink = { name: string; slug: string; comingSoon?: boolean }
+type OfficialDrink = { name: string; slug: string; price?: number; comingSoon?: boolean }
 
 const officialDrinks: OfficialDrink[] = [
-  { name: 'Bora', slug: 'bora' },
-  { name: 'Coca', slug: 'coca' },
-  { name: 'Fanta', slug: 'fanta' },
-  { name: 'Vitalo', slug: 'vitalo' },
+  { name: 'Bora', slug: 'bora', price: 1000 },
+  { name: 'Coca', slug: 'coca', price: 2000 },
+  { name: 'Fanta', slug: 'fanta', price: 2000 },
+  { name: 'Vitalo', slug: 'vitalo', price: 2000 },
   { name: 'Lait caille / Curdled milk', slug: 'lait-caille', comingSoon: true },
   { name: 'Yaourt / Yogurt', slug: 'yaourt', comingSoon: true },
-  { name: 'Water / Eau', slug: 'water' },
-  { name: 'Bavaria', slug: 'bavaria' },
-  { name: 'Bisap', slug: 'bisap' },
+  { name: 'Water / Eau', slug: 'water', price: 500 },
+  { name: 'Bavaria', slug: 'bavaria', price: 5000 },
+  { name: 'Bisap', slug: 'bisap', price: 3000 },
 ]
 
 const monday: MenuLine[] = [
@@ -85,22 +85,22 @@ async function ensureOfficialDrinks(prisma: PrismaClient) {
     })
     const description = drink.comingSoon
       ? 'Official KCS Kitchen drink - coming soon - no discount'
-      : 'Official KCS Kitchen drink - manager must configure price - no discount'
+      : 'Official KCS Kitchen drink - fixed official price - no discount'
     const photoUrl = `/kitchen/images/menu-items/${drink.slug}.jpg`
     const product = existing
       ? await prisma.product.update({
           where: { id: existing.id },
-          data: { category: 'DRINK', discountEligible: false, photoUrl, description },
+          data: { category: 'DRINK', discountEligible: false, photoUrl, description, currentPrice: new Prisma.Decimal(drink.price || 0), currency: 'CDF', isAvailable: !drink.comingSoon },
         })
       : await prisma.product.create({
           data: {
             name: drink.name,
             description,
             category: 'DRINK',
-            currentPrice: new Prisma.Decimal(0),
+            currentPrice: new Prisma.Decimal(drink.price || 0),
             currency: 'CDF',
             photoUrl,
-            isAvailable: false,
+            isAvailable: !drink.comingSoon,
             discountEligible: false,
           },
         })

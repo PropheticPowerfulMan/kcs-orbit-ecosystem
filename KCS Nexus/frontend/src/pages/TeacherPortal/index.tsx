@@ -1006,6 +1006,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         studentNumbers: roster.map((student) => student.studentNumber).filter(Boolean),
       })
       const officialCourse = response.data?.data
+      const confirmedEnrollmentIds = new Set<string>((officialCourse?.enrollments ?? []).map((item: { studentId: string }) => item.studentId))
+      if (confirmedEnrollmentIds.size !== nextCourse.studentIds.length || nextCourse.studentIds.some((studentId: string) => !confirmedEnrollmentIds.has(studentId))) {
+        throw new Error(`Official roster verification failed: ${confirmedEnrollmentIds.size}/${nextCourse.studentIds.length} enrollment(s) confirmed.`)
+      }
       nextCourse = { ...nextCourse, id: officialCourse?.id ?? nextCourse.id, abbreviation: officialCourse?.code ?? nextCourse.abbreviation }
     } catch (error: any) {
       runAction(error?.response?.data?.message || 'The subject could not be synchronized with the official academic registry.', true)
@@ -1246,7 +1250,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const selectedStudents = selectedRoster.filter((student) => !existingIds.has(student.id))
     const nextStudents = [...selectedStudents, ...teacherStudents]
     try {
-      await teacherWorkspaceAPI.syncCourse({
+      const response = await teacherWorkspaceAPI.syncCourse({
         id: enrollmentDialogCourse.id,
         name: enrollmentDialogCourse.name,
         abbreviation: enrollmentDialogCourse.abbreviation,
@@ -1257,6 +1261,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         studentIds: [...selectedIds],
         studentNumbers: selectedRoster.map((student) => student.studentNumber).filter(Boolean),
       })
+      const confirmedIds = new Set<string>((response.data?.data?.enrollments ?? []).map((item: { studentId: string }) => item.studentId))
+      if (confirmedIds.size !== selectedIds.size || [...selectedIds].some((studentId) => !confirmedIds.has(studentId))) {
+        throw new Error(`Official roster verification failed: ${confirmedIds.size}/${selectedIds.size} enrollment(s) confirmed.`)
+      }
     } catch (error: any) {
       setEnrollmentSaving(false)
       runAction(error?.response?.data?.message || 'The official subject enrollment could not be synchronized.', true)
@@ -1597,7 +1605,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <input ref={courseNameRef} aria-invalid={Boolean(courseErrors.name)} className={courseErrors.name ? inputClass + " border-red-500 ring-2 ring-red-100" : inputClass} value={courseDraft.name} onChange={(event) => updateCourseName(event.target.value)} />
                       {courseErrors.name && <p className="field-error" role="alert">{courseErrors.name}</p>}
                     </label>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Abbreviation
                         <input className={`${inputClass} bg-kcs-blue-50 font-bold tracking-wider dark:bg-kcs-blue-950/70`} value={courseDraft.abbreviation} maxLength={30} onChange={(event) => updateCourseAbbreviation(event.target.value)} />
@@ -1606,7 +1614,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Credit Hours
                         <input
-                          className={inputClass}
+                          className={`${inputClass} h-10 text-center font-bold`}
                           type='number'
                           min={1}
                           max={60}
@@ -1629,10 +1637,10 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                         <span className="mt-1 block text-xs text-gray-500 dark:text-gray-300">{tr('Sélection manuelle des élèves de plusieurs classes.', 'Select learners manually across several classes.')}</span>
                       </button>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)]">
                       <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
                         Room
-                        <input className={inputClass} value={courseDraft.room} onChange={(event) => setCourseDraft((draft) => ({ ...draft, room: event.target.value }))} />
+                        <input className={`${inputClass} h-10`} value={courseDraft.room} onChange={(event) => setCourseDraft((draft) => ({ ...draft, room: event.target.value }))} placeholder={tr('Ex. B12', 'E.g. B12')} />
                       </label>
                       <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-gray-600 dark:bg-kcs-blue-950/40 dark:text-gray-300">
                         {courseDraft.enrollmentMode === 'custom' ? tr('Sélection personnalisée', 'Custom selection') : 'Auto enrollment'}

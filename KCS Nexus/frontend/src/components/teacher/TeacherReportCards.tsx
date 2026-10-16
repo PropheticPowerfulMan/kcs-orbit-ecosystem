@@ -514,8 +514,9 @@ function SubjectGradeSubmission() {
       if (synchronizedEnrollmentCount !== allRows.length) {
         throw new Error(`Course roster verification failed: ${synchronizedEnrollmentCount}/${allRows.length} official enrollments were confirmed.`)
       }
-      await academicRecordsAPI.submitFinalGrades({
-        courseId: course.id,
+      const officialCourseId = String(synchronizedCourse.data?.data?.id || course.id)
+      const submissionResponse = await academicRecordsAPI.submitFinalGrades({
+        courseId: officialCourseId,
         academicYear,
         term,
         results: allRows.map((row) => ({
@@ -529,6 +530,11 @@ function SubjectGradeSubmission() {
           ].filter(Boolean).join(' | ').slice(0, 1000),
         })),
       })
+      const submittedCount = Number(submissionResponse.data?.data?.count ?? 0)
+      const propagatedCount = Number(submissionResponse.data?.data?.reportCardDraftsUpdated ?? 0)
+      if (submittedCount !== allRows.length || propagatedCount !== allRows.length) {
+        throw new Error(`Official propagation failed: ${submittedCount}/${allRows.length} grades and ${propagatedCount}/${allRows.length} report-card drafts were confirmed.`)
+      }
       setNotice(`${allRows.length} final grade(s) submitted. The session is now read-only pending administrative review.`)
       await load()
     } catch (reason: any) {

@@ -359,6 +359,7 @@ model KitchenTransaction {
   notes String?
   confirmationType ConfirmationType @default(NONE)
   confirmedByPersonAt DateTime?
+  confirmedByKitchenAt DateTime?
   originalTransactionId String?
   originalTransaction KitchenTransaction? @relation("TransactionReversal", fields: [originalTransactionId], references: [id])
   reversals KitchenTransaction[] @relation("TransactionReversal")
