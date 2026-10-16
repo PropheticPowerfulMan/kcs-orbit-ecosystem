@@ -1554,6 +1554,7 @@ model StudentGovernmentCandidate {
   section          String?
   manifesto        String?
   photoUrl         String?
+  status           String                    @default("APPROVED")
   active           Boolean                   @default(true)
   election         StudentGovernmentElection @relation(fields: [electionId], references: [id], onDelete: Cascade)
   position         StudentGovernmentPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
@@ -1564,6 +1565,7 @@ model StudentGovernmentCandidate {
   @@unique([positionId, studentProfileId])
   @@unique([positionId, ballotNumber])
   @@index([electionId, active])
+  @@index([electionId, status])
 }
 
 model StudentGovernmentVote {

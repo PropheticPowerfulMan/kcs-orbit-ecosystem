@@ -13,6 +13,7 @@ import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 import { generateInteractiveAssignmentDraft } from '../services/assignmentAssessment.service.js'
+import { academicCycleFromDate, mergeAssignmentIntoGradebookCycle } from '../services/gradebookCycle.service.js'
 
 export const teachersRouter = Router()
 
@@ -248,6 +249,11 @@ const teacherCourseSyncSchema = z.object({
 const submissionGradeSchema = z.object({
   score: z.coerce.number().min(0),
   feedback: z.string().max(5000).optional(),
+})
+
+const assignmentGradebookSyncSchema = z.object({
+  academicYear: z.string().regex(/^\d{4}-\d{4}$/).optional(),
+  term: z.enum(['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3', 'Annual final']).optional(),
 })
 
 const ownedCourse = async (userId: string, courseId: string) => {
@@ -800,12 +806,16 @@ teachersRouter.patch('/me/assignments/:assignmentId/submissions/:studentId', aut
 
 teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const assignmentId = getRouteParam(req.params.assignmentId)
+  const requestedCycle = assignmentGradebookSyncSchema.parse(req.body ?? {})
   const assignment = await prisma.assignment.findFirst({
     where: { id: assignmentId, course: { teacher: { userId: req.user!.sub } } },
     include: { course: true, submissions: { where: { status: 'GRADED', score: { not: null } }, include: { student: { include: { user: true, parentLinks: { select: { parentId: true } } } } } } },
   })
   if (!assignment) throw new ApiError(403, 'This assignment is not assigned to the authenticated teacher')
   if (!assignment.submissions.length) throw new ApiError(409, 'No corrected result is ready for the Gradebook')
+  const inferredCycle = academicCycleFromDate(assignment.dueDate)
+  const academicYear = requestedCycle.academicYear ?? inferredCycle.academicYear
+  const term = requestedCycle.term ?? inferredCycle.term
   const synchronizedAt = new Date()
   const result = await prisma.$transaction(async (tx) => {
     await tx.grade.deleteMany({ where: { assignmentId, courseId: assignment.courseId } })
@@ -813,8 +823,27 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
       const score = Number(submission.score)
       const percentage = Number(((score / assignment.maxScore) * 100).toFixed(2))
       const letterGrade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F'
-      return { assignmentId, studentId: submission.studentId, courseId: assignment.courseId, score, maxScore: assignment.maxScore, percentage, letterGrade, period: 'CURRENT' }
+      return { assignmentId, studentId: submission.studentId, courseId: assignment.courseId, score, maxScore: assignment.maxScore, percentage, letterGrade, period: `${academicYear}::${term}` }
     }) })
+    const workspace = await tx.teacherWorkspace.findUnique({ where: { userId: req.user!.sub } })
+    const nextWorkspaceState = mergeAssignmentIntoGradebookCycle(workspace?.state, {
+      courseId: assignment.courseId,
+      assignmentId,
+      title: assignment.title,
+      description: assignment.description,
+      assignmentType: assignment.type,
+      dueDate: assignment.dueDate,
+      maxScore: assignment.maxScore,
+      academicYear,
+      term,
+      scores: assignment.submissions.map((submission) => ({ studentId: submission.studentId, score: Number(submission.score), feedback: submission.feedback })),
+      savedAt: synchronizedAt.toISOString(),
+    })
+    if (workspace) {
+      await tx.teacherWorkspace.update({ where: { id: workspace.id }, data: { state: nextWorkspaceState as Prisma.InputJsonValue, revision: { increment: 1 } } })
+    } else {
+      await tx.teacherWorkspace.create({ data: { userId: req.user!.sub, state: nextWorkspaceState as Prisma.InputJsonValue } })
+    }
     await tx.assignment.update({ where: { id: assignmentId }, data: { gradebookSyncedAt: synchronizedAt, resultsPublishedAt: synchronizedAt } })
     await synchronizeStudentAcademicMetrics(tx, assignment.submissions.map((submission) => submission.studentId))
     const notificationRows = assignment.submissions.flatMap((submission) => {
@@ -825,10 +854,10 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
       ]
     })
     if (notificationRows.length) await tx.notification.createMany({ data: notificationRows })
-    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ASSIGNMENT_RESULTS_SYNCED_TO_GRADEBOOK', targetType: 'Assignment', targetId: assignmentId, metadata: { resultCount: assignment.submissions.length, synchronizedAt: synchronizedAt.toISOString() } } })
-    return { synchronized: assignment.submissions.length, synchronizedAt }
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'ASSIGNMENT_RESULTS_SYNCED_TO_GRADEBOOK', targetType: 'Assignment', targetId: assignmentId, metadata: { resultCount: assignment.submissions.length, academicYear, term, synchronizedAt: synchronizedAt.toISOString() } } })
+    return { synchronized: assignment.submissions.length, academicYear, term, synchronizedAt }
   })
-  return success(res, result, `${result.synchronized} corrected result(s) sent to the official Gradebook`)
+  return success(res, result, `${result.synchronized} corrected result(s) sent to the ${academicYear} · ${term} Gradebook`)
 }))
 
 teachersRouter.delete('/me/assignments/:assignmentId', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {

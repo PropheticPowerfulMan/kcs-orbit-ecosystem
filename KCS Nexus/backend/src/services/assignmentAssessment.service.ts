@@ -198,30 +198,57 @@ export async function gradeSubjectiveAssignmentAnswers(input: {
   questions: InteractiveQuestion[]
   answers: InteractiveAnswerInput[]
 }) {
+  const localGrades = () => {
+    const answerMap = new Map(input.answers.map((item) => [item.questionId, item.answer]))
+    const meaningfulTokens = (value: unknown) => normalize(value).split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 4)
+    return input.questions.map((question) => {
+      const answer = String(answerMap.get(question.id) ?? '').trim()
+      if (!answer) return { questionId: question.id, pointsAwarded: 0, feedback: 'No response was submitted. Teacher review remains available.' }
+      const words = answer.split(/\s+/).filter(Boolean)
+      const rubricTokens = [...new Set(meaningfulTokens(unwrap(question.correctAnswer)))]
+      const answerTokens = new Set(meaningfulTokens(answer))
+      const coverage = rubricTokens.length ? rubricTokens.filter((token) => answerTokens.has(token)).length / rubricTokens.length : 0.5
+      const effort = Math.min(1, words.length / 90)
+      const structured = /(?:because|therefore|for example|evidence|conclusion|parce que|donc|par exemple|preuve|conclusion)/i.test(answer) ? 1 : 0.45
+      const ratio = Math.min(1, Math.max(0.1, effort * 0.35 + coverage * 0.45 + structured * 0.2))
+      const pointsAwarded = round(question.points * ratio)
+      return {
+        questionId: question.id,
+        pointsAwarded,
+        feedback: `KCS provisional rubric score: effort ${Math.round(effort * 100)}%, rubric coverage ${Math.round(coverage * 100)}%, structure ${Math.round(structured * 100)}%. The teacher may revise this score before Gradebook transfer.`,
+      }
+    })
+  }
   const { client, model } = await openAiClient()
-  if (!client || !input.questions.length) return []
+  if (!input.questions.length) return []
+  if (!client) return localGrades()
   const answerMap = new Map(input.answers.map((item) => [item.questionId, item.answer]))
-  const completion = await client.chat.completions.create({
-    model,
-    temperature: 0,
-    max_tokens: 1800,
-    response_format: { type: 'json_object' },
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a strict KCS grading assistant. Grade only against the supplied rubric and maximum points. Give concise, constructive feedback. Do not infer identity or add facts. Return JSON only. Scores must remain between zero and the question maximum. The teacher retains final authority.',
-      },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          questions: input.questions.map((question) => ({ id: question.id, prompt: question.questionText, rubric: question.correctAnswer, explanation: question.explanation, maxPoints: question.points, studentAnswer: answerMap.get(question.id) ?? null })),
-          outputShape: { grades: [{ questionId: 'string', pointsAwarded: 'number', feedback: 'string' }] },
-        }),
-      },
-    ],
-  })
-  const content = completion.choices[0]?.message?.content
-  if (!content) return []
-  const schema = z.object({ grades: z.array(z.object({ questionId: z.string(), pointsAwarded: z.number(), feedback: z.string().min(1).max(2000) })) })
-  return schema.parse(jsonFrom(content)).grades
+  try {
+    const completion = await client.chat.completions.create({
+      model,
+      temperature: 0,
+      max_tokens: 1800,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a strict KCS grading assistant. Grade only against the supplied rubric and maximum points. Reward demonstrated reasoning and effort without inventing knowledge. Give concise, constructive feedback. Do not infer identity or add facts. Return JSON only. Scores must remain between zero and the question maximum. The teacher retains final authority.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            questions: input.questions.map((question) => ({ id: question.id, prompt: question.questionText, rubric: question.correctAnswer, explanation: question.explanation, maxPoints: question.points, studentAnswer: answerMap.get(question.id) ?? null })),
+            outputShape: { grades: [{ questionId: 'string', pointsAwarded: 'number', feedback: 'string' }] },
+          }),
+        },
+      ],
+    })
+    const content = completion.choices[0]?.message?.content
+    if (!content) return localGrades()
+    const schema = z.object({ grades: z.array(z.object({ questionId: z.string(), pointsAwarded: z.number(), feedback: z.string().min(1).max(2000) })) })
+    return schema.parse(jsonFrom(content)).grades
+  } catch (error) {
+    console.warn('[assignment-ai] Subjective grading unavailable; using the auditable local rubric engine.', error)
+    return localGrades()
+  }
 }

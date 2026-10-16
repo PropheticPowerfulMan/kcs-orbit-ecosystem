@@ -96,6 +96,7 @@ type Props = {
 const assignmentTypes: AssignmentType[] = ['homework', 'quiz', 'test', 'exam', 'project', 'participation']
 const terms = ['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3', 'Annual final']
 const scoreScales = [20, 50, 100]
+const legacyAcademicYear = '2026-2027'
 const academicYearOptions = Array.from({ length: 75 }, (_, index) => {
   const start = 2026 + index
   return `${start}-${start + 1}`
@@ -269,30 +270,35 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       const state = (workspace?.state ?? {}) as Record<string, any>
       const legacyColumns = assignments.map(({ id, title, type, date, maxPoints }) => ({ id, title, type, date, maxPoints }))
       const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
-      const legacyPrefix = `${selectedCourseId}-`
-      Object.keys(nextLegacyScores).forEach((key) => {
-        if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
-      })
-      assignments.forEach((assignment) => {
-        enrolledCourseStudents.forEach((student) => {
-          const value = scores[`${assignment.id}:${student.id}`]
-          if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
+      // The legacy mirrors are kept only for the original 2026-2027 cycle so
+      // older report-card readers remain compatible without leaking one
+      // academic year's scores into another one.
+      if (academicYear === legacyAcademicYear) {
+        const legacyPrefix = `${selectedCourseId}-`
+        Object.keys(nextLegacyScores).forEach((key) => {
+          if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
         })
-      })
+        assignments.forEach((assignment) => {
+          enrolledCourseStudents.forEach((student) => {
+            const value = scores[`${assignment.id}:${student.id}`]
+            if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
+          })
+        })
+      }
+      const nextAdvancedByCourse = { ...(state.advancedGradebookByCourse ?? {}) }
+      const nextLegacyColumns = { ...(state.gradebookColumnsByCourse ?? {}) }
+      if (academicYear === legacyAcademicYear) {
+        nextAdvancedByCourse[selectedCourseId] = snapshot
+        nextLegacyColumns[selectedCourseId] = legacyColumns
+      }
       const savedWorkspace = await teacherWorkspaceAPI.save({
         ...state,
-        advancedGradebookByCourse: {
-          ...(state.advancedGradebookByCourse ?? {}),
-          [selectedCourseId]: snapshot,
-        },
+        advancedGradebookByCourse: nextAdvancedByCourse,
         advancedGradebookByCycle: {
           ...(state.advancedGradebookByCycle ?? {}),
           [cycleKey]: snapshot,
         },
-        gradebookColumnsByCourse: {
-          ...(state.gradebookColumnsByCourse ?? {}),
-          [selectedCourseId]: legacyColumns,
-        },
+        gradebookColumnsByCourse: nextLegacyColumns,
         gradebookScores: nextLegacyScores,
       }, workspace?.revision)
       window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt, revision: savedWorkspace.data?.data?.revision } }))
@@ -341,7 +347,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setSelectedAssignmentId('')
       try {
         saved = JSON.parse(localStorage.getItem(browserStorageKey) || '{}') as Partial<GradebookSnapshot>
-        if (!saved.assignments?.length && academicYear === '2026-2027') {
+        if (!saved.assignments?.length && academicYear === legacyAcademicYear) {
           saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
         }
         const [response, officialResponse] = await Promise.all([
@@ -352,9 +358,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         const snapshots = (state.advancedGradebookByCourse ?? {}) as Record<string, Partial<GradebookSnapshot>>
         const cycleSnapshots = (state.advancedGradebookByCycle ?? {}) as Record<string, Partial<GradebookSnapshot>>
         let serverSnapshot = cycleSnapshots[cycleKey]
-          ?? (academicYear === '2026-2027' ? snapshots[selectedCourseId] : undefined)
+          ?? (academicYear === legacyAcademicYear ? snapshots[selectedCourseId] : undefined)
 
-        if (!serverSnapshot && selectedCourse) {
+        if (!serverSnapshot && academicYear === legacyAcademicYear && selectedCourse) {
           const legacyCourse = Array.isArray(state.courses)
             ? state.courses.find((course: any) =>
                 snapshots[course?.id]
@@ -365,7 +371,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           if (legacyCourse?.id) serverSnapshot = snapshots[legacyCourse.id]
         }
 
-        if (!serverSnapshot && selectedCourse) {
+        if (!serverSnapshot && academicYear === legacyAcademicYear && selectedCourse) {
           const legacyColumnsByCourse = (state.gradebookColumnsByCourse ?? {}) as Record<string, Array<{ id: string; title: string; type?: string; date?: string; maxPoints?: number }>>
           const legacyCourse = Array.isArray(state.courses)
             ? state.courses.find((course: any) =>

@@ -15,6 +15,7 @@ const classMatches = (position: { scope: string; grade: string | null; section: 
   return !canonical(position.section) || canonical(position.section) === canonical(student.section)
 }
 const confirmationCode = () => `KCS-SG-${randomBytes(6).toString('hex').toUpperCase()}`
+const officialGrades = ['K3', 'K4', 'K5', ...Array.from({ length: 12 }, (_, index) => `Grade ${index + 1}`)]
 const electionInclude = Prisma.validator<Prisma.StudentGovernmentElectionInclude>()({
   positions: {
     include: { candidates: { where: { active: true }, orderBy: [{ ballotNumber: 'asc' }, { lastName: 'asc' }] } },
@@ -88,6 +89,59 @@ studentGovernmentRouter.post('/vote', authenticate, requireRoles('student'), asy
   return success(res, vote, 'Your anonymous student-government ballot was recorded.', 201)
 }))
 
+studentGovernmentRouter.get('/candidacy', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const student = await prisma.studentProfile.findUnique({
+    where: { userId: req.user!.sub },
+    include: { user: { select: { firstName: true, middleName: true, lastName: true, avatar: true } } },
+  })
+  if (!student || canonical(student.status) !== 'active') throw new ApiError(403, 'Only an active KCS learner may apply.')
+  const election = await prisma.studentGovernmentElection.findFirst({
+    where: { status: 'DRAFT' },
+    include: { positions: { orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }] } },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!election) return success(res, { election: null, student, positions: [], applications: [] })
+  const positions = election.positions.filter((position) => classMatches(position, student))
+  const applications = await prisma.studentGovernmentCandidate.findMany({
+    where: { electionId: election.id, studentProfileId: student.id },
+    include: { position: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  return success(res, { election: { id: election.id, title: election.title, academicYear: election.academicYear }, student, positions, applications })
+}))
+
+studentGovernmentRouter.post('/candidacy', authenticate, requireRoles('student'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = z.object({ positionId: z.string().min(1), manifesto: z.string().trim().min(40).max(4000) }).parse(req.body)
+  const student = await prisma.studentProfile.findUnique({ where: { userId: req.user!.sub }, include: { user: { select: { firstName: true, middleName: true, lastName: true, avatar: true } } } })
+  if (!student || canonical(student.status) !== 'active') throw new ApiError(403, 'Only an active KCS learner may apply.')
+  const position = await prisma.studentGovernmentPosition.findUnique({ where: { id: payload.positionId }, include: { election: { select: { id: true, status: true } } } })
+  if (!position || position.election.status !== 'DRAFT') throw new ApiError(409, 'Student candidacies are not open for this office.')
+  if (!classMatches(position, student)) throw new ApiError(403, 'This office is outside your official class constituency.')
+  const existing = await prisma.studentGovernmentCandidate.findUnique({ where: { positionId_studentProfileId: { positionId: position.id, studentProfileId: student.id } } })
+  if (existing) throw new ApiError(409, 'You already submitted a candidacy for this office.')
+  const pendingCount = await prisma.studentGovernmentCandidate.count({ where: { positionId: position.id } })
+  const candidate = await prisma.$transaction(async (tx) => {
+    const created = await tx.studentGovernmentCandidate.create({ data: {
+      electionId: position.election.id,
+      positionId: position.id,
+      studentProfileId: student.id,
+      ballotNumber: 1000 + pendingCount + 1,
+      firstName: student.user.firstName,
+      middleName: student.user.middleName,
+      lastName: student.user.lastName,
+      grade: student.grade,
+      section: student.section || null,
+      manifesto: payload.manifesto,
+      photoUrl: student.user.avatar || student.officialAvatar || null,
+      status: 'PENDING',
+      active: false,
+    } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'STUDENT_GOVERNMENT_CANDIDACY_SUBMITTED', targetType: 'StudentGovernmentCandidate', targetId: created.id, metadata: { electionId: position.election.id, positionId: position.id } } })
+    return created
+  })
+  return success(res, candidate, 'Your candidacy was submitted for confidential administrative review.', 201)
+}))
+
 const admin = [authenticate, requireAdmin()]
 studentGovernmentRouter.get('/admin', ...admin, asyncHandler(async (_req, res) => {
   const elections = await prisma.studentGovernmentElection.findMany({
@@ -136,6 +190,10 @@ studentGovernmentRouter.post('/admin/elections', ...admin, asyncHandler(async (r
         create: [
           { name: 'Student President', scope: 'GLOBAL', displayOrder: 1 },
           { name: 'Student Vice President', scope: 'GLOBAL', displayOrder: 2 },
+          ...officialGrades.flatMap((grade, index) => [
+            { name: 'Class Representative', scope: 'CLASS', grade, displayOrder: 10 + index * 2 },
+            { name: 'Deputy Class Representative', scope: 'CLASS', grade, displayOrder: 11 + index * 2 },
+          ]),
         ],
       },
     },
@@ -191,9 +249,30 @@ studentGovernmentRouter.post('/admin/elections/:electionId/candidates', ...admin
       section: student.section || null,
       manifesto: payload.manifesto || null,
       photoUrl: student.user.avatar || student.officialAvatar || null,
+      status: 'APPROVED',
+      active: true,
     },
   })
   return success(res, candidate, 'Candidate added to the official ballot.', 201)
+}))
+
+studentGovernmentRouter.patch('/admin/elections/:electionId/candidates/:candidateId/status', ...admin, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const electionId = String(req.params.electionId)
+  const candidateId = String(req.params.candidateId)
+  const { status } = z.object({ status: z.enum(['APPROVED', 'REJECTED', 'WITHDRAWN']) }).parse(req.body)
+  const candidate = await prisma.studentGovernmentCandidate.findFirst({ where: { id: candidateId, electionId }, include: { election: { select: { status: true } } } })
+  if (!candidate) throw new ApiError(404, 'Candidate application not found.')
+  if (candidate.election.status !== 'DRAFT') throw new ApiError(409, 'Candidate applications can only be reviewed while the election is in draft.')
+  if (status === 'WITHDRAWN' && candidate.status !== 'APPROVED') throw new ApiError(409, 'Only an approved candidacy can be withdrawn from the official ballot.')
+  const nextBallot = status === 'APPROVED'
+    ? (await prisma.studentGovernmentCandidate.aggregate({ where: { positionId: candidate.positionId, status: 'APPROVED' }, _max: { ballotNumber: true } }))._max.ballotNumber ?? 0
+    : candidate.ballotNumber
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.studentGovernmentCandidate.update({ where: { id: candidate.id }, data: { status, active: status === 'APPROVED', ...(status === 'APPROVED' ? { ballotNumber: nextBallot + 1 } : {}) } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: `STUDENT_GOVERNMENT_CANDIDACY_${status}`, targetType: 'StudentGovernmentCandidate', targetId: candidate.id, metadata: { electionId, positionId: candidate.positionId } } })
+    return saved
+  })
+  return success(res, updated, `Candidate application ${status.toLowerCase()}.`)
 }))
 
 studentGovernmentRouter.patch('/admin/elections/:electionId/status', ...admin, asyncHandler(async (req, res) => {
