@@ -3597,6 +3597,8 @@ const AdminSectionView = ({
 
   if (segment === 'analytics') return <AdminAnalyticsPanel />
 
+  if (segment === 'academic-calendar') return <AcademicCalendarSettings />
+
   if (segment === 'settings') {
     return (
       <div className="space-y-6">

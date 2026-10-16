@@ -1,6 +1,7 @@
-import { Router } from 'express'
+import { Router, type NextFunction, type Response } from 'express'
 import { env } from '../config/env.js'
-import { authenticate, requireSuperAdmin } from '../middleware/auth.js'
+import { prisma } from '../config/prisma.js'
+import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler } from '../utils/api.js'
 
 const calendarApiUrl = env.ACADEMIC_CALENDAR_ORBIT_API_URL || env.KCS_ORBIT_API_URL
@@ -8,7 +9,23 @@ const calendarApiKey = env.ACADEMIC_CALENDAR_ORBIT_API_KEY || env.KCS_ORBIT_API_
 const calendarOrganizationId = env.ACADEMIC_CALENDAR_ORBIT_ORGANIZATION_ID || env.KCS_ORBIT_ORGANIZATION_ID
 
 export const academicCalendarRouter = Router()
-academicCalendarRouter.use(authenticate, requireSuperAdmin())
+academicCalendarRouter.use(authenticate)
+
+const normalized = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+const requireCalendarManager = async (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
+  try {
+    if (req.user?.sub === 'configured-superadmin') return next()
+    if (!req.user) return next(new ApiError(403, 'Academic calendar management permission required.'))
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.sub },
+      select: { role: true, staffFunction: true, permissions: true, staffProfile: { select: { function: true, permissions: true } } },
+    })
+    const titles = normalized([user?.staffFunction, user?.staffProfile?.function].filter(Boolean).join(' '))
+    const permissions = [...(user?.permissions ?? []), ...(user?.staffProfile?.permissions ?? [])].map(normalized)
+    if (user?.role === 'ADMIN' && (titles.includes('principal') || titles.includes('prefet') || permissions.includes('academic_calendar_manage'))) return next()
+    return next(new ApiError(403, 'Only the Super Administrator or Principal can update the academic calendar.'))
+  } catch (error) { return next(error) }
+}
 
 function orbitUrl(path: string) {
   if (!calendarApiUrl || !calendarApiKey || !calendarOrganizationId) {
@@ -41,7 +58,7 @@ academicCalendarRouter.get('/current', asyncHandler(async (_req, res) => {
   res.json(data)
 }))
 
-academicCalendarRouter.put('/', asyncHandler(async (req, res) => {
+academicCalendarRouter.put('/', requireCalendarManager, asyncHandler(async (req, res) => {
   const response = await fetch(orbitUrl('/calendar'), {
     method: 'PUT',
     headers: headers(true),

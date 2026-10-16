@@ -37,7 +37,7 @@ import {
   YAxis,
 } from 'recharts'
 import { printOfficialPdf } from '@/utils/officialPdf'
-import { academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
+import { academicCalendarAPI, academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { canonicalClassLabel } from '@/utils/classLabels'
 import { useUIStore } from '@/store/uiStore'
 
@@ -335,6 +335,19 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0]
   const selectedBulkAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId)
+
+  useEffect(() => {
+    academicCalendarAPI.current().then(({ data }) => {
+      const calendar = data?.calendar
+      if (!calendar?.name) return
+      setAcademicYear(calendar.name)
+      const now = Date.now()
+      const activeTrimester = (calendar.periods ?? []).find((period: any) => period.type === 'TRIMESTER' && Date.parse(period.startDate) <= now && Date.parse(period.endDate) >= now)
+      if (activeTrimester?.sequence === 1) setTerm(terms[0])
+      if (activeTrimester?.sequence === 2) setTerm(terms[1])
+      if (activeTrimester?.sequence === 3) setTerm(terms[2])
+    }).catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     let active = true

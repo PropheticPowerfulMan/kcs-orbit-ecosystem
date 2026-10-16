@@ -90,7 +90,7 @@ const loadSessionAvatar = (userId: string) => {
   return request
 }
 
-const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
+const getNavItems = (role: UserRole, t: (key: string) => string, language: string): NavItem[] => {
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
@@ -178,6 +178,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string): NavItem[] => {
         { to: '/portal/parent/forum', label: t('portalNav.parentForum'), icon: MessageSquare },
         { to: '/portal/student/forum', label: t('portalNav.studentForum'), icon: MessageSquare },
         { to: '/admin/analytics', label: t('portalNav.aiAnalytics'), icon: Brain },
+        { to: '/admin/academic-calendar', label: language === 'fr' ? 'Calendrier académique' : 'Academic Calendar', icon: Calendar },
         { to: '/admin/data-migration', label: 'Imports Excel / CSV', icon: FileSpreadsheet },
         { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
       ]
@@ -327,8 +328,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     { to: '/admin/finance', label: t('portalNav.feeTracking'), icon: WalletCards },
     { to: '/admin/messages', label: t('portalNav.messages'), icon: MessageSquare },
     { to: '/admin/permissions', label: t('portalNav.permissions'), icon: Shield },
+    { to: '/admin/academic-calendar', label: language === 'fr' ? 'Calendrier académique' : 'Academic Calendar', icon: Calendar },
     { to: '/admin/settings', label: t('portalNav.settings'), icon: Settings },
-  ] : getNavItems(activeRole, t)
+  ] : getNavItems(activeRole, t, language)
   const navItemsWithBadges = navItems.map((item) => ({ ...item, badge: badges[item.to] ?? item.badge }))
   const currentLanguage = (i18n.resolvedLanguage || i18n.language || language).startsWith('fr') ? 'fr' : 'en'
   const nextLanguage = currentLanguage === 'en' ? 'fr' : 'en'

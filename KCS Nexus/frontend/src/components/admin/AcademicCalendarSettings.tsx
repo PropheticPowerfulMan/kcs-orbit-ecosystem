@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CalendarDays, CheckCircle2, Save } from 'lucide-react'
 import { academicCalendarAPI } from '@/services/api'
 
@@ -51,12 +51,13 @@ export default function AcademicCalendarSettings() {
   const [calendar, setCalendar] = useState<Calendar | null>(null)
   const [startYear, setStartYear] = useState(2026)
   const [status, setStatus] = useState('Chargement du calendrier central…')
-  const proposed = useMemo(() => template(startYear), [startYear])
+  const [proposed, setProposed] = useState(() => template(2026))
 
   useEffect(() => {
     academicCalendarAPI.current().then(({ data }) => {
       setCalendar(data.calendar)
       setStartYear(Number(data.calendar.name.slice(0, 4)))
+      setProposed({ ...data.calendar, periods: data.calendar.periods ?? [] })
       setStatus('')
     }).catch(() => setStatus('Calendrier central indisponible. Vérifiez la configuration Orbit.'))
   }, [])
@@ -72,6 +73,14 @@ export default function AcademicCalendarSettings() {
     }
   }
 
+  const chooseStartYear = (value: number) => {
+    setStartYear(value)
+    setProposed(template(value))
+  }
+  const dateValue = (value: string) => value?.slice(0, 10) ?? ''
+  const toIsoDate = (value: string, end = false) => value ? new Date(`${value}T${end ? '23:59:59.999' : '00:00:00.000'}Z`).toISOString() : ''
+  const updatePeriod = (code: string, patch: Partial<Period>) => setProposed((current) => ({ ...current, periods: current.periods.map((item) => item.code === code ? { ...item, ...patch } : item) }))
+
   return (
     <section className="rounded-2xl border border-kcs-blue-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -83,16 +92,20 @@ export default function AcademicCalendarSettings() {
       </div>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <label className="text-sm font-semibold text-kcs-blue-900 dark:text-white">Année de rentrée
-          <input type="number" min="2020" max="2100" value={startYear} onChange={(event) => setStartYear(Number(event.target.value))} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none focus:border-kcs-gold-500 focus:ring-4 focus:ring-kcs-gold-100/60 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/>
+          <input type="number" min="2020" max="2100" value={startYear} onChange={(event) => chooseStartYear(Number(event.target.value))} className="mt-1 block rounded-xl border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none focus:border-kcs-gold-500 focus:ring-4 focus:ring-kcs-gold-100/60 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/>
         </label>
         <div className="rounded-xl border border-kcs-blue-100 bg-kcs-blue-50 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:bg-kcs-blue-800/70 dark:text-kcs-blue-100">{proposed.name} · {fmt(proposed.startDate)} — {fmt(proposed.endDate)}</div>
         <button type="button" onClick={save} className="btn-primary flex items-center gap-2 py-2"><Save size={16}/> Enregistrer et activer</button>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <label className="text-xs font-bold uppercase text-gray-500">Début officiel de l’année<input type="date" value={dateValue(proposed.startDate)} onChange={(event) => setProposed((current) => ({ ...current, startDate: toIsoDate(event.target.value) }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 normal-case text-gray-900 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/></label>
+        <label className="text-xs font-bold uppercase text-gray-500">Fin officielle de l’année<input type="date" value={dateValue(proposed.endDate)} onChange={(event) => setProposed((current) => ({ ...current, endDate: toIsoDate(event.target.value, true) }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 normal-case text-gray-900 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/></label>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
         {(['SEMESTER', 'TRIMESTER'] as const).map((type) => <div key={type} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
           <h3 className="text-sm font-bold text-kcs-blue-900 dark:text-white">{type === 'SEMESTER' ? 'Semestres' : 'Trimestres'}</h3>
           <div className="mt-3 space-y-2">{proposed.periods.filter((item) => item.type === type).map((item) =>
-            <div key={item.code} className="flex justify-between gap-3 text-xs text-gray-600 dark:text-gray-300"><strong>{item.code}</strong><span>{fmt(item.startDate)} — {fmt(item.endDate)}</span></div>)}</div>
+            <div key={item.code} className="rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300"><strong>{item.code} · {item.name}</strong><div className="mt-2 grid grid-cols-2 gap-2"><label>Début<input type="date" value={dateValue(item.startDate)} onChange={(event) => updatePeriod(item.code, { startDate: toIsoDate(event.target.value) })} className="mt-1 w-full rounded-lg border px-2 py-2 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:[color-scheme:dark]"/></label><label>Fin<input type="date" value={dateValue(item.endDate)} onChange={(event) => updatePeriod(item.code, { endDate: toIsoDate(event.target.value, true) })} className="mt-1 w-full rounded-lg border px-2 py-2 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:[color-scheme:dark]"/></label></div></div>)}</div>
         </div>)}
       </div>
       <p className="mt-4 text-xs text-amber-700">L’activation change les valeurs par défaut des nouveaux dossiers. Elle ne promeut aucun élève et ne modifie ni notes, ni paiements, ni dettes historiques.</p>
