@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
   GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck
+  Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck, GripHorizontal
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { academyAPI, authAPI, lessonPlanAPI } from '@/services/api'
@@ -29,6 +29,47 @@ type PortalSidebarProps = { badges?: Record<string, number> }
 const sessionAvatarUrls = new Map<string, string>()
 const sessionAvatarRequests = new Map<string, Promise<string | null>>()
 
+const avatarDatabase = () => new Promise<IDBDatabase>((resolve, reject) => {
+  const request = indexedDB.open('kcs-nexus-media-cache', 1)
+  request.onupgradeneeded = () => {
+    if (!request.result.objectStoreNames.contains('avatars')) request.result.createObjectStore('avatars')
+  }
+  request.onsuccess = () => resolve(request.result)
+  request.onerror = () => reject(request.error)
+})
+
+const readPersistentAvatar = async (userId: string) => {
+  try {
+    const database = await avatarDatabase()
+    const blob = await new Promise<Blob | null>((resolve, reject) => {
+      const request = database.transaction('avatars', 'readonly').objectStore('avatars').get(userId)
+      request.onsuccess = () => resolve(request.result instanceof Blob ? request.result : null)
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+    if (!blob?.size) return null
+    const objectUrl = URL.createObjectURL(blob)
+    sessionAvatarUrls.set(userId, objectUrl)
+    return objectUrl
+  } catch {
+    return null
+  }
+}
+
+const persistAvatar = async (userId: string, blob: Blob) => {
+  try {
+    const database = await avatarDatabase()
+    await new Promise<void>((resolve, reject) => {
+      const request = database.transaction('avatars', 'readwrite').objectStore('avatars').put(blob, userId)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+    database.close()
+  } catch {
+    // Cache availability must never block authenticated navigation.
+  }
+}
+
 const loadSessionAvatar = (userId: string) => {
   const cached = sessionAvatarUrls.get(userId)
   if (cached) return Promise.resolve(cached)
@@ -40,6 +81,7 @@ const loadSessionAvatar = (userId: string) => {
       if (!(response.data instanceof Blob) || response.data.size === 0) return null
       const objectUrl = URL.createObjectURL(response.data)
       sessionAvatarUrls.set(userId, objectUrl)
+      void persistAvatar(userId, response.data)
       return objectUrl
     })
     .catch(() => null)
@@ -152,6 +194,10 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   const desktopNavigationRef = useRef<HTMLElement>(null)
   const mobileSidebarButtonRef = useRef<HTMLButtonElement>(null)
   const [avatarLoadVersion, setAvatarLoadVersion] = useState(0)
+  const [desktopActionHeight, setDesktopActionHeight] = useState(() => {
+    const saved = Number(localStorage.getItem('kcs-nexus-sidebar-action-height'))
+    return Number.isFinite(saved) && saved >= 170 ? saved : 300
+  })
   const { user, logout, updateUser } = useAuthStore()
   const {
     sidebarCollapsed,
@@ -172,6 +218,9 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
   useEffect(() => {
     if (!user?.id) return
     let active = true
+    void readPersistentAvatar(user.id).then((avatar) => {
+      if (active && avatar) updateUser({ avatar })
+    })
     void loadSessionAvatar(user.id).then((avatar) => {
       if (active && avatar) updateUser({ avatar })
     })
@@ -182,6 +231,29 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
     if (!user?.id) return
     // Keep the last valid portrait through transient network or decoding errors.
     if (avatarLoadVersion === 0) setAvatarLoadVersion(1)
+  }
+
+  const beginSidebarResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (sidebarCollapsed) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    const startY = event.clientY
+    const startHeight = desktopActionHeight
+    const onMove = (moveEvent: PointerEvent) => {
+      const maximum = Math.max(190, window.innerHeight - 250)
+      const next = Math.min(maximum, Math.max(170, startHeight + startY - moveEvent.clientY))
+      setDesktopActionHeight(next)
+    }
+    const onEnd = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      setDesktopActionHeight((current) => {
+        localStorage.setItem('kcs-nexus-sidebar-action-height', String(Math.round(current)))
+        return current
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd, { once: true })
   }
 
   useLayoutEffect(() => {
@@ -318,10 +390,20 @@ const PortalSidebar = ({ badges = {} }: PortalSidebarProps) => {
         ))}
       </nav>
 
-      <div className={isMobile ? 'nexus-mobile-menu-actions' : 'space-y-1 border-t border-gray-100 p-3 dark:border-kcs-blue-800'}>
+      <div
+        className={isMobile ? 'nexus-mobile-menu-actions' : 'min-h-0 space-y-1 overflow-y-auto border-t border-gray-100 p-3 dark:border-kcs-blue-800'}
+        style={!isMobile ? { height: sidebarCollapsed ? 'auto' : desktopActionHeight, flex: sidebarCollapsed ? '0 0 auto' : `0 0 ${desktopActionHeight}px` } : undefined}
+      >
         {(isMobile || !sidebarCollapsed) && (
-          <div className="mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold leading-4 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/35 dark:text-emerald-200">
-            {currentLanguage === 'fr' ? 'Règle KCS · réussite et passage ≥ 70 %' : 'KCS rule · success and promotion ≥ 70%'}
+          <div
+            className={`mb-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-bold leading-4 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/35 dark:text-emerald-200 ${isMobile ? '' : 'touch-none cursor-ns-resize select-none'}`}
+            onPointerDown={isMobile ? undefined : beginSidebarResize}
+            role={isMobile ? undefined : 'separator'}
+            aria-orientation={isMobile ? undefined : 'horizontal'}
+            aria-label={isMobile ? undefined : (currentLanguage === 'fr' ? 'Redimensionner les deux zones du menu' : 'Resize the two menu areas')}
+            title={isMobile ? undefined : (currentLanguage === 'fr' ? 'Glissez vers le haut ou le bas pour redimensionner le menu' : 'Drag up or down to resize the menu')}
+          >
+            <span className="flex items-center justify-center gap-1.5"><GripHorizontal size={15} aria-hidden="true" />{currentLanguage === 'fr' ? 'Règle KCS · réussite et passage ≥ 70 %' : 'KCS rule · success and promotion ≥ 70%'}</span>
           </div>
         )}
         {accessRoles.includes('teacher') && activeRole !== 'teacher' && (

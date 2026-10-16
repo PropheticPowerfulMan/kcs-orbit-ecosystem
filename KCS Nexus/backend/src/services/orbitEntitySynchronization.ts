@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
 import { ApiError } from '../utils/api.js'
 import { resolveSynchronizedStudentClass, splitClassName } from '../utils/className.js'
+import { reconcileOfficialClassCourseEnrollments } from './officialClassRoster.js'
 
 export type OrbitRegistryEntityType = 'parent' | 'student' | 'teacher'
 
@@ -492,6 +493,17 @@ export async function synchronizeOrbitEntityToNexus(input: SynchronizationInput)
             ...(owns(input.entity, 'photoData') ? { officialAvatar: clean(input.entity.photoData) } : {}),
           } })
       changedFields.push('studentProfile')
+
+      // The Orbit mutation and every class-derived Nexus relationship are one
+      // local transaction. This prevents the contradictory state where the
+      // profile says Grade 11 while a Grade 1 main teacher still sees the
+      // learner in My Courses, Gradebook or Attendance.
+      if (classParts && input.patch && owns(input.patch, 'className')) {
+        const courseRoster = await reconcileOfficialClassCourseEnrollments(tx, [profile.id], classParts)
+        if (courseRoster.enrolled || courseRoster.removed || courseRoster.submissionsCreated || courseRoster.pendingSubmissionsRemoved) {
+          changedFields.push('officialCourseEnrollments')
+        }
+      }
 
       if (shouldReconcileStudentParentLinks(input.patch)) {
         const parentOrbitId = clean(input.entity.parentId)

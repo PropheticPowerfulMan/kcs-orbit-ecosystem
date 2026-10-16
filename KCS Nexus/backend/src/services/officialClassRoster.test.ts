@@ -2,20 +2,23 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { planOfficialClassCourseChanges } from './officialClassRoster.js'
 
-test('moving a learner from section A to B removes A and enrolls B courses', () => {
+test('moving a learner from section A to B removes stale classes and enrolls the whole-grade and B courses', () => {
   const changes = planOfficialClassCourseChanges([
     { id: 'math-a', grade: 'Grade 9 A', enrolled: true },
     { id: 'math-b', grade: 'Grade 9 B', enrolled: false },
-    { id: 'whole-grade', grade: 'Grade 9', enrolled: true },
+    { id: 'whole-grade', grade: 'Grade 9', enrolled: false },
     { id: 'other-grade', grade: 'Grade 10 A', enrolled: true },
+    { id: 'custom', grade: 'Multi-class', description: '[KCS_SCOPE:CUSTOM]', enrolled: true },
   ], { grade: 'Grade 9', section: 'B' })
   assert.deepEqual(changes, [
     { courseId: 'math-a', action: 'REMOVE' },
     { courseId: 'math-b', action: 'ENROLL' },
+    { courseId: 'whole-grade', action: 'ENROLL' },
+    { courseId: 'other-grade', action: 'REMOVE' },
   ])
 })
 
-test('whole-class assignment removes stale section courses without touching general courses', () => {
+test('whole-class assignment removes stale section courses and keeps its whole-grade course', () => {
   const changes = planOfficialClassCourseChanges([
     { id: 'section-a', grade: 'Grade 8 A', enrolled: true },
     { id: 'general', grade: 'Grade 8', enrolled: true },
