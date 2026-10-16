@@ -66,10 +66,24 @@ enum DailyMenuStatus {
 }
 
 enum TransactionStatus {
+  PENDING
   CONFIRMED
   VOIDED
   REVERSED
   REFUNDED
+}
+
+model SchoolSubsidyPayment {
+  id String @id @default(cuid())
+  amount Decimal @db.Decimal(14, 2)
+  method PaymentMode
+  reference String?
+  notes String?
+  paidAt DateTime @default(now())
+  recordedBy String
+  createdAt DateTime @default(now())
+
+  @@index([paidAt])
 }
 
 enum LedgerEntryType {
@@ -151,6 +165,8 @@ model KitchenAccess {
   role KitchenRole
   isActive Boolean @default(true)
   creditEnabled Boolean @default(false)
+  emailNotifications Boolean @default(true)
+  smsNotifications Boolean @default(true)
   creditLimit Decimal? @db.Decimal(14, 2)
   createdBy String
   createdAt DateTime @default(now())

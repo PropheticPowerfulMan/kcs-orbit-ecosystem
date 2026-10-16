@@ -19,6 +19,18 @@ export function buildKitchenNotification(eventType: string, payload: Payload) {
       ].join('\n')
     }
   }
+  if (eventType === 'KITCHEN_ORDER_PENDING') {
+    const reference = String(payload.transactionNumber || 'KCS Kitchen')
+    return { title: 'KCS Kitchen ? Commande en attente', text: ['Votre commande ' + reference + ' a bien été reçue.', 'Elle ne sera comptabilisée qu’après confirmation de sa livraison par la cuisine.', '', 'Your order ' + reference + ' was received and will only be accounted for after delivery confirmation.'].join('\n') }
+  }
+  if (eventType === 'KITCHEN_ORDER_DELIVERED') {
+    const reference = String(payload.transactionNumber || 'KCS Kitchen')
+    return { title: 'KCS Kitchen ? Commande livrée', text: ['La livraison de votre commande ' + reference + ' a été confirmée.', 'Montant comptabilisé : ' + amount(payload.total) + '.', '', 'Delivery of order ' + reference + ' has been confirmed.'].join('\n') }
+  }
+  if (eventType === 'KITCHEN_ORDER_CANCELLED') {
+    const reference = String(payload.transactionNumber || 'KCS Kitchen')
+    return { title: 'KCS Kitchen ? Commande annulée', text: ['La commande ' + reference + ' a été annulée sans mouvement comptable.', '', 'Order ' + reference + ' was cancelled without accounting impact.'].join('\n') }
+  }
   if (eventType === 'KITCHEN_ONLINE_ORDER_PLACED') {
     const reference = String(payload.transactionNumber || 'KCS Kitchen')
     const person = String(payload.personName || 'KCS member')

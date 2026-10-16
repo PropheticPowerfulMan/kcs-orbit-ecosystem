@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import {
   AlertTriangle, Archive, BarChart3, CalendarDays, ChefHat, ClipboardList, CreditCard, Languages,
   LayoutDashboard, LogOut, Menu, Package, PackagePlus, Plus, ReceiptText, ScanLine, Search,
-  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X, Pencil, LoaderCircle
+  Eye, EyeOff, PanelLeftClose, PanelLeftOpen, ShieldCheck, ShoppingCart, Sun, Moon, Trash2, Users, Wallet, X, Pencil, LoaderCircle, Settings, BellRing, CheckCircle2
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { api, apiBlob, dateTime, getToken, setToken } from './api'
@@ -14,7 +14,7 @@ import PersonSelector from './PersonSelector'
 import { CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
-type Page = 'dashboard' | 'menus' | 'pos' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues'
+type Page = 'dashboard' | 'menus' | 'pos' | 'orders' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues' | 'settings'
 
 type StatementHolder = {
   orbitPersonId: string
@@ -122,7 +122,7 @@ type TransactionReportVerificationResult = {
   document?: Omit<OfficialTransactionReport, 'rows' | 'signature' | 'rowsHash' | 'issuedBy' | 'confirmedSubtotal' | 'confirmedDiscount'>
 }
 
-const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access', 'school-dues'])
+const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'orders', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access', 'school-dues', 'settings'])
 function requestedPage(): Page {
   if (typeof window === 'undefined') return 'dashboard'
   const value = new URLSearchParams(window.location.search).get('page') as Page | null
@@ -211,7 +211,7 @@ async function printStandaloneDocument(elementId: string, title: string, orienta
 }
 const text = {
   fr: {
-    schoolDues: 'Montants dus par KCS',
+    schoolDues: 'Montants dus par KCS', orders: 'Commandes', settings: 'Param\u00e8tres',
     signIn: 'Connexion institutionnelle', identifier: 'E-mail ou code institutionnel', password: 'Mot de passe',
     enter: 'Entrer dans KCS Kitchen', trace: 'Chaque consommation. Chaque franc. Une preuve.',
     powered: 'Propulsé par KCS Orbit', menus: 'Menu du jour', dashboard: 'Tableau de bord', pos: 'Point de vente', catalog: 'Catalogue',
@@ -245,7 +245,7 @@ const text = {
     popularProducts: 'PRODUITS POPULAIRES', topConsumption: 'Consommations principales', secureLoading: 'Chargement sécurisé des données Kitchen…'
   },
   en: {
-    schoolDues: 'Amounts owed by KCS',
+    schoolDues: 'Amounts owed by KCS', orders: 'Orders', settings: 'Settings',
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
     enter: 'Enter KCS Kitchen', trace: 'Every consumption. Every franc. One proof.',
     powered: 'Powered by KCS Orbit', menus: 'Daily menu', dashboard: 'Dashboard', pos: 'Point of sale', catalog: 'Catalog',
@@ -456,6 +456,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['dashboard', t.dashboard, <LayoutDashboard />, true],
     ['menus', lang === 'fr' ? 'Menu du jour' : 'Daily menu', <CalendarDays />, user.role === 'KITCHEN_ADMIN'],
     ['pos', t.pos, <ShoppingCart />, ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)],
+    ['orders', t.orders, <BellRing />, true],
     ['catalog', t.catalog, <ChefHat />, isPrivileged],
     ['transactions', t.transactions, <ReceiptText />, true],
     ['ledger', t.ledger, <Wallet />, true],
@@ -464,7 +465,8 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['reports', t.reports, <BarChart3 />, isPrivileged],
     ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN'],
-    ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)]
+    ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
+    ['settings', t.settings, <Settings />, true]
   ]
   function navigateToPage(nextPage: Page, replace = false) {
     setPage(nextPage)
@@ -508,6 +510,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'dashboard' && <Dashboard user={user} t={t} lang={lang} />}
         {page === 'menus' && <DailyMenus lang={lang} />}
         {page === 'pos' && <PointOfSale t={t} lang={lang} />}
+        {page === 'orders' && <Orders user={user} lang={lang} />}
         {page === 'catalog' && <Catalog canEdit={user.role === 'KITCHEN_ADMIN'} t={t} lang={lang} />}
         {page === 'transactions' && <Transactions user={user} t={t} />}
         {page === 'ledger' && <Ledger user={user} t={t} />}
@@ -515,7 +518,8 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'disputes' && <Disputes user={user} t={t} />}
         {page === 'reports' && <Reports user={user} t={t} />}
         {page === 'access' && <Access t={t} />}
-        {page === 'school-dues' && <SchoolDues lang={lang} />}
+        {page === 'school-dues' && <SchoolDuesRegister user={user} lang={lang} />}
+        {page === 'settings' && <KitchenSettings user={user} lang={lang} onPasswordChanged={onLogout} />}
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
     </main>
@@ -648,6 +652,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const { rate } = useCurrencyDisplay()
   useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
+  const [confirming, setConfirming] = useState(false)
   const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
   const subsidy = person && ['TEACHER', 'STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? (eligibleTotal >= 20000 ? 8000 : eligibleTotal >= 10000 ? 4000 : eligibleTotal >= 5000 ? 2000 : 0) : 0
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
@@ -666,7 +671,7 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPerson(null)
+      setReceipt(result.transaction); setCart({}); setPerson(null); setConfirming(false)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
     finally { setSubmitting(false) }
   }
@@ -686,10 +691,11 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
         {!total && <Empty text={t.noData} />}
         <div className="payment-switch"><button className={paymentMode !== 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CASH')}><Wallet />{t.payNow}</button><button className={paymentMode === 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CREDIT')}><CreditCard />{t.onCredit}</button></div>
         <div className="receipt-totals"><span>{lang === 'fr' ? 'Sous-total' : 'Subtotal'} <b><DisplayMoney value={total} currency="CDF" /></b></span>{subsidy > 0 && <span>{lang === 'fr' ? 'Pris en charge par KCS' : 'KCS school subsidy'} <b>− <DisplayMoney value={subsidy} currency="CDF" /></b></span>}</div><div className="total-row"><span>{lang === 'fr' ? 'À payer' : 'Customer payable'}</span><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF" /></div>
-        <button className="primary large" onClick={checkout} disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
+        <button className="primary large" onClick={() => person && total > 0 ? setConfirming(true) : setNotice({ type: 'error', message: lang === 'fr' ? 'Sélectionnez une personne et au moins un article.' : 'Select a person and at least one item.' })} disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
       </aside>
     </section>
     {receipt && <Receipt transaction={receipt} onClose={() => setReceipt(null)} />}
+    {confirming && person && <Modal onClose={() => !submitting && setConfirming(false)}><div className="confirmation-card"><span className="confirmation-icon"><ShieldCheck /></span><span className="eyebrow">KCS KITCHEN · {lang === 'fr' ? 'VALIDATION' : 'CONFIRMATION'}</span><h2>{lang === 'fr' ? 'Confirmer cette opération ?' : 'Confirm this operation?'}</h2><p>{lang === 'fr' ? 'Vérifiez les informations avant leur inscription définitive dans le registre audité.' : 'Review the information before it is written to the audited register.'}</p><div className="confirmation-summary"><span>{lang === 'fr' ? 'Entité' : 'Person'}<b>{person.fullName}</b></span><span>Mode<b>{paymentMode === 'CREDIT' ? (lang === 'fr' ? 'Dette' : 'Credit') : (lang === 'fr' ? 'Paiement immédiat' : 'Immediate payment')}</b></span><span>{lang === 'fr' ? 'À payer' : 'Payable'}<b><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></b></span></div><div className="button-row"><button type="button" disabled={submitting} onClick={() => setConfirming(false)}>{lang === 'fr' ? 'Annuler' : 'Cancel'}</button><button type="button" className="primary" disabled={submitting} onClick={() => void checkout()}>{submitting ? <LoaderCircle className="spin"/> : <CheckCircle2/>}{lang === 'fr' ? 'Confirmer et enregistrer' : 'Confirm and record'}</button></div></div></Modal>}
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
   </>
 }
@@ -1095,7 +1101,57 @@ function Reports({ user, t }: { user: User; t: Record<string, string> }) {
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
   </>
 }
-function SchoolDues({ lang }: { lang: Lang }) {
+function Orders({ user, lang }: { user: User; lang: Lang }) {
+  const fr = lang === 'fr'
+  const manager = ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)
+  const [rows, setRows] = useState<Transaction[]>([])
+  const [busy, setBusy] = useState('')
+  const [pendingAction, setPendingAction] = useState<{ transaction: Transaction; action: 'deliver' | 'cancel' } | null>(null)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  async function load() {
+    try { const result = await api<{ transactions: Transaction[] }>('/transactions'); setRows(result.transactions) }
+    catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+  }
+  useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 15000); return () => window.clearInterval(timer) }, [])
+  async function act() {
+    if (!pendingAction || busy) return
+    const { transaction, action } = pendingAction
+    setBusy(transaction.id)
+    try {
+      await api('/transactions/' + encodeURIComponent(transaction.id) + (action === 'deliver' ? '/deliver' : '/cancel-order'), { method: 'POST' })
+      setPendingAction(null); await load()
+      setNotice({ type: 'success', message: action === 'deliver' ? (fr ? 'Commande livrée : la comptabilité, le stock, la dette et la prise en charge ont été mis à jour.' : 'Order delivered: accounting, stock, debt and subsidy were updated.') : (fr ? 'Commande annulée sans mouvement comptable ni sortie de stock.' : 'Order cancelled without accounting or inventory movement.') })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy('') }
+  }
+  const pending = rows.filter(row => row.status === 'PENDING')
+  const history = rows.filter(row => row.status !== 'PENDING')
+  const list = (items: Transaction[]) => <div className="order-list">{items.map(row => <article className="order-card" key={row.id}><div><span className={'badge ' + (row.status === 'CONFIRMED' ? 'good' : row.status === 'PENDING' ? 'warn' : '')}>{row.status}</span><h3>{row.personNameSnapshot}</h3><small>{row.transactionNumber} · {dateTime(row.createdAt)}</small></div><div className="order-items">{row.items.map(item => <span key={item.id}>{Number(item.quantity)} × {item.productNameSnapshot}</span>)}</div><div className="order-total"><small>{row.paymentMode === 'CREDIT' ? (fr ? 'Dette demandée' : 'Credit requested') : (fr ? 'Paiement' : 'Payment')}</small><strong><DisplayMoney value={row.total}/></strong></div>{row.status === 'PENDING' && <div className="order-actions">{manager && <button className="primary" onClick={() => setPendingAction({ transaction: row, action: 'deliver' })}><CheckCircle2/>{fr ? 'Confirmer la livraison' : 'Confirm delivery'}</button>}<button className="danger-action" onClick={() => setPendingAction({ transaction: row, action: 'cancel' })}><X/>{fr ? 'Non livrée / annuler' : 'Not delivered / cancel'}</button></div>}</article>)}</div>
+  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · ORDER CONTROL</span><h2>{fr ? 'Commandes à livrer' : 'Orders awaiting delivery'}</h2><p>{fr ? 'Une commande personnelle ne touche ni la comptabilité, ni le stock, ni la dette avant la confirmation réelle de sa livraison.' : 'A personal order does not affect accounting, inventory or debt until actual delivery is confirmed.'}</p></div><button onClick={() => void load()}><Search/>{fr ? 'Actualiser' : 'Refresh'}</button></div>{pending.length ? list(pending) : <Empty text={fr ? 'Aucune commande en attente.' : 'No pending order.'}/>}</section><section className="panel"><div className="section-heading"><div><span className="eyebrow">{fr ? 'TRAÇABILITÉ' : 'TRACEABILITY'}</span><h2>{fr ? 'Historique des commandes' : 'Order history'}</h2></div></div>{history.length ? list(history.slice(0, 100)) : <Empty text={fr ? 'Aucun historique.' : 'No history.'}/>}</section>{pendingAction && <Modal onClose={() => !busy && setPendingAction(null)}><div className="confirmation-card"><span className="confirmation-icon">{pendingAction.action === 'deliver' ? <CheckCircle2/> : <AlertTriangle/>}</span><h2>{pendingAction.action === 'deliver' ? (fr ? 'Confirmer la livraison réelle' : 'Confirm actual delivery') : (fr ? 'Confirmer la non-livraison' : 'Confirm non-delivery')}</h2><p><b>{pendingAction.transaction.personNameSnapshot}</b><br/>{pendingAction.transaction.transactionNumber}</p><p>{pendingAction.action === 'deliver' ? (fr ? 'Cette action enregistrera maintenant le paiement ou la dette, la prise en charge KCS et la sortie de stock.' : 'This will now record payment or debt, KCS subsidy and inventory movement.') : (fr ? 'La commande sera annulée sans incidence financière.' : 'The order will be cancelled without financial impact.')}</p><div className="button-row"><button disabled={!!busy} onClick={() => setPendingAction(null)}>{fr ? 'Retour' : 'Back'}</button><button className={pendingAction.action === 'deliver' ? 'primary' : 'danger-action'} disabled={!!busy} onClick={() => void act()}>{busy ? <LoaderCircle className="spin"/> : pendingAction.action === 'deliver' ? <CheckCircle2/> : <X/>}{fr ? 'Confirmer' : 'Confirm'}</button></div></div></Modal>}{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
+}
+
+function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: Lang; onPasswordChanged: () => void }) {
+  const fr = lang === 'fr'
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const rules = [{ ok: password.length >= 12, fr: '12 caract\u00e8res minimum', en: 'At least 12 characters' }, { ok: /[a-z]/.test(password) && /[A-Z]/.test(password), fr: 'Minuscules et majuscules', en: 'Lowercase and uppercase letters' }, { ok: /\d/.test(password), fr: 'Au moins un chiffre', en: 'At least one number' }, { ok: /[^A-Za-z0-9]/.test(password), fr: 'Au moins un symbole', en: 'At least one symbol' }, { ok: password === confirm && !!confirm, fr: 'Confirmation identique', en: 'Matching confirmation' }]
+  const strong = rules.every(rule => rule.ok)
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!strong || busy) return
+    setBusy(true)
+    try {
+      await api('/me/change-password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword: password }) })
+      setNotice({ type: 'success', message: fr ? 'Mot de passe modifié dans l’identité Orbit. Vous allez vous reconnecter avec le nouveau mot de passe.' : 'Password changed in Orbit identity. Sign in again with the new password.' })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
+  return <><section className="panel settings-profile"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KCS KITCHEN</span><h2>{fr ? 'Identité et sécurité du compte' : 'Account identity and security'}</h2><p>{fr ? 'Ce mot de passe est commun aux applications autorisées de l’écosystème.' : 'This password is shared by the ecosystem applications you are authorized to access.'}</p></div></div><div className="identity-summary"><div className="avatar">{user.fullName.split(' ').map(value => value[0]).slice(0,2).join('')}</div><span><b>{user.fullName}</b><small>{user.email || user.orbitPersonId}</small><small>{translatedRole(user.role, lang)}</small></span></div><form className="password-settings-form" onSubmit={save}><label>{fr ? 'Mot de passe actuel' : 'Current password'}<input type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required/></label><label>{fr ? 'Nouveau mot de passe' : 'New password'}<input type="password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} required/></label><label>{fr ? 'Confirmer le nouveau mot de passe' : 'Confirm new password'}<input type="password" autoComplete="new-password" value={confirm} onChange={event => setConfirm(event.target.value)} required/></label><div className={'password-strength ' + (strong ? 'strong' : 'weak')}><b>{strong ? (fr ? 'Mot de passe robuste' : 'Strong password') : (fr ? 'Exigences à compléter' : 'Requirements to complete')}</b>{rules.map(rule => <span key={rule.en} className={rule.ok ? 'ok' : ''}>{rule.ok ? <CheckCircle2/> : <X/>}{fr ? rule.fr : rule.en}</span>)}</div><button className="primary large" disabled={!strong || busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Changer mon mot de passe' : 'Change my password'}</button></form></section>{notice && <Notice {...notice} onClose={() => { const success = notice.type === 'success'; setNotice(null); if (success) onPasswordChanged() }}/>}</>
+}
+
+function SchoolDues({ user, lang }: { user: User; lang: Lang }) {
   const fr = lang === 'fr'
   const now = new Date()
   const [from, setFrom] = useState(`${now.getFullYear()}-01-01`)
@@ -1117,6 +1173,33 @@ function SchoolDues({ lang }: { lang: Lang }) {
       {!data && !error ? <Loading/> : data && <div className="stats"><Stat icon={<Wallet/>} label={fr ? 'Total a payer par KCS' : 'Total payable by KCS'} value={<DisplayMoney value={data.total}/>} tone="warn"/><Stat icon={<ReceiptText/>} label={fr ? 'Reductions detaillees' : 'Detailed subsidies'} value={data.count}/></div>}
     </section>
     {data && <section id="school-dues-invoice" className="panel official-statement"><div className="section-heading"><div><span className="eyebrow">KINSHASA CHRISTIAN SCHOOL · KCS KITCHEN</span><h2>{fr ? 'ETAT OFFICIEL DES PRISES EN CHARGE' : 'OFFICIAL SCHOOL SUBSIDY STATEMENT'}</h2><p>{from} — {to}</p></div><img src="./images/kcs-emblem.jpg" alt="KCS" style={{width:72,height:72,objectFit:'contain',borderRadius:'50%'}}/></div><div className="stats"><Stat icon={<ShieldCheck/>} label={fr ? 'Montant total du par l ecole' : 'Total amount owed by the school'} value={<DisplayMoney value={data.total}/>} tone="warn"/><Stat icon={<ClipboardList/>} label={fr ? 'Nombre d operations' : 'Number of entries'} value={data.count}/></div><div className="rank-list">{data.rows.map((row:any)=><div key={row.id}><b>{new Date(row.createdAt).toLocaleDateString(fr ? 'fr-CD' : 'en-US')}</b><span><strong>{row.personNameSnapshot}</strong><small>{row.transactionNumber} · {fr ? 'Base eligible' : 'Eligible base'}: {Number(row.eligibleSubtotal).toLocaleString()} CDF</small></span><strong><DisplayMoney value={row.schoolSubsidy}/></strong></div>)}</div><footer><small>{fr ? 'Document produit depuis le registre audite de KCS Kitchen.' : 'Document generated from the audited KCS Kitchen register.'}</small></footer></section>}
+  </>
+}
+
+function SchoolDuesRegister({ user, lang }: { user: User; lang: Lang }) {
+  const fr = lang === 'fr'
+  const now = new Date()
+  const [from, setFrom] = useState(`${now.getFullYear()}-01-01`)
+  const [to, setTo] = useState(now.toISOString().slice(0, 10))
+  const [data, setData] = useState<any>(null)
+  const [busy, setBusy] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  async function load() { setBusy(true); try { setData(await api(`/school-subsidies?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to + 'T23:59:59.999Z')}`)) } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) } finally { setBusy(false) } }
+  useEffect(() => { void load() }, [])
+  async function recordPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (busy) return; const form = event.currentTarget; const values = new FormData(form); setBusy(true)
+    try { await api('/school-subsidies/payments', { method: 'POST', body: JSON.stringify({ amount: Number(values.get('amount')), method: values.get('method'), reference: values.get('reference') || undefined, notes: values.get('notes') || undefined }) }); form.reset(); setPaymentOpen(false); await load(); setNotice({ type: 'success', message: fr ? 'Paiement KCS enregistr\u00e9 et solde actualis\u00e9.' : 'KCS payment recorded and balance refreshed.' }) }
+    catch (error) { setNotice({ type: 'error', message: (error as Error).message }) } finally { setBusy(false) }
+  }
+  return <>
+    <section className="panel school-dues-overview"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · SCHOOL SUBSIDY REGISTER</span><h2>{fr ? 'Dette de prise en charge de l\u2019\u00e9cole envers la cuisine' : 'School subsidy debt owed to the kitchen'}</h2><p>{fr ? 'Chaque r\u00e9duction accord\u00e9e au personnel reste tra\u00e7able jusqu\u2019\u00e0 son paiement partiel ou total par KCS.' : 'Every staff subsidy remains traceable until its partial or full payment by KCS.'}</p></div><div className="button-row">{['KITCHEN_ADMIN','FINANCE'].includes(user.role) && <button className="primary" disabled={!data?.outstanding} onClick={() => setPaymentOpen(true)}><Wallet/>{fr ? 'Enregistrer un paiement KCS' : 'Record KCS payment'}</button>}<button disabled={!data?.rows?.length} onClick={() => void printStandaloneDocument('school-dues-invoice', fr ? 'Facture KCS Kitchen' : 'KCS Kitchen invoice')}><ReceiptText/>{fr ? 'Imprimer / PDF' : 'Print / PDF'}</button></div></div>
+      <div className="search-toolbar"><label>{fr ? 'Du' : 'From'}<input type="date" value={from} onChange={event => setFrom(event.target.value)}/></label><label>{fr ? 'Au' : 'To'}<input type="date" value={to} onChange={event => setTo(event.target.value)}/></label><button className="primary" disabled={busy} onClick={() => void load()}>{busy ? <LoaderCircle className="spin"/> : <Search/>}{fr ? 'Actualiser' : 'Refresh'}</button></div>
+      {!data ? <Loading/> : <div className="stats"><Stat icon={<ReceiptText/>} label={fr ? 'Prises en charge brutes' : 'Gross subsidies'} value={<DisplayMoney value={data.grossTotal}/>} /><Stat icon={<CheckCircle2/>} label={fr ? 'D\u00e9j\u00e0 pay\u00e9 par KCS' : 'Already paid by KCS'} value={<DisplayMoney value={data.paidTotal}/>} tone="good"/><Stat icon={<Wallet/>} label={fr ? 'Solde restant d\u00fb' : 'Outstanding balance'} value={<DisplayMoney value={data.outstanding}/>} tone="warn"/></div>}
+    </section>
+    {data && <section id="school-dues-invoice" className="panel official-statement school-dues-statement"><div className="section-heading"><div><span className="eyebrow">KINSHASA CHRISTIAN SCHOOL · KCS KITCHEN</span><h2>{fr ? '\u00c9TAT OFFICIEL DES PRISES EN CHARGE' : 'OFFICIAL SCHOOL SUBSIDY STATEMENT'}</h2><p>{from} — {to}</p></div><img src="./images/kcs-emblem.jpg" alt="KCS" style={{width:72,height:72,objectFit:'contain',borderRadius:'50%'}}/></div><div className="stats"><Stat icon={<ReceiptText/>} label={fr ? 'Montant brut' : 'Gross amount'} value={<DisplayMoney value={data.grossTotal}/>} /><Stat icon={<CheckCircle2/>} label={fr ? 'Paiements re\u00e7us' : 'Payments received'} value={<DisplayMoney value={data.paidTotal}/>} tone="good"/><Stat icon={<Wallet/>} label={fr ? 'Net \u00e0 payer par l\u2019\u00e9cole' : 'Net payable by the school'} value={<DisplayMoney value={data.outstanding}/>} tone="warn"/></div><div className="rank-list">{data.rows.map((row:any)=><div key={row.id}><b>{new Date(row.createdAt).toLocaleDateString(fr ? 'fr-CD' : 'en-US')}</b><span><strong>{row.personNameSnapshot}</strong><small>{row.transactionNumber} · {fr ? 'Base \u00e9ligible' : 'Eligible base'}: {Number(row.eligibleSubtotal).toLocaleString()} CDF</small></span><strong><DisplayMoney value={row.schoolSubsidy}/></strong></div>)}</div>{data.payments?.length > 0 && <><h3>{fr ? 'Paiements effectu\u00e9s par KCS' : 'Payments made by KCS'}</h3><div className="rank-list">{data.payments.map((payment:any)=><div key={payment.id}><b>{new Date(payment.paidAt).toLocaleDateString(fr ? 'fr-CD' : 'en-US')}</b><span><strong>{payment.method}</strong><small>{payment.reference || (fr ? 'Sans r\u00e9f\u00e9rence' : 'No reference')}</small></span><strong><DisplayMoney value={payment.amount}/></strong></div>)}</div></>}<footer><small>{fr ? 'Document produit depuis le registre audit\u00e9 de KCS Kitchen.' : 'Document generated from the audited KCS Kitchen register.'}</small></footer></section>}
+    {paymentOpen && <Modal onClose={() => !busy && setPaymentOpen(false)}><form className="modal-form" onSubmit={recordPayment}><span className="eyebrow">KCS · KITCHEN SETTLEMENT</span><h2>{fr ? 'Paiement de la dette de l\u2019\u00e9cole' : 'School debt payment'}</h2><p>{fr ? 'Le paiement peut couvrir une partie ou la totalit\u00e9 du solde restant.' : 'The payment may cover part or all of the outstanding balance.'}</p><label>{fr ? 'Montant pay\u00e9 (CDF)' : 'Amount paid (CDF)'}<input name="amount" type="number" min="1" max={Number(data?.outstanding || 0)} required/></label><label>{fr ? 'Mode de paiement' : 'Payment method'}<select name="method"><option value="CASH">{fr ? 'Esp\u00e8ces' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{fr ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option></select></label><label>{fr ? 'R\u00e9f\u00e9rence' : 'Reference'}<input name="reference" maxLength={160}/></label><label>{fr ? 'Note justificative' : 'Supporting note'}<textarea name="notes" maxLength={500}/></label><button className="primary large" disabled={busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Confirmer le paiement' : 'Confirm payment'}</button></form></Modal>}
+    {notice && <Notice {...notice} onClose={() => setNotice(null)}/>}
   </>
 }
 
@@ -1148,7 +1231,8 @@ function Access({ t }: { t: Record<string, string> }) {
     try {
       await api('/access/' + selected!.id, { method: 'PUT', body: JSON.stringify({
         role: data.get('role'), isActive: data.get('active') === 'on', creditEnabled: data.get('credit') === 'on',
-        creditLimit: data.get('limit') ? Number(data.get('limit')) : null
+        creditLimit: data.get('limit') ? Number(data.get('limit')) : null,
+        emailNotifications: data.get('emailNotifications') === 'on', smsNotifications: data.get('smsNotifications') === 'on'
       }) })
       setDetails(await api('/access/' + encodeURIComponent(selected!.id))); setNotice({ type: 'success', message: t.success })
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
@@ -1170,7 +1254,7 @@ function Access({ t }: { t: Record<string, string> }) {
     <div className="search-toolbar"><div className="search-box"><Search /><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && search()} placeholder={t.searchPerson} /></div><button className="primary" onClick={search}>{t.search}</button></div>
     <div className="person-cards">{people.map(person => <button key={person.id} onClick={() => void openPerson(person)}><div className="avatar">{person.fullName.slice(0, 2).toUpperCase()}</div><span><b>{person.fullName}</b><small>{person.kind} · {person.displayId || person.email}</small></span><ShieldCheck /></button>)}</div>
   </section>
-  {selected && <Modal wide onClose={() => setSelected(null)}><div className="modal-form"><span className="eyebrow">KITCHEN ACCESS · DEBT REGISTER</span><h2>{selected.fullName}</h2>{!details ? <Loading/> : <><div className="stats"><Stat icon={<Wallet/>} label={lang === 'fr' ? 'Dette actuelle' : 'Current debt'} value={<DisplayMoney value={details.balance || 0}/>} tone={Number(details.balance) > 0 ? 'warn' : 'good'}/><Stat icon={<ShieldCheck/>} label={lang === 'fr' ? 'Credit autorise' : 'Credit enabled'} value={details.access?.creditEnabled ? (lang === 'fr' ? 'Oui' : 'Yes') : (lang === 'fr' ? 'Non' : 'No')}/></div><form className="modal-form" onSubmit={save}><label>{t.role}<select name="role" defaultValue={details.access?.role || (selected.kind === 'TEACHER' ? 'TEACHER' : selected.kind === 'STUDENT' ? 'STUDENT' : 'STAFF')}><option>KITCHEN_ADMIN</option><option>CASHIER</option><option>FINANCE</option><option>AUDITOR</option><option>TEACHER</option><option>STAFF</option><option>STUDENT</option></select></label><label className="check"><input name="active" type="checkbox" defaultChecked={details.access?.isActive ?? true}/>{t.active}</label><label className="check"><input name="credit" type="checkbox" defaultChecked={details.access?.creditEnabled ?? false}/>{t.creditAllowed}</label><label>{lang === 'fr' ? 'Plafond de credit (CDF)' : 'Credit limit (CDF)'}<input name="limit" type="number" min="1" defaultValue={details.access?.creditLimit || ''}/></label><button className="primary large">{t.save}</button></form>{Number(details.balance) > 0 && <form className="modal-form" onSubmit={recordPayment}><span className="eyebrow">{lang === 'fr' ? 'RECOUVREMENT DE DETTE' : 'DEBT PAYMENT'}</span><p>{lang === 'fr' ? 'Enregistrez un paiement partiel ou total. Le nouveau solde sera immediatement visible dans le dashboard de cette personne.' : 'Record a partial or full payment. The new balance will immediately appear in this person dashboard.'}</p><label>{lang === 'fr' ? 'Montant recu (CDF)' : 'Amount received (CDF)'}<input name="amount" type="number" min="1" max={Number(details.balance)} required/></label><label>{lang === 'fr' ? 'Mode' : 'Method'}<select name="method"><option value="CASH">{lang === 'fr' ? 'Especes' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{lang === 'fr' ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option></select></label><label>{lang === 'fr' ? 'Reference' : 'Reference'}<input name="reference" maxLength={160}/></label><label>{lang === 'fr' ? 'Note' : 'Note'}<textarea name="notes" maxLength={500}/></label><button className="primary large" disabled={busy}>{busy ? <LoaderCircle className="spin"/> : <ReceiptText/>}{lang === 'fr' ? 'Enregistrer le paiement' : 'Record payment'}</button></form>}</>}</div></Modal>}
+  {selected && <Modal wide onClose={() => setSelected(null)}><div className="modal-form"><span className="eyebrow">KITCHEN ACCESS · DEBT REGISTER</span><h2>{selected.fullName}</h2>{!details ? <Loading/> : <><div className="stats"><Stat icon={<Wallet/>} label={lang === 'fr' ? 'Dette actuelle' : 'Current debt'} value={<DisplayMoney value={details.balance || 0}/>} tone={Number(details.balance) > 0 ? 'warn' : 'good'}/><Stat icon={<ShieldCheck/>} label={lang === 'fr' ? 'Credit autorise' : 'Credit enabled'} value={details.access?.creditEnabled ? (lang === 'fr' ? 'Oui' : 'Yes') : (lang === 'fr' ? 'Non' : 'No')}/></div><form className="modal-form" onSubmit={save}><label>{t.role}<select name="role" defaultValue={details.access?.role || (selected.kind === 'TEACHER' ? 'TEACHER' : selected.kind === 'STUDENT' ? 'STUDENT' : 'STAFF')}><option>KITCHEN_ADMIN</option><option>CASHIER</option><option>FINANCE</option><option>AUDITOR</option><option>TEACHER</option><option>STAFF</option><option>STUDENT</option></select></label><label className="check"><input name="active" type="checkbox" defaultChecked={details.access?.isActive ?? true}/>{t.active}</label><label className="check"><input name="credit" type="checkbox" defaultChecked={details.access?.creditEnabled ?? false}/>{t.creditAllowed}</label><label>{lang === 'fr' ? 'Plafond de crédit (CDF)' : 'Credit limit (CDF)'}<input name="limit" type="number" min="1" defaultValue={details.access?.creditLimit || ''}/></label><fieldset className="notification-preferences"><legend>{lang === 'fr' ? 'Notifications externes' : 'External notifications'}</legend><p>{lang === 'fr' ? 'Les notifications du dashboard restent toujours actives.' : 'Dashboard notifications always remain active.'}</p><label className="check"><input name="emailNotifications" type="checkbox" defaultChecked={details.access?.emailNotifications ?? true}/>{lang === 'fr' ? 'Autoriser les e-mails' : 'Enable email'}</label><label className="check"><input name="smsNotifications" type="checkbox" defaultChecked={details.access?.smsNotifications ?? true}/>{lang === 'fr' ? 'Autoriser les SMS' : 'Enable SMS'}</label></fieldset><button className="primary large">{t.save}</button></form>{Number(details.balance) > 0 && <form className="modal-form" onSubmit={recordPayment}><span className="eyebrow">{lang === 'fr' ? 'RECOUVREMENT DE DETTE' : 'DEBT PAYMENT'}</span><p>{lang === 'fr' ? 'Enregistrez un paiement partiel ou total. Le nouveau solde sera immediatement visible dans le dashboard de cette personne.' : 'Record a partial or full payment. The new balance will immediately appear in this person dashboard.'}</p><label>{lang === 'fr' ? 'Montant recu (CDF)' : 'Amount received (CDF)'}<input name="amount" type="number" min="1" max={Number(details.balance)} required/></label><label>{lang === 'fr' ? 'Mode' : 'Method'}<select name="method"><option value="CASH">{lang === 'fr' ? 'Especes' : 'Cash'}</option><option value="MOBILE_MONEY">Mobile Money</option><option value="BANK">{lang === 'fr' ? 'Banque' : 'Bank'}</option><option value="EDUPAY">EduPay</option></select></label><label>{lang === 'fr' ? 'Reference' : 'Reference'}<input name="reference" maxLength={160}/></label><label>{lang === 'fr' ? 'Note' : 'Note'}<textarea name="notes" maxLength={500}/></label><button className="primary large" disabled={busy}>{busy ? <LoaderCircle className="spin"/> : <ReceiptText/>}{lang === 'fr' ? 'Enregistrer le paiement' : 'Record payment'}</button></form>}</>}</div></Modal>}
   {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 

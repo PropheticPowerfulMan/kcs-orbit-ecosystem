@@ -187,7 +187,31 @@ app.get('/api/me', authenticate, asyncRoute(async (req: AuthRequest, res) => {
   res.json({ user: req.kitchenUser, balance })
 }))
 
+app.put('/api/me/change-password', authenticate, asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(12).max(200) }).parse(req.body)
+  const identifier = req.kitchenUser!.email
+  if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
+  const loginResponse = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-kcs-client': 'KCS_KITCHEN' },
+    body: JSON.stringify({ identifier, password: input.currentPassword }),
+    signal: AbortSignal.timeout(12_000),
+  })
+  const loginBody = await loginResponse.json().catch(() => null) as any
+  if (!loginResponse.ok || !loginBody?.data?.token) return res.status(400).json({ message: loginBody?.message || 'Current password is incorrect' })
+  const changeResponse = await fetch(new URL('/api/auth/change-password', env.NEXUS_API_URL), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + loginBody.data.token, 'x-kcs-client': 'KCS_KITCHEN' },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(12_000),
+  })
+  const changeBody = await changeResponse.json().catch(() => null) as any
+  if (!changeResponse.ok) return res.status(changeResponse.status).json({ message: changeBody?.message || 'The ecosystem password could not be changed' })
+  await audit(req, 'INSTITUTIONAL_PASSWORD_CHANGED_FROM_KITCHEN', 'User', req.kitchenUser!.userId, undefined, { propagatedBy: 'NEXUS' })
+  res.json({ changed: true, message: 'Password changed across the KCS ecosystem. Sign in again with the new password.' })
+}))
 app.get('/api/me/avatar', authenticate, asyncRoute(async (req: AuthRequest, res) => {
+
   const people = await loadDirectory()
   const photoData = people.find(person => person.id === req.kitchenUser!.orbitPersonId)?.photoData
   const match = photoData?.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s)
@@ -332,6 +356,8 @@ app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyn
     role: z.enum(['KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR', 'TEACHER', 'STAFF', 'STUDENT']),
     isActive: z.boolean().default(true),
     creditEnabled: z.boolean().default(false),
+    emailNotifications: z.boolean().default(true),
+    smsNotifications: z.boolean().default(true),
     creditLimit: z.coerce.number().positive().optional().nullable()
   }).parse(req.body)
   const access = await prisma.kitchenAccess.upsert({
@@ -387,9 +413,40 @@ app.get('/api/school-subsidies', authenticate, allow('KITCHEN_ADMIN', 'FINANCE',
     orderBy: { createdAt: 'desc' },
     take: 5000
   })
-  const total = rows.reduce((sum, row) => sum + Number(row.schoolSubsidy), 0)
+  const grossTotal = rows.reduce((sum, row) => sum + Number(row.schoolSubsidy), 0)
+  const payments = await prisma.schoolSubsidyPayment.findMany({
+    where: from || to ? { paidAt: { gte: from, lte: to } } : undefined,
+    orderBy: { paidAt: 'desc' },
+    take: 5000
+  })
+  const paidTotal = payments.reduce((sum, payment) => sum + Number(payment.amount), 0)
+  const outstanding = Math.max(0, grossTotal - paidTotal)
   res.setHeader('Cache-Control', 'no-store')
-  res.json({ rows, total, count: rows.length, currency: 'CDF', generatedAt: new Date().toISOString() })
+  res.json({ rows, payments, grossTotal, paidTotal, outstanding, total: outstanding, count: rows.length, currency: 'CDF', generatedAt: new Date().toISOString() })
+}))
+
+app.post('/api/school-subsidies/payments', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({
+    amount: z.coerce.number().positive(),
+    method: z.enum(['CASH', 'MOBILE_MONEY', 'BANK', 'EDUPAY']),
+    reference: z.string().trim().max(160).optional(),
+    notes: z.string().trim().max(500).optional(),
+  }).parse(req.body)
+  const aggregate = await prisma.kitchenTransaction.aggregate({ where: { status: 'CONFIRMED', schoolSubsidy: { gt: 0 } }, _sum: { schoolSubsidy: true } })
+  const grossTotal = Number(aggregate._sum.schoolSubsidy || 0)
+  const paidAggregate = await prisma.schoolSubsidyPayment.aggregate({ _sum: { amount: true } })
+  const paidTotal = Number(paidAggregate._sum.amount || 0)
+  const outstanding = Math.max(0, grossTotal - paidTotal)
+  if (input.amount > outstanding + 0.005) return res.status(409).json({ message: 'Payment exceeds the outstanding KCS school subsidy balance', outstanding })
+  const payment = await prisma.schoolSubsidyPayment.create({ data: {
+    amount: new Prisma.Decimal(input.amount),
+    method: input.method,
+    reference: input.reference,
+    notes: input.notes,
+    recordedBy: req.kitchenUser!.orbitPersonId,
+  } })
+  await audit(req, 'SCHOOL_SUBSIDY_PAYMENT_RECORDED', 'SchoolSubsidyPayment', payment.id, undefined, payment)
+  res.status(201).json({ payment, grossTotal, paidTotal: paidTotal + input.amount, outstanding: Math.max(0, outstanding - input.amount) })
 }))
 
 const kitchenDateKey = (date = new Date()) => {
@@ -619,10 +676,11 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       total: new Prisma.Decimal(total),
       paymentMode: input.paymentMode,
       paymentStatus: isCredit ? 'CREDIT' : 'PAID',
+      status: isPersonalOrder ? 'PENDING' : 'CONFIRMED',
       creditAmount: new Prisma.Decimal(isCredit ? total : 0),
       notes: input.notes,
       confirmationType: input.confirmationType,
-      confirmedByPersonAt: input.confirmationType === 'NONE' ? null : now,
+      confirmedByPersonAt: isPersonalOrder || input.confirmationType === 'NONE' ? null : now,
       items: { create: lines.map(line => ({
         productId: line.product.id,
         productNameSnapshot: line.product.name,
@@ -637,7 +695,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
         reason: 'KCS staff/teacher school subsidy',
         appliedAutomatically: true
       } } : undefined,
-      ledgerEntries: { create: [
+      ledgerEntries: { create: isPersonalOrder ? [] : [
         { orbitPersonId: person.id, type: 'PURCHASE', amount: new Prisma.Decimal(subtotal), description: 'Consumption ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId },
         ...(schoolSubsidy > 0 ? [{ orbitPersonId: person.id, type: 'DISCOUNT' as const, amount: new Prisma.Decimal(-schoolSubsidy), description: 'School subsidy ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : []),
         ...(!isCredit ? [{ orbitPersonId: person.id, type: 'PAYMENT' as const, amount: new Prisma.Decimal(-total), description: 'Immediate payment ' + transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : [])
@@ -645,6 +703,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     }, include: { items: true, discounts: true } })
 
     for (const line of lines) {
+      if (isPersonalOrder) continue
       if (!line.product.trackInventory) continue
       await tx.product.update({ where: { id: line.product.id }, data: { stockQuantity: { decrement: line.quantity } } })
       await tx.stockMovement.create({ data: {
@@ -657,10 +716,11 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     }
 
     const notificationPayload = { transactionNumber, subtotal, schoolSubsidy, total, currency: 'CDF', paymentMode: input.paymentMode, personName: person.fullName, onlineOrder: isPersonalOrder, items: lines.map(line => `${line.quantity} × ${line.product.name}`) }
-    const kitchenManagers = isPersonalOrder ? await tx.kitchenAccess.findMany({ where: { role: 'KITCHEN_ADMIN', isActive: true }, select: { orbitPersonId: true } }) : []
+    const personChannels = ['IN_APP', ...(personAccess?.emailNotifications !== false ? ['EMAIL'] : []), ...(personAccess?.smsNotifications !== false ? ['SMS'] : [])]
+    const kitchenManagers = isPersonalOrder ? await tx.kitchenAccess.findMany({ where: { role: 'KITCHEN_ADMIN', isActive: true }, select: { orbitPersonId: true, emailNotifications: true, smsNotifications: true } }) : []
     await tx.notificationOutbox.createMany({ data: [
-      { orbitPersonId: person.id, eventType: 'KITCHEN_TRANSACTION_CREATED', channels: ['IN_APP', 'EMAIL', 'SMS'], payload: notificationPayload },
-      ...kitchenManagers.filter(manager => manager.orbitPersonId !== person.id).map(manager => ({ orbitPersonId: manager.orbitPersonId, eventType: 'KITCHEN_ONLINE_ORDER_PLACED', channels: ['IN_APP', 'EMAIL', 'SMS'], payload: notificationPayload }))
+      { orbitPersonId: person.id, eventType: isPersonalOrder ? 'KITCHEN_ORDER_PENDING' : 'KITCHEN_TRANSACTION_CREATED', channels: personChannels, payload: notificationPayload },
+      ...kitchenManagers.filter(manager => manager.orbitPersonId !== person.id).map(manager => ({ orbitPersonId: manager.orbitPersonId, eventType: 'KITCHEN_ONLINE_ORDER_PLACED', channels: ['IN_APP', ...(manager.emailNotifications ? ['EMAIL'] : []), ...(manager.smsNotifications ? ['SMS'] : [])], payload: notificationPayload }))
     ] })
     return created
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
@@ -684,6 +744,52 @@ app.get('/api/transactions', authenticate, asyncRoute(async (req: AuthRequest, r
     take: 500
   })
   res.json({ transactions: transactions.map(withReceiptSignature) })
+}))
+
+app.post('/api/transactions/:id/deliver', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = routeParam(req, 'id')
+  const pending = await prisma.kitchenTransaction.findUnique({ where: { id }, include: { items: { include: { product: true } } } })
+  if (!pending) return res.status(404).json({ message: 'Order not found' })
+  if (pending.status !== 'PENDING') return res.status(409).json({ message: 'Only a pending order can be marked as delivered' })
+  const delivered = await prisma.$transaction(async tx => {
+    for (const item of pending.items) {
+      if (!item.product.trackInventory) continue
+      if (Number(item.product.stockQuantity) < Number(item.quantity)) throw Object.assign(new Error('Insufficient stock for ' + item.productNameSnapshot), { statusCode: 409 })
+      await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { decrement: item.quantity } } })
+      await tx.stockMovement.create({ data: { productId: item.productId, type: 'SALE', quantity: new Prisma.Decimal(-Number(item.quantity)), reason: pending.transactionNumber, actor: req.kitchenUser!.orbitPersonId } })
+    }
+    await tx.kitchenLedgerEntry.createMany({ data: [
+      { orbitPersonId: pending.orbitPersonId, type: 'PURCHASE', amount: pending.subtotal, description: 'Consumption ' + pending.transactionNumber, performedBy: req.kitchenUser!.orbitPersonId },
+      ...(Number(pending.schoolSubsidy) > 0 ? [{ orbitPersonId: pending.orbitPersonId, type: 'DISCOUNT' as const, amount: new Prisma.Decimal(-Number(pending.schoolSubsidy)), description: 'School subsidy ' + pending.transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : []),
+      ...(pending.paymentMode !== 'CREDIT' ? [{ orbitPersonId: pending.orbitPersonId, type: 'PAYMENT' as const, amount: new Prisma.Decimal(-Number(pending.total)), description: 'Payment on delivery ' + pending.transactionNumber, performedBy: req.kitchenUser!.orbitPersonId }] : []),
+    ] })
+    const updated = await tx.kitchenTransaction.update({ where: { id }, data: { status: 'CONFIRMED', confirmedByPersonAt: new Date() }, include: { items: true, discounts: true, disputes: true } })
+    const access = await tx.kitchenAccess.findUnique({ where: { orbitPersonId: pending.orbitPersonId } })
+    const channels = ['IN_APP', ...(access?.emailNotifications !== false ? ['EMAIL'] : []), ...(access?.smsNotifications !== false ? ['SMS'] : [])]
+    await tx.notificationOutbox.create({ data: { orbitPersonId: pending.orbitPersonId, eventType: 'KITCHEN_ORDER_DELIVERED', channels, payload: { transactionNumber: pending.transactionNumber, total: Number(pending.total), paymentMode: pending.paymentMode, deliveredAt: new Date().toISOString() } } })
+    return updated
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  await audit(req, 'ORDER_DELIVERED_AND_ACCOUNTED', 'KitchenTransaction', id, pending, delivered)
+  res.json({ transaction: withReceiptSignature(delivered), balance: await balanceFor(pending.orbitPersonId) })
+}))
+
+app.post('/api/transactions/:id/cancel-order', authenticate, asyncRoute(async (req: AuthRequest, res) => {
+  const id = routeParam(req, 'id')
+  const pending = await prisma.kitchenTransaction.findUnique({ where: { id }, include: { items: true, discounts: true } })
+  if (!pending) return res.status(404).json({ message: 'Order not found' })
+  if (pending.status !== 'PENDING') return res.status(409).json({ message: 'Only a pending order can be cancelled' })
+  const personal = ['TEACHER', 'STAFF', 'STUDENT'].includes(req.kitchenUser!.role)
+  if (personal && pending.orbitPersonId !== req.kitchenUser!.orbitPersonId) return res.status(403).json({ message: 'You may only cancel your own pending order' })
+  const reason = z.object({ reason: z.string().trim().min(3).max(500).default('Order not received or cancelled before delivery') }).parse(req.body || {}).reason
+  const cancelled = await prisma.$transaction(async tx => {
+    const updated = await tx.kitchenTransaction.update({ where: { id }, data: { status: 'VOIDED', paymentStatus: 'VOIDED', notes: [pending.notes, reason].filter(Boolean).join(' | ') }, include: { items: true, discounts: true, disputes: true } })
+    const access = await tx.kitchenAccess.findUnique({ where: { orbitPersonId: pending.orbitPersonId } })
+    const channels = ['IN_APP', ...(access?.emailNotifications !== false ? ['EMAIL'] : []), ...(access?.smsNotifications !== false ? ['SMS'] : [])]
+    await tx.notificationOutbox.create({ data: { orbitPersonId: pending.orbitPersonId, eventType: 'KITCHEN_ORDER_CANCELLED', channels, payload: { transactionNumber: pending.transactionNumber, reason } } })
+    return updated
+  })
+  await audit(req, 'PENDING_ORDER_CANCELLED', 'KitchenTransaction', id, pending, cancelled, reason)
+  res.json({ transaction: withReceiptSignature(cancelled), balance: await balanceFor(pending.orbitPersonId) })
 }))
 
 app.get('/api/transactions/verify/:reference', asyncRoute(async (req, res) => {
