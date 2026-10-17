@@ -33,6 +33,7 @@ import { syllabiRouter } from './syllabi.routes.js'
 import { kitchenNotificationsRouter } from './kitchen-notifications.routes.js'
 import { lessonPlanRouter } from './lesson-plan.routes.js'
 import { studentGovernmentRouter } from './student-government.routes.js'
+import { sentinelNotificationsRouter } from './sentinel-notifications.routes.js'
 
 export const router = Router()
 
@@ -70,5 +71,6 @@ router.use('/syllabi', syllabiRouter)
 
 router.use('/employees', employeesRouter)
 router.use('/kitchen-notifications', kitchenNotificationsRouter)
+router.use('/sentinel-notifications', sentinelNotificationsRouter)
 router.use('/', diagnosticRouter)
 router.use('/school-management', schoolManagementRouter)
