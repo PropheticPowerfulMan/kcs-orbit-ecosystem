@@ -98,7 +98,7 @@ export default function TeacherWholeSchoolReportCards() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]))
   const [selectedId, setSelectedId] = useState('')
   const [query, setQuery] = useState('')
-  const [classFilter, setClassFilter] = useState('All classes')
+  const [classFilter, setClassFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'ready' | 'homeroom' | 'submitted'>('all')
   const [teacherComment, setTeacherComment] = useState('')
   const [conduct, setConduct] = useState('')
@@ -148,13 +148,20 @@ export default function TeacherWholeSchoolReportCards() {
     return () => { latestDashboardRequestRef.current += 1 }
   }, [academicYear, term, userId])
   const learners = dashboard?.learners ?? []
-  const classes = useMemo(() => Array.from(new Set(learners.map((learner) => canonicalClassLabel(learner.grade, learner.section)))).sort(compareClassLabels), [learners])
+  // The complete report-card workspace belongs exclusively to the assigned
+  // main teacher. Courses taught in other classes remain available in the
+  // subject-grade workflow, but must never widen this institutional roster.
+  const homeroomLearners = useMemo(() => learners.filter((learner) => learner.isHomeroomStudent), [learners])
+  const classes = useMemo(() => Array.from(new Set(homeroomLearners.map((learner) => canonicalClassLabel(learner.grade, learner.section)))).sort(compareClassLabels), [homeroomLearners])
+  useEffect(() => {
+    setClassFilter((current) => classes.includes(current) ? current : (classes[0] ?? ''))
+  }, [classes])
   const visibleLearners = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-    return learners.filter((learner) => {
+    return homeroomLearners.filter((learner) => {
       const className = canonicalClassLabel(learner.grade, learner.section)
       const matchesQuery = !normalizedQuery || `${learner.name} ${learner.studentNumber} ${className}`.toLowerCase().includes(normalizedQuery)
-      const matchesClass = classFilter === 'All classes' || className === classFilter
+      const matchesClass = !classFilter || className === classFilter
       const matchesStatus = statusFilter === 'all'
         || (statusFilter === 'waiting' && !learner.allSubjectsSubmitted)
         || (statusFilter === 'ready' && learner.allSubjectsSubmitted && (!learner.reportCard || learner.reportCard.publicationStatus === 'DRAFT'))
@@ -162,9 +169,9 @@ export default function TeacherWholeSchoolReportCards() {
         || (statusFilter === 'submitted' && Boolean(learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT'))
       return matchesQuery && matchesClass && matchesStatus
     }).sort((left, right) => compareClassLabels(canonicalClassLabel(left.grade, left.section), canonicalClassLabel(right.grade, right.section)) || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' }))
-  }, [classFilter, learners, query, statusFilter])
+  }, [classFilter, homeroomLearners, query, statusFilter])
 
-  const selected = learners.find((learner) => learner.id === selectedId) ?? visibleLearners[0]
+  const selected = homeroomLearners.find((learner) => learner.id === selectedId) ?? visibleLearners[0]
   useEffect(() => {
     setTeacherComment(selected?.reportCard?.teacherComment ?? '')
     setConduct(selected?.reportCard?.conduct ?? '')
@@ -293,9 +300,9 @@ export default function TeacherWholeSchoolReportCards() {
       setPrinting(false)
     }
   }
-  const homeroomCount = learners.filter((learner) => learner.isHomeroomStudent).length
-  const readyCount = learners.filter((learner) => learner.allSubjectsSubmitted).length
-  const submittedCount = learners.filter((learner) => learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT').length
+  const homeroomCount = homeroomLearners.length
+  const readyCount = homeroomLearners.filter((learner) => learner.allSubjectsSubmitted).length
+  const submittedCount = homeroomLearners.filter((learner) => learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT').length
 
   if (loading && !dashboard) return <div className={panel}><Clock3 className='mr-2 inline animate-spin' />Loading the whole-school report-card register...</div>
 
@@ -318,7 +325,7 @@ export default function TeacherWholeSchoolReportCards() {
 
     <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
       {[
-        [Users, 'School learners', learners.length],
+        [Users, 'My class learners', homeroomLearners.length],
         [UserRoundCheck, 'My homeroom', homeroomCount],
         [FileCheck2, 'All subjects ready', readyCount],
         [Send, 'In admin workflow', submittedCount],
@@ -333,8 +340,8 @@ export default function TeacherWholeSchoolReportCards() {
       <div className='grid gap-3 lg:grid-cols-5'>
         <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} /></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((session) => <option key={session}>{session}</option>)}</select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Class<select className={`${field} mt-1 normal-case`} value={classFilter} onChange={(event) => setClassFilter(event.target.value)}><option>All classes</option>{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Workflow<select className={`${field} mt-1 normal-case`} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value='all'>All learners</option><option value='waiting'>Waiting for grades</option><option value='ready'>Ready for main teacher</option><option value='homeroom'>My homeroom only</option><option value='submitted'>Submitted or published</option></select></label>
+        <label className='text-xs font-bold uppercase text-gray-400'>Main-teacher class<select className={`${field} mt-1 normal-case`} value={classFilter} onChange={(event) => setClassFilter(event.target.value)} disabled={classes.length <= 1}>{!classes.length && <option value=''>No main-teacher class assigned</option>}{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
+        <label className='text-xs font-bold uppercase text-gray-400'>Workflow<select className={`${field} mt-1 normal-case`} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value='all'>All my learners</option><option value='waiting'>Waiting for grades</option><option value='ready'>Ready for main teacher</option><option value='submitted'>Submitted or published</option></select></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Search<div className='relative mt-1'><Search className='absolute left-3 top-3 text-gray-400' size={15} /><input className={`${field} pl-9 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Name or student number' /></div></label>
       </div>
     </div>
