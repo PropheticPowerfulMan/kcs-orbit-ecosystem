@@ -14,6 +14,8 @@ type SubjectContribution = {
   percentage: number | null
   letterGrade: string | null
   submittedAt: string | null
+  termResults?: Record<string, number | null>
+  sourceTermCount?: number
 }
 
 type LearnerRecord = {
@@ -283,6 +285,7 @@ export default function TeacherWholeSchoolReportCards() {
           id: subject.courseId,
           percentage: subject.percentage as number,
           letterGrade: subject.letterGrade ?? letterGrade(subject.percentage as number),
+          termResults: subject.termResults,
           course: { name: subject.courseName, code: subject.courseCode, credits: subject.credits },
         })),
         student: {

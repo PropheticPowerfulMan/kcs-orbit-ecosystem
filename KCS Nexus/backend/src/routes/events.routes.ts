@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles } from '../middleware/auth.js'
+import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 
@@ -12,7 +12,7 @@ const eventSchema = z.object({
   endDate: z.coerce.date(),
   location: z.string().min(2),
   type: z.enum(['ACADEMIC', 'SPIRITUAL', 'SPORTS', 'CULTURAL', 'ADMINISTRATIVE']),
-  coverImage: z.string().url().optional(),
+  coverImage: z.string().trim().refine((value) => /^https?:\/\//i.test(value) || /\/uploads\/media\//i.test(value), 'Cover image must be an HTTPS URL or an uploaded KCS media path').optional(),
   registrationRequired: z.boolean().default(false),
   maxAttendees: z.number().optional(),
   liveStreamEnabled: z.boolean().default(false),
@@ -64,8 +64,9 @@ eventsRouter.patch('/:id/live-stream', authenticate, requireRoles('admin'), asyn
   return success(res, event, 'Live stream settings updated')
 }))
 
-eventsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+eventsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const eventId = getRouteParam(req.params.id)
-  await prisma.event.delete({ where: { id: eventId } })
+  const event = await prisma.event.delete({ where: { id: eventId } })
+  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'SCHOOL_EVENT_DELETED', targetType: 'Event', targetId: eventId, metadata: { title: event.title, startDate: event.startDate } } })
   return success(res, null, 'Event deleted')
 }))

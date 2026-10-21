@@ -4,6 +4,7 @@ type ReportSubject = {
   id: string
   percentage: number
   letterGrade: string
+  termResults?: Record<string, number | null>
   course: { name: string; code: string; credits?: number }
 }
 
@@ -66,7 +67,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   const photo = printableAsset(card.student.officialAvatar ?? card.student.user.avatar)
   const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
   const issuedAt = new Date()
-  const canonicalRecord = JSON.stringify({ id: card.id, student: card.student.studentNumber, term: card.term, average: card.average, status: card.publicationStatus, subjects: (card.subjects ?? []).map(({ course, percentage, letterGrade }) => [course.code, course.credits ?? 0, percentage, letterGrade]) })
+  const canonicalRecord = JSON.stringify({ id: card.id, student: card.student.studentNumber, term: card.term, average: card.average, status: card.publicationStatus, subjects: (card.subjects ?? []).map(({ course, percentage, letterGrade, termResults }) => [course.code, course.credits ?? 0, percentage, letterGrade, termResults ?? null]) })
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalRecord))
   const fingerprint = Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('').toUpperCase()
   const documentId = `KCS-RC-${issuedAt.toISOString().slice(0,10).replace(/-/g,'')}-${fingerprint.slice(0,16)}`
@@ -86,9 +87,15 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     EMAILED: tr('ENVOYÉ PAR E-MAIL', 'EMAILED'),
     POSTED_TO_PORTAL: tr('PUBLIÉ DANS LE PORTAIL', 'POSTED TO PORTAL'),
   } as Record<string, string>)[card.publicationStatus] ?? card.publicationStatus.replace(/_/g, ' ')
+  const annual = card.term.toLowerCase().includes('annual final')
+  const trimesterTerms = ['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3']
+  const termValue = (subject: ReportSubject, sourceTerm: string) => {
+    const value = subject.termResults?.[sourceTerm]
+    return value == null ? '—' : `${value.toFixed(2)}%`
+  }
   const subjects = (card.subjects ?? []).map((subject) => `
     <tr><td><b>${escapeHtml(subject.course.code)}</b><span>${escapeHtml(subject.course.name)}</span></td>
-    <td class="number">${subject.course.credits ?? '—'}</td><td class="number">${subject.percentage.toFixed(2)}%</td>
+    <td class="number">${subject.course.credits ?? '—'}</td>${annual ? trimesterTerms.map((sourceTerm) => `<td class="number">${termValue(subject, sourceTerm)}</td>`).join('') : ''}<td class="number">${subject.percentage.toFixed(2)}%</td>
     <td class="grade">${escapeHtml(subject.letterGrade)}</td></tr>`).join('')
   const attendance = card.attendanceSummary
   const photoBlock = photo
@@ -106,7 +113,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   .status{margin-top:10px;padding:7px 12px;border-radius:7px;background:#eaf5fb;color:#073b70;font-size:9px;font-weight:900;letter-spacing:.09em;text-align:center;text-transform:uppercase}.status.draft{background:#fff4cf;color:#795b0a}
   .identity{display:grid;grid-template-columns:26mm 1fr 38mm;gap:13px;align-items:center;margin:13px 0;padding:12px;background:linear-gradient(120deg,#f8fbfd,#edf7f5);border:1px solid #c8ddec;border-radius:10px}.student-photo{width:26mm;height:32mm;object-fit:cover;border:2px solid #d8aa2f;border-radius:8px;background:#fff}.student-photo.placeholder{display:flex;align-items:center;justify-content:center;color:#0d5d99;font-weight:900}
   .identity h2{margin:0 0 8px;color:#062f5b;font-size:19px}.identity p{margin:3px 0;color:#566c82;font-size:10px}.identity p b{color:#102849}.average{text-align:center;padding:10px;border-left:1px solid #b9cfdd}.average span{display:block;color:#60758c;font-size:8px;font-weight:800;text-transform:uppercase}.average b{display:block;margin-top:4px;color:#08716a;font-size:24px}
-  h3{margin:14px 0 7px;color:#073b70;font-size:12px;letter-spacing:.06em;text-transform:uppercase}table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:9.5px}.course-col{width:46%}.credit-col{width:14%}.result-col{width:24%}.grade-col{width:16%}thead{display:table-header-group}th{padding:8px 7px;text-align:left;background:#0d5d99;color:#fff;font-size:8px;text-transform:uppercase}td{padding:8px 7px;border-bottom:1px solid #dce5ee}tbody tr:nth-child(even){background:#f3f8fb}td span{display:block;margin-top:2px;color:#62758a;font-size:8px}th:nth-child(n+2),td:nth-child(n+2){text-align:center}.number,.grade{text-align:center}.grade{color:#08716a;font-weight:900}
+  h3{margin:14px 0 7px;color:#073b70;font-size:12px;letter-spacing:.06em;text-transform:uppercase}table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:9.5px}.course-col{width:${annual?'30%':'46%'}}.credit-col{width:${annual?'8%':'14%'}}.result-col{width:${annual?'12%':'24%'}}.grade-col{width:${annual?'8%':'16%'}}.term-col{width:14%}thead{display:table-header-group}th{padding:8px 7px;text-align:left;background:#0d5d99;color:#fff;font-size:8px;text-transform:uppercase}td{padding:8px 7px;border-bottom:1px solid #dce5ee}tbody tr:nth-child(even){background:#f3f8fb}td span{display:block;margin-top:2px;color:#62758a;font-size:8px}th:nth-child(n+2),td:nth-child(n+2){text-align:center}.number,.grade{text-align:center}.grade{color:#08716a;font-weight:900}
   .attendance{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.stat{padding:8px;text-align:center;border:1px solid #d5e2eb;border-radius:7px;background:#fff}.stat span{display:block;color:#6d8193;font-size:7px;font-weight:800;text-transform:uppercase}.stat b{display:block;margin-top:3px;color:#073b70;font-size:14px}
   .comments{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}.comment{min-height:58px;padding:10px;border:1px solid #d2e0e9;border-left:4px solid #20a995;border-radius:7px;background:#fbfdfe;font-size:9px;line-height:1.5}.comment b{display:block;margin-bottom:4px;color:#073b70;text-transform:uppercase}
   .empty{padding:18px;text-align:center;color:#725b15;background:#fff7dc;border:1px solid #ead99d;border-radius:8px;font-size:9px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:24px}.signature{padding-top:7px;border-top:1px solid #496178;text-align:center;color:#52677d;font-size:9px}
@@ -119,7 +126,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   <section class="identity">${photoBlock}<div><h2>${escapeHtml(studentName)}</h2>
   <p>${tr('Matricule', 'Student ID')} · <b>${escapeHtml(card.student.studentNumber)}</b></p><p>${tr('Classe', 'Class')} · <b>${escapeHtml([card.student.grade,card.student.section].filter(Boolean).join(' ')||tr('En attente', 'Pending'))}</b></p>
   <p>${tr('Période scolaire', 'Reporting period')} · <b>${escapeHtml(localizedTerm(card.term))}</b></p></div><div class="average"><span>${tr('Moyenne finale', 'Final average')}</span><b>${card.average.toFixed(2)}%</b></div></section>
-  <h3>${tr('Résultats académiques', 'Academic performance')}</h3>${subjects?`<table><colgroup><col class="course-col"><col class="credit-col"><col class="result-col"><col class="grade-col"></colgroup><thead><tr><th>${tr('Cours', 'Course')}</th><th>${tr('Crédit', 'Credit')}</th><th>${tr('Résultat final', 'Final result')}</th><th>${tr('Note', 'Grade')}</th></tr></thead><tbody>${subjects}</tbody></table>`:`<div class="empty">${tr('Aucun résultat de matière soumis n’est encore rattaché à ce bulletin.', 'No submitted subject result is attached to this report card yet.')}</div>`}
+  <h3>${tr('Résultats académiques', 'Academic performance')}</h3>${subjects?`<table><colgroup><col class="course-col"><col class="credit-col">${annual?'<col class="term-col"><col class="term-col"><col class="term-col">':''}<col class="result-col"><col class="grade-col"></colgroup><thead><tr><th>${tr('Cours', 'Course')}</th><th>${tr('Crédit', 'Credit')}</th>${annual?'<th>T1</th><th>T2</th><th>T3</th>':''}<th>${annual?tr('Moyenne annuelle','Annual average'):tr('Résultat final', 'Final result')}</th><th>${tr('Note', 'Grade')}</th></tr></thead><tbody>${subjects}</tbody></table>`:`<div class="empty">${tr('Aucun résultat de matière soumis n’est encore rattaché à ce bulletin.', 'No submitted subject result is attached to this report card yet.')}</div>`}
   <h3>${tr('Résumé des présences', 'Attendance summary')}</h3>${attendance?`<div class="attendance"><div class="stat"><span>${tr('Présent', 'Present')}</span><b>${attendance.present}</b></div><div class="stat"><span>${tr('Absent', 'Absent')}</span><b>${attendance.absent}</b></div><div class="stat"><span>${tr('Retard', 'Late')}</span><b>${attendance.late}</b></div><div class="stat"><span>${tr('Excusé', 'Excused')}</span><b>${attendance.excused}</b></div><div class="stat"><span>${tr('Taux', 'Rate')}</span><b>${attendance.attendanceRate??'—'}%</b></div></div>`:`<div class="empty">${tr('Le résumé des présences n’est pas disponible pour cette période.', 'Attendance summary is not available for this reporting period.')}</div>`}
   <h3>${tr('Appréciation de la direction de classe', 'Class leadership review')}</h3><div class="comments"><div class="comment"><b>${tr('Commentaire du titulaire', 'Main Teacher comment')}</b>${escapeHtml(card.teacherComment||tr('Aucun commentaire saisi.', 'No comment entered.'))}</div><div class="comment"><b>${tr('Conduite', 'Conduct')}</b>${escapeHtml(card.conduct||tr('Non renseignée.', 'Not entered.'))}</div></div>
   <div class="signatures"><div class="signature">${tr('Titulaire de classe', 'Main Teacher')}</div><div class="signature">${tr('Préfet / Signature autorisée', 'Principal / Authorized signature')}</div></div>

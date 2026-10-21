@@ -22,6 +22,8 @@ import ShiningStudentWeekWidget from '@/components/shared/ShiningStudentWeekWidg
 import AccountSettingsPanel from '@/components/shared/AccountSettingsPanel'
 import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSettings'
 import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
+import AdminPreEnrollments from '@/components/admin/AdminPreEnrollments'
+import AdminNewsEventsManager from '@/components/admin/AdminNewsEventsManager'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
 import TeacherActivityReportsInbox from '@/components/admin/TeacherActivityReportsInbox'
@@ -331,6 +333,22 @@ const prepareFamilyContactsForSave = (contacts: FamilyContactDraft[]) => {
   return { contacts: prepared, error: '' }
 }
 
+const createFamilyContactDraft = (kind: FamilyContactDraft['kind']): FamilyContactDraft => ({
+  kind, firstName: '', middleName: '', lastName: '',
+  relationship: kind === 'MOTHER' ? 'Mère' : '',
+  role: kind === 'HOUSEHOLD_AGENT' ? 'Nounou' : '',
+  email: '', phone: '', physicalAddress: '',
+  authorizedPickup: false, emergencyContact: kind === 'MOTHER',
+})
+
+const ensureFamilyContactDrafts = (contacts?: FamilyContactDraft[]): FamilyContactDraft[] => {
+  const drafts = [...(contacts ?? [])]
+  for (const kind of ['MOTHER', 'RELATIVE', 'HOUSEHOLD_AGENT'] as const) {
+    if (!drafts.some((contact) => contact.kind === kind)) drafts.push(createFamilyContactDraft(kind))
+  }
+  return drafts
+}
+
 const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParentEditForm => ({
   firstName: splitPersonName(parent?.name).firstName,
   middleName: splitPersonName(parent?.name).middleName,
@@ -339,15 +357,9 @@ const createAdminParentEditForm = (parent: AdminParentRecord | null): AdminParen
   phone: parent?.phone === 'Telephone non renseigne' ? '' : (parent?.phone ?? ''),
   physicalAddress: editablePhysicalAddress(parent?.physicalAddress),
   photoData: parent?.photoData ?? '',
-  familyContacts: parent?.familyContacts ?? [createFamilyContactDraft('MOTHER'), createFamilyContactDraft('RELATIVE'), createFamilyContactDraft('HOUSEHOLD_AGENT')],
-})
-
-const createFamilyContactDraft = (kind: FamilyContactDraft['kind']): FamilyContactDraft => ({
-  kind, firstName: '', middleName: '', lastName: '',
-  relationship: kind === 'MOTHER' ? 'Mère' : '',
-  role: kind === 'HOUSEHOLD_AGENT' ? 'Nounou' : '',
-  email: '', phone: '', physicalAddress: '',
-  authorizedPickup: false, emergencyContact: kind === 'MOTHER',
+  // Editing must expose the same three contact categories as family creation,
+  // including for older families whose canonical contact array is still empty.
+  familyContacts: ensureFamilyContactDrafts(parent?.familyContacts),
 })
 
 const FamilyContactsEditor = ({ contacts, onChange }: { contacts: FamilyContactDraft[]; onChange: (contacts: FamilyContactDraft[]) => void }) => {
@@ -1528,6 +1540,7 @@ const AdminSectionView = ({
   const [editingParent, setEditingParent] = useState<AdminParentRecord | null>(null)
   const [parentEditForm, setParentEditForm] = useState<AdminParentEditForm>(() => createAdminParentEditForm(null))
   const [parentEditStudents, setParentEditStudents] = useState<ParentEditStudentForm[]>([])
+  const [existingStudentLinkQuery, setExistingStudentLinkQuery] = useState('')
   const [parentNewStudents, setParentNewStudents] = useState<AdminStudentDraft[]>([])
   const [showParentNewStudent, setShowParentNewStudent] = useState(false)
   const [savingParentEdit, setSavingParentEdit] = useState(false)
@@ -2030,6 +2043,7 @@ const AdminSectionView = ({
     setParentEditForm(createAdminParentEditForm(parent))
     setParentEditStudents(parent.students.map((student) => ({ id: student.id, ...createAdminStudentEditForm(student) })))
     setParentNewStudents([])
+    setExistingStudentLinkQuery('')
     setShowParentNewStudent(false)
     setParentNotice('')
   }
@@ -2193,7 +2207,9 @@ const AdminSectionView = ({
         ...(parentEditForm.email.trim() ? { email: parentEditForm.email.trim() } : {}),
         phone: parentEditForm.phone.trim() || null,
         physicalAddress: normalizedParentAddress || null,
-        studentIds: Array.from(new Set([...freshStudentIds, ...createdStudentIds])),
+        // Include children selected from the existing official registry. This
+        // creates an additional parent link; it never recreates the learner.
+        studentIds: Array.from(new Set([...freshStudentIds, ...retainedIds, ...createdStudentIds])),
         familyContacts: preparedFamilyContacts.contacts,
         ...(parentEditForm.photoData !== (editingParent.photoData ?? '') ? { photoData: parentEditForm.photoData } : {}),
       }, editingParent.identifierType)
@@ -2715,8 +2731,8 @@ const AdminSectionView = ({
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-gray-500 dark:text-gray-300 md:col-span-2">Adresse physique<input value={parentEditForm.physicalAddress} onChange={(event) => setParentEditForm((current) => ({ ...current, physicalAddress: event.target.value }))} className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Adresse complète du parent" /></label>
                   </div>
-                <FamilyContactsEditor contacts={parentEditForm.familyContacts} onChange={(familyContacts) => setParentEditForm((current) => ({ ...current, familyContacts }))} />
                 </section>
+                <FamilyContactsEditor contacts={parentEditForm.familyContacts} onChange={(familyContacts) => setParentEditForm((current) => ({ ...current, familyContacts }))} />
                 <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950/40">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -2730,6 +2746,12 @@ const AdminSectionView = ({
                   </div>
                   <div className="mt-4 space-y-4">
                     {parentEditStudents.length === 0 ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Aucun enfant n’est lié. Utilisez « Ajouter un enfant » pour compléter cette famille.</p> : null}
+                    <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-800 dark:bg-violet-950/20">
+                      <p className="text-xs font-black uppercase tracking-wide text-violet-700 dark:text-violet-300">Rattacher un élève déjà inscrit</p>
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Ajoutez ce parent comme responsable supplémentaire, sans recréer l’élève ni sa famille.</p>
+                      <label className="relative mt-3 block"><Search className="absolute left-3 top-3 text-slate-400" size={17}/><input value={existingStudentLinkQuery} onChange={(event)=>setExistingStudentLinkQuery(event.target.value)} className="w-full rounded-xl border border-violet-200 bg-white py-2.5 pl-10 pr-3 text-sm dark:border-violet-800 dark:bg-kcs-blue-950 dark:text-white" placeholder="Nom complet, identifiant ou classe…"/></label>
+                      {existingStudentLinkQuery.trim() ? <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">{officialRoster.filter(student=>!parentEditStudents.some(linked=>linked.id===student.id)).filter(student=>`${student.name} ${student.studentNumber} ${student.grade} ${student.section}`.toLowerCase().includes(existingStudentLinkQuery.trim().toLowerCase())).slice(0,20).map(student=><button type="button" key={student.id} onClick={()=>{setParentEditStudents(current=>[...current,{id:student.id,...createAdminStudentEditForm(student)}]);setExistingStudentLinkQuery('')}} className="rounded-xl border border-violet-200 bg-white p-3 text-left text-sm hover:bg-violet-100 dark:border-violet-800 dark:bg-kcs-blue-900 dark:hover:bg-violet-950"><strong className="block text-kcs-blue-950 dark:text-white">{student.name}</strong><span className="text-xs text-slate-500">{student.studentNumber} · {student.grade} {student.section}</span></button>)}</div>:null}
+                    </div>
                     {parentEditStudents.map((student, index) => (
                       <article key={student.id} className="rounded-2xl border border-kcs-blue-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Enfant lié {index + 1}</p><p className="mt-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{[student.lastName, student.middleName, student.firstName].filter(Boolean).join(' ') || student.studentNumber}</p></div><button type="button" onClick={() => setParentEditStudents((current) => current.filter((item) => item.id !== student.id))} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-200">Retirer de cette famille</button></div>
@@ -3394,6 +3416,8 @@ const AdminSectionView = ({
     )
   }
 
+  if (segment === 'pre-enrollments') return <AdminPreEnrollments />
+
   if (segment === 'finance') {
     const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
     const totals = financeSummary?.totals
@@ -3569,31 +3593,7 @@ const AdminSectionView = ({
     )
   }
 
-  if (segment === 'news' || segment === 'media') {
-    return (
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">{segment === 'news' ? 'News & Events Publishing' : 'Media & Live Broadcasts'}</h2>
-          <div className="space-y-3">
-            {liveEventControls.map((event) => (
-              <div key={event.title} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-                <div className="flex items-center justify-between gap-3"><p className="font-semibold text-kcs-blue-900 dark:text-white">{event.title}</p><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${event.status === 'Live now' ? 'bg-red-600 text-white' : 'bg-kcs-gold-100 text-kcs-blue-800 dark:bg-kcs-gold-900/30 dark:text-kcs-gold-300'}`}>{event.status}</span></div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{event.platform} - {event.audience}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-          <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Publish Item</h2>
-          <div className="grid gap-3">
-            <input className="rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Title" />
-            <textarea className="min-h-32 rounded-xl border border-gray-200 px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" placeholder="Details, audience, media notes..." />
-            <button className={adminButton}>Publish</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (segment === 'news' || segment === 'media') return <AdminNewsEventsManager />
 
   if (segment === 'analytics') return <AdminAnalyticsPanel />
 

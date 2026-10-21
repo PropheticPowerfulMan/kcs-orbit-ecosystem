@@ -11,7 +11,7 @@ const newsSchema = z.object({
   excerpt: z.string().min(10),
   content: z.string().min(20),
   category: z.enum(['NEWS', 'EVENT', 'ANNOUNCEMENT', 'ACHIEVEMENT', 'SPORTS', 'ARTS']),
-  coverImage: z.string().url().optional(),
+  coverImage: z.string().trim().refine((value) => /^https?:\/\//i.test(value) || /\/uploads\/media\//i.test(value), 'Cover image must be an HTTPS URL or an uploaded KCS media path').optional(),
   tags: z.array(z.string()).default([]),
 })
 
@@ -60,8 +60,9 @@ newsRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(async (
   return success(res, post, 'Post updated')
 }))
 
-newsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+newsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const postId = getRouteParam(req.params.id)
-  await prisma.newsPost.delete({ where: { id: postId } })
+  const post = await prisma.newsPost.delete({ where: { id: postId } })
+  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'NEWS_POST_DELETED', targetType: 'NewsPost', targetId: postId, metadata: { title: post.title, slug: post.slug } } })
   return success(res, null, 'Post deleted')
 }))

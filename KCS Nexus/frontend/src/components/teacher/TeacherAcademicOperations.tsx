@@ -4,7 +4,7 @@ import { teacherWorkspaceAPI } from '@/services/api'
 import TeacherActivityReports from './TeacherActivityReports'
 import InteractiveAssignmentStudio from './InteractiveAssignmentStudio'
 
-type Student={id:string;studentNumber:string;grade:string;section?:string;user:{firstName:string;lastName:string}}
+type Student={id:string;studentNumber:string;grade:string;section?:string;user?:{firstName?:string;middleName?:string|null;lastName?:string}}
 type Submission={id:string;studentId:string;score?:number|null;feedback?:string|null;status:string;student:Student}
 type Assignment={id:string;title:string;description:string;dueDate:string;maxScore:number;type:string;cadence:string;estimatedMinutes?:number|null;resourceUrl?:string|null;resourceName?:string|null;submissions:Submission[]}
 type Course={id:string;name:string;code:string;grade:string;enrollments:Array<{studentId:string;student:Student}>;assignments:Assignment[]}
@@ -14,14 +14,16 @@ const panel='rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:bord
 const field='w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
 const button='inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50'
 const tomorrow=()=>{const date=new Date();date.setDate(date.getDate()+1);return date.toISOString().slice(0,10)}
-const nameOf=(student:Student)=>`${student.user.lastName} ${student.user.firstName}`.trim()||student.studentNumber
+const nameOf=(student?:Student)=>student
+ ? [student.user?.lastName,student.user?.middleName,student.user?.firstName].filter(Boolean).join(' ').trim()||student.studentNumber||student.id
+ : 'Student'
 
 export default function TeacherAcademicOperations({segment}:{segment:'attendance'|'assignments'}){
  const [overview,setOverview]=useState<Overview>({profile:null,courses:[]}),[courseId,setCourseId]=useState(''),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  const [query,setQuery]=useState(''),[date,setDate]=useState(new Date().toISOString().slice(0,10)),[period,setPeriod]=useState('Daily'),[statuses,setStatuses]=useState<Record<string,AttendanceStatus>>({}),[notes,setNotes]=useState<Record<string,string>>({})
  const [draft,setDraft]=useState({title:'',description:'',dueDate:tomorrow(),maxScore:100,type:'HOMEWORK',cadence:'ONE_TIME',estimatedMinutes:60,resourceUrl:'',resourceName:''}),[grading,setGrading]=useState<Record<string,{score:string;feedback:string}>>({})
  const course=overview.courses.find(item=>item.id===courseId)??overview.courses[0]
- const roster=useMemo(()=>course?.enrollments.map(item=>item.student).filter(student=>!query.trim()||`${nameOf(student)} ${student.studentNumber} ${student.grade} ${student.section??''}`.toLowerCase().includes(query.toLowerCase()))??[],[course,query])
+ const roster=useMemo(()=>course?.enrollments.map(item=>item.student).filter((student):student is Student=>Boolean(student)).filter(student=>!query.trim()||`${nameOf(student)} ${student.studentNumber} ${student.grade} ${student.section??''}`.toLowerCase().includes(query.toLowerCase()))??[],[course,query])
  const assignments=course?.assignments??[]
  const load=async()=>{setLoading(true);setError('');let lastError:any=null;for(let attempt=0;attempt<3;attempt+=1){try{const response=await teacherWorkspaceAPI.overview();const data=response.data.data as Overview;setOverview(data);setCourseId(current=>data.courses?.some(course=>course.id===current)?current:data.courses?.[0]?.id||'');setLoading(false);return}catch(reason:any){lastError=reason;if(attempt<2)await new Promise(resolve=>window.setTimeout(resolve,500*(attempt+1)))}}setError(lastError?.response?.data?.message??'The official teacher workspace could not be loaded.');setLoading(false)}
  useEffect(()=>{void load()},[])

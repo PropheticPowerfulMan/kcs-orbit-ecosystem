@@ -6,7 +6,7 @@ import {
   LayoutDashboard, BookOpen, FileText, Calendar, Brain,
   Users, Settings, Bell, ChevronLeft, ChevronRight,
   GraduationCap, BarChart3, MessageSquare, LogOut,
-  Shield, Home, UserCheck, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck, GripHorizontal
+  Shield, Home, UserCheck, UserPlus, ClipboardList, LibraryBig, Menu, X, Megaphone, FileSpreadsheet, WalletCards, ClipboardCheck, AlertTriangle, Moon, Sun, Globe, BookOpenCheck, GripHorizontal
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { academyAPI, authAPI, lessonPlanAPI } from '@/services/api'
@@ -169,6 +169,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/admin/discipline', label: t('portalNav.discipline'), icon: AlertTriangle },
         { to: '/admin/employees', label: t('portalNav.employees'), icon: Users },
         { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
+        { to: '/admin/pre-enrollments', label: language === 'fr' ? 'Préinscriptions' : 'Pre-enrollment', icon: UserPlus },
         { to: '/admin/finance', label: t('portalNav.finance'), icon: WalletCards },
         { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
         { to: '/admin/teacher-reports', label: 'Teacher Activity Reports', icon: FileSpreadsheet },

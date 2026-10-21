@@ -1,7 +1,9 @@
 import { Router } from 'express'
 import multer from 'multer'
+import path from 'node:path'
+import { mkdir, unlink, writeFile } from 'node:fs/promises'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles } from '../middleware/auth.js'
+import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { MAX_MEDIA_UPLOAD_BYTES, safeMediaFilename, validateMediaUpload } from '../utils/mediaUpload.js'
@@ -33,6 +35,9 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
   if (!validateMediaUpload(req.file)) throw new ApiError(415, 'Unsupported or invalid media file')
 
   const filename = safeMediaFilename(req.file.originalname)
+  const mediaRoot = path.resolve(process.cwd(), 'uploads', 'media')
+  await mkdir(mediaRoot, { recursive: true })
+  await writeFile(path.join(mediaRoot, filename), req.file.buffer)
 
   const item = await prisma.mediaItem.create({
     data: {
@@ -40,7 +45,7 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
       description: req.body.description,
       category: String(req.body.category || 'General'),
       type: String(req.body.type || 'IMAGE').toUpperCase() as 'IMAGE' | 'VIDEO',
-      url: `uploads/media/${filename}`,
+      url: `${process.env.PUBLIC_API_BASE_PATH || '/nexus/api'}/uploads/media/${filename}`,
       thumbnailUrl: req.body.thumbnailUrl,
       tags: Array.isArray(req.body.tags) ? req.body.tags : [],
     },
@@ -48,8 +53,10 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
   return success(res, item, 'Media uploaded', 201)
 }))
 
-mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const mediaItemId = getRouteParam(req.params.id)
-  await prisma.mediaItem.delete({ where: { id: mediaItemId } })
+  const item = await prisma.mediaItem.delete({ where: { id: mediaItemId } })
+  await unlink(path.resolve(process.cwd(), 'uploads', 'media', path.basename(item.url))).catch(() => undefined)
+  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'MEDIA_ITEM_DELETED', targetType: 'MediaItem', targetId: mediaItemId, metadata: { title: item.title, type: item.type, url: item.url } } })
   return success(res, null, 'Media deleted')
 }))

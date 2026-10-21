@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/uiStore'
 
 type QuestionType = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'SHORT_ANSWER' | 'NUMERIC' | 'ESSAY_OPTIONAL'
 type Question = { questionText:string;questionType:QuestionType;options?:string[]|null;correctAnswer:unknown;points:number;difficulty:'EASY'|'MEDIUM'|'HARD';competencyTag:string;explanation?:string }
-type Student = { id:string;studentNumber:string;user:{firstName:string;middleName?:string;lastName:string} }
+type Student = { id:string;studentNumber:string;user?:{firstName?:string;middleName?:string|null;lastName?:string} }
 type Submission = { id:string;studentId:string;score?:number|null;percentage?:number|null;feedback?:string|null;status:string;submittedAt?:string|null;gradedAt?:string|null }
 type Assignment = { id:string;title:string;description:string;dueDate:string;maxScore:number;type:string;isInteractive?:boolean;aiGenerated?:boolean;gradebookSyncedAt?:string|null;questions?:Question[];submissions:Submission[] }
 type Course = { id:string;name:string;code:string;grade:string;enrollments:Array<{studentId:string;student:Student}>;assignments:Assignment[] }
@@ -30,7 +30,9 @@ export default function InteractiveAssignmentStudio({course,reload}:{course:Cour
  const [pendingSync,setPendingSync]=useState<{assignment:Assignment;academicYear:string;term:string}|null>(null)
  const studentById=useMemo(()=>new Map(course.enrollments.map(item=>[item.studentId,item.student])),[course.enrollments])
  const total=useMemo(()=>draft.questions.reduce((sum,item)=>sum+(Number(item.points)||0),0),[draft.questions])
- const nameOf=(student?:Student)=>student?[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '):tr('Élève','Student')
+ const nameOf=(student?:Student)=>student
+  ? [student.user?.lastName,student.user?.middleName,student.user?.firstName].filter(Boolean).join(' ')||student.studentNumber||student.id
+  : tr('Élève','Student')
  const updateQuestion=(index:number,patch:Partial<Question>)=>setDraft(current=>({...current,questions:current.questions.map((item,i)=>i===index?{...item,...patch}:item)}))
 
  const generate=async()=>{if(!topic.trim())return setResult({ok:false,title:tr('Sujet requis','Topic required'),message:tr('Indiquez le sujet à évaluer avant de solliciter l’IA.','Enter the topic to assess before asking AI.')});setBusy('ai');try{const response=await teacherWorkspaceAPI.generateAssignmentDraft({courseId:course.id,topic,objectives,questionCount,difficulty,language:fr?'fr':'en',questionTypes:['MULTIPLE_CHOICE','TRUE_FALSE','SHORT_ANSWER','NUMERIC','ESSAY_OPTIONAL']});const data=response.data.data;setDraft(current=>({...current,title:data.title,description:data.description,questions:data.questions,aiGenerated:true,aiSource:data.source}));setResult({ok:true,title:tr('Brouillon IA prêt','AI draft ready'),message:tr('Relisez et modifiez chaque question avant publication. Rien n’a encore été envoyé aux élèves.','Review and edit every question before publishing. Nothing has been sent to students yet.')})}catch(error:any){setResult({ok:false,title:tr('IA indisponible','AI unavailable'),message:error?.response?.data?.message??tr('La génération a échoué. Le constructeur manuel reste disponible.','Generation failed. The manual builder remains available.')})}finally{setBusy('')}}

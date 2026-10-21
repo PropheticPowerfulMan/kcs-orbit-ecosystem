@@ -15,6 +15,7 @@ import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
 import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACADEMIC_TERMS } from '../utils/academicCycle.js'
 import { isVisibleInSuperAdministrationQueue, verifyFinalGradePropagation } from '../services/academicSubmissionWorkflow.js'
+import { aggregateReportCardResults, reportCardSourceTerms } from '../services/annualReportCard.service.js'
 
 const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
 const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
@@ -38,6 +39,11 @@ const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:num
  const credits=grades.reduce((sum,item)=>sum+Math.max(item.course.credits||1,1),0)
  return credits?Number((grades.reduce((sum,item)=>sum+(item.percentage*Math.max(item.course.credits||1,1)),0)/credits).toFixed(2)):0
 }
+const splitReportCardTerm=(value:string)=>{
+ const academicYear=value.slice(0,9)
+ const term=value.slice(9).replace(/^[^A-Za-z0-9]+/,'').trim()
+ return{academicYear,term}
+}
 const homeroomReportContext=async(userId:string,studentId:string,academicYear:string,term:string)=>{
  await ensureTeacherProfile(userId)
  const [teacher,student]=await Promise.all([
@@ -50,22 +56,27 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
  if(!student)throw new ApiError(404,'Student not found')
   if(!isTeacherHomeroomForStudent(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
+ const submittedPeriods=reportCardSourceTerms(term).map(sourceTerm=>periodKey(academicYear,sourceTerm,'SUBMITTED'))
  const submittedGrades=await prisma.grade.findMany({
-  where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},
+  where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:{in:submittedPeriods}},
   include:{course:true},
   orderBy:{createdAt:'desc'},
  })
+ const resultByCourse=aggregateReportCardResults(submittedGrades,academicYear,term)
  const latestGradeByCourse=new Map<string,(typeof submittedGrades)[number]>()
  for(const grade of submittedGrades)if(!latestGradeByCourse.has(grade.courseId))latestGradeByCourse.set(grade.courseId,grade)
  const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
   const subjectKey=[enrollment.course.name,enrollment.course.grade,enrollment.course.teacherId].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
   const current=bySubject.get(subjectKey)
-  const currentGrade=current?latestGradeByCourse.get(current.courseId):null
-  const candidateGrade=latestGradeByCourse.get(enrollment.courseId)
+  const currentGrade=current?resultByCourse.get(studentId+':'+current.courseId):null
+  const candidateGrade=resultByCourse.get(studentId+':'+enrollment.courseId)
   if(!current||(!currentGrade&&candidateGrade))bySubject.set(subjectKey,enrollment)
   return bySubject
  },new Map<string,(typeof student.enrollments)[number]>()).values()]
- const grades=uniqueEnrollments.map(item=>latestGradeByCourse.get(item.courseId)).filter((item):item is (typeof submittedGrades)[number]=>Boolean(item))
+ const grades=uniqueEnrollments.flatMap(item=>{
+  const source=latestGradeByCourse.get(item.courseId),result=resultByCourse.get(studentId+':'+item.courseId)
+  return source&&result&&result.percentage!==null?[{...source,percentage:result.percentage,letterGrade:letter(result.percentage)}]:[]
+ })
  return{teacher,student,enrollments:uniqueEnrollments,grades,average:weightedCourseAverage(grades),attendanceSummary:summarizeAttendance(student.attendanceRecords)}
 }
 export const academicRecordsRouter=Router()
@@ -268,7 +279,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
  const homeroomStudentIds=homeroomCandidates.filter(student=>isTeacherHomeroomForStudent(teacher,student)).map(student=>student.id)
  const scopedStudentIds=[...new Set([...courseStudentIds,...homeroomStudentIds])]
  const termLabel=reportCardTerm(cycle.academicYear,cycle.term)
- const submittedPeriod=periodKey(cycle.academicYear,cycle.term,'SUBMITTED')
+ const submittedPeriods=reportCardSourceTerms(cycle.term).map(sourceTerm=>periodKey(cycle.academicYear,sourceTerm,'SUBMITTED'))
  const window=attendanceWindow(cycle.academicYear,cycle.term)
 
  const [students,submittedGrades]=scopedStudentIds.length?await Promise.all([
@@ -284,17 +295,15 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
    orderBy:[{grade:'asc'},{section:'asc'},{user:{lastName:'asc'}}],
   }),
   prisma.grade.findMany({
-   where:{studentId:{in:scopedStudentIds},assignmentId:null,period:submittedPeriod},
-   select:{id:true,studentId:true,courseId:true,percentage:true,letterGrade:true,createdAt:true,course:{select:{id:true,name:true,code:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}},
+   where:{studentId:{in:scopedStudentIds},assignmentId:null,period:{in:submittedPeriods}},
+   select:{id:true,studentId:true,courseId:true,period:true,percentage:true,letterGrade:true,createdAt:true,course:{select:{id:true,name:true,code:true,credits:true,teacher:{select:{user:{select:{firstName:true,lastName:true}}}}}}},
    orderBy:{createdAt:'desc'},
   }),
  ]):[[],[]]
 
- const gradeByEnrollment=new Map<string,(typeof submittedGrades)[number]>()
- for(const item of submittedGrades){
-  const key=item.studentId+':'+item.courseId
-  if(!gradeByEnrollment.has(key))gradeByEnrollment.set(key,item)
- }
+ const resultByEnrollment=aggregateReportCardResults(submittedGrades,cycle.academicYear,cycle.term)
+ const sourceGradeByEnrollment=new Map<string,(typeof submittedGrades)[number]>()
+ for(const item of submittedGrades){const key=item.studentId+':'+item.courseId;if(!sourceGradeByEnrollment.has(key))sourceGradeByEnrollment.set(key,item)}
  const learners=students.map(student=>{
   const uniqueEnrollments=[...student.enrollments.reduce((bySubject,enrollment)=>{
    const subjectKey=[
@@ -304,13 +313,14 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
     enrollment.course.teacher.user.firstName,
    ].join('|').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()
    const current=bySubject.get(subjectKey)
-   const currentGrade=current?gradeByEnrollment.get(student.id+':'+current.course.id):null
-   const candidateGrade=gradeByEnrollment.get(student.id+':'+enrollment.course.id)
+   const currentGrade=current?resultByEnrollment.get(student.id+':'+current.course.id):null
+   const candidateGrade=resultByEnrollment.get(student.id+':'+enrollment.course.id)
    if(!current||(!currentGrade&&candidateGrade))bySubject.set(subjectKey,enrollment)
    return bySubject
   },new Map<string,(typeof student.enrollments)[number]>()).values()]
   const subjects=uniqueEnrollments.map(enrollment=>{
-   const grade=gradeByEnrollment.get(student.id+':'+enrollment.course.id)
+   const grade=resultByEnrollment.get(student.id+':'+enrollment.course.id)
+   const source=sourceGradeByEnrollment.get(student.id+':'+enrollment.course.id)
    return{
     courseId:enrollment.course.id,
     courseName:enrollment.course.name,
@@ -318,14 +328,16 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
     credits:enrollment.course.credits,
     teacherName:[enrollment.course.teacher.user.lastName,enrollment.course.teacher.user.firstName].filter(Boolean).join(' '),
     percentage:grade?.percentage??null,
-    letterGrade:grade?.letterGrade??null,
-    submittedAt:grade?.createdAt??null,
+    letterGrade:grade?.percentage==null?null:letter(grade.percentage),
+    submittedAt:source?.createdAt??null,
+    termResults:grade?.termResults??{},
+    sourceTermCount:grade?.sourceCount??0,
    }
   })
   const submitted=subjects.filter(subject=>subject.percentage!==null)
   const weightedGrades=uniqueEnrollments.flatMap(enrollment=>{
-   const grade=gradeByEnrollment.get(student.id+':'+enrollment.course.id)
-   return grade?[grade]:[]
+   const grade=resultByEnrollment.get(student.id+':'+enrollment.course.id)
+   return grade?.percentage==null?[]:[{percentage:grade.percentage,course:enrollment.course}]
   })
   const reportCard=student.reportCards[0]??null
   return{
@@ -444,10 +456,17 @@ academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(a
 }))
 
 academicRecordsRouter.post('/report-cards/generate',requireRoles('admin','staff'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const payload=cycleSchema.parse(req.body),submitted=periodKey(payload.academicYear,payload.term,'SUBMITTED')
- const grades=await prisma.grade.findMany({where:{assignmentId:null,period:submitted},include:{course:true,student:{include:{user:true}}}})
+ const payload=cycleSchema.parse(req.body)
+ const submittedPeriods=reportCardSourceTerms(payload.term).map(sourceTerm=>periodKey(payload.academicYear,sourceTerm,'SUBMITTED'))
+ const grades=await prisma.grade.findMany({where:{assignmentId:null,period:{in:submittedPeriods}},include:{course:true,student:{include:{user:true}}},orderBy:{createdAt:'desc'}})
  if(!grades.length)throw new ApiError(400,'No submitted final grades exist for this cycle')
- const grouped=new Map<string,typeof grades>();for(const grade of grades)grouped.set(grade.studentId,[...(grouped.get(grade.studentId)||[]),grade])
+ const results=aggregateReportCardResults(grades,payload.academicYear,payload.term)
+ const grouped=new Map<string,Array<{percentage:number;course:{credits:number}}>>()
+ for(const result of results.values())if(result.percentage!==null){
+  const source=grades.find(item=>item.studentId===result.studentId&&item.courseId===result.courseId)
+  if(source)grouped.set(result.studentId,[...(grouped.get(result.studentId)||[]),{percentage:result.percentage,course:source.course}])
+ }
+ if(!grouped.size)throw new ApiError(400,'No complete submitted final grades exist for this cycle')
  const window=attendanceWindow(payload.academicYear,payload.term)
  const attendanceRecords=await prisma.attendanceRecord.findMany({where:{studentId:{in:[...grouped.keys()]},date:window},select:{studentId:true,status:true}})
  const cards=await prisma.$transaction(async tx=>{
@@ -486,7 +505,15 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
    if(grade.period===expectedPeriod&&!byCourse.has(grade.courseId))byCourse.set(grade.courseId,grade)
   }
   const subjects=[...byCourse.values()].sort((left,right)=>(left.course.code||left.course.name).localeCompare(right.course.code||right.course.name,'en',{numeric:true,sensitivity:'base'}))
-  return {...card,student,subjects}
+  const parsedCycle=splitReportCardTerm(card.term)
+  const results=aggregateReportCardResults(grades,parsedCycle.academicYear,parsedCycle.term)
+  const latestByCourse=new Map<string,(typeof grades)[number]>()
+  for(const grade of grades)if(!latestByCourse.has(grade.courseId))latestByCourse.set(grade.courseId,grade)
+  const computedSubjects=[...results.values()].flatMap(result=>{
+   const source=latestByCourse.get(result.courseId)
+   return source&&result.percentage!==null?[{...source,percentage:result.percentage,letterGrade:letter(result.percentage),termResults:result.termResults,sourceTermCount:result.sourceTermCount}]:[]
+  }).sort((left,right)=>(left.course.code||left.course.name).localeCompare(right.course.code||right.course.name,'en',{numeric:true,sensitivity:'base'}))
+  return {...card,student,subjects:computedSubjects.length?computedSubjects:subjects}
  })
  res.setHeader('Cache-Control','private, no-store, no-cache, must-revalidate')
  return success(res,enriched)
@@ -497,11 +524,15 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
  const card=await prisma.$transaction(async tx=>{
   const current=await tx.reportCard.findUnique({where:{id}});if(!current)throw new ApiError(404,'Report card not found')
   const parts=current.term.split(' · ');const academicYear=parts[0],term=parts.slice(1).join(' · ')
-  const submitted=periodKey(academicYear,term,'SUBMITTED'),approved=periodKey(academicYear,term,'APPROVED')
-  const source=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:submitted}})
+  const parsedCycle=splitReportCardTerm(current.term)
+  const submittedPeriods=reportCardSourceTerms(parsedCycle.term).map(sourceTerm=>periodKey(parsedCycle.academicYear,sourceTerm,'SUBMITTED')),approved=periodKey(parsedCycle.academicYear,parsedCycle.term,'APPROVED')
+  const source=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:{in:submittedPeriods}},orderBy:{createdAt:'desc'}})
   if(!source.length)throw new ApiError(409,'The report card has no submitted source grades')
+  const aggregated=aggregateReportCardResults(source,parsedCycle.academicYear,parsedCycle.term)
+  const frozen=[...aggregated.values()].filter((item):item is typeof item&{percentage:number}=>item.percentage!==null)
+  if(!frozen.length)throw new ApiError(409,'The annual report card is incomplete: all three trimester results are required')
   await tx.grade.deleteMany({where:{studentId:current.studentId,assignmentId:null,period:approved}})
-  for(const grade of source)await tx.grade.create({data:{studentId:grade.studentId,courseId:grade.courseId,assignmentId:null,score:grade.score,maxScore:grade.maxScore,percentage:grade.percentage,letterGrade:grade.letterGrade,period:approved}})
+  for(const grade of frozen)await tx.grade.create({data:{studentId:grade.studentId,courseId:grade.courseId,assignmentId:null,score:grade.percentage,maxScore:100,percentage:grade.percentage,letterGrade:letter(grade.percentage),period:approved}})
   await synchronizeStudentAcademicMetrics(tx,[current.studentId])
   const updated=await tx.reportCard.update({where:{id},data:{principalStatus:'APPROVED',publicationStatus:'APPROVED',approvedById:req.user!.sub,approvedAt:new Date()}})
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{previousStatus:current.publicationStatus,academicYear,term,sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade}))}}})

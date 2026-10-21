@@ -2,6 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import morgan from 'morgan'
+import path from 'node:path'
 import { env } from './config/env.js'
 import { isDatabaseReady } from './config/runtimeStatus.js'
 import { router } from './routes/index.js'
@@ -59,6 +60,7 @@ app.use(cors({
 app.use(express.json({ limit: '8mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'))
+app.use('/api/uploads', express.static(path.resolve(process.cwd(), 'uploads'), { immutable: true, maxAge: '7d', fallthrough: false }))
 
 app.get('/health', (_req, res) => {
   const databaseReady = isDatabaseReady()

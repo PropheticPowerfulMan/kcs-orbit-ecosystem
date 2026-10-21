@@ -1505,7 +1505,6 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
-              <button onClick={exportWorkspacePdf} className="btn-gold flex items-center gap-2 py-2 text-sm"><FileText size={16} /> Export PDF</button>
             </div>
           </div>
         </div>
