@@ -1,5 +1,5 @@
 import DateSelect from '@/components/shared/DateSelect'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
   AlertTriangle,
   BarChart3,
@@ -36,7 +36,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { printOfficialPdf } from '@/utils/officialPdf'
+import { printOfficialGradebook } from '@/utils/officialGradebookPrint'
 import { academicCalendarAPI, academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { canonicalClassLabel } from '@/utils/classLabels'
 import { useUIStore } from '@/store/uiStore'
@@ -248,7 +248,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   useEffect(() => {
     if (!spreadsheetOpen) return
     const previousOverflow = document.body.style.overflow
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSpreadsheetOpen(false) }
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') setSpreadsheetOpen(false) }
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', closeOnEscape)
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape) }
@@ -437,7 +437,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   useEffect(() => {
     if (!spreadsheetOpen) return
-    const handleSaveShortcut = (event: KeyboardEvent) => {
+    const handleSaveShortcut = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 's' || event.key.toLowerCase() === 'c')) {
         event.preventDefault(); void saveSpreadsheet()
       }
@@ -750,7 +750,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     } finally { setSubmittingFinals(false) }
   }
 
-  const exportGradebook = (format: 'PDF' | 'Excel' | 'CSV') => {
+  const exportGradebook = async (format: 'PDF' | 'Excel' | 'CSV') => {
     const rows = studentAnalytics.map(({ student, average, projected, missing, risk }) => [student.name, canonicalClassLabel(student.grade, student.section), formatPercent(average), internationalGrade(average), formatPercent(projected), String(missing), risk])
     const heading = ['Student', 'Class', 'Average', 'International grade', 'Prediction', 'Missing work', 'Risk']
     const csv = [heading, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -758,13 +758,25 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     if (format === 'CSV') downloadFile(`${safeName}-gradebook.csv`, csv, 'text/csv;charset=utf-8')
     else if (format === 'Excel') downloadFile(`${safeName}-gradebook.xls`, `<table><thead><tr>${heading.map((cell) => `<th>${cell}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`, 'application/vnd.ms-excel')
     else {
-      if (!printOfficialPdf({ title: 'Official Gradebook Export', subtitle: `${selectedCourse?.name ?? 'Gradebook'} · ${term}`, metadata: [['Academic cycle', term], ['Class average', `${Math.round(classAverage)}%`], ['Students', courseStudents.length], ['Missing work', missingCount]], columns: heading, rows, orientation: 'landscape' })) return onAction('Allow pop-ups to generate the printable PDF.')
+      const reserved=window.open('','_blank','width=1250,height=900')
+      const numeric=studentAnalytics.flatMap(item=>item.average==null?[]:[item.average]).sort((a,b)=>a-b)
+      const median=numeric.length?(numeric.length%2?numeric[(numeric.length-1)/2]:(numeric[numeric.length/2-1]+numeric[numeric.length/2])/2):0
+      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rows:studentAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk})),categories:categories.map(category=>{const values=courseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution,classAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:missingCount},message=>onAction(message,true),reserved)
+      if(!ok)return
     }
     onAction(`${format} export created with the current calculations and international grading scale.`)
   }
 
   const updateCategoryWeight = (categoryId: string, weight: number) => {
     setCategories((current) => current.map((category) => category.id === categoryId ? { ...category, weight: Math.max(0, Math.min(100, weight || 0)) } : category))
+    setSaveNotice(tr('Pondération appliquée immédiatement aux moyennes — enregistrez pour synchroniser','Weighting applied immediately to averages — save to synchronize'))
+  }
+
+  const moveScoreFocus=(event:ReactKeyboardEvent<HTMLInputElement>,row:number,column:number)=>{
+    const directions:Record<string,[number,number]>={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[-1,0],ArrowDown:[1,0]}
+    const movement=directions[event.key];if(!movement)return
+    const target=document.querySelector<HTMLInputElement>(`[data-grade-row="${row+movement[0]}"][data-grade-column="${column+movement[1]}"]`)
+    if(target){event.preventDefault();target.focus();target.select()}
   }
 
   const categoryWeightTotal = categories.reduce((sum, category) => sum + category.weight, 0)
@@ -797,9 +809,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 {academicYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
               <button disabled={submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
-              <button onClick={() => exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
-              <button onClick={() => exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
-              <button onClick={() => exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
+              <button onClick={() => void exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
+              <button onClick={() => void exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
+              <button onClick={() => void exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
             </div>
           </div>
 
@@ -995,21 +1007,24 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </tr>
             </thead>
             <tbody>
-              {studentAnalytics.map(({ student, average, missing, projected, risk }) => (
+              {studentAnalytics.map(({ student, average, missing, projected, risk },rowIndex) => (
                 <tr key={student.id} className="group">
                   <td className="sticky left-0 z-10 border-t border-gray-100 bg-white px-3 py-1.5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900">
                     <p className="font-semibold text-kcs-blue-900 dark:text-white">{student.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{canonicalClassLabel(student.grade, student.section)}</p>
                   </td>
-                  {visibleAssignments.map((assignment) => {
+                  {visibleAssignments.map((assignment,columnIndex) => {
                     const normalized = getScore(assignment, student.id)
                     return (
                       <td key={`${student.id}-${assignment.id}`} className="border-l border-t border-gray-100 px-2 py-1.5 dark:border-kcs-blue-800">
                         <div className="flex items-center justify-center gap-1">
                           <input
+                            data-grade-row={rowIndex}
+                            data-grade-column={columnIndex}
                             className={`w-16 rounded-md px-1.5 py-1 text-center text-xs font-bold outline-none ring-1 transition-colors focus:ring-2 focus:ring-kcs-blue-400 ${toneForScore(normalized)}`}
                             value={getRawScore(assignment.id, student.id)}
                             onChange={(event) => updateScore(assignment.id, student.id, event.target.value)}
+                            onKeyDown={(event)=>moveScoreFocus(event,rowIndex,columnIndex)}
                             placeholder="I"
                           />
                           <div className="flex gap-0.5">

@@ -14,7 +14,21 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 const childSchema = z.object({
   firstName: z.string().trim().min(2), middleName: z.string().trim().optional(), lastName: z.string().trim().min(2),
   dateOfBirth: z.coerce.date(), gender: z.string().default('Not specified'), nationality: z.string().trim().min(2),
-  gradeApplying: z.string().trim().min(1), previousSchool: z.string().trim().optional(), languages: z.string().trim().optional(),
+  gradeApplying: z.string().trim().min(1), section: z.string().trim().max(40).optional(), previousSchool: z.string().trim().optional(), languages: z.string().trim().optional(),
+})
+const familyContactSchema = z.object({
+  kind: z.enum(['MOTHER', 'FATHER', 'GUARDIAN', 'RELATIVE', 'HOUSEHOLD_AGENT', 'OTHER']).default('OTHER'),
+  relationshipLabel: z.string().trim().max(100).optional(),
+  firstName: z.string().trim().max(100).default(''),
+  middleName: z.string().trim().max(100).optional(),
+  lastName: z.string().trim().max(100).default(''),
+  email: z.string().trim().email().optional().or(z.literal('')),
+  phone: z.string().trim().max(40).optional(),
+  physicalAddress: z.string().trim().max(500).optional(),
+  authorizedPickup: z.boolean().default(false),
+  emergencyContact: z.boolean().default(false),
+}).refine((contact) => !contact.firstName && !contact.lastName && !contact.email && !contact.phone ? true : Boolean(contact.firstName && contact.lastName && (contact.email || contact.phone)), {
+  message: 'Each complementary family contact requires a first name, last name, and an email or phone number',
 })
 const parentSchema = z.object({
   firstName: z.string().trim().min(1), middleName: z.string().trim().optional(), lastName: z.string().trim().min(1),
@@ -44,6 +58,11 @@ const parseParent = (body: Record<string, unknown>): Parent => parentSchema.pars
   middleName: body.parentMiddleName, lastName: body.parentLastName || String(body.parentName || '').trim().split(/\s+/).slice(0, -1).join(' ') || body.parentName,
   email: body.parentEmail, phone: body.parentPhone, relationship: body.relationship, address: body.address, occupation: body.occupation,
 })
+const parseFamilyContacts = (body: Record<string, unknown>) => {
+  if (!body.familyContacts) return []
+  try { return z.array(familyContactSchema).max(20).parse(JSON.parse(String(body.familyContacts))) }
+  catch (error) { if (error instanceof z.ZodError) throw error; throw new ApiError(400, 'Invalid complementary family contacts payload') }
+}
 const publicApplication = (application: any) => ({ ...application, parentPhotoData: application.parentPhotoData ? 'stored' : null, children: Array.isArray(application.children) ? application.children.map(({ photoData, ...child }: any) => ({ ...child, photoData: photoData ? 'stored' : null })) : application.children })
 
 export const admissionsRouter = Router()
@@ -67,6 +86,7 @@ admissionsRouter.post('/', upload.any(), asyncHandler(async (req, res) => {
   const files = (req.files || []) as Express.Multer.File[]
   const children = parseChildren(req.body, files)
   const parent = parseParent(req.body)
+  const familyContacts = parseFamilyContacts(req.body)
   const parentPhotoData = photoFile(files, 'parentPhoto')
   const documents = files.filter((file) => file.fieldname === 'documents')
   const applicationNumber = `KCS-${Date.now().toString().slice(-6)}`
@@ -79,7 +99,7 @@ admissionsRouter.post('/', upload.any(), asyncHandler(async (req, res) => {
       dateOfBirth: first.dateOfBirth, gender: first.gender, nationality: first.nationality, gradeApplying: first.gradeApplying,
       previousSchool: first.previousSchool, parentName: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '),
       parentEmail: parent.email, parentPhone: parent.phone, relationship: parent.relationship, address: parent.address, notes,
-      children: storedChildren as any, parentDetails: parent as any, parentPhotoData,
+      children: storedChildren as any, parentDetails: { ...parent, familyContacts } as any, parentPhotoData,
       documents: { create: documents.map((file) => ({ name: file.originalname, type: file.mimetype, url: `email-attachment://${applicationNumber}/${file.originalname}` })) },
     }, include: { documents: true },
   })
@@ -100,8 +120,8 @@ admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHa
   const parentDetails = (application.parentDetails || {}) as unknown as Partial<Parent>
   const submittedChildren = children.length ? children : [{ firstName: application.firstName, middleName: application.middleName || undefined, lastName: application.lastName, dateOfBirth: application.dateOfBirth, gender: application.gender, nationality: application.nationality, gradeApplying: application.gradeApplying, previousSchool: application.previousSchool || undefined }]
   const familyPayload = {
-    parent: { firstName: parentDetails.firstName || application.parentName.split(/\s+/).slice(-1)[0], middleName: parentDetails.middleName, lastName: parentDetails.lastName || application.parentName.split(/\s+/).slice(0, -1).join(' ') || application.parentName, email: application.parentEmail, phone: application.parentPhone, relationship: application.relationship, physicalAddress: application.address, photoData: application.parentPhotoData || undefined },
-    students: submittedChildren.map((child, index) => ({ firstName: child.firstName, middleName: child.middleName, lastName: child.lastName, grade: child.gradeApplying, section: '', dateOfBirth: child.dateOfBirth, studentNumber: `${application.applicationNumber}-STU-${String(index + 1).padStart(2, '0')}`, photoData: child.photoData })),
+    parent: { firstName: parentDetails.firstName || application.parentName.split(/\s+/).slice(-1)[0], middleName: parentDetails.middleName, lastName: parentDetails.lastName || application.parentName.split(/\s+/).slice(0, -1).join(' ') || application.parentName, email: application.parentEmail, phone: application.parentPhone, relationship: application.relationship, physicalAddress: application.address, photoData: application.parentPhotoData || undefined, familyContacts: (parentDetails as any).familyContacts || [] },
+    students: submittedChildren.map((child, index) => ({ firstName: child.firstName, middleName: child.middleName, lastName: child.lastName, grade: child.gradeApplying, section: child.section || '', dateOfBirth: child.dateOfBirth, studentNumber: `${application.applicationNumber}-STU-${String(index + 1).padStart(2, '0')}`, photoData: child.photoData })),
   }
   const authorization = req.headers.authorization
   const response = await fetch(`http://127.0.0.1:${process.env.PORT || 5000}/api/students`, { method: 'POST', headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) }, body: JSON.stringify(familyPayload) })

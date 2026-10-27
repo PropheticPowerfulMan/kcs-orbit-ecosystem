@@ -10,6 +10,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.js'
 
 export const app = express()
 app.set('trust proxy', 1)
+app.disable('x-powered-by')
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
@@ -24,8 +25,9 @@ const authRateLimit = (windowMs: number, maxFailures: number) => {
     const current = authAttempts.get(key)
     if (current && current.resetAt > now && current.count >= maxFailures) {
       const retryAfter = Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+      const retryAfterMinutes = Math.max(1, Math.ceil(retryAfter / 60))
       res.setHeader('Retry-After', String(retryAfter))
-      return res.status(429).json({ success: false, message: 'Too many failed authentication attempts. Please wait and try again.' })
+      return res.status(429).json({ success: false, retryAfterSeconds: retryAfter, retryAfterMinutes, message: `Trop de tentatives. Réessayez dans ${retryAfterMinutes} minute${retryAfterMinutes > 1 ? 's' : ''}. / Too many attempts. Try again in ${retryAfterMinutes} minute${retryAfterMinutes > 1 ? 's' : ''}.` })
     }
     if (current?.resetAt && current.resetAt <= now) authAttempts.delete(key)
 
@@ -38,6 +40,10 @@ const authRateLimit = (windowMs: number, maxFailures: number) => {
       const previous = authAttempts.get(key)
       const active = previous && previous.resetAt > Date.now() ? previous : { count: 0, resetAt: Date.now() + windowMs }
       authAttempts.set(key, { count: active.count + 1, resetAt: active.resetAt })
+      if (authAttempts.size > 5_000) {
+        const cleanupNow = Date.now()
+        for (const [attemptKey, attempt] of authAttempts) if (attempt.resetAt <= cleanupNow) authAttempts.delete(attemptKey)
+      }
     })
     return next()
   }

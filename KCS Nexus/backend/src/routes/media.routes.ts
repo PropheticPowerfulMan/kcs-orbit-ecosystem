@@ -55,8 +55,11 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
 
 mediaRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const mediaItemId = getRouteParam(req.params.id)
-  const item = await prisma.mediaItem.delete({ where: { id: mediaItemId } })
-  await unlink(path.resolve(process.cwd(), 'uploads', 'media', path.basename(item.url))).catch(() => undefined)
-  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'MEDIA_ITEM_DELETED', targetType: 'MediaItem', targetId: mediaItemId, metadata: { title: item.title, type: item.type, url: item.url } } })
-  return success(res, null, 'Media deleted')
+  const item = await prisma.mediaItem.findUnique({ where: { id: mediaItemId } })
+  if (item) {
+    await prisma.mediaItem.deleteMany({ where: { id: mediaItemId } })
+    await unlink(path.resolve(process.cwd(), 'uploads', 'media', path.basename(item.url))).catch(() => undefined)
+  }
+  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: item ? 'MEDIA_ITEM_DELETED' : 'MEDIA_ITEM_DELETE_ALREADY_ABSENT', targetType: 'MediaItem', targetId: mediaItemId, metadata: item ? { title: item.title, type: item.type, url: item.url } : { alreadyAbsent: true } } })
+  return success(res, { alreadyAbsent: !item }, item ? 'Media deleted' : 'Media was already deleted')
 }))

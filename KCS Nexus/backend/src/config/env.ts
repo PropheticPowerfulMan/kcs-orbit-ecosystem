@@ -12,6 +12,7 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(8, 'JWT_REFRESH_SECRET must be at least 8 characters'),
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  ALLOW_PUBLIC_REGISTRATION: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   SUPERADMIN_EMAIL: z.string().email().default('superadmin@kcsnexus.com'),
   SUPERADMIN_PASSWORD: z.string().min(12).optional(),
   SUPERADMIN_FIRSTNAME: z.string().default('Super'),

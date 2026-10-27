@@ -198,10 +198,13 @@ const configuredSuperAdmin = {
 const MAX_FAILED_LOGINS = 5
 const LOGIN_LOCK_MINUTES = 15
 
+const hashRefreshToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex')
+
 async function ensureAccountNotLocked(user: PrismaUser) {
   if (!user.loginLockedUntil) return
   if (user.loginLockedUntil > new Date()) {
-    throw new ApiError(423, `Account temporarily locked after repeated failed sign-in attempts. Try again after ${user.loginLockedUntil.toISOString()}.`)
+    const remainingMinutes = Math.max(1, Math.ceil((user.loginLockedUntil.getTime() - Date.now()) / 60_000))
+    throw new ApiError(423, `Compte temporairement verrouillé. Réessayez dans ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}. / Account temporarily locked. Try again in ${remainingMinutes} minute${remainingMinutes > 1 ? 's' : ''}.`)
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, loginLockedUntil: null } })
 }
@@ -622,6 +625,9 @@ async function findLocalUserByIdentifier(identifier: string) {
 export const authRouter = Router()
 
 authRouter.post('/register', asyncHandler(async (req, res) => {
+  if (env.NODE_ENV === 'production' && !env.ALLOW_PUBLIC_REGISTRATION) {
+    throw new ApiError(403, 'Public account creation is disabled. Use the official KCS admission or pre-enrollment workflow.')
+  }
   const payload = registerSchema.parse(req.body)
 
   const existingUser = await prisma.user.findUnique({ where: { email: payload.email } })
@@ -646,7 +652,7 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
 
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      token: hashRefreshToken(refreshToken),
       userId: user.id,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
@@ -685,7 +691,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
 
       await prisma.refreshToken.create({
         data: {
-          token: refreshToken,
+          token: hashRefreshToken(refreshToken),
           userId: effectiveUser.id,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
@@ -721,7 +727,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
 
   await prisma.refreshToken.create({
     data: {
-      token: refreshToken,
+      token: hashRefreshToken(refreshToken),
       userId: effectiveUser.id,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
@@ -752,8 +758,8 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
     // Database-backed refresh tokens are handled below.
   }
 
-  const storedToken = await prisma.refreshToken.findUnique({
-    where: { token: refreshToken },
+  const storedToken = await prisma.refreshToken.findFirst({
+    where: { token: { in: [hashRefreshToken(refreshToken), refreshToken] } },
     include: { user: true },
   })
 
@@ -767,6 +773,9 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
     throw new ApiError(403, 'This parent account is blocked. Contact the school administration.')
   }
   const token = signAccessToken(synchronizedUser)
+  if (storedToken.token === refreshToken) {
+    await prisma.refreshToken.update({ where: { id: storedToken.id }, data: { token: hashRefreshToken(refreshToken) } })
+  }
   return success(res, { token, user: await buildSafeUserWithAccess(synchronizedUser, false) }, 'Token refreshed')
 }))
 

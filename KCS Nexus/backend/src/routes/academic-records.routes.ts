@@ -98,6 +98,14 @@ academicRecordsRouter.get('/report-cards/verify', asyncHandler(async (req, res) 
  if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Report-card authenticity record not found')
  return success(res, { valid: true, documentType: 'REPORT_CARD', documentId, publicationStatus: metadata.publicationStatus, issuedAt: record.createdAt }, 'Authentic KCS report card verified')
 }))
+academicRecordsRouter.get('/gradebooks/verify', asyncHandler(async (req, res) => {
+ const documentId=z.string().regex(new RegExp('^KCS-GB-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
+ const fingerprint=z.string().regex(/^[A-F0-9]{64}$/i).parse(req.query.fingerprint)
+ const record=await prisma.auditLog.findFirst({where:{action:'GRADEBOOK_VERIFICATION_ISSUED',targetType:'OfficialGradebook',targetId:documentId},orderBy:{createdAt:'desc'}})
+ const metadata=(record?.metadata??{}) as Record<string,unknown>
+ if(!record||metadata.fingerprint!==fingerprint)throw new ApiError(404,'Gradebook authenticity record not found')
+ return success(res,{valid:true,documentType:'GRADEBOOK',documentId,courseId:metadata.courseId,academicYear:metadata.academicYear,term:metadata.term,issuedAt:record.createdAt},'Authentic KCS gradebook verified')
+}))
 academicRecordsRouter.use(authenticate)
 const legacyHeaders=['studentNumber','academicYear','gradeLevel','term','courseCode','courseName','credits','percentage','letterGrade','sourceSchool','sourceDocument']
 const legacyCell=(row:Record<string,unknown>,key:string)=>{
@@ -184,6 +192,16 @@ academicRecordsRouter.post('/report-cards/verification', requireRoles('admin','s
  const actorId = configuredActor?.id ?? (req.user!.sub === 'configured-superadmin' ? null : req.user!.sub)
  await prisma.auditLog.create({ data: { actorId, action: 'REPORT_CARD_VERIFICATION_ISSUED', targetType: 'OfficialReportCard', targetId: payload.documentId, metadata: { fingerprint: payload.fingerprint, reportCardId: reportCard.id, studentId: reportCard.studentId, publicationStatus: reportCard.publicationStatus } } })
  return success(res, { registered: true, documentId: payload.documentId }, 'Report card registered for public verification')
+}))
+academicRecordsRouter.post('/gradebooks/verification',requireRoles('admin','staff','teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({documentId:z.string().regex(new RegExp('^KCS-GB-[0-9]{8}-[A-Z0-9-]+$','i')),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),courseId:z.string().min(1),academicYear:academicYearSchema,term:academicTermSchema}).parse(req.body)
+ const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:{select:{userId:true}},_count:{select:{enrollments:true}}}})
+ if(!course)throw new ApiError(404,'Course not found')
+ if(req.user!.role==='teacher'&&course.teacher.userId!==req.user!.sub)throw new ApiError(403,'Only the assigned teacher may authenticate this Gradebook')
+ const configuredActor=req.user!.sub==='configured-superadmin'?await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}):null
+ const actorId=configuredActor?.id??(req.user!.sub==='configured-superadmin'?null:req.user!.sub)
+ await prisma.auditLog.create({data:{actorId,action:'GRADEBOOK_VERIFICATION_ISSUED',targetType:'OfficialGradebook',targetId:payload.documentId,metadata:{fingerprint:payload.fingerprint,courseId:course.id,courseCode:course.code,academicYear:payload.academicYear,term:payload.term,studentCount:course._count.enrollments}}})
+ return success(res,{registered:true,documentId:payload.documentId},'Gradebook registered for public verification')
 }))
 academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=submissionSchema.parse(req.body)
