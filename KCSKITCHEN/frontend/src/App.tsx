@@ -675,11 +675,8 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [overview, setOverview] = useState<any>(null)
   const { rate } = useCurrencyDisplay()
-  const loadOverview = useCallback(() => api<any>('/pos/overview').then(setOverview).catch(() => undefined), [])
   useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
-  useEffect(() => { void loadOverview(); const timer = window.setInterval(() => void loadOverview(), 30_000); return () => window.clearInterval(timer) }, [loadOverview])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
   const [confirming, setConfirming] = useState(false)
   const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
@@ -700,19 +697,11 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPerson(null); setConfirming(false); void loadOverview()
+      setReceipt(result.transaction); setCart({}); setPerson(null); setConfirming(false)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
     finally { setSubmitting(false) }
   }
   return <>
-    {overview && <section className="stats pos-overview" aria-label={lang === 'fr' ? 'Vue instantanée du point de vente' : 'Point of sale snapshot'}>
-      <Stat icon={<ShoppingCart/>} label={lang === 'fr' ? 'Ventes élèves · aujourd’hui' : 'Student sales · today'} value={<DisplayMoney value={overview.today.students.amount}/>} tone="good"/>
-      <Stat icon={<Users/>} label={lang === 'fr' ? 'Ventes personnel · aujourd’hui' : 'Staff sales · today'} value={<DisplayMoney value={overview.today.others.amount}/>} tone="good"/>
-      <Stat icon={<CalendarDays/>} label={lang === 'fr' ? 'Ventes élèves · mois' : 'Student sales · month'} value={<DisplayMoney value={overview.month.students.amount}/>}/>
-      <Stat icon={<CalendarDays/>} label={lang === 'fr' ? 'Ventes personnel · mois' : 'Staff sales · month'} value={<DisplayMoney value={overview.month.others.amount}/>}/>
-      <Stat icon={<CreditCard/>} label={lang === 'fr' ? 'Dettes élèves' : 'Student debts'} value={<DisplayMoney value={overview.debts.students.amount}/>} tone="warn"/>
-      <Stat icon={<Wallet/>} label={lang === 'fr' ? 'Dettes personnel' : 'Staff debts'} value={<DisplayMoney value={overview.debts.others.amount}/>} tone="warn"/>
-    </section>}
     <section className="pos-grid">
       <div className="panel">
         <div className="step-title"><span>1</span><div><small>IDENTITY</small><h2>{t.identify}</h2></div></div>
