@@ -47,29 +47,39 @@ async function deliverReminder(event: ReminderEvent, user: ReminderUser) {
   const message = eventMessage(event)
   const link = `/?event=${encodeURIComponent(event.id)}#news-events`
   if (channels.has('IN_APP') && !delivery.inAppSentAt) {
-    delivery = await prisma.$transaction(async (tx) => {
+    const sentAt = new Date()
+    const claimed = await prisma.$transaction(async (tx) => {
+      const claim = await tx.eventReminderDelivery.updateMany({ where: { id: delivery.id, inAppSentAt: null }, data: { inAppSentAt: sentAt } })
+      if (!claim.count) return false
       await tx.notification.create({ data: { userId: user.id, title: message.title, message: message.body, type: 'INFO', link } })
-      return tx.eventReminderDelivery.update({ where: { id: delivery.id }, data: { inAppSentAt: new Date() } })
+      return true
     })
+    if (claimed) delivery = { ...delivery, inAppSentAt: sentAt }
   }
   if (channels.has('EMAIL') && !delivery.emailQueuedAt && !delivery.emailFailure) {
     if (!user.email?.trim()) {
       delivery = await prisma.eventReminderDelivery.update({ where: { id: delivery.id }, data: { emailFailure: 'RECIPIENT_EMAIL_MISSING' } })
     } else {
       const fullName = [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ')
-      delivery = await prisma.$transaction(async (tx) => {
-        const now = new Date()
+      const queuedAt = new Date()
+      const claimed = await prisma.$transaction(async (tx) => {
+        const claim = await tx.eventReminderDelivery.updateMany({ where: { id: delivery.id, emailQueuedAt: null, emailFailure: null }, data: { emailQueuedAt: queuedAt } })
+        if (!claim.count) return false
         await tx.correspondenceLog.create({ data: {
           channel: 'EMAIL', status: 'QUEUED', subject: message.title, body: message.body,
           recipientName: fullName, recipientEmail: user.email,
-          metadata: { mailQueueVersion: 1, recipientId: user.id, eventId: event.id, reminderRevision: event.reminderRevision, attempts: 0, nextAttemptAt: now.toISOString(), priority: 'NORMAL' },
+          metadata: { mailQueueVersion: 1, recipientId: user.id, eventId: event.id, reminderRevision: event.reminderRevision, attempts: 0, nextAttemptAt: queuedAt.toISOString(), priority: 'NORMAL' },
         } })
-        return tx.eventReminderDelivery.update({ where: { id: delivery.id }, data: { emailQueuedAt: now } })
+        return true
       })
+      if (claimed) delivery = { ...delivery, emailQueuedAt: queuedAt }
     }
   }
   if (channels.has('SMS') && !delivery.smsAttemptedAt) {
-    delivery = await prisma.eventReminderDelivery.update({ where: { id: delivery.id }, data: { smsAttemptedAt: new Date() } })
+    const attemptedAt = new Date()
+    const claim = await prisma.eventReminderDelivery.updateMany({ where: { id: delivery.id, smsAttemptedAt: null }, data: { smsAttemptedAt: attemptedAt } })
+    if (!claim.count) return
+    delivery = { ...delivery, smsAttemptedAt: attemptedAt }
     const result = await sendSchoolSms(user.phone, message.sms, { brand: false })
     await prisma.eventReminderDelivery.update({ where: { id: delivery.id }, data: result.sent ? { smsSentAt: new Date(), smsFailure: null } : { smsFailure: result.reason } })
   }
