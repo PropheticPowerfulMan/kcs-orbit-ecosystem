@@ -567,3 +567,40 @@ model NotificationOutbox {
   processedAt DateTime?
   @@index([status, createdAt])
 }
+
+model KitchenManagerSettings {
+  id String @id @default("primary")
+  managerOrbitPersonId String?
+  reportEmail String?
+  dailyReportEnabled Boolean @default(false)
+  dailyReportHour Int @default(17)
+  lastReportDate String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum KitchenManagerInboxKind {
+  DAILY_REPORT
+  COMPLAINT
+  SYSTEM
+}
+
+model KitchenManagerInbox {
+  id String @id @default(cuid())
+  kind KitchenManagerInboxKind
+  title String
+  message String @db.Text
+  referenceType String?
+  referenceId String?
+  reportDate String?
+  attachmentName String?
+  attachmentBase64 String? @db.Text
+  emailedAt DateTime?
+  readAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([kind, reportDate])
+  @@index([createdAt])
+  @@index([readAt, createdAt])
+}

@@ -14,7 +14,7 @@ import PersonSelector from './PersonSelector'
 import { convertAmount, CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard, useCurrencyDisplay } from './ExchangeRate'
 
 type Lang = 'fr' | 'en'
-type Page = 'dashboard' | 'menus' | 'pos' | 'orders' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues' | 'settings'
+type Page = 'dashboard' | 'menus' | 'pos' | 'orders' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues' | 'manager-inbox' | 'settings'
 
 type StatementHolder = {
   orbitPersonId: string
@@ -122,7 +122,7 @@ type TransactionReportVerificationResult = {
   document?: Omit<OfficialTransactionReport, 'rows' | 'signature' | 'rowsHash' | 'issuedBy' | 'confirmedSubtotal' | 'confirmedDiscount'>
 }
 
-const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'orders', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access', 'school-dues', 'settings'])
+const pageNames = new Set<Page>(['dashboard', 'menus', 'pos', 'orders', 'catalog', 'transactions', 'ledger', 'inventory', 'procurement', 'disputes', 'reports', 'access', 'school-dues', 'manager-inbox', 'settings'])
 function requestedPage(): Page {
   if (typeof window === 'undefined') return 'dashboard'
   const value = new URLSearchParams(window.location.search).get('page') as Page | null
@@ -211,7 +211,7 @@ async function printStandaloneDocument(elementId: string, title: string, orienta
 }
 const text = {
   fr: {
-    schoolDues: 'Montants dus par KCS', orders: 'Commandes', settings: 'Param\u00e8tres',
+    schoolDues: 'Montants dus par KCS', orders: 'Commandes', settings: 'Param\u00e8tres', managerInbox: 'Boîte du gestionnaire',
     signIn: 'Connexion institutionnelle', identifier: 'E-mail ou code institutionnel', password: 'Mot de passe',
     enter: 'Entrer dans KCS Kitchen', trace: 'Chaque consommation. Chaque franc. Une preuve.',
     powered: 'Propulsé par KCS Orbit', menus: 'Menu du jour', dashboard: 'Tableau de bord', pos: 'Point de vente', catalog: 'Catalogue',
@@ -245,7 +245,7 @@ const text = {
     popularProducts: 'PRODUITS POPULAIRES', topConsumption: 'Consommations principales', secureLoading: 'Chargement sécurisé des données Kitchen…'
   },
   en: {
-    schoolDues: 'Amounts owed by KCS', orders: 'Orders', settings: 'Settings',
+    schoolDues: 'Amounts owed by KCS', orders: 'Orders', settings: 'Settings', managerInbox: 'Manager inbox',
     signIn: 'Institutional sign in', identifier: 'Email or institutional code', password: 'Password',
     enter: 'Enter KCS Kitchen', trace: 'Every consumption. Every franc. One proof.',
     powered: 'Powered by KCS Orbit', menus: 'Daily menu', dashboard: 'Dashboard', pos: 'Point of sale', catalog: 'Catalog',
@@ -453,6 +453,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN'],
     ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
+    ['manager-inbox', t.managerInbox, <BellRing />, ['KITCHEN_ADMIN', 'FINANCE'].includes(user.role)],
     ['settings', t.settings, <Settings />, user.role === 'KITCHEN_ADMIN']
   ]
   function navigateToPage(nextPage: Page, replace = false) {
@@ -491,7 +492,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     </aside>
     <CurrencyDisplayProvider userKey={user.userId}>
     <main className="workspace">
-      <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{t[page === 'school-dues' ? 'schoolDues' : page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
+      <header><button ref={menuButtonRef} className="menu-button" aria-expanded={open} aria-controls="kitchen-navigation" aria-label={lang === 'fr' ? 'Ouvrir le menu' : 'Open navigation'} onClick={() => setOpen(true)}><Menu /></button><button className="collapse-button" onClick={() => setCollapsed(value => !value)} aria-label="Toggle navigation">{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}</button><img className="header-logo" src="./images/kcs-emblem.jpg" alt="Kinshasa Christian School"/><div><span className="eyebrow">KCS KITCHEN · {t.live}</span><h1>{page === 'school-dues' ? t.schoolDues : page === 'manager-inbox' ? t.managerInbox : t[page]}</h1></div><div className="header-actions"><InstallAppButton lang={lang} compact /><div className="status-pill"><ShieldCheck /> {t.verified}</div></div></header>
       <div className="page-body">
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} lang={lang} />}
@@ -506,6 +507,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'reports' && <Reports user={user} t={t} />}
         {page === 'access' && <Access t={t} />}
         {page === 'school-dues' && <SchoolDuesRegister user={user} lang={lang} />}
+        {page === 'manager-inbox' && <ManagerInbox lang={lang} />}
         {page === 'settings' && <KitchenSettings user={user} lang={lang} onPasswordChanged={onLogout} />}
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
@@ -531,6 +533,8 @@ type PersonalMenu = { id: string; title: string; items: Array<{ product: Product
 
 const menuPhotoFor = (product: Product) => {
   const name = product.name.toLowerCase()
+  if (/^(chicken|poulet)(\s|\/|$)/i.test(name)) return './images/menu-items/chicken-kcs.png'
+  if (/^(fries|frites)(\s|\/|$)/i.test(name)) return './images/menu-items/fries-kcs.png'
   const dedicated: Array<[RegExp, string]> = [
     [/chicken.*fries|cuisse.*frite/, 'chicken-fries'], [/samoussa/, 'samoussas'],
     [/macaroni/, 'macaronis'], [/cr.pe|crepe/, 'crepes'], [/sandwich/, 'sandwich'],
@@ -1166,6 +1170,35 @@ function Orders({ user, lang }: { user: User; lang: Lang }) {
   return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · ORDER CONTROL</span><h2>{fr ? 'Commandes à livrer' : 'Orders awaiting delivery'}</h2><p>{fr ? 'Aucun achat ni dette ne touche la comptabilité avant les deux validations : réception par l’entité, puis remise par Kitchen.' : 'No purchase or debt affects accounting until both approvals are complete: customer receipt, then Kitchen handover.'}</p></div><button onClick={() => void load()}><Search/>{fr ? 'Actualiser' : 'Refresh'}</button></div>{pending.length ? list(pending) : <Empty text={fr ? 'Aucune commande en attente.' : 'No pending order.'}/>}</section><section className="panel"><div className="section-heading"><div><span className="eyebrow">{fr ? 'TRAÇABILITÉ' : 'TRACEABILITY'}</span><h2>{fr ? 'Historique des commandes' : 'Order history'}</h2></div></div>{history.length ? list(history.slice(0, 100)) : <Empty text={fr ? 'Aucun historique.' : 'No history.'}/>}</section>{pendingAction && <Modal onClose={() => !busy && setPendingAction(null)}><div className="confirmation-card"><span className="confirmation-icon">{pendingAction.action !== 'cancel' ? <CheckCircle2/> : <AlertTriangle/>}</span><h2>{pendingAction.action === 'receive' ? (fr ? 'Confirmer paiement et réception' : 'Confirm payment and receipt') : pendingAction.action === 'deliver' ? (fr ? 'Validation finale Kitchen' : 'Final Kitchen approval') : (fr ? 'Confirmer la non-livraison' : 'Confirm non-delivery')}</h2><p><b>{pendingAction.transaction.personNameSnapshot}</b><br/>{pendingAction.transaction.transactionNumber}</p><p>{pendingAction.action === 'receive' ? (pendingAction.transaction.paymentMode === 'CREDIT' ? (fr ? 'Je confirme avoir réellement reçu cette commande. Elle ne sera comptabilisée qu’après validation de Kitchen.' : 'I confirm actual receipt. It will only be accounted for after Kitchen approval.') : (fr ? 'Je confirme avoir remis l’argent et reçu ma commande. Elle ne sera comptabilisée qu’après validation de Kitchen.' : 'I confirm handing over payment and receiving my order. It will only be accounted for after Kitchen approval.')) : pendingAction.action === 'deliver' ? (fr ? 'La confirmation du client est acquise. Cette seconde validation enregistrera maintenant la vente ou la dette, la prise en charge KCS et la sortie de stock.' : 'Customer confirmation is complete. This second approval will now record the sale or debt, KCS subsidy and inventory movement.') : (fr ? 'La commande sera annulée sans incidence financière.' : 'The order will be cancelled without financial impact.')}</p><div className="button-row"><button disabled={!!busy} onClick={() => setPendingAction(null)}>{fr ? 'Retour' : 'Back'}</button><button className={pendingAction.action === 'cancel' ? 'danger-action' : 'primary'} disabled={!!busy} onClick={() => void act()}>{busy ? <LoaderCircle className="spin"/> : pendingAction.action !== 'cancel' ? <CheckCircle2/> : <X/>}{fr ? 'Confirmer' : 'Confirm'}</button></div></div></Modal>}{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
 }
 
+function ManagerInbox({ lang }: { lang: Lang }) {
+  const fr = lang === 'fr'
+  const [query, setQuery] = useState('')
+  const [kind, setKind] = useState('')
+  const [items, setItems] = useState<any[]>([])
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const load = useCallback(async () => {
+    setBusy(true)
+    try {
+      const params = new URLSearchParams()
+      if (query.trim()) params.set('q', query.trim())
+      if (kind) params.set('kind', kind)
+      const result = await api<{ items: any[] }>('/manager-inbox?' + params)
+      setItems(result.items)
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }, [query, kind])
+  useEffect(() => { void load() }, [kind])
+  async function download(item: any) {
+    try {
+      const blob = await apiBlob('/manager-inbox/' + encodeURIComponent(item.id) + '/attachment')
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = item.attachmentName || 'KCS-Kitchen-Rapport.pdf'; anchor.click(); URL.revokeObjectURL(url)
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+  }
+  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · MANAGER INBOX</span><h2>{fr ? 'Rapports et réclamations' : 'Reports and complaints'}</h2><p>{fr ? 'Tout ce qui est envoyé au gestionnaire par e-mail reste également archivé et recherchable ici.' : 'Everything emailed to the manager is also archived and searchable here.'}</p></div><button className="primary" disabled={busy} onClick={() => void load()}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Actualiser' : 'Refresh'}</button></div><div className="search-toolbar"><div className="search-box"><Search/><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && void load()} placeholder={fr ? 'Date, référence, personne, réclamation…' : 'Date, reference, person, complaint…'}/></div><select value={kind} onChange={event => setKind(event.target.value)}><option value="">{fr ? 'Tous les messages' : 'All messages'}</option><option value="DAILY_REPORT">{fr ? 'Rapports journaliers' : 'Daily reports'}</option><option value="COMPLAINT">{fr ? 'Réclamations' : 'Complaints'}</option></select><button className="primary" onClick={() => void load()}><Search/>{fr ? 'Rechercher' : 'Search'}</button></div><div className="rank-list">{items.map(item => <div key={item.id}><b>{dateTime(item.createdAt)}</b><span><strong>{item.title}</strong><small>{item.message}</small></span>{item.attachmentName && <button onClick={() => void download(item)}><ReceiptText/>{fr ? 'PDF' : 'PDF'}</button>}</div>)}</div>{!items.length && !busy && <Empty text={fr ? 'Aucun rapport ou réclamation.' : 'No report or complaint.'}/>}</section>{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
+}
+
 function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: Lang; onPasswordChanged: () => void }) {
   const fr = lang === 'fr'
   const [email, setEmail] = useState(user.email || '')
@@ -1176,6 +1209,14 @@ function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: 
   const [visible, setVisible] = useState({ emailPassword: false, current: false, password: false, confirm: false })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [delivery, setDelivery] = useState({ reportEmail: user.email || '', dailyReportEnabled: false, dailyReportHour: 17 })
+  useEffect(() => {
+    void api<{ settings: typeof delivery }>('/manager-settings').then(result => setDelivery({
+      reportEmail: result.settings.reportEmail || user.email || '',
+      dailyReportEnabled: Boolean(result.settings.dailyReportEnabled),
+      dailyReportHour: Number(result.settings.dailyReportHour ?? 17),
+    })).catch(() => undefined)
+  }, [user.email])
   const predictable = /(password|motdepasse|passw0rd|qwerty|azerty|123456|admin|welcome|bienvenue|kinshasa|christian|school)/i.test(password.replace(/[^a-z0-9]/gi, ''))
   const rules = [{ ok: password.length >= 14, fr: '14 caract\u00e8res minimum', en: 'At least 14 characters' }, { ok: /[a-z]/.test(password) && /[A-Z]/.test(password), fr: 'Minuscules et majuscules', en: 'Lowercase and uppercase letters' }, { ok: /\d/.test(password), fr: 'Au moins un chiffre', en: 'At least one number' }, { ok: /[^A-Za-z0-9\s]/.test(password), fr: 'Au moins un symbole', en: 'At least one symbol' }, { ok: !/\s/.test(password), fr: 'Aucun espace', en: 'No spaces' }, { ok: !/(.)\1\1/i.test(password), fr: 'Pas de triple caract\u00e8re identique', en: 'No triple repeated character' }, { ok: !predictable, fr: 'Aucun mot ou motif pr\u00e9visible', en: 'No common word or predictable pattern' }, { ok: password === confirm && !!confirm, fr: 'Confirmation identique', en: 'Matching confirmation' }]
   const strong = rules.every(rule => rule.ok)
@@ -1198,7 +1239,22 @@ function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: 
     } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
     finally { setBusy(false) }
   }
-  return <><section className="panel settings-profile"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KCS KITCHEN</span><h2>{fr ? 'Identité et sécurité du compte' : 'Account identity and security'}</h2><p>{fr ? 'Ces identifiants sont communs aux applications autorisées de l’écosystème.' : 'These credentials are shared by the ecosystem applications you are authorized to access.'}</p></div></div><div className="identity-summary"><div className="avatar">{user.fullName.split(' ').map(value => value[0]).slice(0,2).join('')}</div><span><b>{user.fullName}</b><small>{user.email || user.orbitPersonId}</small><small>{translatedRole(user.role, lang)}</small></span></div><form className="email-settings-form" onSubmit={saveEmail}><label>{fr ? 'Nouvelle adresse e-mail institutionnelle' : 'New institutional email'}<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required/></label><label>{fr ? 'Mot de passe actuel pour confirmer' : 'Current password to confirm'}{passwordInput('emailPassword', emailPassword, setEmailPassword, 'current-password')}</label><button className="primary large" disabled={busy || !emailPassword || email.trim().toLowerCase() === String(user.email || '').toLowerCase()}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Mettre à jour mon e-mail' : 'Update my email'}</button></form><form className="password-settings-form" onSubmit={save}><label>{fr ? 'Mot de passe actuel' : 'Current password'}{passwordInput('current', currentPassword, setCurrentPassword, 'current-password')}</label><label>{fr ? 'Nouveau mot de passe' : 'New password'}{passwordInput('password', password, setPassword, 'new-password')}</label><label>{fr ? 'Confirmer le nouveau mot de passe' : 'Confirm new password'}{passwordInput('confirm', confirm, setConfirm, 'new-password')}</label><div className={'password-strength ' + (strong ? 'strong' : 'weak')}><b>{strong ? (fr ? 'Mot de passe robuste' : 'Strong password') : (fr ? 'Exigences à compléter' : 'Requirements to complete')}</b>{rules.map(rule => <span key={rule.en} className={rule.ok ? 'ok' : ''}>{rule.ok ? <CheckCircle2/> : <X/>}{fr ? rule.fr : rule.en}</span>)}</div><button className="primary large" disabled={!strong || busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Changer mon mot de passe' : 'Change my password'}</button></form></section>{notice && <Notice {...notice} onClose={() => { const success = notice.type === 'success'; setNotice(null); if (success) onPasswordChanged() }}/>}</>
+  async function saveDelivery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true)
+    try {
+      const result = await api<{ settings: typeof delivery }>('/manager-settings', { method: 'PUT', body: JSON.stringify(delivery) })
+      setDelivery(result.settings)
+      setNotice({ type: 'success', message: fr ? 'Destination des rapports enregistrée.' : 'Report destination saved.' })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
+  async function sendDailyNow() {
+    setBusy(true)
+    try { await api('/reports/daily/send', { method: 'POST' }); setNotice({ type: 'success', message: fr ? 'Rapport journalier généré et placé dans la file d’envoi.' : 'Daily report generated and queued for delivery.' }) }
+    catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
+  return <><section className="panel settings-profile"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KCS KITCHEN</span><h2>{fr ? 'Identité et sécurité du compte' : 'Account identity and security'}</h2><p>{fr ? 'Ces identifiants sont communs aux applications autorisées de l’écosystème.' : 'These credentials are shared by the ecosystem applications you are authorized to access.'}</p></div></div><div className="identity-summary"><div className="avatar">{user.fullName.split(' ').map(value => value[0]).slice(0,2).join('')}</div><span><b>{user.fullName}</b><small>{user.email || user.orbitPersonId}</small><small>{translatedRole(user.role, lang)}</small></span></div><form className="email-settings-form" onSubmit={saveEmail}><label>{fr ? 'Nouvelle adresse e-mail institutionnelle' : 'New institutional email'}<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required/></label><label>{fr ? 'Mot de passe actuel pour confirmer' : 'Current password to confirm'}{passwordInput('emailPassword', emailPassword, setEmailPassword, 'current-password')}</label><button className="primary large" disabled={busy || !emailPassword || email.trim().toLowerCase() === String(user.email || '').toLowerCase()}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Mettre à jour mon e-mail' : 'Update my email'}</button></form><form className="password-settings-form" onSubmit={save}><label>{fr ? 'Mot de passe actuel' : 'Current password'}{passwordInput('current', currentPassword, setCurrentPassword, 'current-password')}</label><label>{fr ? 'Nouveau mot de passe' : 'New password'}{passwordInput('password', password, setPassword, 'new-password')}</label><label>{fr ? 'Confirmer le nouveau mot de passe' : 'Confirm new password'}{passwordInput('confirm', confirm, setConfirm, 'new-password')}</label><div className={'password-strength ' + (strong ? 'strong' : 'weak')}><b>{strong ? (fr ? 'Mot de passe robuste' : 'Strong password') : (fr ? 'Exigences à compléter' : 'Requirements to complete')}</b>{rules.map(rule => <span key={rule.en} className={rule.ok ? 'ok' : ''}>{rule.ok ? <CheckCircle2/> : <X/>}{fr ? rule.fr : rule.en}</span>)}</div><button className="primary large" disabled={!strong || busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Changer mon mot de passe' : 'Change my password'}</button></form></section><section className="panel"><div className="section-heading"><div><span className="eyebrow">DAILY REPORT DELIVERY</span><h2>{fr ? 'Rapport journalier et réclamations' : 'Daily report and complaints'}</h2><p>{fr ? 'Cette adresse reçoit le rapport PDF professionnel et chaque nouvelle réclamation. Une copie reste dans la Boîte du gestionnaire.' : 'This address receives the professional PDF report and every complaint. A copy remains in the Manager inbox.'}</p></div></div><form className="modal-form" onSubmit={saveDelivery}><label>{fr ? 'E-mail destinataire du gestionnaire' : 'Manager recipient email'}<input type="email" value={delivery.reportEmail} onChange={event => setDelivery(current => ({ ...current, reportEmail: event.target.value }))} required/></label><label>{fr ? 'Heure d’envoi automatique (heure de Kinshasa)' : 'Automatic delivery hour (Kinshasa time)'}<input type="number" min="0" max="23" value={delivery.dailyReportHour} onChange={event => setDelivery(current => ({ ...current, dailyReportHour: Number(event.target.value) }))}/></label><label className="check"><input type="checkbox" checked={delivery.dailyReportEnabled} onChange={event => setDelivery(current => ({ ...current, dailyReportEnabled: event.target.checked }))}/>{fr ? 'Activer l’envoi journalier automatique' : 'Enable automatic daily delivery'}</label><div className="button-row"><button className="primary" disabled={busy}><ShieldCheck/>{fr ? 'Enregistrer' : 'Save'}</button><button type="button" disabled={busy || !delivery.reportEmail} onClick={() => void sendDailyNow()}><ReceiptText/>{fr ? 'Générer et envoyer maintenant' : 'Generate and send now'}</button></div></form></section>{notice && <Notice {...notice} onClose={() => { const passwordSuccess = notice.type === 'success' && notice.message.toLowerCase().includes(fr ? 'mot de passe' : 'password'); setNotice(null); if (passwordSuccess) onPasswordChanged() }}/>}</>
 }
 
 function SchoolDues({ user, lang }: { user: User; lang: Lang }) {

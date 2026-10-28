@@ -104,14 +104,29 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function toggle(id: string) { setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id]) }
+  function toggle(id: string) {
+    const product = products.find(item => item.id === id)
+    setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])
+    if (product) setMenuPrices(current => current[id] ? current : {
+      ...current,
+      [id]: { value: Number(product.currentPrice) > 0 ? String(product.currentPrice) : '', currency: product.currency || 'CDF' },
+    })
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
     setMessage('')
     try {
-      const payload = JSON.stringify({ date, title, description: description || null, productIds: selected, publish })
+      const items = selected.map(productId => ({
+        productId,
+        unitPrice: Number(menuPrices[productId]?.value || 0),
+        currency: menuPrices[productId]?.currency === 'USD' ? 'USD' : 'CDF',
+      }))
+      if (items.some(item => !Number.isFinite(item.unitPrice) || item.unitPrice <= 0)) {
+        throw new Error(fr ? 'Indiquez un prix valide pour chaque article sélectionné.' : 'Enter a valid price for every selected item.')
+      }
+      const payload = JSON.stringify({ date, title, description: description || null, items, publish })
       await api(editingId ? `/daily-menus/${editingId}` : '/daily-menus', { method: editingId ? 'PUT' : 'POST', body: payload })
       await load()
       setMessage(editingId ? (fr ? 'Menu modifié et inscrit dans l’historique.' : 'Menu updated and recorded in the audit history.') : (fr ? 'Menu enregistré et activé.' : 'Menu saved and activated.'))
@@ -153,7 +168,13 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
         <div className="menu-editor-heading"><div><span className="eyebrow">{editingId ? (fr ? 'MODIFICATION CONTRÔLÉE' : 'CONTROLLED UPDATE') : (fr ? 'NOUVEAU MENU' : 'NEW MENU')}</span><h2>{editingId ? (fr ? 'Modifier le menu' : 'Edit menu') : (fr ? 'Composer le menu' : 'Compose menu')}</h2></div>{editingId && <button type="button" className="secondary compact" onClick={resetEditor}><RotateCcw />{fr ? 'Annuler' : 'Cancel'}</button>}</div>
         <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" value={date} onChange={event => { const nextDate = event.target.value; setDate(nextDate); const existing = menus.find(menu => dateKey(menu.menuDate) === nextDate); if (existing) populateEditor(existing) }} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
         <label>{fr ? 'Description' : 'Description'}<textarea value={description} onChange={event => setDescription(event.target.value)} /></label>
-        <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{product.category}</small><DisplayMoney value={menuPrices[product.id]?.value ?? product.currentPrice} currency={menuPrices[product.id]?.currency ?? product.currency} /></button>)}</div>
+        <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{product.category}</small><DisplayMoney value={menuPrices[product.id]?.value || product.currentPrice} currency={menuPrices[product.id]?.currency ?? product.currency} /></button>)}</div>
+        {selected.length > 0 && <div className="menu-price-editor"><div className="menu-price-editor-title"><b>{fr ? 'Prix du menu du jour' : "Today's menu prices"}</b><small>{fr ? 'Chaque article possède son propre prix, modifiable par le gestionnaire.' : 'Each item has its own price, editable by the Kitchen manager.'}</small></div>{selected.map(productId => {
+          const product = products.find(item => item.id === productId)
+          if (!product) return null
+          const price = menuPrices[productId] || { value: String(product.currentPrice || ''), currency: product.currency || 'CDF' }
+          return <div className="menu-price-line" key={productId}><span><b>{product.name}</b><small>{fr ? 'Prix de vente pour ce menu' : 'Selling price for this menu'}</small></span><label>{fr ? 'Montant' : 'Amount'}<input type="number" min="0.01" step="0.01" inputMode="decimal" value={price.value} onChange={event => setMenuPrices(current => ({ ...current, [productId]: { ...price, value: event.target.value } }))} required /></label><label>{fr ? 'Devise' : 'Currency'}<select value={price.currency} onChange={event => setMenuPrices(current => ({ ...current, [productId]: { ...price, currency: event.target.value } }))}><option value="CDF">CDF</option><option value="USD">USD</option></select></label></div>
+        })}</div>}
         <label className="publish-choice"><input type="checkbox" checked={publish} onChange={event => setPublish(event.target.checked)} /><span>{fr ? 'Publier immédiatement et figer les prix' : 'Publish now and freeze prices'}</span></label>
         {message && <p className="status-message">{message}</p>}
         <button className="primary large" disabled={busy || !selected.length}>{busy ? <LoaderCircle className="spin" /> : <CheckCircle2 />}{editingId ? (fr ? 'Enregistrer les modifications' : 'Save changes') : (fr ? 'Enregistrer le menu' : 'Save menu')}</button>

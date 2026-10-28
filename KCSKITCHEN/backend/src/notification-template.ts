@@ -6,6 +6,12 @@ function amount(value: unknown) {
 }
 
 export function buildKitchenNotification(eventType: string, payload: Payload) {
+  if (eventType === 'KITCHEN_DAILY_REPORT' || eventType === 'KITCHEN_COMPLAINT_OPENED') {
+    return {
+      title: String(payload.title || (eventType === 'KITCHEN_DAILY_REPORT' ? 'KCS Kitchen · Rapport journalier' : 'KCS Kitchen · Nouvelle réclamation')),
+      text: String(payload.text || 'Une nouvelle information Kitchen est disponible dans la boîte du gestionnaire.'),
+    }
+  }
   if (eventType === 'KITCHEN_TRANSACTION_CREATED') {
     const reference = String(payload.transactionNumber || 'KCS Kitchen')
     return {

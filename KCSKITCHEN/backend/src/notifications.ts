@@ -1,6 +1,7 @@
 import { env } from './config.js'
 import { prisma } from './db.js'
 import { buildKitchenNotification } from './notification-template.js'
+import { queueDailyKitchenReport } from './daily-report.js'
 
 const MAX_ATTEMPTS = 5
 let processing = false
@@ -13,6 +14,7 @@ export async function processNotificationOutbox(limit = 25) {
   let failed = 0
   let deferred = 0
   try {
+    await queueDailyKitchenReport(prisma).catch(error => console.error('[kitchen-daily-report]', error))
     const rows = await prisma.notificationOutbox.findMany({
       where: { status: { in: ['QUEUED', 'FAILED'] }, attempts: { lt: MAX_ATTEMPTS } },
       orderBy: { createdAt: 'asc' },
@@ -26,7 +28,8 @@ export async function processNotificationOutbox(limit = 25) {
       }
       processed += 1
       try {
-        const content = buildKitchenNotification(row.eventType, row.payload as Record<string, unknown>)
+        const payload = row.payload as Record<string, unknown>
+        const content = buildKitchenNotification(row.eventType, payload)
         const response = await fetch(env.NEXUS_NOTIFICATION_URL, {
           method: 'POST',
           headers: {
@@ -39,7 +42,10 @@ export async function processNotificationOutbox(limit = 25) {
             eventType: row.eventType,
             channels: row.channels,
             title: content.title,
-            text: content.text
+            text: content.text,
+            recipientEmail: typeof payload.recipientEmail === 'string' ? payload.recipientEmail : undefined,
+            attachmentName: typeof payload.attachmentName === 'string' ? payload.attachmentName : undefined,
+            attachmentBase64: typeof payload.attachmentBase64 === 'string' ? payload.attachmentBase64 : undefined,
           }),
           signal: AbortSignal.timeout(20_000)
         })

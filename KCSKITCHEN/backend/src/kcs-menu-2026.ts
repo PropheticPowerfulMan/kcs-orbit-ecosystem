@@ -1,6 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client'
 
-type MenuLine = { name: string; price: number; category: 'FOOD' | 'SNACK' | 'DESSERT' }
+type MenuLine = { name: string; price: number; category: 'FOOD' | 'SNACK' | 'DESSERT'; managerPriced?: boolean; photoUrl?: string }
 type OfficialProductRef = { id: string }
 type OfficialDrink = { name: string; slug: string; price?: number; comingSoon?: boolean }
 
@@ -17,7 +17,8 @@ const officialDrinks: OfficialDrink[] = [
 ]
 
 const monday: MenuLine[] = [
-  { name: 'Chicken & Fries / Cuisse & Frites', price: 10000, category: 'FOOD' },
+  { name: 'Chicken / Poulet', price: 0, category: 'FOOD', managerPriced: true, photoUrl: '/kitchen/images/menu-items/chicken-kcs.png' },
+  { name: 'Fries / Frites', price: 0, category: 'FOOD', managerPriced: true, photoUrl: '/kitchen/images/menu-items/fries-kcs.png' },
   { name: 'Samoussas', price: 2500, category: 'SNACK' },
   { name: 'Macaronis', price: 5000, category: 'FOOD' },
   { name: 'Crêpes / Crepes', price: 2000, category: 'DESSERT' },
@@ -45,6 +46,10 @@ const officialProducts = [...monday, ...tuesday].filter((line, index, all) =>
 
 async function ensureOfficialProducts(prisma: PrismaClient) {
   const products = new Map<string, OfficialProductRef>()
+  await prisma.product.updateMany({
+    where: { name: 'Chicken & Fries / Cuisse & Frites', archivedAt: null },
+    data: { isAvailable: false },
+  })
   for (const line of officialProducts) {
     let product = await prisma.product.findFirst({
       where: { name: line.name, archivedAt: null },
@@ -53,13 +58,9 @@ async function ensureOfficialProducts(prisma: PrismaClient) {
     product = product
       ? await prisma.product.update({
           where: { id: product.id },
-          data: {
-            currentPrice: new Prisma.Decimal(line.price),
-            currency: 'CDF',
-            category: line.category,
-            isAvailable: true,
-            discountEligible: true
-          }
+          data: line.managerPriced
+            ? { currency: 'CDF', category: line.category, discountEligible: true, photoUrl: line.photoUrl }
+            : { currentPrice: new Prisma.Decimal(line.price), currency: 'CDF', category: line.category, isAvailable: true, discountEligible: true, photoUrl: line.photoUrl }
         })
       : await prisma.product.create({
           data: {
@@ -68,7 +69,8 @@ async function ensureOfficialProducts(prisma: PrismaClient) {
             currency: 'CDF',
             category: line.category,
             isAvailable: true,
-            discountEligible: true
+            discountEligible: true,
+            photoUrl: line.photoUrl,
           }
         })
     products.set(line.name, { id: product.id })
@@ -90,7 +92,9 @@ async function ensureOfficialDrinks(prisma: PrismaClient) {
     const product = existing
       ? await prisma.product.update({
           where: { id: existing.id },
-          data: { category: 'DRINK', discountEligible: false, photoUrl, description, currentPrice: new Prisma.Decimal(drink.price || 0), currency: 'CDF', isAvailable: !drink.comingSoon },
+          data: drink.comingSoon
+            ? { category: 'DRINK', discountEligible: false, photoUrl, currency: 'CDF' }
+            : { category: 'DRINK', discountEligible: false, photoUrl, description, currentPrice: new Prisma.Decimal(drink.price!), currency: 'CDF', isAvailable: true },
         })
       : await prisma.product.create({
           data: {
@@ -122,7 +126,7 @@ async function attachAvailableDrinks(prisma: PrismaClient, menuId: string, start
   })
   await Promise.all(drinks.map((drink, index) => prisma.dailyMenuItem.update({
     where: { menuId_productId: { menuId, productId: drink.id } },
-    data: { unitPrice: drink.currentPrice, currency: drink.currency, displayOrder: startOrder + index, isAvailable: true },
+    data: { unitPrice: drink.currentPrice, currency: drink.currency, displayOrder: startOrder + index, isAvailable: drink.isAvailable },
   })))
   return prisma.dailyMenu.findUniqueOrThrow({ where: { id: menuId }, include: { items: { where: { isAvailable: true }, include: { product: true }, orderBy: { displayOrder: 'asc' } } } })
 }
@@ -144,8 +148,22 @@ export async function ensureOfficialMenu(
       }
     }
   })
-  if (existing) return attachAvailableDrinks(prisma, existing.id, existing.items.length)
   const products = preparedProducts ?? await ensureOfficialProducts(prisma)
+  if (existing) {
+    const legacy = await prisma.product.findMany({ where: { name: 'Chicken & Fries / Cuisse & Frites', archivedAt: null }, select: { id: true } })
+    if (legacy.length) await prisma.dailyMenuItem.updateMany({ where: { menuId: existing.id, productId: { in: legacy.map(item => item.id) } }, data: { isAvailable: false } })
+    for (const [index, line] of definition.items.entries()) {
+      const product = await prisma.product.findUniqueOrThrow({ where: { id: products.get(line.name)!.id } })
+      const configuredPrice = line.managerPriced ? product.currentPrice : new Prisma.Decimal(line.price)
+      const available = line.managerPriced ? product.isAvailable && Number(product.currentPrice) > 0 : true
+      await prisma.dailyMenuItem.upsert({
+        where: { menuId_productId: { menuId: existing.id, productId: product.id } },
+        create: { menuId: existing.id, productId: product.id, unitPrice: configuredPrice, currency: 'CDF', displayOrder: index, isAvailable: available },
+        update: { unitPrice: configuredPrice, currency: 'CDF', displayOrder: index, isAvailable: available },
+      })
+    }
+    return attachAvailableDrinks(prisma, existing.id, definition.items.length)
+  }
   const menu = await prisma.$transaction(async tx => {
     const menu = await tx.dailyMenu.create({
       data: {
@@ -161,9 +179,10 @@ export async function ensureOfficialMenu(
       data: definition.items.map((line, index) => ({
         menuId: menu.id,
         productId: products.get(line.name)!.id,
-        unitPrice: new Prisma.Decimal(line.price),
+        unitPrice: line.managerPriced ? new Prisma.Decimal(0) : new Prisma.Decimal(line.price),
         currency: 'CDF',
-        displayOrder: index
+        displayOrder: index,
+        isAvailable: !line.managerPriced,
       }))
     })
     return menu

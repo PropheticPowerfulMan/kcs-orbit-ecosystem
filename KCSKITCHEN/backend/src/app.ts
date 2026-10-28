@@ -16,6 +16,7 @@ import { compareClassNames, normalizeClassName } from './class-name.js'
 import { processNotificationOutbox } from './notifications.js'
 import { procurementRouter } from './procurement.js'
 import { getUsdCdfRate } from './exchange-rate.js'
+import { queueDailyKitchenReport } from './daily-report.js'
 import {
   buildStatementArtifact,
   canIssueStatement,
@@ -503,12 +504,24 @@ app.get('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FIN
   res.setHeader('Cache-Control', 'no-store')
   res.json({ menus, deletedMenus })
 }))
-const dailyMenuSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), title: z.string().trim().min(2).max(120), description: z.string().trim().max(500).optional().nullable(), productIds: z.array(z.string().min(1)).min(1).max(80), publish: z.boolean().default(false) })
+const dailyMenuSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  title: z.string().trim().min(2).max(120),
+  description: z.string().trim().max(500).optional().nullable(),
+  productIds: z.array(z.string().min(1)).max(80).optional(),
+  items: z.array(z.object({ productId: z.string().min(1), unitPrice: z.coerce.number().positive(), currency: z.enum(['CDF', 'USD']).default('CDF') })).min(1).max(80).optional(),
+  publish: z.boolean().default(false)
+}).refine(value => Boolean(value.items?.length || value.productIds?.length), { message: 'At least one priced menu item is required' })
 const auditJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
+const menuInputLines = (input: z.infer<typeof dailyMenuSchema>) => {
+  const source = input.items?.length ? input.items : (input.productIds || []).map(productId => ({ productId, unitPrice: 0, currency: 'CDF' as const }))
+  return [...new Map(source.map(item => [item.productId, item])).values()]
+}
 
 app.post('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
   const input = dailyMenuSchema.parse(req.body)
-  const ids = [...new Set(input.productIds)]
+  const lines = menuInputLines(input)
+  const ids = lines.map(item => item.productId)
   const products = await prisma.product.findMany({ where: { id: { in: ids }, archivedAt: null, isAvailable: true } })
   if (products.length !== ids.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
   const date = menuDate(input.date)
@@ -516,7 +529,8 @@ app.post('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(as
   if (existing) return res.status(409).json({ message: 'A menu already exists for this service date. Open it with Edit to preserve its complete audit history.' })
   const menu = await prisma.$transaction(async tx => {
     const saved = await tx.dailyMenu.create({ data: { menuDate: date, title: input.title, description: input.description, createdBy: req.kitchenUser!.orbitPersonId, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null } })
-    await tx.dailyMenuItem.createMany({ data: ids.map((id, index) => { const product = products.find(item => item.id === id)!; return { menuId: saved.id, productId: id, unitPrice: product.currentPrice, currency: product.currency, displayOrder: index } }) })
+    await tx.dailyMenuItem.createMany({ data: lines.map((line, index) => { const product = products.find(item => item.id === line.productId)!; const unitPrice = line.unitPrice > 0 ? line.unitPrice : Number(product.currentPrice); if (unitPrice <= 0) throw new Error(`${product.name} requires a menu price`); return { menuId: saved.id, productId: product.id, unitPrice: new Prisma.Decimal(unitPrice), currency: line.currency || product.currency, displayOrder: index } }) })
+    for (const line of lines) if (line.unitPrice > 0) await tx.product.update({ where: { id: line.productId }, data: { currentPrice: new Prisma.Decimal(line.unitPrice), currency: line.currency, isAvailable: true } })
     const complete = await tx.dailyMenu.findUniqueOrThrow({ where: { id: saved.id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
     await tx.auditLog.create({ data: { actorId: req.kitchenUser!.orbitPersonId, actorRole: req.kitchenUser!.role, action: input.publish ? 'DAILY_MENU_PUBLISHED' : 'DAILY_MENU_SAVED', entityType: 'DailyMenu', entityId: saved.id, newValue: auditJson(complete), ipAddress: req.ip } })
     return complete
@@ -539,13 +553,15 @@ app.put('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute
   const date = menuDate(input.date)
   const conflicting = await prisma.dailyMenu.findFirst({ where: { menuDate: date, id: { not: id } }, select: { id: true } })
   if (conflicting) return res.status(409).json({ message: 'Another menu already exists for this service date.' })
-  const productIds = [...new Set(input.productIds)]
+  const lines = menuInputLines(input)
+  const productIds = lines.map(item => item.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, archivedAt: null, isAvailable: true } })
   if (products.length !== productIds.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
   const menu = await prisma.$transaction(async tx => {
     await tx.dailyMenu.update({ where: { id }, data: { menuDate: date, title: input.title, description: input.description, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null, closedAt: null } })
     await tx.dailyMenuItem.deleteMany({ where: { menuId: id } })
-    await tx.dailyMenuItem.createMany({ data: productIds.map((productId, index) => { const product = products.find(item => item.id === productId)!; return { menuId: id, productId, unitPrice: product.currentPrice, currency: product.currency, displayOrder: index } }) })
+    await tx.dailyMenuItem.createMany({ data: lines.map((line, index) => { const product = products.find(item => item.id === line.productId)!; const unitPrice = line.unitPrice > 0 ? line.unitPrice : Number(product.currentPrice); if (unitPrice <= 0) throw new Error(`${product.name} requires a menu price`); return { menuId: id, productId: product.id, unitPrice: new Prisma.Decimal(unitPrice), currency: line.currency || product.currency, displayOrder: index } }) })
+    for (const line of lines) if (line.unitPrice > 0) await tx.product.update({ where: { id: line.productId }, data: { currentPrice: new Prisma.Decimal(line.unitPrice), currency: line.currency, isAvailable: true } })
     const updated = await tx.dailyMenu.findUniqueOrThrow({ where: { id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
     await tx.auditLog.create({ data: { actorId: req.kitchenUser!.orbitPersonId, actorRole: req.kitchenUser!.role, action: 'DAILY_MENU_UPDATED', entityType: 'DailyMenu', entityId: id, oldValue: auditJson(previous), newValue: auditJson(updated), ipAddress: req.ip } })
     return updated
@@ -1021,6 +1037,17 @@ app.post('/api/disputes', authenticate, asyncRoute(async (req: AuthRequest, res)
     return res.status(403).json({ message: 'Forbidden' })
   }
   const dispute = await prisma.kitchenDispute.create({ data: { ...input, orbitPersonId: transaction.orbitPersonId } })
+  const settings = await prisma.kitchenManagerSettings.findUnique({ where: { id: 'primary' } })
+  const inbox = await prisma.kitchenManagerInbox.create({ data: {
+    kind: 'COMPLAINT', title: `Réclamation Kitchen · ${transaction.transactionNumber}`,
+    message: `${transaction.personNameSnapshot} · ${input.reason.replaceAll('_', ' ')}${input.comment ? `\n${input.comment}` : ''}`,
+    referenceType: 'KitchenDispute', referenceId: dispute.id,
+  } })
+  if (settings?.managerOrbitPersonId) await prisma.notificationOutbox.create({ data: {
+    orbitPersonId: settings.managerOrbitPersonId,
+    eventType: 'KITCHEN_COMPLAINT_OPENED', channels: ['IN_APP', ...(settings.reportEmail ? ['EMAIL'] : [])],
+    payload: { title: inbox.title, text: inbox.message, recipientEmail: settings.reportEmail || undefined, inboxId: inbox.id },
+  } })
   await audit(req, 'DISPUTE_OPENED', 'KitchenDispute', dispute.id, undefined, dispute)
   res.status(201).json({ dispute })
 }))
@@ -1733,6 +1760,64 @@ app.post('/api/periods/:id/restore', authenticate, allow('KITCHEN_ADMIN', 'FINAN
 app.post('/api/notifications/retry', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
   const result = await processNotificationOutbox(100)
   await audit(req, 'NOTIFICATION_RETRY', 'NotificationOutbox', 'batch', undefined, result)
+  res.json(result)
+}))
+
+app.get('/api/manager-settings', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (_req, res) => {
+  const settings = await prisma.kitchenManagerSettings.upsert({ where: { id: 'primary' }, create: { id: 'primary' }, update: {} })
+  res.json({ settings })
+}))
+
+app.put('/api/manager-settings', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({
+    reportEmail: z.string().trim().email().max(254),
+    dailyReportEnabled: z.boolean(),
+    dailyReportHour: z.coerce.number().int().min(0).max(23),
+  }).parse(req.body)
+  const previous = await prisma.kitchenManagerSettings.findUnique({ where: { id: 'primary' } })
+  const settings = await prisma.kitchenManagerSettings.upsert({
+    where: { id: 'primary' },
+    create: { id: 'primary', ...input, managerOrbitPersonId: req.kitchenUser!.orbitPersonId, updatedBy: req.kitchenUser!.orbitPersonId },
+    update: { ...input, managerOrbitPersonId: req.kitchenUser!.orbitPersonId, updatedBy: req.kitchenUser!.orbitPersonId },
+  })
+  await audit(req, 'KITCHEN_MANAGER_SETTINGS_UPDATED', 'KitchenManagerSettings', settings.id, previous, settings)
+  res.json({ settings })
+}))
+
+app.get('/api/manager-inbox', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req, res) => {
+  const query = String(req.query.q || '').trim()
+  const kind = z.enum(['DAILY_REPORT', 'COMPLAINT', 'SYSTEM']).optional().parse(req.query.kind || undefined)
+  const items = await prisma.kitchenManagerInbox.findMany({
+    where: {
+      ...(kind ? { kind } : {}),
+      ...(query ? { OR: [
+        { title: { contains: query, mode: 'insensitive' } },
+        { message: { contains: query, mode: 'insensitive' } },
+        { referenceId: { contains: query, mode: 'insensitive' } },
+      ] } : {}),
+    },
+    orderBy: { createdAt: 'desc' }, take: 500,
+    select: { id: true, kind: true, title: true, message: true, referenceType: true, referenceId: true, reportDate: true, attachmentName: true, emailedAt: true, readAt: true, createdAt: true },
+  })
+  res.json({ items })
+}))
+
+app.get('/api/manager-inbox/:id/attachment', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req, res) => {
+  const item = await prisma.kitchenManagerInbox.findUnique({ where: { id: routeParam(req, 'id') } })
+  if (!item?.attachmentBase64 || !item.attachmentName) return res.status(404).json({ message: 'Attachment not found' })
+  res.setHeader('content-type', 'application/pdf')
+  res.setHeader('content-disposition', `attachment; filename="${item.attachmentName.replace(/[^a-zA-Z0-9._-]/g, '_')}"`)
+  res.send(Buffer.from(item.attachmentBase64, 'base64'))
+}))
+
+app.post('/api/manager-inbox/:id/read', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req, res) => {
+  const item = await prisma.kitchenManagerInbox.update({ where: { id: routeParam(req, 'id') }, data: { readAt: new Date() } })
+  res.json({ item })
+}))
+
+app.post('/api/reports/daily/send', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const result = await queueDailyKitchenReport(prisma, true)
+  await audit(req, 'KITCHEN_DAILY_REPORT_QUEUED', 'KitchenManagerInbox', result.inboxId || 'none', undefined, result)
   res.json(result)
 }))
 
