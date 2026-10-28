@@ -464,7 +464,44 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandl
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
-    return success(res, orbitStudentsToProfiles(directory), 'Students loaded from Orbit')
+    const orbitProfiles = orbitStudentsToProfiles(directory)
+    // Orbit owns identity/class placement, while Nexus owns attendance and academic
+    // evidence. Merge both sources so an entity "View" never loses the presence
+    // recorded by teachers merely because the directory came from Orbit.
+    const localProfiles = await prisma.studentProfile.findMany({
+      where: { studentNumber: { in: orbitProfiles.map((student) => student.studentNumber) } },
+      select: {
+        id: true,
+        studentNumber: true,
+        gpa: true,
+        attendanceRecords: { select: { status: true } },
+        grades: { select: { percentage: true } },
+      },
+    })
+    const localByNumber = new Map(localProfiles.map((profile) => [profile.studentNumber.toLowerCase(), profile]))
+    const merged = orbitProfiles.map((profile) => {
+      const local = localByNumber.get(profile.studentNumber.toLowerCase())
+      const attended = local?.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length ?? 0
+      const attendanceRate = local?.attendanceRecords.length
+        ? Number(((attended / local.attendanceRecords.length) * 100).toFixed(1))
+        : null
+      const average = local?.grades.length
+        ? Number((local.grades.reduce((sum, grade) => sum + Number(grade.percentage), 0) / local.grades.length).toFixed(1))
+        : null
+      return {
+        ...profile,
+        localProfileId: local?.id ?? null,
+        attendanceRate,
+        gpa: local?.gpa ?? profile.gpa ?? null,
+        academicSummary: {
+          average,
+          attendanceRate,
+          attendanceRecords: local?.attendanceRecords.length ?? 0,
+          publishedGrades: local?.grades.length ?? 0,
+        },
+      }
+    })
+    return success(res, merged, 'Students loaded from Orbit with Nexus academic evidence')
   }
 
   throw new ApiError(503, 'Le registre Orbit est requis pour garantir des effectifs identiques dans tout l’écosystème.')

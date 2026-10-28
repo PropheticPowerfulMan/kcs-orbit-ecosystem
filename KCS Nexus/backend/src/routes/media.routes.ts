@@ -47,7 +47,9 @@ mediaRouter.post('/upload', authenticate, requireRoles('admin'), upload.single('
       type: String(req.body.type || 'IMAGE').toUpperCase() as 'IMAGE' | 'VIDEO',
       url: `${process.env.PUBLIC_API_BASE_PATH || '/nexus/api'}/uploads/media/${filename}`,
       thumbnailUrl: req.body.thumbnailUrl,
-      tags: Array.isArray(req.body.tags) ? req.body.tags : [],
+      tags: Array.isArray(req.body.tags)
+        ? req.body.tags.map(String).map((tag: string) => tag.trim()).filter(Boolean)
+        : String(req.body.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
     },
   })
   return success(res, item, 'Media uploaded', 201)

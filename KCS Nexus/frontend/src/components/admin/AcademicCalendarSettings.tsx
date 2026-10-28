@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarDays, CheckCircle2, Save } from 'lucide-react'
 import { academicCalendarAPI } from '@/services/api'
+import SemesterTimetableManager from './SemesterTimetableManager'
 
 type Period = { type: 'SEMESTER' | 'TRIMESTER'; sequence: number; code: string; name: string; startDate: string; endDate: string }
 type Calendar = { name: string; startDate: string; endDate: string; isCurrent: boolean; status: string; periods: Period[] }
@@ -110,6 +111,7 @@ export default function AcademicCalendarSettings() {
       </div>
       <p className="mt-4 text-xs text-amber-700">L’activation change les valeurs par défaut des nouveaux dossiers. Elle ne promeut aucun élève et ne modifie ni notes, ni paiements, ni dettes historiques.</p>
       {status && <p className="mt-3 text-sm font-semibold text-kcs-blue-700 dark:text-kcs-blue-200">{status}</p>}
+      <SemesterTimetableManager academicYear={proposed.name} />
     </section>
   )
 }

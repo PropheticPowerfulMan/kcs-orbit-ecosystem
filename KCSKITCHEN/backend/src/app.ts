@@ -187,8 +187,8 @@ app.get('/api/me', authenticate, asyncRoute(async (req: AuthRequest, res) => {
   res.json({ user: req.kitchenUser, balance })
 }))
 
-app.put('/api/me/change-password', authenticate, asyncRoute(async (req: AuthRequest, res) => {
-  const input = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(12).max(200) }).parse(req.body)
+app.put('/api/me/change-password', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(14).max(128) }).parse(req.body)
   const identifier = req.kitchenUser!.email
   if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
   const loginResponse = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
@@ -209,6 +209,30 @@ app.put('/api/me/change-password', authenticate, asyncRoute(async (req: AuthRequ
   if (!changeResponse.ok) return res.status(changeResponse.status).json({ message: changeBody?.message || 'The ecosystem password could not be changed' })
   await audit(req, 'INSTITUTIONAL_PASSWORD_CHANGED_FROM_KITCHEN', 'User', req.kitchenUser!.userId, undefined, { propagatedBy: 'NEXUS' })
   res.json({ changed: true, message: 'Password changed across the KCS ecosystem. Sign in again with the new password.' })
+}))
+
+app.put('/api/me/email', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({ currentPassword: z.string().min(1).max(200), newEmail: z.string().trim().email().max(180) }).parse(req.body)
+  const identifier = req.kitchenUser!.email
+  if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
+  const loginResponse = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-kcs-client': 'KCS_KITCHEN' },
+    body: JSON.stringify({ identifier, password: input.currentPassword }),
+    signal: AbortSignal.timeout(12_000),
+  })
+  const loginBody = await loginResponse.json().catch(() => null) as any
+  if (!loginResponse.ok || !loginBody?.data?.token) return res.status(400).json({ message: loginBody?.message || 'Current password is incorrect' })
+  const updateResponse = await fetch(new URL('/api/auth/email', env.NEXUS_API_URL), {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + loginBody.data.token, 'x-kcs-client': 'KCS_KITCHEN' },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(12_000),
+  })
+  const updateBody = await updateResponse.json().catch(() => null) as any
+  if (!updateResponse.ok) return res.status(updateResponse.status).json({ message: updateBody?.message || 'The institutional email could not be changed' })
+  await audit(req, 'INSTITUTIONAL_EMAIL_CHANGED_FROM_KITCHEN', 'User', req.kitchenUser!.userId, { email: identifier }, { email: input.newEmail.toLowerCase() })
+  res.json({ changed: true, email: input.newEmail.toLowerCase(), message: 'Institutional email updated. Sign in again with the new address.' })
 }))
 app.get('/api/me/avatar', authenticate, asyncRoute(async (req: AuthRequest, res) => {
 

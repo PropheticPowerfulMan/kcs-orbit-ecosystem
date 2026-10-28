@@ -67,6 +67,13 @@ const buildLocalSchoolAnswer = (question: string, language?: string) => {
   const q = normalize(question)
   const isFr = lang === 'fr'
 
+  if (/^(bonjour|bonsoir|salut|hello|hi|hey|good morning|good afternoon|good evening)[\s!?.]*$/.test(q)) {
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Kinshasa', hour: '2-digit', hour12: false }).format(new Date()))
+    return isFr
+      ? `${hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} ! Ravi de vous accueillir à KCS. Comment puis-je vous aider aujourd’hui — admission, programme, calendrier, frais, accès Nexus ou une autre question ?`
+      : `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}! Welcome to KCS. How may I help you today—admissions, programs, calendar, fees, Nexus access, or something else?`
+  }
+
   if (hasAny(q, ['admission', 'inscription', 'inscrire', 'apply', 'enroll', 'registration', 'postuler'])) {
     return isFr
       ? `Pour postuler à ${schoolFacts.shortName} :\n${formatList([

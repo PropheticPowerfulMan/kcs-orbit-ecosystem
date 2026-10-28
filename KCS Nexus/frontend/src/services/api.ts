@@ -575,6 +575,10 @@ export const academicCalendarAPI = {
   current: () => api.get('/academic-calendar/current'),
   list: () => api.get('/academic-calendar'),
   save: (data: object) => api.put('/academic-calendar', data),
+  schedule: (academicYear: string, semester: number) => api.get('/academic-calendar/schedule', { params: { academicYear, semester } }),
+  publishSchedule: (data: object) => api.put('/academic-calendar/schedule', data),
+  previewPromotion: (data: object) => api.post('/academic-calendar/rollover/preview', data),
+  runPromotion: (data: object) => api.post('/academic-calendar/rollover/run', data),
 }
 
 export const shiningStudentsAPI = {

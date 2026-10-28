@@ -1,7 +1,8 @@
-import { useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import { Play, X, Camera, Film, ChevronRight } from 'lucide-react'
 import { kcsPublicImages } from '@/data/kcsPublicImages'
+import { mediaAPI } from '@/services/api'
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -29,7 +30,7 @@ const categories = ['All', 'Campus Life', 'Academics', 'Sports', 'Arts', 'Faith'
 type Category = (typeof categories)[number]
 
 type GalleryItem = {
-  id: number
+  id: number | string
   title: string
   category: Exclude<Category, 'All'>
   type: 'image' | 'video'
@@ -143,13 +144,36 @@ const galleryItems: GalleryItem[] = [
 const GalleryPage = () => {
   const [activeCategory, setActiveCategory] = useState<Category>('All')
   const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null)
+  const [publishedGallery, setPublishedGallery] = useState<GalleryItem[]>([])
+
+  useEffect(() => {
+    mediaAPI.getAll().then(({ data }) => {
+      const records = Array.isArray(data?.data) ? data.data : []
+      setPublishedGallery(records
+        .filter((item: any) => String(item.category || '').toLowerCase() === 'gallery')
+        .map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          subtitle: item.description || 'A moment from life at Kinshasa Christian School.',
+          category: (item.tags || []).map((tag: string) => categories.find((category) => category.toLowerCase() === String(tag).toLowerCase())).find(Boolean) || 'Campus Life',
+          type: String(item.type).toUpperCase() === 'VIDEO' ? 'video' : 'image',
+          image: item.thumbnailUrl || item.url,
+          featured: (item.tags || []).some((tag: string) => String(tag).toLowerCase() === 'featured'),
+        })))
+    }).catch(() => setPublishedGallery([]))
+  }, [])
+
+  const allGalleryItems = useMemo(() => publishedGallery.length ? publishedGallery : galleryItems, [publishedGallery])
 
   const filteredItems = useMemo(() => {
-    if (activeCategory === 'All') return galleryItems
-    return galleryItems.filter((item) => item.category === activeCategory)
-  }, [activeCategory])
+    if (activeCategory === 'All') return allGalleryItems
+    return allGalleryItems.filter((item) => item.category === activeCategory)
+  }, [activeCategory, allGalleryItems])
 
-  const featuredItems = galleryItems.filter((item) => item.featured)
+  const imageItems = allGalleryItems.filter((item) => item.type === 'image')
+  const featuredItems = (imageItems.filter((item) => item.featured).length
+    ? imageItems.filter((item) => item.featured)
+    : imageItems.length ? imageItems : allGalleryItems).slice(0, 3)
 
   return (
     <div className="bg-white dark:bg-kcs-blue-950 min-h-screen">
@@ -243,7 +267,9 @@ const GalleryPage = () => {
                   className="group relative w-full overflow-hidden rounded-3xl bg-white dark:bg-kcs-blue-900/60 border border-gray-100 dark:border-kcs-blue-800 text-left break-inside-avoid shadow-sm hover:shadow-kcs transition-all duration-300"
                 >
                   <div className="relative overflow-hidden">
-                    <img src={item.image} alt={item.title} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                    {item.type === 'video'
+                      ? <video src={item.image} aria-label={item.title} muted preload="metadata" className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      : <img src={item.image} alt={item.title} className="w-full object-cover transition-transform duration-500 group-hover:scale-105" />}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-90" />
                     <div className="absolute top-4 left-4 flex items-center gap-2">
                       <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white/15 text-white backdrop-blur-md border border-white/10">
@@ -277,7 +303,7 @@ const GalleryPage = () => {
               </p>
             </motion.div>
             <div className="grid lg:grid-cols-3 gap-6">
-              {galleryItems
+              {allGalleryItems
                 .filter((item) => item.type === 'video')
                 .map((item) => (
                   <motion.button
@@ -354,14 +380,9 @@ const GalleryPage = () => {
                 className="grid w-full overflow-hidden rounded-[2rem] border border-white/10 bg-kcs-blue-950 lg:grid-cols-[1.35fr_0.65fr]"
               >
                 <div className="relative min-h-[320px] bg-black">
-                  <img src={selectedItem.image} alt={selectedItem.title} className="h-full w-full object-cover" />
-                  {selectedItem.type === 'video' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-kcs-blue-950/30">
-                      <span className="w-20 h-20 rounded-full bg-kcs-gold-500 text-kcs-blue-950 flex items-center justify-center shadow-2xl">
-                        <Play size={28} fill="currentColor" />
-                      </span>
-                    </div>
-                  )}
+                  {selectedItem.type === 'video'
+                    ? <video src={selectedItem.image} aria-label={selectedItem.title} controls autoPlay className="h-full w-full object-contain" />
+                    : <img src={selectedItem.image} alt={selectedItem.title} className="h-full w-full object-cover" />}
                 </div>
                 <div className="flex flex-col justify-between p-8 text-white">
                   <div>

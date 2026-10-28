@@ -22,6 +22,10 @@ const input = z.object({
   academicYear: z.string().trim().regex(/^\d{4}-\d{4}$/),
   title: z.string().trim().min(2).max(180),
   description: z.string().trim().max(2000).optional(),
+  targetUserIds: z.string().optional().transform((value) => {
+    if (!value) return [] as string[]
+    try { return z.array(z.string().min(1)).max(500).parse(JSON.parse(value)) } catch { throw new ApiError(422, 'Invalid syllabus recipient selection') }
+  }),
 })
 type SyllabusVersion = {
   academicYear: string
@@ -33,7 +37,7 @@ type SyllabusVersion = {
   fileSize: number
   publishedAt: string
 }
-type Meta = SyllabusVersion & { history?: SyllabusVersion[] }
+type Meta = SyllabusVersion & { history?: SyllabusVersion[]; targetUserIds?: string[] }
 const parse = (value: string | null): Meta | null => {
   if (!value) return null
   try { return JSON.parse(value) as Meta } catch { return null }
@@ -60,13 +64,13 @@ syllabiRouter.get('/', authenticate, asyncHandler(async (req: AuthenticatedReque
     select: { id: true, name: true, code: true, grade: true, syllabus: true, teacher: { select: { user: { select: { firstName: true, middleName: true, lastName: true } } } } },
     orderBy: [{ grade: 'asc' }, { name: 'asc' }],
   })
-  return success(res, courses.map(item).filter((entry) => entry.fileName))
+  return success(res, courses.map(item).filter((entry) => entry.fileName && (role !== 'student' || !entry.targetUserIds?.length || entry.targetUserIds.includes(req.user!.sub))))
 }))
 
 syllabiRouter.get('/teacher-courses', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const courses = await prisma.course.findMany({
     where: { teacher: { userId: req.user!.sub } },
-    select: { id: true, name: true, code: true, grade: true, syllabus: true },
+    select: { id: true, name: true, code: true, grade: true, syllabus: true, enrollments: { select: { student: { select: { userId: true, studentNumber: true, grade: true, section: true, user: { select: { firstName: true, middleName: true, lastName: true } } } } } } },
     orderBy: [{ grade: 'asc' }, { name: 'asc' }],
   })
   return success(res, courses.map((course) => ({ ...course, syllabus: parse(course.syllabus) })))
@@ -100,6 +104,7 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
     fileSize: req.file?.size ?? previous!.fileSize,
     publishedAt: new Date().toISOString(),
     history: previous ? [versionSnapshot(previous), ...(previous.history ?? [])].slice(0, 50) : [],
+    targetUserIds: payload.targetUserIds.length ? payload.targetUserIds : undefined,
   }
   const saved = await prisma.$transaction(async (transaction) => {
     const updated = await transaction.course.update({
@@ -107,7 +112,9 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
       data: { syllabus: JSON.stringify(meta) },
       select: { id: true, name: true, code: true, grade: true, syllabus: true, teacher: { select: { user: { select: { firstName: true, middleName: true, lastName: true } } } } },
     })
-    const recipients = [...new Set(course.enrollments.map((entry) => entry.student.userId))]
+    const enrolledRecipients = [...new Set(course.enrollments.map((entry) => entry.student.userId))]
+    const requestedRecipients = new Set(payload.targetUserIds)
+    const recipients = requestedRecipients.size ? enrolledRecipients.filter((userId) => requestedRecipients.has(userId)) : enrolledRecipients
     if (recipients.length) await transaction.notification.createMany({
       data: recipients.map((userId) => ({
         userId,
@@ -123,7 +130,7 @@ syllabiRouter.post('/:courseId', authenticate, requireRoles('teacher'), upload.s
         action: previous ? 'COURSE_SYLLABUS_UPDATED' : 'COURSE_SYLLABUS_PUBLISHED',
         targetType: 'Course',
         targetId: course.id,
-        metadata: { academicYear: payload.academicYear, recipients: recipients.length, fileSize: meta.fileSize, fileReplaced: Boolean(req.file) },
+        metadata: { academicYear: payload.academicYear, recipients: recipients.length, targeted: requestedRecipients.size > 0, fileSize: meta.fileSize, fileReplaced: Boolean(req.file) },
       },
     })
     return updated
@@ -141,6 +148,7 @@ syllabiRouter.get('/:courseId/download', authenticate, asyncHandler(async (req: 
   if (!permitted) throw new ApiError(403, 'You are not enrolled in this course')
   const meta = parse(course.syllabus)
   if (!meta) throw new ApiError(404, 'No syllabus has been published for this course')
+  if (role === 'student' && meta.targetUserIds?.length && !meta.targetUserIds.includes(req.user!.sub)) throw new ApiError(403, 'This syllabus was not assigned to this learner')
   const requestedVersion = String(req.query.version ?? '')
   const document = requestedVersion ? meta.history?.find((entry) => entry.publishedAt === requestedVersion) : meta
   if (!document) throw new ApiError(404, 'This syllabus version is no longer available')

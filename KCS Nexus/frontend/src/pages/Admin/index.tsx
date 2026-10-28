@@ -3080,7 +3080,7 @@ const AdminSectionView = ({
                     ['Email parent', viewingStudent.parentEmail || 'Non renseigné'],
                     ['Téléphone parent', viewingStudent.parentPhone || 'Non renseigné'],
                     ['Conseiller', viewingStudent.advisor ?? selectedInsight?.advisor ?? 'Non assigné'],
-                    ['Présence', `${viewingStudent.attendance}%`],
+                    ['Présence', viewingStudent.attendance == null ? 'Aucune présence enregistrée' : `${viewingStudent.attendance}%`],
                     ['GPA', String(viewingStudent.gpa)],
                     ['Discipline', viewingStudent.discipline],
                     ['Suivi', getStudentRisk(viewingStudent)],
@@ -3152,7 +3152,7 @@ const AdminSectionView = ({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">
-                        <p className={`font-display text-xl font-bold ${scoreTone(viewingStudent.attendance, 'attendance')}`}>{viewingStudent.attendance}%</p>
+                        <p className={`font-display text-xl font-bold ${viewingStudent.attendance == null ? 'text-gray-400' : scoreTone(viewingStudent.attendance, 'attendance')}`}>{viewingStudent.attendance == null ? '—' : `${viewingStudent.attendance}%`}</p>
                         <p className="mt-1 text-xs text-gray-400">Présence</p>
                       </div>
                       <div className="rounded-xl bg-white p-4 text-center dark:bg-kcs-blue-900/70">

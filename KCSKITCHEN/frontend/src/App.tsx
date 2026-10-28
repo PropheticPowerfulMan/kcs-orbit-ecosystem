@@ -453,7 +453,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN'],
     ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
-    ['settings', t.settings, <Settings />, true]
+    ['settings', t.settings, <Settings />, user.role === 'KITCHEN_ADMIN']
   ]
   function navigateToPage(nextPage: Page, replace = false) {
     setPage(nextPage)
@@ -1168,13 +1168,27 @@ function Orders({ user, lang }: { user: User; lang: Lang }) {
 
 function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: Lang; onPasswordChanged: () => void }) {
   const fr = lang === 'fr'
+  const [email, setEmail] = useState(user.email || '')
+  const [emailPassword, setEmailPassword] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [visible, setVisible] = useState({ emailPassword: false, current: false, password: false, confirm: false })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const rules = [{ ok: password.length >= 12, fr: '12 caract\u00e8res minimum', en: 'At least 12 characters' }, { ok: /[a-z]/.test(password) && /[A-Z]/.test(password), fr: 'Minuscules et majuscules', en: 'Lowercase and uppercase letters' }, { ok: /\d/.test(password), fr: 'Au moins un chiffre', en: 'At least one number' }, { ok: /[^A-Za-z0-9]/.test(password), fr: 'Au moins un symbole', en: 'At least one symbol' }, { ok: password === confirm && !!confirm, fr: 'Confirmation identique', en: 'Matching confirmation' }]
+  const predictable = /(password|motdepasse|passw0rd|qwerty|azerty|123456|admin|welcome|bienvenue|kinshasa|christian|school)/i.test(password.replace(/[^a-z0-9]/gi, ''))
+  const rules = [{ ok: password.length >= 14, fr: '14 caract\u00e8res minimum', en: 'At least 14 characters' }, { ok: /[a-z]/.test(password) && /[A-Z]/.test(password), fr: 'Minuscules et majuscules', en: 'Lowercase and uppercase letters' }, { ok: /\d/.test(password), fr: 'Au moins un chiffre', en: 'At least one number' }, { ok: /[^A-Za-z0-9\s]/.test(password), fr: 'Au moins un symbole', en: 'At least one symbol' }, { ok: !/\s/.test(password), fr: 'Aucun espace', en: 'No spaces' }, { ok: !/(.)\1\1/i.test(password), fr: 'Pas de triple caract\u00e8re identique', en: 'No triple repeated character' }, { ok: !predictable, fr: 'Aucun mot ou motif pr\u00e9visible', en: 'No common word or predictable pattern' }, { ok: password === confirm && !!confirm, fr: 'Confirmation identique', en: 'Matching confirmation' }]
   const strong = rules.every(rule => rule.ok)
+  const passwordInput = (key: keyof typeof visible, value: string, onChange: (value: string) => void, autoComplete: string) => <span className="password-field"><input type={visible[key] ? 'text' : 'password'} autoComplete={autoComplete} value={value} onChange={event => onChange(event.target.value)} required/><button type="button" onClick={() => setVisible(current => ({ ...current, [key]: !current[key] }))} aria-label={visible[key] ? (fr ? 'Masquer' : 'Hide') : (fr ? 'Afficher' : 'Show')}>{visible[key] ? <EyeOff/> : <Eye/>}</button></span>
+  async function saveEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (busy || !emailPassword || email.trim().toLowerCase() === String(user.email || '').toLowerCase()) return
+    setBusy(true)
+    try {
+      await api('/me/email', { method: 'PUT', body: JSON.stringify({ currentPassword: emailPassword, newEmail: email.trim() }) })
+      setNotice({ type: 'success', message: fr ? 'Adresse e-mail institutionnelle modifi\u00e9e. Reconnectez-vous avec la nouvelle adresse.' : 'Institutional email updated. Sign in again with the new address.' })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!strong || busy) return
     setBusy(true)
@@ -1184,7 +1198,7 @@ function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: 
     } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
     finally { setBusy(false) }
   }
-  return <><section className="panel settings-profile"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KCS KITCHEN</span><h2>{fr ? 'Identité et sécurité du compte' : 'Account identity and security'}</h2><p>{fr ? 'Ce mot de passe est commun aux applications autorisées de l’écosystème.' : 'This password is shared by the ecosystem applications you are authorized to access.'}</p></div></div><div className="identity-summary"><div className="avatar">{user.fullName.split(' ').map(value => value[0]).slice(0,2).join('')}</div><span><b>{user.fullName}</b><small>{user.email || user.orbitPersonId}</small><small>{translatedRole(user.role, lang)}</small></span></div><form className="password-settings-form" onSubmit={save}><label>{fr ? 'Mot de passe actuel' : 'Current password'}<input type="password" autoComplete="current-password" value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} required/></label><label>{fr ? 'Nouveau mot de passe' : 'New password'}<input type="password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} required/></label><label>{fr ? 'Confirmer le nouveau mot de passe' : 'Confirm new password'}<input type="password" autoComplete="new-password" value={confirm} onChange={event => setConfirm(event.target.value)} required/></label><div className={'password-strength ' + (strong ? 'strong' : 'weak')}><b>{strong ? (fr ? 'Mot de passe robuste' : 'Strong password') : (fr ? 'Exigences à compléter' : 'Requirements to complete')}</b>{rules.map(rule => <span key={rule.en} className={rule.ok ? 'ok' : ''}>{rule.ok ? <CheckCircle2/> : <X/>}{fr ? rule.fr : rule.en}</span>)}</div><button className="primary large" disabled={!strong || busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Changer mon mot de passe' : 'Change my password'}</button></form></section>{notice && <Notice {...notice} onClose={() => { const success = notice.type === 'success'; setNotice(null); if (success) onPasswordChanged() }}/>}</>
+  return <><section className="panel settings-profile"><div className="section-heading"><div><span className="eyebrow">ORBIT IDENTITY · KCS KITCHEN</span><h2>{fr ? 'Identité et sécurité du compte' : 'Account identity and security'}</h2><p>{fr ? 'Ces identifiants sont communs aux applications autorisées de l’écosystème.' : 'These credentials are shared by the ecosystem applications you are authorized to access.'}</p></div></div><div className="identity-summary"><div className="avatar">{user.fullName.split(' ').map(value => value[0]).slice(0,2).join('')}</div><span><b>{user.fullName}</b><small>{user.email || user.orbitPersonId}</small><small>{translatedRole(user.role, lang)}</small></span></div><form className="email-settings-form" onSubmit={saveEmail}><label>{fr ? 'Nouvelle adresse e-mail institutionnelle' : 'New institutional email'}<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required/></label><label>{fr ? 'Mot de passe actuel pour confirmer' : 'Current password to confirm'}{passwordInput('emailPassword', emailPassword, setEmailPassword, 'current-password')}</label><button className="primary large" disabled={busy || !emailPassword || email.trim().toLowerCase() === String(user.email || '').toLowerCase()}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Mettre à jour mon e-mail' : 'Update my email'}</button></form><form className="password-settings-form" onSubmit={save}><label>{fr ? 'Mot de passe actuel' : 'Current password'}{passwordInput('current', currentPassword, setCurrentPassword, 'current-password')}</label><label>{fr ? 'Nouveau mot de passe' : 'New password'}{passwordInput('password', password, setPassword, 'new-password')}</label><label>{fr ? 'Confirmer le nouveau mot de passe' : 'Confirm new password'}{passwordInput('confirm', confirm, setConfirm, 'new-password')}</label><div className={'password-strength ' + (strong ? 'strong' : 'weak')}><b>{strong ? (fr ? 'Mot de passe robuste' : 'Strong password') : (fr ? 'Exigences à compléter' : 'Requirements to complete')}</b>{rules.map(rule => <span key={rule.en} className={rule.ok ? 'ok' : ''}>{rule.ok ? <CheckCircle2/> : <X/>}{fr ? rule.fr : rule.en}</span>)}</div><button className="primary large" disabled={!strong || busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Changer mon mot de passe' : 'Change my password'}</button></form></section>{notice && <Notice {...notice} onClose={() => { const success = notice.type === 'success'; setNotice(null); if (success) onPasswordChanged() }}/>}</>
 }
 
 function SchoolDues({ user, lang }: { user: User; lang: Lang }) {

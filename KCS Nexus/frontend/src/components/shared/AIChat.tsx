@@ -31,6 +31,13 @@ const formatSchoolList = (items: string[]) => items.map((item) => `- ${item}`).j
 const getLocalSchoolResponse = (question: string, lang: 'en' | 'fr'): string => {
   const q = normalize(question)
 
+  if (/^(bonjour|bonsoir|salut|hello|hi|hey|good morning|good afternoon|good evening)[\s!?.]*$/.test(q)) {
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Kinshasa', hour: '2-digit', hour12: false }).format(new Date()))
+    return lang === 'fr'
+      ? `${hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} ! Je suis heureux de vous accueillir à KCS. Que puis-je faire pour vous aujourd’hui ?`
+      : `${hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'}! Welcome to KCS. How may I help you today?`
+  }
+
   if (lang === 'fr') {
     if (hasAny(q, ['admission', 'inscription', 'inscrire', 'postuler'])) {
       return `Pour postuler à KCS :\n${formatSchoolList([
@@ -318,6 +325,7 @@ const AIChat = () => {
                     disabled={isLoading}
                   />
                   <button
+                    data-kcs-no-processing="true"
                     onClick={() => sendMessage()}
                     disabled={!input.trim() || isLoading}
                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white transition-all duration-200 hover:scale-105 hover:shadow-kcs active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 kcs-gradient"
