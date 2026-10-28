@@ -90,9 +90,10 @@ type DraftEntry = {
 type DraftStore = Record<string, Record<string, DraftEntry>>
 
 const sessions = [
-  'Semester 1 · Trimester 1',
-  'Semester 1 · Trimester 2',
-  'Semester 2 · Trimester 3',
+  'Semester 1 · Quarter 1',
+  'Semester 1 · Quarter 2',
+  'Semester 2 · Quarter 3',
+  'Semester 2 · Quarter 4',
   'Annual final',
 ]
 

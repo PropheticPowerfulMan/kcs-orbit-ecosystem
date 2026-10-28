@@ -3,7 +3,7 @@ import { CalendarDays, CheckCircle2, Save } from 'lucide-react'
 import { academicCalendarAPI } from '@/services/api'
 import SemesterTimetableManager from './SemesterTimetableManager'
 
-type Period = { type: 'SEMESTER' | 'TRIMESTER'; sequence: number; code: string; name: string; startDate: string; endDate: string }
+type Period = { type: 'SEMESTER' | 'QUARTER'; sequence: number; code: string; name: string; startDate: string; endDate: string }
 type Calendar = { name: string; startDate: string; endDate: string; isCurrent: boolean; status: string; periods: Period[] }
 
 const iso = (year: number, month: number, day: number, end = false) =>
@@ -23,9 +23,10 @@ function template(startYear: number) {
       periods: [
         period('SEMESTER', 1, 'S1', 'Semestre 1', iso(2026, 8, 7), iso(2027, 0, 29, true)),
         period('SEMESTER', 2, 'S2', 'Semestre 2', iso(2027, 1, 1), iso(2027, 5, 11, true)),
-        period('TRIMESTER', 1, 'T1', 'Trimestre 1', iso(2026, 8, 7), iso(2026, 11, 18, true)),
-        period('TRIMESTER', 2, 'T2', 'Trimestre 2', iso(2027, 0, 5), iso(2027, 2, 19, true)),
-        period('TRIMESTER', 3, 'T3', 'Trimestre 3', iso(2027, 3, 5), iso(2027, 5, 11, true)),
+        period('QUARTER', 1, 'Q1', 'Quarter 1 · 45 jours', iso(2026, 8, 7), iso(2026, 10, 6, true)),
+        period('QUARTER', 2, 'Q2', 'Quarter 2 · 45 jours', iso(2026, 10, 9), iso(2027, 0, 29, true)),
+        period('QUARTER', 3, 'Q3', 'Quarter 3 · 45 jours', iso(2027, 1, 1), iso(2027, 3, 2, true)),
+        period('QUARTER', 4, 'Q4', 'Quarter 4 · 45 jours', iso(2027, 3, 5), iso(2027, 5, 11, true)),
       ],
     }
   }
@@ -39,9 +40,10 @@ function template(startYear: number) {
     periods: [
       period('SEMESTER', 1, 'S1', 'Semestre 1', iso(startYear, 8, 1), iso(startYear + 1, 0, 31, true)),
       period('SEMESTER', 2, 'S2', 'Semestre 2', iso(startYear + 1, 1, 1), iso(startYear + 1, 5, 30, true)),
-      period('TRIMESTER', 1, 'T1', 'Trimestre 1', iso(startYear, 8, 1), iso(startYear, 11, 31, true)),
-      period('TRIMESTER', 2, 'T2', 'Trimestre 2', iso(startYear + 1, 0, 1), iso(startYear + 1, 2, 31, true)),
-      period('TRIMESTER', 3, 'T3', 'Trimestre 3', iso(startYear + 1, 3, 1), iso(startYear + 1, 5, 30, true)),
+      period('QUARTER', 1, 'Q1', 'Quarter 1 · 45 jours', iso(startYear, 8, 1), iso(startYear, 10, 1, true)),
+      period('QUARTER', 2, 'Q2', 'Quarter 2 · 45 jours', iso(startYear, 10, 2), iso(startYear + 1, 0, 31, true)),
+      period('QUARTER', 3, 'Q3', 'Quarter 3 · 45 jours', iso(startYear + 1, 1, 1), iso(startYear + 1, 3, 1, true)),
+      period('QUARTER', 4, 'Q4', 'Quarter 4 · 45 jours', iso(startYear + 1, 3, 2), iso(startYear + 1, 5, 30, true)),
     ],
   }
 }
@@ -103,8 +105,8 @@ export default function AcademicCalendarSettings() {
         <label className="text-xs font-bold uppercase text-gray-500">Fin officielle de l’année<input type="date" value={dateValue(proposed.endDate)} onChange={(event) => setProposed((current) => ({ ...current, endDate: toIsoDate(event.target.value, true) }))} className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 normal-case text-gray-900 dark:border-kcs-blue-600 dark:bg-kcs-blue-950 dark:text-white dark:[color-scheme:dark]"/></label>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {(['SEMESTER', 'TRIMESTER'] as const).map((type) => <div key={type} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
-          <h3 className="text-sm font-bold text-kcs-blue-900 dark:text-white">{type === 'SEMESTER' ? 'Semestres' : 'Trimestres'}</h3>
+        {(['SEMESTER', 'QUARTER'] as const).map((type) => <div key={type} className="rounded-xl bg-gray-50 p-4 dark:bg-kcs-blue-800/30">
+          <h3 className="text-sm font-bold text-kcs-blue-900 dark:text-white">{type === 'SEMESTER' ? 'Semestres · 2 quarters chacun' : 'Quarters · 45 jours chacun · 180 jours au total'}</h3>
           <div className="mt-3 space-y-2">{proposed.periods.filter((item) => item.type === type).map((item) =>
             <div key={item.code} className="rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-gray-300"><strong>{item.code} · {item.name}</strong><div className="mt-2 grid grid-cols-2 gap-2"><label>Début<input type="date" value={dateValue(item.startDate)} onChange={(event) => updatePeriod(item.code, { startDate: toIsoDate(event.target.value) })} className="mt-1 w-full rounded-lg border px-2 py-2 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:[color-scheme:dark]"/></label><label>Fin<input type="date" value={dateValue(item.endDate)} onChange={(event) => updatePeriod(item.code, { endDate: toIsoDate(event.target.value, true) })} className="mt-1 w-full rounded-lg border px-2 py-2 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:[color-scheme:dark]"/></label></div></div>)}</div>
         </div>)}

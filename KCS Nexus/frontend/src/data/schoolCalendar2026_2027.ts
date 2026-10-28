@@ -15,17 +15,13 @@ export const schoolYear2026_2027 = {
     { code: 'S1', name: 'Semestre 1', startDate: '2026-09-07', endDate: '2027-01-29' },
     { code: 'S2', name: 'Semestre 2', startDate: '2027-02-01', endDate: '2027-06-11' },
   ],
-  trimesters: [
-    { code: 'T1', name: 'Trimestre 1', startDate: '2026-09-07', endDate: '2026-12-18' },
-    { code: 'T2', name: 'Trimestre 2', startDate: '2027-01-05', endDate: '2027-03-19' },
-    { code: 'T3', name: 'Trimestre 3', startDate: '2027-04-05', endDate: '2027-06-11' },
+  quarters: [
+    { code: 'Q1', name: 'Quarter 1', startDate: '2026-09-07', endDate: '2026-11-06', instructionalDays: 45 },
+    { code: 'Q2', name: 'Quarter 2', startDate: '2026-11-09', endDate: '2027-01-29', instructionalDays: 45 },
+    { code: 'Q3', name: 'Quarter 3', startDate: '2027-02-01', endDate: '2027-04-02', instructionalDays: 45 },
+    { code: 'Q4', name: 'Quarter 4', startDate: '2027-04-05', endDate: '2027-06-11', instructionalDays: 45 },
   ],
-  quarterEnds: [
-    { code: 'Q1', date: '2026-11-06' },
-    { code: 'Q2', date: '2027-01-22' },
-    { code: 'Q3', date: '2027-04-09' },
-    { code: 'Q4', date: '2027-06-11' },
-  ],
+  instructionalDays: 180,
 } as const
 
 export const schoolCalendarEvents2026_2027: SchoolCalendarEvent[] = [

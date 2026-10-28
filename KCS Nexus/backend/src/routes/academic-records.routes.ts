@@ -15,7 +15,7 @@ import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
 import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACADEMIC_TERMS } from '../utils/academicCycle.js'
 import { isVisibleInSuperAdministrationQueue, verifyFinalGradePropagation } from '../services/academicSubmissionWorkflow.js'
-import { aggregateReportCardResults, reportCardSourceTerms } from '../services/annualReportCard.service.js'
+import { aggregateReportCardResults, reportCardSourcePeriodTerms } from '../services/annualReportCard.service.js'
 
 const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
 const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
@@ -32,7 +32,7 @@ const letter=(value:number)=>value>=97?'A+':value>=93?'A':value>=90?'A-':value>=
 const periodKey=(year:string,term:string,status:'SUBMITTED'|'APPROVED')=>academicPeriodKey(year,term as Parameters<typeof academicPeriodKey>[1],status)
 const parsePeriod=(period:string)=>{const [academicYear,term,status]=period.split('::');return{academicYear,term,status}}
 
-const attendanceWindow=(year:string,term:string)=>{const key=term.toLowerCase();if(year==='2026-2027'){if(key.includes('trimester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2026-12-18T23:59:59Z')};if(key.includes('trimester 2'))return{gte:new Date('2027-01-05T00:00:00Z'),lte:new Date('2027-03-19T23:59:59Z')};if(key.includes('trimester 3'))return{gte:new Date('2027-04-05T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')};if(key.includes('semester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2027-01-29T23:59:59Z')};if(key.includes('semester 2'))return{gte:new Date('2027-02-01T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')}}const [start,end]=year.split('-');return{gte:new Date(`${start}-08-01T00:00:00Z`),lte:new Date(`${end}-07-31T23:59:59Z`)}}
+const attendanceWindow=(year:string,term:string)=>{const key=term.toLowerCase().replace('trimester','quarter');if(year==='2026-2027'){if(key.includes('quarter 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2026-11-06T23:59:59Z')};if(key.includes('quarter 2'))return{gte:new Date('2026-11-09T00:00:00Z'),lte:new Date('2027-01-29T23:59:59Z')};if(key.includes('quarter 3'))return{gte:new Date('2027-02-01T00:00:00Z'),lte:new Date('2027-04-02T23:59:59Z')};if(key.includes('quarter 4'))return{gte:new Date('2027-04-05T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')};if(key.includes('semester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2027-01-29T23:59:59Z')};if(key.includes('semester 2'))return{gte:new Date('2027-02-01T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')}}const [start,end]=year.split('-');return{gte:new Date(`${start}-08-01T00:00:00Z`),lte:new Date(`${end}-07-31T23:59:59Z`)}}
 const summarizeAttendance=(records:Array<{status:string}>)=>{const count=(status:string)=>records.filter(item=>item.status===status).length;const attended=records.filter(item=>['PRESENT','LATE','EXCUSED'].includes(item.status)).length;return{total:records.length,present:count('PRESENT'),absent:count('ABSENT'),late:count('LATE'),excused:count('EXCUSED'),sick:count('SICK'),suspended:count('SUSPENDED'),attendanceRate:records.length?Number((attended*100/records.length).toFixed(1)):null}}
 const reportCardTerm=(academicYear:string,term:string)=>`${academicYear} · ${term}`
 const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:number}}>)=>{
@@ -44,6 +44,9 @@ const splitReportCardTerm=(value:string)=>{
  const term=value.slice(9).replace(/^[^A-Za-z0-9]+/,'').trim()
  return{academicYear,term}
 }
+const resolveAcademicActorId=async(req:AuthenticatedRequest)=>req.user!.sub==='configured-superadmin'
+ ? (await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}))?.id??null
+ : req.user!.sub
 const homeroomReportContext=async(userId:string,studentId:string,academicYear:string,term:string)=>{
  await ensureTeacherProfile(userId)
  const [teacher,student]=await Promise.all([
@@ -56,7 +59,7 @@ const homeroomReportContext=async(userId:string,studentId:string,academicYear:st
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
  if(!student)throw new ApiError(404,'Student not found')
   if(!isTeacherHomeroomForStudent(teacher,student))throw new ApiError(403,'Only the assigned main teacher may edit or submit this learner report card')
- const submittedPeriods=reportCardSourceTerms(term).map(sourceTerm=>periodKey(academicYear,sourceTerm,'SUBMITTED'))
+ const submittedPeriods=reportCardSourcePeriodTerms(term).map(sourceTerm=>`${academicYear}::${sourceTerm}::SUBMITTED`)
  const submittedGrades=await prisma.grade.findMany({
   where:{studentId,courseId:{in:student.enrollments.map(item=>item.courseId)},assignmentId:null,period:{in:submittedPeriods}},
   include:{course:true},
@@ -88,6 +91,14 @@ academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) =
  const metadata = (record?.metadata ?? {}) as Record<string, unknown>
  if (!record || metadata.fingerprint !== fingerprint) throw new ApiError(404, 'Transcript authenticity record not found')
  return success(res, { valid: true, documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt }, 'Authentic KCS transcript verified')
+}))
+academicRecordsRouter.get('/certificates/verify',asyncHandler(async(req,res)=>{
+ const documentId=z.string().regex(new RegExp('^KCS-CERT-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
+ const fingerprint=z.string().regex(/^[A-F0-9]{64}$/i).parse(req.query.fingerprint)
+ const record=await prisma.auditLog.findFirst({where:{action:'CERTIFICATE_VERIFICATION_ISSUED',targetType:'OfficialCompletionCertificate',targetId:documentId},orderBy:{createdAt:'desc'}})
+ const metadata=(record?.metadata??{}) as Record<string,unknown>
+ if(!record||metadata.fingerprint!==fingerprint)throw new ApiError(404,'Certificate authenticity record not found')
+ return success(res,{valid:true,documentType:'CERTIFICATE',documentId,studentName:metadata.studentName,studentNumber:metadata.studentNumber,grade:metadata.grade,academicYear:metadata.academicYear,issuedAt:record.createdAt},'Authentic KCS certificate verified')
 }))
 
 academicRecordsRouter.get('/report-cards/verify', asyncHandler(async (req, res) => {
@@ -193,6 +204,17 @@ academicRecordsRouter.post('/report-cards/verification', requireRoles('admin','s
  await prisma.auditLog.create({ data: { actorId, action: 'REPORT_CARD_VERIFICATION_ISSUED', targetType: 'OfficialReportCard', targetId: payload.documentId, metadata: { fingerprint: payload.fingerprint, reportCardId: reportCard.id, studentId: reportCard.studentId, publicationStatus: reportCard.publicationStatus } } })
  return success(res, { registered: true, documentId: payload.documentId }, 'Report card registered for public verification')
 }))
+academicRecordsRouter.post('/certificates/verification',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({documentId:z.string().regex(new RegExp('^KCS-CERT-[0-9]{8}-[A-Z0-9-]+$','i')),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),studentId:z.string().min(1),academicYear:academicYearSchema}).parse(req.body)
+ const student=await prisma.studentProfile.findUnique({where:{id:payload.studentId},include:{user:true}})
+ if(!student)throw new ApiError(404,'Student not found')
+ const grade=normalizeClassParts(student.grade,student.section).grade
+ if(!['K4','Grade 4','Grade 8'].includes(grade))throw new ApiError(409,'Certificates are restricted to K4, Grade 4 and Grade 8')
+ const studentName=[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' ')
+ const actorId=await resolveAcademicActorId(req)
+ await prisma.auditLog.create({data:{actorId,action:'CERTIFICATE_VERIFICATION_ISSUED',targetType:'OfficialCompletionCertificate',targetId:payload.documentId,metadata:{fingerprint:payload.fingerprint,studentId:student.id,studentName,studentNumber:student.studentNumber,grade,academicYear:payload.academicYear}}})
+ return success(res,{registered:true,documentId:payload.documentId},'Certificate registered for public verification')
+}))
 academicRecordsRouter.post('/gradebooks/verification',requireRoles('admin','staff','teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=z.object({documentId:z.string().regex(new RegExp('^KCS-GB-[0-9]{8}-[A-Z0-9-]+$','i')),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),courseId:z.string().min(1),academicYear:academicYearSchema,term:academicTermSchema}).parse(req.body)
  const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:{select:{userId:true}},_count:{select:{enrollments:true}}}})
@@ -297,7 +319,7 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
  const homeroomStudentIds=homeroomCandidates.filter(student=>isTeacherHomeroomForStudent(teacher,student)).map(student=>student.id)
  const scopedStudentIds=[...new Set([...courseStudentIds,...homeroomStudentIds])]
  const termLabel=reportCardTerm(cycle.academicYear,cycle.term)
- const submittedPeriods=reportCardSourceTerms(cycle.term).map(sourceTerm=>periodKey(cycle.academicYear,sourceTerm,'SUBMITTED'))
+ const submittedPeriods=reportCardSourcePeriodTerms(cycle.term).map(sourceTerm=>`${cycle.academicYear}::${sourceTerm}::SUBMITTED`)
  const window=attendanceWindow(cycle.academicYear,cycle.term)
 
  const [students,submittedGrades]=scopedStudentIds.length?await Promise.all([
@@ -475,7 +497,7 @@ academicRecordsRouter.get('/review',requireRoles('admin','staff'),asyncHandler(a
 
 academicRecordsRouter.post('/report-cards/generate',requireRoles('admin','staff'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=cycleSchema.parse(req.body)
- const submittedPeriods=reportCardSourceTerms(payload.term).map(sourceTerm=>periodKey(payload.academicYear,sourceTerm,'SUBMITTED'))
+ const submittedPeriods=reportCardSourcePeriodTerms(payload.term).map(sourceTerm=>`${payload.academicYear}::${sourceTerm}::SUBMITTED`)
  const grades=await prisma.grade.findMany({where:{assignmentId:null,period:{in:submittedPeriods}},include:{course:true,student:{include:{user:true}}},orderBy:{createdAt:'desc'}})
  if(!grades.length)throw new ApiError(400,'No submitted final grades exist for this cycle')
  const results=aggregateReportCardResults(grades,payload.academicYear,payload.term)
@@ -503,6 +525,7 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
    student:{
     include:{
      user:true,
+     parentLinks:{include:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}},
      grades:{
       where:{assignmentId:null,period:{contains:'::SUBMITTED'}},
       include:{course:{select:{name:true,code:true,credits:true}}},
@@ -537,18 +560,63 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
  return success(res,enriched)
 }))
 
+academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const id=getRouteParam(req.params.id)
+ const payload=z.object({teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500)}).parse(req.body)
+ const actorId=await resolveAcademicActorId(req)
+ const card=await prisma.$transaction(async tx=>{
+  const current=await tx.reportCard.findUnique({where:{id}})
+  if(!current)throw new ApiError(404,'Report card not found')
+  if(current.publicationStatus==='EMAILED')throw new ApiError(409,'An emailed report card must be reopened before editorial changes')
+  const updated=await tx.reportCard.update({where:{id},data:{teacherComment:payload.teacherComment||null,conduct:payload.conduct||null}})
+  await tx.auditLog.create({data:{actorId,action:'SUPERADMIN_REPORT_CARD_EDITORIAL_UPDATE',targetType:'ReportCard',targetId:id,metadata:{previous:{teacherComment:current.teacherComment,conduct:current.conduct},next:payload,term:current.term,studentId:current.studentId}}})
+  return updated
+ })
+ return success(res,card,'Report-card presentation fields updated and audited')
+}))
+
+academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({deliveries:z.array(z.object({reportCardId:z.string().min(1),parentIds:z.array(z.string().min(1)).max(10).default([])})).min(1).max(250)}).parse(req.body)
+ const actorId=await resolveAcademicActorId(req)
+ const uniqueDeliveries=[...new Map(payload.deliveries.map(item=>[item.reportCardId,item])).values()]
+ const cards=await prisma.reportCard.findMany({where:{id:{in:uniqueDeliveries.map(item=>item.reportCardId)}},include:{student:{include:{user:true,parentLinks:{include:{parent:true}}}}}})
+ if(cards.length!==uniqueDeliveries.length)throw new ApiError(404,'One or more selected report cards no longer exist')
+ const invalid=cards.filter(card=>!['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus))
+ if(invalid.length)throw new ApiError(409,'Only approved report cards may be sent to parents')
+ let recipients=0
+ await prisma.$transaction(async tx=>{
+  for(const card of cards){
+   const request=uniqueDeliveries.find(item=>item.reportCardId===card.id)!
+   const linked=card.student.parentLinks.filter(link=>!request.parentIds.length||request.parentIds.includes(link.parentId))
+   if(!linked.length)throw new ApiError(409,`No selected parent is linked to ${card.student.studentNumber}`)
+   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
+   const subject=`KCS · Official report card · ${learner} · ${card.term}`
+   const body=`The official report card for ${learner} (${card.student.studentNumber}) is ready for ${card.term}. Average: ${card.average.toFixed(2)}%. Sign in to KCS Nexus to view the controlled official document.`
+   for(const {parent} of linked){
+    const message=await tx.internalMessage.create({data:{senderId:actorId,recipientId:parent.id,subject,body,priority:'high'}})
+    await tx.notification.create({data:{userId:parent.id,title:subject,message:body,type:'MESSAGE',link:'/portal/parent/grades'}})
+    await tx.correspondenceLog.create({data:{channel:'EMAIL',status:parent.email?'QUEUED':'FAILED',subject,body,senderId:actorId,recipientName:[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),recipientEmail:parent.email,recipientPhone:parent.phone,studentId:card.studentId,reportCardId:card.id,failureReason:parent.email?null:'RECIPIENT_EMAIL_MISSING',metadata:{mailQueueVersion:1,internalMessageId:message.id,recipientId:parent.id,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH'}}})
+    recipients++
+   }
+   await tx.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date(),portalPostedAt:card.portalPostedAt??new Date()}})
+   await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_DELIVERY_QUEUED',targetType:'ReportCard',targetId:card.id,metadata:{studentId:card.studentId,parentIds:linked.map(item=>item.parentId),term:card.term}}})
+  }
+ })
+ return success(res,{reportCards:cards.length,recipients},'Official report cards published to parent dashboards and email delivery safely queued')
+}))
+
 academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id)
  const card=await prisma.$transaction(async tx=>{
   const current=await tx.reportCard.findUnique({where:{id}});if(!current)throw new ApiError(404,'Report card not found')
   const parts=current.term.split(' · ');const academicYear=parts[0],term=parts.slice(1).join(' · ')
   const parsedCycle=splitReportCardTerm(current.term)
-  const submittedPeriods=reportCardSourceTerms(parsedCycle.term).map(sourceTerm=>periodKey(parsedCycle.academicYear,sourceTerm,'SUBMITTED')),approved=periodKey(parsedCycle.academicYear,parsedCycle.term,'APPROVED')
+  const submittedPeriods=reportCardSourcePeriodTerms(parsedCycle.term).map(sourceTerm=>`${parsedCycle.academicYear}::${sourceTerm}::SUBMITTED`),approved=periodKey(parsedCycle.academicYear,parsedCycle.term,'APPROVED')
   const source=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:{in:submittedPeriods}},orderBy:{createdAt:'desc'}})
   if(!source.length)throw new ApiError(409,'The report card has no submitted source grades')
   const aggregated=aggregateReportCardResults(source,parsedCycle.academicYear,parsedCycle.term)
   const frozen=[...aggregated.values()].filter((item):item is typeof item&{percentage:number}=>item.percentage!==null)
-  if(!frozen.length)throw new ApiError(409,'The annual report card is incomplete: all three trimester results are required')
+  if(!frozen.length)throw new ApiError(409,'The annual report card is incomplete: all four quarter results are required')
   await tx.grade.deleteMany({where:{studentId:current.studentId,assignmentId:null,period:approved}})
   for(const grade of frozen)await tx.grade.create({data:{studentId:grade.studentId,courseId:grade.courseId,assignmentId:null,score:grade.percentage,maxScore:100,percentage:grade.percentage,letterGrade:letter(grade.percentage),period:approved}})
   await synchronizeStudentAcademicMetrics(tx,[current.studentId])

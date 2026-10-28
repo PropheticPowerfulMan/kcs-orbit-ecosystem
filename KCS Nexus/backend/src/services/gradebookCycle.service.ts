@@ -37,11 +37,13 @@ export const academicCycleFromDate = (date: Date) => {
   const month = date.getUTCMonth()
   const start = month >= 7 ? year : year - 1
   const academicYear = `${start}-${start + 1}`
-  const term = month >= 7 && month <= 10
-    ? 'Semester 1 · Trimester 1'
-    : month === 11 || month <= 2
-      ? 'Semester 1 · Trimester 2'
-      : 'Semester 2 · Trimester 3'
+  const term = month >= 8 && month <= 10
+    ? 'Semester 1 · Quarter 1'
+    : month === 11 || month === 0
+      ? 'Semester 1 · Quarter 2'
+      : month >= 1 && month <= 3
+        ? 'Semester 2 · Quarter 3'
+        : 'Semester 2 · Quarter 4'
   return { academicYear, term }
 }
 

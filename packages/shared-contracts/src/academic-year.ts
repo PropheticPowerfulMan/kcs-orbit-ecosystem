@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const TrimmedStringSchema = z.string().trim().min(1);
 
-export const AcademicPeriodTypeSchema = z.enum(["SEMESTER", "TRIMESTER"]);
+export const AcademicPeriodTypeSchema = z.enum(["SEMESTER", "QUARTER"]);
 export const AcademicYearStatusSchema = z.enum(["PLANNED", "ACTIVE", "CLOSED", "ARCHIVED"]);
 
 export const AcademicPeriodSchema = z.object({
@@ -21,7 +21,7 @@ export const AcademicCalendarInputSchema = z.object({
   endDate: z.coerce.date(),
   status: AcademicYearStatusSchema.optional(),
   isCurrent: z.boolean().optional(),
-  periods: z.array(AcademicPeriodSchema).length(5)
+  periods: z.array(AcademicPeriodSchema).length(6)
 });
 
 export type AcademicPeriodInput = z.infer<typeof AcademicPeriodSchema>;
@@ -34,12 +34,12 @@ export const KCS_OFFICIAL_CALENDAR_2026_2027 = {
     { sequence: 1, code: "S1", name: "Semestre 1", startDate: "2026-09-07", endDate: "2027-01-29" },
     { sequence: 2, code: "S2", name: "Semestre 2", startDate: "2027-02-01", endDate: "2027-06-11" }
   ],
-  trimesters: [
-    { sequence: 1, code: "T1", name: "Trimestre 1", startDate: "2026-09-07", endDate: "2026-12-18" },
-    { sequence: 2, code: "T2", name: "Trimestre 2", startDate: "2027-01-05", endDate: "2027-03-19" },
-    { sequence: 3, code: "T3", name: "Trimestre 3", startDate: "2027-04-05", endDate: "2027-06-11" }
-  ],
-  quarterEnds: ["2026-11-06", "2027-01-22", "2027-04-09", "2027-06-11"]
+  quarters: [
+    { sequence: 1, code: "Q1", name: "Quarter 1", startDate: "2026-09-07", endDate: "2026-11-06", instructionalDays: 45 },
+    { sequence: 2, code: "Q2", name: "Quarter 2", startDate: "2026-11-09", endDate: "2027-01-29", instructionalDays: 45 },
+    { sequence: 3, code: "Q3", name: "Quarter 3", startDate: "2027-02-01", endDate: "2027-04-02", instructionalDays: 45 },
+    { sequence: 4, code: "Q4", name: "Quarter 4", startDate: "2027-04-05", endDate: "2027-06-11", instructionalDays: 45 }
+  ]
 } as const;
 
 export function buildDefaultAcademicCalendar(startYear: number, organizationId: string): AcademicCalendarInput {
@@ -66,8 +66,8 @@ export function buildDefaultAcademicCalendar(startYear: number, organizationId: 
           startDate: fromIso(period.startDate),
           endDate: fromIso(period.endDate, true)
         })),
-        ...official.trimesters.map((period) => ({
-          type: "TRIMESTER" as const,
+        ...official.quarters.map(({ instructionalDays: _instructionalDays, ...period }) => ({
+          type: "QUARTER" as const,
           ...period,
           startDate: fromIso(period.startDate),
           endDate: fromIso(period.endDate, true)
@@ -86,9 +86,10 @@ export function buildDefaultAcademicCalendar(startYear: number, organizationId: 
     periods: [
       { type: "SEMESTER", sequence: 1, code: "S1", name: "Semester 1", startDate: utc(startYear, 8, 1), endDate: utc(startYear + 1, 0, 31, true) },
       { type: "SEMESTER", sequence: 2, code: "S2", name: "Semester 2", startDate: utc(startYear + 1, 1, 1), endDate: utc(startYear + 1, 5, 30, true) },
-      { type: "TRIMESTER", sequence: 1, code: "T1", name: "Trimester 1", startDate: utc(startYear, 8, 1), endDate: utc(startYear, 11, 31, true) },
-      { type: "TRIMESTER", sequence: 2, code: "T2", name: "Trimester 2", startDate: utc(startYear + 1, 0, 1), endDate: utc(startYear + 1, 2, 31, true) },
-      { type: "TRIMESTER", sequence: 3, code: "T3", name: "Trimester 3", startDate: utc(startYear + 1, 3, 1), endDate: utc(startYear + 1, 5, 30, true) }
+      { type: "QUARTER", sequence: 1, code: "Q1", name: "Quarter 1", startDate: utc(startYear, 8, 1), endDate: utc(startYear, 10, 1, true) },
+      { type: "QUARTER", sequence: 2, code: "Q2", name: "Quarter 2", startDate: utc(startYear, 10, 2), endDate: utc(startYear + 1, 0, 31, true) },
+      { type: "QUARTER", sequence: 3, code: "Q3", name: "Quarter 3", startDate: utc(startYear + 1, 1, 1), endDate: utc(startYear + 1, 3, 1, true) },
+      { type: "QUARTER", sequence: 4, code: "Q4", name: "Quarter 4", startDate: utc(startYear + 1, 3, 2), endDate: utc(startYear + 1, 5, 30, true) }
     ]
   };
 }

@@ -602,6 +602,8 @@ export const academicRecordsAPI = {
   reportCards: (params?: object) => api.get('/academic-records/report-cards', { params, timeout: 60_000 }),
   approveReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/approve`),
   publishReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/publish`),
+  updateReportCardEditorial: (id: string, data: { teacherComment: string; conduct: string }) => api.patch(`/academic-records/report-cards/${id}/editorial`, data),
+  deliverReportCards: (deliveries: Array<{ reportCardId: string; parentIds: string[] }>) => api.post('/academic-records/report-cards/deliver', { deliveries }),
   transcript: (studentId: string) => api.get('/academic-records/transcripts/' + studentId, { timeout: 60_000 }),
   legacyTemplate: (format: 'csv' | 'xlsx') => api.get('/academic-records/legacy-records/template', { params: { format }, responseType: 'blob', timeout: 60_000 }),
   importLegacyRecords: (data: FormData) => api.post('/academic-records/legacy-records/import', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000 }),
@@ -609,9 +611,11 @@ export const academicRecordsAPI = {
   registerTranscriptVerification: (data: { documentId: string; fingerprint: string; studentId: string }) => api.post('/academic-records/transcripts/verification', data),
   registerReportCardVerification: (data: { documentId: string; fingerprint: string; reportCardId: string }) => api.post('/academic-records/report-cards/verification', data),
   registerGradebookVerification: (data: { documentId: string; fingerprint: string; courseId: string; academicYear: string; term: string }) => api.post('/academic-records/gradebooks/verification', data),
+  registerCertificateVerification: (data: { documentId: string; fingerprint: string; studentId: string; academicYear: string }) => api.post('/academic-records/certificates/verification', data),
   verifyReportCard: (document: string, fingerprint: string) => api.get('/academic-records/report-cards/verify', { params: { document, fingerprint } }),
   verifyGradebook: (document: string, fingerprint: string) => api.get('/academic-records/gradebooks/verify', { params: { document, fingerprint } }),
   verifyTranscript: (document: string, fingerprint: string) => api.get('/academic-records/transcripts/verify', { params: { document, fingerprint } }),
+  verifyCertificate: (document: string, fingerprint: string) => api.get('/academic-records/certificates/verify', { params: { document, fingerprint } }),
 }
 
 

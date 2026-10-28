@@ -25,6 +25,7 @@ import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
 import AdminPreEnrollments from '@/components/admin/AdminPreEnrollments'
 import AdminNewsEventsManager from '@/components/admin/AdminNewsEventsManager'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
+import CertificateControlCenter from '@/components/admin/CertificateControlCenter'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
 import TeacherActivityReportsInbox from '@/components/admin/TeacherActivityReportsInbox'
 import TeacherDisciplinePanel from '@/components/teacher/TeacherDisciplinePanel'
@@ -501,7 +502,7 @@ const extractStudentApiMessage = (error: unknown, fallback: string) => {
   return responseData?.message || responseData?.error || responseData?.details || (error as { message?: string })?.message || fallback
 }
 
-const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'employees', 'transcripts', 'reports'])
+const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'employees', 'transcripts', 'report-cards', 'certificates', 'reports'])
 
 const getAdminRoster = () => studentsAPI.getAll(undefined, {
   headers: {
@@ -3279,7 +3280,9 @@ const AdminSectionView = ({
     )
   }
 
-  if (segment === 'transcripts') return <AcademicRecordsControlCenter />
+  if (segment === 'transcripts') return <AcademicRecordsControlCenter view="transcripts" />
+  if (segment === 'report-cards') return <AcademicRecordsControlCenter view="report-cards" />
+  if (segment === 'certificates') return <CertificateControlCenter />
 
   if (segment === 'attendance' || segment === 'staff-attendance') return <AttendanceManagementPanel />
 

@@ -30,7 +30,7 @@ export function printOfficialTranscript(transcript: OfficialTranscript, onBlocke
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const dateLocale = language === 'fr' ? 'fr-FR' : 'en-GB'
   const localizedTerm = (value: string) => language === 'fr'
-    ? value.replace(/Semester/g, 'Semestre').replace(/Trimester/g, 'Trimestre').replace(/Annual final/gi, 'Final annuel')
+    ? value.replace(/Semester/g, 'Semestre').replace(/Trimester/g, 'Quarter').replace(/Annual final/gi, 'Final annuel')
     : value
   const issueDate = new Date(transcript.generatedAt ?? Date.now())
   const compactDate = issueDate.toISOString().slice(0, 10).replace(/-/g, '')

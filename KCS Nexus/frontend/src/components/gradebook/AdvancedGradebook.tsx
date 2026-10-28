@@ -94,7 +94,7 @@ type Props = {
 }
 
 const assignmentTypes: AssignmentType[] = ['homework', 'quiz', 'test', 'exam', 'project', 'participation']
-const terms = ['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3', 'Annual final']
+const terms = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Annual final']
 const scoreScales = [20, 50, 100]
 const legacyAcademicYear = '2026-2027'
 const academicYearOptions = Array.from({ length: 75 }, (_, index) => {
@@ -342,10 +342,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       if (!calendar?.name) return
       setAcademicYear(calendar.name)
       const now = Date.now()
-      const activeTrimester = (calendar.periods ?? []).find((period: any) => period.type === 'TRIMESTER' && Date.parse(period.startDate) <= now && Date.parse(period.endDate) >= now)
-      if (activeTrimester?.sequence === 1) setTerm(terms[0])
-      if (activeTrimester?.sequence === 2) setTerm(terms[1])
-      if (activeTrimester?.sequence === 3) setTerm(terms[2])
+      const activeQuarter = (calendar.periods ?? []).find((period: any) => ['QUARTER','TRIMESTER'].includes(period.type) && Date.parse(period.startDate) <= now && Date.parse(period.endDate) >= now)
+      if (activeQuarter?.sequence) setTerm(terms[Math.min(activeQuarter.sequence, 4) - 1])
     }).catch(() => undefined)
   }, [])
 

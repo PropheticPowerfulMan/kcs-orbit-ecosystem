@@ -23,9 +23,9 @@ export function validateAcademicCalendar(raw: AcademicCalendarInput) {
   }
   if (input.startDate >= input.endDate) errors.push("Academic year end date must follow its start date.");
 
-  for (const type of ["SEMESTER", "TRIMESTER"] as const) {
+  for (const type of ["SEMESTER", "QUARTER"] as const) {
     const periods = input.periods.filter((item) => item.type === type).sort((a, b) => a.sequence - b.sequence);
-    const expected = type === "SEMESTER" ? 2 : 3;
+    const expected = type === "SEMESTER" ? 2 : 4;
     if (periods.length !== expected) errors.push(`${type} must contain exactly ${expected} periods.`);
     periods.forEach((period, index) => {
       if (period.sequence !== index + 1) errors.push(`${type} sequences must be contiguous.`);

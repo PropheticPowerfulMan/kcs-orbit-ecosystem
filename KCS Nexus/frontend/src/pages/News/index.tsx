@@ -224,7 +224,7 @@ const NewsPage = () => {
                 One verified calendar for the whole KCS ecosystem
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                Nexus, Savanex, EduPay, EduSync and Academy use the same school year, semester and trimester reference dates.
+                Nexus, Savanex, EduPay, EduSync and Academy use the same 180-day school year, semester and quarter reference dates.
               </p>
             </motion.div>
 
@@ -242,18 +242,11 @@ const NewsPage = () => {
                 ))}</div>
               </motion.article>
               <motion.article variants={fadeUp} className="rounded-2xl border border-gray-100 bg-gray-50 p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
-                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Trimesters</p>
-                <div className="mt-3 space-y-3">{schoolYear2026_2027.trimesters.map((period) => (
+                <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">Quarters · 45 instructional days each</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">{schoolYear2026_2027.quarters.map((period) => (
                   <div key={period.code}><p className="font-bold text-kcs-blue-950 dark:text-white">{period.code} · {period.name}</p><p className="text-xs text-gray-500 dark:text-gray-400">{formatSchoolCalendarDate({ date: period.startDate, endDate: period.endDate })}</p></div>
                 ))}</div>
               </motion.article>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {schoolYear2026_2027.quarterEnds.map((quarter) => (
-                <span key={quarter.code} className="rounded-full border border-kcs-gold-200 bg-kcs-gold-50 px-3 py-1.5 text-xs font-bold text-kcs-blue-800">
-                  {quarter.code} ends {formatSchoolCalendarDate({ date: quarter.date })}
-                </span>
-              ))}
             </div>
           </AnimSection>
 

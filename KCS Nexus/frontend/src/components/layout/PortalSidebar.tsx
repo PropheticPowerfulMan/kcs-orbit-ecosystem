@@ -164,6 +164,8 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/admin/parents', label: t('portalNav.parents'), icon: Users },
         { to: '/admin/attendance', label: t('portalNav.staffAttendance'), icon: ClipboardCheck },
         { to: '/admin/transcripts', label: t('portalNav.transcripts'), icon: FileSpreadsheet },
+        { to: '/admin/report-cards', label: t('portalNav.reportCards'), icon: GraduationCap },
+        { to: '/admin/certificates', label: language === 'fr' ? 'Certificats' : 'Certificates', icon: Shield },
         { to: '/admin/diagnostics', label: t('portalNav.diagnosticControl'), icon: ClipboardCheck },
         { to: '/admin/communications', label: t('portalNav.communications'), icon: Megaphone },
         { to: '/admin/discipline', label: t('portalNav.discipline'), icon: AlertTriangle },

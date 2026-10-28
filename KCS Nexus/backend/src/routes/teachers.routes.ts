@@ -253,7 +253,7 @@ const submissionGradeSchema = z.object({
 
 const assignmentGradebookSyncSchema = z.object({
   academicYear: z.string().regex(/^\d{4}-\d{4}$/).optional(),
-  term: z.enum(['Semester 1 · Trimester 1', 'Semester 1 · Trimester 2', 'Semester 2 · Trimester 3', 'Annual final']).optional(),
+  term: z.enum(['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Annual final']).optional(),
 })
 
 const ownedCourse = async (userId: string, courseId: string) => {

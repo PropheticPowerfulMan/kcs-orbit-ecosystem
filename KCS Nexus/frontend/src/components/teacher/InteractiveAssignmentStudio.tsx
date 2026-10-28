@@ -14,7 +14,7 @@ const panel='rounded-2xl border border-sky-100 bg-[#f4f9ff] p-4 shadow-sm dark:b
 const field='w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 focus:ring-2 focus:ring-kcs-blue-100 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:focus:ring-kcs-blue-800'
 const primary='inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0'
 const blankQuestion=():Question=>({questionText:'',questionType:'MULTIPLE_CHOICE',options:['','','',''],correctAnswer:'',points:10,difficulty:'MEDIUM',competencyTag:'Core understanding',explanation:''})
-const gradebookTerms=['Semester 1 · Trimester 1','Semester 1 · Trimester 2','Semester 2 · Trimester 3','Annual final']
+const gradebookTerms=['Semester 1 · Quarter 1','Semester 1 · Quarter 2','Semester 2 · Quarter 3','Semester 2 · Quarter 4','Annual final']
 const gradebookYears=Array.from({length:75},(_,index)=>`${2026+index}-${2027+index}`)
 const cycleForDate=(value:string)=>{const date=new Date(`${value.slice(0,10)}T00:00:00Z`),year=date.getUTCFullYear(),month=date.getUTCMonth(),start=month>=7?year:year-1;return {academicYear:`${start}-${start+1}`,term:month>=7&&month<=10?gradebookTerms[0]:month===11||month<=2?gradebookTerms[1]:gradebookTerms[2]}}
 

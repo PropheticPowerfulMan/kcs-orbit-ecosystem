@@ -62,7 +62,7 @@ enum AcademicYearStatus {
 
 enum AcademicPeriodType {
   SEMESTER
-  TRIMESTER
+  QUARTER
 }
 
 model Organization {

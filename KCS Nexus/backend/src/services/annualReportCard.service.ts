@@ -1,8 +1,13 @@
-export const KCS_TRIMESTER_TERMS = [
-  'Semester 1 · Trimester 1',
-  'Semester 1 · Trimester 2',
-  'Semester 2 · Trimester 3',
+import { academicTermAliases, canonicalAcademicTerm } from '../utils/academicCycle.js'
+
+export const KCS_QUARTER_TERMS = [
+  'Semester 1 · Quarter 1',
+  'Semester 1 · Quarter 2',
+  'Semester 2 · Quarter 3',
+  'Semester 2 · Quarter 4',
 ] as const
+/** @deprecated compatibility export for older imports. */
+export const KCS_TRIMESTER_TERMS = KCS_QUARTER_TERMS
 
 export type ReportGradeSource = {
   studentId: string
@@ -25,8 +30,10 @@ export type AggregatedCourseResult = {
 export const isAnnualFinalTerm = (term: string) => term.trim().toLowerCase() === 'annual final'
 
 export const reportCardSourceTerms = (term: string) => isAnnualFinalTerm(term)
-  ? [...KCS_TRIMESTER_TERMS]
-  : [term]
+  ? [...KCS_QUARTER_TERMS]
+  : [canonicalAcademicTerm(term) ?? term]
+
+export const reportCardSourcePeriodTerms = (term: string) => reportCardSourceTerms(term).flatMap(academicTermAliases)
 
 export function aggregateReportCardResults(
   grades: ReportGradeSource[],
@@ -38,8 +45,9 @@ export function aggregateReportCardResults(
   const newestByTerm = new Map<string, ReportGradeSource>()
 
   for (const grade of grades) {
-    const [year, gradeTerm, status] = grade.period.split('::')
-    if (year !== academicYear || status !== 'SUBMITTED' || !required.has(gradeTerm)) continue
+    const [year, rawGradeTerm, status] = grade.period.split('::')
+    const gradeTerm = canonicalAcademicTerm(rawGradeTerm) ?? rawGradeTerm
+    if (year !== academicYear || status !== 'SUBMITTED' || !required.has(gradeTerm as typeof requiredTerms[number])) continue
     const key = `${grade.studentId}:${grade.courseId}:${gradeTerm}`
     const current = newestByTerm.get(key)
     const currentTime = current?.createdAt ? new Date(current.createdAt).getTime() : 0
