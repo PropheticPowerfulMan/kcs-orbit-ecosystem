@@ -362,6 +362,7 @@ model User {
   electiveOfferingsTaught        ElectiveOffering[]       @relation("ElectiveOfferingTeacher")
   electiveOfferingsProposed      ElectiveOffering[]       @relation("ElectiveOfferingProposer")
   shiningStudentSchedulesCreated ShiningStudentSchedule[] @relation("ShiningStudentScheduleCreator")
+  eventReminderDeliveries        EventReminderDelivery[]
 }
 
 model TeacherWorkspace {
@@ -721,8 +722,36 @@ model Event {
   liveStreamStatus     String    @default("scheduled")
   liveStreamStartsAt   DateTime?
   replayUrl            String?
+  audienceRoles        UserRole[] @default([ADMIN, STAFF, TEACHER, STUDENT, PARENT])
+  audienceGrades       String[]   @default([])
+  reminderEnabled      Boolean    @default(true)
+  reminderDaysBefore   Int        @default(7)
+  reminderChannels     String[]   @default(["IN_APP", "EMAIL", "SMS"])
+  reminderRevision     Int        @default(1)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
+  reminderDeliveries   EventReminderDelivery[]
+}
+
+model EventReminderDelivery {
+  id             String   @id @default(cuid())
+  eventId        String
+  userId         String
+  revision       Int
+  inAppSentAt    DateTime?
+  emailQueuedAt  DateTime?
+  smsAttemptedAt DateTime?
+  smsSentAt      DateTime?
+  emailFailure   String?
+  smsFailure     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, revision])
+  @@index([eventId, revision])
+  @@index([userId, createdAt])
 }
 
 model AttendanceRecord {

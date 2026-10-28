@@ -4,6 +4,7 @@ import { app } from './app.js'
 import { isDatabaseReady, setDatabaseReady } from './config/runtimeStatus.js'
 import { ensureUserAccessCodeColumn } from './utils/userAccessCode.js'
 import { startOutboundMailQueue } from './services/outboundMailQueue.js'
+import { startEventReminderWorker } from './services/eventReminder.service.js'
 
 const start = async () => {
   try {
@@ -11,6 +12,7 @@ const start = async () => {
     await ensureUserAccessCodeColumn(prisma)
     setDatabaseReady(true)
     startOutboundMailQueue()
+    startEventReminderWorker()
   } catch (error) {
     setDatabaseReady(false)
     console.error('KCS Nexus database unavailable; starting API in degraded mode.', error)
