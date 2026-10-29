@@ -8,7 +8,7 @@ RELEASE="${1:-}"
 [[ "$RELEASE" =~ ^[0-9a-f]{7,40}$ ]] || { echo "Usage: deploy.sh <git-sha>" >&2; exit 1; }
 [[ -f "$ENV_FILE" ]] || { echo "Missing $ENV_FILE" >&2; exit 1; }
 
-for image in orbit-api nexus-api nexus-web kitchen-api kitchen-web academy edupay-api edupay-web savanex-api savanex-web edusync-api edusync-web; do
+for image in orbit-api nexus-api nexus-web kitchen-api kitchen-web sentinel-api sentinel-web academy edupay-api edupay-web savanex-api savanex-web edusync-api edusync-web; do
   docker image inspect "kcs/$image:$RELEASE" >/dev/null
 done
 
@@ -19,11 +19,14 @@ previous_nexus_api="$(sed -n 's/^NEXUS_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)
 previous_nexus_web="$(sed -n 's/^NEXUS_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_kitchen_api="$(sed -n 's/^KITCHEN_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_kitchen_web="$(sed -n 's/^KITCHEN_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
+previous_sentinel_api="$(sed -n 's/^SENTINEL_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
+previous_sentinel_web="$(sed -n 's/^SENTINEL_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_academy="$(sed -n 's/^ACADEMY_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_edupay_api="$(sed -n 's/^EDUPAY_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_edupay_web="$(sed -n 's/^EDUPAY_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_savanex_api="$(sed -n 's/^SAVANEX_API_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 previous_savanex_web="$(sed -n 's/^SAVANEX_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
+previous_edusync_web="$(sed -n 's/^EDUSYNC_WEB_RELEASE=//p' "$ENV_FILE" | tail -n 1)"
 printf '%s\n' "$previous" > "$ROOT_DIR/.previous-production-release"
 
 env_snapshot="$(mktemp "${ENV_FILE}.pre-deploy.XXXXXX")"
@@ -50,11 +53,14 @@ rollback_on_error() {
   export NEXUS_WEB_RELEASE="${previous_nexus_web:-$previous}"
   export KITCHEN_API_RELEASE="${previous_kitchen_api:-$previous}"
   export KITCHEN_WEB_RELEASE="${previous_kitchen_web:-$previous}"
+  export SENTINEL_API_RELEASE="${previous_sentinel_api:-$previous}"
+  export SENTINEL_WEB_RELEASE="${previous_sentinel_web:-$previous}"
   export ACADEMY_RELEASE="${previous_academy:-$previous}"
   export EDUPAY_API_RELEASE="${previous_edupay_api:-$previous}"
   export EDUPAY_WEB_RELEASE="${previous_edupay_web:-$previous}"
   export SAVANEX_API_RELEASE="${previous_savanex_api:-$previous}"
   export SAVANEX_WEB_RELEASE="${previous_savanex_web:-$previous}"
+  export EDUSYNC_WEB_RELEASE="${previous_edusync_web:-$previous}"
   if [[ "$previous" =~ ^[0-9a-f]{7,40}$ ]]; then
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --wait --wait-timeout 300 || true
   fi
@@ -69,11 +75,14 @@ export NEXUS_API_RELEASE="$RELEASE"
 export NEXUS_WEB_RELEASE="$RELEASE"
 export KITCHEN_API_RELEASE="$RELEASE"
 export KITCHEN_WEB_RELEASE="$RELEASE"
+export SENTINEL_API_RELEASE="$RELEASE"
+export SENTINEL_WEB_RELEASE="$RELEASE"
 export ACADEMY_RELEASE="$RELEASE"
 export EDUPAY_API_RELEASE="$RELEASE"
 export EDUPAY_WEB_RELEASE="$RELEASE"
 export SAVANEX_API_RELEASE="$RELEASE"
 export SAVANEX_WEB_RELEASE="$RELEASE"
+export EDUSYNC_WEB_RELEASE="$RELEASE"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --quiet
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build --remove-orphans --wait --wait-timeout 300
 PRODUCTION_ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" "$ROOT_DIR/ops/production/verify.sh"
@@ -84,11 +93,14 @@ set_release_key NEXUS_API_RELEASE "$RELEASE"
 set_release_key NEXUS_WEB_RELEASE "$RELEASE"
 set_release_key KITCHEN_API_RELEASE "$RELEASE"
 set_release_key KITCHEN_WEB_RELEASE "$RELEASE"
+set_release_key SENTINEL_API_RELEASE "$RELEASE"
+set_release_key SENTINEL_WEB_RELEASE "$RELEASE"
 set_release_key ACADEMY_RELEASE "$RELEASE"
 set_release_key EDUPAY_API_RELEASE "$RELEASE"
 set_release_key EDUPAY_WEB_RELEASE "$RELEASE"
 set_release_key SAVANEX_API_RELEASE "$RELEASE"
 set_release_key SAVANEX_WEB_RELEASE "$RELEASE"
+set_release_key EDUSYNC_WEB_RELEASE "$RELEASE"
 chmod 600 "$ENV_FILE"
 rm -f -- "$env_snapshot"
 trap - ERR

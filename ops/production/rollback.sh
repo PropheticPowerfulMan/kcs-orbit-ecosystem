@@ -15,7 +15,7 @@ set_release_key() {
   fi
 }
 
-for image in orbit-api nexus-api nexus-web kitchen-api kitchen-web academy edupay-api edupay-web savanex-api savanex-web edusync-api edusync-web; do
+for image in orbit-api nexus-api nexus-web kitchen-api kitchen-web sentinel-api sentinel-web academy edupay-api edupay-web savanex-api savanex-web edusync-api edusync-web; do
   docker image inspect "kcs/$image:$RELEASE" >/dev/null
 done
 
@@ -25,9 +25,12 @@ export NEXUS_API_RELEASE="$RELEASE"
 export NEXUS_WEB_RELEASE="$RELEASE"
 export KITCHEN_API_RELEASE="$RELEASE"
 export KITCHEN_WEB_RELEASE="$RELEASE"
+export SENTINEL_API_RELEASE="$RELEASE"
+export SENTINEL_WEB_RELEASE="$RELEASE"
 export ACADEMY_RELEASE="$RELEASE"
 export EDUPAY_API_RELEASE="$RELEASE"
 export EDUPAY_WEB_RELEASE="$RELEASE"
+export EDUSYNC_WEB_RELEASE="$RELEASE"
 docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/ops/production/compose.yml" up -d --no-build --wait --wait-timeout 300
 PRODUCTION_ENV_FILE="$ENV_FILE" "$ROOT_DIR/ops/production/verify.sh"
 set_release_key KCS_RELEASE "$RELEASE"
@@ -36,8 +39,11 @@ set_release_key NEXUS_API_RELEASE "$RELEASE"
 set_release_key NEXUS_WEB_RELEASE "$RELEASE"
 set_release_key KITCHEN_API_RELEASE "$RELEASE"
 set_release_key KITCHEN_WEB_RELEASE "$RELEASE"
+set_release_key SENTINEL_API_RELEASE "$RELEASE"
+set_release_key SENTINEL_WEB_RELEASE "$RELEASE"
 set_release_key ACADEMY_RELEASE "$RELEASE"
 set_release_key EDUPAY_API_RELEASE "$RELEASE"
 set_release_key EDUPAY_WEB_RELEASE "$RELEASE"
+set_release_key EDUSYNC_WEB_RELEASE "$RELEASE"
 chmod 600 "$ENV_FILE"
 echo "Application rollback to $RELEASE completed. Database volumes were not modified."
