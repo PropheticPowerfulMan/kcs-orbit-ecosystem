@@ -273,7 +273,7 @@ academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncH
    where:{OR:[{role:'ADMIN'},{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'}]},
    select:{id:true},
   })
-  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:'Final course grades ready for review',message:`${course.code||course.name}: ${created.length} final grade(s) were submitted for ${payload.academicYear} · ${payload.term}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
+  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:'Final course grades ready for review',message:`${course.code||course.name}: ${created.length} final grade(s) were submitted for ${payload.academicYear} · ${payload.term}.`,type:'INFO',link:'/portal/admin/report-cards'}))})
   await synchronizeStudentAcademicMetrics(tx,canonicalResults.map(item=>item.studentId))
   return{created,draftCards,notified:recipients.length}
  })
@@ -474,7 +474,7 @@ academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRole
   })
   await tx.auditLog.create({data:{actorId:req.user!.sub,action:replacesPreviousSubmission?'MAIN_TEACHER_REPORT_CARD_RESUBMITTED':'MAIN_TEACHER_REPORT_CARD_SUBMITTED',targetType:'ReportCard',targetId:saved.id,metadata:{studentId,academicYear:payload.academicYear,term:payload.term,replacesPreviousSubmission,courseGrades:context.grades.map(item=>({courseId:item.courseId,percentage:item.percentage,credits:item.course.credits}))}}})
   const recipients=await tx.user.findMany({where:{OR:[{role:'ADMIN'},{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'}]},select:{id:true}})
-  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/transcripts'}))})
+  if(recipients.length)await tx.notification.createMany({data:recipients.map(({id:userId})=>({userId,title:replacesPreviousSubmission?'Updated report card ready for review':'Report card ready for review',message:`A main teacher ${replacesPreviousSubmission?'replaced the previous submission':'submitted the complete report card'} for ${context.student.studentNumber}.`,type:'INFO',link:'/portal/admin/report-cards'}))})
   return{saved,notified:recipients.length}
  })
   const confirmed=await prisma.reportCard.findUnique({where:{id:result.saved.id},select:{id:true,publicationStatus:true,principalStatus:true}})
