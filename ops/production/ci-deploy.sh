@@ -16,6 +16,11 @@ exec 9>/var/lock/kcs-orbit-deploy.lock
 flock -n 9 || { echo "Another production deployment is already running." >&2; exit 1; }
 
 cd "$ROOT_DIR"
+# The forced SSH wrapper fast-forwards the parent repository before invoking
+# this script. Synchronize gitlinks first so a legitimate submodule revision
+# change is not mistaken for an operator modification.
+git submodule sync --recursive
+git submodule update --init --recursive
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || {
   echo "Refusing to deploy from a dirty tracked worktree." >&2
   exit 1
