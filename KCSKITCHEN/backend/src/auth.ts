@@ -11,6 +11,7 @@ export type KitchenIdentity = {
   personType: PersonType
   role: KitchenRole
   hasOfficialPhoto: boolean
+  canManageOwnCredentials: boolean
 }
 
 export type AuthRequest = Request & { kitchenUser?: KitchenIdentity }

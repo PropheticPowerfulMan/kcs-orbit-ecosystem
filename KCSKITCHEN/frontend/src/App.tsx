@@ -454,7 +454,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN'],
     ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['manager-inbox', t.managerInbox, <BellRing />, ['KITCHEN_ADMIN', 'FINANCE'].includes(user.role)],
-    ['settings', t.settings, <Settings />, user.role === 'KITCHEN_ADMIN']
+    ['settings', t.settings, <Settings />, user.role === 'KITCHEN_ADMIN' && Boolean(user.canManageOwnCredentials)]
   ]
   function navigateToPage(nextPage: Page, replace = false) {
     setPage(nextPage)

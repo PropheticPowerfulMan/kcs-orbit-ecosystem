@@ -17,6 +17,7 @@ import { processNotificationOutbox } from './notifications.js'
 import { procurementRouter } from './procurement.js'
 import { getUsdCdfRate } from './exchange-rate.js'
 import { queueDailyKitchenReport } from './daily-report.js'
+import { canManageOwnKitchenCredentials, reauthenticatedAsSameAccount } from './credential-policy.js'
 import {
   buildStatementArtifact,
   canIssueStatement,
@@ -178,7 +179,12 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     email: person?.email || nexusUser.email || null,
     personType: access?.personType || type,
     role: access?.role || defaultRole(String(nexusUser.role), type),
-    hasOfficialPhoto: Boolean(person?.photoData)
+    hasOfficialPhoto: Boolean(person?.photoData),
+    canManageOwnCredentials: canManageOwnKitchenCredentials({
+      userId: String(nexusUser.id),
+      orbitPersonId,
+      explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
+    }),
   }
   res.json({ token: signSession(identity), user: identity })
 }))
@@ -189,6 +195,12 @@ app.get('/api/me', authenticate, asyncRoute(async (req: AuthRequest, res) => {
 }))
 
 app.put('/api/me/change-password', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId } })
+  if (!canManageOwnKitchenCredentials({
+    userId: req.kitchenUser!.userId,
+    orbitPersonId: req.kitchenUser!.orbitPersonId,
+    explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
+  })) return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may change their own credentials. The Nexus Super Administrator account is protected.' })
   const input = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(14).max(128) }).parse(req.body)
   const identifier = req.kitchenUser!.email
   if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
@@ -200,6 +212,9 @@ app.put('/api/me/change-password', authenticate, allow('KITCHEN_ADMIN'), asyncRo
   })
   const loginBody = await loginResponse.json().catch(() => null) as any
   if (!loginResponse.ok || !loginBody?.data?.token) return res.status(400).json({ message: loginBody?.message || 'Current password is incorrect' })
+  if (!reauthenticatedAsSameAccount(req.kitchenUser!.userId, loginBody?.data?.user?.id)) {
+    return res.status(409).json({ message: 'The reauthenticated account does not match the Kitchen manager session. No credential was changed.' })
+  }
   const changeResponse = await fetch(new URL('/api/auth/change-password', env.NEXUS_API_URL), {
     method: 'PUT',
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + loginBody.data.token, 'x-kcs-client': 'KCS_KITCHEN' },
@@ -213,6 +228,12 @@ app.put('/api/me/change-password', authenticate, allow('KITCHEN_ADMIN'), asyncRo
 }))
 
 app.put('/api/me/email', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId } })
+  if (!canManageOwnKitchenCredentials({
+    userId: req.kitchenUser!.userId,
+    orbitPersonId: req.kitchenUser!.orbitPersonId,
+    explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
+  })) return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may change their own credentials. The Nexus Super Administrator account is protected.' })
   const input = z.object({ currentPassword: z.string().min(1).max(200), newEmail: z.string().trim().email().max(180) }).parse(req.body)
   const identifier = req.kitchenUser!.email
   if (!identifier) return res.status(409).json({ message: 'No institutional email is linked to this Kitchen account' })
@@ -224,6 +245,9 @@ app.put('/api/me/email', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async 
   })
   const loginBody = await loginResponse.json().catch(() => null) as any
   if (!loginResponse.ok || !loginBody?.data?.token) return res.status(400).json({ message: loginBody?.message || 'Current password is incorrect' })
+  if (!reauthenticatedAsSameAccount(req.kitchenUser!.userId, loginBody?.data?.user?.id)) {
+    return res.status(409).json({ message: 'The reauthenticated account does not match the Kitchen manager session. No credential was changed.' })
+  }
   const updateResponse = await fetch(new URL('/api/auth/email', env.NEXUS_API_URL), {
     method: 'PUT',
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + loginBody.data.token, 'x-kcs-client': 'KCS_KITCHEN' },
