@@ -25,6 +25,7 @@ const dateKeyInKinshasa = (value = new Date()) => {
 }
 const today = () => dateKeyInKinshasa()
 const dateKey = (value: string) => new Date(value).toISOString().slice(0, 10)
+const DAILY_STAPLES = new Set(['Chicken / Poulet', 'Fries / Frites'])
 
 function AuditTrail({ logs, fr }: { logs: AuditEntry[]; fr: boolean }) {
   return <div className="menu-audit"><b><Clock3 />{fr ? 'Piste d’audit' : 'Audit trail'}</b>{logs.length
@@ -61,20 +62,24 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
       const activeProducts = productResult.products.filter(product => product.isAvailable)
       const todayMenu = menuResult.menus.find(menu => dateKey(menu.menuDate) === today())
       if (todayMenu) populateEditor(todayMenu, activeProducts)
+      else prepareNewMenu(today(), activeProducts)
     }
   }
 
   useEffect(() => { void load().catch(error => setMessage(error.message)) }, [])
 
-  function resetEditor() {
+  function prepareNewMenu(nextDate = today(), availableProducts = products) {
     setEditingId('')
-    setDate(today())
+    setDate(nextDate)
     setTitle('')
     setDescription('')
-    setSelected([])
-    setMenuPrices({})
+    const staples = availableProducts.filter(product => DAILY_STAPLES.has(product.name))
+    setSelected(staples.map(product => product.id))
+    setMenuPrices(Object.fromEntries(staples.map(product => [product.id, { value: Number(product.currentPrice) > 0 ? String(product.currentPrice) : '', currency: product.currency || 'CDF' }])))
     setPublish(true)
   }
+
+  function resetEditor() { prepareNewMenu(today()) }
 
   function populateEditor(menu: Menu, availableProducts = products) {
     const activeProductIds = new Set(availableProducts.map(product => product.id))
@@ -106,6 +111,10 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
 
   function toggle(id: string) {
     const product = products.find(item => item.id === id)
+    if (product && DAILY_STAPLES.has(product.name) && selected.includes(id)) {
+      setMessage(fr ? 'Poulet et Frites sont deux plats distincts obligatoires dans chaque menu journalier.' : 'Chicken and Fries are two distinct required items on every daily menu.')
+      return
+    }
     setSelected(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])
     if (product) setMenuPrices(current => current[id] ? current : {
       ...current,
@@ -166,9 +175,9 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     <section className="menu-workspace">
       <form className="panel menu-editor" onSubmit={save}>
         <div className="menu-editor-heading"><div><span className="eyebrow">{editingId ? (fr ? 'MODIFICATION CONTRÔLÉE' : 'CONTROLLED UPDATE') : (fr ? 'NOUVEAU MENU' : 'NEW MENU')}</span><h2>{editingId ? (fr ? 'Modifier le menu' : 'Edit menu') : (fr ? 'Composer le menu' : 'Compose menu')}</h2></div>{editingId && <button type="button" className="secondary compact" onClick={resetEditor}><RotateCcw />{fr ? 'Annuler' : 'Cancel'}</button>}</div>
-        <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" value={date} onChange={event => { const nextDate = event.target.value; setDate(nextDate); const existing = menus.find(menu => dateKey(menu.menuDate) === nextDate); if (existing) populateEditor(existing) }} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
+        <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" value={date} onChange={event => { const nextDate = event.target.value; const existing = menus.find(menu => dateKey(menu.menuDate) === nextDate); if (existing) populateEditor(existing); else prepareNewMenu(nextDate) }} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
         <label>{fr ? 'Description' : 'Description'}<textarea value={description} onChange={event => setDescription(event.target.value)} /></label>
-        <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{product.category}</small><DisplayMoney value={menuPrices[product.id]?.value || product.currentPrice} currency={menuPrices[product.id]?.currency ?? product.currency} /></button>)}</div>
+        <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{DAILY_STAPLES.has(product.name) ? (fr ? 'Plat quotidien obligatoire · prix séparé' : 'Required daily item · separate price') : product.category}</small><DisplayMoney value={menuPrices[product.id]?.value || product.currentPrice} currency={menuPrices[product.id]?.currency ?? product.currency} /></button>)}</div>
         {selected.length > 0 && <div className="menu-price-editor"><div className="menu-price-editor-title"><b>{fr ? 'Prix du menu du jour' : "Today's menu prices"}</b><small>{fr ? 'Chaque article possède son propre prix, modifiable par le gestionnaire.' : 'Each item has its own price, editable by the Kitchen manager.'}</small></div>{selected.map(productId => {
           const product = products.find(item => item.id === productId)
           if (!product) return null

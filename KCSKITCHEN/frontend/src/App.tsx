@@ -679,6 +679,8 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [saleSequence, setSaleSequence] = useState(0)
+  const checkoutLock = useRef(false)
   const { rate } = useCurrencyDisplay()
   useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
   const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
@@ -688,7 +690,9 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
   function change(id: string, quantity: number) { setCart(current => ({ ...current, [id]: Math.max(0, quantity) })) }
   async function checkout() {
+    if (checkoutLock.current) return
     if (!person || total <= 0) return setNotice({ type: 'error', message: 'Select a person and at least one item.' })
+    checkoutLock.current = true
     setSubmitting(true)
     try {
       const result = await api<{ transaction: Transaction }>('/transactions', {
@@ -701,15 +705,15 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPerson(null); setConfirming(false)
+      setReceipt(result.transaction); setCart({}); setPerson(null); setPaymentMode('CASH'); setConfirming(false); setSaleSequence(current => current + 1)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
-    finally { setSubmitting(false) }
+    finally { checkoutLock.current = false; setSubmitting(false) }
   }
   return <>
     <section className="pos-grid">
       <div className="panel">
         <div className="step-title"><span>1</span><div><small>IDENTITY</small><h2>{t.identify}</h2></div></div>
-        <PersonSelector value={person} onChange={(nextPerson) => {
+        <PersonSelector key={saleSequence} value={person} onChange={(nextPerson) => {
           if (nextPerson?.id !== person?.id) {
             setCart({})
             setPaymentMode('CASH')

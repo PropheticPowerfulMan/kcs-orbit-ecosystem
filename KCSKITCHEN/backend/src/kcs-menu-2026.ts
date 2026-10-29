@@ -16,9 +16,13 @@ const officialDrinks: OfficialDrink[] = [
   { name: 'Bisap', slug: 'bisap', price: 3000 },
 ]
 
-const monday: MenuLine[] = [
+const dailyStaples: MenuLine[] = [
   { name: 'Chicken / Poulet', price: 0, category: 'FOOD', managerPriced: true, photoUrl: '/kitchen/images/menu-items/chicken-kcs.png' },
   { name: 'Fries / Frites', price: 0, category: 'FOOD', managerPriced: true, photoUrl: '/kitchen/images/menu-items/fries-kcs.png' },
+]
+export const DAILY_STAPLE_PRODUCT_NAMES = dailyStaples.map(item => item.name)
+const monday: MenuLine[] = [
+  ...dailyStaples,
   { name: 'Samoussas', price: 2500, category: 'SNACK' },
   { name: 'Macaronis', price: 5000, category: 'FOOD' },
   { name: 'Crêpes / Crepes', price: 2000, category: 'DESSERT' },
@@ -26,6 +30,7 @@ const monday: MenuLine[] = [
   { name: 'Waffles / Gaufres', price: 1000, category: 'DESSERT' }
 ]
 const tuesday: MenuLine[] = [
+  ...dailyStaples,
   { name: 'Shawarma Meat / Chawarma Viande', price: 10000, category: 'FOOD' },
   { name: 'Chicken Meatballs / Boulettes de Poulet', price: 5000, category: 'FOOD' },
   { name: 'Beef Skewers / Brochettes de viande', price: 2500, category: 'FOOD' },
@@ -40,6 +45,7 @@ const menus: Record<number, { title: string; items: MenuLine[] }> = {
   4: { title: 'Thursday / Jeudi', items: tuesday.map(line => line.name.includes('French Toast') ? { ...line, price: 1000 } : line) },
   5: { title: 'Friday / Vendredi', items: monday }
 }
+export const officialMenuDefinitionForDay = (day: number) => menus[day]
 const officialProducts = [...monday, ...tuesday].filter((line, index, all) =>
   all.findIndex(candidate => candidate.name === line.name) === index
 )
@@ -136,7 +142,7 @@ export async function ensureOfficialMenu(
   preparedProducts?: Map<string, OfficialProductRef>
 ) {
   const date = new Date(`${key}T00:00:00.000Z`)
-  const definition = menus[date.getUTCDay()]
+  const definition = officialMenuDefinitionForDay(date.getUTCDay())
   if (!definition) return null
   const existing = await prisma.dailyMenu.findUnique({
     where: { menuDate: date },

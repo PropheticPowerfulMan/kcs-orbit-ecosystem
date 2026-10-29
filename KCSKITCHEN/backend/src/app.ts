@@ -10,7 +10,7 @@ import { env } from './config.js'
 import { prisma } from './db.js'
 import { allow, authenticate, signSession, type AuthRequest, type KitchenIdentity } from './auth.js'
 import { calculateSchoolSubsidy } from './staff-subsidy.js'
-import { ensureOfficialMenu } from './kcs-menu-2026.js'
+import { DAILY_STAPLE_PRODUCT_NAMES, ensureOfficialMenu } from './kcs-menu-2026.js'
 import { loadDirectory, resolvePerson } from './directory.js'
 import { compareClassNames, normalizeClassName } from './class-name.js'
 import { processNotificationOutbox } from './notifications.js'
@@ -18,6 +18,7 @@ import { procurementRouter } from './procurement.js'
 import { getUsdCdfRate } from './exchange-rate.js'
 import { queueDailyKitchenReport } from './daily-report.js'
 import { canManageOwnKitchenCredentials, reauthenticatedAsSameAccount } from './credential-policy.js'
+import { runWithTransactionRetry } from './transaction-retry.js'
 import {
   buildStatementArtifact,
   canIssueStatement,
@@ -557,14 +558,33 @@ const dailyMenuSchema = z.object({
   publish: z.boolean().default(false)
 }).refine(value => Boolean(value.items?.length || value.productIds?.length), { message: 'At least one priced menu item is required' })
 const auditJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
+async function runKitchenSerializableTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return runWithTransactionRetry(() => prisma.$transaction(operation, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }))
+}
 const menuInputLines = (input: z.infer<typeof dailyMenuSchema>) => {
   const source = input.items?.length ? input.items : (input.productIds || []).map(productId => ({ productId, unitPrice: 0, currency: 'CDF' as const }))
   return [...new Map(source.map(item => [item.productId, item])).values()]
 }
+async function menuLinesWithRequiredStaples(input: z.infer<typeof dailyMenuSchema>) {
+  const lines = menuInputLines(input)
+  const staples = await prisma.product.findMany({
+    where: { name: { in: DAILY_STAPLE_PRODUCT_NAMES }, archivedAt: null, isAvailable: true },
+    orderBy: { name: 'asc' },
+  })
+  if (staples.length !== DAILY_STAPLE_PRODUCT_NAMES.length) {
+    throw Object.assign(new Error('Chicken and fries must both be active catalog products before a daily menu can be saved'), { statusCode: 409 })
+  }
+  const selectedIds = new Set(lines.map(line => line.productId))
+  for (const name of DAILY_STAPLE_PRODUCT_NAMES) {
+    const product = staples.find(item => item.name === name)!
+    if (!selectedIds.has(product.id)) lines.push({ productId: product.id, unitPrice: Number(product.currentPrice), currency: product.currency === 'USD' ? 'USD' : 'CDF' })
+  }
+  return lines
+}
 
 app.post('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
   const input = dailyMenuSchema.parse(req.body)
-  const lines = menuInputLines(input)
+  const lines = await menuLinesWithRequiredStaples(input)
   const ids = lines.map(item => item.productId)
   const products = await prisma.product.findMany({ where: { id: { in: ids }, archivedAt: null, isAvailable: true } })
   if (products.length !== ids.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
@@ -597,7 +617,7 @@ app.put('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute
   const date = menuDate(input.date)
   const conflicting = await prisma.dailyMenu.findFirst({ where: { menuDate: date, id: { not: id } }, select: { id: true } })
   if (conflicting) return res.status(409).json({ message: 'Another menu already exists for this service date.' })
-  const lines = menuInputLines(input)
+  const lines = await menuLinesWithRequiredStaples(input)
   const productIds = lines.map(item => item.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, archivedAt: null, isAvailable: true } })
   if (products.length !== productIds.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
@@ -734,7 +754,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     }
   }
 
-  const transaction = await prisma.$transaction(async tx => {
+  const transaction = await runKitchenSerializableTransaction(async tx => {
     const counterName = 'TRANSACTION-' + now.getUTCFullYear()
     const counter = await tx.kitchenCounter.upsert({
       where: { name: counterName },
@@ -807,7 +827,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       ...kitchenManagers.filter(manager => manager.orbitPersonId !== person.id).map(manager => ({ orbitPersonId: manager.orbitPersonId, eventType: 'KITCHEN_ONLINE_ORDER_PLACED', channels: ['IN_APP', ...(manager.emailNotifications ? ['EMAIL'] : []), ...(manager.smsNotifications ? ['SMS'] : [])], payload: notificationPayload }))
     ] })
     return created
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  })
 
   await audit(req, 'TRANSACTION_CREATED', 'KitchenTransaction', transaction.id, undefined, transaction)
   res.status(201).json({ transaction: withReceiptSignature(transaction), balance: await balanceFor(person.id) })
@@ -853,7 +873,7 @@ app.post('/api/transactions/:id/deliver', authenticate, allow('KITCHEN_ADMIN', '
   if (!pending) return res.status(404).json({ message: 'Order not found' })
   if (pending.status !== 'PENDING') return res.status(409).json({ message: 'Only a pending order can be marked as delivered' })
   if (!pending.confirmedByPersonAt) return res.status(409).json({ message: 'The customer must first confirm actual receipt of the order and, for a purchase, handover of payment' })
-  const delivered = await prisma.$transaction(async tx => {
+  const delivered = await runKitchenSerializableTransaction(async tx => {
     const claim = await tx.kitchenTransaction.updateMany({
       where: { id, status: 'PENDING', confirmedByPersonAt: { not: null }, confirmedByKitchenAt: null },
       data: { confirmedByKitchenAt: new Date() },
@@ -875,7 +895,7 @@ app.post('/api/transactions/:id/deliver', authenticate, allow('KITCHEN_ADMIN', '
     const channels = ['IN_APP', ...(access?.emailNotifications !== false ? ['EMAIL'] : []), ...(access?.smsNotifications !== false ? ['SMS'] : [])]
     await tx.notificationOutbox.create({ data: { orbitPersonId: pending.orbitPersonId, eventType: 'KITCHEN_ORDER_DELIVERED', channels, payload: { transactionNumber: pending.transactionNumber, total: Number(pending.total), paymentMode: pending.paymentMode, deliveredAt: new Date().toISOString() } } })
     return updated
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+  })
   await audit(req, 'ORDER_DELIVERED_AND_ACCOUNTED', 'KitchenTransaction', id, pending, delivered)
   res.json({ transaction: withReceiptSignature(delivered), balance: await balanceFor(pending.orbitPersonId) })
 }))
