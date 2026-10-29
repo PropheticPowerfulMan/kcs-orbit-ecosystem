@@ -1,4 +1,4 @@
-const CACHE = 'kcs-kitchen-culinary-shell-v8-isolated'
+const CACHE = 'kcs-kitchen-culinary-shell-v9-isolated'
 const SCOPE_PATH = new URL('./', self.location.href).pathname
 const SHELL = [
   './',
