@@ -1,432 +1,827 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
-import { academicRecordsAPI } from '@/services/api'
-import { useAuthStore } from '@/store/authStore'
-import { printOfficialReportCard } from '@/utils/officialReportCardPrint'
-import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels'
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
+import { academicRecordsAPI } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
+import { printOfficialReportCard } from '@/utils/officialReportCardPrint';
+import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels';
 
 type SubjectContribution = {
-  courseId: string
-  courseName: string
-  courseCode: string
-  credits: number
-  teacherName: string
-  percentage: number | null
-  letterGrade: string | null
-  submittedAt: string | null
-  termResults?: Record<string, number | null>
-  sourceTermCount?: number
-}
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  credits: number;
+  teacherName: string;
+  percentage: number | null;
+  letterGrade: string | null;
+  submittedAt: string | null;
+  termResults?: Record<string, number | null>;
+  sourceTermCount?: number;
+};
 
 type LearnerRecord = {
-  id: string
-  studentNumber: string
-  name: string
-  officialAvatar?: string | null
-  user: { firstName: string; middleName?: string | null; lastName: string; avatar?: string | null }
-  grade: string
-  section: string
-  isHomeroomStudent: boolean
-  subjects: SubjectContribution[]
-  expectedSubjectCount: number
-  submittedSubjectCount: number
-  allSubjectsSubmitted: boolean
-  average: number | null
-  attendance: { total: number; present: number; absent: number; late: number; excused: number; sick: number; suspended: number; attendanceRate: number | null }
-  reportCard: { id: string; teacherComment?: string | null; conduct?: string | null; principalStatus: string; publicationStatus: string; hiddenCourseIds?: string[] } | null
-}
+  id: string;
+  studentNumber: string;
+  name: string;
+  officialAvatar?: string | null;
+  user: {
+    firstName: string;
+    middleName?: string | null;
+    lastName: string;
+    avatar?: string | null;
+  };
+  grade: string;
+  section: string;
+  isHomeroomStudent: boolean;
+  subjects: SubjectContribution[];
+  expectedSubjectCount: number;
+  submittedSubjectCount: number;
+  allSubjectsSubmitted: boolean;
+  average: number | null;
+  attendance: {
+    total: number;
+    present: number;
+    absent: number;
+    late: number;
+    excused: number;
+    sick: number;
+    suspended: number;
+    attendanceRate: number | null;
+  };
+  reportCard: {
+    id: string;
+    teacherComment?: string | null;
+    conduct?: string | null;
+    principalStatus: string;
+    publicationStatus: string;
+    hiddenCourseIds?: string[];
+  } | null;
+};
 
 type Dashboard = {
-  teacher: { name: string; status: string; homeroomGrade?: string | null; homeroomSection?: string | null }
-  learners: LearnerRecord[]
-  hierarchy: Record<string, string>
-}
+  teacher: {
+    name: string;
+    status: string;
+    homeroomGrade?: string | null;
+    homeroomSection?: string | null;
+  };
+  learners: LearnerRecord[];
+  hierarchy: Record<string, string>;
+};
 
-const sessions = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Annual final']
-const panel = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50'
-const field = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
+const sessions = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Annual final'];
+const panel = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50';
+const field = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white';
 
 const letterGrade = (value: number | null) => {
-  if (value === null) return 'I'
-  if (value >= 97) return 'A+'
-  if (value >= 93) return 'A'
-  if (value >= 90) return 'A-'
-  if (value >= 87) return 'B+'
-  if (value >= 83) return 'B'
-  if (value >= 80) return 'B-'
-  if (value >= 77) return 'C+'
-  if (value >= 73) return 'C'
-  if (value >= 70) return 'C-'
-  return value >= 60 ? 'D' : 'F'
-}
+  if (value === null) return 'I';
+  if (value >= 97) return 'A+';
+  if (value >= 93) return 'A';
+  if (value >= 90) return 'A-';
+  if (value >= 87) return 'B+';
+  if (value >= 83) return 'B';
+  if (value >= 80) return 'B-';
+  if (value >= 77) return 'C+';
+  if (value >= 73) return 'C';
+  if (value >= 70) return 'C-';
+  return value >= 60 ? 'D' : 'F';
+};
 
 const workflowLabel = (learner: LearnerRecord) => {
-  const status = learner.reportCard?.publicationStatus
-  if (status === 'POSTED_TO_PORTAL') return 'Published'
-  if (status === 'APPROVED') return 'Approved'
-  if (status === 'READY_FOR_REVIEW') return 'Administrative review'
-  if (status === 'DRAFT') return 'Main-teacher draft'
-  return learner.allSubjectsSubmitted ? 'Ready for main teacher' : 'Waiting for subject grades'
-}
-const reportDashboardCacheKey = (userId: string, academicYear: string, term: string) =>
-  'kcs:nexus:teacher-report-card:v2:' + userId + ':' + academicYear + ':' + term
+  const status = learner.reportCard?.publicationStatus;
+  if (status === 'POSTED_TO_PORTAL') return 'Published';
+  if (status === 'APPROVED') return 'Approved';
+  if (status === 'READY_FOR_REVIEW') return 'Administrative review';
+  if (status === 'DRAFT') return 'Main-teacher draft';
+  return learner.allSubjectsSubmitted ? 'Ready for main teacher' : 'Waiting for subject grades';
+};
+const reportDashboardCacheKey = (userId: string, academicYear: string, term: string) => 'kcs:nexus:teacher-report-card:v2:' + userId + ':' + academicYear + ':' + term;
 
 const readReportDashboardCache = (userId: string, academicYear: string, term: string): Dashboard | null => {
-  if (typeof window === 'undefined' || !userId) return null
+  if (typeof window === 'undefined' || !userId) return null;
   try {
-    const raw = window.sessionStorage.getItem(reportDashboardCacheKey(userId, academicYear, term))
-    if (!raw) return null
-    const cached = JSON.parse(raw) as { savedAt: number; value: Dashboard }
-    if (!cached?.value || Date.now() - Number(cached.savedAt || 0) > 6 * 60 * 60 * 1000) return null
-    return cached.value
+    const raw = window.sessionStorage.getItem(reportDashboardCacheKey(userId, academicYear, term));
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as { savedAt: number; value: Dashboard };
+    if (!cached?.value || Date.now() - Number(cached.savedAt || 0) > 6 * 60 * 60 * 1000) return null;
+    return cached.value;
   } catch {
-    return null
+    return null;
   }
-}
+};
 
 const writeReportDashboardCache = (userId: string, academicYear: string, term: string, value: Dashboard) => {
-  if (typeof window === 'undefined' || !userId) return
+  if (typeof window === 'undefined' || !userId) return;
   try {
-    window.sessionStorage.setItem(reportDashboardCacheKey(userId, academicYear, term), JSON.stringify({ savedAt: Date.now(), value }))
+    window.sessionStorage.setItem(reportDashboardCacheKey(userId, academicYear, term), JSON.stringify({ savedAt: Date.now(), value }));
   } catch {
     // A cache failure must never block the official live register.
   }
-}
+};
 
 export default function TeacherWholeSchoolReportCards() {
-  const userId = useAuthStore((state) => state.user?.id ?? '')
-  const [academicYear, setAcademicYear] = useState('2026-2027')
-  const [term, setTerm] = useState(sessions[0])
-  const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]))
-  const [selectedId, setSelectedId] = useState('')
-  const [query, setQuery] = useState('')
-  const [classFilter, setClassFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'ready' | 'homeroom' | 'submitted'>('all')
-  const [teacherComment, setTeacherComment] = useState('')
-  const [conduct, setConduct] = useState('')
-  const [hiddenCourseIds, setHiddenCourseIds] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [savingAction, setSavingAction] = useState<'draft' | 'submit' | null>(null)
-  const [printing, setPrinting] = useState(false)
-  const [notice, setNotice] = useState('')
-  const [error, setError] = useState('')
-  const latestDashboardRequestRef = useRef(0)
-  const activeCycleKey = `${userId}|${academicYear}|${term}`
-  const activeCycleKeyRef = useRef(activeCycleKey)
-  activeCycleKeyRef.current = activeCycleKey
+  const userId = useAuthStore((state) => state.user?.id ?? '');
+  const [academicYear, setAcademicYear] = useState('2026-2027');
+  const [term, setTerm] = useState(sessions[0]);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(() => readReportDashboardCache(userId, '2026-2027', sessions[0]));
+  const [selectedId, setSelectedId] = useState('');
+  const [query, setQuery] = useState('');
+  const [classFilter, setClassFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'ready' | 'homeroom' | 'submitted'>('all');
+  const [teacherComment, setTeacherComment] = useState('');
+  const [conduct, setConduct] = useState('');
+  const [hiddenCourseIds, setHiddenCourseIds] = useState<string[]>([]);
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [visibilityAction, setVisibilityAction] = useState<'HIDE' | 'RESTORE'>('HIDE');
+  const [visibilityStudentIds, setVisibilityStudentIds] = useState<string[]>([]);
+  const [visibilityCourseIds, setVisibilityCourseIds] = useState<string[]>([]);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<'draft' | 'submit' | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const latestDashboardRequestRef = useRef(0);
+  const activeCycleKey = `${userId}|${academicYear}|${term}`;
+  const activeCycleKeyRef = useRef(activeCycleKey);
+  activeCycleKeyRef.current = activeCycleKey;
 
   const applyDashboard = (next: Dashboard, persist = true) => {
-    setDashboard(next)
-    if (persist) writeReportDashboardCache(userId, academicYear, term, next)
-    setSelectedId((current) => next.learners.some((learner) => learner.id === current) ? current : (next.learners.find((learner) => learner.isHomeroomStudent)?.id ?? next.learners[0]?.id ?? ''))
-  }
+    setDashboard(next);
+    if (persist) writeReportDashboardCache(userId, academicYear, term, next);
+    setSelectedId((current) => (next.learners.some((learner) => learner.id === current) ? current : (next.learners.find((learner) => learner.isHomeroomStudent)?.id ?? next.learners[0]?.id ?? '')));
+  };
 
   const load = async (): Promise<Dashboard | null> => {
-    const requestCycleKey = `${userId}|${academicYear}|${term}`
-    if (requestCycleKey !== activeCycleKeyRef.current) return null
-    const requestToken = ++latestDashboardRequestRef.current
-    setLoading(true)
-    setError('')
+    const requestCycleKey = `${userId}|${academicYear}|${term}`;
+    if (requestCycleKey !== activeCycleKeyRef.current) return null;
+    const requestToken = ++latestDashboardRequestRef.current;
+    setLoading(true);
+    setError('');
     try {
-      const response = await academicRecordsAPI.teacherReportDashboard({ academicYear, term })
-      if (latestDashboardRequestRef.current !== requestToken || activeCycleKeyRef.current !== requestCycleKey) return null
-      const next = response.data?.data as Dashboard
-      applyDashboard(next)
-      return next
+      const response = await academicRecordsAPI.teacherReportDashboard({
+        academicYear,
+        term,
+      });
+      if (latestDashboardRequestRef.current !== requestToken || activeCycleKeyRef.current !== requestCycleKey) return null;
+      const next = response.data?.data as Dashboard;
+      applyDashboard(next);
+      return next;
     } catch (reason: any) {
-      if (latestDashboardRequestRef.current !== requestToken || activeCycleKeyRef.current !== requestCycleKey) return null
-      setError(reason?.response?.data?.message ?? (dashboard ? 'Live refresh failed; the last verified report-card snapshot remains visible.' : 'The report-card workspace could not be loaded.'))
-      return null
+      if (latestDashboardRequestRef.current !== requestToken || activeCycleKeyRef.current !== requestCycleKey) return null;
+      setError(reason?.response?.data?.message ?? (dashboard ? 'Live refresh failed; the last verified report-card snapshot remains visible.' : 'The report-card workspace could not be loaded.'));
+      return null;
     } finally {
-      if (latestDashboardRequestRef.current === requestToken && activeCycleKeyRef.current === requestCycleKey) setLoading(false)
+      if (latestDashboardRequestRef.current === requestToken && activeCycleKeyRef.current === requestCycleKey) setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    const cached = readReportDashboardCache(userId, academicYear, term)
-    if (cached) applyDashboard(cached, false)
-    else setDashboard(null)
-    void load()
-    return () => { latestDashboardRequestRef.current += 1 }
-  }, [academicYear, term, userId])
-  const learners = dashboard?.learners ?? []
+    const cached = readReportDashboardCache(userId, academicYear, term);
+    if (cached) applyDashboard(cached, false);
+    else setDashboard(null);
+    void load();
+    return () => {
+      latestDashboardRequestRef.current += 1;
+    };
+  }, [academicYear, term, userId]);
+  const learners = dashboard?.learners ?? [];
   // The complete report-card workspace belongs exclusively to the assigned
   // main teacher. Courses taught in other classes remain available in the
   // subject-grade workflow, but must never widen this institutional roster.
-  const homeroomLearners = useMemo(() => learners.filter((learner) => learner.isHomeroomStudent), [learners])
-  const classes = useMemo(() => Array.from(new Set(homeroomLearners.map((learner) => canonicalClassLabel(learner.grade, learner.section)))).sort(compareClassLabels), [homeroomLearners])
+  const homeroomLearners = useMemo(() => learners.filter((learner) => learner.isHomeroomStudent), [learners]);
+  const classes = useMemo(() => Array.from(new Set(homeroomLearners.map((learner) => canonicalClassLabel(learner.grade, learner.section)))).sort(compareClassLabels), [homeroomLearners]);
   useEffect(() => {
-    setClassFilter((current) => classes.includes(current) ? current : (classes[0] ?? ''))
-  }, [classes])
+    setClassFilter((current) => (classes.includes(current) ? current : (classes[0] ?? '')));
+  }, [classes]);
   const visibleLearners = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    return homeroomLearners.filter((learner) => {
-      const className = canonicalClassLabel(learner.grade, learner.section)
-      const matchesQuery = !normalizedQuery || `${learner.name} ${learner.studentNumber} ${className}`.toLowerCase().includes(normalizedQuery)
-      const matchesClass = !classFilter || className === classFilter
-      const matchesStatus = statusFilter === 'all'
-        || (statusFilter === 'waiting' && !learner.allSubjectsSubmitted)
-        || (statusFilter === 'ready' && learner.allSubjectsSubmitted && (!learner.reportCard || learner.reportCard.publicationStatus === 'DRAFT'))
-        || (statusFilter === 'homeroom' && learner.isHomeroomStudent)
-        || (statusFilter === 'submitted' && Boolean(learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT'))
-      return matchesQuery && matchesClass && matchesStatus
-    }).sort((left, right) => compareClassLabels(canonicalClassLabel(left.grade, left.section), canonicalClassLabel(right.grade, right.section)) || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' }))
-  }, [classFilter, homeroomLearners, query, statusFilter])
+    const normalizedQuery = query.trim().toLowerCase();
+    return homeroomLearners
+      .filter((learner) => {
+        const className = canonicalClassLabel(learner.grade, learner.section);
+        const matchesQuery = !normalizedQuery || `${learner.name} ${learner.studentNumber} ${className}`.toLowerCase().includes(normalizedQuery);
+        const matchesClass = !classFilter || className === classFilter;
+        const matchesStatus = statusFilter === 'all' || (statusFilter === 'waiting' && !learner.allSubjectsSubmitted) || (statusFilter === 'ready' && learner.allSubjectsSubmitted && (!learner.reportCard || learner.reportCard.publicationStatus === 'DRAFT')) || (statusFilter === 'homeroom' && learner.isHomeroomStudent) || (statusFilter === 'submitted' && Boolean(learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT'));
+        return matchesQuery && matchesClass && matchesStatus;
+      })
+      .sort((left, right) => compareClassLabels(canonicalClassLabel(left.grade, left.section), canonicalClassLabel(right.grade, right.section)) || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' }));
+  }, [classFilter, homeroomLearners, query, statusFilter]);
 
-  const selected = homeroomLearners.find((learner) => learner.id === selectedId) ?? visibleLearners[0]
+  const selected = homeroomLearners.find((learner) => learner.id === selectedId) ?? visibleLearners[0];
   useEffect(() => {
-    setTeacherComment(selected?.reportCard?.teacherComment ?? '')
-    setConduct(selected?.reportCard?.conduct ?? '')
-    setHiddenCourseIds(selected?.reportCard?.hiddenCourseIds ?? [])
-    setNotice('')
-    setError('')
-  }, [selected?.id, term])
+    setTeacherComment(selected?.reportCard?.teacherComment ?? '');
+    setConduct(selected?.reportCard?.conduct ?? '');
+    setHiddenCourseIds(selected?.reportCard?.hiddenCourseIds ?? []);
+    setNotice('');
+    setError('');
+  }, [selected?.id, term]);
 
-  const locked = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus))
-  const awaitingReview = selected?.reportCard?.publicationStatus === 'READY_FOR_REVIEW'
-  const visibleSubjects = useMemo(() => selected?.subjects.filter((subject) => !hiddenCourseIds.includes(subject.courseId)) ?? [], [hiddenCourseIds, selected])
-  const visibleSubmittedCount = visibleSubjects.filter((subject) => subject.percentage !== null).length
-  const allVisibleSubmitted = visibleSubjects.length > 0 && visibleSubmittedCount === visibleSubjects.length
+  const locked = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus));
+  const awaitingReview = selected?.reportCard?.publicationStatus === 'READY_FOR_REVIEW';
+  const visibleSubjects = useMemo(() => selected?.subjects.filter((subject) => !hiddenCourseIds.includes(subject.courseId)) ?? [], [hiddenCourseIds, selected]);
+  const visibleSubmittedCount = visibleSubjects.filter((subject) => subject.percentage !== null).length;
+  const allVisibleSubmitted = visibleSubjects.length > 0 && visibleSubmittedCount === visibleSubjects.length;
   const visibleAverage = useMemo(() => {
-    const graded = visibleSubjects.filter((subject) => subject.percentage !== null)
-    const credits = graded.reduce((sum, subject) => sum + Math.max(subject.credits || 1, 1), 0)
-    return credits ? Number((graded.reduce((sum, subject) => sum + (Number(subject.percentage) * Math.max(subject.credits || 1, 1)), 0) / credits).toFixed(2)) : null
-  }, [visibleSubjects])
+    const graded = visibleSubjects.filter((subject) => subject.percentage !== null);
+    const credits = graded.reduce((sum, subject) => sum + Math.max(subject.credits || 1, 1), 0);
+    return credits ? Number((graded.reduce((sum, subject) => sum + Number(subject.percentage) * Math.max(subject.credits || 1, 1), 0) / credits).toFixed(2)) : null;
+  }, [visibleSubjects]);
+  const homeroomCourses = useMemo(() => {
+    const byId = new Map<string, SubjectContribution>();
+    for (const learner of homeroomLearners) for (const subject of learner.subjects) if (!byId.has(subject.courseId)) byId.set(subject.courseId, subject);
+    return [...byId.values()].sort((left, right) =>
+      left.courseName.localeCompare(right.courseName, 'fr', {
+        sensitivity: 'base',
+      }),
+    );
+  }, [homeroomLearners]);
+  const openVisibility = (action: 'HIDE' | 'RESTORE', studentIds: string[] = [], courseIds: string[] = []) => {
+    setVisibilityAction(action);
+    setVisibilityStudentIds(studentIds);
+    setVisibilityCourseIds(courseIds);
+    setVisibilityOpen(true);
+    setError('');
+  };
   const toggleCourseVisibility = (courseId: string) => {
-    if (locked) return
-    setHiddenCourseIds((current) => {
-      if (current.includes(courseId)) {
-        setNotice('Course restored. Save the draft to persist the recalculated report card average.')
-        return current.filter((id) => id !== courseId)
-      }
-      if ((selected?.subjects.length ?? 0) - current.length <= 1) {
-        setError('At least one official course must remain visible on the report card.')
-        return current
-      }
-      setError('')
-      setNotice('Course visibility updated. Save the draft to persist the recalculated report card average.')
-      return [...current, courseId]
-    })
-  }
-  const updateReport = async (submit: boolean) => {
-    if (!selected) return
-    setSaving(true)
-    setSavingAction(submit ? 'submit' : 'draft')
-    setError('')
-    setNotice('')
+    if (!selected || locked) return;
+    openVisibility(hiddenCourseIds.includes(courseId) ? 'RESTORE' : 'HIDE', [selected.id], [courseId]);
+  };
+  const toggleSelected = (value: string, values: string[], setValues: (next: string[]) => void) => setValues(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+  const applyVisibility = async () => {
+    if (!visibilityStudentIds.length || !visibilityCourseIds.length) return;
+    setVisibilityBusy(true);
+    setError('');
+    setNotice('');
     try {
-      const payload = { academicYear, term, teacherComment, conduct, hiddenCourseIds }
-      let submission: any = null
-      let draft: any = null
+      const response = await academicRecordsAPI.updateTeacherReportVisibilityBulk({
+        academicYear,
+        term,
+        action: visibilityAction,
+        studentIds: visibilityStudentIds,
+        courseIds: visibilityCourseIds,
+      });
+      const count = Number(response.data?.data?.updatedLearners ?? visibilityStudentIds.length);
+      setVisibilityOpen(false);
+      await load();
+      setNotice(`${visibilityAction === 'HIDE' ? 'Course visibility removed from' : 'Course visibility restored for'} ${count} learner(s). Official averages were recalculated.`);
+    } catch (reason: any) {
+      setError(reason?.response?.data?.message ?? reason?.message ?? 'The course-visibility operation failed.');
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+  const updateReport = async (submit: boolean) => {
+    if (!selected) return;
+    setSaving(true);
+    setSavingAction(submit ? 'submit' : 'draft');
+    setError('');
+    setNotice('');
+    try {
+      const payload = {
+        academicYear,
+        term,
+        teacherComment,
+        conduct,
+        hiddenCourseIds,
+      };
+      let submission: any = null;
+      let draft: any = null;
       if (submit) {
-        const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload)
-        submission = response.data?.data
+        const response = await academicRecordsAPI.submitTeacherReport(selected.id, payload);
+        submission = response.data?.data;
         if (submission?.publicationStatus !== 'READY_FOR_REVIEW' || submission?.superAdministrationQueued !== true) {
-          throw new Error('The report card was not confirmed in the Super Administration review queue.')
+          throw new Error('The report card was not confirmed in the Super Administration review queue.');
         }
       } else {
-        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload)
-        draft = response.data?.data
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, payload);
+        draft = response.data?.data;
         if (draft?.publicationStatus !== 'DRAFT' || draft?.principalStatus !== 'DRAFT') {
-          throw new Error('The report-card draft was not confirmed in the official Nexus register.')
+          throw new Error('The report-card draft was not confirmed in the official Nexus register.');
         }
       }
-      const savedCard = submission ?? draft
+      const savedCard = submission ?? draft;
       setDashboard((current) => {
-        if (!current || !savedCard) return current
+        if (!current || !savedCard) return current;
         const next: Dashboard = {
           ...current,
-          learners: current.learners.map((learner) => learner.id === selected.id ? {
-            ...learner,
-            reportCard: {
-              id: savedCard.id,
-              teacherComment: savedCard.teacherComment,
-              conduct: savedCard.conduct,
-              principalStatus: savedCard.principalStatus,
-              publicationStatus: savedCard.publicationStatus,
-              hiddenCourseIds,
-            },
-            average: visibleAverage,
-            expectedSubjectCount: visibleSubjects.length,
-            submittedSubjectCount: visibleSubmittedCount,
-            allSubjectsSubmitted: allVisibleSubmitted,
-          } : learner),
-        }
-        writeReportDashboardCache(userId, academicYear, term, next)
-        return next
-      })
-      setNotice(submit
-        ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced in the Super Administration review queue.' : 'The complete report card is confirmed in the Super Administration review queue.')
-        : 'The main-teacher draft is saved and confirmed in the official Nexus register.')
+          learners: current.learners.map((learner) =>
+            learner.id === selected.id
+              ? {
+                  ...learner,
+                  reportCard: {
+                    id: savedCard.id,
+                    teacherComment: savedCard.teacherComment,
+                    conduct: savedCard.conduct,
+                    principalStatus: savedCard.principalStatus,
+                    publicationStatus: savedCard.publicationStatus,
+                    hiddenCourseIds,
+                  },
+                  average: visibleAverage,
+                  expectedSubjectCount: visibleSubjects.length,
+                  submittedSubjectCount: visibleSubmittedCount,
+                  allSubjectsSubmitted: allVisibleSubmitted,
+                }
+              : learner,
+          ),
+        };
+        writeReportDashboardCache(userId, academicYear, term, next);
+        return next;
+      });
+      setNotice(submit ? (submission?.replacesPreviousSubmission ? 'The previous submission was replaced in the Super Administration review queue.' : 'The complete report card is confirmed in the Super Administration review queue.') : 'The main-teacher draft is saved and confirmed in the official Nexus register.');
     } catch (reason: any) {
-      setError(reason?.response?.data?.message ?? reason?.message ?? 'The report-card operation failed.')
+      setError(reason?.response?.data?.message ?? reason?.message ?? 'The report-card operation failed.');
     } finally {
-      setSaving(false)
-      setSavingAction(null)
+      setSaving(false);
+      setSavingAction(null);
     }
-  }
+  };
 
   const printSelectedReportCard = async () => {
-    if (!selected || printing) return
-    const reservedWindow = window.open('', '_blank', 'width=1100,height=900')
+    if (!selected || printing) return;
+    const reservedWindow = window.open('', '_blank', 'width=1100,height=900');
     if (!reservedWindow) {
-      setError('The browser blocked the print window. Allow pop-ups and try again.')
-      return
+      setError('The browser blocked the print window. Allow pop-ups and try again.');
+      return;
     }
-    reservedWindow.document.write('<!doctype html><html><body style="font-family:system-ui;padding:2rem;color:#053665">Securely preparing the official report card…</body></html>')
-    reservedWindow.document.close()
-    setPrinting(true)
-    setError('')
+    reservedWindow.document.write('<!doctype html><html><body style="font-family:system-ui;padding:2rem;color:#053665">Securely preparing the official report card…</body></html>');
+    reservedWindow.document.close();
+    setPrinting(true);
+    setError('');
     try {
-      let reportCardId = selected.reportCard?.id
-      let publicationStatus = selected.reportCard?.publicationStatus ?? 'DRAFT'
+      let reportCardId = selected.reportCard?.id;
+      let publicationStatus = selected.reportCard?.publicationStatus ?? 'DRAFT';
       if (!reportCardId) {
-        if (!selected.isHomeroomStudent) throw new Error('The main teacher must save this report card before it can be printed as an official document.')
-        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct, hiddenCourseIds })
-        const savedCard = response.data?.data
-        if (!savedCard?.id) throw new Error('The official report-card register did not confirm the saved draft.')
-        reportCardId = savedCard.id
-        publicationStatus = savedCard.publicationStatus ?? 'DRAFT'
+        if (!selected.isHomeroomStudent) throw new Error('The main teacher must save this report card before it can be printed as an official document.');
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct, hiddenCourseIds });
+        const savedCard = response.data?.data;
+        if (!savedCard?.id) throw new Error('The official report-card register did not confirm the saved draft.');
+        reportCardId = savedCard.id;
+        publicationStatus = savedCard.publicationStatus ?? 'DRAFT';
         setDashboard((current) => {
-          if (!current) return current
-          const next: Dashboard = { ...current, learners: current.learners.map((learner) => learner.id === selected.id ? { ...learner, average: visibleAverage, expectedSubjectCount: visibleSubjects.length, submittedSubjectCount: visibleSubmittedCount, allSubjectsSubmitted: allVisibleSubmitted, reportCard: { id: savedCard.id, teacherComment: savedCard.teacherComment, conduct: savedCard.conduct, principalStatus: savedCard.principalStatus, publicationStatus, hiddenCourseIds } } : learner) }
-          writeReportDashboardCache(userId, academicYear, term, next)
-          return next
-        })
+          if (!current) return current;
+          const next: Dashboard = {
+            ...current,
+            learners: current.learners.map((learner) =>
+              learner.id === selected.id
+                ? {
+                    ...learner,
+                    average: visibleAverage,
+                    expectedSubjectCount: visibleSubjects.length,
+                    submittedSubjectCount: visibleSubmittedCount,
+                    allSubjectsSubmitted: allVisibleSubmitted,
+                    reportCard: {
+                      id: savedCard.id,
+                      teacherComment: savedCard.teacherComment,
+                      conduct: savedCard.conduct,
+                      principalStatus: savedCard.principalStatus,
+                      publicationStatus,
+                      hiddenCourseIds,
+                    },
+                  }
+                : learner,
+            ),
+          };
+          writeReportDashboardCache(userId, academicYear, term, next);
+          return next;
+        });
       }
-      let officialAvatar = selected.officialAvatar
-      let userAvatar = selected.user.avatar
+      let officialAvatar = selected.officialAvatar;
+      let userAvatar = selected.user.avatar;
       try {
-        const response = await academicRecordsAPI.teacherReportStudentPhoto(selected.id)
-        officialAvatar = response.data?.data?.officialAvatar ?? officialAvatar
-        userAvatar = response.data?.data?.avatar ?? userAvatar
+        const response = await academicRecordsAPI.teacherReportStudentPhoto(selected.id);
+        officialAvatar = response.data?.data?.officialAvatar ?? officialAvatar;
+        userAvatar = response.data?.data?.avatar ?? userAvatar;
       } catch {
         // The report remains printable if the portrait service is temporarily unavailable.
       }
-      await printOfficialReportCard({
-        id: reportCardId!,
-        term: academicYear + ' · ' + term,
-        average: visibleAverage ?? 0,
-        teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
-        conduct: selected.reportCard?.conduct ?? conduct,
-        publicationStatus,
-        attendanceSummary: selected.attendance,
-        subjects: visibleSubjects.filter((subject) => subject.percentage !== null).map((subject) => ({
-          id: subject.courseId,
-          percentage: subject.percentage as number,
-          letterGrade: subject.letterGrade ?? letterGrade(subject.percentage as number),
-          termResults: subject.termResults,
-          course: { name: subject.courseName, code: subject.courseCode, credits: subject.credits },
-        })),
-        student: {
-          id: selected.id,
-          studentNumber: selected.studentNumber,
-          grade: selected.grade,
-          section: selected.section,
-          officialAvatar,
-          user: { ...selected.user, avatar: userAvatar },
+      await printOfficialReportCard(
+        {
+          id: reportCardId!,
+          term: academicYear + ' · ' + term,
+          average: visibleAverage ?? 0,
+          teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
+          conduct: selected.reportCard?.conduct ?? conduct,
+          publicationStatus,
+          attendanceSummary: selected.attendance,
+          subjects: visibleSubjects
+            .filter((subject) => subject.percentage !== null)
+            .map((subject) => ({
+              id: subject.courseId,
+              percentage: subject.percentage as number,
+              letterGrade: subject.letterGrade ?? letterGrade(subject.percentage as number),
+              termResults: subject.termResults,
+              course: {
+                name: subject.courseName,
+                code: subject.courseCode,
+                credits: subject.credits,
+              },
+            })),
+          student: {
+            id: selected.id,
+            studentNumber: selected.studentNumber,
+            grade: selected.grade,
+            section: selected.section,
+            officialAvatar,
+            user: { ...selected.user, avatar: userAvatar },
+          },
         },
-      }, setError, reservedWindow)
+        setError,
+        reservedWindow,
+      );
     } catch (reason: any) {
-      reservedWindow.close()
-      setError(reason?.response?.data?.message ?? reason?.message ?? 'The official report card could not be prepared.')
+      reservedWindow.close();
+      setError(reason?.response?.data?.message ?? reason?.message ?? 'The official report card could not be prepared.');
     } finally {
-      setPrinting(false)
+      setPrinting(false);
     }
-  }
-  const homeroomCount = homeroomLearners.length
-  const readyCount = homeroomLearners.filter((learner) => learner.allSubjectsSubmitted).length
-  const submittedCount = homeroomLearners.filter((learner) => learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT').length
+  };
+  const homeroomCount = homeroomLearners.length;
+  const readyCount = homeroomLearners.filter((learner) => learner.allSubjectsSubmitted).length;
+  const submittedCount = homeroomLearners.filter((learner) => learner.reportCard && learner.reportCard.publicationStatus !== 'DRAFT').length;
 
-  if (loading && !dashboard) return <div className={panel}><Clock3 className='mr-2 inline animate-spin' />Loading the whole-school report-card register...</div>
+  if (loading && !dashboard)
+    return (
+      <div className={panel}>
+        <Clock3 className="mr-2 inline animate-spin" />
+        Loading the whole-school report-card register...
+      </div>
+    );
 
-  return <section className='space-y-5'>
-    <div className='rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-kcs-blue-700 p-6 text-white shadow-xl'>
-      <div className='flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between'>
-        <div>
-          <p className='flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-kcs-gold-300'><ShieldCheck size={17} />Collaborative official report cards</p>
-          <h2 className='mt-2 font-display text-2xl font-bold'>One learner, every subject teacher, one controlled report card</h2>
-          <p className='mt-2 max-w-4xl text-sm text-blue-100'>Every subject grade comes from the responsible teacher's My Courses Gradebook. The main teacher reviews the complete class record, adds the institutional comment, and submits it. Super Administration alone approves, publishes, and controls Grade 9-12 transcripts.</p>
+  return (
+    <section className="space-y-5">
+      <div className="rounded-3xl bg-gradient-to-br from-kcs-blue-950 via-kcs-blue-800 to-kcs-blue-700 p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-kcs-gold-300">
+              <ShieldCheck size={17} />
+              Collaborative official report cards
+            </p>
+            <h2 className="mt-2 font-display text-2xl font-bold">One learner, every subject teacher, one controlled report card</h2>
+            <p className="mt-2 max-w-4xl text-sm text-blue-100">Every subject grade comes from the responsible teacher's My Courses Gradebook. The main teacher reviews the complete class record, adds the institutional comment, and submits it. Super Administration alone approves, publishes, and controls Grade 9-12 transcripts.</p>
+          </div>
+          <button type="button" onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold hover:bg-white/20">
+            <RefreshCw size={16} />
+            Refresh official data
+          </button>
         </div>
-        <button type='button' onClick={() => void load()} className='inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold hover:bg-white/20'><RefreshCw size={16} />Refresh official data</button>
-      </div>
-      <div className='mt-5 grid gap-2 sm:grid-cols-3'>
-        {Object.entries(dashboard?.hierarchy ?? {}).map(([role, detail], index) => <div key={role} className='rounded-xl border border-white/20 bg-white/10 p-3'><span className='text-xs font-black text-kcs-gold-300'>{index + 1}</span><p className='mt-1 text-xs font-bold capitalize'>{role.replace(/([A-Z])/g, ' $1')}</p><p className='mt-1 text-[11px] text-blue-100'>{detail}</p></div>)}
-      </div>
-    </div>
-
-    {(notice || error) && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${error ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-200'}`}>{error || notice}</div>}
-
-    <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
-      {[
-        [Users, 'My class learners', homeroomLearners.length],
-        [UserRoundCheck, 'My homeroom', homeroomCount],
-        [FileCheck2, 'All subjects ready', readyCount],
-        [Send, 'In admin workflow', submittedCount],
-        [GraduationCap, 'Pass standard', '≥70%'],
-      ].map(([Icon, label, value]) => {
-        const CardIcon = Icon as typeof Users
-        return <div key={String(label)} className={panel}><CardIcon size={18} className='text-kcs-blue-600 dark:text-kcs-blue-300' /><p className='mt-2 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white'>{String(value)}</p><p className='text-xs font-semibold text-gray-500'>{String(label)}</p></div>
-      })}
-    </div>
-
-    <div className={panel}>
-      <div className='grid gap-3 lg:grid-cols-5'>
-        <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} /></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((session) => <option key={session}>{session}</option>)}</select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Main-teacher class<select className={`${field} mt-1 normal-case`} value={classFilter} onChange={(event) => setClassFilter(event.target.value)} disabled={classes.length <= 1}>{!classes.length && <option value=''>No main-teacher class assigned</option>}{classes.map((className) => <option key={className}>{className}</option>)}</select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Workflow<select className={`${field} mt-1 normal-case`} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value='all'>All my learners</option><option value='waiting'>Waiting for grades</option><option value='ready'>Ready for main teacher</option><option value='submitted'>Submitted or published</option></select></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Search<div className='relative mt-1'><Search className='absolute left-3 top-3 text-gray-400' size={15} /><input className={`${field} pl-9 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Name or student number' /></div></label>
-      </div>
-    </div>
-
-    <div className='grid gap-5 xl:grid-cols-[360px_1fr]'>
-      <div className={`${panel} max-h-[760px] overflow-auto p-3`}>
-        <div className='mb-3 flex items-center justify-between px-2'><h3 className='font-bold text-kcs-blue-950 dark:text-white'>Learner directory</h3><span className='text-xs font-bold text-gray-500'>{visibleLearners.length}</span></div>
-        <div className='space-y-2'>
-          {visibleLearners.map((learner) => <button type='button' key={learner.id} onClick={() => setSelectedId(learner.id)} className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === learner.id ? 'border-kcs-blue-500 bg-kcs-blue-50 ring-2 ring-kcs-blue-100 dark:bg-kcs-blue-950' : 'border-gray-100 hover:border-kcs-blue-200 dark:border-kcs-blue-800'}`}>
-            <div className='flex items-start justify-between gap-2'><div><p className='text-sm font-bold text-kcs-blue-950 dark:text-white'>{learner.name}</p><p className='text-xs text-gray-500'>{learner.studentNumber} · {canonicalClassLabel(learner.grade, learner.section)}</p></div>{learner.isHomeroomStudent && <UserRoundCheck size={17} className='text-emerald-600' />}</div>
-            <div className='mt-2 flex items-center justify-between text-[11px] font-semibold'><span className={learner.allSubjectsSubmitted ? 'text-emerald-600' : 'text-amber-600'}>{learner.submittedSubjectCount}/{learner.expectedSubjectCount} subjects</span><span className='text-kcs-blue-600 dark:text-kcs-blue-300'>{workflowLabel(learner)}</span></div>
-          </button>)}
-          {!visibleLearners.length && <p className='p-6 text-center text-sm text-gray-500'>No learner matches these filters.</p>}
+        <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          {Object.entries(dashboard?.hierarchy ?? {}).map(([role, detail], index) => (
+            <div key={role} className="rounded-xl border border-white/20 bg-white/10 p-3">
+              <span className="text-xs font-black text-kcs-gold-300">{index + 1}</span>
+              <p className="mt-1 text-xs font-bold capitalize">{role.replace(/([A-Z])/g, ' $1')}</p>
+              <p className="mt-1 text-[11px] text-blue-100">{detail}</p>
+            </div>
+          ))}
         </div>
+      </div>
+
+      {(notice || error) && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${error ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-200'}`}>{error || notice}</div>}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          [Users, 'My class learners', homeroomLearners.length],
+          [UserRoundCheck, 'My homeroom', homeroomCount],
+          [FileCheck2, 'All subjects ready', readyCount],
+          [Send, 'In admin workflow', submittedCount],
+          [GraduationCap, 'Pass standard', '≥70%'],
+        ].map(([Icon, label, value]) => {
+          const CardIcon = Icon as typeof Users;
+          return (
+            <div key={String(label)} className={panel}>
+              <CardIcon size={18} className="text-kcs-blue-600 dark:text-kcs-blue-300" />
+              <p className="mt-2 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">{String(value)}</p>
+              <p className="text-xs font-semibold text-gray-500">{String(label)}</p>
+            </div>
+          );
+        })}
       </div>
 
       <div className={panel}>
-        {!selected ? <p className='py-16 text-center text-sm text-gray-500'>Select a learner to open the complete report-card file.</p> : <>
-          <div className='flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between dark:border-kcs-blue-800'>
-            <div><p className='text-xs font-black uppercase tracking-wide text-kcs-gold-600'>Complete learner record</p><h3 className='mt-1 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white'>{selected.name}</h3><p className='text-sm text-gray-500'>{selected.studentNumber} · {canonicalClassLabel(selected.grade, selected.section)}</p></div>
-            {!selected.isHomeroomStudent && <button type='button' aria-busy={printing} disabled={printing} onClick={printSelectedReportCard} className='inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-300 disabled:opacity-60'>{printing ? <RefreshCw size={16} className='animate-spin' /> : <Printer size={16} />}{printing ? 'Preparing PDF.' : 'Print / Save official PDF'}</button>}
-            <div className='flex flex-wrap items-center gap-2 text-xs font-bold'>{selected.isHomeroomStudent && <button type='button' aria-busy={printing} disabled={printing} onClick={printSelectedReportCard} className='inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-300 disabled:opacity-60'>{printing ? <RefreshCw size={16} className='animate-spin' /> : <Printer size={16} />}{printing ? 'Preparing PDF…' : 'Print / Save official PDF'}</button>}<span className='rounded-full bg-kcs-blue-50 px-3 py-1.5 text-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200'>{workflowLabel(selected)}</span>{selected.isHomeroomStudent ? <span className='rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'>Main-teacher control</span> : <span className='rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-kcs-blue-800 dark:text-gray-300'>Whole-school read only</span>}</div>
-          </div>
+        <div className="grid gap-3 lg:grid-cols-5">
+          <label className="text-xs font-bold uppercase text-gray-400">
+            Academic year
+            <input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} />
+          </label>
+          <label className="text-xs font-bold uppercase text-gray-400">
+            Report session
+            <select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>
+              {sessions.map((session) => (
+                <option key={session}>{session}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-bold uppercase text-gray-400">
+            Main-teacher class
+            <select className={`${field} mt-1 normal-case`} value={classFilter} onChange={(event) => setClassFilter(event.target.value)} disabled={classes.length <= 1}>
+              {!classes.length && <option value="">No main-teacher class assigned</option>}
+              {classes.map((className) => (
+                <option key={className}>{className}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-bold uppercase text-gray-400">
+            Workflow
+            <select className={`${field} mt-1 normal-case`} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
+              <option value="all">All my learners</option>
+              <option value="waiting">Waiting for grades</option>
+              <option value="ready">Ready for main teacher</option>
+              <option value="submitted">Submitted or published</option>
+            </select>
+          </label>
+          <label className="text-xs font-bold uppercase text-gray-400">
+            Search
+            <div className="relative mt-1">
+              <Search className="absolute left-3 top-3 text-gray-400" size={15} />
+              <input className={`${field} pl-9 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name or student number" />
+            </div>
+          </label>
+        </div>
+      </div>
 
-          <div className='mt-4 grid gap-3 sm:grid-cols-4'>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Weighted average</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{visibleAverage === null ? 'Pending' : `${visibleAverage}% · ${letterGrade(visibleAverage)}`}</p></div>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Visible course grades</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{visibleSubmittedCount}/{visibleSubjects.length}</p>{hiddenCourseIds.length ? <p className='mt-1 text-[11px] font-bold text-amber-600'>{hiddenCourseIds.length} hidden</p> : null}</div>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Attendance</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{selected.attendance.attendanceRate === null ? 'N/A' : `${selected.attendance.attendanceRate}%`}</p></div>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Promotion standard</p><p className={`mt-1 text-xl font-black ${(visibleAverage ?? 0) >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>≥70%</p></div>
+      <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
+        <div className={`${panel} max-h-[760px] overflow-auto p-3`}>
+          <div className="mb-3 flex items-center justify-between px-2">
+            <h3 className="font-bold text-kcs-blue-950 dark:text-white">Learner directory</h3>
+            <span className="text-xs font-bold text-gray-500">{visibleLearners.length}</span>
           </div>
-
-          <div className='mt-5 overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700'>
-            <div className='border-b bg-gray-50 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950'><h4 className='font-bold text-kcs-blue-950 dark:text-white'>Subject contributions from all teachers</h4><p className='text-xs text-gray-500'>The Main Teacher may hide a course for this learner. Hidden courses are excluded from the official average until restored.</p></div>
-            <div className='overflow-x-auto'><table className='w-full min-w-[820px] text-sm'><thead className='bg-kcs-blue-950 text-left text-xs uppercase text-white'><tr><th className='px-4 py-3'>Course</th><th className='px-4 py-3'>Teacher</th><th className='px-4 py-3'>Credits</th><th className='px-4 py-3'>Final grade</th><th className='px-4 py-3'>Status</th><th className='px-4 py-3'>Report card</th></tr></thead><tbody className='divide-y divide-gray-100 dark:divide-kcs-blue-800'>{selected.subjects.map((subject) => { const hidden=hiddenCourseIds.includes(subject.courseId); return <tr key={subject.courseId} className={hidden?'bg-amber-50/70 opacity-75 dark:bg-amber-950/20':''}><td className='px-4 py-3'><b className='text-kcs-blue-950 dark:text-white'>{subject.courseName}</b><small className='block text-gray-500'>{subject.courseCode}</small></td><td className='px-4 py-3 text-gray-600 dark:text-gray-300'>{subject.teacherName}</td><td className='px-4 py-3'>{subject.credits}</td><td className='px-4 py-3 font-bold'>{subject.percentage === null ? 'Pending' : `${subject.percentage}% · ${subject.letterGrade}`}</td><td className='px-4 py-3'>{hidden?<span className='font-bold text-amber-700 dark:text-amber-300'>Excluded from average</span>:subject.percentage === null ? <span className='text-amber-600'>Teacher submission required</span> : <span className='text-emerald-600'>Submitted</span>}</td><td className='px-4 py-3'><button type='button' disabled={locked||!selected.isHomeroomStudent} onClick={()=>toggleCourseVisibility(subject.courseId)} className='inline-flex items-center gap-2 rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-black text-kcs-blue-700 hover:bg-kcs-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-kcs-blue-600 dark:text-kcs-blue-200'>{hidden?<><Eye size={15}/>Restore</>:<><EyeOff size={15}/>Hide</>}</button></td></tr>})}</tbody></table></div>
-            {!selected.subjects.length && <p className='p-6 text-center text-sm text-gray-500'>No official course enrollment is linked to this learner yet.</p>}
+          <div className="space-y-2">
+            {visibleLearners.map((learner) => (
+              <button type="button" key={learner.id} onClick={() => setSelectedId(learner.id)} className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === learner.id ? 'border-kcs-blue-500 bg-kcs-blue-50 ring-2 ring-kcs-blue-100 dark:bg-kcs-blue-950' : 'border-gray-100 hover:border-kcs-blue-200 dark:border-kcs-blue-800'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-bold text-kcs-blue-950 dark:text-white">{learner.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {learner.studentNumber} · {canonicalClassLabel(learner.grade, learner.section)}
+                    </p>
+                  </div>
+                  {learner.isHomeroomStudent && <UserRoundCheck size={17} className="text-emerald-600" />}
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
+                  <span className={learner.allSubjectsSubmitted ? 'text-emerald-600' : 'text-amber-600'}>
+                    {learner.submittedSubjectCount}/{learner.expectedSubjectCount} subjects
+                  </span>
+                  <span className="text-kcs-blue-600 dark:text-kcs-blue-300">{workflowLabel(learner)}</span>
+                </div>
+              </button>
+            ))}
+            {!visibleLearners.length && <p className="p-6 text-center text-sm text-gray-500">No learner matches these filters.</p>}
           </div>
+        </div>
 
-          <div className='mt-5 grid gap-4 lg:grid-cols-[.7fr_1.3fr]'>
-            <div className='rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-950'><h4 className='font-bold text-kcs-blue-950 dark:text-white'>Attendance summary</h4><div className='mt-3 grid grid-cols-3 gap-2 text-center text-sm'><span><b className='block text-lg text-emerald-600'>{selected.attendance.present}</b>Present</span><span><b className='block text-lg text-red-600'>{selected.attendance.absent}</b>Absent</span><span><b className='block text-lg text-amber-600'>{selected.attendance.late}</b>Late</span></div></div>
-            <div className='rounded-xl border border-gray-200 p-4 dark:border-kcs-blue-700'>
-              <div className='flex items-center justify-between gap-2'><div><h4 className='font-bold text-kcs-blue-950 dark:text-white'>Main teacher review</h4><p className='text-xs text-gray-500'>Institutional synthesis after every subject teacher has submitted.</p></div><UserRoundCheck className='text-kcs-blue-600' size={20} /></div>
-              {!selected.isHomeroomStudent && <p className='mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600 dark:bg-kcs-blue-950 dark:text-gray-300'>You may review this learner's complete report card, but only the assigned main teacher may write or submit the institutional comment.</p>}
-              <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Main teacher comment<textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => setTeacherComment(event.target.value)} placeholder='Synthesize academic progress, effort, strengths, and the next priority.' /></label>
-              <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Conduct and learning habits<input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder='Conduct, responsibility, collaboration, punctuality...' /></label>
-              {selected.isHomeroomStudent && !allVisibleSubmitted && <p className='mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'>Submission remains locked: {visibleSubjects.length - visibleSubmittedCount} visible subject teacher(s) still need to submit final grades.</p>}
-              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' aria-busy={savingAction === 'draft'} disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300'>{savingAction === 'draft' ? <RefreshCw size={15} className='animate-spin' /> : <Save size={15} />}{savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}</button><button type='button' aria-busy={savingAction === 'submit'} disabled={saving || locked || !allVisibleSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'>{savingAction === 'submit'?<RefreshCw size={15} className='animate-spin'/>:<CheckCircle2 size={15} />}{savingAction === 'submit'?'Submitting…':awaitingReview?'Replace submission to Super Administration':'Submit to Super Administration'}</button></div>}
+        <div className={panel}>
+          {!selected ? (
+            <p className="py-16 text-center text-sm text-gray-500">Select a learner to open the complete report-card file.</p>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 sm:flex-row sm:items-start sm:justify-between dark:border-kcs-blue-800">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-kcs-gold-600">Complete learner record</p>
+                  <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">{selected.name}</h3>
+                  <p className="text-sm text-gray-500">
+                    {selected.studentNumber} · {canonicalClassLabel(selected.grade, selected.section)}
+                  </p>
+                </div>
+                {!selected.isHomeroomStudent && (
+                  <button type="button" aria-busy={printing} disabled={printing} onClick={printSelectedReportCard} className="inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-300 disabled:opacity-60">
+                    {printing ? <RefreshCw size={16} className="animate-spin" /> : <Printer size={16} />}
+                    {printing ? 'Preparing PDF.' : 'Print / Save official PDF'}
+                  </button>
+                )}
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                  {selected.isHomeroomStudent && (
+                    <button type="button" aria-busy={printing} disabled={printing} onClick={printSelectedReportCard} className="inline-flex items-center gap-2 rounded-xl bg-kcs-gold-400 px-4 py-2.5 text-sm font-black text-kcs-blue-950 shadow-sm hover:bg-kcs-gold-300 disabled:opacity-60">
+                      {printing ? <RefreshCw size={16} className="animate-spin" /> : <Printer size={16} />}
+                      {printing ? 'Preparing PDF…' : 'Print / Save official PDF'}
+                    </button>
+                  )}
+                  <span className="rounded-full bg-kcs-blue-50 px-3 py-1.5 text-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-kcs-blue-200">{workflowLabel(selected)}</span>
+                  {selected.isHomeroomStudent ? <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">Main-teacher control</span> : <span className="rounded-full bg-gray-100 px-3 py-1.5 text-gray-600 dark:bg-kcs-blue-800 dark:text-gray-300">Whole-school read only</span>}
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950">
+                  <p className="text-xs text-gray-500">Weighted average</p>
+                  <p className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{visibleAverage === null ? 'Pending' : `${visibleAverage}% · ${letterGrade(visibleAverage)}`}</p>
+                </div>
+                <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950">
+                  <p className="text-xs text-gray-500">Visible course grades</p>
+                  <p className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">
+                    {visibleSubmittedCount}/{visibleSubjects.length}
+                  </p>
+                  {hiddenCourseIds.length ? <p className="mt-1 text-[11px] font-bold text-amber-600">{hiddenCourseIds.length} hidden</p> : null}
+                </div>
+                <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950">
+                  <p className="text-xs text-gray-500">Attendance</p>
+                  <p className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{selected.attendance.attendanceRate === null ? 'N/A' : `${selected.attendance.attendanceRate}%`}</p>
+                </div>
+                <div className="rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950">
+                  <p className="text-xs text-gray-500">Promotion standard</p>
+                  <p className={`mt-1 text-xl font-black ${(visibleAverage ?? 0) >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>≥70%</p>
+                </div>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700">
+                <div className="flex flex-col gap-3 border-b bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+                  <div>
+                    <h4 className="font-bold text-kcs-blue-950 dark:text-white">Subject contributions from all teachers</h4>
+                    <p className="text-xs text-gray-500">Hide or restore one or several courses for one or several learners. Every operation asks for its exact scope.</p>
+                  </div>
+                  {selected.isHomeroomStudent && (
+                    <button type="button" disabled={locked} onClick={() => openVisibility('HIDE', [selected.id], [])} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-black text-white hover:bg-kcs-blue-800 disabled:opacity-40">
+                      <EyeOff size={15} />
+                      Manage visibility
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[820px] text-sm">
+                    <thead className="bg-kcs-blue-950 text-left text-xs uppercase text-white">
+                      <tr>
+                        <th className="px-4 py-3">Course</th>
+                        <th className="px-4 py-3">Teacher</th>
+                        <th className="px-4 py-3">Credits</th>
+                        <th className="px-4 py-3">Final grade</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Report card</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-kcs-blue-800">
+                      {selected.subjects.map((subject) => {
+                        const hidden = hiddenCourseIds.includes(subject.courseId);
+                        return (
+                          <tr key={subject.courseId} className={hidden ? 'bg-amber-50/70 opacity-75 dark:bg-amber-950/20' : ''}>
+                            <td className="px-4 py-3">
+                              <b className="text-kcs-blue-950 dark:text-white">{subject.courseName}</b>
+                              <small className="block text-gray-500">{subject.courseCode}</small>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{subject.teacherName}</td>
+                            <td className="px-4 py-3">{subject.credits}</td>
+                            <td className="px-4 py-3 font-bold">{subject.percentage === null ? 'Pending' : `${subject.percentage}% · ${subject.letterGrade}`}</td>
+                            <td className="px-4 py-3">{hidden ? <span className="font-bold text-amber-700 dark:text-amber-300">Excluded from average</span> : subject.percentage === null ? <span className="text-amber-600">Teacher submission required</span> : <span className="text-emerald-600">Submitted</span>}</td>
+                            <td className="px-4 py-3">
+                              <button type="button" disabled={locked || !selected.isHomeroomStudent} onClick={() => toggleCourseVisibility(subject.courseId)} className="inline-flex items-center gap-2 rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-black text-kcs-blue-700 hover:bg-kcs-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-kcs-blue-600 dark:text-kcs-blue-200">
+                                {hidden ? (
+                                  <>
+                                    <Eye size={15} />
+                                    Restore
+                                  </>
+                                ) : (
+                                  <>
+                                    <EyeOff size={15} />
+                                    Hide
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {!selected.subjects.length && <p className="p-6 text-center text-sm text-gray-500">No official course enrollment is linked to this learner yet.</p>}
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-[.7fr_1.3fr]">
+                <div className="rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-950">
+                  <h4 className="font-bold text-kcs-blue-950 dark:text-white">Attendance summary</h4>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
+                    <span>
+                      <b className="block text-lg text-emerald-600">{selected.attendance.present}</b>
+                      Present
+                    </span>
+                    <span>
+                      <b className="block text-lg text-red-600">{selected.attendance.absent}</b>
+                      Absent
+                    </span>
+                    <span>
+                      <b className="block text-lg text-amber-600">{selected.attendance.late}</b>
+                      Late
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-200 p-4 dark:border-kcs-blue-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-kcs-blue-950 dark:text-white">Main teacher review</h4>
+                      <p className="text-xs text-gray-500">Institutional synthesis after every subject teacher has submitted.</p>
+                    </div>
+                    <UserRoundCheck className="text-kcs-blue-600" size={20} />
+                  </div>
+                  {!selected.isHomeroomStudent && <p className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600 dark:bg-kcs-blue-950 dark:text-gray-300">You may review this learner's complete report card, but only the assigned main teacher may write or submit the institutional comment.</p>}
+                  <label className="mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white">
+                    Main teacher comment
+                    <textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => setTeacherComment(event.target.value)} placeholder="Synthesize academic progress, effort, strengths, and the next priority." />
+                  </label>
+                  <label className="mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white">
+                    Conduct and learning habits
+                    <input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder="Conduct, responsibility, collaboration, punctuality..." />
+                  </label>
+                  {selected.isHomeroomStudent && !allVisibleSubmitted && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Submission remains locked: {visibleSubjects.length - visibleSubmittedCount} visible subject teacher(s) still need to submit final grades.</p>}
+                  {selected.isHomeroomStudent && (
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
+                      <button type="button" aria-busy={savingAction === 'draft'} disabled={saving || locked} onClick={() => void updateReport(false)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300">
+                        {savingAction === 'draft' ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                        {savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}
+                      </button>
+                      <button type="button" aria-busy={savingAction === 'submit'} disabled={saving || locked || !allVisibleSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
+                        {savingAction === 'submit' ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                        {savingAction === 'submit' ? 'Submitting…' : awaitingReview ? 'Replace submission to Super Administration' : 'Submit to Super Administration'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      {visibilityOpen && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-kcs-blue-950/75 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Course visibility scope">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border border-kcs-blue-200 bg-white p-5 shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-900 sm:p-7">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.18em] text-kcs-gold-600">Main teacher · report-card scope</p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">Choose exactly what must change</h3>
+                <p className="mt-2 text-sm text-gray-500">Select the action, one or several learners, and one or several courses. The official average is recalculated separately for every learner.</p>
+              </div>
+              <button type="button" onClick={() => setVisibilityOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-bold text-gray-600 dark:border-kcs-blue-700 dark:text-gray-200">
+                Cancel
+              </button>
+            </div>
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              <div className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700">
+                <p className="text-xs font-black uppercase text-gray-400">1 · Action</p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setVisibilityAction('HIDE')} className={`rounded-xl px-4 py-3 text-sm font-black ${visibilityAction === 'HIDE' ? 'bg-amber-500 text-kcs-blue-950' : 'bg-gray-100 text-gray-600 dark:bg-kcs-blue-950 dark:text-gray-200'}`}>
+                    <EyeOff className="mx-auto mb-1" size={18} />
+                    Hide
+                  </button>
+                  <button type="button" onClick={() => setVisibilityAction('RESTORE')} className={`rounded-xl px-4 py-3 text-sm font-black ${visibilityAction === 'RESTORE' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600 dark:bg-kcs-blue-950 dark:text-gray-200'}`}>
+                    <Eye className="mx-auto mb-1" size={18} />
+                    Restore
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black uppercase text-gray-400">2 · Learners</p>
+                  <button type="button" onClick={() => setVisibilityStudentIds(visibilityStudentIds.length === homeroomLearners.length ? [] : homeroomLearners.map((item) => item.id))} className="text-xs font-black text-kcs-blue-600 dark:text-kcs-blue-200">
+                    {visibilityStudentIds.length === homeroomLearners.length ? 'Clear' : 'Select all'}
+                  </button>
+                </div>
+                <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+                  {homeroomLearners.map((learner) => (
+                    <label key={learner.id} className="flex cursor-pointer items-start gap-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-950">
+                      <input type="checkbox" checked={visibilityStudentIds.includes(learner.id)} onChange={() => toggleSelected(learner.id, visibilityStudentIds, setVisibilityStudentIds)} className="mt-1" />
+                      <span>
+                        <b className="block text-kcs-blue-950 dark:text-white">{learner.name}</b>
+                        <small className="text-gray-500">
+                          {learner.studentNumber} · {canonicalClassLabel(learner.grade, learner.section)}
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-gray-200 p-4 lg:col-span-2 dark:border-kcs-blue-700">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black uppercase text-gray-400">3 · Courses</p>
+                  <button type="button" onClick={() => setVisibilityCourseIds(visibilityCourseIds.length === homeroomCourses.length ? [] : homeroomCourses.map((item) => item.courseId))} className="text-xs font-black text-kcs-blue-600 dark:text-kcs-blue-200">
+                    {visibilityCourseIds.length === homeroomCourses.length ? 'Clear' : 'Select all'}
+                  </button>
+                </div>
+                <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
+                  {homeroomCourses.map((subject) => (
+                    <label key={subject.courseId} className="flex cursor-pointer items-start gap-3 rounded-xl bg-gray-50 p-3 text-sm dark:bg-kcs-blue-950">
+                      <input type="checkbox" checked={visibilityCourseIds.includes(subject.courseId)} onChange={() => toggleSelected(subject.courseId, visibilityCourseIds, setVisibilityCourseIds)} className="mt-1" />
+                      <span>
+                        <b className="block text-kcs-blue-950 dark:text-white">{subject.courseName}</b>
+                        <small className="text-gray-500">
+                          {subject.courseCode} · {subject.teacherName}
+                        </small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col items-stretch justify-end gap-2 border-t border-gray-100 pt-4 sm:flex-row dark:border-kcs-blue-700">
+              <span className="mr-auto self-center text-xs font-bold text-gray-500">
+                {visibilityStudentIds.length} learner(s) · {visibilityCourseIds.length} course(s)
+              </span>
+              <button type="button" onClick={() => setVisibilityOpen(false)} className="rounded-xl border border-gray-200 px-5 py-3 text-sm font-bold dark:border-kcs-blue-700">
+                Cancel
+              </button>
+              <button type="button" disabled={visibilityBusy || !visibilityStudentIds.length || !visibilityCourseIds.length} onClick={() => void applyVisibility()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-5 py-3 text-sm font-black text-white disabled:opacity-40">
+                {visibilityBusy ? <RefreshCw className="animate-spin" size={17} /> : visibilityAction === 'HIDE' ? <EyeOff size={17} /> : <Eye size={17} />}
+                Confirm {visibilityAction === 'HIDE' ? 'hide' : 'restore'}
+              </button>
             </div>
           </div>
-        </>}
-      </div>
-    </div>
-  </section>
+        </div>
+      )}
+    </section>
+  );
 }

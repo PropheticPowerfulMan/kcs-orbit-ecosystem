@@ -5,6 +5,7 @@
     "description":  "Kinshasa Christian School ecosystem portal for administration, parents, students, and staff.",
     "start_url":  "./",
     "scope":  "./",
+    "handle_links": "not-preferred",
     "display":  "standalone",
     "display_override":  [
                              "window-controls-overlay",

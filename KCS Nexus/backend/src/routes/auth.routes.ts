@@ -102,7 +102,7 @@ function splitFullName(fullName: string) {
   }
 }
 
-function mapSavanexRole(role: string | undefined, employeeType?: string) {
+function mapSavanexRole(role: string | undefined, employeeType?: string, authClient?: string) {
   const normalizedEmployeeType = (employeeType || '').trim().toLowerCase().replace(/[ _-]+/g, ' ')
   if (['teacher', 'enseignant', 'teaching staff', 'faculty', 'academic'].includes(normalizedEmployeeType)) return 'TEACHER' as const
   if (['administrative', 'administrative staff', 'leadership'].includes(normalizedEmployeeType)) return 'STAFF' as const
@@ -111,7 +111,12 @@ function mapSavanexRole(role: string | undefined, employeeType?: string) {
   // Generic support/specialist employees remain valid ecosystem identities,
   // but must never receive a Nexus dashboard implicitly.
   if (['staff', 'administrative staff', 'administrative_staff', 'administrative-staff'].includes(normalized)) return 'STAFF' as const
-  if (normalized === 'employee') return null
+  // Support employees do not receive a Nexus dashboard by default.  A
+  // dedicated ecosystem application may nevertheless authenticate an
+  // explicitly authorised employee and apply its own access matrix.  Keep
+  // this exception scoped to Kitchen; a later direct Nexus login still goes
+  // through the default branch below and remains denied.
+  if (normalized === 'employee') return authClient === 'KCS_KITCHEN' ? 'STAFF' as const : null
   if (normalized === 'teacher') return 'TEACHER' as const
   if (normalized === 'student') return 'STUDENT' as const
   if (normalized === 'parent') return 'PARENT' as const
@@ -275,7 +280,7 @@ function buildConfiguredSuperAdminUser(account: PrismaUser) {
     updatedAt: account.updatedAt,
   }
 }
-async function authenticateWithSavanex(identifier: string, password: string) {
+async function authenticateWithSavanex(identifier: string, password: string, authClient?: string) {
   if (!savanexAuthIsEnabled()) {
     return null
   }
@@ -306,7 +311,7 @@ async function authenticateWithSavanex(identifier: string, password: string) {
   const employeeType = typeof externalUser.employee_type === 'string'
     ? externalUser.employee_type
     : typeof externalUser.employeeType === 'string' ? externalUser.employeeType : undefined
-  const mappedRole = mapSavanexRole(typeof externalUser.role === 'string' ? externalUser.role : undefined, employeeType)
+  const mappedRole = mapSavanexRole(typeof externalUser.role === 'string' ? externalUser.role : undefined, employeeType, authClient)
   if (!mappedRole) {
     return null
   }
@@ -397,7 +402,7 @@ async function authenticateWithEduPay(identifier: string, password: string): Pro
   }
 }
 
-async function authenticateWithSharedProviders(identifier: string, password: string, permissions: string[] = []) {
+async function authenticateWithSharedProviders(identifier: string, password: string, permissions: string[] = [], authClient?: string) {
   type ProviderResult = { source: 'SAVANEX' | 'EduPay'; user: ExternalUserProfile | null; error?: unknown }
   const knownSources = new Set(
     permissions
@@ -408,7 +413,7 @@ async function authenticateWithSharedProviders(identifier: string, password: str
   const trySavanex = !hasRecognizedSource || knownSources.has('savanex')
   const tryEduPay = !hasRecognizedSource || knownSources.has('edupay')
   const attempts: Array<Promise<ProviderResult>> = []
-  if (trySavanex) attempts.push(authenticateWithSavanex(identifier, password)
+  if (trySavanex) attempts.push(authenticateWithSavanex(identifier, password, authClient)
     .then((user) => ({ source: 'SAVANEX' as const, user }))
     .catch((error) => ({ source: 'SAVANEX' as const, user: null, error })))
   if (tryEduPay) attempts.push(authenticateWithEduPay(identifier, password)
@@ -525,7 +530,11 @@ async function refreshCanonicalIdentity(user: PrismaUser, enforcePresence = true
 }
 async function changeFederatedPassword(user: { role: string; accessCode: string | null; email: string }, currentPassword: string, newPassword: string) {
   if (!env.SAVANEX_API_URL || !env.SAVANEX_AUTH_API_KEY) throw new ApiError(503, 'SAVANEX password authority is unavailable.')
-  const entityType = user.role === 'PARENT' ? 'parent' : user.role === 'STUDENT' ? 'student' : 'teacher'
+  const entityType = user.role === 'PARENT'
+    ? 'parent'
+    : user.role === 'STUDENT'
+      ? 'student'
+      : user.role === 'TEACHER' ? 'teacher' : 'employee'
   const identifier = user.accessCode || user.email
   const response = await fetch(`${env.SAVANEX_API_URL.replace(/\/$/, '')}/api/integration/entities/${entityType}/${encodeURIComponent(identifier)}/change-password/`, {
     method: 'POST',
@@ -706,7 +715,8 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   const localAuthOnly = req.header('x-kcs-local-auth-only') === 'true'
   const hasTeacherProfile = user ? Boolean(await prisma.teacherProfile.findUnique({ where: { userId: user.id }, select: { id: true } })) : false
   const providerPermissions = hasTeacherProfile ? ['ecosystem:savanex'] : (user?.permissions ?? [])
-  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password, providerPermissions)
+  const authClient = (req.header('x-kcs-client') || '').trim().toUpperCase()
+  const externalUser = localAuthOnly ? null : await authenticateWithSharedProviders(identifier, payload.password, providerPermissions, authClient)
   if (!externalUser) {
     if (user) await recordFailedLogin(user)
     throw new ApiError(401, 'Identifiant ou mot de passe incorrect.')

@@ -1,47 +1,563 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BookOpen, CheckCircle2, Download, FileText, Loader2, Pencil, RefreshCw, Trash2, Upload, X } from 'lucide-react'
-import PortalSidebar from '@/components/layout/PortalSidebar'
-import { syllabiAPI } from '@/services/api'
-import { useAuthStore } from '@/store/authStore'
-import { useUIStore } from '@/store/uiStore'
-import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, BookOpen, CheckCircle2, Download, FileText, Loader2, Pencil, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import PortalSidebar from '@/components/layout/PortalSidebar';
+import { syllabiAPI } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
+import { useUIStore } from '@/store/uiStore';
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting';
 
-type Version={academicYear:string;title:string;description?:string;fileName:string;fileSize:number;publishedAt:string}
-type Item=Version&{id:string;history?:Version[];targetUserIds?:string[];course:{name:string;code:string;grade:string;teacher?:{user?:{firstName:string;middleName?:string;lastName:string}}}}
-type DisplayItem=Item&{isCurrent:boolean}
-type Learner={userId:string;studentNumber:string;grade:string;section:string;user:{firstName:string;middleName?:string;lastName:string}}
-type Course={id:string;name:string;code:string;grade:string;syllabus?:Item|null;enrollments?:Array<{student:Learner}>}
-const card='rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900'
-const field='w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white'
+type Version = {
+  academicYear: string;
+  title: string;
+  description?: string;
+  fileName: string;
+  fileSize: number;
+  publishedAt: string;
+};
+type Item = Version & {
+  id: string;
+  history?: Version[];
+  targetUserIds?: string[];
+  sharedUserIds?: string[];
+  course: {
+    name: string;
+    code: string;
+    grade: string;
+    teacher?: {
+      user?: { firstName: string; middleName?: string; lastName: string };
+    };
+  };
+};
+type DisplayItem = Item & { isCurrent: boolean };
+type Learner = {
+  userId: string;
+  studentNumber: string;
+  grade: string;
+  section: string;
+  user: { firstName: string; middleName?: string; lastName: string };
+};
+type Course = {
+  id: string;
+  name: string;
+  code: string;
+  grade: string;
+  syllabus?: Item | null;
+  enrollments?: Array<{ student: Learner }>;
+};
+type EcosystemRecipient = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  detail?: string;
+};
+const card = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900';
+const field = 'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white';
 
-export default function CourseSyllabi(){
- const user=useAuthStore(s=>s.user);const language=useUIStore(s=>s.language);const fr=language==='fr';const teacher=user?.role==='teacher'
- const [items,setItems]=useState<Item[]>([]),[courses,setCourses]=useState<Course[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('')
- const [courseId,setCourseId]=useState(''),[year,setYear]=useState('2026-2027'),[title,setTitle]=useState(''),[description,setDescription]=useState(''),[file,setFile]=useState<File|null>(null)
- const [targetMode,setTargetMode]=useState<'all'|'class'|'selected'>('all'),[targetClass,setTargetClass]=useState(''),[targetUserIds,setTargetUserIds]=useState<string[]>([])
- const [notice,setNotice]=useState(''),[query,setQuery]=useState(''),[editing,setEditing]=useState<Item|null>(null),[deleting,setDeleting]=useState<Item|null>(null)
- const [editYear,setEditYear]=useState(''),[editTitle,setEditTitle]=useState(''),[editDescription,setEditDescription]=useState(''),[editFile,setEditFile]=useState<File|null>(null)
- const tr=(a:string,b:string)=>fr?a:b
- const load=async()=>{setLoading(true);setError('');try{const [list,owned]=await Promise.all([syllabiAPI.list(),teacher?syllabiAPI.teacherCourses():Promise.resolve(null)]);setItems(list.data.data||[]);if(owned)setCourses(owned.data.data||[])}catch(e:any){setError(e.response?.data?.message||tr('Impossible de charger les syllabus.','Unable to load syllabi.'))}finally{setLoading(false)}}
- useEffect(()=>{void load()},[])
- const name=(i:Item)=>{const u=i.course.teacher?.user;return u?[u.lastName,u.middleName,u.firstName].filter(Boolean).join(' '):tr('Enseignant du cours','Course teacher')}
- const selected=useMemo(()=>courses.find(c=>c.id===courseId),[courses,courseId])
- const learners=useMemo(()=>selected?.enrollments?.map(entry=>entry.student).sort((a,b)=>[a.user.lastName,a.user.middleName,a.user.firstName].filter(Boolean).join(' ').localeCompare([b.user.lastName,b.user.middleName,b.user.firstName].filter(Boolean).join(' '),'fr'))??[],[selected])
- const learnerClasses=useMemo(()=>[...new Set(learners.map(student=>[student.grade,student.section].filter(Boolean).join(' ')))],[learners])
-const searchableItems=useMemo<DisplayItem[]>(()=>{const normalized=query.trim().toLocaleLowerCase();return items.flatMap(item=>[{...item,isCurrent:true},...(item.history||[]).map(version=>({...item,...version,history:[],isCurrent:false}))]).filter(item=>!normalized||[item.title,item.description,item.fileName,item.academicYear,item.course.name,item.course.code,item.course.grade,name(item)].filter(Boolean).join(' ').toLocaleLowerCase().includes(normalized)).sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))},[items,query,language])
- useEffect(()=>{if(selected){setTitle(tr('Syllabus de ','Syllabus for ')+selected.name);setTargetMode('all');setTargetClass('');setTargetUserIds([])}},[courseId,selected])
- const resolvedTargets=targetMode==='all'?[]:targetMode==='class'?learners.filter(student=>[student.grade,student.section].filter(Boolean).join(' ')===targetClass).map(student=>student.userId):targetUserIds
- const publish=async()=>{if(!courseId||!file||!title.trim()){setError(tr('Sélectionnez le cours, le document et indiquez un titre.','Select the course and document, then enter a title.'));return}if(targetMode!=='all'&&!resolvedTargets.length){setError(tr('Sélectionnez au moins un élève destinataire.','Select at least one learner recipient.'));return}setBusy(true);setError('');try{const form=new FormData();form.append('academicYear',year);form.append('title',title);form.append('description',description);form.append('targetUserIds',JSON.stringify(resolvedTargets));form.append('file',file);await syllabiAPI.publish(courseId,form);setFile(null);setDescription('');setNotice(tr(`Syllabus envoyé à ${targetMode==='all'?learners.length:resolvedTargets.length} élève(s).`,`Syllabus sent to ${targetMode==='all'?learners.length:resolvedTargets.length} learner(s).`));await load()}catch(e:any){setError(e.response?.data?.message||tr('Publication impossible.','Publication failed.'))}finally{setBusy(false)}}
- const download=async(item:DisplayItem)=>{try{const response=await syllabiAPI.download(item.id,item.isCurrent?undefined:item.publishedAt);const url=URL.createObjectURL(response.data);const a=document.createElement('a');a.href=url;a.download=item.fileName;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch{setError(tr('Téléchargement impossible.','Download failed.'))}}
- const openEdit=(item:Item)=>{setEditing(item);setEditYear(item.academicYear);setEditTitle(item.title);setEditDescription(item.description||'');setEditFile(null);setError('');setNotice('')}
- const saveEdit=async()=>{if(!editing||!editTitle.trim()){setError(tr('Indiquez un titre pour le syllabus.','Enter a title for the syllabus.'));return}setBusy(true);setError('');try{const form=new FormData();form.append('academicYear',editYear);form.append('title',editTitle.trim());form.append('description',editDescription.trim());form.append('targetUserIds',JSON.stringify(editing.targetUserIds??[]));if(editFile)form.append('file',editFile);await syllabiAPI.publish(editing.id,form);setEditing(null);setNotice(editFile?tr('Le document a été remplacé et mis à jour.','The document was replaced and updated.'):tr('Les informations du syllabus ont été mises à jour.','The syllabus information was updated.'));await load()}catch(e:any){setError(e.response?.data?.message||tr('Modification impossible.','Update failed.'))}finally{setBusy(false)}}
- const remove=async()=>{if(!deleting)return;setBusy(true);setError('');try{await syllabiAPI.remove(deleting.id);setDeleting(null);setNotice(tr('Le syllabus a été supprimé des dashboards élèves.','The syllabus was removed from learner dashboards.'));await load()}catch(e:any){setError(e.response?.data?.message||tr('Suppression impossible.','Deletion failed.'))}finally{setBusy(false)}}
- return <div className="portal-shell flex min-h-screen bg-slate-50 dark:bg-kcs-blue-950"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"><div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}, {user?.firstName || 'KCS'}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} - {tr('Vos documents académiques officiels, accessibles depuis votre espace élève.','Your official academic documents, available from your student portal.')}</p></div><button onClick={()=>void load()} disabled={loading} className="rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"><RefreshCw size={16} className={loading?"mr-2 inline animate-spin":"mr-2 inline"}/>{tr("Actualiser","Refresh")}</button></div></div><div className="w-full max-w-none p-4 sm:p-6 lg:p-8"><div className="mb-6"><p className="text-xs font-black uppercase tracking-[.2em] text-kcs-gold-600">KCS Nexus · Academic documents</p><h1 className="mt-2 text-3xl font-bold text-kcs-blue-950 dark:text-white">{tr('Syllabus des cours','Course syllabi')}</h1><p className="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-300">{tr('Documents officiels publiés par chaque enseignant pour les élèves réellement inscrits à son cours.','Official documents published by each teacher for learners actually enrolled in the course.')}</p></div>
- {error&&<p className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
- {notice&&<p role="status" className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"><CheckCircle2 size={18}/>{notice}</p>}
- {teacher&&<section className={card}><h2 className="flex items-center gap-2 text-xl font-bold text-kcs-blue-950 dark:text-white"><Upload size={20}/>{tr('Publier ou remplacer un syllabus','Publish or replace a syllabus')}</h2><p className="mt-2 text-sm text-slate-500">{tr('PDF, DOC ou DOCX · 15 Mo maximum. Choisissez précisément les élèves qui doivent le recevoir.','PDF, DOC or DOCX · 15 MB maximum. Choose exactly which learners should receive it.')}</p><div className="mt-5 grid items-start gap-4 md:grid-cols-2"><label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{tr('Cours concerné','Course')}<select className={`${field} h-11 py-2`} value={courseId} onChange={e=>setCourseId(e.target.value)}><option value="">{tr('Choisir un de mes cours','Choose one of my courses')}</option>{courses.map(c=><option key={c.id} value={c.id}>{c.name} · {c.grade} · {c.code}</option>)}</select><small className="font-normal text-slate-500 dark:text-slate-300">{tr('Seuls vos cours officiels sont proposés.','Only your official courses are listed.')}</small></label><label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{tr('Année scolaire du syllabus','Syllabus academic year')}<input className={field} value={year} onChange={e=>setYear(e.target.value)} pattern="\d{4}-\d{4}" placeholder="2026-2027"/><small className="font-normal text-slate-500 dark:text-slate-300">{tr('Exemple : 2026-2027. Cette année identifie la période scolaire couverte par le document.','Example: 2026-2027. This identifies the school year covered by the document.')}</small></label><input className={field} value={title} onChange={e=>setTitle(e.target.value)} placeholder={tr('Titre du document','Document title')}/><label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{tr('Destinataires','Recipients')}<select className={field} value={targetMode} onChange={e=>setTargetMode(e.target.value as any)}><option value="all">{tr('Toute la classe / tous les inscrits','Whole class / all enrolled')}</option><option value="class">{tr('Une catégorie / classe','One category / class')}</option><option value="selected">{tr('Sélection nominative','Named selection')}</option></select></label>{targetMode==='class'&&<label className="md:col-span-2 grid gap-1 text-sm font-semibold dark:text-white">{tr('Classe ou catégorie ciblée','Target class or category')}<select className={field} value={targetClass} onChange={e=>setTargetClass(e.target.value)}><option value="">{tr('Choisir','Choose')}</option>{learnerClasses.map(value=><option key={value}>{value}</option>)}</select></label>}{targetMode==='selected'&&<fieldset className="md:col-span-2 max-h-64 overflow-y-auto rounded-2xl border border-sky-200 p-4"><legend className="px-2 text-sm font-black dark:text-white">{tr('Élèves destinataires','Learner recipients')}</legend><div className="grid gap-2 sm:grid-cols-2">{learners.map(student=>{const name=[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' ');return <label key={student.userId} className="flex items-center gap-2 rounded-xl bg-sky-50 p-3 text-sm dark:bg-kcs-blue-800/40 dark:text-white"><input type="checkbox" checked={targetUserIds.includes(student.userId)} onChange={()=>setTargetUserIds(current=>current.includes(student.userId)?current.filter(id=>id!==student.userId):[...current,student.userId])}/><span><b>{name}</b><small className="block text-slate-500 dark:text-slate-300">{student.studentNumber} · {[student.grade,student.section].filter(Boolean).join(' ')}</small></span></label>})}</div></fieldset>}<label className="md:col-span-2 grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">{tr('Note d’accompagnement (facultative)','Accompanying note (optional)')}<textarea className={[field,'min-h-24 resize-y'].join(' ')} value={description} onChange={e=>setDescription(e.target.value)} placeholder={tr('Contexte, objectifs, consignes ou message utile aux élèves…','Context, objectives, instructions or a helpful message for learners…')}/><small className="font-normal text-slate-500 dark:text-slate-300">{tr('Cette note sera conservée avec cette version dans l’historique.','This note will remain attached to this version in the history.')}</small></label><label className="md:col-span-2 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-kcs-blue-300 p-5 text-sm font-bold text-kcs-blue-700 dark:text-sky-200"><FileText className="mr-2"/>{file?.name||tr('Sélectionner le syllabus','Select syllabus document')}<input className="sr-only" type="file" accept=".pdf,.doc,.docx" onChange={e=>setFile(e.target.files?.[0]||null)}/></label><button disabled={busy} onClick={()=>void publish()} className="md:col-span-2 rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white disabled:opacity-50">{busy?tr('Publication…','Publishing…'):tr('Publier et avertir les élèves','Publish and notify learners')}</button></div></section>}
- <section className="mt-6"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Historique des envois','Submission history')}</h2><p className="mt-1 text-sm text-slate-500">{tr('Chaque publication et chaque remplacement restent retrouvables.','Every publication and replacement remains traceable.')}</p></div><span className="text-sm font-semibold text-slate-500">{searchableItems.length} {tr('version(s)','version(s)')}</span></div><label className="mb-4 block"><span className="sr-only">{tr('Rechercher dans l’historique','Search submission history')}</span><div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950"><BookOpen size={17} className="text-kcs-blue-600"/><input value={query} onChange={event=>setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm text-kcs-blue-950 outline-none placeholder:text-slate-400 dark:text-white" placeholder={tr('Rechercher par cours, classe, année, titre, note, fichier ou enseignant…','Search by course, class, year, title, note, file or teacher…')}/>{query&&<button type="button" onClick={()=>setQuery('')} className="rounded-full p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-kcs-blue-800"><X size={16}/></button>}</div></label>{loading?<div className={card}>{tr('Chargement…','Loading…')}</div>:searchableItems.length===0?<div className={card}><BookOpen className="text-kcs-blue-500"/><p className="mt-3 font-bold dark:text-white">{tr('Aucun syllabus publié pour le moment.','No syllabus has been published yet.')}</p></div>:<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{searchableItems.map(i=><article key={i.id+i.publishedAt} className={card}><div className="flex items-start justify-between gap-3"><FileText className="text-kcs-blue-600"/><span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700">{i.academicYear}</span></div><div className="mt-4 flex flex-wrap items-center gap-2"><h3 className="text-lg font-bold text-kcs-blue-950 dark:text-white">{i.title}</h3><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${i.isCurrent?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-600 dark:bg-kcs-blue-800 dark:text-slate-200'}`}>{i.isCurrent?tr('Version actuelle','Current version'):tr('Version archivée','Archived version')}</span></div><p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{i.course.name} · {i.course.grade}</p><p className="mt-1 text-xs text-slate-500">{name(i)}</p>{i.description&&<p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{i.description}</p>}<p className="mt-3 truncate text-xs text-slate-500">{i.fileName} · {(i.fileSize/1024/1024).toFixed(2)} Mo</p><p className="mt-1 text-xs text-slate-500">{tr('Envoyé le','Submitted')} {new Date(i.publishedAt).toLocaleString(fr?'fr-FR':'en-US')}</p><div className="mt-4 grid gap-2 sm:grid-cols-2"><button onClick={()=>void download(i)} className="rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white sm:col-span-2"><Download size={16} className="mr-2 inline"/>{tr('Télécharger','Download')}</button>{teacher&&i.isCurrent&&<button onClick={()=>openEdit(i)} className="rounded-xl border-2 border-kcs-blue-300 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:text-blue-100"><Pencil size={15} className="mr-2 inline"/>{tr('Modifier','Edit')}</button>}{teacher&&i.isCurrent&&<button onClick={()=>{setDeleting(i);setError('');setNotice('')}} className="rounded-xl border-2 border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 dark:border-red-800 dark:text-red-200"><Trash2 size={15} className="mr-2 inline"/>{tr('Supprimer','Delete')}</button>}</div></article>)}</div>}</section></div></main>
- {editing&&<div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onMouseDown={()=>{if(!busy)setEditing(null)}}><section role="dialog" aria-modal="true" aria-labelledby="syllabus-edit-title" className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-kcs-blue-200 bg-[#f4f9ff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onMouseDown={event=>event.stopPropagation()}><header className="sticky top-0 z-10 flex items-start justify-between gap-4 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-5 py-4 text-white sm:px-7"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-kcs-gold-300">{editing.course.code} · {editing.course.grade}</p><h2 id="syllabus-edit-title" className="mt-1 text-xl font-bold sm:text-2xl">{tr('Modifier le syllabus','Edit syllabus')}</h2><p className="mt-1 text-sm text-blue-100">{editing.course.name}</p></div><button disabled={busy} onClick={()=>setEditing(null)} className="rounded-full bg-white/10 p-2 hover:bg-white/20"><X size={20}/></button></header><div className="grid gap-4 p-5 sm:p-7"><label className="grid gap-1 text-sm font-semibold dark:text-white">{tr('Année académique','Academic year')}<input className={field} value={editYear} onChange={event=>setEditYear(event.target.value)} pattern="\d{4}-\d{4}"/></label><label className="grid gap-1 text-sm font-semibold dark:text-white">{tr('Titre','Title')}<input className={field} value={editTitle} onChange={event=>setEditTitle(event.target.value)}/></label><label className="grid gap-1 text-sm font-semibold dark:text-white">{tr('Description','Description')}<textarea className={[field,'min-h-28 resize-y'].join(' ')} value={editDescription} onChange={event=>setEditDescription(event.target.value)}/></label><label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-kcs-blue-300 p-5 text-center text-sm font-bold text-kcs-blue-800 dark:text-blue-100"><Upload className="mb-2"/><span>{editFile?.name||tr('Remplacer le PDF / document (facultatif)','Replace PDF / document (optional)')}</span><small className="mt-1 font-normal text-slate-500 dark:text-slate-300">{tr('Laissez vide pour conserver : ','Leave empty to keep: ')}{editing.fileName}</small><input className="sr-only" type="file" accept=".pdf,.doc,.docx" onChange={event=>setEditFile(event.target.files?.[0]||null)}/></label><div className="flex flex-col-reverse gap-3 border-t border-kcs-blue-100 pt-5 sm:flex-row sm:justify-end dark:border-kcs-blue-800"><button disabled={busy} onClick={()=>setEditing(null)} className="rounded-xl border-2 border-kcs-blue-300 px-5 py-3 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:text-blue-100">{tr('Annuler','Cancel')}</button><button disabled={busy} onClick={()=>void saveEdit()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy?<Loader2 size={17} className="mr-2 inline animate-spin"/>:<CheckCircle2 size={17} className="mr-2 inline"/>}{tr('Enregistrer et notifier','Save and notify')}</button></div></div></section></div>}
- {deleting&&<div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" onMouseDown={()=>{if(!busy)setDeleting(null)}}><section role="alertdialog" aria-modal="true" aria-labelledby="syllabus-delete-title" className="w-full max-w-lg rounded-3xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900 dark:bg-kcs-blue-950" onMouseDown={event=>event.stopPropagation()}><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200"><AlertTriangle/></div><h2 id="syllabus-delete-title" className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Supprimer ce syllabus ?','Delete this syllabus?')}</h2><p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{tr('Le document sera retiré immédiatement des dashboards élèves et cette action restera auditée.','The document will immediately be removed from learner dashboards and the action will remain audited.')}</p><p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-800 dark:bg-red-950/40 dark:text-red-200">{deleting.title} · {deleting.course.name}</p><div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button disabled={busy} onClick={()=>setDeleting(null)} className="rounded-xl border-2 border-kcs-blue-300 px-5 py-3 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:text-blue-100">{tr('Conserver','Keep')}</button><button disabled={busy} onClick={()=>void remove()} className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy?<Loader2 size={17} className="mr-2 inline animate-spin"/>:<Trash2 size={17} className="mr-2 inline"/>}{tr('Supprimer définitivement','Delete permanently')}</button></div></section></div>}
- </div>
+export default function CourseSyllabi() {
+  const user = useAuthStore((s) => s.user);
+  const language = useUIStore((s) => s.language);
+  const fr = language === 'fr';
+  const teacher = user?.role === 'teacher';
+  const [items, setItems] = useState<Item[]>([]),
+    [courses, setCourses] = useState<Course[]>([]),
+    [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const [courseId, setCourseId] = useState(''),
+    [year, setYear] = useState('2026-2027'),
+    [title, setTitle] = useState(''),
+    [description, setDescription] = useState(''),
+    [file, setFile] = useState<File | null>(null);
+  const [targetMode, setTargetMode] = useState<'all' | 'class' | 'selected'>('all'),
+    [targetClass, setTargetClass] = useState(''),
+    [targetUserIds, setTargetUserIds] = useState<string[]>([]);
+  const [ecosystemRecipients, setEcosystemRecipients] = useState<EcosystemRecipient[]>([]),
+    [sharedUserIds, setSharedUserIds] = useState<string[]>([]),
+    [recipientQuery, setRecipientQuery] = useState(''),
+    [recipientRole, setRecipientRole] = useState('ALL');
+  const [notice, setNotice] = useState(''),
+    [query, setQuery] = useState(''),
+    [editing, setEditing] = useState<Item | null>(null),
+    [deleting, setDeleting] = useState<Item | null>(null);
+  const [editYear, setEditYear] = useState(''),
+    [editTitle, setEditTitle] = useState(''),
+    [editDescription, setEditDescription] = useState(''),
+    [editFile, setEditFile] = useState<File | null>(null);
+  const tr = (a: string, b: string) => (fr ? a : b);
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [list, owned] = await Promise.all([syllabiAPI.list(), teacher ? syllabiAPI.teacherCourses() : Promise.resolve(null)]);
+      setItems(list.data.data || []);
+      if (owned) setCourses(owned.data.data || []);
+    } catch (e: any) {
+      setError(e.response?.data?.message || tr('Impossible de charger les syllabus.', 'Unable to load syllabi.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
+  useEffect(() => {
+    if (teacher)
+      void syllabiAPI
+        .recipientDirectory()
+        .then((response) => setEcosystemRecipients(response.data.data || []))
+        .catch(() => setEcosystemRecipients([]));
+  }, [teacher]);
+  const name = (i: Item) => {
+    const u = i.course.teacher?.user;
+    return u ? [u.lastName, u.middleName, u.firstName].filter(Boolean).join(' ') : tr('Enseignant du cours', 'Course teacher');
+  };
+  const selected = useMemo(() => courses.find((c) => c.id === courseId), [courses, courseId]);
+  const learners = useMemo(() => selected?.enrollments?.map((entry) => entry.student).sort((a, b) => [a.user.lastName, a.user.middleName, a.user.firstName].filter(Boolean).join(' ').localeCompare([b.user.lastName, b.user.middleName, b.user.firstName].filter(Boolean).join(' '), 'fr')) ?? [], [selected]);
+  const learnerClasses = useMemo(() => [...new Set(learners.map((student) => [student.grade, student.section].filter(Boolean).join(' ')))], [learners]);
+  const filteredEcosystemRecipients = useMemo(() => {
+    const q = recipientQuery.trim().toLocaleLowerCase();
+    return ecosystemRecipients.filter((recipient) => (recipientRole === 'ALL' || recipient.role === recipientRole) && (!q || [recipient.name, recipient.email, recipient.role, recipient.detail].filter(Boolean).join(' ').toLocaleLowerCase().includes(q)));
+  }, [ecosystemRecipients, recipientQuery, recipientRole]);
+  const searchableItems = useMemo<DisplayItem[]>(() => {
+    const normalized = query.trim().toLocaleLowerCase();
+    return items
+      .flatMap((item) => [
+        { ...item, isCurrent: true },
+        ...(item.history || []).map((version) => ({
+          ...item,
+          ...version,
+          history: [],
+          isCurrent: false,
+        })),
+      ])
+      .filter((item) => !normalized || [item.title, item.description, item.fileName, item.academicYear, item.course.name, item.course.code, item.course.grade, name(item)].filter(Boolean).join(' ').toLocaleLowerCase().includes(normalized))
+      .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+  }, [items, query, language]);
+  useEffect(() => {
+    if (selected) {
+      setTitle(tr('Syllabus de ', 'Syllabus for ') + selected.name);
+      setTargetMode('all');
+      setTargetClass('');
+      setTargetUserIds([]);
+    }
+  }, [courseId, selected]);
+  const learnerTargets = targetMode === 'all' ? [] : targetMode === 'class' ? learners.filter((student) => [student.grade, student.section].filter(Boolean).join(' ') === targetClass).map((student) => student.userId) : targetUserIds;
+  const resolvedTargets = [...new Set([...learnerTargets, ...sharedUserIds])];
+  const publish = async () => {
+    if (!courseId || !file || !title.trim()) {
+      setError(tr('Sélectionnez le cours, le document et indiquez un titre.', 'Select the course and document, then enter a title.'));
+      return;
+    }
+    if (targetMode !== 'all' && !resolvedTargets.length) {
+      setError(tr('Sélectionnez au moins un élève destinataire.', 'Select at least one learner recipient.'));
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('academicYear', year);
+      form.append('title', title);
+      form.append('description', description);
+      form.append('targetUserIds', JSON.stringify(learnerTargets));
+      form.append('sharedUserIds', JSON.stringify(sharedUserIds));
+      form.append('file', file);
+      await syllabiAPI.publish(courseId, form);
+      setFile(null);
+      setDescription('');
+      setNotice(tr(`Syllabus envoyé à ${targetMode === 'all' ? learners.length : resolvedTargets.length} élève(s).`, `Syllabus sent to ${targetMode === 'all' ? learners.length : resolvedTargets.length} learner(s).`));
+      await load();
+    } catch (e: any) {
+      setError(e.response?.data?.message || tr('Publication impossible.', 'Publication failed.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const download = async (item: DisplayItem) => {
+    try {
+      const response = await syllabiAPI.download(item.id, item.isCurrent ? undefined : item.publishedAt);
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = item.fileName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setError(tr('Téléchargement impossible.', 'Download failed.'));
+    }
+  };
+  const openEdit = (item: Item) => {
+    setEditing(item);
+    setEditYear(item.academicYear);
+    setEditTitle(item.title);
+    setEditDescription(item.description || '');
+    setEditFile(null);
+    setError('');
+    setNotice('');
+  };
+  const saveEdit = async () => {
+    if (!editing || !editTitle.trim()) {
+      setError(tr('Indiquez un titre pour le syllabus.', 'Enter a title for the syllabus.'));
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('academicYear', editYear);
+      form.append('title', editTitle.trim());
+      form.append('description', editDescription.trim());
+      form.append('targetUserIds', JSON.stringify(editing.targetUserIds ?? []));
+      form.append('sharedUserIds', JSON.stringify(editing.sharedUserIds ?? []));
+      if (editFile) form.append('file', editFile);
+      await syllabiAPI.publish(editing.id, form);
+      setEditing(null);
+      setNotice(editFile ? tr('Le document a été remplacé et mis à jour.', 'The document was replaced and updated.') : tr('Les informations du syllabus ont été mises à jour.', 'The syllabus information was updated.'));
+      await load();
+    } catch (e: any) {
+      setError(e.response?.data?.message || tr('Modification impossible.', 'Update failed.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    setError('');
+    try {
+      await syllabiAPI.remove(deleting.id);
+      setDeleting(null);
+      setNotice(tr('Le syllabus a été supprimé des dashboards élèves.', 'The syllabus was removed from learner dashboards.'));
+      await load();
+    } catch (e: any) {
+      setError(e.response?.data?.message || tr('Suppression impossible.', 'Deletion failed.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="portal-shell flex min-h-screen bg-slate-50 dark:bg-kcs-blue-950">
+      <PortalSidebar />
+      <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
+                {getLocalizedGreeting(language)}, {user?.firstName || 'KCS'}
+              </h1>
+              <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
+                {getLocalizedPortalDate(language)} - {tr('Vos documents académiques officiels, accessibles depuis votre espace élève.', 'Your official academic documents, available from your student portal.')}
+              </p>
+            </div>
+            <button onClick={() => void load()} disabled={loading} className="rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-60">
+              <RefreshCw size={16} className={loading ? 'mr-2 inline animate-spin' : 'mr-2 inline'} />
+              {tr('Actualiser', 'Refresh')}
+            </button>
+          </div>
+        </div>
+        <div className="w-full max-w-none p-4 sm:p-6 lg:p-8">
+          <div className="mb-6">
+            <p className="text-xs font-black uppercase tracking-[.2em] text-kcs-gold-600">KCS Nexus · Academic documents</p>
+            <h1 className="mt-2 text-3xl font-bold text-kcs-blue-950 dark:text-white">{tr('Syllabus des cours', 'Course syllabi')}</h1>
+            <p className="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-300">{tr('Documents officiels publiés par chaque enseignant pour les élèves réellement inscrits à son cours.', 'Official documents published by each teacher for learners actually enrolled in the course.')}</p>
+          </div>
+          {error && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</p>}
+          {notice && (
+            <p role="status" className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <CheckCircle2 size={18} />
+              {notice}
+            </p>
+          )}
+          {teacher && (
+            <section className={card}>
+              <h2 className="flex items-center gap-2 text-xl font-bold text-kcs-blue-950 dark:text-white">
+                <Upload size={20} />
+                {tr('Publier ou remplacer un syllabus', 'Publish or replace a syllabus')}
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">{tr('PDF, DOC ou DOCX · 15 Mo maximum. Choisissez précisément les élèves qui doivent le recevoir.', 'PDF, DOC or DOCX · 15 MB maximum. Choose exactly which learners should receive it.')}</p>
+              <div className="mt-5 grid items-start gap-4 md:grid-cols-2">
+                <label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
+                  {tr('Cours concerné', 'Course')}
+                  <select className={`${field} h-11 py-2`} value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+                    <option value="">{tr('Choisir un de mes cours', 'Choose one of my courses')}</option>
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} · {c.grade} · {c.code}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="font-normal text-slate-500 dark:text-slate-300">{tr('Seuls vos cours officiels sont proposés.', 'Only your official courses are listed.')}</small>
+                </label>
+                <label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
+                  {tr('Année scolaire du syllabus', 'Syllabus academic year')}
+                  <input className={field} value={year} onChange={(e) => setYear(e.target.value)} pattern="\d{4}-\d{4}" placeholder="2026-2027" />
+                  <small className="font-normal text-slate-500 dark:text-slate-300">{tr('Exemple : 2026-2027. Cette année identifie la période scolaire couverte par le document.', 'Example: 2026-2027. This identifies the school year covered by the document.')}</small>
+                </label>
+                <input className={field} value={title} onChange={(e) => setTitle(e.target.value)} placeholder={tr('Titre du document', 'Document title')} />
+                <label className="grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
+                  {tr('Destinataires', 'Recipients')}
+                  <select className={field} value={targetMode} onChange={(e) => setTargetMode(e.target.value as any)}>
+                    <option value="all">{tr('Toute la classe / tous les inscrits', 'Whole class / all enrolled')}</option>
+                    <option value="class">{tr('Une catégorie / classe', 'One category / class')}</option>
+                    <option value="selected">{tr('Sélection nominative', 'Named selection')}</option>
+                  </select>
+                </label>
+                {targetMode === 'class' && (
+                  <label className="md:col-span-2 grid gap-1 text-sm font-semibold dark:text-white">
+                    {tr('Classe ou catégorie ciblée', 'Target class or category')}
+                    <select className={field} value={targetClass} onChange={(e) => setTargetClass(e.target.value)}>
+                      <option value="">{tr('Choisir', 'Choose')}</option>
+                      {learnerClasses.map((value) => (
+                        <option key={value}>{value}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {targetMode === 'selected' && (
+                  <fieldset className="md:col-span-2 max-h-64 overflow-y-auto rounded-2xl border border-sky-200 p-4">
+                    <legend className="px-2 text-sm font-black dark:text-white">{tr('Élèves destinataires', 'Learner recipients')}</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {learners.map((student) => {
+                        const name = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ');
+                        return (
+                          <label key={student.userId} className="flex items-center gap-2 rounded-xl bg-sky-50 p-3 text-sm dark:bg-kcs-blue-800/40 dark:text-white">
+                            <input type="checkbox" checked={targetUserIds.includes(student.userId)} onChange={() => setTargetUserIds((current) => (current.includes(student.userId) ? current.filter((id) => id !== student.userId) : [...current, student.userId]))} />
+                            <span>
+                              <b>{name}</b>
+                              <small className="block text-slate-500 dark:text-slate-300">
+                                {student.studentNumber} · {[student.grade, student.section].filter(Boolean).join(' ')}
+                              </small>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+                <fieldset className="md:col-span-2 rounded-2xl border border-kcs-blue-200 p-4 dark:border-kcs-blue-700">
+                  <legend className="px-2 text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Autres destinataires de l’écosystème (facultatif)', 'Other ecosystem recipients (optional)')}</legend>
+                  <p className="mb-3 text-xs text-slate-500">{tr('Partagez aussi ce document avec le SuperAdministrateur, le Principal, d’autres enseignants, des parents ou toute autre identité autorisée.', 'Also share this document with Super Administration, the Principal, other teachers, parents, or any other authorised identity.')}</p>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_190px]">
+                    <input className={field} value={recipientQuery} onChange={(event) => setRecipientQuery(event.target.value)} placeholder={tr('Nom, e-mail, rôle ou classe…', 'Name, email, role or class…')} />
+                    <select className={field} value={recipientRole} onChange={(event) => setRecipientRole(event.target.value)}>
+                      <option value="ALL">{tr('Tous les rôles', 'All roles')}</option>
+                      <option value="ADMIN">Super Administration</option>
+                      <option value="STAFF">{tr('Principal / personnel', 'Principal / staff')}</option>
+                      <option value="TEACHER">{tr('Enseignants', 'Teachers')}</option>
+                      <option value="PARENT">{tr('Parents', 'Parents')}</option>
+                      <option value="STUDENT">{tr('Élèves', 'Learners')}</option>
+                    </select>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-xs font-bold text-slate-500">
+                    <span>
+                      {sharedUserIds.length} {tr('sélectionné(s)', 'selected')}
+                    </span>
+                    <button type="button" onClick={() => setSharedUserIds([])} className="text-kcs-blue-700 dark:text-sky-200">
+                      {tr('Effacer', 'Clear')}
+                    </button>
+                  </div>
+                  <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {filteredEcosystemRecipients.map((recipient) => (
+                      <label key={recipient.id} className="flex cursor-pointer gap-2 rounded-xl bg-sky-50 p-3 text-sm dark:bg-kcs-blue-800/40 dark:text-white">
+                        <input type="checkbox" className="mt-1" checked={sharedUserIds.includes(recipient.id)} onChange={() => setSharedUserIds((current) => (current.includes(recipient.id) ? current.filter((id) => id !== recipient.id) : [...current, recipient.id]))} />
+                        <span>
+                          <b className="block">{recipient.name}</b>
+                          <small className="block text-slate-500 dark:text-slate-300">
+                            {recipient.role} · {recipient.detail || recipient.email}
+                          </small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="md:col-span-2 grid gap-1 text-sm font-semibold text-kcs-blue-950 dark:text-white">
+                  {tr('Note d’accompagnement (facultative)', 'Accompanying note (optional)')}
+                  <textarea className={[field, 'min-h-24 resize-y'].join(' ')} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={tr('Contexte, objectifs, consignes ou message utile aux élèves…', 'Context, objectives, instructions or a helpful message for learners…')} />
+                  <small className="font-normal text-slate-500 dark:text-slate-300">{tr('Cette note sera conservée avec cette version dans l’historique.', 'This note will remain attached to this version in the history.')}</small>
+                </label>
+                <label className="md:col-span-2 flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-kcs-blue-300 p-5 text-sm font-bold text-kcs-blue-700 dark:text-sky-200">
+                  <FileText className="mr-2" />
+                  {file?.name || tr('Sélectionner le syllabus', 'Select syllabus document')}
+                  <input className="sr-only" type="file" accept=".pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                </label>
+                <button disabled={busy} onClick={() => void publish()} className="md:col-span-2 rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white disabled:opacity-50">
+                  {busy ? tr('Publication…', 'Publishing…') : tr('Publier et avertir les élèves', 'Publish and notify learners')}
+                </button>
+              </div>
+            </section>
+          )}
+          <section className="mt-6">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Historique des envois', 'Submission history')}</h2>
+                <p className="mt-1 text-sm text-slate-500">{tr('Chaque publication et chaque remplacement restent retrouvables.', 'Every publication and replacement remains traceable.')}</p>
+              </div>
+              <span className="text-sm font-semibold text-slate-500">
+                {searchableItems.length} {tr('version(s)', 'version(s)')}
+              </span>
+            </div>
+            <label className="mb-4 block">
+              <span className="sr-only">{tr('Rechercher dans l’historique', 'Search submission history')}</span>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+                <BookOpen size={17} className="text-kcs-blue-600" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm text-kcs-blue-950 outline-none placeholder:text-slate-400 dark:text-white" placeholder={tr('Rechercher par cours, classe, année, titre, note, fichier ou enseignant…', 'Search by course, class, year, title, note, file or teacher…')} />
+                {query && (
+                  <button type="button" onClick={() => setQuery('')} className="rounded-full p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-kcs-blue-800">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </label>
+            {loading ? (
+              <div className={card}>{tr('Chargement…', 'Loading…')}</div>
+            ) : searchableItems.length === 0 ? (
+              <div className={card}>
+                <BookOpen className="text-kcs-blue-500" />
+                <p className="mt-3 font-bold dark:text-white">{tr('Aucun syllabus publié pour le moment.', 'No syllabus has been published yet.')}</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {searchableItems.map((i) => (
+                  <article key={i.id + i.publishedAt} className={card}>
+                    <div className="flex items-start justify-between gap-3">
+                      <FileText className="text-kcs-blue-600" />
+                      <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700">{i.academicYear}</span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-bold text-kcs-blue-950 dark:text-white">{i.title}</h3>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${i.isCurrent ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600 dark:bg-kcs-blue-800 dark:text-slate-200'}`}>{i.isCurrent ? tr('Version actuelle', 'Current version') : tr('Version archivée', 'Archived version')}</span>
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      {i.course.name} · {i.course.grade}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">{name(i)}</p>
+                    {i.description && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{i.description}</p>}
+                    <p className="mt-3 truncate text-xs text-slate-500">
+                      {i.fileName} · {(i.fileSize / 1024 / 1024).toFixed(2)} Mo
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {tr('Envoyé le', 'Submitted')} {new Date(i.publishedAt).toLocaleString(fr ? 'fr-FR' : 'en-US')}
+                    </p>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <button onClick={() => void download(i)} className="rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white sm:col-span-2">
+                        <Download size={16} className="mr-2 inline" />
+                        {tr('Télécharger', 'Download')}
+                      </button>
+                      {teacher && i.isCurrent && (
+                        <button onClick={() => openEdit(i)} className="rounded-xl border-2 border-kcs-blue-300 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:text-blue-100">
+                          <Pencil size={15} className="mr-2 inline" />
+                          {tr('Modifier', 'Edit')}
+                        </button>
+                      )}
+                      {teacher && i.isCurrent && (
+                        <button
+                          onClick={() => {
+                            setDeleting(i);
+                            setError('');
+                            setNotice('');
+                          }}
+                          className="rounded-xl border-2 border-red-200 px-4 py-2.5 text-sm font-bold text-red-700 dark:border-red-800 dark:text-red-200"
+                        >
+                          <Trash2 size={15} className="mr-2 inline" />
+                          {tr('Supprimer', 'Delete')}
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+      {editing && (
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+          onMouseDown={() => {
+            if (!busy) setEditing(null);
+          }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="syllabus-edit-title" className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-kcs-blue-200 bg-[#f4f9ff] shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="sticky top-0 z-10 flex items-start justify-between gap-4 bg-gradient-to-r from-kcs-blue-950 to-kcs-blue-700 px-5 py-4 text-white sm:px-7">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.18em] text-kcs-gold-300">
+                  {editing.course.code} · {editing.course.grade}
+                </p>
+                <h2 id="syllabus-edit-title" className="mt-1 text-xl font-bold sm:text-2xl">
+                  {tr('Modifier le syllabus', 'Edit syllabus')}
+                </h2>
+                <p className="mt-1 text-sm text-blue-100">{editing.course.name}</p>
+              </div>
+              <button disabled={busy} onClick={() => setEditing(null)} className="rounded-full bg-white/10 p-2 hover:bg-white/20">
+                <X size={20} />
+              </button>
+            </header>
+            <div className="grid gap-4 p-5 sm:p-7">
+              <label className="grid gap-1 text-sm font-semibold dark:text-white">
+                {tr('Année académique', 'Academic year')}
+                <input className={field} value={editYear} onChange={(event) => setEditYear(event.target.value)} pattern="\d{4}-\d{4}" />
+              </label>
+              <label className="grid gap-1 text-sm font-semibold dark:text-white">
+                {tr('Titre', 'Title')}
+                <input className={field} value={editTitle} onChange={(event) => setEditTitle(event.target.value)} />
+              </label>
+              <label className="grid gap-1 text-sm font-semibold dark:text-white">
+                {tr('Description', 'Description')}
+                <textarea className={[field, 'min-h-28 resize-y'].join(' ')} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} />
+              </label>
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-kcs-blue-300 p-5 text-center text-sm font-bold text-kcs-blue-800 dark:text-blue-100">
+                <Upload className="mb-2" />
+                <span>{editFile?.name || tr('Remplacer le PDF / document (facultatif)', 'Replace PDF / document (optional)')}</span>
+                <small className="mt-1 font-normal text-slate-500 dark:text-slate-300">
+                  {tr('Laissez vide pour conserver : ', 'Leave empty to keep: ')}
+                  {editing.fileName}
+                </small>
+                <input className="sr-only" type="file" accept=".pdf,.doc,.docx" onChange={(event) => setEditFile(event.target.files?.[0] || null)} />
+              </label>
+              <div className="flex flex-col-reverse gap-3 border-t border-kcs-blue-100 pt-5 sm:flex-row sm:justify-end dark:border-kcs-blue-800">
+                <button disabled={busy} onClick={() => setEditing(null)} className="rounded-xl border-2 border-kcs-blue-300 px-5 py-3 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:text-blue-100">
+                  {tr('Annuler', 'Cancel')}
+                </button>
+                <button disabled={busy} onClick={() => void saveEdit()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
+                  {busy ? <Loader2 size={17} className="mr-2 inline animate-spin" /> : <CheckCircle2 size={17} className="mr-2 inline" />}
+                  {tr('Enregistrer et notifier', 'Save and notify')}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+      {deleting && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+          onMouseDown={() => {
+            if (!busy) setDeleting(null);
+          }}
+        >
+          <section role="alertdialog" aria-modal="true" aria-labelledby="syllabus-delete-title" className="w-full max-w-lg rounded-3xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900 dark:bg-kcs-blue-950" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">
+              <AlertTriangle />
+            </div>
+            <h2 id="syllabus-delete-title" className="mt-4 text-xl font-bold text-kcs-blue-950 dark:text-white">
+              {tr('Supprimer ce syllabus ?', 'Delete this syllabus?')}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{tr('Le document sera retiré immédiatement des dashboards élèves et cette action restera auditée.', 'The document will immediately be removed from learner dashboards and the action will remain audited.')}</p>
+            <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-800 dark:bg-red-950/40 dark:text-red-200">
+              {deleting.title} · {deleting.course.name}
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button disabled={busy} onClick={() => setDeleting(null)} className="rounded-xl border-2 border-kcs-blue-300 px-5 py-3 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-600 dark:text-blue-100">
+                {tr('Conserver', 'Keep')}
+              </button>
+              <button disabled={busy} onClick={() => void remove()} className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">
+                {busy ? <Loader2 size={17} className="mr-2 inline animate-spin" /> : <Trash2 size={17} className="mr-2 inline" />}
+                {tr('Supprimer définitivement', 'Delete permanently')}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }

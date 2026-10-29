@@ -30,6 +30,11 @@ const teacherReportDraftSchema=cycleSchema.extend({
  conduct:z.string().trim().max(500).default(''),
  hiddenCourseIds:z.array(z.string().min(1)).max(100).default([]),
 })
+const teacherReportVisibilityBulkSchema=cycleSchema.extend({
+ action:z.enum(['HIDE','RESTORE']),
+ studentIds:z.array(z.string().min(1)).min(1).max(200),
+ courseIds:z.array(z.string().min(1)).min(1).max(100),
+})
 const attendanceCorrectionSchema=z.object({
  total:z.number().int().min(0).max(1000),present:z.number().int().min(0).max(1000),absent:z.number().int().min(0).max(1000),late:z.number().int().min(0).max(1000),excused:z.number().int().min(0).max(1000),sick:z.number().int().min(0).max(1000),suspended:z.number().int().min(0).max(1000),attendanceRate:z.number().min(0).max(100).nullable(),
 })
@@ -522,6 +527,42 @@ academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles(
   return saved
  })
  return success(res,card,'Main-teacher report-card draft saved')
+}))
+
+academicRecordsRouter.post('/report-cards/teacher-visibility/bulk',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=teacherReportVisibilityBulkSchema.parse(req.body)
+ const studentIds=[...new Set(payload.studentIds)],requestedCourseIds=[...new Set(payload.courseIds)]
+ const termLabel=reportCardTerm(payload.academicYear,payload.term)
+ const prepared=[] as Array<{studentId:string;studentNumber:string;average:number;attendanceSummary:unknown;hiddenCourseIds:string[];current:any}>
+ for(const studentId of studentIds){
+  const context=await homeroomReportContext(req.user!.sub,studentId,payload.academicYear,payload.term)
+  const current=await prisma.reportCard.findUnique({where:{studentId_term:{studentId,term:termLabel}}})
+  if(current&&['APPROVED','EMAILED','POSTED_TO_PORTAL'].includes(current.publicationStatus))throw new ApiError(409,`The report card for ${context.student.studentNumber} is approved or published and is read-only`)
+  const officialCourseIds=context.enrollments.map(item=>item.courseId)
+  const applicable=requestedCourseIds.filter(courseId=>officialCourseIds.includes(courseId))
+  if(!applicable.length)continue
+  const existing=new Set(academicCorrections(current?.academicCorrections).hiddenCourseIds??[])
+  for(const courseId of applicable){if(payload.action==='HIDE')existing.add(courseId);else existing.delete(courseId)}
+  const visibility=reportCardVisibility(officialCourseIds,[...existing])
+  const visibleGrades=context.grades.filter(item=>visibility.visibleCourseIds.includes(item.courseId))
+  prepared.push({studentId,studentNumber:context.student.studentNumber,average:weightedCourseAverage(visibleGrades),attendanceSummary:context.attendanceSummary,hiddenCourseIds:visibility.hiddenCourseIds,current})
+ }
+ if(!prepared.length)throw new ApiError(400,'None of the selected courses belongs to the selected main-teacher learners')
+ const cards=await prisma.$transaction(async tx=>{
+  const saved=[]
+  for(const item of prepared){
+   const corrections={...academicCorrections(item.current?.academicCorrections),hiddenCourseIds:item.hiddenCourseIds}
+   const card=await tx.reportCard.upsert({
+    where:{studentId_term:{studentId:item.studentId,term:termLabel}},
+    create:{studentId:item.studentId,term:termLabel,average:item.average,teacherComment:'',conduct:'',attendanceSummary:item.attendanceSummary as never,academicCorrections:corrections,principalStatus:'DRAFT',publicationStatus:'DRAFT'},
+    update:{average:item.average,attendanceSummary:item.attendanceSummary as never,academicCorrections:corrections,principalStatus:'DRAFT',publicationStatus:'DRAFT',approvedById:null,approvedAt:null,portalPostedAt:null,emailedAt:null},
+   })
+   await tx.auditLog.create({data:{actorId:req.user!.sub,action:payload.action==='HIDE'?'MAIN_TEACHER_COURSES_HIDDEN_BULK':'MAIN_TEACHER_COURSES_RESTORED_BULK',targetType:'ReportCard',targetId:card.id,metadata:{studentId:item.studentId,studentNumber:item.studentNumber,academicYear:payload.academicYear,term:payload.term,requestedCourseIds,hiddenCourseIds:item.hiddenCourseIds,scopeStudentIds:studentIds}}})
+   saved.push({...card,hiddenCourseIds:item.hiddenCourseIds})
+  }
+  return saved
+ })
+ return success(res,{action:payload.action,updatedLearners:cards.length,cards},payload.action==='HIDE'?'Selected courses hidden for the selected learners':'Selected courses restored for the selected learners')
 }))
 
 academicRecordsRouter.post('/report-cards/teacher-submit/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
