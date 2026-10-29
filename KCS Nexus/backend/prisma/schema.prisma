@@ -858,6 +858,7 @@ model ReportCard {
   paymentCondition   String                  @default("PENDING_REVIEW")
   feeSummary         Json?
   attendanceSummary  Json?
+  academicCorrections Json?
   publicationStatus  ReportPublicationStatus @default(DRAFT)
   emailedAt          DateTime?
   portalPostedAt     DateTime?

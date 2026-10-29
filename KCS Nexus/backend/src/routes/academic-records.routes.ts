@@ -28,6 +28,14 @@ const teacherReportDraftSchema=cycleSchema.extend({
  teacherComment:z.string().trim().max(1500).default(''),
  conduct:z.string().trim().max(500).default(''),
 })
+const attendanceCorrectionSchema=z.object({
+ total:z.number().int().min(0).max(1000),present:z.number().int().min(0).max(1000),absent:z.number().int().min(0).max(1000),late:z.number().int().min(0).max(1000),excused:z.number().int().min(0).max(1000),sick:z.number().int().min(0).max(1000),suspended:z.number().int().min(0).max(1000),attendanceRate:z.number().min(0).max(100).nullable(),
+})
+const reportCardEditorialSchema=z.object({
+ teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500),average:z.number().min(0).max(100),
+ attendanceSummary:attendanceCorrectionSchema.nullable(),
+ subjects:z.array(z.object({courseId:z.string().min(1),percentage:z.number().min(0).max(100)})).max(100),
+})
 const letter=(value:number)=>value>=97?'A+':value>=93?'A':value>=90?'A-':value>=87?'B+':value>=83?'B':value>=80?'B-':value>=77?'C+':value>=73?'C':value>=70?'C-':value>=67?'D+':value>=63?'D':value>=60?'D-':'F'
 const periodKey=(year:string,term:string,status:'SUBMITTED'|'APPROVED')=>academicPeriodKey(year,term as Parameters<typeof academicPeriodKey>[1],status)
 const parsePeriod=(period:string)=>{const [academicYear,term,status]=period.split('::');return{academicYear,term,status}}
@@ -44,6 +52,9 @@ const splitReportCardTerm=(value:string)=>{
  const term=value.slice(9).replace(/^[^A-Za-z0-9]+/,'').trim()
  return{academicYear,term}
 }
+type AcademicCorrections={subjects?:Array<{courseId:string;percentage:number;letterGrade?:string}>}
+const academicCorrections=(value:unknown):AcademicCorrections=>value&&typeof value==='object'&&!Array.isArray(value)?value as AcademicCorrections:{}
+const correctionMap=(value:unknown)=>new Map((academicCorrections(value).subjects??[]).map(item=>[item.courseId,item]))
 const resolveAcademicActorId=async(req:AuthenticatedRequest)=>req.user!.sub==='configured-superadmin'
  ? (await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{id:true}}))?.id??null
  : req.user!.sub
@@ -554,7 +565,13 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
    const source=latestByCourse.get(result.courseId)
    return source&&result.percentage!==null?[{...source,percentage:result.percentage,letterGrade:letter(result.percentage),termResults:result.termResults,sourceTermCount:result.sourceTermCount}]:[]
   }).sort((left,right)=>(left.course.code||left.course.name).localeCompare(right.course.code||right.course.name,'en',{numeric:true,sensitivity:'base'}))
-  return {...card,student,subjects:computedSubjects.length?computedSubjects:subjects}
+  const baseSubjects=computedSubjects.length?computedSubjects:subjects
+  const corrections=correctionMap(card.academicCorrections)
+  const correctedSubjects=baseSubjects.map(subject=>{
+   const correction=corrections.get(subject.courseId)
+   return correction?{...subject,percentage:correction.percentage,letterGrade:letter(correction.percentage)}:subject
+  })
+  return {...card,student,subjects:correctedSubjects}
  })
  res.setHeader('Cache-Control','private, no-store, no-cache, must-revalidate')
  return success(res,enriched)
@@ -562,17 +579,23 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
 
 academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id)
- const payload=z.object({teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500)}).parse(req.body)
+ const payload=reportCardEditorialSchema.parse(req.body)
  const actorId=await resolveAcademicActorId(req)
  const card=await prisma.$transaction(async tx=>{
   const current=await tx.reportCard.findUnique({where:{id}})
   if(!current)throw new ApiError(404,'Report card not found')
-  if(current.publicationStatus==='EMAILED')throw new ApiError(409,'An emailed report card must be reopened before editorial changes')
-  const updated=await tx.reportCard.update({where:{id},data:{teacherComment:payload.teacherComment||null,conduct:payload.conduct||null}})
-  await tx.auditLog.create({data:{actorId,action:'SUPERADMIN_REPORT_CARD_EDITORIAL_UPDATE',targetType:'ReportCard',targetId:id,metadata:{previous:{teacherComment:current.teacherComment,conduct:current.conduct},next:payload,term:current.term,studentId:current.studentId}}})
+  const previous={teacherComment:current.teacherComment,conduct:current.conduct,average:current.average,attendanceSummary:current.attendanceSummary,academicCorrections:current.academicCorrections,publicationStatus:current.publicationStatus}
+  const correctedSubjects=payload.subjects.map(subject=>({...subject,percentage:Number(subject.percentage.toFixed(2)),letterGrade:letter(subject.percentage)}))
+  const requiresReapproval=['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(current.publicationStatus)
+  const updated=await tx.reportCard.update({where:{id},data:{
+   teacherComment:payload.teacherComment||null,conduct:payload.conduct||null,average:Number(payload.average.toFixed(2)),attendanceSummary:payload.attendanceSummary as any,
+   academicCorrections:{subjects:correctedSubjects,correctedBy:actorId,correctedAt:new Date().toISOString()} as any,
+   ...(requiresReapproval?{principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW' as const,approvedById:null,approvedAt:null,emailedAt:null,portalPostedAt:null}:{}),
+  }})
+  await tx.auditLog.create({data:{actorId,action:'SUPERADMIN_REPORT_CARD_FULL_CORRECTION',targetType:'ReportCard',targetId:id,metadata:{previous,next:{...payload,subjects:correctedSubjects},requiresReapproval,term:current.term,studentId:current.studentId}}})
   return updated
  })
- return success(res,card,'Report-card presentation fields updated and audited')
+ return success(res,card,'Report-card academic and presentation fields updated and audited')
 }))
 
 academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
@@ -615,13 +638,17 @@ academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),as
   const source=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:{in:submittedPeriods}},orderBy:{createdAt:'desc'}})
   if(!source.length)throw new ApiError(409,'The report card has no submitted source grades')
   const aggregated=aggregateReportCardResults(source,parsedCycle.academicYear,parsedCycle.term)
-  const frozen=[...aggregated.values()].filter((item):item is typeof item&{percentage:number}=>item.percentage!==null)
+  const corrections=correctionMap(current.academicCorrections)
+  const frozen=[...aggregated.values()].filter((item):item is typeof item&{percentage:number}=>item.percentage!==null).map(item=>{
+   const correction=corrections.get(item.courseId)
+   return correction?{...item,percentage:correction.percentage}:item
+  })
   if(!frozen.length)throw new ApiError(409,'The annual report card is incomplete: all four quarter results are required')
   await tx.grade.deleteMany({where:{studentId:current.studentId,assignmentId:null,period:approved}})
   for(const grade of frozen)await tx.grade.create({data:{studentId:grade.studentId,courseId:grade.courseId,assignmentId:null,score:grade.percentage,maxScore:100,percentage:grade.percentage,letterGrade:letter(grade.percentage),period:approved}})
   await synchronizeStudentAcademicMetrics(tx,[current.studentId])
   const updated=await tx.reportCard.update({where:{id},data:{principalStatus:'APPROVED',publicationStatus:'APPROVED',approvedById:req.user!.sub,approvedAt:new Date()}})
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{previousStatus:current.publicationStatus,academicYear,term,sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade}))}}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_APPROVED',targetType:'ReportCard',targetId:id,metadata:{previousStatus:current.publicationStatus,academicYear,term,sourceGrades:source.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:x.letterGrade})),frozenGrades:frozen.map(x=>({courseId:x.courseId,percentage:x.percentage,letterGrade:letter(x.percentage)})),superAdminCorrectionsApplied:corrections.size}}})
   return updated
  })
  return success(res,card,'Report card approved and official grades frozen')

@@ -409,10 +409,30 @@ app.put('/api/access/:orbitPersonId', authenticate, allow('KITCHEN_ADMIN'), asyn
     smsNotifications: z.boolean().default(true),
     creditLimit: z.coerce.number().positive().optional().nullable()
   }).parse(req.body)
-  const access = await prisma.kitchenAccess.upsert({
-    where: { orbitPersonId: person.id },
-    create: { orbitPersonId: person.id, personType: personTypeFrom(person.kind), createdBy: req.kitchenUser!.orbitPersonId, ...data },
-    update: data
+  const access = await prisma.$transaction(async tx => {
+    const saved = await tx.kitchenAccess.upsert({
+      where: { orbitPersonId: person.id },
+      create: { orbitPersonId: person.id, personType: personTypeFrom(person.kind), createdBy: req.kitchenUser!.orbitPersonId, ...data },
+      update: data
+    })
+    const currentManager = await tx.kitchenManagerSettings.findUnique({ where: { id: 'primary' } })
+    if (saved.role === 'KITCHEN_ADMIN' && saved.isActive) {
+      await tx.kitchenManagerSettings.upsert({
+        where: { id: 'primary' },
+        create: { id: 'primary', managerOrbitPersonId: person.id, reportEmail: person.email || null, updatedBy: req.kitchenUser!.orbitPersonId },
+        update: {
+          managerOrbitPersonId: person.id,
+          reportEmail: currentManager?.reportEmail || person.email || null,
+          updatedBy: req.kitchenUser!.orbitPersonId,
+        },
+      })
+    } else if (currentManager?.managerOrbitPersonId === person.id) {
+      await tx.kitchenManagerSettings.update({
+        where: { id: 'primary' },
+        data: { managerOrbitPersonId: null, reportEmail: null, dailyReportEnabled: false, updatedBy: req.kitchenUser!.orbitPersonId },
+      })
+    }
+    return saved
   })
   await audit(req, 'ACCESS_UPDATED', 'KitchenAccess', access.id, undefined, access)
   res.json({ access })
@@ -1793,6 +1813,12 @@ app.get('/api/manager-settings', authenticate, allow('KITCHEN_ADMIN'), asyncRout
 }))
 
 app.put('/api/manager-settings', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId } })
+  if (!canManageOwnKitchenCredentials({
+    userId: req.kitchenUser!.userId,
+    orbitPersonId: req.kitchenUser!.orbitPersonId,
+    explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
+  })) return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may configure report delivery.' })
   const input = z.object({
     reportEmail: z.string().trim().email().max(254),
     dailyReportEnabled: z.boolean(),
@@ -1840,6 +1866,12 @@ app.post('/api/manager-inbox/:id/read', authenticate, allow('KITCHEN_ADMIN', 'FI
 }))
 
 app.post('/api/reports/daily/send', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: req.kitchenUser!.orbitPersonId } })
+  if (!canManageOwnKitchenCredentials({
+    userId: req.kitchenUser!.userId,
+    orbitPersonId: req.kitchenUser!.orbitPersonId,
+    explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
+  })) return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may send the official daily report.' })
   const result = await queueDailyKitchenReport(prisma, true)
   await audit(req, 'KITCHEN_DAILY_REPORT_QUEUED', 'KitchenManagerInbox', result.inboxId || 'none', undefined, result)
   res.json(result)

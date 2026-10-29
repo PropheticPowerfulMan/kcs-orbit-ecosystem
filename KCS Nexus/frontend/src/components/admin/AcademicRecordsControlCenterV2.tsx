@@ -21,6 +21,14 @@ type Card = PrintableReportCard & {
   student: PrintableReportCard['student'] & { id: string; transcriptVisible: boolean; parentLinks?: Array<{ parentId: string; parent: { id: string; firstName: string; middleName?: string | null; lastName: string; email?: string | null; phone?: string | null } }> }
 }
 
+type EditorialForm = {
+  teacherComment: string
+  conduct: string
+  average: number
+  attendanceSummary: NonNullable<PrintableReportCard['attendanceSummary']> | null
+  subjects: Array<{ courseId: string; courseName: string; courseCode: string; percentage: number }>
+}
+
 type Transcript = {
   student: { name: string; studentNumber: string; grade: string; photoUrl?: string | null }
   rows: Array<{ id: string; percentage: number; letterGrade: string; credits: number; cycle: { academicYear: string; term: string }; course: { name: string; code: string } }>
@@ -81,7 +89,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const [legacyBusy, setLegacyBusy] = useState(false)
   const [legacyConfirmation, setLegacyConfirmation] = useState('')
   const [editingCard, setEditingCard] = useState<Card | null>(null)
-  const [editorialForm, setEditorialForm] = useState({ teacherComment: '', conduct: '' })
+  const [editorialForm, setEditorialForm] = useState<EditorialForm>({ teacherComment: '', conduct: '', average: 0, attendanceSummary: null, subjects: [] })
   const [selectedParents, setSelectedParents] = useState<Record<string, string[]>>({})
   const [deliveryBusy, setDeliveryBusy] = useState(false)
   const showTranscripts = view === 'transcripts'
@@ -205,15 +213,23 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
 
   const openEditorial = (card: Card) => {
     setEditingCard(card)
-    setEditorialForm({ teacherComment: card.teacherComment ?? '', conduct: card.conduct ?? '' })
+    setEditorialForm({
+      teacherComment: card.teacherComment ?? '', conduct: card.conduct ?? '', average: card.average,
+      attendanceSummary: card.attendanceSummary ? {
+        total: card.attendanceSummary.total ?? 0, present: card.attendanceSummary.present ?? 0, absent: card.attendanceSummary.absent ?? 0,
+        late: card.attendanceSummary.late ?? 0, excused: card.attendanceSummary.excused ?? 0, sick: card.attendanceSummary.sick ?? 0,
+        suspended: card.attendanceSummary.suspended ?? 0, attendanceRate: card.attendanceSummary.attendanceRate ?? null,
+      } : null,
+      subjects: (card.subjects ?? []).map((subject) => ({ courseId: subject.courseId || subject.id, courseName: subject.course.name, courseCode: subject.course.code, percentage: subject.percentage })),
+    })
   }
 
   const saveEditorial = async () => {
     if (!editingCard) return
     setBusy(true)
     try {
-      await academicRecordsAPI.updateReportCardEditorial(editingCard.id, editorialForm)
-      setNotice(tr('Le toilettage du bulletin a été enregistré et ajouté à la piste d’audit.', 'The report-card editorial review was saved and added to the audit trail.'))
+      await academicRecordsAPI.updateReportCardEditorial(editingCard.id, { ...editorialForm, subjects: editorialForm.subjects.map(({ courseId, percentage }) => ({ courseId, percentage })) })
+      setNotice(tr('Toutes les corrections du bulletin ont été enregistrées dans la piste d’audit. Un bulletin déjà approuvé est rouvert pour une nouvelle approbation avant publication.', 'All report-card corrections were saved in the audit trail. A previously approved card is reopened for reapproval before publication.'))
       setEditingCard(null)
       await load()
     } catch (error: any) {
@@ -324,7 +340,18 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   }
 
   return <section className="space-y-5 rounded-3xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20 sm:p-5">
-    {editingCard ? <div className="fixed inset-0 z-[210] flex items-center justify-center bg-kcs-blue-950/80 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={tr('Modifier le bulletin', 'Edit report card')} onClick={() => setEditingCard(null)}><section className="w-full max-w-3xl overflow-hidden rounded-3xl border border-sky-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}><header className="flex items-start justify-between gap-4 border-b border-sky-100 p-5 dark:border-kcs-blue-800"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">{tr('Toilettage avant publication', 'Editorial review before publication')}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{cardStudentName(editingCard)}</h3><p className="text-sm text-slate-500 dark:text-slate-300">{editingCard.student.studentNumber} · {editingCard.term}</p></div><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 p-2 text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><X size={18}/></button></header><div className="grid gap-4 p-5"><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Commentaire institutionnel', 'Institutional comment')}<textarea rows={5} maxLength={1500} value={editorialForm.teacherComment} onChange={(event) => setEditorialForm((current) => ({ ...current, teacherComment: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Conduite / appréciation', 'Conduct / appreciation')}<textarea rows={3} maxLength={500} value={editorialForm.conduct} onChange={(event) => setEditorialForm((current) => ({ ...current, conduct: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label><p className="rounded-xl bg-sky-50 p-3 text-xs font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-sky-100">{tr('Les résultats et la moyenne restent issus des notes officielles. Toute modification éditoriale est auditée.', 'Results and average remain sourced from official grades. Every editorial change is audited.')}</p></div><footer className="flex flex-col-reverse gap-2 border-t border-sky-100 p-5 dark:border-kcs-blue-800 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" disabled={busy} onClick={() => void saveEditorial()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 size={17} className="animate-spin"/> : <Edit3 size={17}/>} {tr('Enregistrer le toilettage', 'Save editorial review')}</button></footer></section></div> : null}
+    {editingCard ? <div className="fixed inset-0 z-[210] flex items-center justify-center bg-kcs-blue-950/80 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={tr('Modifier le bulletin', 'Edit report card')} onClick={() => setEditingCard(null)}>
+      <section className="flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-sky-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-4 border-b border-sky-100 p-5 dark:border-kcs-blue-800"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">{tr('Correction complète et auditée', 'Full audited correction')}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{cardStudentName(editingCard)}</h3><p className="text-sm text-slate-500 dark:text-slate-300">{editingCard.student.studentNumber} · {editingCard.term}</p></div><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 p-2 text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><X size={18}/></button></header>
+        <div className="grid gap-5 overflow-y-auto p-5">
+          <section className="rounded-2xl border border-sky-100 p-4 dark:border-kcs-blue-800"><h4 className="mb-3 text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Résultats académiques', 'Academic results')}</h4><div className="grid gap-2">{editorialForm.subjects.map((subject, index) => <label key={subject.courseId} className="grid items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 sm:grid-cols-[minmax(0,1fr)_9rem]"><span className="truncate">{subject.courseCode} · {subject.courseName}</span><span className="relative"><input type="number" min="0" max="100" step="0.01" value={subject.percentage} onChange={(event) => setEditorialForm((current) => ({ ...current, subjects: current.subjects.map((item, itemIndex) => itemIndex === index ? { ...item, percentage: Math.min(100, Math.max(0, Number(event.target.value))) } : item) }))} className={inputClass + ' pr-8'} /><b className="absolute right-3 top-1/2 -translate-y-1/2">%</b></span></label>)}</div><label className="mt-3 block text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Moyenne officielle du bulletin', 'Official report-card average')}<input type="number" min="0" max="100" step="0.01" value={editorialForm.average} onChange={(event) => setEditorialForm((current) => ({ ...current, average: Math.min(100, Math.max(0, Number(event.target.value))) }))} className={inputClass + ' mt-1'} /></label></section>
+          {editorialForm.attendanceSummary ? <section className="rounded-2xl border border-sky-100 p-4 dark:border-kcs-blue-800"><h4 className="mb-3 text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Présences et assiduité', 'Attendance')}</h4><div className="grid gap-3 sm:grid-cols-4">{(['total','present','absent','late','excused','sick','suspended'] as const).map((field) => <label key={field} className="text-xs font-bold capitalize text-slate-600 dark:text-slate-300">{field}<input type="number" min="0" max="1000" value={editorialForm.attendanceSummary?.[field] ?? 0} onChange={(event) => setEditorialForm((current) => current.attendanceSummary ? ({ ...current, attendanceSummary: { ...current.attendanceSummary, [field]: Math.max(0, Number(event.target.value)) } }) : current)} className={inputClass + ' mt-1'} /></label>)}<label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Taux (%)', 'Rate (%)')}<input type="number" min="0" max="100" step="0.1" value={editorialForm.attendanceSummary.attendanceRate ?? ''} onChange={(event) => setEditorialForm((current) => current.attendanceSummary ? ({ ...current, attendanceSummary: { ...current.attendanceSummary, attendanceRate: event.target.value === '' ? null : Math.min(100, Math.max(0, Number(event.target.value))) } }) : current)} className={inputClass + ' mt-1'} /></label></div></section> : null}
+          <div className="grid gap-4 md:grid-cols-2"><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Commentaire institutionnel', 'Institutional comment')}<textarea rows={5} maxLength={1500} value={editorialForm.teacherComment} onChange={(event) => setEditorialForm((current) => ({ ...current, teacherComment: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Conduite / appréciation', 'Conduct / appreciation')}<textarea rows={5} maxLength={500} value={editorialForm.conduct} onChange={(event) => setEditorialForm((current) => ({ ...current, conduct: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label></div>
+          <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">{tr('Les notes sources des enseignants ne sont jamais écrasées. Les corrections du SuperAdministrateur sont historisées et deviennent les valeurs officielles au moment de l’approbation. Modifier un bulletin déjà envoyé le rouvre pour un nouvel envoi.', 'Teacher source grades are never overwritten. Super Administrator corrections are audited and become official on approval. Editing an already delivered card reopens it for a new delivery.')}</p>
+        </div>
+        <footer className="flex flex-col-reverse gap-2 border-t border-sky-100 p-5 dark:border-kcs-blue-800 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" disabled={busy} onClick={() => void saveEditorial()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 size={17} className="animate-spin"/> : <Edit3 size={17}/>} {tr('Enregistrer toutes les corrections', 'Save all corrections')}</button></footer>
+      </section>
+    </div> : null}
     {transcript ? <div className="fixed inset-0 z-[190] flex items-center justify-center bg-kcs-blue-950/80 p-2 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label={tr('Aperçu du relevé officiel', 'Official transcript preview')} onClick={() => setTranscript(null)}>
       <section className="relative flex max-h-[96vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
         <img src="/images/kcs-logo.png" alt="" className="pointer-events-none absolute left-1/2 top-1/2 w-[78%] -translate-x-1/2 -translate-y-1/2 opacity-[0.035] grayscale"/>

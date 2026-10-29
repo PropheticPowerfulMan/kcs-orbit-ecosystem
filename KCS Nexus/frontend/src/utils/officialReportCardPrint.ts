@@ -2,6 +2,7 @@ import QRCode from 'qrcode'
 import { academicRecordsAPI } from '@/services/api'
 type ReportSubject = {
   id: string
+  courseId?: string
   percentage: number
   letterGrade: string
   termResults?: Record<string, number | null>
