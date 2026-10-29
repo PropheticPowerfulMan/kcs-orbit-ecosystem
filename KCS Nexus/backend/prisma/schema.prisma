@@ -311,6 +311,8 @@ model User {
   staffFunction                  String?
   permissions                    String[]                 @default([])
   avatar                         String?
+  signatureImage                 String?
+  signatureUpdatedAt             DateTime?
   phone                          String?
   googleId                       String?                  @unique
   orbitUserId                    String?                  @unique
@@ -1366,6 +1368,8 @@ model DisciplineCase {
   incident           String
   resolution         String?
   actionTaken        String?
+  suspensionStart    DateTime?
+  suspensionEnd      DateTime?
   parentNotifiedAt   DateTime?
   studentNotifiedAt  DateTime?
   status             DisciplineResolutionStatus @default(OPEN)
@@ -1380,6 +1384,7 @@ model DisciplineCase {
   @@index([status])
   @@index([severity])
   @@index([incidentDate])
+  @@index([studentId, suspensionStart, suspensionEnd])
 }
 
 model CorrespondenceLog {

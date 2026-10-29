@@ -236,6 +236,8 @@ export const authAPI = {
     api.get('/auth/avatar/' + encodeURIComponent(id), { responseType: 'blob' }),
   updateProfile: (data: { firstName?: string; middleName?: string | null; lastName?: string; phone?: string; avatar?: string; bio?: string }) =>
     api.put('/auth/profile', data),
+  signature: () => api.get('/auth/signature'),
+  updateSignature: (signatureImage: string) => api.put('/auth/signature', { signatureImage }),
   updateEmail: (data: { newEmail: string; currentPassword?: string }) =>
     api.put('/auth/email', data),
   toggle2FA: (enabled: boolean) =>
@@ -560,6 +562,9 @@ export const disciplineAPI = {
   list: () => api.get('/school-management/discipline-cases'),
   create: (data: object) => api.post('/school-management/discipline-cases', data),
   updateResolution: (id: string, data: object) => api.patch(`/school-management/discipline-cases/${id}/resolution`, data),
+  suspensions: () => api.get('/school-management/discipline-suspensions'),
+  createSuspension: (data: object) => api.post('/school-management/discipline-suspensions', data),
+  cancelSuspension: (id: string) => api.patch(`/school-management/discipline-suspensions/${id}/cancel`),
 }
 
 
@@ -590,6 +595,7 @@ export const shiningStudentsAPI = {
 }
 
 export const academicRecordsAPI = {
+  officialSignatures: (studentId?: string) => api.get('/academic-records/official-signatures', { params: studentId ? { studentId } : undefined }),
   studentRegistry: () => api.get('/academic-records/student-registry', { timeout: 60_000 }),
   submitFinalGrades: (data: object) => api.post('/academic-records/final-grades/submit', data),
   myFinalGrades: () => api.get('/academic-records/final-grades/me'),

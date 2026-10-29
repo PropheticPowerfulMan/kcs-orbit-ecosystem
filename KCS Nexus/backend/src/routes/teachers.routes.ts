@@ -14,6 +14,7 @@ import { academicScheduleForTeacher } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 import { generateInteractiveAssignmentDraft } from '../services/assignmentAssessment.service.js'
 import { academicCycleFromDate, mergeAssignmentIntoGradebookCycle } from '../services/gradebookCycle.service.js'
+import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 
 export const teachersRouter = Router()
 
@@ -292,7 +293,7 @@ teachersRouter.post('/me/activity-reports/generate', authenticate, requireRoles(
     students: new Set(teacher.courses.flatMap((course) => course.enrollments.map((item) => item.studentId))).size,
     assignments: { total: assignments.length, submissions: submissions.length, gradedSubmissions: submissions.filter((item) => item.status === 'GRADED').length, byType, byCadence },
     grades: grades.length,
-    attendance: { total: attendance.length, present: attendance.filter((item) => item.status === 'PRESENT').length, absent: attendance.filter((item) => item.status === 'ABSENT').length, late: attendance.filter((item) => item.status === 'LATE').length, excused: attendance.filter((item) => item.status === 'EXCUSED').length },
+    attendance: { total: attendance.length, present: attendance.filter((item) => item.status === 'PRESENT').length, absent: attendance.filter((item) => ['ABSENT', 'EXCUSED', 'SICK', 'SUSPENDED'].includes(item.status)).length, late: attendance.filter((item) => item.status === 'LATE').length, excused: attendance.filter((item) => item.status === 'EXCUSED').length },
   }
   const fallback = reportFallback(evidence, payload.periodStart, periodEnd)
   let content = fallback
@@ -614,12 +615,11 @@ teachersRouter.get('/me/overview', authenticate, requireRoles('teacher'), asyncH
     const attendanceRows = attendance.filter((record) => record.studentId === student.id)
     const submissions = teacher.courses.flatMap((course) => course.assignments.flatMap((assignment) => assignment.submissions.filter((submission) => submission.studentId === student.id).map((submission) => ({ ...submission, dueDate: assignment.dueDate }))))
     const average = grades.length ? Number((grades.reduce((sum, grade) => sum + grade.percentage, 0) / grades.length).toFixed(1)) : null
-    const present = attendanceRows.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
-    const attendanceRate = attendanceRows.length ? Number(((present / attendanceRows.length) * 100).toFixed(1)) : null
+    const attendanceRate = attendanceRateFromStatuses(attendanceRows.map((record) => record.status))
     const attendanceSummary = {
       total: attendanceRows.length,
       present: attendanceRows.filter((record) => record.status === 'PRESENT').length,
-      absent: attendanceRows.filter((record) => record.status === 'ABSENT').length,
+      absent: attendanceRows.filter((record) => ['ABSENT', 'EXCUSED', 'SICK', 'SUSPENDED'].includes(record.status)).length,
       late: attendanceRows.filter((record) => record.status === 'LATE').length,
       excused: attendanceRows.filter((record) => record.status === 'EXCUSED').length,
       sick: attendanceRows.filter((record) => record.status === 'SICK').length,

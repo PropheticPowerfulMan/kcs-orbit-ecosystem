@@ -1,8 +1,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
+import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 
 type DbClient = PrismaClient | Prisma.TransactionClient
-const attendedStatuses = new Set(['PRESENT', 'LATE', 'EXCUSED'])
-export const attendanceRate = (statuses: string[]) => statuses.length ? Number((statuses.filter((status) => attendedStatuses.has(status)).length * 100 / statuses.length).toFixed(1)) : null
+export const attendanceRate = attendanceRateFromStatuses
 export const gradePoints = (percentage: number) => percentage >= 90 ? 4 : percentage >= 80 ? 3 : percentage >= 70 ? 2 : percentage >= 60 ? 1 : 0
 export const weightedGpa = (grades: Array<{ percentage: number; course: { credits: number } }>) => {
   const credits = grades.reduce((sum, grade) => sum + Math.max(grade.course.credits || 1, 1), 0)

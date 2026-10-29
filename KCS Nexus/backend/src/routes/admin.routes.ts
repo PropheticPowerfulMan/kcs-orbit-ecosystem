@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma.js'
 import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import * as XLSX from 'xlsx'
+import { summarizeAttendanceStatuses } from '../utils/attendancePolicy.js'
 
 export const adminRouter = Router()
 
@@ -18,8 +19,8 @@ adminRouter.get('/staff-overview', authenticate, requireRoles('admin', 'staff'),
   ])
   const attendanceByClass = [...new Set(students.map((student) => student.grade))].map((grade) => {
     const records = students.filter((student) => student.grade === grade).flatMap((student) => student.attendanceRecords)
-    const present = records.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
-    return { label: grade, attendance: records.length ? Math.round((present / records.length) * 100) : null, evidence: records.length }
+    const summary = summarizeAttendanceStatuses(records.map((record) => record.status))
+    return { label: grade, attendance: summary.attendanceRate, evidence: records.length }
   })
   return success(res, {
     stats: {
@@ -147,13 +148,14 @@ adminRouter.get('/analytics', asyncHandler(async (req, res) => {
   ])
   const attendanceMap = Object.fromEntries(attendance.map((row) => [row.status, row._count]))
   const attendanceTotal = attendance.reduce((sum, row) => sum + row._count, 0)
-  const present = (attendanceMap.PRESENT || 0) + (attendanceMap.LATE || 0) + (attendanceMap.EXCUSED || 0)
+  const attendanceStatuses = attendance.flatMap((row) => Array.from({ length: row._count }, () => row.status))
+  const attendanceSummary = summarizeAttendanceStatuses(attendanceStatuses)
   const delivery = correspondence.map((row) => ({ channel: row.channel, status: row.status, count: row._count }))
   const emailQueued = delivery.filter((row) => row.channel === 'EMAIL' && row.status === 'QUEUED').reduce((sum, row) => sum + row.count, 0)
   const emailSent = delivery.filter((row) => row.channel === 'EMAIL' && ['SENT','DELIVERED'].includes(row.status)).reduce((sum, row) => sum + row.count, 0)
   const emailFailed = delivery.filter((row) => row.channel === 'EMAIL' && row.status === 'FAILED').reduce((sum, row) => sum + row.count, 0)
   const risks = [
-    ...(attendanceTotal && present / attendanceTotal < 0.85 ? [{ level: 'high', title: 'Attendance below target', detail: Math.round(present / attendanceTotal * 100) + '% attendance over the selected period.' }] : []),
+    ...(attendanceSummary.attendanceRate !== null && attendanceSummary.attendanceRate < 85 ? [{ level: 'high', title: 'Attendance below target', detail: attendanceSummary.attendanceRate + '% attendance over the selected period.' }] : []),
     ...(emailFailed ? [{ level: 'medium', title: 'Email delivery failures', detail: emailFailed + ' email delivery failure(s) require review.' }] : []),
     ...(incidents ? [{ level: 'medium', title: 'Open incidents', detail: incidents + ' open incident(s) in the selected period.' }] : []),
     ...recommendations.slice(0, 5).map((item) => ({ level: item.riskLevel, title: item.title, detail: item.description })),
@@ -162,7 +164,7 @@ adminRouter.get('/analytics', asyncHandler(async (req, res) => {
     period: { key: period, days, from: since.toISOString(), to: new Date().toISOString() },
     population: { students, parents, teachers, staff, administrators, courses },
     academics: { gradedItems: grades._count, averagePercentage: grades._avg.percentage == null ? null : Number(grades._avg.percentage.toFixed(1)) },
-    attendance: { total: attendanceTotal, present: attendanceMap.PRESENT || 0, absent: attendanceMap.ABSENT || 0, late: attendanceMap.LATE || 0, excused: attendanceMap.EXCUSED || 0, rate: attendanceTotal ? Number((present / attendanceTotal * 100).toFixed(1)) : null },
+    attendance: { total: attendanceTotal, present: attendanceMap.PRESENT || 0, absent: attendanceSummary.absent, late: attendanceMap.LATE || 0, excused: attendanceMap.EXCUSED || 0, rate: attendanceSummary.attendanceRate },
     engagement: { parentForumPosts: forumPosts, parentForumComments: forumComments, studentForumPosts, internalMessages: messages, notifications },
     communications: { delivery, emailQueued, emailSent, emailFailed, workerCapacityPerHour: 180 },
     admissions: applications.map((row) => ({ status: row.status, count: row._count })),

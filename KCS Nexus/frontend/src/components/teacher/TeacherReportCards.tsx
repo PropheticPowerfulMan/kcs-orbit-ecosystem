@@ -228,14 +228,15 @@ const buildReportCourses = (overview: Record<string, any>, state?: TeacherReport
     const student = studentsById.get(studentId)
     if (!student || student.analytics?.attendanceSummary?.total) return
     const count = (status: string) => statuses.filter((item) => item === status).length
-    const attended = statuses.filter((item) => ['PRESENT', 'LATE', 'EXCUSED'].includes(item)).length
+    const attended = statuses.filter((item) => ['PRESENT', 'LATE'].includes(item)).length
+    const absent = statuses.filter((item) => ['ABSENT', 'EXCUSED', 'SICK', 'SUSPENDED'].includes(item)).length
     student.analytics = {
       ...(student.analytics ?? {}),
       attendanceRate: statuses.length ? Number(((attended * 100) / statuses.length).toFixed(1)) : null,
       attendanceSummary: {
         total: statuses.length,
         present: count('PRESENT'),
-        absent: count('ABSENT'),
+        absent,
         late: count('LATE'),
         excused: count('EXCUSED'),
         sick: count('SICK'),

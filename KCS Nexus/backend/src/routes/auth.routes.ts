@@ -1006,6 +1006,38 @@ authRouter.put('/profile', authenticate, asyncHandler(async (req: AuthenticatedR
   return success(res, await buildSafeUserWithAccess(updated), 'Personal Nexus profile photo updated without changing the official ecosystem portrait')
 }))
 
+const officialSignatureSchema = z.object({
+  signatureImage: z.string().max(900_000).refine(
+    (value) => value === '' || /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/s.test(value),
+    'Only a transparent PNG or WebP signature image is accepted.',
+  ),
+}).strict()
+
+authRouter.get('/signature', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const account = req.user!.sub === configuredSuperAdmin.id
+    ? await getConfiguredSuperAdminAccount()
+    : await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!account) throw new ApiError(404, 'User not found')
+  return success(res, { signatureImage: account.signatureImage, signatureUpdatedAt: account.signatureUpdatedAt }, 'Official signature loaded')
+}))
+
+authRouter.put('/signature', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = officialSignatureSchema.parse(req.body)
+  const account = req.user!.sub === configuredSuperAdmin.id
+    ? await getConfiguredSuperAdminAccount()
+    : await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!account) throw new ApiError(404, 'User not found')
+  const updated = await prisma.user.update({
+    where: { id: account.id },
+    data: { signatureImage: payload.signatureImage || null, signatureUpdatedAt: new Date() },
+    select: { id: true, signatureImage: true, signatureUpdatedAt: true },
+  })
+  await prisma.auditLog.create({
+    data: { actorId: account.id, action: payload.signatureImage ? 'OFFICIAL_SIGNATURE_UPDATED' : 'OFFICIAL_SIGNATURE_REMOVED', targetType: 'User', targetId: account.id },
+  })
+  return success(res, updated, payload.signatureImage ? 'Official electronic signature saved' : 'Official electronic signature removed')
+}))
+
 authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
     newEmail: z.string().email(),

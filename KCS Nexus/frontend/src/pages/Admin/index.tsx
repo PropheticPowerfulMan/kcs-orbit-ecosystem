@@ -24,6 +24,7 @@ import AcademicCalendarSettings from '@/components/admin/AcademicCalendarSetting
 import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
 import AdminPreEnrollments from '@/components/admin/AdminPreEnrollments'
 import AdminNewsEventsManager from '@/components/admin/AdminNewsEventsManager'
+import AdminSuspensionCenter from '@/components/admin/AdminSuspensionCenter'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
 import CertificateControlCenter from '@/components/admin/CertificateControlCenter'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
@@ -3328,6 +3329,10 @@ const AdminSectionView = ({
 
   if (segment === 'discipline') {
     return <TeacherDisciplinePanel students={officialRoster} />
+  }
+
+  if (segment === 'suspensions') {
+    return <AdminSuspensionCenter students={officialRoster} />
   }
 
   const filteredEmployees = (sharedDirectory?.teachers || []).filter((employee) => {

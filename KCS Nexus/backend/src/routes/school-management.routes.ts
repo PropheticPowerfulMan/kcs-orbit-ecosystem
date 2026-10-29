@@ -2,7 +2,7 @@ import { Router, type NextFunction, type Response } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
-import { authenticate, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { sendSchoolSms } from '../utils/sms.js'
@@ -106,6 +106,8 @@ const disciplineSchema = z.object({
   notifyStudent: z.boolean().optional(),
   parentMessage: z.string().optional(),
   studentMessage: z.string().optional(),
+  suspensionStart: z.coerce.date().optional(),
+  suspensionEnd: z.coerce.date().optional(),
 })
 
 const requireOperationalAdministrator = (req: AuthenticatedRequest, _res: Response, next: NextFunction) => {
@@ -532,6 +534,51 @@ schoolManagementRouter.get('/discipline-cases', requireRoles('admin', 'staff', '
   return success(res, cases)
 }))
 
+schoolManagementRouter.get('/discipline-suspensions', requireSuperAdmin(), asyncHandler(async (_req, res) => {
+  const suspensions = await prisma.disciplineCase.findMany({
+    where: { suspensionStart: { not: null }, suspensionEnd: { not: null } },
+    include: { student: { include: { user: { select: { firstName: true, middleName: true, lastName: true } } } }, reportedBy: { select: { firstName: true, middleName: true, lastName: true } } },
+    orderBy: [{ suspensionStart: 'desc' }, { createdAt: 'desc' }],
+  })
+  return success(res, suspensions, 'Official student suspension register loaded')
+}))
+
+schoolManagementRouter.post('/discipline-suspensions', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = z.object({
+    studentId: z.string().min(1), reason: z.string().trim().min(5).max(2000),
+    startDate: z.coerce.date(), endDate: z.coerce.date(), notifyParent: z.boolean().default(true), notifyStudent: z.boolean().default(true),
+  }).superRefine((value, context) => { if (value.endDate < value.startDate) context.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'Suspension end date must be on or after its start date.' }) }).parse(req.body)
+  const start = new Date(payload.startDate); start.setUTCHours(0,0,0,0)
+  const end = new Date(payload.endDate); end.setUTCHours(23,59,59,999)
+  const actorId = await resolveActorId(req)
+  const student = await prisma.studentProfile.findUnique({ where: { id: payload.studentId }, include: { user: true, parentLinks: { include: { parent: true } } } })
+  if (!student) throw new ApiError(404, 'Student not found')
+  const disciplineCase = await prisma.$transaction(async (tx) => {
+    const created = await tx.disciplineCase.create({ data: { studentId: student.id, reportedById: actorId, category: 'Suspension', severity: 'HIGH', incident: payload.reason, actionTaken: `Official suspension from ${start.toISOString().slice(0,10)} to ${end.toISOString().slice(0,10)}`, status: 'OPEN', suspensionStart: start, suspensionEnd: end } })
+    await tx.auditLog.create({ data: { actorId, action: 'STUDENT_SUSPENSION_SCHEDULED', targetType: 'DisciplineCase', targetId: created.id, metadata: { studentId: student.id, startDate: start.toISOString(), endDate: end.toISOString(), reason: payload.reason } } })
+    const notifications = [] as Array<{userId:string;title:string;message:string;type:'WARNING';link:string}>
+    const learner = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
+    const message = `${learner}: suspension officielle du ${start.toISOString().slice(0,10)} au ${end.toISOString().slice(0,10)}. ${payload.reason}`
+    if (payload.notifyStudent) notifications.push({ userId: student.user.id, title: 'Official suspension', message, type: 'WARNING', link: '/portal/student/attendance' })
+    if (payload.notifyParent) notifications.push(...student.parentLinks.map(link => ({ userId: link.parent.id, title: 'Student suspension notice', message, type: 'WARNING' as const, link: '/portal/parent/notifications' })))
+    if (notifications.length) await tx.notification.createMany({ data: notifications })
+    return created
+  })
+  return success(res, disciplineCase, 'Official suspension scheduled and synchronized with attendance', 201)
+}))
+
+schoolManagementRouter.patch('/discipline-suspensions/:id/cancel', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const id = getRouteParam(req.params.id), actorId = await resolveActorId(req)
+  const suspension = await prisma.disciplineCase.findUnique({ where: { id } })
+  if (!suspension?.suspensionStart) throw new ApiError(404, 'Suspension not found')
+  const updated = await prisma.$transaction(async tx => {
+    const record = await tx.disciplineCase.update({ where: { id }, data: { status: 'RESOLVED', resolution: 'Suspension cancelled by Super Administration', resolvedById: actorId } })
+    await tx.auditLog.create({ data: { actorId, action: 'STUDENT_SUSPENSION_CANCELLED', targetType: 'DisciplineCase', targetId: id } })
+    return record
+  })
+  return success(res, updated, 'Suspension cancelled')
+}))
+
 
   schoolManagementRouter.post("/discipline-cases", requireRoles("admin", "staff", "teacher"), asyncHandler(async (req: AuthenticatedRequest, res) => {
     const payload = disciplineSchema.parse(req.body)
@@ -548,6 +595,8 @@ schoolManagementRouter.get('/discipline-cases', requireRoles('admin', 'staff', '
       incident: payload.incident,
       actionTaken: payload.actionTaken,
       resolution: payload.resolution,
+      suspensionStart: payload.suspensionStart,
+      suspensionEnd: payload.suspensionEnd,
       status: payload.status,
       parentNotifiedAt: payload.notifyParent ? now : undefined,
       studentNotifiedAt: payload.notifyStudent ? now : undefined,

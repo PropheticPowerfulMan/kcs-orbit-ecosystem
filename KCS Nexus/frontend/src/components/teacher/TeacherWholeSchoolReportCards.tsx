@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Clock3, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
+import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { printOfficialReportCard } from '@/utils/officialReportCardPrint'
@@ -33,7 +33,7 @@ type LearnerRecord = {
   allSubjectsSubmitted: boolean
   average: number | null
   attendance: { total: number; present: number; absent: number; late: number; excused: number; sick: number; suspended: number; attendanceRate: number | null }
-  reportCard: { id: string; teacherComment?: string | null; conduct?: string | null; principalStatus: string; publicationStatus: string } | null
+  reportCard: { id: string; teacherComment?: string | null; conduct?: string | null; principalStatus: string; publicationStatus: string; hiddenCourseIds?: string[] } | null
 }
 
 type Dashboard = {
@@ -104,6 +104,7 @@ export default function TeacherWholeSchoolReportCards() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'waiting' | 'ready' | 'homeroom' | 'submitted'>('all')
   const [teacherComment, setTeacherComment] = useState('')
   const [conduct, setConduct] = useState('')
+  const [hiddenCourseIds, setHiddenCourseIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingAction, setSavingAction] = useState<'draft' | 'submit' | null>(null)
@@ -177,12 +178,37 @@ export default function TeacherWholeSchoolReportCards() {
   useEffect(() => {
     setTeacherComment(selected?.reportCard?.teacherComment ?? '')
     setConduct(selected?.reportCard?.conduct ?? '')
+    setHiddenCourseIds(selected?.reportCard?.hiddenCourseIds ?? [])
     setNotice('')
     setError('')
   }, [selected?.id, term])
 
   const locked = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus))
   const awaitingReview = selected?.reportCard?.publicationStatus === 'READY_FOR_REVIEW'
+  const visibleSubjects = useMemo(() => selected?.subjects.filter((subject) => !hiddenCourseIds.includes(subject.courseId)) ?? [], [hiddenCourseIds, selected])
+  const visibleSubmittedCount = visibleSubjects.filter((subject) => subject.percentage !== null).length
+  const allVisibleSubmitted = visibleSubjects.length > 0 && visibleSubmittedCount === visibleSubjects.length
+  const visibleAverage = useMemo(() => {
+    const graded = visibleSubjects.filter((subject) => subject.percentage !== null)
+    const credits = graded.reduce((sum, subject) => sum + Math.max(subject.credits || 1, 1), 0)
+    return credits ? Number((graded.reduce((sum, subject) => sum + (Number(subject.percentage) * Math.max(subject.credits || 1, 1)), 0) / credits).toFixed(2)) : null
+  }, [visibleSubjects])
+  const toggleCourseVisibility = (courseId: string) => {
+    if (locked) return
+    setHiddenCourseIds((current) => {
+      if (current.includes(courseId)) {
+        setNotice('Course restored. Save the draft to persist the recalculated report card average.')
+        return current.filter((id) => id !== courseId)
+      }
+      if ((selected?.subjects.length ?? 0) - current.length <= 1) {
+        setError('At least one official course must remain visible on the report card.')
+        return current
+      }
+      setError('')
+      setNotice('Course visibility updated. Save the draft to persist the recalculated report card average.')
+      return [...current, courseId]
+    })
+  }
   const updateReport = async (submit: boolean) => {
     if (!selected) return
     setSaving(true)
@@ -190,7 +216,7 @@ export default function TeacherWholeSchoolReportCards() {
     setError('')
     setNotice('')
     try {
-      const payload = { academicYear, term, teacherComment, conduct }
+      const payload = { academicYear, term, teacherComment, conduct, hiddenCourseIds }
       let submission: any = null
       let draft: any = null
       if (submit) {
@@ -219,7 +245,12 @@ export default function TeacherWholeSchoolReportCards() {
               conduct: savedCard.conduct,
               principalStatus: savedCard.principalStatus,
               publicationStatus: savedCard.publicationStatus,
+              hiddenCourseIds,
             },
+            average: visibleAverage,
+            expectedSubjectCount: visibleSubjects.length,
+            submittedSubjectCount: visibleSubmittedCount,
+            allSubjectsSubmitted: allVisibleSubmitted,
           } : learner),
         }
         writeReportDashboardCache(userId, academicYear, term, next)
@@ -252,14 +283,14 @@ export default function TeacherWholeSchoolReportCards() {
       let publicationStatus = selected.reportCard?.publicationStatus ?? 'DRAFT'
       if (!reportCardId) {
         if (!selected.isHomeroomStudent) throw new Error('The main teacher must save this report card before it can be printed as an official document.')
-        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct })
+        const response = await academicRecordsAPI.saveTeacherReportDraft(selected.id, { academicYear, term, teacherComment, conduct, hiddenCourseIds })
         const savedCard = response.data?.data
         if (!savedCard?.id) throw new Error('The official report-card register did not confirm the saved draft.')
         reportCardId = savedCard.id
         publicationStatus = savedCard.publicationStatus ?? 'DRAFT'
         setDashboard((current) => {
           if (!current) return current
-          const next: Dashboard = { ...current, learners: current.learners.map((learner) => learner.id === selected.id ? { ...learner, reportCard: { id: savedCard.id, teacherComment: savedCard.teacherComment, conduct: savedCard.conduct, principalStatus: savedCard.principalStatus, publicationStatus } } : learner) }
+          const next: Dashboard = { ...current, learners: current.learners.map((learner) => learner.id === selected.id ? { ...learner, average: visibleAverage, expectedSubjectCount: visibleSubjects.length, submittedSubjectCount: visibleSubmittedCount, allSubjectsSubmitted: allVisibleSubmitted, reportCard: { id: savedCard.id, teacherComment: savedCard.teacherComment, conduct: savedCard.conduct, principalStatus: savedCard.principalStatus, publicationStatus, hiddenCourseIds } } : learner) }
           writeReportDashboardCache(userId, academicYear, term, next)
           return next
         })
@@ -276,12 +307,12 @@ export default function TeacherWholeSchoolReportCards() {
       await printOfficialReportCard({
         id: reportCardId!,
         term: academicYear + ' · ' + term,
-        average: selected.average ?? 0,
+        average: visibleAverage ?? 0,
         teacherComment: selected.reportCard?.teacherComment ?? teacherComment,
         conduct: selected.reportCard?.conduct ?? conduct,
         publicationStatus,
         attendanceSummary: selected.attendance,
-        subjects: selected.subjects.filter((subject) => subject.percentage !== null).map((subject) => ({
+        subjects: visibleSubjects.filter((subject) => subject.percentage !== null).map((subject) => ({
           id: subject.courseId,
           percentage: subject.percentage as number,
           letterGrade: subject.letterGrade ?? letterGrade(subject.percentage as number),
@@ -289,6 +320,7 @@ export default function TeacherWholeSchoolReportCards() {
           course: { name: subject.courseName, code: subject.courseCode, credits: subject.credits },
         })),
         student: {
+          id: selected.id,
           studentNumber: selected.studentNumber,
           grade: selected.grade,
           section: selected.section,
@@ -370,15 +402,15 @@ export default function TeacherWholeSchoolReportCards() {
           </div>
 
           <div className='mt-4 grid gap-3 sm:grid-cols-4'>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Weighted average</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{selected.average === null ? 'Pending' : `${selected.average}% · ${letterGrade(selected.average)}`}</p></div>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Course grades</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{selected.submittedSubjectCount}/{selected.expectedSubjectCount}</p></div>
+            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Weighted average</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{visibleAverage === null ? 'Pending' : `${visibleAverage}% · ${letterGrade(visibleAverage)}`}</p></div>
+            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Visible course grades</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{visibleSubmittedCount}/{visibleSubjects.length}</p>{hiddenCourseIds.length ? <p className='mt-1 text-[11px] font-bold text-amber-600'>{hiddenCourseIds.length} hidden</p> : null}</div>
             <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Attendance</p><p className='mt-1 text-xl font-black text-kcs-blue-950 dark:text-white'>{selected.attendance.attendanceRate === null ? 'N/A' : `${selected.attendance.attendanceRate}%`}</p></div>
-            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Promotion standard</p><p className={`mt-1 text-xl font-black ${(selected.average ?? 0) >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>≥70%</p></div>
+            <div className='rounded-xl bg-gray-50 p-3 dark:bg-kcs-blue-950'><p className='text-xs text-gray-500'>Promotion standard</p><p className={`mt-1 text-xl font-black ${(visibleAverage ?? 0) >= 70 ? 'text-emerald-600' : 'text-amber-600'}`}>≥70%</p></div>
           </div>
 
           <div className='mt-5 overflow-hidden rounded-xl border border-gray-200 dark:border-kcs-blue-700'>
-            <div className='border-b bg-gray-50 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950'><h4 className='font-bold text-kcs-blue-950 dark:text-white'>Subject contributions from all teachers</h4><p className='text-xs text-gray-500'>Each row is owned and submitted by the teacher responsible for that course.</p></div>
-            <div className='overflow-x-auto'><table className='w-full min-w-[720px] text-sm'><thead className='bg-kcs-blue-950 text-left text-xs uppercase text-white'><tr><th className='px-4 py-3'>Course</th><th className='px-4 py-3'>Teacher</th><th className='px-4 py-3'>Credits</th><th className='px-4 py-3'>Final grade</th><th className='px-4 py-3'>Status</th></tr></thead><tbody className='divide-y divide-gray-100 dark:divide-kcs-blue-800'>{selected.subjects.map((subject) => <tr key={subject.courseId}><td className='px-4 py-3'><b className='text-kcs-blue-950 dark:text-white'>{subject.courseName}</b><small className='block text-gray-500'>{subject.courseCode}</small></td><td className='px-4 py-3 text-gray-600 dark:text-gray-300'>{subject.teacherName}</td><td className='px-4 py-3'>{subject.credits}</td><td className='px-4 py-3 font-bold'>{subject.percentage === null ? 'Pending' : `${subject.percentage}% · ${subject.letterGrade}`}</td><td className='px-4 py-3'>{subject.percentage === null ? <span className='text-amber-600'>Teacher submission required</span> : <span className='text-emerald-600'>Submitted</span>}</td></tr>)}</tbody></table></div>
+            <div className='border-b bg-gray-50 px-4 py-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-950'><h4 className='font-bold text-kcs-blue-950 dark:text-white'>Subject contributions from all teachers</h4><p className='text-xs text-gray-500'>The Main Teacher may hide a course for this learner. Hidden courses are excluded from the official average until restored.</p></div>
+            <div className='overflow-x-auto'><table className='w-full min-w-[820px] text-sm'><thead className='bg-kcs-blue-950 text-left text-xs uppercase text-white'><tr><th className='px-4 py-3'>Course</th><th className='px-4 py-3'>Teacher</th><th className='px-4 py-3'>Credits</th><th className='px-4 py-3'>Final grade</th><th className='px-4 py-3'>Status</th><th className='px-4 py-3'>Report card</th></tr></thead><tbody className='divide-y divide-gray-100 dark:divide-kcs-blue-800'>{selected.subjects.map((subject) => { const hidden=hiddenCourseIds.includes(subject.courseId); return <tr key={subject.courseId} className={hidden?'bg-amber-50/70 opacity-75 dark:bg-amber-950/20':''}><td className='px-4 py-3'><b className='text-kcs-blue-950 dark:text-white'>{subject.courseName}</b><small className='block text-gray-500'>{subject.courseCode}</small></td><td className='px-4 py-3 text-gray-600 dark:text-gray-300'>{subject.teacherName}</td><td className='px-4 py-3'>{subject.credits}</td><td className='px-4 py-3 font-bold'>{subject.percentage === null ? 'Pending' : `${subject.percentage}% · ${subject.letterGrade}`}</td><td className='px-4 py-3'>{hidden?<span className='font-bold text-amber-700 dark:text-amber-300'>Excluded from average</span>:subject.percentage === null ? <span className='text-amber-600'>Teacher submission required</span> : <span className='text-emerald-600'>Submitted</span>}</td><td className='px-4 py-3'><button type='button' disabled={locked||!selected.isHomeroomStudent} onClick={()=>toggleCourseVisibility(subject.courseId)} className='inline-flex items-center gap-2 rounded-lg border border-kcs-blue-200 px-3 py-2 text-xs font-black text-kcs-blue-700 hover:bg-kcs-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-kcs-blue-600 dark:text-kcs-blue-200'>{hidden?<><Eye size={15}/>Restore</>:<><EyeOff size={15}/>Hide</>}</button></td></tr>})}</tbody></table></div>
             {!selected.subjects.length && <p className='p-6 text-center text-sm text-gray-500'>No official course enrollment is linked to this learner yet.</p>}
           </div>
 
@@ -389,8 +421,8 @@ export default function TeacherWholeSchoolReportCards() {
               {!selected.isHomeroomStudent && <p className='mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-600 dark:bg-kcs-blue-950 dark:text-gray-300'>You may review this learner's complete report card, but only the assigned main teacher may write or submit the institutional comment.</p>}
               <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Main teacher comment<textarea disabled={!selected.isHomeroomStudent || locked} className={`${field} min-h-28 disabled:cursor-not-allowed disabled:opacity-60`} maxLength={1500} value={teacherComment} onChange={(event) => setTeacherComment(event.target.value)} placeholder='Synthesize academic progress, effort, strengths, and the next priority.' /></label>
               <label className='mt-3 grid gap-1 text-xs font-bold text-kcs-blue-950 dark:text-white'>Conduct and learning habits<input disabled={!selected.isHomeroomStudent || locked} className={`${field} disabled:cursor-not-allowed disabled:opacity-60`} maxLength={500} value={conduct} onChange={(event) => setConduct(event.target.value)} placeholder='Conduct, responsibility, collaboration, punctuality...' /></label>
-              {selected.isHomeroomStudent && !selected.allSubjectsSubmitted && <p className='mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'>Submission remains locked: {selected.expectedSubjectCount - selected.submittedSubjectCount} subject teacher(s) still need to submit final grades.</p>}
-              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' aria-busy={savingAction === 'draft'} disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300'>{savingAction === 'draft' ? <RefreshCw size={15} className='animate-spin' /> : <Save size={15} />}{savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}</button><button type='button' aria-busy={savingAction === 'submit'} disabled={saving || locked || !selected.allSubjectsSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'>{savingAction === 'submit'?<RefreshCw size={15} className='animate-spin'/>:<CheckCircle2 size={15} />}{savingAction === 'submit'?'Submitting…':awaitingReview?'Replace submission to Super Administration':'Submit to Super Administration'}</button></div>}
+              {selected.isHomeroomStudent && !allVisibleSubmitted && <p className='mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700 dark:bg-amber-950/30 dark:text-amber-200'>Submission remains locked: {visibleSubjects.length - visibleSubmittedCount} visible subject teacher(s) still need to submit final grades.</p>}
+              {selected.isHomeroomStudent && <div className='mt-4 flex flex-wrap justify-end gap-2'><button type='button' aria-busy={savingAction === 'draft'} disabled={saving || locked} onClick={() => void updateReport(false)} className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-800 bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-kcs-blue-800 disabled:opacity-40 dark:border-kcs-gold-300 dark:bg-kcs-gold-400 dark:text-kcs-blue-950 dark:hover:bg-kcs-gold-300'>{savingAction === 'draft' ? <RefreshCw size={15} className='animate-spin' /> : <Save size={15} />}{savingAction === 'draft' ? 'Saving draft…' : 'Save draft'}</button><button type='button' aria-busy={savingAction === 'submit'} disabled={saving || locked || !allVisibleSubmitted || teacherComment.trim().length < 5} onClick={() => void updateReport(true)} className='inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-40'>{savingAction === 'submit'?<RefreshCw size={15} className='animate-spin'/>:<CheckCircle2 size={15} />}{savingAction === 'submit'?'Submitting…':awaitingReview?'Replace submission to Super Administration':'Submit to Super Administration'}</button></div>}
             </div>
           </div>
         </>}

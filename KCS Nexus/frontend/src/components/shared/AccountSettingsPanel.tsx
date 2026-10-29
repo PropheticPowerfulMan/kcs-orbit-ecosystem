@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Camera, CheckCircle2, Eye, EyeOff, Fingerprint, KeyRound, Loader2, Mail, Phone, Save, Shield, UserCheck, UsersRound } from 'lucide-react'
+import { Camera, CheckCircle2, Eye, EyeOff, Fingerprint, KeyRound, Loader2, Mail, PenTool, Phone, Save, Shield, Trash2, UserCheck, UsersRound } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { authAPI } from '@/services/api'
@@ -15,7 +15,9 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const signatureInputRef = useRef<HTMLInputElement>(null)
   const [profile, setProfile] = useState({ avatar: '' })
+  const [signature, setSignature] = useState({ saved: '', draft: '', loaded: false })
   const [passwords, setPasswords] = useState({ current: '', newPassword: '', confirm: '' })
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({})
   const [savingAction, setSavingAction] = useState<'all' | 'password' | ''>('')
@@ -23,12 +25,24 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
   const [error, setError] = useState('')
 
   useEffect(() => setProfile({ avatar: user?.avatar ?? '' }), [user?.id, user?.avatar])
+  useEffect(() => {
+    let active = true
+    if (!user?.id) return
+    authAPI.signature().then(({ data }) => {
+      if (!active) return
+      const value = data?.data?.signatureImage ?? ''
+      setSignature({ saved: value, draft: value, loaded: true })
+    }).catch(() => { if (active) setSignature((current) => ({ ...current, loaded: true })) })
+    return () => { active = false }
+  }, [user?.id])
 
   const displayName = [user?.lastName, user?.middleName, user?.firstName].filter(Boolean).join(' ') || tr('Utilisateur du portail', 'Portal user')
   const initials = `${user?.firstName?.[0] ?? 'K'}${user?.lastName?.[0] ?? 'C'}`.toUpperCase()
   const identityValues = [user?.firstName, user?.middleName, user?.lastName, user?.email, user?.accessCode]
   const passwordDrafted = Boolean(passwords.current || passwords.newPassword || passwords.confirm)
   const photoChanged = profile.avatar !== (user?.avatar ?? '')
+  const signatureChanged = signature.loaded && signature.draft !== signature.saved
+  const canUseOfficialSignature = Boolean(user && (user.role === 'teacher' || user.role === 'staff' || user.role === 'admin' || user.accessRoles?.includes('teacher') || user.accessRoles?.includes('staff')))
   const accessProfiles = (user?.accessRoles?.length ? user.accessRoles : user?.role ? [user.role] : [])
     .map((role) => ({ admin: tr('Superadministration', 'Super Administration'), staff: tr('Administration', 'Administration'), teacher: tr('Enseignant', 'Teacher'), student: tr('Élève', 'Student'), parent: tr('Parent', 'Parent') }[role] ?? role))
     .join(' · ')
@@ -40,6 +54,16 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
     if (file.size > 1024 * 1024) return setError(tr('La photo doit peser moins de 1 Mo.', 'The photo must be smaller than 1 MB.'))
     const reader = new FileReader()
     reader.onload = () => setProfile({ avatar: String(reader.result) })
+    reader.readAsDataURL(file)
+  }
+
+  const chooseSignature = (file?: File) => {
+    if (!file) return
+    setError('')
+    if (!['image/png', 'image/webp'].includes(file.type)) return setError(tr('Choisissez une signature PNG ou WebP, idéalement sur fond transparent.', 'Choose a PNG or WebP signature, preferably with a transparent background.'))
+    if (file.size > 600 * 1024) return setError(tr('La signature doit peser moins de 600 Ko.', 'The signature must be smaller than 600 KB.'))
+    const reader = new FileReader()
+    reader.onload = () => setSignature((current) => ({ ...current, draft: String(reader.result) }))
     reader.readAsDataURL(file)
   }
 
@@ -78,7 +102,7 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
   const saveAllUpdates = async () => {
     setError('')
     setMessage('')
-    if (!photoChanged && !passwordDrafted) return setMessage(tr('Aucune nouvelle modification à enregistrer.', 'There are no new changes to save.'))
+    if (!photoChanged && !signatureChanged && !passwordDrafted) return setMessage(tr('Aucune nouvelle modification à enregistrer.', 'There are no new changes to save.'))
     if (passwordDrafted) {
       const validationError = validatePassword()
       if (validationError) return setError(validationError)
@@ -89,9 +113,15 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
         const response = await authAPI.updateProfile({ avatar: profile.avatar })
         updateUser(response.data.data)
       }
+      if (signatureChanged) {
+        await authAPI.updateSignature(signature.draft)
+        setSignature((current) => ({ ...current, saved: current.draft }))
+      }
       if (passwordDrafted) await changePassword()
-      setMessage(photoChanged && passwordDrafted
-        ? tr('Photo personnelle Nexus et mot de passe enregistrés avec succès.', 'Nexus personal photo and password saved successfully.')
+      setMessage((photoChanged || signatureChanged) && passwordDrafted
+        ? tr('Profil, signature officielle et mot de passe enregistrés avec succès.', 'Profile, official signature and password saved successfully.')
+        : signatureChanged
+          ? tr('Signature électronique officielle enregistrée et auditée.', 'Official electronic signature saved and audited.')
         : photoChanged
           ? tr('Photo personnelle enregistrée uniquement dans votre dashboard KCS Nexus.', 'Personal photo saved only in your KCS Nexus dashboard.')
           : tr('Mot de passe enregistré et propagé dans l’écosystème.', 'Password saved and propagated across the ecosystem.'))
@@ -127,6 +157,12 @@ export default function AccountSettingsPanel({ roleLabel }: AccountSettingsPanel
         <Status icon={<Shield size={18}/>} label={tr('Photo personnelle', 'Personal photo')} value={tr('KCS Nexus uniquement · dossier officiel inchangé', 'KCS Nexus only · official record unchanged')}/>
       </div>
       <button type="button" disabled={Boolean(savingAction)} onClick={() => void saveAllUpdates()} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-kcs-blue-700 to-cyan-600 px-4 py-3 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60">{savingAction === 'all' ? <Loader2 size={18} className="animate-spin"/> : <Save size={18}/>} {savingAction === 'all' ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer les modifications', 'Save updates')}</button>
+      {canUseOfficialSignature ? <div className="mt-5 rounded-2xl border border-sky-200 bg-white/80 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/50">
+        <div className="flex items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-sm font-black text-kcs-blue-950 dark:text-white"><PenTool size={17}/>{tr('Signature électronique officielle', 'Official electronic signature')}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{tr('Elle est apposée uniquement aux documents qui exigent votre fonction : titulaire, Principal ou Head of School.', 'It is only placed on documents requiring your role: main teacher, Principal or Head of School.')}</p></div>{signature.draft ? <button type="button" onClick={() => setSignature((current) => ({ ...current, draft: '' }))} className="rounded-lg p-2 text-rose-600" aria-label={tr('Supprimer la signature', 'Remove signature')}><Trash2 size={17}/></button> : null}</div>
+        <div className="mt-3 flex min-h-24 items-center justify-center rounded-xl border border-dashed border-sky-300 bg-sky-50 p-3 dark:border-kcs-blue-600 dark:bg-kcs-blue-900">{signature.draft ? <img src={signature.draft} alt={tr('Signature électronique', 'Electronic signature')} className="max-h-20 max-w-full object-contain"/> : <span className="text-xs font-bold text-slate-500">{tr('Aucune signature enregistrée', 'No signature saved')}</span>}</div>
+        <button type="button" onClick={() => signatureInputRef.current?.click()} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-sky-300 px-4 py-2 text-sm font-bold text-kcs-blue-800 dark:text-sky-200"><PenTool size={16}/>{tr('Choisir la signature', 'Choose signature')}</button>
+        <input ref={signatureInputRef} type="file" accept="image/png,image/webp" className="hidden" onChange={(event) => chooseSignature(event.target.files?.[0])}/>
+      </div> : null}
     </section>
 
     <section className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">

@@ -8,6 +8,7 @@ import { compareClassParts, normalizeClassParts, splitClassName } from '../utils
 import { studentBelongsToAssignedClass, teacherClassKey } from '../utils/teacherClassAccess.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { ensureOrbitStudentProfile, type OrbitStudentIdentity } from '../services/orbitStudentMaterialization.js'
+import { summarizeAttendanceStatuses } from '../utils/attendancePolicy.js'
 
 export const attendanceRouter = Router()
 
@@ -52,18 +53,7 @@ async function resolveAttendanceRecorderId(userId: string) {
 }
 
 const summarize = (records: Array<{ status: string }>) => {
-  const count = (status: string) => records.filter((record) => record.status === status).length
-  const attended = records.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
-  return {
-    total: records.length,
-    present: count('PRESENT'),
-    absent: count('ABSENT'),
-    late: count('LATE'),
-    excused: count('EXCUSED'),
-    sick: count('SICK'),
-    suspended: count('SUSPENDED'),
-    attendanceRate: records.length ? Number(((attended / records.length) * 100).toFixed(1)) : null,
-  }
+  return summarizeAttendanceStatuses(records.map((record) => record.status))
 }
 
 async function assignedTeacherClasses(userId: string) {
@@ -156,19 +146,26 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
     throw new ApiError(403, 'The selected class is not assigned to this teacher')
   }
   const students = visibleStudents.filter((student) => matchesAssignedClass(student, requestedClass))
+  const activeSuspensions = students.length ? await prisma.disciplineCase.findMany({
+    where: { studentId: { in: students.map(student => student.id) }, suspensionStart: { lte: date }, suspensionEnd: { gte: date }, status: { not: 'RESOLVED' } },
+    select: { studentId: true, suspensionStart: true, suspensionEnd: true },
+  }) : []
+  const suspendedIds = new Set(activeSuspensions.map(item => item.studentId))
+  const effectiveRecords = students.map(student => suspendedIds.has(student.id) ? { status: 'SUSPENDED' } : student.attendanceRecords[0]).filter((item): item is { status: string } => Boolean(item?.status))
   return success(res, {
     date: date.toISOString().slice(0, 10),
     class: { grade: requestedClass.grade, section: requestedClass.section },
     classes,
-    summary: summarize(students.flatMap((student) => student.attendanceRecords.slice(0, 1))),
+    summary: summarize(effectiveRecords),
     requiresRosterAssignment: Boolean(requestedClass.section) && unassignedStudentCount > 0,
     unassignedStudentCount,
     students: students.map((student) => ({
       id: student.id,
       studentNumber: student.studentNumber,
       name: [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' '),
-      status: student.attendanceRecords[0]?.status ?? null,
-      note: student.attendanceRecords[0]?.note ?? '',
+      status: suspendedIds.has(student.id) ? 'SUSPENDED' : student.attendanceRecords[0]?.status ?? null,
+      note: suspendedIds.has(student.id) ? 'Official disciplinary suspension · automatically marked absent' : student.attendanceRecords[0]?.note ?? '',
+      statusLocked: suspendedIds.has(student.id),
     })),
   }, 'Main-teacher attendance register loaded')
 }))
@@ -199,8 +196,11 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
   }
   const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
+  const activeSuspensions = await prisma.disciplineCase.findMany({ where: { studentId: { in: ids }, suspensionStart: { lte: date }, suspensionEnd: { gte: date }, status: { not: 'RESOLVED' } }, select: { studentId: true } })
+  const suspendedIds = new Set(activeSuspensions.map(item => item.studentId))
+  const effectiveEntries = payload.entries.map(entry => suspendedIds.has(entry.studentId) ? { ...entry, status: 'SUSPENDED' as const, note: 'Official disciplinary suspension · automatically marked absent' } : entry)
   await prisma.$transaction(async (tx) => {
-    for (const entry of payload.entries) {
+    for (const entry of effectiveEntries) {
       await tx.attendanceRecord.upsert({
         where: { studentId_date_className_period: { studentId: entry.studentId, date, className, period: payload.period ?? 'Daily' } },
         create: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period ?? 'Daily', status: entry.status, note: entry.note },
@@ -210,7 +210,7 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
     await synchronizeStudentAcademicMetrics(tx, ids)
   })
-  return success(res, { date: date.toISOString().slice(0, 10), className, saved: payload.entries.length, summary: summarize(payload.entries) }, 'Official class attendance saved')
+  return success(res, { date: date.toISOString().slice(0, 10), className, saved: effectiveEntries.length, suspended: suspendedIds.size, summary: summarize(effectiveEntries) }, 'Official class attendance saved')
 }))
 
 attendanceRouter.get('/history', requireRoles('admin', 'teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -269,7 +269,7 @@ attendanceRouter.get('/students/:studentId/analytics', requireRoles('admin'), as
   if (!student) throw new ApiError(404, 'Student not found')
   const records = await prisma.attendanceRecord.findMany({ where: { studentId: student.id }, include: { recordedBy: { select: { firstName: true, middleName: true, lastName: true, role: true } } }, orderBy: { date: 'desc' }, take: 730 })
   const summary = summarize(records)
-  const punctual = records.filter(record => ['PRESENT','EXCUSED'].includes(record.status)).length
+  const punctual = records.filter(record => record.status === 'PRESENT').length
   const unexcusedAbsences = records.filter(record => record.status === 'ABSENT' && !record.note?.trim()).length
   const sample = records.length
   const proportion = sample ? (summary.attendanceRate ?? 0) / 100 : 0
@@ -278,7 +278,7 @@ attendanceRouter.get('/students/:studentId/analytics', requireRoles('admin'), as
   const centre = sample ? proportion + zScore * zScore / (2 * sample) : 0
   const margin = sample ? zScore * Math.sqrt((proportion * (1 - proportion) + zScore * zScore / (4 * sample)) / sample) : 0
   const confidence95 = sample ? { low: Number((100 * (centre - margin) / denominator).toFixed(1)), high: Number((100 * (centre + margin) / denominator).toFixed(1)) } : null
-  const riskScore = sample ? Number(Math.min(100, ((summary.absent + summary.sick + summary.suspended) * 100 + summary.late * 35) / sample).toFixed(1)) : 0
+  const riskScore = sample ? Number(Math.min(100, (summary.absent * 100 + summary.late * 35) / sample).toFixed(1)) : 0
   return success(res, { student: { id: student.id, name: [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' '), studentNumber: student.studentNumber, grade: student.grade, section: student.section }, summary, indicators: { punctualityRate: sample ? Number((punctual / sample * 100).toFixed(1)) : null, latenessRate: sample ? Number((summary.late / sample * 100).toFixed(1)) : null, absenceRate: sample ? Number((summary.absent / sample * 100).toFixed(1)) : null, unexcusedAbsences, riskScore, confidence95 }, records: records.map(record => ({ id: record.id, date: record.date, status: record.status, note: record.note, className: record.className, recordedBy: record.recordedBy ? [record.recordedBy.lastName, record.recordedBy.middleName, record.recordedBy.firstName].filter(Boolean).join(' ') : null })) }, 'Student attendance analytics loaded')
 }))
 

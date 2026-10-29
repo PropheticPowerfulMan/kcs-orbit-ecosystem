@@ -16,6 +16,7 @@ import { resolveStudentProfileId } from '../services/studentIdentity.js'
 import { academicScheduleForGrade } from '../utils/academicSchedule.js'
 import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
 import { gradeInteractiveAssignment, gradeSubjectiveAssignmentAnswers } from '../services/assignmentAssessment.service.js'
+import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 import {
   getOrbitSharedDirectory as getSharedDirectoryFromOrbit,
   invalidateOrbitSharedDirectory,
@@ -481,10 +482,7 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandl
     const localByNumber = new Map(localProfiles.map((profile) => [profile.studentNumber.toLowerCase(), profile]))
     const merged = orbitProfiles.map((profile) => {
       const local = localByNumber.get(profile.studentNumber.toLowerCase())
-      const attended = local?.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length ?? 0
-      const attendanceRate = local?.attendanceRecords.length
-        ? Number(((attended / local.attendanceRecords.length) * 100).toFixed(1))
-        : null
+      const attendanceRate = attendanceRateFromStatuses(local?.attendanceRecords.map((record) => record.status) ?? [])
       const average = local?.grades.length
         ? Number((local.grades.reduce((sum, grade) => sum + Number(grade.percentage), 0) / local.grades.length).toFixed(1))
         : null
@@ -556,8 +554,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     const children = orbitProfiles.map((profile) => {
       const local = localByNumber.get(profile.studentNumber.toLowerCase())
       const average = local?.grades.length ? Number((local.grades.reduce((sum, grade) => sum + grade.percentage, 0) / local.grades.length).toFixed(1)) : null
-      const present = local?.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length ?? 0
-      const attendanceRate = local?.attendanceRecords.length ? Number(((present / local.attendanceRecords.length) * 100).toFixed(1)) : null
+      const attendanceRate = attendanceRateFromStatuses(local?.attendanceRecords.map((record) => record.status) ?? [])
       const pendingAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING').length ?? 0
       const overdueAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length ?? 0
       return {
@@ -607,8 +604,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
   }
   const average = student.grades.length ? Number((student.grades.reduce((sum, grade) => sum + grade.percentage, 0) / student.grades.length).toFixed(1)) : null
-  const present = student.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
-  const attendanceRate = student.attendanceRecords.length ? Number(((present / student.attendanceRecords.length) * 100).toFixed(1)) : null
+  const attendanceRate = attendanceRateFromStatuses(student.attendanceRecords.map((record) => record.status))
   const pendingAssignments = student.submissions.filter((submission) => submission.status === 'PENDING').length
   const overdueAssignments = student.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length
   const completedAssignments = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
@@ -1169,8 +1165,7 @@ studentsRouter.get('/:id/analytics', authenticate, asyncHandler(async (req: Auth
   })
   if (!student) throw new ApiError(404, 'Student not found')
   const overallPercentage = student.grades.length ? Number((student.grades.reduce((sum, grade) => sum + grade.percentage, 0) / student.grades.length).toFixed(1)) : null
-  const present = student.attendanceRecords.filter((record) => ['PRESENT', 'LATE', 'EXCUSED'].includes(record.status)).length
-  const attendanceRate = student.attendanceRecords.length ? Number(((present / student.attendanceRecords.length) * 100).toFixed(1)) : null
+  const attendanceRate = attendanceRateFromStatuses(student.attendanceRecords.map((record) => record.status))
   const completed = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
   const assignmentCompletion = student.submissions.length ? Number(((completed / student.submissions.length) * 100).toFixed(1)) : null
   const midpoint = Math.floor(student.grades.length / 2)
