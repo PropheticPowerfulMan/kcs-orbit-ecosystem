@@ -238,6 +238,8 @@ export const authAPI = {
     api.put('/auth/profile', data),
   signature: () => api.get('/auth/signature'),
   updateSignature: (signatureImage: string) => api.put('/auth/signature', { signatureImage }),
+  documentAssets: () => api.get('/auth/document-assets'),
+  updateDocumentAssets: (data: { signatureImage: string; officialSealImage: string }) => api.put('/auth/document-assets', data),
   updateEmail: (data: { newEmail: string; currentPassword?: string }) =>
     api.put('/auth/email', data),
   toggle2FA: (enabled: boolean) =>
@@ -285,7 +287,7 @@ export const studentsAPI = {
   submitInteractiveAssignment: (submissionId: string, answers: Array<{ questionId: string; answer: unknown }>) => api.post(`/students/me/assignments/${submissionId}/submit-quiz`, { answers }, { timeout: 60_000 }),
   submitMyAssignment: (submissionId: string, fileName: string) => api.patch(`/students/me/assignments/${submissionId}/submit`, { fileName }),
   update: (id: string, data: object) => api.put(`/students/${id}`, data),
-  delete: (id: string) => api.delete(`/students/${id}`),
+  delete: (id: string, data: { confirmation: 'ARCHIVER'; reason: string }) => api.delete(`/students/${id}`, { data }),
 }
 
 // --- Registry API ---
@@ -567,6 +569,8 @@ export const disciplineAPI = {
   cancelSuspension: (id: string) => api.patch(`/school-management/discipline-suspensions/${id}/cancel`),
   dismissals: () => api.get('/school-management/discipline-dismissals'),
   createDismissal: (data: object) => api.post('/school-management/discipline-dismissals', data),
+  archiveBackup: (id: string) => api.get(`/school-management/student-archives/${id}/backup`, { responseType: 'blob' }),
+  deleteArchive: (id: string, data: { confirmation: 'SUPPRIMER ARCHIVE'; studentNumber: string }) => api.delete(`/school-management/student-archives/${id}`, { data }),
 }
 
 

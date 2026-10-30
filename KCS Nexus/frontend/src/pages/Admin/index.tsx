@@ -25,6 +25,7 @@ import AdminAnalyticsPanel from '@/components/admin/AdminAnalyticsPanel'
 import AdminPreEnrollments from '@/components/admin/AdminPreEnrollments'
 import AdminNewsEventsManager from '@/components/admin/AdminNewsEventsManager'
 import AdminSuspensionCenter from '@/components/admin/AdminSuspensionCenter'
+import StudentArchivesCenter from '@/components/admin/StudentArchivesCenter'
 import AcademicRecordsControlCenter from '@/components/admin/AcademicRecordsControlCenterV2'
 import CertificateControlCenter from '@/components/admin/CertificateControlCenter'
 import AttendanceManagementPanel from '@/components/admin/AttendanceManagementPanel'
@@ -89,6 +90,7 @@ const adminRosterSeed: any[] = []
 
 type AdminStudentRecord = {
   id: string
+  localProfileId?: string | null
   name: string
   studentNumber?: string
   email?: string
@@ -529,6 +531,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
       : null
   return {
     id: profile.id,
+    localProfileId: profile.localProfileId ?? null,
     name: fullName,
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
@@ -2029,12 +2032,16 @@ const AdminSectionView = ({
       return
     }
 
-    const confirmed = window.confirm(`Supprimer ${student.name} du registre officiel ?`)
+    const confirmed = window.confirm(`Retirer ${student.name} de tous les registres actifs et archiver son dossier ?\n\nCette opération bloque son accès, mais préserve ses preuves académiques dans Archives.`)
     if (!confirmed) return
+    const secondConfirmation = window.prompt('Pour confirmer cette décision, tapez exactement ARCHIVER :')
+    if (secondConfirmation !== 'ARCHIVER') return setStudentNotice('Décision annulée : aucune donnée n’a été modifiée.')
+    const reason = window.prompt(`Motif officiel de l’archivage de ${student.name} (10 caractères minimum) :`)
+    if (!reason || reason.trim().length < 10) return setStudentNotice('Un motif officiel d’au moins 10 caractères est obligatoire.')
     try {
-      const response = await studentsAPI.delete(student.id)
+      const response = await studentsAPI.delete(student.id, { confirmation: 'ARCHIVER', reason: reason.trim() })
       await refreshOfficialRoster(true)
-      setStudentNotice(response.data?.message || `${student.name} a été supprimé du registre officiel.`)
+      setStudentNotice(response.data?.message || `${student.name} a été retiré des registres actifs et archivé.`)
     } catch (error) {
       setStudentNotice(extractStudentApiMessage(error, `Impossible de supprimer ${student.name} pour le moment.`))
       return
@@ -3286,6 +3293,7 @@ const AdminSectionView = ({
   if (segment === 'transcripts') return <AcademicRecordsControlCenter view="transcripts" />
   if (segment === 'report-cards') return <AcademicRecordsControlCenter view="report-cards" />
   if (segment === 'certificates') return <CertificateControlCenter />
+  if (segment === 'student-archives') return <StudentArchivesCenter />
 
   if (segment === 'attendance' || segment === 'staff-attendance') return <AttendanceManagementPanel />
 

@@ -167,8 +167,8 @@ academicRecordsRouter.get('/official-signatures', requireRoles('admin','staff','
  const studentId = String(req.query.studentId || '').trim()
  const [requester, student, leadership] = await Promise.all([
   req.user!.sub === 'configured-superadmin'
-   ? prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{firstName:true,middleName:true,lastName:true,signatureImage:true}})
-   : prisma.user.findUnique({where:{id:req.user!.sub},select:{firstName:true,middleName:true,lastName:true,signatureImage:true}}),
+   ? prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{firstName:true,middleName:true,lastName:true,signatureImage:true,officialSealImage:true}})
+   : prisma.user.findUnique({where:{id:req.user!.sub},select:{firstName:true,middleName:true,lastName:true,signatureImage:true,officialSealImage:true}}),
   studentId ? prisma.studentProfile.findUnique({where:{id:studentId},select:{grade:true,section:true}}) : null,
   prisma.user.findMany({
    where:{signatureImage:{not:null},OR:[{role:'STAFF'},{role:'ADMIN'}]},
@@ -188,7 +188,8 @@ academicRecordsRouter.get('/official-signatures', requireRoles('admin','staff','
  const title=(item:(typeof leadership)[number])=>`${item.staffFunction||''} ${item.staffProfile?.function||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()
  const principal=leadership.find(item=>/principal|prefet/.test(title(item)))??null
  const headOfSchool=leadership.find(item=>/head of school|school head|directeur|direction/.test(title(item)))??null
- return success(res,{mainTeacher,principal:signatureIdentity(principal),headOfSchool:signatureIdentity(headOfSchool)},'Official document signatures loaded')
+ const superAdministrator=req.user!.sub==='configured-superadmin'||requester?.officialSealImage?signatureIdentity(requester):null
+ return success(res,{mainTeacher,principal:signatureIdentity(principal),headOfSchool:signatureIdentity(headOfSchool),superAdministrator,officialSealImage:requester?.officialSealImage??null},'Official document signatures loaded')
 }))
 const legacyHeaders=['studentNumber','academicYear','gradeLevel','term','courseCode','courseName','credits','percentage','letterGrade','sourceSchool','sourceDocument']
 const legacyCell=(row:Record<string,unknown>,key:string)=>{

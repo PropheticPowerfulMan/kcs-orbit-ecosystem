@@ -237,6 +237,7 @@ const downloadFile = (fileName: string, content: string, type: string) => {
 
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction }: Props) => {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
+  const [commandCenterOpen, setCommandCenterOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:command-center') !== 'closed')
   const [taskPanelOpen, setTaskPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:task-panel') !== 'closed')
   const [weightPanelOpen, setWeightPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:weight-panel') !== 'closed')
   const togglePanel = (key: 'task' | 'weight', open: boolean) => {
@@ -796,15 +797,29 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }))
   }
 
+  const configurationGridClass = taskPanelOpen && weightPanelOpen
+    ? 'xl:grid-cols-[0.9fr_1.1fr]'
+    : taskPanelOpen
+      ? 'xl:grid-cols-[minmax(0,1fr)_15rem]'
+      : weightPanelOpen
+        ? 'xl:grid-cols-[15rem_minmax(0,1fr)]'
+        : 'sm:grid-cols-2'
+
 
   return (
     <div className="gradebook-mobile-surface space-y-6">
-      <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <div className={`grid gap-4 ${commandCenterOpen ? 'xl:grid-cols-[1fr_0.9fr]' : ''}`}>
+        <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${commandCenterOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+            <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
+             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">AI Gradebook Command Center</p>
-              <h3 className="mt-1 font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{selectedCourse?.name ?? 'Gradebook'}</h3>
+              <h3 className={`${commandCenterOpen ? 'mt-1 text-2xl' : 'mt-0 text-base'} font-display font-bold text-kcs-blue-900 dark:text-white`}>{selectedCourse?.name ?? 'Gradebook'}</h3>
+             </div>
+             <button type="button" aria-expanded={commandCenterOpen} onClick={() => { const next=!commandCenterOpen;setCommandCenterOpen(next);localStorage.setItem('kcs:nexus:gradebook:command-center',next?'open':'closed') }} className="shrink-0 rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={19} className={`transition-transform ${commandCenterOpen?'rotate-180':''}`}/><span className="sr-only">{commandCenterOpen?'Hide command center':'Show command center'}</span></button>
+            </div>
+            {commandCenterOpen && <>
+             <div>
               <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
                 Spreadsheet entry, weighted categories, predictive risk detection, report-card comments, and synchronized parent/student/admin visibility.
               </p>
@@ -818,9 +833,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <button onClick={() => void exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
               <button onClick={() => void exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
             </div>
+            </>}
           </div>
 
-          <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_0.7fr_0.7fr_1fr]">
+          {commandCenterOpen && <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_0.7fr_0.7fr_1fr]">
             <select className="input-kcs py-2 text-sm" value={selectedCourse?.id} onChange={(event) => onSelectCourse(event.target.value)}>
               {courses.map((course) => <option key={course.id} value={course.id}>{canonicalClassLabel(course.className || course.gradeLevels[0])} - {course.name}</option>)}
             </select>
@@ -834,10 +850,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <Search size={16} className="text-gray-400" />
               <input className="w-full bg-transparent text-sm outline-none dark:text-white" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search students" />
             </label>
-          </div>
+          </div>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-2">
+        {commandCenterOpen && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-2">
           {[
             { label: 'Class average', value: `${Math.round(classAverage)}%`, icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' },
             { label: 'At risk', value: String(atRiskCount), icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' },
@@ -853,7 +869,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               </div>
             )
           })}
-        </div>
+        </div>}
       </div>
 
       {officialCourseGrades.length > 0 && (
@@ -876,15 +892,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div>
         </section>
       )}
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+      <div className={`grid gap-4 transition-all ${configurationGridClass}`}>
+        <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${taskPanelOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Create an assessment task</h4>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Add one real Gradebook column. The task type automatically selects its weighting category.</p>
+              {taskPanelOpen && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Add one real Gradebook column. The task type automatically selects its weighting category.</p>}
             </div>
 
-            <div className="flex items-center gap-2"><span className="hidden rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200 sm:inline">RBAC: teacher classes only</span><button type="button" aria-expanded={taskPanelOpen} onClick={() => togglePanel('task', !taskPanelOpen)} className="rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={18} className={`transition-transform ${taskPanelOpen ? 'rotate-180' : ''}`} /><span className="sr-only">{taskPanelOpen ? 'Hide section' : 'Show section'}</span></button></div>
+            <div className="flex items-center gap-2">{taskPanelOpen && <span className="hidden rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200 sm:inline">RBAC: teacher classes only</span>}<button type="button" aria-expanded={taskPanelOpen} onClick={() => togglePanel('task', !taskPanelOpen)} className="rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={18} className={`transition-transform ${taskPanelOpen ? 'rotate-180' : ''}`} /><span className="sr-only">{taskPanelOpen ? 'Hide section' : 'Show section'}</span></button></div>
           </div>
           {taskPanelOpen && <div className="mt-4 grid gap-3">
             <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
@@ -933,15 +949,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </div>}
         </div>
 
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
+        <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${weightPanelOpen ? 'p-5' : 'p-3'}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h4 className="font-bold text-kcs-blue-900 dark:text-white">Category weighting</h4>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">These percentages calculate every learner's final course grade and feed the official report card.</p>
+              {weightPanelOpen && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">These percentages calculate every learner's final course grade and feed the official report card.</p>}
             </div>
             <div className="flex items-center gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs font-black ${categoryWeightTotal === 100 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200'}`}>{categoryWeightTotal}% / 100%</span>
-              {categoryWeightTotal !== 100 && <button type="button" onClick={normalizeCategoryWeights} className="rounded-lg border border-kcs-blue-200 px-2.5 py-1 text-xs font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Balance to 100%</button>}
+              {weightPanelOpen && <span className={`rounded-full px-3 py-1 text-xs font-black ${categoryWeightTotal === 100 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200'}`}>{categoryWeightTotal}% / 100%</span>}
+              {weightPanelOpen && categoryWeightTotal !== 100 && <button type="button" onClick={normalizeCategoryWeights} className="rounded-lg border border-kcs-blue-200 px-2.5 py-1 text-xs font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Balance to 100%</button>}
               <button type="button" aria-expanded={weightPanelOpen} onClick={() => togglePanel('weight', !weightPanelOpen)} className="rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={18} className={`transition-transform ${weightPanelOpen ? 'rotate-180' : ''}`} /><span className="sr-only">{weightPanelOpen ? 'Hide section' : 'Show section'}</span></button>
             </div>
           </div>

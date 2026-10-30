@@ -153,12 +153,39 @@ academicCalendarRouter.post('/rollover/preview', requireCalendarManager, asyncHa
   res.json(data)
 }))
 
-academicCalendarRouter.post('/rollover/run', requireCalendarManager, asyncHandler(async (req, res) => {
+academicCalendarRouter.post('/rollover/run', requireCalendarManager, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const response = await fetch(orbitUrl('/rollover/run'), {
     method: 'POST', headers: headers(true),
     body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId, passThreshold: 70 }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError(response.status, data.message || 'Academic promotion run failed.')
+  const planItems = (data as any)?.plan?.items ?? (data as any)?.data?.plan?.items ?? (data as any)?.data?.items ?? []
+  const graduates = Array.isArray(planItems) ? planItems.filter((item: any) => String(item?.action || item?.decision || '').toUpperCase() === 'GRADUATE') : []
+  if (graduates.length) {
+    const studentIds = graduates.map((item: any) => String(item.studentId || '')).filter(Boolean)
+    const studentNumbers = graduates.map((item: any) => String(item.studentNumber || '')).filter(Boolean)
+    const profiles = await prisma.studentProfile.findMany({
+      where: { grade: 'Grade 12', status: { equals: 'active', mode: 'insensitive' }, OR: [{ id: { in: studentIds } }, { studentNumber: { in: studentNumbers } }, { user: { orbitUserId: { in: studentIds } } }] },
+      include: { archive: true, user: true, parentLinks: true, enrollments: { select: { id: true, courseId: true } }, _count: { select: { grades: true, submissions: true, attendanceRecords: true, reportCards: true, transcripts: true, disciplineCases: true } } },
+    })
+    const actorId = req.user?.sub === 'configured-superadmin'
+      ? (await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } }))?.id
+      : req.user?.sub
+    if (!actorId) throw new ApiError(409, 'The academic rollover audit identity is unavailable')
+    for (const student of profiles.filter((profile) => !profile.archive)) {
+      const fullName = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
+      const snapshot = { archiveType: 'GRADUATION', identity: { userId: student.userId, orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, fullName, email: student.user.email }, academicPlacement: { grade: student.grade, section: student.section, enrollmentDate: student.enrollmentDate }, parentUserIds: student.parentLinks.map((link) => link.parentId), courseEnrollments: student.enrollments, recordCounts: student._count, statusBeforeArchive: student.status, passingRule: 'Grade 12 final average >= 70%' }
+      await prisma.$transaction(async (tx) => {
+        const archive = await tx.studentArchive.create({ data: { studentId: student.id, userId: student.userId, studentNumber: student.studentNumber, orbitUserId: student.user.orbitUserId, fullName, grade: student.grade, section: student.section, reason: 'GRADUATION · Grade 12 successfully completed under the KCS ≥ 70% passing rule', effectiveDate: new Date(), archivedSnapshot: snapshot, archivedById: actorId } })
+        await tx.enrollment.deleteMany({ where: { studentId: student.id } })
+        await tx.refreshToken.deleteMany({ where: { userId: student.userId } })
+        await tx.studentProfile.update({ where: { id: student.id }, data: { status: 'graduated' } })
+        await tx.user.update({ where: { id: student.userId }, data: { accountBlockedAt: new Date(), accountBlockedReason: 'Grade 12 graduation archive', accountBlockedBy: actorId, loginLockedUntil: null } })
+        await tx.auditLog.create({ data: { actorId, action: 'GRADE_12_GRADUATE_REMOVED_FROM_ACTIVE_ROSTERS_AND_ARCHIVED', targetType: 'StudentArchive', targetId: archive.id, metadata: { studentId: student.id, studentNumber: student.studentNumber, passingRule: '>=70%' } } })
+      })
+    }
+    ;(data as any).nexusGraduationArchive = { requested: graduates.length, archived: profiles.filter((profile) => !profile.archive).length }
+  }
   res.json(data)
 }))

@@ -14,7 +14,7 @@ import { getParentAcademicClearance } from './finance.routes.js'
 import { KCS_ACADEMIC_PASSING_SCORE_PERCENT, meetsKcsAcademicPassingScore } from '@ecosystem/shared-contracts'
 import { resolveStudentProfileId } from '../services/studentIdentity.js'
 import { academicScheduleForGrade } from '../utils/academicSchedule.js'
-import { ensureOrbitStudentProfile } from '../services/orbitStudentMaterialization.js'
+import { ensureOrbitStudentProfile, updateOrbitStudentStatus } from '../services/orbitStudentMaterialization.js'
 import { gradeInteractiveAssignment, gradeSubjectiveAssignmentAnswers } from '../services/assignmentAssessment.service.js'
 import { attendanceRateFromStatuses } from '../utils/attendancePolicy.js'
 import {
@@ -465,7 +465,7 @@ studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandl
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
-    const orbitProfiles = orbitStudentsToProfiles(directory)
+    const orbitProfiles = orbitStudentsToProfiles(directory).filter((student) => String(student.status || 'active').toLowerCase() === 'active')
     // Orbit owns identity/class placement, while Nexus owns attendance and academic
     // evidence. Merge both sources so an entity "View" never loses the presence
     // recorded by teachers merely because the directory came from Orbit.
@@ -1354,45 +1354,56 @@ studentsRouter.put('/:id', authenticate, requireSuperAdmin(), asyncHandler(async
   return success(res, { ...student, notificationDelivery }, 'Student updated successfully')
 }))
 
-studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+studentsRouter.delete('/:id', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const studentId = getRouteParam(req.params.id)
+  const payload = z.object({
+    confirmation: z.literal('ARCHIVER'),
+    reason: z.string().trim().min(10).max(1000),
+  }).parse(req.body)
+
+  const actorId = req.user?.sub === 'configured-superadmin'
+    ? (await prisma.user.findUnique({ where: { email: process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com' }, select: { id: true } }))?.id
+    : req.user?.sub
+  if (!actorId) throw new ApiError(409, 'The Super Administrator audit identity is unavailable')
+
+  let student = await prisma.studentProfile.findUnique({
+    where: { id: studentId },
+    include: { user: true, archive: true, parentLinks: true, enrollments: { select: { id: true, courseId: true } }, _count: { select: { grades: true, submissions: true, attendanceRecords: true, reportCards: true, transcripts: true, disciplineCases: true } } },
+  })
 
   if (orbitRegistryIsEnabled()) {
     const directory = await getSharedDirectoryFromOrbit()
     const target = directory.students.find((student) => student.id === studentId)
     if (!target) throw new ApiError(404, 'Student not found')
-    const parent = target.parentId ? directory.parents.find((candidate) => candidate.id === target.parentId) : undefined
-    const parentEmails = [parent?.email, ...(parent?.familyContacts?.map((contact) => contact.email) ?? [])].filter(Boolean) as string[]
-    const parentPhones = [parent?.phone, ...(parent?.familyContacts?.map((contact) => contact.phone) ?? [])].filter(Boolean) as string[]
-    const localParents = parentEmails.length ? await prisma.user.findMany({
-      where: { role: 'PARENT', email: { in: parentEmails } },
-      select: { id: true },
-    }) : []
-
-    await deleteRegistryEntityInOrbit('student', studentId, env.KCS_ORBIT_ORGANIZATION_ID!, 'orbitId')
-    invalidateOrbitSharedDirectory()
-    await prisma.user.deleteMany({
-      where: {
-        role: 'STUDENT',
-        OR: [
-          ...(target.accessCode ? [{ accessCode: target.accessCode }] : []),
-          ...(target.email ? [{ email: target.email }] : []),
-        ],
-      },
+    const studentNumber = orbitExternalId(target)
+    student ??= await prisma.studentProfile.findFirst({
+      where: { OR: [{ studentNumber }, { user: { orbitUserId: target.id } }] },
+      include: { user: true, archive: true, parentLinks: true, enrollments: { select: { id: true, courseId: true } }, _count: { select: { grades: true, submissions: true, attendanceRecords: true, reportCards: true, transcripts: true, disciplineCases: true } } },
     })
-    const notificationDelivery = await deliverStudentUpdateSafely({
-      studentEmail: target.email,
-      studentName: target.fullName,
-      parentUserIds: localParents.map((user) => user.id),
-      parentEmails,
-      parentPhones,
-    }, 'deleted')
-    return success(res, { id: studentId, deleted: true, notificationDelivery }, 'Student deleted through Orbit')
+    if (!student) throw new ApiError(409, 'The learner must be synchronized locally before archival. Refresh the official registry and retry.')
+    await updateOrbitStudentStatus({ orbitUserId: student.user.orbitUserId || target.id, studentNumber }, 'dismissed')
+    invalidateOrbitSharedDirectory()
   }
 
-  const student = await prisma.studentProfile.findUnique({ where: { id: studentId } })
   if (!student) throw new ApiError(404, 'Student not found')
+  if (student.archive) throw new ApiError(409, 'This learner is already archived')
 
-  await prisma.user.delete({ where: { id: student.userId } })
-  return success(res, { id: studentId }, 'Student deleted')
+  const fullName = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
+  const snapshot = {
+    archiveType: 'ADMINISTRATIVE_REMOVAL',
+    identity: { userId: student.userId, orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, fullName, email: student.user.email, accessCode: student.user.accessCode },
+    academicPlacement: { grade: student.grade, section: student.section, enrollmentDate: student.enrollmentDate },
+    parentUserIds: student.parentLinks.map((link) => link.parentId), courseEnrollments: student.enrollments,
+    recordCounts: student._count, statusBeforeArchive: student.status,
+  }
+  const archive = await prisma.$transaction(async (tx) => {
+    const created = await tx.studentArchive.create({ data: { studentId: student.id, userId: student.userId, studentNumber: student.studentNumber, orbitUserId: student.user.orbitUserId, fullName, grade: student.grade, section: student.section, reason: payload.reason, effectiveDate: new Date(), archivedSnapshot: snapshot, archivedById: actorId } })
+    await tx.enrollment.deleteMany({ where: { studentId: student.id } })
+    await tx.refreshToken.deleteMany({ where: { userId: student.userId } })
+    await tx.studentProfile.update({ where: { id: student.id }, data: { status: 'archived' } })
+    await tx.user.update({ where: { id: student.userId }, data: { accountBlockedAt: new Date(), accountBlockedReason: `Archived by Super Administration: ${payload.reason}`, accountBlockedBy: actorId, loginLockedUntil: null } })
+    await tx.auditLog.create({ data: { actorId, action: 'STUDENT_REMOVED_FROM_ACTIVE_ECOSYSTEM_AND_ARCHIVED', targetType: 'StudentArchive', targetId: created.id, metadata: { studentId: student.id, studentNumber: student.studentNumber, reason: payload.reason, snapshot } as Prisma.InputJsonValue } })
+    return created
+  })
+  return success(res, { id: student.id, archived: true, archiveId: archive.id }, 'Student removed from active registers and archived')
 }))

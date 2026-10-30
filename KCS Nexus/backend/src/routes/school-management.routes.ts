@@ -584,6 +584,30 @@ schoolManagementRouter.get('/discipline-dismissals', requireSuperAdmin(), asyncH
   return success(res, archives, 'Permanently dismissed student archive loaded')
 }))
 
+schoolManagementRouter.get('/student-archives/:id/backup', requireSuperAdmin(), asyncHandler(async (req, res) => {
+  const id = getRouteParam(req.params.id)
+  const archive = await prisma.studentArchive.findUnique({ where: { id } })
+  if (!archive) throw new ApiError(404, 'Archived learner record not found')
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.setHeader('Content-Disposition', `attachment; filename="KCS-ARCHIVE-${archive.studentNumber}-${archive.id}.json"`)
+  return res.status(200).send(JSON.stringify({ schema: 'KCS_STUDENT_ARCHIVE_BACKUP_V1', exportedAt: new Date().toISOString(), archive }, null, 2))
+}))
+
+schoolManagementRouter.delete('/student-archives/:id', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const id = getRouteParam(req.params.id)
+  const payload = z.object({ confirmation: z.literal('SUPPRIMER ARCHIVE'), studentNumber: z.string().min(2) }).parse(req.body)
+  const actorId = await resolveActorId(req)
+  if (!actorId) throw new ApiError(409, 'The Super Administrator audit identity is unavailable')
+  const archive = await prisma.studentArchive.findUnique({ where: { id } })
+  if (!archive) throw new ApiError(404, 'Archived learner record not found')
+  if (archive.studentNumber !== payload.studentNumber) throw new ApiError(422, 'Student number confirmation does not match the archived record')
+  await prisma.$transaction(async (tx) => {
+    await tx.auditLog.create({ data: { actorId, action: 'STUDENT_ARCHIVE_RECORD_PERMANENTLY_REMOVED', targetType: 'StudentArchive', targetId: archive.id, metadata: { mandatoryBackupNotice: true, removedAt: new Date().toISOString(), archiveSnapshot: archive } as any } })
+    await tx.studentArchive.delete({ where: { id } })
+  })
+  return success(res, { id, deleted: true }, 'Archived learner record removed; academic evidence remains preserved')
+}))
+
 schoolManagementRouter.post('/discipline-dismissals', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = z.object({
     studentIds: z.array(z.string().min(1)).min(1).max(100).transform((ids) => [...new Set(ids)]),

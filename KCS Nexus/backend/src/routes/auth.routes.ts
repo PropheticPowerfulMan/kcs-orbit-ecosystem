@@ -1048,6 +1048,26 @@ authRouter.put('/signature', authenticate, asyncHandler(async (req: Authenticate
   return success(res, updated, payload.signatureImage ? 'Official electronic signature saved' : 'Official electronic signature removed')
 }))
 
+const officialDocumentAssetsSchema = z.object({
+  signatureImage: z.string().max(900_000).refine((value) => value === '' || /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/s.test(value), 'Only PNG or WebP signature images are accepted.'),
+  officialSealImage: z.string().max(1_500_000).refine((value) => value === '' || /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/s.test(value), 'Only PNG or WebP seal images are accepted.'),
+}).strict()
+
+authRouter.get('/document-assets', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const account = req.user!.sub === configuredSuperAdmin.id ? await getConfiguredSuperAdminAccount() : await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!account || account.email.toLowerCase() !== (process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com').toLowerCase()) throw new ApiError(403, 'Super Administrator document-asset permission required')
+  return success(res, { signatureImage: account.signatureImage, officialSealImage: account.officialSealImage, signatureUpdatedAt: account.signatureUpdatedAt, officialSealUpdatedAt: account.officialSealUpdatedAt }, 'Official document assets loaded')
+}))
+
+authRouter.put('/document-assets', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = officialDocumentAssetsSchema.parse(req.body)
+  const account = req.user!.sub === configuredSuperAdmin.id ? await getConfiguredSuperAdminAccount() : await prisma.user.findUnique({ where: { id: req.user!.sub } })
+  if (!account || account.email.toLowerCase() !== (process.env.SUPERADMIN_EMAIL || 'superadmin@kcsnexus.com').toLowerCase()) throw new ApiError(403, 'Super Administrator document-asset permission required')
+  const updated = await prisma.user.update({ where: { id: account.id }, data: { signatureImage: payload.signatureImage || null, signatureUpdatedAt: new Date(), officialSealImage: payload.officialSealImage || null, officialSealUpdatedAt: new Date() }, select: { signatureImage: true, officialSealImage: true, signatureUpdatedAt: true, officialSealUpdatedAt: true } })
+  await prisma.auditLog.create({ data: { actorId: account.id, action: 'OFFICIAL_CERTIFICATE_ASSETS_UPDATED', targetType: 'User', targetId: account.id, metadata: { hasSignature: Boolean(payload.signatureImage), hasSeal: Boolean(payload.officialSealImage) } } })
+  return success(res, updated, 'Official signature and school seal saved')
+}))
+
 authRouter.put('/email', authenticate, asyncHandler(async (req: AuthenticatedRequest, res) => {
   const schema = z.object({
     newEmail: z.string().email(),

@@ -1,0 +1,2 @@
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "officialSealImage" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "officialSealUpdatedAt" TIMESTAMP(3);

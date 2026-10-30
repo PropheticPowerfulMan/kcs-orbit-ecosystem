@@ -313,6 +313,8 @@ model User {
   avatar                         String?
   signatureImage                 String?
   signatureUpdatedAt             DateTime?
+  officialSealImage              String?
+  officialSealUpdatedAt          DateTime?
   phone                          String?
   googleId                       String?                  @unique
   orbitUserId                    String?                  @unique
