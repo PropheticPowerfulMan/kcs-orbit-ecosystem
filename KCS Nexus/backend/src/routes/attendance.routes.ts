@@ -112,6 +112,7 @@ attendanceRouter.get('/teacher/homeroom', requireRoles('teacher'), asyncHandler(
     console.warn('[teacher-attendance] Orbit roster synchronization unavailable; using the verified local Nexus register.', error)
   }
   const registryStudents = await prisma.studentProfile.findMany({
+    where: { status: { equals: 'active', mode: 'insensitive' } },
     include: {
       user: { select: { firstName: true, middleName: true, lastName: true } },
       attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' } },
@@ -285,6 +286,7 @@ attendanceRouter.get('/students/:studentId/analytics', requireRoles('admin'), as
 attendanceRouter.get('/students', requireRoles('admin'), asyncHandler(async (req, res) => {
   const date = normalizedDay(z.coerce.date().parse(String(req.query.date ?? new Date().toISOString().slice(0, 10))))
   const students = await prisma.studentProfile.findMany({
+    where: { status: { equals: 'active', mode: 'insensitive' } },
     include: {
       user: { select: { firstName: true, middleName: true, lastName: true } },
       attendanceRecords: { where: { date }, orderBy: { createdAt: 'desc' }, include: { recordedBy: { select: { id: true, firstName: true, middleName: true, lastName: true, role: true } } } },
@@ -315,7 +317,10 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
   const date = normalizedDay(payload.date)
   const ids = payload.entries.map((entry) => entry.studentId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate student in attendance register')
-  const students = await prisma.studentProfile.findMany({ where: { id: { in: ids } }, select: { id: true, grade: true, section: true } })
+  const students = await prisma.studentProfile.findMany({
+    where: { id: { in: ids }, status: { equals: 'active', mode: 'insensitive' } },
+    select: { id: true, grade: true, section: true },
+  })
   if (students.length !== ids.length) throw new ApiError(404, 'One or more students were not found')
   const selectedClass = normalizeClassParts(payload.grade, payload.section)
   if (students.some((student) => {
