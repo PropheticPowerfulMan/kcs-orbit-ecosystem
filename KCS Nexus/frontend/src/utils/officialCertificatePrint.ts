@@ -13,8 +13,8 @@ export type CertificateStudent = {
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[character] ?? character)
 const asset = (value?: string | null) => value ? (/^(data:|blob:|https?:)/i.test(value) ? value : new URL(value, window.location.origin).href) : ''
 
-export async function printOfficialCertificate(student: CertificateStudent, academicYear: string, onBlocked: (message: string) => void) {
-  const language = document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en'
+export async function printOfficialCertificate(student: CertificateStudent, academicYear: string, onBlocked: (message: string) => void, selectedLanguage?: 'fr' | 'en', authenticated = true) {
+  const language = selectedLanguage ?? (document.documentElement.lang.toLowerCase().startsWith('fr') ? 'fr' : 'en')
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const printWindow = window.open('', '_blank', 'width=1200,height=850')
   if (!printWindow) return onBlocked(tr('Autorisez les fenêtres contextuelles pour générer le certificat.', 'Allow pop-ups to generate the certificate.'))
@@ -31,7 +31,7 @@ export async function printOfficialCertificate(student: CertificateStudent, acad
   const verificationUrl = `${window.location.origin}/verify/certificate?document=${encodeURIComponent(documentId)}&fingerprint=${encodeURIComponent(fingerprint)}`
   const qr = await QRCode.toDataURL(verificationUrl, { errorCorrectionLevel: 'H', margin: 1, width: 320, color: { dark: '#052F5F', light: '#FFFFFF' } })
   let signatures: { principal?: { image?: string | null; name?: string } | null; headOfSchool?: { image?: string | null; name?: string } | null } = {}
-  try { signatures = (await academicRecordsAPI.officialSignatures(student.id)).data?.data ?? {} } catch { /* Signature absence does not block certificate generation. */ }
+  if (authenticated) try { signatures = (await academicRecordsAPI.officialSignatures(student.id)).data?.data ?? {} } catch { /* Signature absence does not block certificate generation. */ }
   const signature = (entry: { image?: string | null; name?: string } | null | undefined, label: string) => `<div class="signature">${entry?.image ? `<img src="${escapeHtml(entry.image)}" alt="">` : ''}<b>${escapeHtml(entry?.name || '')}</b><span>${escapeHtml(label)}</span></div>`
   const logo = asset('/images/kcs-logo.png')
   const watermark = asset('/images/kcs.jpg?v=certificate-watermark')

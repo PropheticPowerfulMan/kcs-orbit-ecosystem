@@ -23,6 +23,8 @@ COPY --from=build ["/workspace/KCS Nexus/backend/node_modules", "./node_modules"
 COPY --from=build ["/workspace/KCS Nexus/backend/prisma", "./prisma"]
 COPY --from=build ["/workspace/KCS Nexus/backend/dist", "./dist"]
 COPY --from=build ["/workspace/KCS Nexus/backend/scripts", "./scripts"]
+COPY ["KCS Nexus/frontend/public/images/kcs-logo.png", "./assets/kcs-logo.png"]
+COPY ["KCS Nexus/frontend/public/images/kcs.jpg", "./assets/kcs-watermark.jpg"]
 COPY --from=build /workspace/packages/shared-contracts /workspace/packages/shared-contracts
 EXPOSE 5000
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]

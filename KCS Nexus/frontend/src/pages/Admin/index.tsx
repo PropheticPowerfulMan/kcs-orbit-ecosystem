@@ -1565,6 +1565,8 @@ const AdminSectionView = ({
   const [familyCredentials, setFamilyCredentials] = useState<any>(null)
   const [admissionCredentials, setAdmissionCredentials] = useState<any>(null)
   const [admissionApproving, setAdmissionApproving] = useState('')
+  const [admissionCertificateLanguage, setAdmissionCertificateLanguage] = useState<'fr' | 'en'>('fr')
+  const [admissionCertificateAuthenticated, setAdmissionCertificateAuthenticated] = useState(true)
   const [admissionNotice, setAdmissionNotice] = useState('')
   const [parentNotice, setParentNotice] = useState('')
   const [parentAccess, setParentAccess] = useState<Record<string, any>>({})
@@ -2377,7 +2379,7 @@ const AdminSectionView = ({
     setAdmissionApproving(application.id)
     setAdmissionNotice('')
     try {
-      const response = await admissionsAPI.approve(application.id)
+      const response = await admissionsAPI.approve(application.id, { language: admissionCertificateLanguage, includeAuthentication: admissionCertificateAuthenticated, academicYear: '2026-2027' })
       const payload = response.data?.data ?? response.data
       setAdmissionRequests((items) => {
         const next = items.map((item) => item.id === application.id ? { ...item, status: 'ACCEPTED' as const, provisionedAt: new Date().toISOString() } : item)
@@ -3380,6 +3382,7 @@ const AdminSectionView = ({
               {admissionRequests.filter((item) => item.status === 'SUBMITTED' || item.status === 'UNDER_REVIEW').length} pending decisions
             </span>
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-sky-100 bg-sky-50 p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><label className="text-xs font-bold text-kcs-blue-900 dark:text-white">Admission certificate language<select className="ml-2 rounded-lg border border-sky-200 bg-white px-3 py-2 dark:border-kcs-blue-600 dark:bg-kcs-blue-950" value={admissionCertificateLanguage} onChange={event=>setAdmissionCertificateLanguage(event.target.value as 'fr'|'en')}><option value="fr">Français</option><option value="en">English</option></select></label><label className="flex items-center gap-2 text-xs font-bold text-kcs-blue-900 dark:text-white"><input type="checkbox" checked={admissionCertificateAuthenticated} onChange={event=>setAdmissionCertificateAuthenticated(event.target.checked)}/> Include digital signatures, QR and school seal</label></div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {admissionRequests.map((item) => (

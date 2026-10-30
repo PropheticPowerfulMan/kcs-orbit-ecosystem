@@ -2,10 +2,11 @@ import { Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
-import { authenticate, requireRoles, requireSuperAdmin } from '../middleware/auth.js'
+import { authenticate, requireRoles, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { sendSchoolMail } from '../utils/mail.js'
 import { getRouteParam } from '../utils/request.js'
+import { admissionCertificatePdf } from '../utils/admissionCertificatePdf.js'
 
 const OFFICIAL_SCHOOL_EMAIL = 'kinshasachristianschool@gmail.com'
 const MAX_CHILDREN = 12
@@ -111,7 +112,8 @@ admissionsRouter.post('/', upload.any(), asyncHandler(async (req, res) => {
   return success(res, { ...publicApplication(application), emailDelivery: mail, schoolEmail: OFFICIAL_SCHOOL_EMAIL }, 'Family application submitted', 201)
 }))
 
-admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHandler(async (req, res) => {
+admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const certificateOptions = z.object({ language: z.enum(['fr', 'en']).default('fr'), includeAuthentication: z.boolean().default(true), academicYear: z.string().trim().regex(/^\d{4}-\d{4}$/).default('2026-2027') }).parse(req.body || {})
   const id = getRouteParam(req.params.id)
   const application = await prisma.admissionApplication.findUnique({ where: { id }, include: { documents: true } })
   if (!application) throw new ApiError(404, 'Application not found')
@@ -129,7 +131,22 @@ admissionsRouter.post('/:id/approve', authenticate, requireSuperAdmin(), asyncHa
   if (!response.ok) throw new ApiError(response.status, result?.message || result?.error || 'Family provisioning failed')
   const family = result.data || result
   const updated = await prisma.admissionApplication.update({ where: { id }, data: { status: 'ACCEPTED', provisionedAt: new Date(), provisionedParentId: String(family.parent?.id || family.parent?.orbitId || '') || null } })
-  return success(res, { application: publicApplication(updated), family, temporaryCredentials: family.temporaryCredentials, credentialDelivery: family.credentialDelivery }, 'Application approved and family provisioned')
+  let admissionCertificateDelivery: unknown = { sent: false, reason: 'NOT_ATTEMPTED' }
+  try {
+    const officials = await prisma.user.findMany({ where: { signatureImage: { not: null }, OR: [{ staffProfile: { is: { function: { contains: 'principal', mode: 'insensitive' } } } }, { staffProfile: { is: { function: { contains: 'head', mode: 'insensitive' } } } }] }, include: { staffProfile: true } })
+    const principalUser = officials.find((user) => /principal|préfet|prefet/i.test(user.staffProfile?.function || ''))
+    const headUser = officials.find((user) => /head/i.test(user.staffProfile?.function || ''))
+    const display = (user: typeof officials[number] | undefined) => user ? { name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '), image: user.signatureImage } : null
+    const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = []
+    for (const [index, child] of submittedChildren.entries()) {
+      const certificate = await admissionCertificatePdf({ applicationNumber: application.applicationNumber, academicYear: certificateOptions.academicYear, language: certificateOptions.language, includeAuthentication: certificateOptions.includeAuthentication, child: { ...child, studentNumber: `${application.applicationNumber}-STU-${String(index + 1).padStart(2, '0')}` }, principal: display(principalUser), headOfSchool: display(headUser) })
+      attachments.push({ filename: `${certificate.documentId}.pdf`, content: certificate.buffer, contentType: 'application/pdf' })
+    }
+    const fr = certificateOptions.language === 'fr'
+    admissionCertificateDelivery = await sendSchoolMail({ to: application.parentEmail, replyTo: OFFICIAL_SCHOOL_EMAIL, subject: fr ? `Admission officielle KCS · ${application.applicationNumber}` : `Official KCS admission · ${application.applicationNumber}`, text: fr ? `Bonjour ${application.parentName},\n\nL’admission de votre/vos enfant(s) à Kinshasa Christian School est confirmée. Vous trouverez le(s) certificat(s) officiel(s) en pièce jointe.\n\nDossier : ${application.applicationNumber}` : `Dear ${application.parentName},\n\nYour child/children's admission to Kinshasa Christian School is confirmed. The official certificate(s) are attached.\n\nApplication: ${application.applicationNumber}`, attachments })
+  } catch (error) { console.error('[admissions] admission certificate delivery failed without rolling back provisioning', error); admissionCertificateDelivery = { sent: false, reason: 'CERTIFICATE_OR_SMTP_FAILED' } }
+  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'admission.certificates_issued', targetType: 'AdmissionApplication', targetId: application.id, metadata: { language: certificateOptions.language, includeAuthentication: certificateOptions.includeAuthentication, delivery: admissionCertificateDelivery } as any } }).catch(() => undefined)
+  return success(res, { application: publicApplication(updated), family, temporaryCredentials: family.temporaryCredentials, credentialDelivery: family.credentialDelivery, admissionCertificateDelivery }, 'Application approved, family provisioned and admission certificate processed')
 }))
 
 admissionsRouter.patch('/:id/status', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (req: import('../middleware/auth.js').AuthenticatedRequest, res) => {
