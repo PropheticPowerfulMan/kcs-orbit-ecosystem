@@ -6,6 +6,7 @@ import {
   Bell,
   Brain,
   CheckCircle2,
+  ChevronDown,
   Eye,
   Download,
   FileSpreadsheet,
@@ -236,6 +237,12 @@ const downloadFile = (fileName: string, content: string, type: string) => {
 
 const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction }: Props) => {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
+  const [taskPanelOpen, setTaskPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:task-panel') !== 'closed')
+  const [weightPanelOpen, setWeightPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:weight-panel') !== 'closed')
+  const togglePanel = (key: 'task' | 'weight', open: boolean) => {
+    localStorage.setItem(`kcs:nexus:gradebook:${key}-panel`, open ? 'open' : 'closed')
+    if (key === 'task') setTaskPanelOpen(open); else setWeightPanelOpen(open)
+  }
   const language = useUIStore((state) => state.language)
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [draggedAssignmentId, setDraggedAssignmentId] = useState('')
@@ -877,9 +884,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Add one real Gradebook column. The task type automatically selects its weighting category.</p>
             </div>
 
-            <span className="rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200">RBAC: teacher classes only</span>
+            <div className="flex items-center gap-2"><span className="hidden rounded-full bg-kcs-blue-50 px-3 py-1 text-xs font-bold text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200 sm:inline">RBAC: teacher classes only</span><button type="button" aria-expanded={taskPanelOpen} onClick={() => togglePanel('task', !taskPanelOpen)} className="rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={18} className={`transition-transform ${taskPanelOpen ? 'rotate-180' : ''}`} /><span className="sr-only">{taskPanelOpen ? 'Hide section' : 'Show section'}</span></button></div>
           </div>
-          <div className="mt-4 grid gap-3">
+          {taskPanelOpen && <div className="mt-4 grid gap-3">
             <label className="grid gap-1 text-xs font-bold text-kcs-blue-900 dark:text-kcs-blue-100">
               Task title <span className="font-normal text-gray-500">Use a recognizable name, for example Fractions quiz 1.</span>
               <input className="input-kcs py-2 text-sm" value={draft.title} onChange={(event) => setDraft((item) => ({ ...item, title: event.target.value }))} placeholder="Enter the assessment title" />
@@ -923,7 +930,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               {addingAssignment ? <Loader2 size={17} className="animate-spin" /> : <Plus size={17} />}
               {addingAssignment ? 'Adding task…' : 'Add task'}
             </button>
-          </div>
+          </div>}
         </div>
 
         <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
@@ -935,9 +942,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <div className="flex items-center gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-black ${categoryWeightTotal === 100 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200' : 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200'}`}>{categoryWeightTotal}% / 100%</span>
               {categoryWeightTotal !== 100 && <button type="button" onClick={normalizeCategoryWeights} className="rounded-lg border border-kcs-blue-200 px-2.5 py-1 text-xs font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200">Balance to 100%</button>}
+              <button type="button" aria-expanded={weightPanelOpen} onClick={() => togglePanel('weight', !weightPanelOpen)} className="rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={18} className={`transition-transform ${weightPanelOpen ? 'rotate-180' : ''}`} /><span className="sr-only">{weightPanelOpen ? 'Hide section' : 'Show section'}</span></button>
             </div>
           </div>
-          {categoryWeightTotal !== 100 && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">Final-grade submission is locked until the category total equals exactly 100%.</p>}
+          {weightPanelOpen && <>{categoryWeightTotal !== 100 && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">Final-grade submission is locked until the category total equals exactly 100%.</p>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {categories.map((category) => {
               const categoryValues = studentAnalytics.map(({ student }) => getCategoryAverage(student.id, category.id)).filter((value): value is number => value !== null)
@@ -956,7 +964,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 </div>
               )
             })}
-          </div>
+          </div></>}
         </div>
       </div>
 
