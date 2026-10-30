@@ -580,6 +580,18 @@ model KitchenManagerSettings {
   updatedAt DateTime @updatedAt
 }
 
+model KitchenCashierAccount {
+  id String @id @default("primary")
+  fullName String @default("Kitchen Cashier")
+  email String @unique
+  passwordHash String
+  isActive Boolean @default(true)
+  updatedBy String
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum KitchenManagerInboxKind {
   DAILY_REPORT
   COMPLAINT

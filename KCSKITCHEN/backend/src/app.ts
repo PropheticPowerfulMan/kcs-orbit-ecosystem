@@ -103,6 +103,22 @@ const statementVerificationKeys = loadStatementVerificationKeys()
 const asyncRoute = (handler: (req: any, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => void handler(req, res, next).catch(next)
 
+function hashLocalPassword(password: string) {
+  const salt = crypto.randomBytes(16)
+  const digest = crypto.scryptSync(password, salt, 64)
+  return `scrypt:${salt.toString('hex')}:${digest.toString('hex')}`
+}
+
+function verifyLocalPassword(password: string, stored: string) {
+  const [algorithm, saltHex, digestHex] = stored.split(':')
+  if (algorithm !== 'scrypt' || !saltHex || !digestHex) return false
+  try {
+    const expected = Buffer.from(digestHex, 'hex')
+    const actual = crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length)
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
+  } catch { return false }
+}
+
 function routeParam(req: Request, name: string) { return String(req.params[name] || '') }
 
 function personTypeFrom(kind: string): PersonType {
@@ -113,7 +129,9 @@ function personTypeFrom(kind: string): PersonType {
 }
 
 function defaultRole(nexusRole: string, personType: PersonType): KitchenRole {
-  if (nexusRole.toLowerCase() === 'admin') return 'KITCHEN_ADMIN'
+  // Kitchen administration is never inherited from a global Nexus role.
+  // Only an explicit KitchenAccess assignment may grant KITCHEN_ADMIN.
+  if (nexusRole.toLowerCase() === 'admin') return 'CASHIER'
   if (personType === 'TEACHER') return 'TEACHER'
   if (personType === 'STUDENT') return 'STUDENT'
   return 'STAFF'
@@ -149,8 +167,32 @@ app.use('/api', procurementRouter)
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const payload = z.object({
     identifier: z.string().trim().min(2).max(180),
-    password: z.string().min(1).max(200)
+    password: z.string().min(1).max(200),
+    accessMode: z.enum(['STAFF', 'ADMIN']).optional()
   }).parse(req.body)
+
+  const normalizedIdentifier = payload.identifier.toLowerCase()
+  const cashier = await prisma.kitchenCashierAccount.findUnique({ where: { email: normalizedIdentifier } })
+  if (cashier) {
+    if (payload.accessMode === 'ADMIN') {
+      return res.status(403).json({ message: 'The cashier account is restricted to Point of sale' })
+    }
+    if (!cashier.isActive || !verifyLocalPassword(payload.password, cashier.passwordHash)) {
+      return res.status(401).json({ message: 'Cashier email or password is incorrect' })
+    }
+    const identity: KitchenIdentity = {
+      userId: `kitchen-cashier:${cashier.id}`,
+      orbitPersonId: `kitchen-cashier:${cashier.id}`,
+      fullName: cashier.fullName,
+      email: cashier.email,
+      personType: 'STAFF',
+      role: 'CASHIER',
+      hasOfficialPhoto: false,
+      canManageOwnCredentials: false,
+    }
+    await prisma.kitchenCashierAccount.update({ where: { id: cashier.id }, data: { lastLoginAt: new Date() } })
+    return res.json({ token: signSession(identity), user: identity })
+  }
 
   const response = await fetch(new URL('/api/auth/login', env.NEXUS_API_URL), {
     method: 'POST',
@@ -186,6 +228,13 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
       orbitPersonId,
       explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
     }),
+  }
+  if (payload.accessMode === 'STAFF' && identity.role === 'KITCHEN_ADMIN') {
+    identity.role = 'CASHIER'
+    identity.canManageOwnCredentials = false
+  }
+  if (payload.accessMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN') {
+    return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may use the administration portal' })
   }
   res.json({ token: signSession(identity), user: identity })
 }))
@@ -1852,6 +1901,32 @@ app.put('/api/manager-settings', authenticate, allow('KITCHEN_ADMIN'), asyncRout
   })
   await audit(req, 'KITCHEN_MANAGER_SETTINGS_UPDATED', 'KitchenManagerSettings', settings.id, previous, settings)
   res.json({ settings })
+}))
+
+app.get('/api/cashier-account', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (_req, res) => {
+  const account = await prisma.kitchenCashierAccount.findUnique({
+    where: { id: 'primary' },
+    select: { id: true, fullName: true, email: true, isActive: true, lastLoginAt: true, updatedAt: true }
+  })
+  res.json({ account })
+}))
+
+app.put('/api/cashier-account', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(async (req: AuthRequest, res) => {
+  const input = z.object({
+    fullName: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(180).transform(value => value.toLowerCase()),
+    password: z.string().min(14).max(128),
+    isActive: z.boolean().default(true),
+  }).parse(req.body)
+  const previous = await prisma.kitchenCashierAccount.findUnique({ where: { id: 'primary' } })
+  const account = await prisma.kitchenCashierAccount.upsert({
+    where: { id: 'primary' },
+    create: { id: 'primary', fullName: input.fullName, email: input.email, passwordHash: hashLocalPassword(input.password), isActive: input.isActive, updatedBy: req.kitchenUser!.orbitPersonId },
+    update: { fullName: input.fullName, email: input.email, passwordHash: hashLocalPassword(input.password), isActive: input.isActive, updatedBy: req.kitchenUser!.orbitPersonId },
+    select: { id: true, fullName: true, email: true, isActive: true, lastLoginAt: true, updatedAt: true }
+  })
+  await audit(req, previous ? 'KITCHEN_CASHIER_CREDENTIALS_RESET' : 'KITCHEN_CASHIER_ACCOUNT_CREATED', 'KitchenCashierAccount', account.id, previous ? { email: previous.email, isActive: previous.isActive } : undefined, { email: account.email, isActive: account.isActive })
+  res.json({ account })
 }))
 
 app.get('/api/manager-inbox', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req, res) => {

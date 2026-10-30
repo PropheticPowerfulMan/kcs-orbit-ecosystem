@@ -7,7 +7,13 @@ const esc = (v: unknown) =>
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] || c,
   );
-const asset = (v: string) => new URL(v, window.location.origin).href;
+const asset = (v: string) =>
+  new URL(
+    v === "/images/kcs-logo.png"
+      ? "/images/kcs.jpg?v=standalone-emblem"
+      : v,
+    window.location.origin,
+  ).href;
 
 export async function printAttendanceCertificates(
   students: CertificateStudent[],
@@ -70,8 +76,8 @@ export async function printAttendanceCertificates(
     const verify = `${location.origin}/verify/certificate?document=${encodeURIComponent(documentId)}&fingerprint=${encodeURIComponent(fingerprint)}`;
     const qr = await QRCode.toDataURL(verify, {
       errorCorrectionLevel: "H",
-      margin: 1,
-      width: 280,
+      margin: 2,
+      width: 1024,
     });
     const signature = (entry: any, label: string) =>
       `<div class="sig">${authenticated && entry?.image ? `<img src="${esc(entry.image)}">` : ""}<b>${authenticated ? esc(entry?.name || "") : ""}</b><span>${esc(label)}</span></div>`;
@@ -84,8 +90,12 @@ export async function printAttendanceCertificates(
     );
   }
   const html = `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><title>KCS Attendance Certificates</title><style>@page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{margin:0;background:#e8f1f8;color:#082b4d;font-family:"Segoe UI",Arial,sans-serif;-webkit-print-color-adjust:exact}.sheet{position:relative;isolation:isolate;width:281mm;height:194mm;margin:10px auto;overflow:hidden;background:#fff;page-break-after:always;box-shadow:0 18px 55px #062b4d25}.frame{position:absolute;inset:8mm;border:2px solid #0d5d99}.frame:after{content:"";position:absolute;inset:3mm;border:1px solid #d6a62a}.watermark{position:absolute;left:50%;top:50%;width:125mm;height:125mm;transform:translate(-50%,-50%);object-fit:contain;opacity:.065;filter:grayscale(1)}.content{position:relative;z-index:1;height:100%;padding:14mm 18mm;text-align:center}.logo{width:62mm;max-height:23mm;object-fit:contain}.digital-seal{position:absolute;left:18mm;bottom:18mm;width:27mm;height:27mm;object-fit:contain}.eyebrow{color:#b07e0a;font-size:10px;font-weight:900;letter-spacing:.2em}h1{margin:7px 0;color:#053665;font:700 29px Georgia}.rule{width:62%;height:2px;margin:9px auto 16px;background:linear-gradient(90deg,transparent,#d6a62a,#0d5d99,#d6a62a,transparent)}.lead,.statement{font:15px/1.6 Georgia;max-width:220mm;margin:0 auto}.name{display:inline-block;margin:12px 0 8px;padding:0 20px 5px;border-bottom:2px solid #d6a62a;color:#073b70;font:700 30px Georgia}.issued{margin-top:13px;font-size:10px}.bottom{position:absolute;left:20mm;right:20mm;bottom:13mm;display:grid;grid-template-columns:1fr 32mm 1fr;gap:18px;align-items:end}.sig{display:grid;min-height:20mm;align-content:end;justify-items:center;border-bottom:1px solid #42627d;font-size:8px}.sig img{max-width:44mm;height:12mm;object-fit:contain}.sig span{margin-bottom:-14px;padding-top:3px}.qr img{width:25mm;height:25mm}.qr small{display:block;font-size:6px}.doc{position:absolute;right:18mm;top:14mm;z-index:2;color:#688098;font-size:7px;text-align:right}@media print{body{background:#fff}.sheet{margin:0;box-shadow:none}}</style></head><body>${pages.join("")}<script>addEventListener('load',()=>Promise.all([...document.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r}))).then(()=>setTimeout(()=>print(),250)))<\/script></body></html>`;
+  const polishedHtml = html.replace(
+    "</style>",
+    ".logo{width:27mm;height:27mm;max-height:none;border-radius:50%;object-fit:contain;filter:drop-shadow(0 5px 10px #052f5f25)}.qr img{display:block;width:29mm;height:29mm;margin:auto;image-rendering:auto}.sheet:before{content:'';position:absolute;inset:11mm;border:1px solid rgba(214,166,42,.34);pointer-events:none}</style>",
+  );
   const url = URL.createObjectURL(
-    new Blob([html], { type: "text/html;charset=utf-8" }),
+    new Blob([polishedHtml], { type: "text/html;charset=utf-8" }),
   );
   popup.location.replace(url);
   setTimeout(() => URL.revokeObjectURL(url), 60000);

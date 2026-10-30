@@ -308,6 +308,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [accessMode, setAccessMode] = useState<'STAFF' | 'ADMIN'>('STAFF')
   const [credentials, setCredentials] = useState({ identifier: '', password: '' })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -315,8 +316,16 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     try {
       const result = await api<{ token: string; user: User }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ identifier: credentials.identifier.trim(), password: credentials.password })
+        body: JSON.stringify({ identifier: credentials.identifier.trim(), password: credentials.password, accessMode })
       })
+      const isKitchenStaff = result.user.role === 'CASHIER'
+      const isKitchenAdministrator = result.user.role === 'KITCHEN_ADMIN'
+      if ((accessMode === 'STAFF' && !isKitchenStaff) || (accessMode === 'ADMIN' && !isKitchenAdministrator)) {
+        setToken(null)
+        throw new Error(accessMode === 'STAFF'
+          ? (lang === 'fr' ? 'Ce portail est réservé au personnel de caisse Kitchen. Choisissez « Administration » si vous êtes le gestionnaire.' : 'This portal is reserved for Kitchen point-of-sale staff. Choose “Administration” if you are the manager.')
+          : (lang === 'fr' ? 'Ce portail est réservé au gestionnaire Kitchen. Choisissez « Personnel / Point de vente » pour la caisse.' : 'This portal is reserved for the Kitchen manager. Choose “Staff / Point of sale” for cashier access.'))
+      }
       setToken(result.token); onLogin(result.user)
     } catch (err) { setError((err as Error).message) } finally { setLoading(false) }
   }
@@ -333,6 +342,10 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     </section>
     <section className="login-card">
       <div><span className="eyebrow">{t.secureAccess}</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
+      <div className="kitchen-login-modes" role="tablist" aria-label={lang === 'fr' ? 'Type d’accès Kitchen' : 'Kitchen access type'}>
+        <button type="button" role="tab" aria-selected={accessMode === 'STAFF'} className={accessMode === 'STAFF' ? 'active' : ''} onClick={() => setAccessMode('STAFF')}><ShoppingCart />{lang === 'fr' ? 'Personnel · Point de vente' : 'Staff · Point of sale'}</button>
+        <button type="button" role="tab" aria-selected={accessMode === 'ADMIN'} className={accessMode === 'ADMIN' ? 'active' : ''} onClick={() => setAccessMode('ADMIN')}><ShieldCheck />{lang === 'fr' ? 'Administration' : 'Administration'}</button>
+      </div>
       <form onSubmit={submit} autoComplete="on">
         <label>{t.identifier}<input
           name="username"
@@ -364,7 +377,8 @@ const privileged: Role[] = ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR']
 
 function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { lang, setLang, t } = useLanguage()
-  const [page, setPage] = useState<Page>(requestedPage)
+  const isKitchenStaff = user.role === 'CASHIER'
+  const [page, setPage] = useState<Page>(() => isKitchenStaff ? 'pos' : requestedPage())
   const [open, setOpen] = useState(false)
   const sidebarRef = useRef<HTMLElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -440,16 +454,16 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     }
   }, [drawerViewport, open])
   const nav: Array<[Page, string, ReactNode, boolean]> = [
-    ['dashboard', t.dashboard, <LayoutDashboard />, true],
+    ['dashboard', t.dashboard, <LayoutDashboard />, !isKitchenStaff],
     ['menus', lang === 'fr' ? 'Menu du jour' : 'Daily menu', <CalendarDays />, user.role === 'KITCHEN_ADMIN'],
     ['pos', t.pos, <ShoppingCart />, ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)],
-    ['orders', t.orders, <BellRing />, true],
-    ['catalog', t.catalog, <ChefHat />, isPrivileged],
-    ['transactions', t.transactions, <ReceiptText />, true],
-    ['ledger', t.ledger, <Wallet />, user.role !== 'KITCHEN_ADMIN'],
-    ['inventory', t.inventory, <Package />, isPrivileged],
-    ['disputes', t.disputes, <AlertTriangle />, true],
-    ['reports', t.reports, <BarChart3 />, isPrivileged],
+    ['orders', t.orders, <BellRing />, !isKitchenStaff],
+    ['catalog', t.catalog, <ChefHat />, isPrivileged && !isKitchenStaff],
+    ['transactions', t.transactions, <ReceiptText />, !isKitchenStaff],
+    ['ledger', t.ledger, <Wallet />, !isKitchenStaff && user.role !== 'KITCHEN_ADMIN'],
+    ['inventory', t.inventory, <Package />, isPrivileged && !isKitchenStaff],
+    ['disputes', t.disputes, <AlertTriangle />, !isKitchenStaff],
+    ['reports', t.reports, <BarChart3 />, isPrivileged && !isKitchenStaff],
     ['procurement', t.procurement, <PackagePlus />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
     ['access', t.access, <Users />, user.role === 'KITCHEN_ADMIN'],
     ['school-dues', t.schoolDues, <ReceiptText />, ['KITCHEN_ADMIN', 'FINANCE', 'AUDITOR'].includes(user.role)],
@@ -466,12 +480,12 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
     else window.history.pushState({}, '', url)
   }
   useEffect(() => {
-    if (!nav.some(item => item[0] === page && item[3])) navigateToPage('dashboard', true)
+    if (!nav.some(item => item[0] === page && item[3])) navigateToPage(isKitchenStaff ? 'pos' : 'dashboard', true)
   }, [page, user.role])
   useEffect(() => {
     const restorePage = () => {
       const nextPage = requestedPage()
-      setPage(nav.some(item => item[0] === nextPage && item[3]) ? nextPage : 'dashboard')
+      setPage(nav.some(item => item[0] === nextPage && item[3]) ? nextPage : (isKitchenStaff ? 'pos' : 'dashboard'))
       setOpen(false)
       window.scrollTo({ top: 0, left: 0 })
     }
@@ -508,7 +522,7 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'access' && <Access t={t} />}
         {page === 'school-dues' && <SchoolDuesRegister user={user} lang={lang} />}
         {page === 'manager-inbox' && <ManagerInbox lang={lang} />}
-        {page === 'settings' && <KitchenSettings user={user} lang={lang} onPasswordChanged={onLogout} />}
+        {page === 'settings' && <><CashierAccountSettings lang={lang}/><KitchenSettings user={user} lang={lang} onPasswordChanged={onLogout} /></>}
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
     </main>
@@ -1201,6 +1215,24 @@ function ManagerInbox({ lang }: { lang: Lang }) {
     } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
   }
   return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · MANAGER INBOX</span><h2>{fr ? 'Rapports et réclamations' : 'Reports and complaints'}</h2><p>{fr ? 'Tout ce qui est envoyé au gestionnaire par e-mail reste également archivé et recherchable ici.' : 'Everything emailed to the manager is also archived and searchable here.'}</p></div><button className="primary" disabled={busy} onClick={() => void load()}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{fr ? 'Actualiser' : 'Refresh'}</button></div><div className="search-toolbar"><div className="search-box"><Search/><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => event.key === 'Enter' && void load()} placeholder={fr ? 'Date, référence, personne, réclamation…' : 'Date, reference, person, complaint…'}/></div><select value={kind} onChange={event => setKind(event.target.value)}><option value="">{fr ? 'Tous les messages' : 'All messages'}</option><option value="DAILY_REPORT">{fr ? 'Rapports journaliers' : 'Daily reports'}</option><option value="COMPLAINT">{fr ? 'Réclamations' : 'Complaints'}</option></select><button className="primary" onClick={() => void load()}><Search/>{fr ? 'Rechercher' : 'Search'}</button></div><div className="rank-list">{items.map(item => <div key={item.id}><b>{dateTime(item.createdAt)}</b><span><strong>{item.title}</strong><small>{item.message}</small></span>{item.attachmentName && <button onClick={() => void download(item)}><ReceiptText/>{fr ? 'PDF' : 'PDF'}</button>}</div>)}</div>{!items.length && !busy && <Empty text={fr ? 'Aucun rapport ou réclamation.' : 'No report or complaint.'}/>}</section>{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
+}
+
+function CashierAccountSettings({ lang }: { lang: Lang }) {
+  const fr = lang === 'fr'
+  const [account, setAccount] = useState<any>(null)
+  const [form, setForm] = useState({ fullName: 'Kitchen Cashier', email: '', password: '', confirm: '', isActive: true })
+  const [visible, setVisible] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  useEffect(() => { void api<any>('/cashier-account').then(result => { setAccount(result.account); if (result.account) setForm(current => ({ ...current, fullName: result.account.fullName, email: result.account.email, isActive: result.account.isActive })) }).catch(error => setNotice({ type: 'error', message: error.message })) }, [])
+  const predictable = /(password|motdepasse|qwerty|azerty|123456|cashier|kitchen|kinshasa|school)/i.test(form.password.replace(/[^a-z0-9]/gi, ''))
+  const strong = form.password.length >= 14 && /[a-z]/.test(form.password) && /[A-Z]/.test(form.password) && /\d/.test(form.password) && /[^A-Za-z0-9\s]/.test(form.password) && !/\s/.test(form.password) && !predictable && form.password === form.confirm
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!strong || busy) return; setBusy(true)
+    try { const result = await api<any>('/cashier-account', { method: 'PUT', body: JSON.stringify({ fullName: form.fullName, email: form.email, password: form.password, isActive: form.isActive }) }); setAccount(result.account); setForm(current => ({ ...current, password: '', confirm: '' })); setNotice({ type: 'success', message: fr ? 'Compte de caisse enregistré. Il ouvre uniquement le Point de vente.' : 'Cashier account saved. It opens Point of sale only.' }) }
+    catch (error) { setNotice({ type: 'error', message: (error as Error).message }) } finally { setBusy(false) }
+  }
+  return <section className="panel cashier-account-settings"><div className="section-heading"><div><span className="eyebrow">KCS KITCHEN · CASHIER ACCESS</span><h2>{fr ? 'Compte du personnel de caisse' : 'Point-of-sale staff account'}</h2><p>{fr ? 'Compte local Kitchen isolé de Nexus, limité strictement au Point de vente. Avant sa création, les identifiants actuels du gestionnaire peuvent ouvrir une session de caisse temporaire et limitée.' : 'Local Kitchen account isolated from Nexus and strictly limited to Point of sale. Before it is created, the current manager credentials can open a temporary restricted cashier session.'}</p></div>{account && <b>{account.isActive ? (fr ? 'ACTIF' : 'ACTIVE') : (fr ? 'DÉSACTIVÉ' : 'DISABLED')}</b>}</div><form className="modal-form" onSubmit={submit}><label>{fr ? 'Nom affiché' : 'Display name'}<input value={form.fullName} onChange={event => setForm(current => ({ ...current, fullName: event.target.value }))} required/></label><label>{fr ? 'E-mail de connexion du caissier' : 'Cashier sign-in email'}<input type="email" autoComplete="off" value={form.email} onChange={event => setForm(current => ({ ...current, email: event.target.value }))} required/></label><label>{account ? (fr ? 'Nouveau mot de passe' : 'New password') : (fr ? 'Mot de passe initial' : 'Initial password')}<span className="password-field"><input type={visible ? 'text' : 'password'} autoComplete="new-password" value={form.password} onChange={event => setForm(current => ({ ...current, password: event.target.value }))} required/><button type="button" onClick={() => setVisible(value => !value)}>{visible ? <EyeOff/> : <Eye/>}</button></span></label><label>{fr ? 'Confirmer le mot de passe' : 'Confirm password'}<input type={visible ? 'text' : 'password'} autoComplete="new-password" value={form.confirm} onChange={event => setForm(current => ({ ...current, confirm: event.target.value }))} required/></label><div className={'password-strength ' + (strong ? 'strong' : 'weak')}><b>{strong ? (fr ? 'Mot de passe robuste' : 'Strong password') : (fr ? '14 caractères minimum avec majuscule, minuscule, chiffre et symbole; confirmations identiques.' : 'At least 14 characters with uppercase, lowercase, number and symbol; confirmations must match.')}</b></div><label className="check"><input type="checkbox" checked={form.isActive} onChange={event => setForm(current => ({ ...current, isActive: event.target.checked }))}/>{fr ? 'Autoriser la connexion du caissier' : 'Allow cashier sign-in'}</label><button className="primary large" disabled={!strong || busy}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{account ? (fr ? 'Mettre à jour le caissier' : 'Update cashier') : (fr ? 'Créer le caissier' : 'Create cashier')}</button></form>{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</section>
 }
 
 function KitchenSettings({ user, lang, onPasswordChanged }: { user: User; lang: Lang; onPasswordChanged: () => void }) {

@@ -810,21 +810,17 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     <div className="gradebook-mobile-surface space-y-6">
       <div className={`grid gap-4 ${commandCenterOpen ? 'xl:grid-cols-[1fr_0.9fr]' : ''}`}>
         <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${commandCenterOpen ? 'p-5' : 'p-3'}`}>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex min-w-0 flex-1 items-start justify-between gap-3">
-             <div>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+            <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wide text-kcs-blue-600 dark:text-kcs-blue-300">AI Gradebook Command Center</p>
-              <h3 className={`${commandCenterOpen ? 'mt-1 text-2xl' : 'mt-0 text-base'} font-display font-bold text-kcs-blue-900 dark:text-white`}>{selectedCourse?.name ?? 'Gradebook'}</h3>
-             </div>
-             <button type="button" aria-expanded={commandCenterOpen} onClick={() => { const next=!commandCenterOpen;setCommandCenterOpen(next);localStorage.setItem('kcs:nexus:gradebook:command-center',next?'open':'closed') }} className="shrink-0 rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={19} className={`transition-transform ${commandCenterOpen?'rotate-180':''}`}/><span className="sr-only">{commandCenterOpen?'Hide command center':'Show command center'}</span></button>
-            </div>
-            {commandCenterOpen && <>
-             <div>
-              <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-300">
+              <h3 className={`${commandCenterOpen ? 'mt-1 text-xl sm:text-2xl' : 'mt-0 text-base'} break-words font-display font-bold leading-tight text-kcs-blue-900 dark:text-white`}>{selectedCourse?.name ?? 'Gradebook'}</h3>
+              {commandCenterOpen && <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600 dark:text-gray-300">
                 Spreadsheet entry, weighted categories, predictive risk detection, report-card comments, and synchronized parent/student/admin visibility.
-              </p>
+              </p>}
             </div>
-            <div className="flex flex-wrap items-end gap-1.5">
+            <button type="button" aria-expanded={commandCenterOpen} onClick={() => { const next=!commandCenterOpen;setCommandCenterOpen(next);localStorage.setItem('kcs:nexus:gradebook:command-center',next?'open':'closed') }} className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-kcs-blue-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 sm:w-auto dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={19} className={`transition-transform ${commandCenterOpen?'rotate-180':''}`}/><span>{commandCenterOpen?'Hide command center':'Show command center'}</span></button>
+          </div>
+          {commandCenterOpen && <div className="mt-4 flex flex-wrap items-end gap-1.5 border-t border-gray-100 pt-4 dark:border-kcs-blue-800">
               <select aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                 {academicYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
@@ -832,9 +828,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <button onClick={() => void exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
               <button onClick={() => void exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
               <button onClick={() => void exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
-            </div>
-            </>}
-          </div>
+          </div>}
 
           {commandCenterOpen && <div className="mt-5 grid gap-3 lg:grid-cols-[1fr_0.7fr_0.7fr_1fr]">
             <select className="input-kcs py-2 text-sm" value={selectedCourse?.id} onChange={(event) => onSelectCourse(event.target.value)}>
