@@ -59,6 +59,34 @@ export async function updateOrbitStudentClassAssignment(
   return { synchronized: true as const }
 }
 
+export async function updateOrbitStudentStatus(
+  student: Pick<OrbitStudentClassReference, 'orbitUserId' | 'studentNumber'>,
+  status: string,
+) {
+  if (!env.KCS_ORBIT_API_URL || !env.KCS_ORBIT_API_KEY || !env.KCS_ORBIT_ORGANIZATION_ID) {
+    return { synchronized: false as const }
+  }
+
+  const identifier = student.orbitUserId || student.studentNumber
+  const identifierType = student.orbitUserId ? 'orbitId' : 'externalId'
+  const response = await fetch(
+    `${env.KCS_ORBIT_API_URL.replace(/\/$/, '')}/api/integration/registry/student/${encodeURIComponent(identifier)}?organizationId=${encodeURIComponent(env.KCS_ORBIT_ORGANIZATION_ID)}&identifierType=${identifierType}`,
+    {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': env.KCS_ORBIT_API_KEY,
+        'x-app-slug': 'KCS_NEXUS',
+      },
+      body: JSON.stringify({ status }),
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
+  const payload = await response.json().catch(() => ({})) as { message?: string }
+  if (!response.ok) throw new ApiError(response.status, payload.message || `Orbit student status update failed with status ${response.status}`)
+  return { synchronized: true as const }
+}
+
 const identityName = (student: OrbitStudentIdentity) => {
   const parts = (student.fullName ?? '').trim().split(/\s+/).filter(Boolean)
   return {

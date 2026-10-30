@@ -460,6 +460,32 @@ model StudentProfile {
   electiveChoices         ElectiveChoice[]
   electiveAllocations     ElectiveAllocation[]
   shiningStudentSchedules ShiningStudentSchedule[]
+  archive                 StudentArchive?
+}
+
+/// Immutable administrative snapshot created when a learner is permanently
+/// dismissed. Academic records remain in their original tables while the
+/// active identity is blocked and removed from operational rosters.
+model StudentArchive {
+  id               String   @id @default(cuid())
+  studentId        String   @unique
+  userId           String
+  studentNumber    String
+  orbitUserId      String?
+  fullName         String
+  grade            String
+  section          String
+  reason           String
+  effectiveDate    DateTime
+  archivedSnapshot Json
+  archivedById     String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  student          StudentProfile @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@index([effectiveDate])
+  @@index([studentNumber])
+  @@index([archivedById])
 }
 
 enum ShiningStudentDivision {

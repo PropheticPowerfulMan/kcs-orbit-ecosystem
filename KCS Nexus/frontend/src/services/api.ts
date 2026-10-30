@@ -450,7 +450,7 @@ export const notificationsAPI = {
 // --- AI API ---
 export const aiAPI = {
   chat: (messages: object[], language?: string) =>
-    api.post('/ai/chat', { messages, language }),
+    api.post('/ai/chat', { messages, language }, { headers: { 'x-silent-feedback': 'true' } }),
   teacherAssistant: (
     task: 'dashboard-insights' | 'lesson-plan' | 'quiz' | 'feedback' | 'intervention' | 'meeting-summary',
     context?: string,
@@ -565,6 +565,8 @@ export const disciplineAPI = {
   suspensions: () => api.get('/school-management/discipline-suspensions'),
   createSuspension: (data: object) => api.post('/school-management/discipline-suspensions', data),
   cancelSuspension: (id: string) => api.patch(`/school-management/discipline-suspensions/${id}/cancel`),
+  dismissals: () => api.get('/school-management/discipline-dismissals'),
+  createDismissal: (data: object) => api.post('/school-management/discipline-dismissals', data),
 }
 
 

@@ -7,7 +7,7 @@ import { ApiError, asyncHandler, success } from '../utils/api.js'
 import { getRouteParam } from '../utils/request.js'
 import { sendSchoolSms } from '../utils/sms.js'
 import { classAssignmentsOverlap, normalizeClassParts } from '../utils/className.js'
-import { updateOrbitStudentClassAssignment } from '../services/orbitStudentMaterialization.js'
+import { updateOrbitStudentClassAssignment, updateOrbitStudentStatus } from '../services/orbitStudentMaterialization.js'
 import { reconcileOfficialClassCourseEnrollments } from '../services/officialClassRoster.js'
 
 const enumValue = <T extends readonly [string, ...string[]]>(values: T) => z.enum(values)
@@ -577,6 +577,65 @@ schoolManagementRouter.patch('/discipline-suspensions/:id/cancel', requireSuperA
     return record
   })
   return success(res, updated, 'Suspension cancelled')
+}))
+
+schoolManagementRouter.get('/discipline-dismissals', requireSuperAdmin(), asyncHandler(async (_req, res) => {
+  const archives = await prisma.studentArchive.findMany({ orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }] })
+  return success(res, archives, 'Permanently dismissed student archive loaded')
+}))
+
+schoolManagementRouter.post('/discipline-dismissals', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = z.object({
+    studentIds: z.array(z.string().min(1)).min(1).max(100).transform((ids) => [...new Set(ids)]),
+    reason: z.string().trim().min(10).max(3000),
+    effectiveDate: z.coerce.date(),
+    notifyParents: z.boolean().default(true),
+  }).parse(req.body)
+  const actorId = await resolveActorId(req)
+  if (!actorId) throw new ApiError(409, 'The Super Administrator audit identity is unavailable')
+  const students = await prisma.studentProfile.findMany({
+    where: { id: { in: payload.studentIds }, status: { equals: 'active', mode: 'insensitive' } },
+    include: {
+      user: true,
+      parentLinks: { include: { parent: { select: { id: true, phone: true } } } },
+      enrollments: { select: { id: true, courseId: true } },
+      _count: { select: { grades: true, submissions: true, attendanceRecords: true, reportCards: true, transcripts: true, disciplineCases: true } },
+    },
+  })
+  if (students.length !== payload.studentIds.length) throw new ApiError(409, 'One or more selected learners are missing, already archived, or no longer active.')
+
+  // The Orbit registry is the ecosystem identity authority. Refuse the local
+  // dismissal if the central status cannot be secured first, preventing split state.
+  await Promise.all(students.map((student) => updateOrbitStudentStatus({ orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber }, 'dismissed')))
+
+  const effectiveDate = new Date(payload.effectiveDate); effectiveDate.setUTCHours(0, 0, 0, 0)
+  const archived = await prisma.$transaction(async (tx) => {
+    const results = []
+    for (const student of students) {
+      const fullName = [student.user.lastName, student.user.middleName, student.user.firstName].filter(Boolean).join(' ')
+      const snapshot = {
+        identity: { userId: student.userId, orbitUserId: student.user.orbitUserId, studentNumber: student.studentNumber, fullName, email: student.user.email, accessCode: student.user.accessCode },
+        academicPlacement: { grade: student.grade, section: student.section, enrollmentDate: student.enrollmentDate },
+        parentUserIds: student.parentLinks.map((link) => link.parentId),
+        courseEnrollments: student.enrollments,
+        recordCounts: student._count,
+        statusBeforeDismissal: student.status,
+      }
+      const archive = await tx.studentArchive.create({ data: { studentId: student.id, userId: student.userId, studentNumber: student.studentNumber, orbitUserId: student.user.orbitUserId, fullName, grade: student.grade, section: student.section, reason: payload.reason, effectiveDate, archivedSnapshot: snapshot, archivedById: actorId } })
+      await tx.enrollment.deleteMany({ where: { studentId: student.id } })
+      await tx.refreshToken.deleteMany({ where: { userId: student.userId } })
+      await tx.studentProfile.update({ where: { id: student.id }, data: { status: 'dismissed' } })
+      await tx.user.update({ where: { id: student.userId }, data: { accountBlockedAt: new Date(), accountBlockedReason: `Permanent school dismissal: ${payload.reason}`, accountBlockedBy: actorId, loginLockedUntil: null } })
+      if (payload.notifyParents && student.parentLinks.length) {
+        await tx.notification.createMany({ data: student.parentLinks.map((link) => ({ userId: link.parentId, title: 'Décision administrative officielle / Official administrative decision', message: `${fullName}: renvoi définitif effectif le ${effectiveDate.toISOString().slice(0, 10)}. ${payload.reason}`, type: 'WARNING' as const, link: '/portal/parent/notifications' })) })
+      }
+      await tx.auditLog.create({ data: { actorId, action: 'STUDENT_PERMANENTLY_DISMISSED_AND_ARCHIVED', targetType: 'StudentArchive', targetId: archive.id, metadata: { studentId: student.id, studentNumber: student.studentNumber, orbitUserId: student.user.orbitUserId, effectiveDate: effectiveDate.toISOString(), reason: payload.reason, removedCourseEnrollments: student.enrollments.length } } })
+      results.push(archive)
+    }
+    return results
+  })
+
+  return success(res, { archived, count: archived.length }, 'Learners permanently dismissed, removed from active rosters, and archived', 201)
 }))
 
 

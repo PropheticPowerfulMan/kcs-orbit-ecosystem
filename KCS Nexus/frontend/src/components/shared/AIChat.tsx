@@ -7,6 +7,14 @@ import type { ChatMessage } from '@/types'
 
 const generateId = () => Math.random().toString(36).substring(2, 9)
 
+const detectMessageLanguage = (value: string, fallback: 'en' | 'fr'): 'en' | 'fr' => {
+  const normalized = value.toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const frenchSignals = normalized.match(/\b(bonjour|bonsoir|merci|comment|pourquoi|quel|quelle|quels|quelles|ecole|eleve|parent|inscription|frais|horaire|programme|classe|je|vous|nous|est|sont|avec|pour|dans|sur|des|une|un)\b/g)?.length ?? 0
+  const englishSignals = normalized.match(/\b(hello|hi|thanks|how|why|what|which|school|student|parent|admission|fees|schedule|program|grade|class|i|you|we|is|are|with|for|the|a|an)\b/g)?.length ?? 0
+  if (frenchSignals === englishSignals) return fallback
+  return frenchSignals > englishSignals ? 'fr' : 'en'
+}
+
 const SCHOOL_CONTACT = {
   email: 'kinshasachristianschool@gmail.com',
   phone: '+243 895 326 011',
@@ -128,6 +136,8 @@ const AIChat = () => {
   const sendMessage = async (draft = input) => {
     const cleanInput = draft.trim()
     if (!cleanInput || isLoading) return
+    const responseLanguage = detectMessageLanguage(cleanInput, chatLanguage)
+    if (responseLanguage !== chatLanguage) setChatLanguage(responseLanguage)
 
     const userMessage: ChatMessage = {
       id: generateId(),
@@ -146,11 +156,11 @@ const AIChat = () => {
         content: message.content,
       }))
 
-      const response = await aiAPI.chat(recentMessages, chatLanguage)
+      const response = await aiAPI.chat(recentMessages, responseLanguage)
       const assistantContent =
         response.data?.data?.response ||
         response.data?.data?.message ||
-        getLocalSchoolResponse(cleanInput, chatLanguage)
+        getLocalSchoolResponse(cleanInput, responseLanguage)
 
       setMessages((prev) => [
         ...prev,
@@ -167,7 +177,7 @@ const AIChat = () => {
         {
           id: generateId(),
           role: 'assistant',
-          content: getLocalSchoolResponse(cleanInput, chatLanguage),
+          content: getLocalSchoolResponse(cleanInput, responseLanguage),
           timestamp: new Date().toISOString(),
         },
       ])
@@ -212,7 +222,7 @@ const AIChat = () => {
             animate={{ opacity: 1, scale: 1, y: 0, height: minimized ? 'auto' : 'min(500px, 72dvh)' }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
             transition={{ duration: 0.3, type: 'spring', stiffness: 300, damping: 30 }}
-            className="nexus-glass-card fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] right-3 z-50 flex w-[calc(100vw-1.5rem)] max-w-[380px] flex-col overflow-hidden rounded-2xl sm:bottom-6 sm:right-6 sm:w-[380px]"
+            className="nexus-glass-card fixed bottom-[max(4.75rem,calc(env(safe-area-inset-bottom)+4rem))] right-3 z-50 flex w-[calc(100vw-1.5rem)] max-w-[380px] flex-col overflow-hidden rounded-2xl sm:bottom-6 sm:right-6 sm:w-[380px]"
             style={{ maxHeight: minimized ? undefined : 'min(500px, 72dvh)' }}
           >
             <div className="flex min-w-0 flex-shrink-0 items-center justify-between gap-2 p-3 sm:p-4 kcs-gradient">
