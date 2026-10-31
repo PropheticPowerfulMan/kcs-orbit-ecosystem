@@ -16,6 +16,39 @@ import { convertAmount, CurrencyDisplayProvider, DisplayMoney, ExchangeRateCard,
 type Lang = 'fr' | 'en'
 type Page = 'dashboard' | 'menus' | 'pos' | 'orders' | 'catalog' | 'transactions' | 'ledger' | 'inventory' | 'procurement' | 'disputes' | 'reports' | 'access' | 'school-dues' | 'manager-inbox' | 'settings'
 
+type LiveOrderAlert = {
+  kind: 'pending' | 'settled'
+  title: string
+  message: string
+  transactionNumber: string
+}
+
+function playOrderTone(kind: LiveOrderAlert['kind']) {
+  try {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) return
+    const context = new AudioContextClass()
+    const notes = kind === 'pending' ? [659, 784, 988] : [523, 659, 784, 1047]
+    notes.forEach((frequency, index) => {
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      const startsAt = context.currentTime + index * .12
+      oscillator.type = kind === 'pending' ? 'triangle' : 'sine'
+      oscillator.frequency.setValueAtTime(frequency, startsAt)
+      gain.gain.setValueAtTime(.0001, startsAt)
+      gain.gain.exponentialRampToValueAtTime(kind === 'pending' ? .12 : .1, startsAt + .025)
+      gain.gain.exponentialRampToValueAtTime(.0001, startsAt + .18)
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start(startsAt)
+      oscillator.stop(startsAt + .2)
+    })
+    window.setTimeout(() => void context.close(), 900)
+  } catch {
+    // Some browsers require a prior user gesture before allowing sound.
+  }
+}
+
 type StatementHolder = {
   orbitPersonId: string
   displayId: string | null
@@ -236,7 +269,7 @@ const text = {
     trackInventory: 'Suivre le stock', updateReason: 'Motif de la modification', saveChanges: 'Enregistrer les modifications', unavailable: 'Indisponible',
     secureAccess: 'ACCÈS SÉCURISÉ', smartManagement: 'Gestion intelligente de la cantine',
     identityProof: 'Identité Orbit · Session chiffrée · Accès audité',
-    managerHint: 'Gestionnaires : utilisez votre identité Admin Nexus institutionnelle. Aucun compte Kitchen séparé n’est créé.',
+    managerHint: 'Élèves, enseignants et staff : choisissez Consommateur avec vos accès Orbit. Le caissier et le gestionnaire disposent chacun de leur portail dédié.',
     live: 'EN DIRECT', verified: 'Orbit vérifié', lightMode: 'Mode soleil', darkMode: 'Mode lune',
     personalAccount: 'COMPTE KITCHEN PERSONNEL', welcome: 'Bienvenue', consumptionLive: 'Votre relevé de consommation est à jour, exact et vérifiable.',
     thisMonth: 'Ce mois-ci', recentActivity: 'ACTIVITÉ RÉCENTE', kitchenNotifications: 'Notifications Kitchen',
@@ -270,7 +303,7 @@ const text = {
     trackInventory: 'Track inventory', updateReason: 'Reason for update', saveChanges: 'Save changes', unavailable: 'Unavailable',
     secureAccess: 'SECURE ACCESS', smartManagement: 'Smart canteen management',
     identityProof: 'Orbit identity · Encrypted session · Audited access',
-    managerHint: 'Managers: use your institutional Nexus Admin identity. No separate Kitchen account is created.',
+    managerHint: 'Students, teachers and staff: choose Consumer with your Orbit credentials. The cashier and manager each have a dedicated portal.',
     live: 'LIVE', verified: 'Orbit verified', lightMode: 'Light mode', darkMode: 'Dark mode',
     personalAccount: 'PERSONAL KITCHEN ACCOUNT', welcome: 'Welcome', consumptionLive: 'Your consumption ledger is live, exact and verifiable.',
     thisMonth: 'This month', recentActivity: 'RECENT ACTIVITY', kitchenNotifications: 'Kitchen notifications',
@@ -308,7 +341,7 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [accessMode, setAccessMode] = useState<'STAFF' | 'ADMIN'>('STAFF')
+  const [accessMode, setAccessMode] = useState<'CUSTOMER' | 'CASHIER' | 'ADMIN'>('CUSTOMER')
   const [credentials, setCredentials] = useState({ identifier: '', password: '' })
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -320,11 +353,14 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
       })
       const isKitchenStaff = result.user.role === 'CASHIER'
       const isKitchenAdministrator = result.user.role === 'KITCHEN_ADMIN'
-      if ((accessMode === 'STAFF' && !isKitchenStaff) || (accessMode === 'ADMIN' && !isKitchenAdministrator)) {
+      const isConsumer = ['TEACHER', 'STAFF', 'STUDENT'].includes(result.user.role)
+      if ((accessMode === 'CUSTOMER' && !isConsumer) || (accessMode === 'CASHIER' && !isKitchenStaff) || (accessMode === 'ADMIN' && !isKitchenAdministrator)) {
         setToken(null)
-        throw new Error(accessMode === 'STAFF'
-          ? (lang === 'fr' ? 'Ce portail est réservé au personnel de caisse Kitchen. Choisissez « Administration » si vous êtes le gestionnaire.' : 'This portal is reserved for Kitchen point-of-sale staff. Choose “Administration” if you are the manager.')
-          : (lang === 'fr' ? 'Ce portail est réservé au gestionnaire Kitchen. Choisissez « Personnel / Point de vente » pour la caisse.' : 'This portal is reserved for the Kitchen manager. Choose “Staff / Point of sale” for cashier access.'))
+        throw new Error(accessMode === 'CUSTOMER'
+          ? (lang === 'fr' ? 'Choisissez cet accès avec vos identifiants Orbit d’élève, d’enseignant ou de membre du personnel.' : 'Use this access with your Orbit student, teacher or staff credentials.')
+          : accessMode === 'CASHIER'
+            ? (lang === 'fr' ? 'Ce portail est réservé au caissier Kitchen. Choisissez « Administration » si vous êtes le gestionnaire.' : 'This portal is reserved for the Kitchen cashier. Choose “Administration” if you are the manager.')
+            : (lang === 'fr' ? 'Ce portail est réservé au gestionnaire Kitchen. Choisissez « Caissier » pour la caisse.' : 'This portal is reserved for the Kitchen manager. Choose “Cashier” for point-of-sale access.'))
       }
       setToken(result.token); onLogin(result.user)
     } catch (err) { setError((err as Error).message) } finally { setLoading(false) }
@@ -343,7 +379,8 @@ function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <section className="login-card">
       <div><span className="eyebrow">{t.secureAccess}</span><h2>{t.signIn}</h2><p>{t.powered}</p></div>
       <div className="kitchen-login-modes" role="tablist" aria-label={lang === 'fr' ? 'Type d’accès Kitchen' : 'Kitchen access type'}>
-        <button type="button" role="tab" aria-selected={accessMode === 'STAFF'} className={accessMode === 'STAFF' ? 'active' : ''} onClick={() => setAccessMode('STAFF')}><ShoppingCart />{lang === 'fr' ? 'Personnel · Point de vente' : 'Staff · Point of sale'}</button>
+        <button type="button" role="tab" aria-selected={accessMode === 'CUSTOMER'} className={accessMode === 'CUSTOMER' ? 'active' : ''} onClick={() => setAccessMode('CUSTOMER')}><Users />{lang === 'fr' ? 'Consommateur' : 'Consumer'}</button>
+        <button type="button" role="tab" aria-selected={accessMode === 'CASHIER'} className={accessMode === 'CASHIER' ? 'active' : ''} onClick={() => setAccessMode('CASHIER')}><ShoppingCart />{lang === 'fr' ? 'Caissier' : 'Cashier'}</button>
         <button type="button" role="tab" aria-selected={accessMode === 'ADMIN'} className={accessMode === 'ADMIN' ? 'active' : ''} onClick={() => setAccessMode('ADMIN')}><ShieldCheck />{lang === 'fr' ? 'Administration' : 'Administration'}</button>
       </div>
       <form onSubmit={submit} autoComplete="on">
@@ -387,6 +424,8 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
   useEffect(() => { document.body.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('kcs-kitchen-theme', dark ? 'dark' : 'light') }, [dark])
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('kcs-kitchen-sidebar') === 'collapsed')
   const [officialAvatar, setOfficialAvatar] = useState('')
+  const [liveOrderAlert, setLiveOrderAlert] = useState<LiveOrderAlert | null>(null)
+  const orderSnapshotRef = useRef<Map<string, string> | null>(null)
   useEffect(() => {
     if (!user.hasOfficialPhoto) return
     let active = true
@@ -453,11 +492,58 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
       menuButtonRef.current?.focus()
     }
   }, [drawerViewport, open])
+  useEffect(() => {
+    if (!['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)) return
+    let active = true
+    let alertTimer = 0
+    const monitorOrders = async () => {
+      try {
+        const result = await api<{ transactions: Transaction[] }>('/transactions')
+        if (!active) return
+        const nextSnapshot = new Map(result.transactions.map(transaction => [transaction.id, transaction.status]))
+        const previous = orderSnapshotRef.current
+        orderSnapshotRef.current = nextSnapshot
+        if (!previous) return
+        const newPending = result.transactions.find(transaction => transaction.status === 'PENDING' && !previous.has(transaction.id))
+        const newlySettled = result.transactions.find(transaction => transaction.status === 'CONFIRMED' && previous.get(transaction.id) === 'PENDING')
+        const changed = newlySettled || newPending
+        if (!changed) return
+        const kind: LiveOrderAlert['kind'] = newlySettled ? 'settled' : 'pending'
+        const alert: LiveOrderAlert = kind === 'settled'
+          ? {
+              kind,
+              title: lang === 'fr' ? 'Commande réglée et comptabilisée' : 'Order settled and recorded',
+              message: lang === 'fr' ? `${changed.personNameSnapshot} · la vente est synchronisée avec le registre du gestionnaire.` : `${changed.personNameSnapshot} · the sale is synchronized with the manager register.`,
+              transactionNumber: changed.transactionNumber
+            }
+          : {
+              kind,
+              title: lang === 'fr' ? 'Nouvelle commande en attente' : 'New order awaiting action',
+              message: lang === 'fr' ? `${changed.personNameSnapshot} vient d’envoyer une commande à traiter.` : `${changed.personNameSnapshot} has just placed an order for processing.`,
+              transactionNumber: changed.transactionNumber
+            }
+        window.clearTimeout(alertTimer)
+        setLiveOrderAlert(alert)
+        playOrderTone(kind)
+        alertTimer = window.setTimeout(() => setLiveOrderAlert(null), kind === 'pending' ? 12000 : 9000)
+      } catch {
+        // Page-level connectivity feedback remains responsible for network errors.
+      }
+    }
+    void monitorOrders()
+    const timer = window.setInterval(() => void monitorOrders(), 7000)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.clearTimeout(alertTimer)
+      orderSnapshotRef.current = null
+    }
+  }, [lang, user.role])
   const nav: Array<[Page, string, ReactNode, boolean]> = [
     ['dashboard', t.dashboard, <LayoutDashboard />, !isKitchenStaff],
     ['menus', lang === 'fr' ? 'Menu du jour' : 'Daily menu', <CalendarDays />, user.role === 'KITCHEN_ADMIN'],
     ['pos', t.pos, <ShoppingCart />, ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)],
-    ['orders', t.orders, <BellRing />, !isKitchenStaff],
+    ['orders', t.orders, <BellRing />, ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role) || !isKitchenStaff],
     ['catalog', t.catalog, <ChefHat />, isPrivileged && !isKitchenStaff],
     ['transactions', t.transactions, <ReceiptText />, !isKitchenStaff],
     ['ledger', t.ledger, <Wallet />, !isKitchenStaff && user.role !== 'KITCHEN_ADMIN'],
@@ -526,6 +612,18 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         {page === 'procurement' && <Procurement user={user} lang={lang} />}
       </div>
     </main>
+    {liveOrderAlert && <div className="live-order-alert-backdrop" role="alertdialog" aria-live="assertive" aria-label={liveOrderAlert.title}>
+      <section className={'live-order-alert ' + liveOrderAlert.kind}>
+        <span className="live-order-alert-icon">{liveOrderAlert.kind === 'settled' ? <CheckCircle2 /> : <BellRing />}</span>
+        <span className="eyebrow">KCS KITCHEN · {liveOrderAlert.transactionNumber}</span>
+        <h2>{liveOrderAlert.title}</h2>
+        <p>{liveOrderAlert.message}</p>
+        <div className="button-row">
+          <button onClick={() => setLiveOrderAlert(null)}>{lang === 'fr' ? 'Fermer' : 'Close'}</button>
+          <button className="primary" onClick={() => { setLiveOrderAlert(null); navigateToPage('orders') }}><BellRing />{lang === 'fr' ? 'Ouvrir les commandes' : 'Open orders'}</button>
+        </div>
+      </section>
+    </div>}
     </CurrencyDisplayProvider>
   </div>
 }

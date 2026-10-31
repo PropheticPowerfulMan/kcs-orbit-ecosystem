@@ -168,15 +168,15 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const payload = z.object({
     identifier: z.string().trim().min(2).max(180),
     password: z.string().min(1).max(200),
-    accessMode: z.enum(['STAFF', 'ADMIN']).optional()
+    accessMode: z.enum(['CUSTOMER', 'CASHIER', 'STAFF', 'ADMIN']).optional()
   }).parse(req.body)
 
   const normalizedIdentifier = payload.identifier.toLowerCase()
-  const cashier = await prisma.kitchenCashierAccount.findUnique({ where: { email: normalizedIdentifier } })
+  const requestedMode = payload.accessMode || 'CUSTOMER'
+  const cashier = ['CASHIER', 'STAFF'].includes(requestedMode)
+    ? await prisma.kitchenCashierAccount.findUnique({ where: { email: normalizedIdentifier } })
+    : null
   if (cashier) {
-    if (payload.accessMode === 'ADMIN') {
-      return res.status(403).json({ message: 'The cashier account is restricted to Point of sale' })
-    }
     if (!cashier.isActive || !verifyLocalPassword(payload.password, cashier.passwordHash)) {
       return res.status(401).json({ message: 'Cashier email or password is incorrect' })
     }
@@ -213,6 +213,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const orbitPersonId = person?.id || String(nexusUser.id)
   const type = person ? personTypeFrom(person.kind) : 'ADMINISTRATIVE_STAFF'
   const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId } })
+  const personalRole = defaultRole(String(nexusUser.role), type)
   if (access && !access.isActive) return res.status(403).json({ message: 'KCS Kitchen access is disabled' })
 
   const identity: KitchenIdentity = {
@@ -221,7 +222,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     fullName: person?.fullName || [nexusUser.lastName, nexusUser.firstName].filter(Boolean).join(' ') || 'KCS Administrator',
     email: person?.email || nexusUser.email || null,
     personType: access?.personType || type,
-    role: access?.role || defaultRole(String(nexusUser.role), type),
+    role: access?.role || personalRole,
     hasOfficialPhoto: Boolean(person?.photoData),
     canManageOwnCredentials: canManageOwnKitchenCredentials({
       userId: String(nexusUser.id),
@@ -229,11 +230,21 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
       explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
     }),
   }
-  if (payload.accessMode === 'STAFF' && identity.role === 'KITCHEN_ADMIN') {
-    identity.role = 'CASHIER'
+  if (requestedMode === 'CUSTOMER') {
+    if (!['TEACHER', 'STAFF', 'STUDENT'].includes(personalRole)) {
+      return res.status(403).json({ message: 'This portal is reserved for Kitchen consumers with an active Orbit identity' })
+    }
+    identity.role = personalRole
     identity.canManageOwnCredentials = false
   }
-  if (payload.accessMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN') {
+  if (['CASHIER', 'STAFF'].includes(requestedMode)) {
+    if (identity.role === 'KITCHEN_ADMIN') identity.role = 'CASHIER'
+    if (identity.role !== 'CASHIER') {
+      return res.status(403).json({ message: 'Only the Kitchen cashier may use the Point of sale portal' })
+    }
+    identity.canManageOwnCredentials = false
+  }
+  if (requestedMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN') {
     return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may use the administration portal' })
   }
   res.json({ token: signSession(identity), user: identity })

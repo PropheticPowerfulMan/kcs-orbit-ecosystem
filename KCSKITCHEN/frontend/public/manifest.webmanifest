@@ -1,8 +1,8 @@
 {
   "name": "KCS Kitchen · Culinary",
   "short_name": "KCS Kitchen",
-  "id": "/kitchen/pwa/kcs-kitchen-culinary-v11",
-  "start_url": "/kitchen/?source=kcs-kitchen-pwa-v11",
+  "id": "/kitchen/app",
+  "start_url": "/kitchen/?source=kcs-kitchen-pwa-v12",
   "scope": "/kitchen/",
   "lang": "fr",
   "description": "Gestion professionnelle de la cantine de Kinshasa Christian School",
