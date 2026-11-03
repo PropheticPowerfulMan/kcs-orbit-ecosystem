@@ -96,8 +96,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          remote_action="$DEPLOY_ACTION"
+          if [[ "$DEPLOY_ACTION" == "deploy-nexus" ]]; then
+            # The VPS restricted key allowlists the existing "deploy" verb.
+            # The Nexus-specific confirmation routes ci-deploy.sh to the
+            # Nexus-only deployer, without invoking the ecosystem-wide deploy.
+            remote_action="deploy"
+          fi
           ssh -i ~/.ssh/kcs_deploy \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            root@"$VPS_HOST" "$DEPLOY_ACTION $RELEASE $CONFIRMATION"
+            root@"$VPS_HOST" "$remote_action $RELEASE $CONFIRMATION"

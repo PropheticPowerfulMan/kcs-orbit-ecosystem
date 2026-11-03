@@ -37,7 +37,7 @@ if [[ "$ACTION" == "rollback" ]]; then
   exec "$ROOT_DIR/ops/production/rollback.sh" "$RELEASE"
 fi
 
-if [[ "$ACTION" == "deploy-nexus" ]]; then
+if [[ "$ACTION" == "deploy-nexus" || ( "$ACTION" == "deploy" && "$CONFIRMATION" == "DEPLOY_NEXUS_PRODUCTION" ) ]]; then
   [[ "$CONFIRMATION" == "DEPLOY_NEXUS_PRODUCTION" ]] || { echo "Nexus deployment confirmation is invalid." >&2; exit 1; }
   [[ "$(git rev-parse HEAD)" == "$RELEASE" ]] || { echo "The VPS checkout must exactly match the requested release." >&2; exit 1; }
   set -a
