@@ -9,6 +9,7 @@ import { normalizeClassParts } from '../utils/className.js'
 import { teacherClassKey } from '../utils/teacherClassAccess.js'
 import { ensureTeacherProfile } from '../utils/teacherProfile.js'
 import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
+import { sendSchoolMail } from '../utils/mail.js'
 
 const submissionSchema=z.object({
  courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),term:z.string().min(2).max(80),
@@ -26,6 +27,38 @@ const parsePeriod=(period:string)=>{const [academicYear,term,status]=period.spli
 const attendanceWindow=(year:string,term:string)=>{const key=term.toLowerCase();if(year==='2026-2027'){if(key.includes('trimester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2026-12-18T23:59:59Z')};if(key.includes('trimester 2'))return{gte:new Date('2027-01-05T00:00:00Z'),lte:new Date('2027-03-19T23:59:59Z')};if(key.includes('trimester 3'))return{gte:new Date('2027-04-05T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')};if(key.includes('semester 1'))return{gte:new Date('2026-09-07T00:00:00Z'),lte:new Date('2027-01-29T23:59:59Z')};if(key.includes('semester 2'))return{gte:new Date('2027-02-01T00:00:00Z'),lte:new Date('2027-06-11T23:59:59Z')}}const [start,end]=year.split('-');return{gte:new Date(`${start}-08-01T00:00:00Z`),lte:new Date(`${end}-07-31T23:59:59Z`)}}
 const summarizeAttendance=(records:Array<{status:string}>)=>{const count=(status:string)=>records.filter(item=>item.status===status).length;const attended=records.filter(item=>['PRESENT','LATE','EXCUSED'].includes(item.status)).length;return{total:records.length,present:count('PRESENT'),absent:count('ABSENT'),late:count('LATE'),excused:count('EXCUSED'),sick:count('SICK'),suspended:count('SUSPENDED'),attendanceRate:records.length?Number((attended*100/records.length).toFixed(1)):null}}
 const reportCardTerm=(academicYear:string,term:string)=>`${academicYear} · ${term}`
+
+const reportCardEditSchema=z.object({
+ teacherComment:z.string().trim().max(1500).optional(),
+ conduct:z.string().trim().max(500).optional(),
+ principalName:z.string().trim().max(160).optional(),
+ signatureDataUrl:z.string().max(1_500_000).optional(),
+ sealDataUrl:z.string().max(1_500_000).optional(),
+ grades:z.array(z.object({courseId:z.string().min(1),percentage:z.number().min(0).max(100)})).max(200).optional(),
+})
+const reportCardSendSchema=z.object({
+ reportCardIds:z.array(z.string().min(1)).min(1).max(200),
+ parentIds:z.array(z.string().min(1)).max(500).optional(),
+ language:z.enum(['EN','FR']).default('EN'),
+ message:z.string().trim().max(3000).optional(),
+})
+const pdfEscape=(value:string)=>value.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)').replace(/[^\x20-\x7E]/g,'?')
+const buildSimpleReportCardPdf=(studentName:string,studentNumber:string,term:string,average:number,rows:Array<{name:string;percentage:number;letterGrade:string}>)=>{
+ const lines=['KINSHASA CHRISTIAN SCHOOL','OFFICIAL REPORT CARD','Student: '+studentName,'Student ID: '+studentNumber,'Period: '+term,'Official average: '+average.toFixed(2)+'%','','COURSE RESULTS',...rows.map(row=>row.name+' | '+row.percentage.toFixed(2)+'% | '+row.letterGrade)]
+ let y=790
+ const commands=['BT','/F1 11 Tf']
+ for(const line of lines){commands.push('1 0 0 1 48 '+y+' Tm ('+pdfEscape(line)+') Tj');y-=18;if(y<48){commands.push('ET');break}}
+ if(commands.at(-1)!=='ET')commands.push('ET')
+ const stream=commands.join('\n')
+ const objects=['1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n','2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n','3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n','4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n','5 0 obj\n<< /Length '+Buffer.byteLength(stream,'utf8')+' >>\nstream\n'+stream+'\nendstream\nendobj\n']
+ let pdf='%PDF-1.4\n',offsets=[0]
+ for(const object of objects){offsets.push(Buffer.byteLength(pdf,'utf8'));pdf+=object}
+ const xref=Buffer.byteLength(pdf,'utf8')
+ pdf+='xref\n0 '+(objects.length+1)+'\n0000000000 65535 f \n'
+ for(const offset of offsets.slice(1))pdf+=String(offset).padStart(10,'0')+' 00000 n \n'
+ pdf+='trailer\n<< /Size '+(objects.length+1)+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n'
+ return Buffer.from(pdf,'utf8')
+}
 const weightedCourseAverage=(grades:Array<{percentage:number;course:{credits:number}}>)=>{
  const credits=grades.reduce((sum,item)=>sum+Math.max(item.course.credits||1,1),0)
  return credits?Number((grades.reduce((sum,item)=>sum+(item.percentage*Math.max(item.course.credits||1,1)),0)/credits).toFixed(2)):0
@@ -278,8 +311,13 @@ academicRecordsRouter.post('/report-cards/generate',requireRoles('admin','staff'
 }))
 
 academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHandler(async(req,res)=>{
- const cards=await prisma.reportCard.findMany({where:req.query.status?{publicationStatus:String(req.query.status) as any}:{},include:{student:{include:{user:true}},approvedBy:true},orderBy:{updatedAt:'desc'}})
- return success(res,cards)
+ const cards=await prisma.reportCard.findMany({where:req.query.status?{publicationStatus:String(req.query.status) as any}:{},include:{student:{include:{user:true,parentLinks:{include:{parent:{select:{id:true,firstName:true,lastName:true,email:true}}}}}},approvedBy:true},orderBy:{updatedAt:'desc'}})
+ const hydrated=await Promise.all(cards.map(async(card)=>{
+  const parts=card.term.split(' · ');const academicYear=parts.shift()||'';const term=parts.join(' · ')
+  const grades=await prisma.grade.findMany({where:{studentId:card.studentId,assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},include:{course:{select:{id:true,name:true,code:true,credits:true}}},orderBy:{course:{name:'asc'}}})
+  return {...card,parents:card.student.parentLinks.map(link=>link.parent),courseGrades:grades.map(item=>({courseId:item.courseId,courseName:item.course.name,courseCode:item.course.code,percentage:item.percentage,letterGrade:item.letterGrade,credits:item.course.credits})),officialPresentation:((card.feeSummary as any)?.officialPresentation??null)}
+ }))
+ return success(res,hydrated)
 }))
 
 academicRecordsRouter.patch('/report-cards/:id/approve',requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
@@ -310,6 +348,48 @@ academicRecordsRouter.patch('/report-cards/:id/publish',requireRoles('admin','st
   return updated
  })
  return success(res,card,'Approved report card published to the portal')
+}))
+
+
+academicRecordsRouter.patch('/report-cards/:id/edit',requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const id=getRouteParam(req.params.id);const payload=reportCardEditSchema.parse(req.body)
+ const result=await prisma.$transaction(async(tx)=>{
+  const current=await tx.reportCard.findUnique({where:{id},include:{student:{include:{user:true}}}})
+  if(!current)throw new ApiError(404,'Report card not found')
+  const parts=current.term.split(' · ');const academicYear=parts.shift()||'';const term=parts.join(' · ')
+  const source=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},include:{course:{select:{id:true,credits:true}}}})
+  const requested=new Map((payload.grades??[]).map(item=>[item.courseId,item.percentage]))
+  for(const grade of source){const value=requested.get(grade.courseId);if(value===undefined)continue;await tx.grade.update({where:{id:grade.id},data:{score:value,percentage:value,letterGrade:letter(value)}})}
+  const refreshed=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},include:{course:{select:{credits:true}}}})
+  const presentation={...(((current.feeSummary as any)?.officialPresentation??{})),...(payload.principalName!==undefined?{principalName:payload.principalName}:{}),...(payload.signatureDataUrl!==undefined?{signatureDataUrl:payload.signatureDataUrl}:{}),...(payload.sealDataUrl!==undefined?{sealDataUrl:payload.sealDataUrl}:{})}
+  const updated=await tx.reportCard.update({where:{id},data:{average:weightedCourseAverage(refreshed),teacherComment:payload.teacherComment,conduct:payload.conduct,feeSummary:{...((current.feeSummary as any)||{}),officialPresentation:presentation}}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'REPORT_CARD_ADMIN_EDITED',targetType:'ReportCard',targetId:id,metadata:{academicYear,term,changedCourses:[...requested.keys()],average:updated.average}}})
+  return {updated,refreshed}
+ })
+ return success(res,{...result.updated,courseGrades:result.refreshed.map(item=>({courseId:item.courseId,courseName:(item as any).course.name,percentage:item.percentage,letterGrade:item.letterGrade})),officialPresentation:((result.updated.feeSummary as any)?.officialPresentation??null)},'Report card corrected and average recalculated')
+}))
+academicRecordsRouter.post('/report-cards/send',requireRoles('admin'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=reportCardSendSchema.parse(req.body)
+ const cards=await prisma.reportCard.findMany({where:{id:{in:payload.reportCardIds}},include:{student:{include:{user:true,parentLinks:{include:{parent:true}}}}}})
+ if(cards.length!==payload.reportCardIds.length)throw new ApiError(404,'One or more report cards were not found')
+ const sent:Array<{reportCardId:string;parentId:string;email:string;sent:boolean}>=[]
+ for(const card of cards){
+  const parts=card.term.split(' · ');const academicYear=parts.shift()||'';const term=parts.join(' · ')
+  const grades=await prisma.grade.findMany({where:{studentId:card.studentId,assignmentId:null,period:periodKey(academicYear,term,'SUBMITTED')},include:{course:{select:{name:true}}},orderBy:{course:{name:'asc'}}})
+  const recipients=card.student.parentLinks.filter(link=>!payload.parentIds?.length||payload.parentIds.includes(link.parentId))
+  for(const link of recipients){
+   if(!link.parent.email)continue
+   const studentName=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
+   const subject=payload.language==='FR'?'Bulletin officiel KCS — '+studentName:'Official KCS report card — '+studentName
+   const body=payload.message||(payload.language==='FR'?'Bonjour,\n\nVeuillez trouver en pièce jointe le bulletin officiel de '+studentName+' pour '+card.term+'.\n\nCordialement,\nKinshasa Christian School':'Hello,\n\nPlease find attached the official report card for '+studentName+' for '+card.term+'.\n\nKind regards,\nKinshasa Christian School')
+   const pdf=buildSimpleReportCardPdf(studentName,card.student.studentNumber,card.term,card.average,grades.map(item=>({name:item.course.name,percentage:item.percentage,letterGrade:letter(item.percentage)})))
+   const result=await sendSchoolMail({to:link.parent.email,subject,text:body,html:'<p>'+body.replace(/\n/g,'<br>')+'</p>',branded:true,attachments:[{filename:'report-card-'+card.student.studentNumber+'.pdf',content:pdf,contentType:'application/pdf'}]})
+   sent.push({reportCardId:card.id,parentId:link.parentId,email:link.parent.email,sent:result.sent})
+   await prisma.correspondenceLog.create({data:{channel:'EMAIL',status:result.sent?'SENT':'FAILED',subject,body,recipientName:[link.parent.lastName,link.parent.firstName].filter(Boolean).join(' '),recipientEmail:link.parent.email,studentId:card.studentId,reportCardId:card.id,sentAt:result.sent?new Date():undefined,failureReason:result.sent?undefined:(result.reason||'DELIVERY_FAILED')}})
+  }
+  await prisma.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date()}})
+ }
+ return success(res,{sent},'Selected report cards sent to the targeted parents')
 }))
 
 academicRecordsRouter.patch('/transcripts/:studentId/visibility', requireSuperAdmin(), asyncHandler(async(req:AuthenticatedRequest,res)=>{

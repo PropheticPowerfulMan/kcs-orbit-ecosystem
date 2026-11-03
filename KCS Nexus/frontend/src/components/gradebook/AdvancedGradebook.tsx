@@ -276,7 +276,6 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }, [selectedCourseId, students])
 
   useEffect(() => {
-    if (!spreadsheetOpen) return
     const handleSaveShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === 's' || event.key.toLowerCase() === 'c')) {
         event.preventDefault(); void saveSpreadsheet()
@@ -284,7 +283,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
     window.addEventListener('keydown', handleSaveShortcut)
     return () => window.removeEventListener('keydown', handleSaveShortcut)
-  }, [spreadsheetOpen, scores, comments, assignments, selectedCourseId])
+  }, [scores, comments, assignments, categories, selectedCourseId])
   const enrolledCourseStudents = useMemo(() => selectedCourse?.studentIds?.length
     ? selectedCourse.studentIds.map((id) => students.find((student) => student.id === id)).filter(Boolean) as GradebookStudent[]
     : students, [selectedCourse, students])

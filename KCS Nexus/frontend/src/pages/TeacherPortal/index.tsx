@@ -788,6 +788,11 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
 
   const deleteCourse = async (courseId: string) => {
     const course = courses.find((item) => item.id === courseId)
+    const confirmationKey = 'kcs-confirm-delete-courses'
+    if (window.localStorage.getItem(confirmationKey) !== 'skip') {
+      if (!window.confirm('Delete ' + (course?.name ?? 'this course') + '? This removes the course from My Courses and its local Gradebook view.')) return
+      if (window.confirm('Do not ask again for course deletion? You can restore confirmations from My Courses settings.')) window.localStorage.setItem(confirmationKey, 'skip')
+    }
     const nextCourses = courses.filter((item) => item.id !== courseId)
     if (!await persistWorkspace({ courses: nextCourses }, `${course?.name ?? 'Subject'} removed and saved.`)) return
     setCourses(nextCourses)
