@@ -17,6 +17,7 @@ import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACA
 import { isVisibleInSuperAdministrationQueue, verifyFinalGradePropagation } from '../services/academicSubmissionWorkflow.js'
 import { summarizeAttendanceStatuses } from '../utils/attendancePolicy.js'
 import { aggregateReportCardResults, reportCardSourcePeriodTerms } from '../services/annualReportCard.service.js'
+import { officialReportCardPdf } from '../utils/officialReportCardPdf.js'
 
 const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
 const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
@@ -42,6 +43,11 @@ const reportCardEditorialSchema=z.object({
  teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500),average:z.number().min(0).max(100),
  attendanceSummary:attendanceCorrectionSchema.nullable(),
  subjects:z.array(z.object({courseId:z.string().min(1),percentage:z.number().min(0).max(100)})).max(100),
+})
+const reportCardOfficialSettingsSchema=z.object({
+ principalName:z.string().trim().min(2).max(120),
+ signatureImage:z.string().max(900_000).refine(value=>value===''||/^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/s.test(value),'Only PNG or WebP signature images are accepted.'),
+ officialSealImage:z.string().max(1_500_000).refine(value=>value===''||/^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/s.test(value),'Only PNG or WebP seal images are accepted.'),
 })
 const letter=(value:number)=>value>=97?'A+':value>=93?'A':value>=90?'A-':value>=87?'B+':value>=83?'B':value>=80?'B-':value>=77?'C+':value>=73?'C':value>=70?'C-':value>=67?'D+':value>=63?'D':value>=60?'D-':'F'
 const periodKey=(year:string,term:string,status:'SUBMITTED'|'APPROVED')=>academicPeriodKey(year,term as Parameters<typeof academicPeriodKey>[1],status)
@@ -697,27 +703,85 @@ academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),as
   const current=await tx.reportCard.findUnique({where:{id}})
   if(!current)throw new ApiError(404,'Report card not found')
   const previous={teacherComment:current.teacherComment,conduct:current.conduct,average:current.average,attendanceSummary:current.attendanceSummary,academicCorrections:current.academicCorrections,publicationStatus:current.publicationStatus}
+ const parsedCycle=splitReportCardTerm(current.term)
+ const sourcePeriods=reportCardSourcePeriodTerms(parsedCycle.term).map(term=>`${parsedCycle.academicYear}::${term}::SUBMITTED`)
+ const officialSources=await tx.grade.findMany({where:{studentId:current.studentId,assignmentId:null,period:{in:sourcePeriods}},select:{courseId:true}})
+ const officialCourseIds=new Set(officialSources.map(item=>item.courseId))
+ if(payload.subjects.some(item=>!officialCourseIds.has(item.courseId)))throw new ApiError(400,'A corrected subject is not part of this learner report card')
+ const courseCredits=await tx.course.findMany({where:{id:{in:payload.subjects.map(item=>item.courseId)}},select:{id:true,credits:true}})
+  const creditByCourse=new Map(courseCredits.map(item=>[item.id,Math.max(1,item.credits||1)]))
   const correctedSubjects=payload.subjects.map(subject=>({...subject,percentage:Number(subject.percentage.toFixed(2)),letterGrade:letter(subject.percentage)}))
+  const totalWeight=correctedSubjects.reduce((sum,item)=>sum+(creditByCourse.get(item.courseId)??1),0)
+  const officialAverage=correctedSubjects.length&&totalWeight
+   ? Number((correctedSubjects.reduce((sum,item)=>sum+item.percentage*(creditByCourse.get(item.courseId)??1),0)/totalWeight).toFixed(2))
+   : Number(payload.average.toFixed(2))
   const requiresReapproval=['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(current.publicationStatus)
   const updated=await tx.reportCard.update({where:{id},data:{
-   teacherComment:payload.teacherComment||null,conduct:payload.conduct||null,average:Number(payload.average.toFixed(2)),attendanceSummary:payload.attendanceSummary as any,
+   teacherComment:payload.teacherComment||null,conduct:payload.conduct||null,average:officialAverage,attendanceSummary:payload.attendanceSummary as any,
    academicCorrections:{...academicCorrections(current.academicCorrections),subjects:correctedSubjects,correctedBy:actorId,correctedAt:new Date().toISOString()} as any,
    ...(requiresReapproval?{principalStatus:'READY_FOR_REVIEW',publicationStatus:'READY_FOR_REVIEW' as const,approvedById:null,approvedAt:null,emailedAt:null,portalPostedAt:null}:{}),
   }})
-  await tx.auditLog.create({data:{actorId,action:'SUPERADMIN_REPORT_CARD_FULL_CORRECTION',targetType:'ReportCard',targetId:id,metadata:{previous,next:{...payload,subjects:correctedSubjects},requiresReapproval,term:current.term,studentId:current.studentId}}})
+  await tx.auditLog.create({data:{actorId,action:'SUPERADMIN_REPORT_CARD_FULL_CORRECTION',targetType:'ReportCard',targetId:id,metadata:{previous,next:{...payload,average:officialAverage,subjects:correctedSubjects},averageRule:'credit-weighted visible course results',requiresReapproval,term:current.term,studentId:current.studentId}}})
   return updated
  })
  return success(res,card,'Report-card academic and presentation fields updated and audited')
 }))
 
-academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const payload=z.object({deliveries:z.array(z.object({reportCardId:z.string().min(1),parentIds:z.array(z.string().min(1)).max(10).default([])})).min(1).max(250)}).parse(req.body)
+academicRecordsRouter.get('/report-cards/official-settings',requireSuperAdmin(),asyncHandler(async(_req,res)=>{
+ const latest=await prisma.auditLog.findFirst({where:{action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global'},orderBy:{createdAt:'desc'},select:{metadata:true}})
+ const account=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
+ const metadata=(latest?.metadata??{}) as Record<string,unknown>
+ return success(res,{principalName:String(metadata.principalName??''),signatureImage:account?.signatureImage??'',officialSealImage:account?.officialSealImage??''})
+}))
+
+academicRecordsRouter.put('/report-cards/official-settings',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=reportCardOfficialSettingsSchema.parse(req.body)
  const actorId=await resolveAcademicActorId(req)
+ if(!actorId)throw new ApiError(403,'A configured Super Administrator account is required to save official assets')
+ await prisma.$transaction(async tx=>{
+  await tx.user.update({where:{id:actorId},data:{signatureImage:payload.signatureImage||null,signatureUpdatedAt:new Date(),officialSealImage:payload.officialSealImage||null,officialSealUpdatedAt:new Date()}})
+  await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global',metadata:{principalName:payload.principalName,hasSignature:Boolean(payload.signatureImage),hasSeal:Boolean(payload.officialSealImage)}}})
+ })
+ return success(res,payload,'Official report-card signature, principal name, and school seal saved')
+}))
+
+academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({language:z.enum(['fr','en']).default('en'),deliveries:z.array(z.object({reportCardId:z.string().min(1),parentIds:z.array(z.string().min(1)).min(1).max(10)})).min(1).max(250)}).parse(req.body)
+ if(payload.deliveries.reduce((sum,item)=>sum+item.parentIds.length,0)>100)throw new ApiError(400,'Send report cards to at most 100 parent accounts per batch')
+ const actorId=await resolveAcademicActorId(req)
+ const settingsRow=await prisma.auditLog.findFirst({where:{action:'REPORT_CARD_OFFICIALIZATION_SETTINGS',targetType:'ReportCardSettings',targetId:'global'},orderBy:{createdAt:'desc'},select:{metadata:true}})
+ const officialSettings=(settingsRow?.metadata??{}) as {principalName?:string;signatureImage?:string;officialSealImage?:string}
+ const officialAccount=await prisma.user.findUnique({where:{email:process.env.SUPERADMIN_EMAIL||'superadmin@kcsnexus.com'},select:{signatureImage:true,officialSealImage:true}})
  const uniqueDeliveries=[...new Map(payload.deliveries.map(item=>[item.reportCardId,item])).values()]
  const cards=await prisma.reportCard.findMany({where:{id:{in:uniqueDeliveries.map(item=>item.reportCardId)}},include:{student:{include:{user:true,parentLinks:{include:{parent:true}}}}}})
  if(cards.length!==uniqueDeliveries.length)throw new ApiError(404,'One or more selected report cards no longer exist')
  const invalid=cards.filter(card=>!['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus))
  if(invalid.length)throw new ApiError(409,'Only approved report cards may be sent to parents')
+ const pdfByCard=new Map<string,Awaited<ReturnType<typeof officialReportCardPdf>>>()
+ for(const card of cards){
+  const parsed=splitReportCardTerm(card.term)
+  const sourcePeriods=reportCardSourcePeriodTerms(parsed.term).map(term=>`${parsed.academicYear}::${term}::SUBMITTED`)
+  const source=await prisma.grade.findMany({where:{studentId:card.studentId,assignmentId:null,period:{in:sourcePeriods}},include:{course:{select:{id:true,name:true,code:true,credits:true}}},orderBy:{createdAt:'desc'}})
+  const aggregated=aggregateReportCardResults(source,parsed.academicYear,parsed.term)
+  const correction=academicCorrections(card.academicCorrections)
+  const override=correctionMap(card.academicCorrections)
+  const hidden=new Set(correction.hiddenCourseIds??[])
+  const latestCourse=new Map<string,typeof source[number]['course']>()
+  for(const grade of source)if(!latestCourse.has(grade.courseId))latestCourse.set(grade.courseId,grade.course)
+  const subjects=[...aggregated.values()].flatMap(item=>{
+   if(item.percentage===null||hidden.has(item.courseId))return[]
+   const course=latestCourse.get(item.courseId);if(!course)return[]
+   const corrected=override.get(item.courseId)
+   const percentage=corrected?.percentage??item.percentage
+   const safeGrade=String(card.student.grade??'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&')
+   const suffix=new RegExp(`\\s*(?:-|\\u2013|\\u2014|\\u00b7)\\s*${safeGrade}(?:\\s+[A-Z])?\\s*$`,'i')
+   const name=String(course.name).replace(suffix,'').trim()||course.name
+   return[{name,code:course.code,credits:course.credits,percentage,letterGrade:letter(percentage),termResults:item.termResults}]
+  })
+  const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
+  const pdf=await officialReportCardPdf({id:card.id,studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:card.attendanceSummary as any,language:payload.language,principal:{name:officialSettings.principalName||'Principal',image:officialAccount?.signatureImage},seal:officialAccount?.officialSealImage})
+  pdfByCard.set(card.id,pdf)
+ }
  let recipients=0
  await prisma.$transaction(async tx=>{
   for(const card of cards){
@@ -725,16 +789,18 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
    const linked=card.student.parentLinks.filter(link=>!request.parentIds.length||request.parentIds.includes(link.parentId))
    if(!linked.length)throw new ApiError(409,`No selected parent is linked to ${card.student.studentNumber}`)
    const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
-   const subject=`KCS · Official report card · ${learner} · ${card.term}`
-   const body=`The official report card for ${learner} (${card.student.studentNumber}) is ready for ${card.term}. Average: ${card.average.toFixed(2)}%. Sign in to KCS Nexus to view the controlled official document.`
+   const subject=payload.language==='fr'?`KCS · Bulletin scolaire officiel · ${learner} · ${card.term}`:`KCS · Official report card · ${learner} · ${card.term}`
+   const body=payload.language==='fr'?`Bonjour,\n\nVeuillez trouver en pièce jointe le bulletin officiel de ${learner} (${card.student.studentNumber}) pour ${card.term}. Moyenne officielle : ${card.average.toFixed(2)} %.\n\nLe document comporte un code QR permettant de vérifier son authenticité auprès du registre KCS Nexus.\n\nCordialement,\nKinshasa Christian School`:`Dear Parent/Guardian,\n\nPlease find attached the official report card for ${learner} (${card.student.studentNumber}) for ${card.term}. Official average: ${card.average.toFixed(2)}%.\n\nThe document includes a QR code to verify its authenticity in the KCS Nexus register.\n\nSincerely,\nKinshasa Christian School`
+   const pdf=pdfByCard.get(card.id)!
    for(const {parent} of linked){
-    const message=await tx.internalMessage.create({data:{senderId:actorId,recipientId:parent.id,subject,body,priority:'high'}})
+    const message=await tx.internalMessage.create({data:{senderId:actorId,recipientId:parent.id,subject,body,priority:'high',attachmentName:`${pdf.documentId}.pdf`,attachmentMime:'application/pdf',attachmentSize:pdf.buffer.length,attachmentData:pdf.buffer}})
     await tx.notification.create({data:{userId:parent.id,title:subject,message:body,type:'MESSAGE',link:'/portal/parent/grades'}})
-    await tx.correspondenceLog.create({data:{channel:'EMAIL',status:parent.email?'QUEUED':'FAILED',subject,body,senderId:actorId,recipientName:[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),recipientEmail:parent.email,recipientPhone:parent.phone,studentId:card.studentId,reportCardId:card.id,failureReason:parent.email?null:'RECIPIENT_EMAIL_MISSING',metadata:{mailQueueVersion:1,internalMessageId:message.id,recipientId:parent.id,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH'}}})
+    await tx.correspondenceLog.create({data:{channel:'EMAIL',status:parent.email?'QUEUED':'FAILED',subject,body,senderId:actorId,recipientName:[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' '),recipientEmail:parent.email,recipientPhone:parent.phone,studentId:card.studentId,reportCardId:card.id,failureReason:parent.email?null:'RECIPIENT_EMAIL_MISSING',metadata:{mailQueueVersion:1,internalMessageId:message.id,recipientId:parent.id,attempts:0,nextAttemptAt:new Date().toISOString(),priority:'HIGH',language:payload.language}}})
     recipients++
    }
    await tx.reportCard.update({where:{id:card.id},data:{publicationStatus:'EMAILED',emailedAt:new Date(),portalPostedAt:card.portalPostedAt??new Date()}})
-   await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_DELIVERY_QUEUED',targetType:'ReportCard',targetId:card.id,metadata:{studentId:card.studentId,parentIds:linked.map(item=>item.parentId),term:card.term}}})
+   await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_VERIFICATION_ISSUED',targetType:'OfficialReportCard',targetId:pdf.documentId,metadata:{fingerprint:pdf.fingerprint,reportCardId:card.id,studentId:card.studentId,publicationStatus:'EMAILED'}}})
+   await tx.auditLog.create({data:{actorId,action:'REPORT_CARD_DELIVERY_QUEUED',targetType:'ReportCard',targetId:card.id,metadata:{studentId:card.studentId,parentIds:linked.map(item=>item.parentId),term:card.term,documentId:pdf.documentId,language:payload.language}}})
   }
  })
  return success(res,{reportCards:cards.length,recipients},'Official report cards published to parent dashboards and email delivery safely queued')

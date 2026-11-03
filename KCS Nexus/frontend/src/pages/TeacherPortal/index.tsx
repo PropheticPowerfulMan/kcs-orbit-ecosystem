@@ -77,6 +77,7 @@ const generateCourseAbbreviation = (name: string) => {
 
 const COURSE_SCOPE_CUSTOM = '[KCS_SCOPE:CUSTOM]'
 const COURSE_SCOPE_CLASS = '[KCS_SCOPE:CLASS]'
+const COURSE_DELETE_CONFIRM_KEY = 'kcs:nexus:teacher:skip-course-delete-confirmation'
 
 const courseScopeDescription = (name: string, scope: 'class' | 'custom', className: string) => (
   `${name} · ${scope === 'custom' ? 'Multi-class custom roster' : className} · synchronized from Teacher My Courses ${scope === 'custom' ? COURSE_SCOPE_CUSTOM : COURSE_SCOPE_CLASS}`
@@ -326,6 +327,9 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     }).slice(0, 0),
   )
   const [courseTab, setCourseTab] = useState<'setup' | 'enrollment'>('setup')
+  const [pendingDeleteCourse, setPendingDeleteCourse] = useState<{ id: string; name: string } | null>(null)
+  const [skipCourseDeleteConfirmation, setSkipCourseDeleteConfirmation] = useState(() => localStorage.getItem(COURSE_DELETE_CONFIRM_KEY) === 'true')
+  const [rememberCourseDeleteChoice, setRememberCourseDeleteChoice] = useState(false)
   const [courseSearch, setCourseSearch] = useState('')
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null)
   const [selectedEnrollmentCourseId, setSelectedEnrollmentCourseId] = useState('')
@@ -1062,7 +1066,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     setCourseAbbreviationManual(course.abbreviation !== generateCourseAbbreviation(course.name))
   }
 
-  const deleteCourse = async (courseId: string) => {
+  const performDeleteCourse = async (courseId: string) => {
     const course = courses.find((item) => item.id === courseId)
     if (!course) return
     const nextCourses = courses.filter((item) => item.id !== courseId)
@@ -1089,6 +1093,25 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     if (editingCourseId === courseId) resetCourseDraft()
     if (selectedEnrollmentCourseId === courseId) setSelectedEnrollmentCourseId(nextCourses[0]?.id ?? '')
     if (selectedGradebookCourseId === courseId) setSelectedGradebookCourseId(nextCourses[0]?.id ?? '')
+  }
+
+  const deleteCourse = (courseId: string) => {
+    const course = courses.find((item) => item.id === courseId)
+    if (!course) return
+    if (skipCourseDeleteConfirmation) { void performDeleteCourse(courseId); return }
+    setRememberCourseDeleteChoice(false)
+    setPendingDeleteCourse({ id: course.id, name: course.name })
+  }
+
+  const confirmCourseDelete = () => {
+    if (!pendingDeleteCourse) return
+    if (rememberCourseDeleteChoice) {
+      localStorage.setItem(COURSE_DELETE_CONFIRM_KEY, 'true')
+      setSkipCourseDeleteConfirmation(true)
+    }
+    const id = pendingDeleteCourse.id
+    setPendingDeleteCourse(null)
+    void performDeleteCourse(id)
   }
 
   const filteredCourses = courses.filter((course) => {
@@ -1675,7 +1698,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
                     <label className="relative block sm:w-72">
                       <input className={inputClass} value={courseSearch} onChange={(event) => setCourseSearch(event.target.value)} placeholder="Search" />
                     </label>
-                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{filteredCourses.length} subject(s)</span>
+                    <div className="flex flex-wrap items-center gap-3"><span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{filteredCourses.length} subject(s)</span>{skipCourseDeleteConfirmation && <button type="button" onClick={() => { localStorage.removeItem(COURSE_DELETE_CONFIRM_KEY); setSkipCourseDeleteConfirmation(false) }} className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-700 dark:text-amber-200">{tr('Réactiver la confirmation de suppression', 'Turn delete confirmation back on')}</button>}</div>
                   </div>
                   <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-kcs-blue-800">
                     <table className="w-full min-w-[820px] text-left text-sm">
@@ -2670,6 +2693,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
           </div>
         </div>
       )}
+      {pendingDeleteCourse && <div className="fixed inset-0 z-[250] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="course-delete-title"><section className="w-full max-w-lg rounded-3xl border border-red-200 bg-white p-6 shadow-2xl dark:border-red-900/60 dark:bg-kcs-blue-950"><p className="text-xs font-black uppercase tracking-[.16em] text-red-600">{tr("Suppression du cours", "Course deletion")}</p><h2 id="course-delete-title" className="mt-2 text-xl font-black text-kcs-blue-950 dark:text-white">{tr("Voulez-vous réellement supprimer ce cours ?", "Do you really want to delete this course?")}</h2><p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{tr("Cours concerné :", "Course:")} <strong>{pendingDeleteCourse.name}</strong>. {tr("Ses liens officiels seront supprimés.", "Its official links will be removed.")}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 dark:bg-kcs-blue-900 dark:text-slate-200"><input type="checkbox" className="mt-1 h-4 w-4" checked={rememberCourseDeleteChoice} onChange={(event) => setRememberCourseDeleteChoice(event.target.checked)}/><span>{tr("Ne plus me demander sur cet appareil", "Do not ask me again on this device")}</span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteCourse(null)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 dark:border-kcs-blue-700 dark:text-white">{tr("Annuler", "Cancel")}</button><button type="button" onClick={confirmCourseDelete} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white hover:bg-red-700">{tr("Supprimer le cours", "Delete course")}</button></div></section></div>}
     </section>
   )
 }
