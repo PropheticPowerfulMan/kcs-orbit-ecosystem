@@ -597,10 +597,10 @@ function Shell({ user, onLogout }: { user: User; onLogout: () => void }) {
         <ExchangeRateCard lang={lang} compact />
         {page === 'dashboard' && <Dashboard user={user} t={t} lang={lang} />}
         {page === 'menus' && <DailyMenus lang={lang} />}
-        {page === 'pos' && <PointOfSale t={t} lang={lang} />}
+        {page === 'pos' && <PointOfSale user={user} t={t} lang={lang} />}
         {page === 'orders' && <Orders user={user} lang={lang} />}
         {page === 'catalog' && <Catalog canEdit={user.role === 'KITCHEN_ADMIN'} t={t} lang={lang} />}
-        {page === 'transactions' && <Transactions user={user} t={t} />}
+        {page === 'transactions' && <Transactions user={user} t={t} lang={lang} />}
         {page === 'ledger' && <Ledger user={user} t={t} />}
         {page === 'inventory' && <Inventory canEdit={user.role === 'KITCHEN_ADMIN'} t={t} />}
         {page === 'disputes' && <Disputes user={user} t={t} />}
@@ -781,12 +781,14 @@ function Dashboard({ user, t, lang }: { user: User; t: Record<string, string>; l
   </>
 }
 
-function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
+function PointOfSale({ user, t, lang }: { user: User; t: Record<string, string>; lang: Lang }) {
   const [products, setProducts] = useState<Product[]>([])
   const [dailyMenuId, setDailyMenuId] = useState('')
   const [menuTitle, setMenuTitle] = useState('')
   const [person, setPerson] = useState<Person | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
+  const [priceOverrides, setPriceOverrides] = useState<Record<string, string>>({})
+  const [priceOverrideReason, setPriceOverrideReason] = useState('')
   const [paymentMode, setPaymentMode] = useState('CASH')
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -794,10 +796,14 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
   const [saleSequence, setSaleSequence] = useState(0)
   const checkoutLock = useRef(false)
   const { rate } = useCurrencyDisplay()
+  const canNegotiatePrice = ['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(user.role)
+  const unitPriceCdf = (product: Product) => priceOverrides[product.id]?.trim()
+    ? Number(priceOverrides[product.id])
+    : Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1)
   useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
-  const total = useMemo(() => products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
+  const total = useMemo(() => products.reduce((sum, product) => sum + unitPriceCdf(product) * (cart[product.id] || 0), 0), [products, cart, rate, priceOverrides])
   const [confirming, setConfirming] = useState(false)
-  const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0), [products, cart, rate])
+  const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + unitPriceCdf(product) * (cart[product.id] || 0), 0), [products, cart, rate, priceOverrides])
   const subsidy = person && ['TEACHER', 'STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? (eligibleTotal >= 20000 ? 8000 : eligibleTotal >= 10000 ? 4000 : eligibleTotal >= 5000 ? 2000 : 0) : 0
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
   function change(id: string, quantity: number) { setCart(current => ({ ...current, [id]: Math.max(0, quantity) })) }
@@ -812,12 +818,13 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
         body: JSON.stringify({
           orbitPersonId: person.id,
           dailyMenuId,
-          items: Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId, quantity })),
+          items: Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId, quantity, ...(priceOverrides[productId]?.trim() ? { unitPriceCdf: Number(priceOverrides[productId]) } : {}) })),
+          ...(Object.values(priceOverrides).some(value => value.trim()) ? { priceOverrideReason } : {}),
           paymentMode,
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPerson(null); setPaymentMode('CASH'); setConfirming(false); setSaleSequence(current => current + 1)
+      setReceipt(result.transaction); setCart({}); setPriceOverrides({}); setPriceOverrideReason(''); setPerson(null); setPaymentMode('CASH'); setConfirming(false); setSaleSequence(current => current + 1)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
     finally { checkoutLock.current = false; setSubmitting(false) }
   }
@@ -828,6 +835,8 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
         <PersonSelector key={saleSequence} value={person} onChange={(nextPerson) => {
           if (nextPerson?.id !== person?.id) {
             setCart({})
+            setPriceOverrides({})
+            setPriceOverrideReason('')
             setPaymentMode('CASH')
             setReceipt(null)
             setConfirming(false)
@@ -842,14 +851,15 @@ function PointOfSale({ t, lang }: { t: Record<string, string>; lang: Lang }) {
       </div>
       <aside className="basket panel">
         <div className="step-title"><span>3</span><div><small>CHECKOUT</small><h2>{t.basket}</h2></div></div>
-        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><DisplayMoney value={product.currentPrice} currency={product.currency} /></span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DisplayMoney value={Number(product.currentPrice) * cart[product.id]} currency={product.currency} /></div>)}</div>
+        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div className="basket-line" key={product.id}><span><b>{product.name}</b><DisplayMoney value={unitPriceCdf(product)} currency="CDF" />{canNegotiatePrice && <label className="negotiated-price">{lang === 'fr' ? 'Prix convenu / unité (CDF)' : 'Agreed unit price (CDF)'}<input type="number" min="1" step="1" inputMode="decimal" value={priceOverrides[product.id] || ''} placeholder={String(Math.round(Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1)))} onChange={event => setPriceOverrides(current => ({ ...current, [product.id]: event.target.value }))}/></label>}</span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DisplayMoney value={unitPriceCdf(product) * cart[product.id]} currency="CDF" /></div>)}</div>
+        {canNegotiatePrice && Object.values(priceOverrides).some(value => value.trim()) && <label className="negotiated-reason">{lang === 'fr' ? 'Motif du prix convenu (obligatoire et audité)' : 'Reason for agreed price (required and audited)'}<input value={priceOverrideReason} maxLength={300} required onChange={event => setPriceOverrideReason(event.target.value)} placeholder={lang === 'fr' ? 'Ex. : prix exceptionnel autorisé par le gestionnaire' : 'E.g. exceptional manager-approved sale price'}/></label>}
         {!total && <Empty text={t.noData} />}
         <div className="payment-switch"><button className={paymentMode !== 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CASH')}><Wallet />{t.payNow}</button><button className={paymentMode === 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CREDIT')}><CreditCard />{t.onCredit}</button></div>
         <div className="receipt-totals"><span>{lang === 'fr' ? 'Sous-total' : 'Subtotal'} <b><DisplayMoney value={total} currency="CDF" /></b></span>{subsidy > 0 && <span>{lang === 'fr' ? 'Pris en charge par KCS' : 'KCS school subsidy'} <b>− <DisplayMoney value={subsidy} currency="CDF" /></b></span>}</div><div className="total-row"><span>{lang === 'fr' ? 'À payer' : 'Customer payable'}</span><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF" /></div>
-        <button className="primary large" onClick={() => person && total > 0 ? setConfirming(true) : setNotice({ type: 'error', message: lang === 'fr' ? 'Sélectionnez une personne et au moins un article.' : 'Select a person and at least one item.' })} disabled={submitting}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
+        <button className="primary large" onClick={() => person && total > 0 ? setConfirming(true) : setNotice({ type: 'error', message: lang === 'fr' ? 'Sélectionnez une personne et au moins un article.' : 'Select a person and at least one item.' })} disabled={submitting || (canNegotiatePrice && Object.values(priceOverrides).some(value => value.trim()) && priceOverrideReason.trim().length < 3)}>{submitting ? <LoaderCircle className="spin" /> : <ShieldCheck />} {t.confirmSale}</button>
       </aside>
     </section>
-    {receipt && <Receipt transaction={receipt} onClose={() => setReceipt(null)} />}
+    {receipt && <Receipt transaction={receipt} onClose={() => setReceipt(null)} lang={lang} />}
     {confirming && person && <Modal onClose={() => !submitting && setConfirming(false)}><div className="confirmation-card"><span className="confirmation-icon"><ShieldCheck /></span><span className="eyebrow">KCS KITCHEN · {lang === 'fr' ? 'VALIDATION' : 'CONFIRMATION'}</span><h2>{lang === 'fr' ? 'Confirmer cette opération ?' : 'Confirm this operation?'}</h2><p>{lang === 'fr' ? 'Vérifiez les informations avant leur inscription définitive dans le registre audité.' : 'Review the information before it is written to the audited register.'}</p><div className="confirmation-summary"><span>{lang === 'fr' ? 'Entité' : 'Person'}<b>{person.fullName}</b></span><span>Mode<b>{paymentMode === 'CREDIT' ? (lang === 'fr' ? 'Dette' : 'Credit') : (lang === 'fr' ? 'Paiement immédiat' : 'Immediate payment')}</b></span><span>{lang === 'fr' ? 'À payer' : 'Payable'}<b><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></b></span></div><div className="button-row"><button type="button" disabled={submitting} onClick={() => setConfirming(false)}>{lang === 'fr' ? 'Annuler' : 'Cancel'}</button><button type="button" className="primary" disabled={submitting} onClick={() => void checkout()}>{submitting ? <LoaderCircle className="spin"/> : <CheckCircle2/>}{lang === 'fr' ? 'Confirmer et enregistrer' : 'Confirm and record'}</button></div></div></Modal>}
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}
   </>
@@ -920,21 +930,58 @@ function Catalog({ canEdit, t, lang }: { canEdit: boolean; t: Record<string, str
     {notice && <Notice {...notice} onClose={() => setNotice(null)} />}</>
 }
 
-function Transactions({ user, t }: { user: User; t: Record<string, string> }) {
+function Transactions({ user, t, lang }: { user: User; t: Record<string, string>; lang: Lang }) {
   const [rows, setRows] = useState<Transaction[]>([])
   const [selected, setSelected] = useState<Transaction | null>(null)
   const [query, setQuery] = useState('')
-  useEffect(() => { api<{ transactions: Transaction[] }>('/transactions').then(result => setRows(result.transactions)) }, [])
+  const [correcting, setCorrecting] = useState<Transaction | null>(null)
+  const [voiding, setVoiding] = useState<Transaction | null>(null)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const canManage = ['KITCHEN_ADMIN', 'FINANCE'].includes(user.role)
+  async function load() {
+    try { const result = await api<{ transactions: Transaction[] }>('/transactions'); setRows(result.transactions) }
+    catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+  }
+  useEffect(() => { void load() }, [])
   const filtered = rows.filter(row => [row.transactionNumber, row.personNameSnapshot, row.cashierNameSnapshot].some(value => value.toLowerCase().includes(query.toLowerCase())))
-  return <section className="panel"><div className="section-heading"><div><span className="eyebrow">IMMUTABLE REGISTER</span><h2>{t.history}</h2></div><div className="search-inline"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} /></div></div>
+  async function voidTransaction() {
+    if (!voiding || reason.trim().length < 5 || busy) return
+    setBusy(true)
+    try {
+      await api('/transactions/' + encodeURIComponent(voiding.id) + '/void', { method: 'POST', body: JSON.stringify({ reason }) })
+      setVoiding(null); setReason(''); await load()
+      setNotice({ type: 'success', message: lang === 'fr' ? 'Transaction annulée avec contre-écriture; soldes, stock et rapports actualisés.' : 'Transaction voided with reversal; balances, inventory and reports refreshed.' })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
+  async function saveCorrection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!correcting || reason.trim().length < 5 || busy) return
+    const data = new FormData(event.currentTarget)
+    const productIds = correcting.items.map(item => item.productId || '')
+    const items = correcting.items.map((item, index) => ({ productId: productIds[index], quantity: Number(data.get(`quantity-${index}`)), unitPriceCdf: Number(data.get(`price-${index}`)) }))
+    if (items.some(item => !item.productId || !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isFinite(item.unitPriceCdf) || item.unitPriceCdf <= 0)) {
+      setNotice({ type: 'error', message: lang === 'fr' ? 'Chaque ligne doit avoir un article, une quantité et un prix valides.' : 'Every line needs a valid product, quantity and price.' }); return
+    }
+    setBusy(true)
+    try {
+      await api('/transactions/' + encodeURIComponent(correcting.id), { method: 'PUT', body: JSON.stringify({ items, reason }) })
+      setCorrecting(null); setReason(''); await load()
+      setNotice({ type: 'success', message: lang === 'fr' ? 'Transaction corrigée : les soldes, le stock et les rapports ont été recalculés.' : 'Transaction corrected: balances, inventory and reports were recalculated.' })
+    } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
+    finally { setBusy(false) }
+  }
+  return <><section className="panel"><div className="section-heading"><div><span className="eyebrow">{canManage ? (lang === 'fr' ? 'REGISTRE DE TRANSACTIONS AUDITÉ' : 'AUDITED TRANSACTION REGISTER') : 'IMMUTABLE REGISTER'}</span><h2>{t.history}</h2><p>{canManage ? (lang === 'fr' ? 'Le gestionnaire peut corriger ou annuler une opération; chaque changement laisse une trace.' : 'Managers can correct or void a transaction; every change is audited.') : ''}</p></div><div className="search-inline"><Search /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} /></div></div>
     <div className="data-table transaction-table"><div className="table-head"><span>Transaction</span><span>Date</span><span>Person</span><span>Mode</span><span>{t.total}</span><span>Status</span></div>
       {filtered.map(row => <button className="table-row" key={row.id} onClick={() => setSelected(row)}><span data-label="Transaction"><b>{row.transactionNumber}</b></span><span data-label="Date">{dateTime(row.createdAt)}</span><span data-label="Person">{row.personNameSnapshot}</span><span data-label="Mode">{row.paymentMode}</span><span data-label={t.total}><b><DisplayMoney value={row.total} /></b></span><span data-label="Status"><em className={'badge ' + (row.status === 'CONFIRMED' ? 'good' : 'warn')}>{row.status}</em></span></button>)}
     </div>{!filtered.length && <Empty text={t.noData} />}
-    {selected && <Receipt transaction={selected} onClose={() => setSelected(null)} allowDispute={['TEACHER', 'STAFF', 'STUDENT'].includes(user.role)} />}
-  </section>
+    {selected && <Receipt transaction={selected} onClose={() => setSelected(null)} lang={lang} allowDispute={['TEACHER', 'STAFF', 'STUDENT'].includes(user.role)} canManage={canManage} onCorrect={() => { const current = selected; setSelected(null); setCorrecting(current); setReason('') }} onVoid={() => { const current = selected; setSelected(null); setVoiding(current); setReason('') }} />}
+  </section>{correcting && <Modal wide onClose={() => !busy && setCorrecting(null)}><form className="modal-form transaction-correction" onSubmit={saveCorrection}><span className="eyebrow">KCS KITCHEN · {lang === 'fr' ? 'CORRECTION AUDITÉE' : 'AUDITED CORRECTION'}</span><h2>{lang === 'fr' ? 'Corriger la transaction' : 'Correct transaction'}</h2><p>{correcting.transactionNumber} · {correcting.personNameSnapshot}. {lang === 'fr' ? 'Les prix ci-dessous sont saisis en CDF. La correction sera inscrite au journal.' : 'Enter corrected prices below in CDF. This correction is recorded in the audit log.'}</p>{correcting.items.map((item,index) => <div className="form-grid correction-line" key={item.id}><label>{lang === 'fr' ? 'Article' : 'Item'}<input value={item.productNameSnapshot} disabled /></label><label>{lang === 'fr' ? 'Quantité' : 'Quantity'}<input name={`quantity-${index}`} type="number" min="0.001" step="0.001" defaultValue={item.quantity}/></label><label>{lang === 'fr' ? 'Prix unitaire (CDF)' : 'Unit price (CDF)'}<input name={`price-${index}`} type="number" min="1" step="1" defaultValue={item.unitPriceAtPurchase}/></label></div>)}<label>{lang === 'fr' ? 'Motif obligatoire' : 'Reason required'}<textarea value={reason} onChange={event => setReason(event.target.value)} minLength={5} maxLength={500} required placeholder={lang === 'fr' ? 'Expliquez la correction des articles, quantités ou prix…' : 'Explain the correction to items, quantities or prices…'}/></label><div className="button-row"><button type="button" disabled={busy} onClick={() => setCorrecting(null)}>{lang === 'fr' ? 'Annuler' : 'Cancel'}</button><button className="primary" disabled={busy || reason.trim().length < 5}>{busy ? <LoaderCircle className="spin"/> : <ShieldCheck/>}{lang === 'fr' ? 'Enregistrer la correction' : 'Save correction'}</button></div></form></Modal>}{voiding && <Modal onClose={() => !busy && setVoiding(null)}><div className="confirmation-card"><span className="confirmation-icon"><AlertTriangle/></span><h2>{lang === 'fr' ? 'Annuler cette transaction ?' : 'Void this transaction?'}</h2><p>{voiding.transactionNumber} · {voiding.personNameSnapshot}. {lang === 'fr' ? 'L’original sera conservé, une contre-écriture créée et le stock ajusté.' : 'The original remains recorded; a reversal entry is created and inventory is adjusted.'}</p><label>{lang === 'fr' ? 'Motif obligatoire' : 'Reason required'}<textarea value={reason} onChange={event => setReason(event.target.value)} minLength={5} maxLength={500}/></label><div className="button-row"><button disabled={busy} onClick={() => setVoiding(null)}>{lang === 'fr' ? 'Retour' : 'Back'}</button><button className="danger-action" disabled={busy || reason.trim().length < 5} onClick={() => void voidTransaction()}>{busy ? <LoaderCircle className="spin"/> : <Trash2/>}{lang === 'fr' ? 'Annuler avec traçabilité' : 'Void with audit trail'}</button></div></div></Modal>}{notice && <Notice {...notice} onClose={() => setNotice(null)}/>}</>
 }
 
-function Receipt({ transaction, onClose, allowDispute = false }: { transaction: Transaction; onClose: () => void; allowDispute?: boolean }) {
+function Receipt({ transaction, onClose, lang = 'en', allowDispute = false, canManage = false, onCorrect, onVoid }: { transaction: Transaction; onClose: () => void; lang?: Lang; allowDispute?: boolean; canManage?: boolean; onCorrect?: () => void; onVoid?: () => void }) {
   const [dispute, setDispute] = useState(false)
   const [message, setMessage] = useState('')
   const [printing, setPrinting] = useState(false)
@@ -961,7 +1008,7 @@ function Receipt({ transaction, onClose, allowDispute = false }: { transaction: 
     <div className="receipt-verification"><QRCodeSVG value={verificationUrl} size={92} level="M" includeMargin title="Verify this KCS Kitchen receipt"/><div><b>SCAN TO VERIFY</b><span>Authenticity and current status are checked against the official Kitchen register without exposing private financial data.</span><code>{transaction.transactionNumber}</code></div></div>
     <div className="receipt-proof"><ShieldCheck /> Digitally registered, timestamped and auditable. Original transaction records are never silently deleted.</div>
     {message && <div className="form-message">{message}</div>}
-    <div className="receipt-actions"><button disabled={printing} onClick={() => void printReceipt()}>{printing ? <LoaderCircle className="spin"/> : <ReceiptText />} {printing ? 'Preparing PDf&' : 'Print / PDF'}</button>{allowDispute && <button className="warning" onClick={() => setDispute(!dispute)}><AlertTriangle /> Dispute</button>}<button className="primary" onClick={onClose}>Close</button></div>
+    <div className="receipt-actions"><button disabled={printing} onClick={() => void printReceipt()}>{printing ? <LoaderCircle className="spin"/> : <ReceiptText />} {printing ? (lang === 'fr' ? 'Préparation du PDF…' : 'Preparing PDF…') : 'Print / PDF'}</button>{canManage && transaction.status === 'CONFIRMED' && <><button onClick={onCorrect}><Pencil/>{lang === 'fr' ? 'Corriger' : 'Correct'}</button><button className="danger-action" onClick={onVoid}><Trash2/>{lang === 'fr' ? 'Annuler' : 'Void'}</button></>}{allowDispute && <button className="warning" onClick={() => setDispute(!dispute)}><AlertTriangle /> {lang === 'fr' ? 'Contester' : 'Dispute'}</button>}<button className="primary" onClick={onClose}>{lang === 'fr' ? 'Fermer' : 'Close'}</button></div>
     {dispute && <form className="dispute-form" onSubmit={sendDispute}><select name="reason"><option value="I_DID_NOT_TAKE_THIS">I did not take this</option><option value="WRONG_ITEM">Wrong item</option><option value="WRONG_QUANTITY">Wrong quantity</option><option value="WRONG_PRICE">Wrong price</option><option value="WRONG_DATE">Wrong date</option><option value="OTHER">Other</option></select><textarea name="comment" placeholder="Explain the issue…" /><button className="warning">Submit dispute</button></form>}
   </div></Modal>
 }

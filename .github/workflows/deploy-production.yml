@@ -10,13 +10,14 @@ on:
         options:
           - deploy
           - deploy-nexus
+          - deploy-kitchen
           - rollback
       release:
         description: Full 40-character commit SHA from main (blank deploys current main)
         required: false
         type: string
       confirmation:
-        description: Type DEPLOY_PRODUCTION, DEPLOY_NEXUS_PRODUCTION, or ROLLBACK_PRODUCTION
+        description: Type DEPLOY_PRODUCTION, DEPLOY_NEXUS_PRODUCTION, DEPLOY_KITCHEN_PRODUCTION, or ROLLBACK_PRODUCTION
         required: true
         type: string
 
@@ -56,7 +57,7 @@ jobs:
           sha="${REQUESTED_RELEASE:-$(git rev-parse origin/main)}"
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Release must be a full Git SHA." >&2; exit 1; }
           git merge-base --is-ancestor "$sha" origin/main
-          if [[ "$DEPLOY_ACTION" == "deploy" || "$DEPLOY_ACTION" == "deploy-nexus" ]] && [[ "$sha" != "$(git rev-parse origin/main)" ]]; then
+          if [[ "$DEPLOY_ACTION" == "deploy" || "$DEPLOY_ACTION" == "deploy-nexus" || "$DEPLOY_ACTION" == "deploy-kitchen" ]] && [[ "$sha" != "$(git rev-parse origin/main)" ]]; then
             echo "Deployments must use the current head of main. Use rollback for an older release." >&2
             exit 1
           fi
@@ -97,10 +98,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           remote_action="$DEPLOY_ACTION"
-          if [[ "$DEPLOY_ACTION" == "deploy-nexus" ]]; then
+          if [[ "$DEPLOY_ACTION" == "deploy-nexus" || "$DEPLOY_ACTION" == "deploy-kitchen" ]]; then
             # The VPS restricted key allowlists the existing "deploy" verb.
-            # The Nexus-specific confirmation routes ci-deploy.sh to the
-            # Nexus-only deployer, without invoking the ecosystem-wide deploy.
+            # The scope-specific confirmation routes ci-deploy.sh to the
+            # matching app-only deployer, without invoking the ecosystem-wide deploy.
             remote_action="deploy"
           fi
           ssh -i ~/.ssh/kcs_deploy \
