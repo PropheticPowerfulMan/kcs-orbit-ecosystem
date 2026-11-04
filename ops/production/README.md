@@ -50,4 +50,6 @@ For a complete ecosystem deployment, select `deploy`, leave `release` blank, and
 
 For a Nexus-only rollout, select `deploy-nexus`, leave `release` blank, and type `DEPLOY_NEXUS_PRODUCTION`. It builds and restarts only `nexus_api` and `nexus_web`, makes a full backup first, and automatically restores only those two services if health checks fail. It does not restart other services, change other image release keys, or touch any database/file volume.
 
+For a Kitchen-only rollout, select `deploy-kitchen`, leave `release` blank, and type `DEPLOY_KITCHEN_PRODUCTION`. It builds only the Kitchen API and web images, makes the existing pre-deploy backup, and restarts only `kitchen_api` and `kitchen_web`. It verifies that all other running production containers remain unchanged and restores the previous Kitchen image references if health checks fail.
+
 For an application rollback, select `rollback`, enter the full 40-character SHA of an image release retained on the VPS, and type `ROLLBACK_PRODUCTION`. Rollback never reverses database migrations or removes volumes, so every migration must remain backward-compatible.
