@@ -828,6 +828,16 @@ model StaffAttendanceRecord {
   @@index([status])
 }
 
+model MessageAttachment {
+  id        String            @id @default(cuid())
+  name      String
+  mime      String
+  size      Int
+  data      Bytes
+  createdAt DateTime          @default(now())
+  messages  InternalMessage[]
+}
+
 model InternalMessage {
   id                  String                @id @default(cuid())
   senderId            String?
@@ -838,6 +848,8 @@ model InternalMessage {
   attachmentMime      String?
   attachmentSize      Int?
   attachmentData      Bytes?
+  sharedAttachmentId  String?
+  sharedAttachment    MessageAttachment?    @relation(fields: [sharedAttachmentId], references: [id], onDelete: SetNull)
   targetRole          UserRole?
   readAt              DateTime?
   priority            String                @default("normal")
@@ -854,6 +866,7 @@ model InternalMessage {
   @@index([recipientId, createdAt])
   @@index([targetRole, createdAt])
   @@index([createdAt, id])
+  @@index([sharedAttachmentId])
   @@index([senderId, senderArchivedAt, createdAt])
   @@index([recipientId, recipientArchivedAt, createdAt])
 }

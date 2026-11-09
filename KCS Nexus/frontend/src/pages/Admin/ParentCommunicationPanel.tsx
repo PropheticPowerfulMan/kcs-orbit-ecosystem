@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useRef, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, CheckSquare, Download, Eye, Mail, MessageSquare, Paperclip, Send, Square, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import MessageAttachment from '../../components/shared/MessageAttachment'
@@ -49,7 +49,7 @@ const messageFamilyContext = (message: any) => { const parts = String(message.su
 const copy = {
   fr: {
     loadFailed: 'Chargement impossible.', selectParent: 'Sélectionnez au moins un destinataire.', selectChannel: 'Sélectionnez Email ou SMS.', enterMessage: 'Saisissez un sujet et un message.',
-    confirmSend: (count: number) => 'Confirmer l’envoi à ' + count + ' destinataire(s) ?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message enregistré pour ' + count + ' destinataire(s). Emails placés dans la file sécurisée : ' + es + ', erreurs immédiates : ' + ef + '. SMS envoyés : ' + ss + ', échecs : ' + sf + '.',
+    confirmSend: (count: number) => 'Confirmer l’envoi à ' + count + ' destinataire(s) ?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message enregistré pour ' + count + ' destinataire(s). Emails placés dans la file sécurisée : ' + es + ', erreurs immédiates : ' + ef + '. SMS placés dans la file sécurisée : ' + ss + ', échecs : ' + sf + '.',
     sendFailed: 'Échec de l’envoi.', confirmDelete: (count: number) => 'Supprimer définitivement ' + count + ' ancien(s) message(s) ?', deleted: (count: number) => count + ' message(s) supprimé(s).', deleteFailed: 'Suppression impossible.',
     recipients: 'Destinataires', families: 'Toutes les entités de l’écosystème', selected: 'sélectionné(s)', parentSearch: 'Nom, email, téléphone, identifiant, classe ou département...', deselect: 'Désélectionner', selectResults: 'Sélectionner les résultats', clear: 'Effacer', noEmail: 'Email absent', noPhone: 'Téléphone absent',
     official: 'Communication officielle', channels: 'Email, SMS et boîte Nexus', subject: 'Sujet', exactMessage: 'Message exact à envoyer...', copyStored: 'Sans préfixe applicatif ; une copie est conservée dans Nexus.', sending: 'Envoi...', sendTo: (count: number) => 'Envoyer à ' + count + ' destinataire(s)',
@@ -61,7 +61,7 @@ const copy = {
   },
   en: {
     loadFailed: 'Unable to load communications.', selectParent: 'Select at least one recipient.', selectChannel: 'Select Email or SMS.', enterMessage: 'Enter a subject and a message.',
-    confirmSend: (count: number) => 'Confirm delivery to ' + count + ' recipient(s)?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message recorded for ' + count + ' recipient(s). Emails placed in the secure queue: ' + es + ', immediate errors: ' + ef + '. SMS sent: ' + ss + ', failed: ' + sf + '.',
+    confirmSend: (count: number) => 'Confirm delivery to ' + count + ' recipient(s)?', recorded: (count: number, es: number, ef: number, ss: number, sf: number) => 'Message recorded for ' + count + ' recipient(s). Emails placed in the secure queue: ' + es + ', immediate errors: ' + ef + '. SMS placed in the secure queue: ' + ss + ', failed: ' + sf + '.',
     sendFailed: 'Delivery failed.', confirmDelete: (count: number) => 'Permanently delete ' + count + ' old message(s)?', deleted: (count: number) => count + ' message(s) deleted.', deleteFailed: 'Unable to delete messages.',
     recipients: 'Recipients', families: 'All ecosystem entities', selected: 'selected', parentSearch: 'Name, email, phone, ID, class or department...', deselect: 'Deselect', selectResults: 'Select results', clear: 'Clear', noEmail: 'No email', noPhone: 'No phone number',
     official: 'Official communication', channels: 'Email, SMS and Nexus inbox', subject: 'Subject', exactMessage: 'Exact message to send...', copyStored: 'No application prefix; a copy is retained in Nexus.', sending: 'Sending...', sendTo: (count: number) => 'Send to ' + count + ' recipient(s)',
@@ -106,6 +106,8 @@ export default function ParentCommunicationPanel() {
   const [gradeFilter, setGradeFilter] = useState('ALL')
   const [contactFilter, setContactFilter] = useState('ALL')
   const [quickClasses, setQuickClasses] = useState<string[]>([])
+  const deliveryIntent = useRef<{ signature: string; requestId: string } | null>(null)
+  const sendingRef = useRef(false)
   const [channels, setChannels] = useState<Array<'email' | 'sms'>>(['email', 'sms'])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
@@ -295,14 +297,20 @@ export default function ParentCommunicationPanel() {
     setter((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
 
   const send = async () => {
+    if (sendingRef.current) return
     if (!selectedParents.length) return setNotice(c.selectParent)
     if (!channels.length) return setNotice(c.selectChannel)
     if (!subject.trim() || !body.trim()) return setNotice(c.enterMessage)
     if (selectedParents.length > 1 && !window.confirm(c.confirmSend(selectedParents.length))) return
+    sendingRef.current = true
     setBusy(true)
     setNotice('')
     try {
+      const signature = JSON.stringify({ recipients: [...selectedParents].sort(), channels: [...channels].sort(), subject: subject.trim(), body: body.trim(), attachment: attachment ? [attachment.name, attachment.size, attachment.lastModified] : null })
+      if (deliveryIntent.current?.signature !== signature) deliveryIntent.current = { signature, requestId: crypto.randomUUID() }
       const formData = new FormData()
+      formData.append('requestId', deliveryIntent.current!.requestId)
+      formData.append('language', language === 'fr' ? 'fr' : 'en')
       formData.append('recipientIds', JSON.stringify(selectedParents))
       formData.append('channels', JSON.stringify(channels))
       formData.append('subject', subject.trim())
@@ -312,11 +320,12 @@ export default function ParentCommunicationPanel() {
       const data = response.data?.data
       const delivery = Array.isArray(data?.delivery) ? data.delivery : []
       const emailSent = delivery.filter((row: any) => row.email?.sent || row.email?.queued).length
-      const smsSent = delivery.filter((row: any) => row.sms?.sent).length
+      const smsSent = delivery.filter((row: any) => row.sms?.sent || row.sms?.queued).length
       const emailFailed = channels.includes('email') ? delivery.length - emailSent : 0
       const smsFailed = channels.includes('sms') ? delivery.length - smsSent : 0
       setNotice(c.recorded(data?.recipients ?? 0, emailSent, emailFailed, smsSent, smsFailed))
       setDeliveryReport({ delivery, channels: data?.channels ?? channels, recipients: data?.recipients ?? delivery.length })
+      deliveryIntent.current = null
       setSubject('')
       setBody('')
       setAttachment(null)
@@ -325,6 +334,7 @@ export default function ParentCommunicationPanel() {
     } catch (error: any) {
       setNotice(error?.response?.data?.message ?? c.sendFailed)
     } finally {
+      sendingRef.current = false
       setBusy(false)
     }
   }
@@ -458,7 +468,7 @@ export default function ParentCommunicationPanel() {
       {deliveryReport ? <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm" onClick={() => setDeliveryReport(null)} role="dialog" aria-modal="true" aria-labelledby="delivery-result-title">
         <section className="max-h-[calc(100vh-2rem)] w-full max-w-3xl overflow-y-auto rounded-3xl border border-kcs-blue-300/30 bg-white p-6 shadow-2xl dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-kcs-gold-600">{c.official}</p><h3 id="delivery-result-title" className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{c.deliveryTitle}</h3><p className="mt-1 text-sm text-gray-500 dark:text-gray-300">{c.deliveryIntro}</p></div><button className={primaryButton} onClick={() => setDeliveryReport(null)}><X size={17}/>{c.close}</button></div>
-          <div className="mt-5 space-y-3">{deliveryReport.delivery.map((row: any) => <article key={row.userId} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50"><h4 className="font-bold text-kcs-blue-950 dark:text-white">{row.name}</h4><div className="mt-3 grid gap-3 sm:grid-cols-2">{deliveryReport.channels.map((channel: 'email' | 'sms') => { const result = row[channel]; const accepted = Boolean(result?.sent); const reason = result?.reason === 'SMS_INSUFFICIENT_BALANCE' ? (language === 'fr' ? 'Solde SMS du fournisseur insuffisant.' : 'SMS provider balance is insufficient.') : result?.reason === 'SMS_INVALID_PHONE' ? (language === 'fr' ? 'Numéro de téléphone invalide.' : 'Invalid phone number.') : result?.reason === 'SMTP_SEND_FAILED' ? (language === 'fr' ? 'Le serveur e-mail a temporairement refusé l’envoi.' : 'The email server temporarily rejected delivery.') : result?.reason; return <div key={channel} className={`rounded-xl border p-3 ${accepted ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30' : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30'}`}><div className="flex items-center gap-2">{accepted ? <CheckCircle2 className="text-emerald-600" size={20}/> : <AlertTriangle className="text-red-600" size={20}/>}<b className="text-kcs-blue-950 dark:text-white">{channel === 'email' ? c.emailLabel : c.smsLabel}</b></div><p className={`mt-2 text-sm font-bold ${accepted ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{accepted ? c.providerAccepted : c.notSent}</p>{accepted ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{c.finalPending}</p> : reason ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{reason}</p> : null}</div> })}</div></article>)}</div>
+          <div className="mt-5 space-y-3">{deliveryReport.delivery.map((row: any) => <article key={`${row.userId}-${row.relationship ?? 'PRIMARY'}`} className="rounded-2xl border border-gray-200 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900/50"><h4 className="font-bold text-kcs-blue-950 dark:text-white">{row.name}</h4><div className="mt-3 grid gap-3 sm:grid-cols-2">{deliveryReport.channels.map((channel: 'email' | 'sms') => { const result = row[channel]; const accepted = Boolean(result?.sent || result?.queued); const reason = result?.reason === 'SMS_INSUFFICIENT_BALANCE' ? (language === 'fr' ? 'Solde SMS du fournisseur insuffisant.' : 'SMS provider balance is insufficient.') : result?.reason === 'SMS_INVALID_PHONE' ? (language === 'fr' ? 'Numéro de téléphone invalide.' : 'Invalid phone number.') : result?.reason === 'SMTP_SEND_FAILED' ? (language === 'fr' ? 'Le serveur e-mail a temporairement refusé l’envoi.' : 'The email server temporarily rejected delivery.') : result?.reason; return <div key={channel} className={`rounded-xl border p-3 ${accepted ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30' : 'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-950/30'}`}><div className="flex items-center gap-2">{accepted ? <CheckCircle2 className="text-emerald-600" size={20}/> : <AlertTriangle className="text-red-600" size={20}/>}<b className="text-kcs-blue-950 dark:text-white">{channel === 'email' ? c.emailLabel : c.smsLabel}</b></div><p className={`mt-2 text-sm font-bold ${accepted ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>{result?.queued ? (language === 'fr' ? 'Enregistré dans la file d’envoi' : 'Recorded in the delivery queue') : accepted ? c.providerAccepted : c.notSent}</p>{accepted ? <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{c.finalPending}</p> : reason ? <p className="mt-1 text-xs text-red-700 dark:text-red-300">{reason}</p> : null}</div> })}</div></article>)}</div>
           <div className="mt-5 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"><AlertTriangle className="mt-0.5 shrink-0" size={20}/><p>{c.deliveryNote}</p></div>
         </section>
       </div> : null}
