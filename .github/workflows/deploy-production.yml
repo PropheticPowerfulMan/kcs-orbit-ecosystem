@@ -9,13 +9,15 @@ on:
         type: choice
         options:
           - deploy
+          - deploy-nexus
+          - deploy-kitchen
           - rollback
       release:
         description: Full 40-character commit SHA from main (blank deploys current main)
         required: false
         type: string
       confirmation:
-        description: Type DEPLOY_PRODUCTION or ROLLBACK_PRODUCTION
+        description: Type DEPLOY_PRODUCTION, DEPLOY_NEXUS_PRODUCTION, DEPLOY_KITCHEN_PRODUCTION, or ROLLBACK_PRODUCTION
         required: true
         type: string
 
@@ -45,7 +47,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          expected="${DEPLOY_ACTION^^}_PRODUCTION"
+          expected="${DEPLOY_ACTION//-/_}"
+          expected="${expected^^}_PRODUCTION"
           [[ "$CONFIRMATION" == "$expected" ]] || { echo "Confirmation must be $expected" >&2; exit 1; }
           if [[ "$DEPLOY_ACTION" == "rollback" && -z "$REQUESTED_RELEASE" ]]; then
             echo "Rollback requires the full SHA of an existing image release." >&2
@@ -54,7 +57,7 @@ jobs:
           sha="${REQUESTED_RELEASE:-$(git rev-parse origin/main)}"
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Release must be a full Git SHA." >&2; exit 1; }
           git merge-base --is-ancestor "$sha" origin/main
-          if [[ "$DEPLOY_ACTION" == "deploy" && "$sha" != "$(git rev-parse origin/main)" ]]; then
+          if [[ "$DEPLOY_ACTION" == "deploy" || "$DEPLOY_ACTION" == "deploy-nexus" || "$DEPLOY_ACTION" == "deploy-kitchen" ]] && [[ "$sha" != "$(git rev-parse origin/main)" ]]; then
             echo "Deployments must use the current head of main. Use rollback for an older release." >&2
             exit 1
           fi
@@ -94,8 +97,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          remote_action="$DEPLOY_ACTION"
+          if [[ "$DEPLOY_ACTION" == "deploy-nexus" || "$DEPLOY_ACTION" == "deploy-kitchen" ]]; then
+            # The VPS restricted key allowlists the existing "deploy" verb.
+            # The scope-specific confirmation routes ci-deploy.sh to the
+            # matching app-only deployer, without invoking the ecosystem-wide deploy.
+            remote_action="deploy"
+          fi
           ssh -i ~/.ssh/kcs_deploy \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            root@"$VPS_HOST" "$DEPLOY_ACTION $RELEASE $CONFIRMATION"
+            root@"$VPS_HOST" "$remote_action $RELEASE $CONFIRMATION"

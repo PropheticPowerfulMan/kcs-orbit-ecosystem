@@ -168,15 +168,15 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const payload = z.object({
     identifier: z.string().trim().min(2).max(180),
     password: z.string().min(1).max(200),
-    accessMode: z.enum(['STAFF', 'ADMIN']).optional()
+    accessMode: z.enum(['CUSTOMER', 'CASHIER', 'STAFF', 'ADMIN']).optional()
   }).parse(req.body)
 
   const normalizedIdentifier = payload.identifier.toLowerCase()
-  const cashier = await prisma.kitchenCashierAccount.findUnique({ where: { email: normalizedIdentifier } })
+  const requestedMode = payload.accessMode || 'CUSTOMER'
+  const cashier = ['CASHIER', 'STAFF'].includes(requestedMode)
+    ? await prisma.kitchenCashierAccount.findUnique({ where: { email: normalizedIdentifier } })
+    : null
   if (cashier) {
-    if (payload.accessMode === 'ADMIN') {
-      return res.status(403).json({ message: 'The cashier account is restricted to Point of sale' })
-    }
     if (!cashier.isActive || !verifyLocalPassword(payload.password, cashier.passwordHash)) {
       return res.status(401).json({ message: 'Cashier email or password is incorrect' })
     }
@@ -213,6 +213,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const orbitPersonId = person?.id || String(nexusUser.id)
   const type = person ? personTypeFrom(person.kind) : 'ADMINISTRATIVE_STAFF'
   const access = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId } })
+  const personalRole = defaultRole(String(nexusUser.role), type)
   if (access && !access.isActive) return res.status(403).json({ message: 'KCS Kitchen access is disabled' })
 
   const identity: KitchenIdentity = {
@@ -221,7 +222,7 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
     fullName: person?.fullName || [nexusUser.lastName, nexusUser.firstName].filter(Boolean).join(' ') || 'KCS Administrator',
     email: person?.email || nexusUser.email || null,
     personType: access?.personType || type,
-    role: access?.role || defaultRole(String(nexusUser.role), type),
+    role: access?.role || personalRole,
     hasOfficialPhoto: Boolean(person?.photoData),
     canManageOwnCredentials: canManageOwnKitchenCredentials({
       userId: String(nexusUser.id),
@@ -229,11 +230,21 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
       explicitKitchenAdmin: Boolean(access?.isActive && access.role === 'KITCHEN_ADMIN'),
     }),
   }
-  if (payload.accessMode === 'STAFF' && identity.role === 'KITCHEN_ADMIN') {
-    identity.role = 'CASHIER'
+  if (requestedMode === 'CUSTOMER') {
+    if (!['TEACHER', 'STAFF', 'STUDENT'].includes(personalRole)) {
+      return res.status(403).json({ message: 'This portal is reserved for Kitchen consumers with an active Orbit identity' })
+    }
+    identity.role = personalRole
     identity.canManageOwnCredentials = false
   }
-  if (payload.accessMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN') {
+  if (['CASHIER', 'STAFF'].includes(requestedMode)) {
+    if (identity.role === 'KITCHEN_ADMIN') identity.role = 'CASHIER'
+    if (identity.role !== 'CASHIER') {
+      return res.status(403).json({ message: 'Only the Kitchen cashier may use the Point of sale portal' })
+    }
+    identity.canManageOwnCredentials = false
+  }
+  if (requestedMode === 'ADMIN' && identity.role !== 'KITCHEN_ADMIN') {
     return res.status(403).json({ message: 'Only the explicitly assigned Kitchen manager may use the administration portal' })
   }
   res.json({ token: signSession(identity), user: identity })
@@ -703,14 +714,18 @@ app.post('/api/daily-menus/:id/close', authenticate, allow('KITCHEN_ADMIN'), asy
 const saleSchema = z.object({
   orbitPersonId: z.string().min(1),
   dailyMenuId: z.string().min(1),
-  items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000) })).min(1).max(50),
+  items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000), unitPriceCdf: z.coerce.number().positive().max(100000000).optional() })).min(1).max(50),
   paymentMode: z.enum(['CASH', 'MOBILE_MONEY', 'BANK', 'EDUPAY', 'CREDIT']),
   notes: z.string().trim().max(500).optional(),
+  priceOverrideReason: z.string().trim().min(3).max(300).optional(),
   confirmationType: z.enum(['NONE', 'PIN', 'DASHBOARD', 'QR', 'SIGNATURE']).default('NONE')
 })
 
 app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'TEACHER', 'STAFF', 'STUDENT'), asyncRoute(async (req: AuthRequest, res) => {
   const input = saleSchema.parse(req.body)
+  const hasPriceOverride = input.items.some(item => item.unitPriceCdf != null)
+  if (hasPriceOverride && !['KITCHEN_ADMIN', 'CASHIER', 'FINANCE'].includes(req.kitchenUser!.role)) return res.status(403).json({ message: 'Only Kitchen sales staff may apply an agreed sale price' })
+  if (hasPriceOverride && !input.priceOverrideReason) return res.status(400).json({ message: 'A reason is required for an agreed sale price' })
   const isPersonalOrder = ['TEACHER', 'STAFF', 'STUDENT'].includes(req.kitchenUser!.role)
   if (isPersonalOrder && input.orbitPersonId !== req.kitchenUser!.orbitPersonId) return res.status(403).json({ message: 'A personal Kitchen order may only be placed for the authenticated account' })
   if (isPersonalOrder && !['CASH', 'CREDIT'].includes(input.paymentMode)) return res.status(400).json({ message: 'Choose purchase or debt for a personal Kitchen order' })
@@ -762,13 +777,15 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
       throw Object.assign(new Error('Insufficient stock for ' + product.name), { statusCode: 409 })
     }
     const menuItem = menuItems.get(product.id)!
-    const unitPriceCdf = Number(menuItem.unitPrice) * (menuItem.currency === 'USD' ? exchangeRate!.rate : 1)
+    const listUnitPriceCdf = Number(menuItem.unitPrice) * (menuItem.currency === 'USD' ? exchangeRate!.rate : 1)
+    const unitPriceCdf = item.unitPriceCdf ?? listUnitPriceCdf
     if (!Number.isFinite(unitPriceCdf) || unitPriceCdf <= 0) {
       throw Object.assign(new Error(product.name + ' requires a manager-configured price before it can be ordered'), { statusCode: 409 })
     }
     return {
       product,
       quantity: item.quantity,
+      listUnitPriceCdf,
       unitPriceCdf,
       subtotal: unitPriceCdf * item.quantity
     }
@@ -878,7 +895,8 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     return created
   })
 
-  await audit(req, 'TRANSACTION_CREATED', 'KitchenTransaction', transaction.id, undefined, transaction)
+  const overrideAudit = hasPriceOverride ? `${input.priceOverrideReason}; ${lines.filter(line => line.unitPriceCdf !== line.listUnitPriceCdf).map(line => `${line.product.name}: list ${line.listUnitPriceCdf} CDF, agreed ${line.unitPriceCdf} CDF`).join('; ')}` : undefined
+  await audit(req, 'TRANSACTION_CREATED', 'KitchenTransaction', transaction.id, undefined, transaction, overrideAudit)
   res.status(201).json({ transaction: withReceiptSignature(transaction), balance: await balanceFor(person.id) })
 }))
 
@@ -1048,6 +1066,116 @@ app.post('/api/payments', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINAN
   } })
   await audit(req, 'PAYMENT_RECEIVED', 'KitchenPayment', payment.id, undefined, payment)
   res.status(201).json({ payment, balance: await balanceFor(person.id) })
+}))
+
+const transactionCorrectionSchema = z.object({
+  items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000), unitPriceCdf: z.coerce.number().positive().max(100000000) })).min(1).max(50),
+  reason: z.string().trim().min(5).max(500)
+}).refine(value => new Set(value.items.map(item => item.productId)).size === value.items.length, { message: 'Each product may appear only once in a corrected transaction' })
+
+app.put('/api/transactions/:id', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {
+  const id = routeParam(req, 'id')
+  const input = transactionCorrectionSchema.parse(req.body)
+  const original = await prisma.kitchenTransaction.findUnique({
+    where: { id },
+    include: { items: true, discounts: true, ledgerEntries: true, payments: true, reversals: true }
+  })
+  if (!original) return res.status(404).json({ message: 'Transaction not found' })
+  if (original.status !== 'CONFIRMED') return res.status(409).json({ message: 'Only a confirmed transaction can be corrected. Cancel pending orders or void a completed reversal.' })
+  if (original.payments.length || original.reversals.length || original.ledgerEntries.some(entry => ['REFUND', 'REVERSAL', 'ADJUSTMENT'].includes(entry.type))) {
+    return res.status(409).json({ message: 'This transaction has a linked payment or reversal and cannot be edited. Void it and create a corrected sale instead.' })
+  }
+
+  const productIds = input.items.map(item => item.productId)
+  const [menuItems, products] = await Promise.all([
+    prisma.dailyMenuItem.findMany({ where: { menuId: original.dailyMenuId, productId: { in: productIds } } }),
+    prisma.product.findMany({ where: { id: { in: [...new Set([...productIds, ...original.items.map(item => item.productId)])] } } })
+  ])
+  if (menuItems.length !== productIds.length) return res.status(409).json({ message: 'Corrected products must belong to the original daily menu' })
+  const productById = new Map(products.map(product => [product.id, product]))
+  const newLines = input.items.map(item => {
+    const product = productById.get(item.productId)
+    if (!product) throw Object.assign(new Error('A corrected product no longer exists'), { statusCode: 409 })
+    return { product, quantity: item.quantity, unitPriceCdf: item.unitPriceCdf, subtotal: item.quantity * item.unitPriceCdf }
+  })
+  const oldQuantities = new Map<string, number>()
+  for (const item of original.items) oldQuantities.set(item.productId, (oldQuantities.get(item.productId) || 0) + Number(item.quantity))
+  const newQuantities = new Map<string, number>()
+  for (const item of newLines) newQuantities.set(item.product.id, (newQuantities.get(item.product.id) || 0) + item.quantity)
+  for (const product of products) {
+    if (!product.trackInventory) continue
+    const stockDelta = (oldQuantities.get(product.id) || 0) - (newQuantities.get(product.id) || 0)
+    if (stockDelta < 0 && Number(product.stockQuantity) < Math.abs(stockDelta)) return res.status(409).json({ message: `Insufficient stock to correct ${product.name}` })
+  }
+
+  const subtotal = newLines.reduce((sum, line) => sum + line.subtotal, 0)
+  const eligibleSubtotal = newLines.filter(line => line.product.discountEligible && line.product.category !== 'DRINK').reduce((sum, line) => sum + line.subtotal, 0)
+  const currentPerson = await resolvePerson(original.orbitPersonId)
+  const subsidyRole = currentPerson?.kind === 'TEACHER' ? 'TEACHER'
+    : ['STAFF', 'ADMINISTRATIVE_STAFF'].includes(currentPerson?.kind || '') ? 'STAFF'
+      : original.personType === 'STAFF' || Number(original.schoolSubsidy) > 0 ? 'STAFF' : original.personType
+  const schoolSubsidy = calculateSchoolSubsidy(eligibleSubtotal, subsidyRole)
+  const total = Math.max(0, subtotal - schoolSubsidy)
+  const corrected = await runKitchenSerializableTransaction(async tx => {
+    const claim = await tx.kitchenTransaction.updateMany({ where: { id, status: 'CONFIRMED' }, data: { status: 'PENDING' } })
+    if (claim.count !== 1) throw Object.assign(new Error('This transaction changed while it was being corrected; reload and try again'), { statusCode: 409 })
+    for (const product of products) {
+      if (!product.trackInventory) continue
+      const stockDelta = (oldQuantities.get(product.id) || 0) - (newQuantities.get(product.id) || 0)
+      if (stockDelta === 0) continue
+      await tx.product.update({ where: { id: product.id }, data: { stockQuantity: { increment: new Prisma.Decimal(stockDelta) } } })
+      await tx.stockMovement.create({ data: {
+        productId: product.id,
+        type: stockDelta > 0 ? 'RETURN' : 'SALE',
+        quantity: new Prisma.Decimal(stockDelta),
+        reason: `Correction ${original.transactionNumber}: ${input.reason}`,
+        actor: req.kitchenUser!.orbitPersonId
+      } })
+    }
+    await tx.kitchenTransactionItem.deleteMany({ where: { transactionId: id } })
+    await tx.kitchenTransactionItem.createMany({ data: newLines.map(line => ({
+      transactionId: id, productId: line.product.id, productNameSnapshot: line.product.name,
+      quantity: new Prisma.Decimal(line.quantity), unitPriceAtPurchase: new Prisma.Decimal(line.unitPriceCdf),
+      subtotal: new Prisma.Decimal(line.subtotal)
+    })) })
+    const transactionPatch = await tx.kitchenTransaction.update({ where: { id }, data: {
+      subtotal: new Prisma.Decimal(subtotal), eligibleSubtotal: new Prisma.Decimal(eligibleSubtotal),
+      discount: new Prisma.Decimal(schoolSubsidy), schoolSubsidy: new Prisma.Decimal(schoolSubsidy),
+      total: new Prisma.Decimal(total), creditAmount: new Prisma.Decimal(original.paymentMode === 'CREDIT' ? total : 0),
+      status: 'CONFIRMED'
+    } })
+    const entrySpecs: Array<{ type: 'PURCHASE' | 'DISCOUNT' | 'PAYMENT'; amount: number; description: string }> = [
+      { type: 'PURCHASE', amount: subtotal, description: 'Corrected consumption ' + original.transactionNumber },
+      { type: 'DISCOUNT', amount: -schoolSubsidy, description: 'Corrected school subsidy ' + original.transactionNumber },
+      ...(original.paymentMode === 'CREDIT' ? [] : [{ type: 'PAYMENT' as const, amount: -total, description: 'Corrected immediate payment ' + original.transactionNumber }])
+    ]
+    for (const spec of entrySpecs) {
+      const existing = original.ledgerEntries.find(entry => entry.type === spec.type)
+      if (existing) await tx.kitchenLedgerEntry.update({ where: { id: existing.id }, data: { amount: new Prisma.Decimal(spec.amount), description: spec.description, reason: input.reason, performedBy: req.kitchenUser!.orbitPersonId } })
+      else if (spec.type !== 'DISCOUNT' || schoolSubsidy > 0) await tx.kitchenLedgerEntry.create({ data: {
+        transactionId: id, orbitPersonId: original.orbitPersonId, type: spec.type, amount: new Prisma.Decimal(spec.amount),
+        description: spec.description, reason: input.reason, performedBy: req.kitchenUser!.orbitPersonId
+      } })
+    }
+    const priorDiscount = original.discounts[0]
+    if (priorDiscount) await tx.discountApplication.update({ where: { id: priorDiscount.id }, data: {
+      originalAmount: new Prisma.Decimal(eligibleSubtotal), discountAmount: new Prisma.Decimal(schoolSubsidy),
+      finalAmount: new Prisma.Decimal(total), reason: 'Corrected KCS staff/teacher school subsidy', approvedBy: req.kitchenUser!.orbitPersonId
+    } })
+    else if (schoolSubsidy > 0) await tx.discountApplication.create({ data: {
+      transactionId: id, originalAmount: new Prisma.Decimal(eligibleSubtotal), discountAmount: new Prisma.Decimal(schoolSubsidy),
+      finalAmount: new Prisma.Decimal(total), reason: 'Corrected KCS staff/teacher school subsidy', appliedAutomatically: true,
+      approvedBy: req.kitchenUser!.orbitPersonId
+    } })
+    await tx.notificationOutbox.create({ data: {
+      orbitPersonId: original.orbitPersonId, eventType: 'KITCHEN_TRANSACTION_CORRECTED', channels: ['IN_APP'],
+      payload: { transactionNumber: original.transactionNumber, reason: input.reason, previousTotal: Number(original.total), correctedTotal: total }
+    } })
+    return { transactionPatch, items: newLines }
+  })
+  const updated = await prisma.kitchenTransaction.findUniqueOrThrow({ where: { id }, include: { items: true, discounts: true, disputes: true } })
+  await audit(req, 'TRANSACTION_CORRECTED', 'KitchenTransaction', id, original, updated, input.reason)
+  res.json({ transaction: withReceiptSignature(updated), balance: await balanceFor(original.orbitPersonId), previousTotal: Number(original.total), correctedTotal: total })
 }))
 
 app.post('/api/transactions/:id/void', authenticate, allow('KITCHEN_ADMIN', 'FINANCE'), asyncRoute(async (req: AuthRequest, res) => {

@@ -18,6 +18,7 @@ type QueueMetadata = {
   nextAttemptAt?: string
   lastAttemptAt?: string
   priority?: 'HIGH' | 'NORMAL' | 'BULK'
+  language?: 'fr' | 'en'
 }
 
 const queueMetadata = (value: unknown): QueueMetadata => value && typeof value === 'object' && !Array.isArray(value) ? value as QueueMetadata : {}
@@ -76,7 +77,8 @@ export async function processOutboundMailQueue() {
       where: { id: metadata.internalMessageId },
       select: { attachmentName: true, attachmentMime: true, attachmentData: true },
     }) : null
-    const attachmentNote = message?.attachmentName ? `\n\nDocument joint : ${message.attachmentName}. Disponible aussi dans votre boîte Nexus.` : ''
+    const language = metadata.language === 'en' ? 'en' : 'fr'
+    const attachmentNote = message?.attachmentName ? (language === 'fr' ? `\n\nDocument joint : ${message.attachmentName}. Disponible aussi dans votre boîte Nexus.` : `\n\nAttached document: ${message.attachmentName}. Also available in your Nexus inbox.`) : ''
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character))
     const messageHtml = (row.body + attachmentNote).split(/\r?\n/).map((line) => line.trim() ? `<p style="margin:0 0 16px;line-height:1.72;color:#334155">${escapeHtml(line)}</p>` : '<div style="height:12px">&nbsp;</div>').join('')
     const trackingUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || ''}/api/messages/tracking/email/${encodeURIComponent(row.id)}.gif`
@@ -88,6 +90,7 @@ export async function processOutboundMailQueue() {
       html: `${messageHtml}<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`,
       attachments: message?.attachmentData && message.attachmentName ? [{ filename: message.attachmentName, content: Buffer.from(message.attachmentData), contentType: message.attachmentMime ?? undefined }] : undefined,
       branded: true,
+      language,
     })
     const attempts = (metadata.attempts ?? 0) + 1
     if (result.sent) {
