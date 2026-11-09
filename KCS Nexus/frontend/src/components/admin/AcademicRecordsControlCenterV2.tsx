@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Download, Edit3, FileCheck2, FilterX, History, Loader2, Printer, RefreshCw, Search, Send, ShieldCheck, Upload, X } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
 import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
@@ -26,8 +26,9 @@ type EditorialForm = {
   conduct: string
   average: number
   attendanceSummary: NonNullable<PrintableReportCard['attendanceSummary']> | null
-  subjects: Array<{ courseId: string; courseName: string; courseCode: string; percentage: number }>
+  subjects: Array<{ courseId: string; courseName: string; courseCode: string; credits: number; percentage: number }>
 }
+type ReportCardOfficialSettings = { principalName: string; signatureImage: string; officialSealImage: string }
 
 type Transcript = {
   student: { name: string; studentNumber: string; grade: string; photoUrl?: string | null }
@@ -90,8 +91,14 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const [legacyConfirmation, setLegacyConfirmation] = useState('')
   const [editingCard, setEditingCard] = useState<Card | null>(null)
   const [editorialForm, setEditorialForm] = useState<EditorialForm>({ teacherComment: '', conduct: '', average: 0, attendanceSummary: null, subjects: [] })
+  const deliveryIntentRef = useRef<{signature:string;requestId:string}|null>(null)
+  const deliveryInFlightRef = useRef(false)
   const [selectedParents, setSelectedParents] = useState<Record<string, string[]>>({})
   const [deliveryBusy, setDeliveryBusy] = useState(false)
+  const [officialSettings, setOfficialSettings] = useState<ReportCardOfficialSettings>({ principalName: '', signatureImage: '', officialSealImage: '' })
+  const [officialSettingsBusy, setOfficialSettingsBusy] = useState(false)
+  const signatureInput = useRef<HTMLInputElement>(null)
+  const sealInput = useRef<HTMLInputElement>(null)
   const showTranscripts = view === 'transcripts'
 
   const load = async () => {
@@ -125,6 +132,12 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   }
 
   useEffect(() => { void load() }, [])
+  useEffect(() => {
+    if (showTranscripts) return
+    academicRecordsAPI.reportCardOfficialSettings().then((response) => {
+      setOfficialSettings({ principalName: response.data?.data?.principalName ?? '', signatureImage: response.data?.data?.signatureImage ?? '', officialSealImage: response.data?.data?.officialSealImage ?? '' })
+    }).catch(() => setNotice(tr('Les paramètres de signature officielle n’ont pas pu être chargés.', 'Official signature settings could not be loaded.')))
+  }, [showTranscripts])
 
   const matching = useMemo(() => {
     const selected = normalize(term)
@@ -220,15 +233,45 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
         late: card.attendanceSummary.late ?? 0, excused: card.attendanceSummary.excused ?? 0, sick: card.attendanceSummary.sick ?? 0,
         suspended: card.attendanceSummary.suspended ?? 0, attendanceRate: card.attendanceSummary.attendanceRate ?? null,
       } : null,
-      subjects: (card.subjects ?? []).map((subject) => ({ courseId: subject.courseId || subject.id, courseName: subject.course.name, courseCode: subject.course.code, percentage: subject.percentage })),
+      subjects: (card.subjects ?? []).map((subject) => ({ courseId: subject.courseId || subject.id, courseName: subject.course.name, courseCode: subject.course.code, credits: subject.course.credits ?? 1, percentage: subject.percentage })),
     })
+  }
+
+  const computedEditorialAverage = useMemo(() => {
+    const visible = editorialForm.subjects.filter((item) => Number.isFinite(item.percentage))
+    if (!visible.length) return Number(editorialForm.average.toFixed(2))
+    const weight = visible.reduce((sum, item) => sum + Math.max(1, item.credits || 1), 0)
+    return Number((visible.reduce((sum, item) => sum + item.percentage * Math.max(1, item.credits || 1), 0) / weight).toFixed(2))
+  }, [editorialForm.average, editorialForm.subjects])
+
+  const readOfficialImage = (kind: 'signatureImage' | 'officialSealImage', file?: File) => {
+    if (!file) return
+    const max = kind === 'signatureImage' ? 600 * 1024 : 1000 * 1024
+    if (!['image/png', 'image/webp'].includes(file.type) || file.size > max) {
+      setNotice(tr('Utilisez une image PNG ou WebP, de 600 Ko maximum pour la signature et 1 Mo pour le sceau.', 'Use a PNG or WebP image, up to 600 KB for the signature and 1 MB for the seal.'))
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => setOfficialSettings((current) => ({ ...current, [kind]: String(reader.result ?? '') }))
+    reader.readAsDataURL(file)
+  }
+
+  const saveOfficialSettings = async () => {
+    if (officialSettings.principalName.trim().length < 2) return setNotice(tr('Saisissez le nom officiel du principal avant l’enregistrement.', 'Enter the principal’s official name before saving.'))
+    setOfficialSettingsBusy(true)
+    try {
+      const response = await academicRecordsAPI.saveReportCardOfficialSettings({ ...officialSettings, principalName: officialSettings.principalName.trim() })
+      setOfficialSettings(response.data.data)
+      setNotice(tr('Le nom du principal, la signature et le sceau sont enregistrés pour les prochains bulletins.', 'Principal name, signature, and seal are saved for future report cards.'))
+    } catch (error: any) { setNotice(error?.response?.data?.message ?? tr('Les éléments officiels n’ont pas pu être enregistrés.', 'Official document assets could not be saved.')) }
+    finally { setOfficialSettingsBusy(false) }
   }
 
   const saveEditorial = async () => {
     if (!editingCard) return
     setBusy(true)
     try {
-      await academicRecordsAPI.updateReportCardEditorial(editingCard.id, { ...editorialForm, subjects: editorialForm.subjects.map(({ courseId, percentage }) => ({ courseId, percentage })) })
+      await academicRecordsAPI.updateReportCardEditorial(editingCard.id, { ...editorialForm, average: computedEditorialAverage, subjects: editorialForm.subjects.map(({ courseId, percentage }) => ({ courseId, percentage })) })
       setNotice(tr('Toutes les corrections du bulletin ont été enregistrées dans la piste d’audit. Un bulletin déjà approuvé est rouvert pour une nouvelle approbation avant publication.', 'All report-card corrections were saved in the audit trail. A previously approved card is reopened for reapproval before publication.'))
       setEditingCard(null)
       await load()
@@ -253,16 +296,21 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   })
 
   const deliverSelected = async () => {
+    if (deliveryInFlightRef.current) return
     const deliveries = visibleCards.flatMap((card) => (selectedParents[card.id]?.length ?? 0) ? [{ reportCardId: card.id, parentIds: selectedParents[card.id] }] : [])
     if (!deliveries.length) return setNotice(tr('Sélectionnez au moins un parent lié à un bulletin approuvé.', 'Select at least one parent linked to an approved report card.'))
+    deliveryInFlightRef.current = true
     setDeliveryBusy(true)
+    const signature=JSON.stringify({deliveries,language})
+    if(deliveryIntentRef.current?.signature!==signature)deliveryIntentRef.current={signature,requestId:crypto.randomUUID()}
     try {
-      const response = await academicRecordsAPI.deliverReportCards(deliveries)
+      const response = await academicRecordsAPI.deliverReportCards(deliveries, language === 'fr' ? 'fr' : 'en', deliveryIntentRef.current!.requestId)
       setNotice(language === 'fr' ? `${response.data.data.reportCards} bulletin(s) publié(s) et ${response.data.data.recipients} livraison(s) parent placée(s) dans la file sécurisée.` : `${response.data.data.reportCards} report card(s) published and ${response.data.data.recipients} parent delivery item(s) safely queued.`)
+      deliveryIntentRef.current=null
       setSelectedParents({})
       await load()
     } catch (error: any) { setNotice(error?.response?.data?.message ?? tr('L’envoi contrôlé des bulletins a échoué.', 'Controlled report-card delivery failed.')) }
-    finally { setDeliveryBusy(false) }
+    finally { deliveryInFlightRef.current=false; setDeliveryBusy(false) }
   }
 
   const viewTranscript = async (studentId: string) => {
@@ -341,10 +389,11 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
 
   return <section className="space-y-5 rounded-3xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20 sm:p-5">
     {editingCard ? <div className="fixed inset-0 z-[210] flex items-center justify-center bg-kcs-blue-950/80 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={tr('Modifier le bulletin', 'Edit report card')} onClick={() => setEditingCard(null)}>
-      <section className="flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-sky-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" onClick={(event) => event.stopPropagation()}>
+      <section className="flex w-[88vw] max-w-[1680px] flex-col overflow-hidden rounded-3xl border border-sky-200 bg-white shadow-2xl dark:border-kcs-blue-700 dark:bg-kcs-blue-950" style={{ height: '88vh', maxHeight: '960px' }} onClick={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-4 border-b border-sky-100 p-5 dark:border-kcs-blue-800"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">{tr('Correction complète et auditée', 'Full audited correction')}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{cardStudentName(editingCard)}</h3><p className="text-sm text-slate-500 dark:text-slate-300">{editingCard.student.studentNumber} · {editingCard.term}</p></div><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 p-2 text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><X size={18}/></button></header>
         <div className="grid gap-5 overflow-y-auto p-5">
-          <section className="rounded-2xl border border-sky-100 p-4 dark:border-kcs-blue-800"><h4 className="mb-3 text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Résultats académiques', 'Academic results')}</h4><div className="grid gap-2">{editorialForm.subjects.map((subject, index) => <label key={subject.courseId} className="grid items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 sm:grid-cols-[minmax(0,1fr)_9rem]"><span className="truncate">{subject.courseCode} · {subject.courseName}</span><span className="relative"><input type="number" min="0" max="100" step="0.01" value={subject.percentage} onChange={(event) => setEditorialForm((current) => ({ ...current, subjects: current.subjects.map((item, itemIndex) => itemIndex === index ? { ...item, percentage: Math.min(100, Math.max(0, Number(event.target.value))) } : item) }))} className={inputClass + ' pr-8'} /><b className="absolute right-3 top-1/2 -translate-y-1/2">%</b></span></label>)}</div><label className="mt-3 block text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Moyenne officielle du bulletin', 'Official report-card average')}<input type="number" min="0" max="100" step="0.01" value={editorialForm.average} onChange={(event) => setEditorialForm((current) => ({ ...current, average: Math.min(100, Math.max(0, Number(event.target.value))) }))} className={inputClass + ' mt-1'} /></label></section>
+          <section className="rounded-2xl border border-sky-100 p-4 dark:border-kcs-blue-800"><h4 className="mb-1 text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Résultats académiques', 'Academic results')}</h4><p className="mb-3 text-xs text-slate-500 dark:text-slate-300">{tr('Les cours modifiés recalculent la moyenne officielle selon leurs crédits.', 'Changing course results automatically recalculates the official average using course credits.')}</p><div className="grid gap-2">{editorialForm.subjects.map((subject, index) => <label key={subject.courseId} className="grid items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 sm:grid-cols-[minmax(0,1fr)_9rem]"><span className="truncate">{subject.courseCode} · {subject.courseName} <small className="font-normal">({subject.credits} {tr('crédit(s)', 'credit(s)')})</small></span><span className="relative"><input type="number" min="0" max="100" step="0.01" value={subject.percentage} onChange={(event) => setEditorialForm((current) => ({ ...current, subjects: current.subjects.map((item, itemIndex) => itemIndex === index ? { ...item, percentage: Math.min(100, Math.max(0, Number(event.target.value))) } : item) }))} className={inputClass + ' pr-8'} /><b className="absolute right-3 top-1/2 -translate-y-1/2">%</b></span></label>)}</div><label className="mt-3 block max-w-sm text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Moyenne officielle recalculée', 'Recalculated official average')}<input type="number" readOnly value={computedEditorialAverage} className={inputClass + ' mt-1 cursor-not-allowed font-black'} /></label></section>
+          <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-800 dark:bg-amber-950/20"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Signature, sceau et autorité du bulletin', 'Report-card signature, seal, and issuing authority')}</h4><p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{tr('Ces éléments sont enregistrés pour les prochains PDF et les envois aux parents.', 'These settings are saved for future PDFs and parent email deliveries.')}</p></div><button type="button" disabled={officialSettingsBusy} onClick={() => void saveOfficialSettings()} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50">{officialSettingsBusy ? tr('Enregistrement…', 'Saving…') : tr('Enregistrer les éléments officiels', 'Save official assets')}</button></div><label className="mt-3 block max-w-xl text-xs font-bold text-slate-700 dark:text-slate-200">{tr('Nom officiel du principal', 'Principal’s official name')}<input value={officialSettings.principalName} onChange={(event) => setOfficialSettings((current) => ({ ...current, principalName: event.target.value }))} maxLength={120} className={inputClass + ' mt-1'} placeholder={tr('Nom complet à imprimer sur le bulletin', 'Full name to print on the report card')} /></label><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="rounded-xl border border-amber-200 bg-white/80 p-3 dark:border-amber-800 dark:bg-kcs-blue-900"><p className="text-xs font-black text-kcs-blue-950 dark:text-white">{tr('Signature électronique', 'Electronic signature')}</p>{officialSettings.signatureImage ? <img src={officialSettings.signatureImage} alt="" className="mt-2 h-14 max-w-48 object-contain"/> : <p className="mt-2 text-xs text-slate-500">{tr('Aucune signature chargée', 'No signature uploaded')}</p>}<button type="button" onClick={() => signatureInput.current?.click()} className="mt-2 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><Upload size={14} className="mr-1 inline"/>{tr('Importer la signature', 'Upload signature')}</button><input ref={signatureInput} type="file" accept="image/png,image/webp" className="hidden" onChange={(event) => readOfficialImage('signatureImage', event.target.files?.[0])}/><button type="button" onClick={() => setOfficialSettings((current) => ({ ...current, signatureImage: '' }))} className="ml-2 text-xs font-bold text-red-700">{tr('Retirer', 'Remove')}</button></div><div className="rounded-xl border border-amber-200 bg-white/80 p-3 dark:border-amber-800 dark:bg-kcs-blue-900"><p className="text-xs font-black text-kcs-blue-950 dark:text-white">{tr('Sceau de l’école', 'School seal')}</p>{officialSettings.officialSealImage ? <img src={officialSettings.officialSealImage} alt="" className="mt-2 h-14 max-w-48 object-contain"/> : <p className="mt-2 text-xs text-slate-500">{tr('Aucun sceau chargé', 'No seal uploaded')}</p>}<button type="button" onClick={() => sealInput.current?.click()} className="mt-2 rounded-lg border border-sky-200 px-3 py-2 text-xs font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><Upload size={14} className="mr-1 inline"/>{tr('Importer le sceau', 'Upload seal')}</button><input ref={sealInput} type="file" accept="image/png,image/webp" className="hidden" onChange={(event) => readOfficialImage('officialSealImage', event.target.files?.[0])}/><button type="button" onClick={() => setOfficialSettings((current) => ({ ...current, officialSealImage: '' }))} className="ml-2 text-xs font-bold text-red-700">{tr('Retirer', 'Remove')}</button></div></div></section>
           {editorialForm.attendanceSummary ? <section className="rounded-2xl border border-sky-100 p-4 dark:border-kcs-blue-800"><h4 className="mb-3 text-sm font-black text-kcs-blue-950 dark:text-white">{tr('Présences et assiduité', 'Attendance')}</h4><div className="grid gap-3 sm:grid-cols-4">{(['total','present','absent','late','excused','sick','suspended'] as const).map((field) => <label key={field} className="text-xs font-bold capitalize text-slate-600 dark:text-slate-300">{field}<input type="number" min="0" max="1000" value={editorialForm.attendanceSummary?.[field] ?? 0} onChange={(event) => setEditorialForm((current) => current.attendanceSummary ? ({ ...current, attendanceSummary: { ...current.attendanceSummary, [field]: Math.max(0, Number(event.target.value)) } }) : current)} className={inputClass + ' mt-1'} /></label>)}<label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Taux (%)', 'Rate (%)')}<input type="number" min="0" max="100" step="0.1" value={editorialForm.attendanceSummary.attendanceRate ?? ''} onChange={(event) => setEditorialForm((current) => current.attendanceSummary ? ({ ...current, attendanceSummary: { ...current.attendanceSummary, attendanceRate: event.target.value === '' ? null : Math.min(100, Math.max(0, Number(event.target.value))) } }) : current)} className={inputClass + ' mt-1'} /></label></div></section> : null}
           <div className="grid gap-4 md:grid-cols-2"><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Commentaire institutionnel', 'Institutional comment')}<textarea rows={5} maxLength={1500} value={editorialForm.teacherComment} onChange={(event) => setEditorialForm((current) => ({ ...current, teacherComment: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Conduite / appréciation', 'Conduct / appreciation')}<textarea rows={5} maxLength={500} value={editorialForm.conduct} onChange={(event) => setEditorialForm((current) => ({ ...current, conduct: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label></div>
           <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">{tr('Les notes sources des enseignants ne sont jamais écrasées. Les corrections du SuperAdministrateur sont historisées et deviennent les valeurs officielles au moment de l’approbation. Modifier un bulletin déjà envoyé le rouvre pour un nouvel envoi.', 'Teacher source grades are never overwritten. Super Administrator corrections are audited and become official on approval. Editing an already delivered card reopens it for a new delivery.')}</p>

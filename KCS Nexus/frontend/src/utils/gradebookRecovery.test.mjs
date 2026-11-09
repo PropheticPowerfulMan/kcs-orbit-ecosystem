@@ -53,3 +53,15 @@ test('a stale or empty browser copy does not erase server marks', () => {
 test('server readback comparison ignores JSON object ordering', () => {
  assert.equal(stableGradebookValue({a:1,b:{x:2,y:3}}),stableGradebookValue({b:{y:3,x:2},a:1}))
 })
+
+test('server weighting is scoped to its course and academic year',()=>{
+ const one={id:'quiz',name:'Quiz',weight:100},other={id:'test',name:'Test',weight:100}
+ const state={gradebookCategoryWeightsByCycle:{'math-course::2026-2027':{categories:[one]},'reading::2026-2027':{categories:[other]}}}
+ assert.deepEqual(recover(state).snapshot.categories,[one])
+ assert.deepEqual(recover(state,{courseId:'reading'}).snapshot.categories,[other])
+ assert.deepEqual(recover(state,{academicYear:'2025-2026'}).snapshot.categories,[])
+})
+test('assessment identifiers containing colons keep stable student identity mapping',()=>{
+ const state={teacherStudents:[{id:'old',studentNumber:'N001'}],advancedGradebookByCycle:{'math-course::2026-2027':{assignments:[task('assignment:quiz')],scores:{'assignment:quiz:old':'75'}}}}
+ assert.equal(recover(state,{students:[{id:'new',studentNumber:'N001'}]}).snapshot.scores['assignment:quiz:new'],'75')
+})

@@ -43,7 +43,7 @@ import { canonicalClassLabel } from '@/utils/classLabels'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { canonicalGradebookTerm, openingGradebookTerm } from '@/utils/gradebookPeriods'
-import { recoverGradebook, stableGradebookValue, type AssignmentType, type GradebookColumn, type Category, type GradebookSnapshot, type ArchivedAssignment } from '@/utils/gradebookRecovery'
+import { recoverGradebook, stableGradebookValue, defaultGradebookCategories, type AssignmentType, type GradebookColumn, type Category, type GradebookSnapshot, type ArchivedAssignment } from '@/utils/gradebookRecovery'
 
 type Course = {
   id: string
@@ -78,6 +78,7 @@ type Props = {
   selectedCourseId: string
   onSelectCourse: (courseId: string) => void
   onAction: (message: string, isError?: boolean) => void
+  onRegisterSave?: (save: () => Promise<boolean>) => void
   onCategoryWeightsChange?: (categories: Category[]) => void
 }
 
@@ -85,8 +86,8 @@ const assignmentTypes: AssignmentType[] = ['homework', 'quiz', 'test', 'exam', '
 const terms = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Annual final']
 const scoreScales = [20, 50, 100]
 const legacyAcademicYear = '2026-2027'
-const academicYearOptions = Array.from({ length: 75 }, (_, index) => {
-  const start = 2026 + index
+const academicYearOptions = Array.from({ length: 101 }, (_, index) => {
+  const start = 2000 + index
   return `${start}-${start + 1}`
 })
 
@@ -99,14 +100,7 @@ const defaultPointsByType: Record<AssignmentType, number> = {
   participation: 10,
 }
 
-const defaultCategories: Category[] = [
-  { id: 'homework', name: 'Homework', weight: 15 },
-  { id: 'quiz', name: 'Quiz', weight: 15 },
-  { id: 'test', name: 'Test', weight: 20 },
-  { id: 'project', name: 'Project', weight: 20 },
-  { id: 'exam', name: 'Exam', weight: 25 },
-  { id: 'participation', name: 'Participation', weight: 5 },
-]
+const defaultCategories = defaultGradebookCategories
 
 const assignmentTypeLabels: Record<AssignmentType, { name: string; help: string }> = {
 
@@ -209,7 +203,7 @@ const downloadFile = (fileName: string, content: string, type: string) => {
   URL.revokeObjectURL(url)
 }
 
-const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction }: Props) => {
+const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse, onAction, onRegisterSave }: Props) => {
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false)
   const [commandCenterOpen, setCommandCenterOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:command-center') !== 'closed')
   const [taskPanelOpen, setTaskPanelOpen] = useState(() => localStorage.getItem('kcs:nexus:gradebook:task-panel') !== 'closed')
@@ -246,6 +240,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [savingSpreadsheet, setSavingSpreadsheet] = useState(false)
   const savingRef = useRef(false)
   const saveActionRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false)
+  const weightRequests = useRef(new Map<string, Promise<unknown>>())
+  const weightScopeRef = useRef('')
+  const persistCourseWeights = (courseId: string, year: string, next: Category[]) => {
+    if (Math.abs(next.reduce((sum, item) => sum + item.weight, 0) - 100) > 0.001) return Promise.resolve()
+    const key = courseId + '::' + year
+    const request = (weightRequests.current.get(key) ?? Promise.resolve()).catch(() => undefined).then(() => teacherWorkspaceAPI.saveGradebookWeights({ courseId, academicYear: year, categories: next }))
+    weightRequests.current.set(key, request)
+    return request
+  }
   const [recoveredCells, setRecoveredCells] = useState(0)
   const [loadedSnapshotSavedAt, setLoadedSnapshotSavedAt] = useState('')
   const saveSpreadsheet = async (silent = false) => {
@@ -260,6 +263,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     setSavingSpreadsheet(true)
     try { localStorage.setItem(browserStorageKey, JSON.stringify(snapshot)) } catch { /* Server persistence remains available when browser storage is full. */ }
     try {
+      await persistCourseWeights(selectedCourseId, academicYear, categories)
       const latest = await teacherWorkspaceAPI.get()
       const workspace = latest.data?.data
       const state = (workspace?.state ?? {}) as Record<string, any>
@@ -271,7 +275,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         throw new Error(tr('Ce cours a été modifié dans une autre session. Rechargez les notes avant de réessayer.', 'This course was updated in another session. Reload its saved grades before trying again.'))
       }
       if (alreadyPersisted && currentSnapshot.savedAt) snapshot.savedAt = currentSnapshot.savedAt
-      const legacyColumns = assignments.map(({ id, title, type, date, maxPoints }) => ({ id, title, type, date, maxPoints }))
+      const legacyColumns = assignments.map(({ id, title, type, date, maxPoints, term, category }) => ({ id, title, type, date, maxPoints, term, category }))
       const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
       // The legacy mirrors are kept only for the original 2026-2027 cycle so
       // older report-card readers remain compatible without leaking one
@@ -323,6 +327,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
   }
   saveActionRef.current = saveSpreadsheet
+  useEffect(() => { onRegisterSave?.(() => saveActionRef.current()) }, [onRegisterSave])
   const [comments, setComments] = useState<Record<string, string>>({})
   const [term, setTerm] = useState(terms[0])
   const [scale, setScale] = useState(100)
@@ -336,6 +341,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [loadedScope, setLoadedScope] = useState('')
   const [addingAssignment, setAddingAssignment] = useState(false)
   const cycleKey = `${selectedCourseId}::${academicYear}`
+  weightScopeRef.current = cycleKey
   const browserStorageKey = `kcs-live-gradebook-${cycleKey}`
   const periodPreferenceKey = `kcs:nexus:gradebook:period:${userId}:${cycleKey}`
   const chooseTerm = (nextTerm: string) => {
@@ -385,10 +391,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         if (!saved.assignments?.length && academicYear === legacyAcademicYear) {
           saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
         }
-        const [response, officialResponse] = await Promise.all([
-          teacherWorkspaceAPI.get(),
-          academicRecordsAPI.myFinalGrades().catch(() => null),
-        ])
+        void academicRecordsAPI.myFinalGrades().then(officialResponse => {
+          if (active) setOfficialFinalGrades((officialResponse.data?.data?.submissions ?? []) as OfficialFinalGrade[])
+        }).catch(() => undefined)
+        const response = await teacherWorkspaceAPI.get()
         const state = (response.data?.data?.state ?? {}) as Record<string, any>
         const matchingCourses = (Array.isArray(state.courses) ? state.courses : []).filter((course: any) =>
           String(course?.name || '').trim().toLowerCase() === selectedCourse.name.trim().toLowerCase()
@@ -400,7 +406,6 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           setLoadedSnapshotSavedAt(recovery.baseSavedAt)
           setRecoveredCells(recovery.recoveredCells)
         }
-        if (active) setOfficialFinalGrades((officialResponse?.data?.data?.submissions ?? []) as OfficialFinalGrade[])
       } catch {
         if (!saved.assignments?.length) {
           if (active) onAction(tr('Les notes enregistrées ne sont pas accessibles pour le moment. Rechargez cette page pour réessayer.', 'Saved grades are temporarily unavailable. Reload this page to try again.'), true)
@@ -691,6 +696,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const submitFinalGrades = async () => {
     if (!selectedCourse) return onAction('Select a course before submitting final grades.', true)
     if (!enrolledCourseStudents.length) return onAction('This course has no enrolled students.', true)
+    if (term === 'Annual final') return onAction(tr('Soumettez les quatre quarters séparément. Le bulletin annuel est calculé à partir de ces soumissions.', 'Submit the four quarters separately. The annual report card is calculated from those submissions.'), true)
     if (categories.reduce((sum, category) => sum + category.weight, 0) !== 100) return onAction('Category weights must total exactly 100% before final grades can be submitted.', true)
     const incomplete = submissionAnalytics.filter((item) => item.average === null || item.missing > 0)
     if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`, true)
@@ -762,9 +768,22 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     onAction(`${format} export created with the current calculations and international grading scale.`)
   }
 
+  const applyCategoryWeights = (next: Category[]) => {
+    setCategories(next)
+    if (Math.abs(next.reduce((sum, item) => sum + item.weight, 0) - 100) > 0.001) {
+      setSaveNotice(tr('Ajustez la pondération à 100 % pour l’enregistrer pour ce cours.', 'Adjust the total to 100% to save this course weighting.'))
+      return
+    }
+    const scope = cycleKey
+    setSaveNotice(tr('Enregistrement de la pondération de ce cours…', 'Saving this course weighting…'))
+    void persistCourseWeights(selectedCourseId, academicYear, next).then(() => {
+      if (weightScopeRef.current === scope) setSaveNotice(tr('Pondération de ce cours enregistrée sur le serveur.', 'This course weighting is saved on the server.'))
+    }).catch((error: any) => {
+      if (weightScopeRef.current === scope) onAction(error?.response?.data?.message || tr('La pondération reste à enregistrer. Utilisez Save pour réessayer.', 'Weighting still needs to be saved. Use Save to retry.'), true)
+    })
+  }
   const updateCategoryWeight = (categoryId: string, weight: number) => {
-    setCategories((current) => current.map((category) => category.id === categoryId ? { ...category, weight: Math.max(0, Math.min(100, weight || 0)) } : category))
-    setSaveNotice(tr('Pondération appliquée immédiatement aux moyennes — enregistrez pour synchroniser','Weighting applied immediately to averages — save to synchronize'))
+    applyCategoryWeights(categories.map(category => category.id === categoryId ? { ...category, weight: Math.max(0, Math.min(100, weight || 0)) } : category))
   }
 
   const moveScoreFocus=(event:ReactKeyboardEvent<HTMLInputElement>,row:number,column:number)=>{
@@ -777,10 +796,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const categoryWeightTotal = categories.reduce((sum, category) => sum + category.weight, 0)
   const normalizeCategoryWeights = () => {
     const currentTotal = categories.reduce((sum, category) => sum + category.weight, 0)
-    if (!currentTotal) return setCategories(defaultCategories)
+    if (!currentTotal) return applyCategoryWeights(defaultCategories)
     let allocated = 0
-    setCategories((current) => current.map((category, index) => {
-      const weight = index === current.length - 1 ? 100 - allocated : Math.round((category.weight / currentTotal) * 100)
+    applyCategoryWeights(categories.map((category, index) => {
+      const weight = index === categories.length - 1 ? 100 - allocated : Math.round((category.weight / currentTotal) * 100)
       allocated += weight
       return { ...category, weight }
     }))
@@ -833,7 +852,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               {courses.map((course) => <option key={course.id} value={course.id}>{canonicalClassLabel(course.className || course.gradeLevels[0])} - {course.name}</option>)}
             </select>
             <select className="input-kcs py-2 text-sm" value={term} onChange={(event) => chooseTerm(event.target.value)}>
-              {terms.map((item) => <option key={item}>{item}</option>)}
+              {terms.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
             <select className="input-kcs py-2 text-sm" value={scale} onChange={(event) => setScale(Number(event.target.value))}>
               {scoreScales.map((item) => <option key={item} value={item}>{item}-point scale</option>)}

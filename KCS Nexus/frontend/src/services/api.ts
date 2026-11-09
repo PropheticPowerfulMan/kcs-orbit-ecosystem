@@ -362,6 +362,8 @@ export const employeesAPI = {
 }
 
 export const teacherWorkspaceAPI = {
+  gradebookOverview: () => api.get('/teachers/me/gradebook-overview'),
+  saveGradebookWeights: (data: object) => api.put('/teachers/me/gradebook-weights', data, { headers: { 'x-silent-feedback': 'true' } }),
   overview: () => api.get('/teachers/me/overview'),
   get: () => api.get('/teachers/me/workspace'),
   save: (state: Record<string, unknown>, revision?: number) => api.put('/teachers/me/workspace', { state, revision }),
@@ -616,7 +618,9 @@ export const academicRecordsAPI = {
   approveReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/approve`),
   publishReportCard: (id: string) => api.patch(`/academic-records/report-cards/${id}/publish`),
   updateReportCardEditorial: (id: string, data: { teacherComment: string; conduct: string; average: number; attendanceSummary: object | null; subjects: Array<{ courseId: string; percentage: number }> }) => api.patch(`/academic-records/report-cards/${id}/editorial`, data),
-  deliverReportCards: (deliveries: Array<{ reportCardId: string; parentIds: string[] }>) => api.post('/academic-records/report-cards/deliver', { deliveries }),
+  reportCardOfficialSettings: () => api.get('/academic-records/report-cards/official-settings'),
+  saveReportCardOfficialSettings: (data: { principalName: string; signatureImage: string; officialSealImage: string }) => api.put('/academic-records/report-cards/official-settings', data),
+  deliverReportCards: (deliveries: Array<{ reportCardId: string; parentIds: string[] }>, language: 'fr' | 'en', requestId?: string) => api.post('/academic-records/report-cards/deliver', { deliveries, language, requestId }, { timeout: 180_000 }),
   transcript: (studentId: string) => api.get('/academic-records/transcripts/' + studentId, { timeout: 60_000 }),
   legacyTemplate: (format: 'csv' | 'xlsx') => api.get('/academic-records/legacy-records/template', { params: { format }, responseType: 'blob', timeout: 60_000 }),
   importLegacyRecords: (data: FormData) => api.post('/academic-records/legacy-records/import', data, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000 }),

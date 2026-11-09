@@ -338,6 +338,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   const [enrollmentSaving, setEnrollmentSaving] = useState(false)
   const [courseSaving, setCourseSaving] = useState(false)
   const [registryRefreshKey, setRegistryRefreshKey] = useState(0)
+  const gradebookSaveRef = useRef<() => Promise<boolean>>(async () => false)
   const [selectedGradebookCourseId, setSelectedGradebookCourseId] = useState('')
   const [gradebookColumnsByCourse, setGradebookColumnsByCourse] = useState<Record<string, GradebookColumn[]>>({})
   const [gradebookScores, setGradebookScores] = useState<Record<string, string>>({})
@@ -510,7 +511,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     const loadStudents = async () => {
       setRegistryStatus('loading')
       try {
-        const response = await teacherWorkspaceAPI.overview()
+        const response = await (segment === 'grades' ? teacherWorkspaceAPI.gradebookOverview() : teacherWorkspaceAPI.overview())
         const overview = response.data?.data ?? {}
         setOfficialTimetable(overview.timetable ?? [])
         setOfficialCourseAssignments(overview.assignments ?? [])
@@ -699,13 +700,19 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
   }
 
   const saveWorkspace = () => { void persistWorkspace({}, `${meta.title} changes were saved to KCS Nexus.`) }
+  const saveGradebookUpdates = async () => {
+    setWorkspaceStatus('saving')
+    const saved = await gradebookSaveRef.current()
+    setWorkspaceStatus(saved ? 'ready' : 'error')
+  }
+
   const exportWorkspacePdf = () => {
     const now = new Date()
     const academicYearStart = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
     const academicYearLabel = `${academicYearStart}-${academicYearStart + 1}`
     const exportData = (() => {
       if (segment === 'courses') return { columns: ['Subject', 'Class', 'Room', 'Credit hours', 'Enrolled'], rows: courses.map((course) => [course.name, course.gradeLevels.join(', '), course.room, course.creditHours, course.studentIds.length]), narrative: 'Official teaching-load and subject-enrolment register.' }
-      if (segment === 'attendance') return { columns: ['Student', 'Date', 'Class', 'Status'], rows: attendanceEntries.map((record) => [findStudent(record.studentId)?.name ?? 'Student', record.date, record.className, record.status]), narrative: 'Homeroom daily attendance register, generated from the current teacher record.' }
+  if (segment === 'attendance') return { columns: ['Student', 'Date', 'Class', 'Status'], rows: attendanceEntries.map((record) => [findStudent(record.studentId)?.name ?? 'Student', record.date, record.className, record.status]), narrative: 'Homeroom daily attendance register, generated from the current teacher record.' }
       if (segment === 'assignments') return { columns: ['Assignment', 'Student', 'Subject', 'Due date', 'Status', 'Priority'], rows: assignmentList.map((item) => [item.title, findStudent(item.studentId)?.name ?? 'Student', item.subject, item.due, item.status, item.priority]), narrative: 'Assignment register and learner follow-up status.' }
       if (segment === 'reports' || segment === 'report-card') return { columns: ['Student', 'Cycle', 'Average', 'Conduct', 'Approval'], rows: reportList.map((item) => [item.student, item.term, `${item.average}%`, item.conduct, item.principalStatus]), narrative: 'Teacher report-card register for administrative review.' }
       if (segment === 'timetable') return { columns: [language === 'fr' ? 'Jour' : 'Day', language === 'fr' ? 'Horaire' : 'Time', language === 'fr' ? 'Cours' : 'Course', language === 'fr' ? 'Classe' : 'Class', language === 'fr' ? 'Salle' : 'Room', language === 'fr' ? 'Élèves' : 'Learners'], rows: officialTimetable.map((item: any) => [item.day, `${item.startTime}–${item.endTime}`, `${item.courseName}${item.courseCode ? ` (${item.courseCode})` : ''}`, item.className || item.grade || '—', item.room || '—', item.studentCount ?? '—']), narrative: language === 'fr' ? 'Emploi du temps officiel synchronisé du professeur.' : 'Official synchronized teacher timetable.' }
@@ -1506,7 +1513,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveWorkspace} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
+              <button type="button" data-teacher-save-primary disabled={workspaceStatus === 'saving'} onClick={saveGradebookUpdates} className="btn-primary flex items-center gap-2 py-2 text-sm disabled:cursor-wait disabled:opacity-60"><CheckCircle2 size={16} /> {workspaceStatus === 'saving' ? 'Saving…' : 'Save updates'}</button>
             </div>
           </div>
         </div>
@@ -1518,6 +1525,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
         )}
 
         <AdvancedGradebook
+          onRegisterSave={(save) => { gradebookSaveRef.current = save }}
           courses={courses}
           students={teacherStudents.length ? teacherStudents : courseStudentPool}
           selectedCourseId={selectedGradebookCourseId}

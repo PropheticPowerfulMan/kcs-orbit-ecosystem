@@ -67,8 +67,12 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   const logo = printableAsset('/images/kcs-logo.png')
   const watermark = printableAsset('/images/kcs.jpg?v=official-watermark-20260927')
   const photo = printableAsset(card.student.officialAvatar ?? card.student.user.avatar)
-  let signatures: { mainTeacher?: { image?: string | null; name?: string } | null; principal?: { image?: string | null; name?: string } | null } = {}
+  let signatures: { mainTeacher?: { image?: string | null; name?: string } | null; principal?: { image?: string | null; name?: string } | null; officialSealImage?: string | null } = {}
+  let officialSettings: { principalName?: string; signatureImage?: string; officialSealImage?: string } = {}
   try { signatures = (await academicRecordsAPI.officialSignatures(card.student.id)).data?.data ?? {} } catch { /* Missing signatures do not invalidate the academic record. */ }
+  if (card.student.id) try { officialSettings = (await academicRecordsAPI.reportCardOfficialSettings()).data?.data ?? {} } catch { /* Teacher print access is independent from SuperAdmin-only officialization settings. */ }
+  if (officialSettings.principalName || officialSettings.signatureImage) signatures.principal = { name: officialSettings.principalName || signatures.principal?.name, image: officialSettings.signatureImage || signatures.principal?.image }
+  signatures.officialSealImage = officialSettings.officialSealImage || signatures.officialSealImage
   const signatureBlock = (entry: { image?: string | null; name?: string } | null | undefined, label: string) => entry?.image
     ? `<div class="signature"><img src="${escapeHtml(entry.image)}" alt=""><b>${escapeHtml(entry.name || label)}</b><span>${escapeHtml(label)}</span></div>`
     : `<div class="signature"><b>${escapeHtml(entry?.name || '')}</b><span>${escapeHtml(label)}</span></div>`
@@ -100,8 +104,14 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
     const value = subject.termResults?.[sourceTerm]
     return value == null ? '—' : `${value.toFixed(2)}%`
   }
+  const courseNameForDocument = (name: string) => {
+    const grade = String(card.student.grade ?? '').trim()
+    if (!grade) return name
+    const escaped = grade.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return name.replace(new RegExp(`\\s*(?:-|\\u2013|\\u2014|\\u00b7)\\s*${escaped}(?:\\s+[A-Z])?\\s*$`, 'i'), '').trim() || name
+  }
   const subjects = (card.subjects ?? []).map((subject) => `
-    <tr><td><b>${escapeHtml(subject.course.code)}</b><span>${escapeHtml(subject.course.name)}</span></td>
+    <tr><td><b>${escapeHtml(subject.course.code)}</b><span>${escapeHtml(courseNameForDocument(subject.course.name))}</span></td>
     <td class="number">${subject.course.credits ?? '—'}</td>${annual ? quarterTerms.map((sourceTerm) => `<td class="number">${termValue(subject, sourceTerm)}</td>`).join('') : ''}<td class="number">${subject.percentage.toFixed(2)}%</td>
     <td class="grade">${escapeHtml(subject.letterGrade)}</td></tr>`).join('')
   const attendance = card.attendanceSummary
@@ -124,7 +134,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   .attendance{display:grid;grid-template-columns:repeat(5,1fr);gap:7px}.stat{padding:8px;text-align:center;border:1px solid #d5e2eb;border-radius:7px;background:#fff}.stat span{display:block;color:#6d8193;font-size:7px;font-weight:800;text-transform:uppercase}.stat b{display:block;margin-top:3px;color:#073b70;font-size:14px}
   .comments{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}.comment{min-height:58px;padding:10px;border:1px solid #d2e0e9;border-left:4px solid #20a995;border-radius:7px;background:#fbfdfe;font-size:9px;line-height:1.5}.comment b{display:block;margin-bottom:4px;color:#073b70;text-transform:uppercase}
   .empty{padding:18px;text-align:center;color:#725b15;background:#fff7dc;border:1px solid #ead99d;border-radius:8px;font-size:9px}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:45px;margin-top:18px}.signature{display:grid;min-height:20mm;align-content:end;justify-items:center;border-bottom:1px solid #496178;text-align:center;color:#52677d;font-size:8px}.signature img{display:block;max-width:42mm;height:12mm;object-fit:contain}.signature b{color:#183b5e;font-size:8px}.signature span{display:block;margin-bottom:-14px;padding-top:3px}
-  .authenticity{display:grid;grid-template-columns:24mm 1fr;gap:10px;align-items:center;margin-top:14px;padding:9px;border:1px solid #b8cfdf;border-radius:8px;background:#f4f9fc}.authenticity img{width:22mm;height:22mm}.authenticity b{color:#073b70}.authenticity p{margin:2px 0;font-size:7.5px;line-height:1.35;word-break:break-all}footer{display:flex;justify-content:space-between;margin-top:18px;padding-top:8px;border-top:2px solid #20a995;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
+  .authenticity{display:grid;grid-template-columns:24mm 1fr;gap:10px;align-items:center;margin-top:14px;padding:9px;border:1px solid #b8cfdf;border-radius:8px;background:#f4f9fc}.authenticity img{width:22mm;height:22mm}.authenticity b{color:#073b70}.authenticity p{margin:2px 0;font-size:7.5px;line-height:1.35;word-break:break-all}.official-seal{position:absolute;right:19mm;bottom:38mm;z-index:2;pointer-events:none}.official-seal img{width:30mm;height:30mm;object-fit:contain;opacity:.78}footer{display:flex;justify-content:space-between;margin-top:18px;padding-top:8px;border-top:2px solid #20bfa9;color:#5b7086;font-size:8px;line-height:1.45}footer strong{color:#073b70}
   @media print{body{background:#fff}.sheet{width:auto;height:277mm;margin:0;border:0;box-shadow:none}.content{padding:8mm 8mm 6mm}}
   </style></head><body><main class="sheet ${(card.subjects?.length ?? 0)>16?'ultradense':(card.subjects?.length ?? 0)>10?'dense':''}"><div class="top-line"></div><div class="watermark-wrap" aria-hidden="true"><img class="watermark" src="${escapeHtml(watermark)}" alt=""></div>
   <div class="content"><header class="masthead"><img class="school-logo" src="${escapeHtml(logo)}" alt="Kinshasa Christian School">
@@ -137,6 +147,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   <h3>${tr('Résumé des présences', 'Attendance summary')}</h3>${attendance?`<div class="attendance"><div class="stat"><span>${tr('Présent', 'Present')}</span><b>${attendance.present}</b></div><div class="stat"><span>${tr('Absent', 'Absent')}</span><b>${attendance.absent}</b></div><div class="stat"><span>${tr('Retard', 'Late')}</span><b>${attendance.late}</b></div><div class="stat"><span>${tr('Excusé', 'Excused')}</span><b>${attendance.excused}</b></div><div class="stat"><span>${tr('Taux', 'Rate')}</span><b>${attendance.attendanceRate??'—'}%</b></div></div>`:`<div class="empty">${tr('Le résumé des présences n’est pas disponible pour cette période.', 'Attendance summary is not available for this reporting period.')}</div>`}
   <h3>${tr('Appréciation de la direction de classe', 'Class leadership review')}</h3><div class="comments"><div class="comment"><b>${tr('Commentaire du titulaire', 'Main Teacher comment')}</b>${escapeHtml(card.teacherComment||tr('Aucun commentaire saisi.', 'No comment entered.'))}</div><div class="comment"><b>${tr('Conduite', 'Conduct')}</b>${escapeHtml(card.conduct||tr('Non renseignée.', 'Not entered.'))}</div></div>
   <div class="signatures">${signatureBlock(signatures.mainTeacher,tr('Titulaire de classe','Main Teacher'))}${signatureBlock(signatures.principal,tr('Préfet / Signature autorisée','Principal / Authorized signature'))}</div>
+  ${signatures.officialSealImage ? `<div class="official-seal"><img src="${escapeHtml(signatures.officialSealImage)}" alt="${tr('Sceau officiel de l’école','Official school seal')}"></div>` : ''}
   <section class="authenticity"><img src="${escapeHtml(qrCode)}" alt="QR verification"><div><b>${tr('Authentification numérique internationale', 'International digital authentication')}</b><p>${tr('Scannez pour vérifier ce document directement dans le registre officiel KCS Nexus.', 'Scan to verify this document directly against the official KCS Nexus registry.')}</p><p><strong>Document ID:</strong> ${escapeHtml(documentId)}</p><p><strong>SHA-256:</strong> ${escapeHtml(fingerprint)}</p><p><strong>UTC:</strong> ${escapeHtml(issuedAt.toISOString())} · QR ISO/IEC 18004 · ECC H</p></div></section>
   <footer><div><strong>Kinshasa Christian School</strong><br>Macampagne, Ngaliema · Kinshasa, ${tr('République démocratique du Congo', 'Democratic Republic of Congo')}</div><div style="text-align:right">KCS Nexus AI · ${tr('Bulletin officiel', 'Official Report Card')}<br>${escapeHtml(issuedAt.toLocaleDateString(dateLocale))}</div></footer>
   </div></main><script>addEventListener('load',function(){var i=Array.prototype.slice.call(document.images);Promise.all(i.map(function(x){if(x.complete)return Promise.resolve();return new Promise(function(r){x.onload=r;x.onerror=r})})).then(function(){setTimeout(function(){window.focus();window.print()},250)})});<\/script></body></html>`
