@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-v4';
+const CACHE_NAME = 'kcs-nexus-shell-gradebook-20261109';
 
 const SIBLING_APP_PREFIXES = [
   '/kitchen/'
