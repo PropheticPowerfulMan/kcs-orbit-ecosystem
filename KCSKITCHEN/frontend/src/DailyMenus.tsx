@@ -49,11 +49,16 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [historyDate, setHistoryDate] = useState('')
+  async function findMenuDate(value: string) {
+    setHistoryDate(value)
+    try { const result = await api<{ menus: Menu[] }>('/daily-menus' + (value ? '?date=' + encodeURIComponent(value) : '')); setMenus(result.menus) } catch (error) { setMessage((error as Error).message) }
+  }
 
   async function load() {
     const [productResult, menuResult] = await Promise.all([
       api<{ products: Product[] }>('/products'),
-      api<{ menus: Menu[]; deletedMenus: DeletedMenuAudit[] }>('/daily-menus'),
+      api<{ menus: Menu[]; deletedMenus: DeletedMenuAudit[] }>('/daily-menus' + (historyDate ? '?date=' + encodeURIComponent(historyDate) : '')),
     ])
     setProducts(productResult.products.filter(product => product.isAvailable))
     setMenus(menuResult.menus)
@@ -94,10 +99,6 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
   }
 
   function edit(menu: Menu) {
-    if ((menu._count?.transactions || 0) > 0) {
-      setMessage(fr ? 'Ce menu possède déjà des ventes : il reste consultable et traçable, mais il est verrouillé.' : 'This menu already has sales: it remains visible and traceable, but is locked.')
-      return
-    }
     const activeProductIds = new Set(products.map(product => product.id))
     const menuProductIds = menu.items.map(item => item.product.id)
     const selectableProductIds = menuProductIds.filter(id => activeProductIds.has(id))
@@ -136,10 +137,10 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
         throw new Error(fr ? 'Indiquez un prix valide pour chaque article sélectionné.' : 'Enter a valid price for every selected item.')
       }
       const payload = JSON.stringify({ date, title, description: description || null, items, publish })
-      await api(editingId ? `/daily-menus/${editingId}` : '/daily-menus', { method: editingId ? 'PUT' : 'POST', body: payload })
+      const result = await api<{ menu: Menu }>(editingId ? `/daily-menus/${editingId}` : '/daily-menus', { method: editingId ? 'PUT' : 'POST', body: payload })
       await load()
+      populateEditor(result.menu, result.menu.items.map(item => item.product))
       setMessage(editingId ? (fr ? 'Menu modifié et inscrit dans l’historique.' : 'Menu updated and recorded in the audit history.') : (fr ? 'Menu enregistré et activé.' : 'Menu saved and activated.'))
-      resetEditor()
     } catch (error) { setMessage((error as Error).message) }
     finally { setBusy(false) }
   }
@@ -154,11 +155,7 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
   }
 
   async function remove(menu: Menu) {
-    if ((menu._count?.transactions || 0) > 0) {
-      setMessage(fr ? 'Suppression interdite : ce menu est lié à des ventes et doit rester dans la piste comptable.' : 'Deletion blocked: this menu is linked to sales and must remain in the accounting trail.')
-      return
-    }
-    if (!window.confirm(fr ? `Supprimer définitivement le menu « ${menu.title} » ? Une trace d’audit sera conservée.` : `Permanently delete “${menu.title}”? An audit record will be retained.`)) return
+    if (!window.confirm(fr ? `Retirer le menu « ${menu.title} » ? Les ventes et commandes déjà enregistrées seront conservées.` : `Withdraw “${menu.title}”? Existing sales and orders will remain in the accounting history.`)) return
     setBusy(true)
     try {
       await api(`/daily-menus/${menu.id}`, { method: 'DELETE', body: JSON.stringify({ reason: fr ? 'Supprimé depuis le centre de contrôle du menu du jour' : 'Deleted from the Daily Menu control center' }) })
@@ -175,7 +172,7 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
     <section className="menu-workspace">
       <form className="panel menu-editor" onSubmit={save}>
         <div className="menu-editor-heading"><div><span className="eyebrow">{editingId ? (fr ? 'MODIFICATION CONTRÔLÉE' : 'CONTROLLED UPDATE') : (fr ? 'NOUVEAU MENU' : 'NEW MENU')}</span><h2>{editingId ? (fr ? 'Modifier le menu' : 'Edit menu') : (fr ? 'Composer le menu' : 'Compose menu')}</h2></div>{editingId && <button type="button" className="secondary compact" onClick={resetEditor}><RotateCcw />{fr ? 'Annuler' : 'Cancel'}</button>}</div>
-        <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" value={date} onChange={event => { const nextDate = event.target.value; const existing = menus.find(menu => dateKey(menu.menuDate) === nextDate); if (existing) populateEditor(existing); else prepareNewMenu(nextDate) }} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
+        <div className="form-grid"><label>{fr ? 'Date de service' : 'Service date'}<input type="date" disabled={Boolean(editingId && menus.find(menu => menu.id === editingId)?._count?.transactions)} value={date} onChange={event => { const nextDate = event.target.value; const existing = menus.find(menu => dateKey(menu.menuDate) === nextDate); if (existing) populateEditor(existing); else prepareNewMenu(nextDate) }} required /></label><label>{fr ? 'Titre du menu' : 'Menu title'}<input value={title} onChange={event => setTitle(event.target.value)} required minLength={2} /></label></div>
         <label>{fr ? 'Description' : 'Description'}<textarea value={description} onChange={event => setDescription(event.target.value)} /></label>
         <div className="menu-products">{products.map(product => <button type="button" key={product.id} className={selected.includes(product.id) ? 'menu-product selected' : 'menu-product'} onClick={() => toggle(product.id)}>{selected.includes(product.id) ? <CheckCircle2 /> : <ChefHat />}<b>{product.name}</b><small>{DAILY_STAPLES.has(product.name) ? (fr ? 'Plat quotidien obligatoire · prix séparé' : 'Required daily item · separate price') : product.category}</small><DisplayMoney value={menuPrices[product.id]?.value || product.currentPrice} currency={menuPrices[product.id]?.currency ?? product.currency} /></button>)}</div>
         {selected.length > 0 && <div className="menu-price-editor"><div className="menu-price-editor-title"><b>{fr ? 'Prix du menu du jour' : "Today's menu prices"}</b><small>{fr ? 'Chaque article possède son propre prix, modifiable par le gestionnaire.' : 'Each item has its own price, editable by the Kitchen manager.'}</small></div>{selected.map(productId => {
@@ -184,17 +181,18 @@ export default function DailyMenus({ lang }: { lang: 'fr' | 'en' }) {
           const price = menuPrices[productId] || { value: String(product.currentPrice || ''), currency: product.currency || 'CDF' }
           return <div className="menu-price-line" key={productId}><span><b>{product.name}</b><small>{fr ? 'Prix de vente pour ce menu' : 'Selling price for this menu'}</small></span><label>{fr ? 'Montant' : 'Amount'}<input type="number" min="0.01" step="0.01" inputMode="decimal" value={price.value} onChange={event => setMenuPrices(current => ({ ...current, [productId]: { ...price, value: event.target.value } }))} required /></label><label>{fr ? 'Devise' : 'Currency'}<select value={price.currency} onChange={event => setMenuPrices(current => ({ ...current, [productId]: { ...price, currency: event.target.value } }))}><option value="CDF">CDF</option><option value="USD">USD</option></select></label></div>
         })}</div>}
-        <label className="publish-choice"><input type="checkbox" checked={publish} onChange={event => setPublish(event.target.checked)} /><span>{fr ? 'Publier immédiatement et figer les prix' : 'Publish now and freeze prices'}</span></label>
+        <label className="publish-choice"><input type="checkbox" checked={publish} onChange={event => setPublish(event.target.checked)} /><span>{fr ? 'Publier immédiatement les prix du menu' : 'Publish current menu prices'}</span></label>
         {message && <p className="status-message">{message}</p>}
         <button className="primary large" disabled={busy || !selected.length}>{busy ? <LoaderCircle className="spin" /> : <CheckCircle2 />}{editingId ? (fr ? 'Enregistrer les modifications' : 'Save changes') : (fr ? 'Enregistrer le menu' : 'Save menu')}</button>
       </form>
       <aside className="panel menu-history">
         <h2>{fr ? 'Menus récents et traçabilité' : 'Recent menus and audit trail'}</h2>
+        <label>{fr ? 'Rechercher un menu à une date précise' : 'Find a menu for a specific date'}<input type="date" value={historyDate} onChange={event => void findMenuDate(event.target.value)} /></label>
+        <p className="menu-history-help">{fr ? 'Les menus restent modifiables après une vente. Leur retrait bloque les nouvelles commandes, et les ventes déjà enregistrées conservent leurs prix.' : 'Menus remain editable after a sale. Withdrawing a menu stops new orders, while recorded sales keep their original prices.'}</p>
         {menus.map(menu => {
-          const locked = (menu._count?.transactions || 0) > 0
           return <article key={menu.id} className={auditMenuId === menu.id ? 'active' : ''}>
             <CalendarDays /><span><b>{menu.title}</b><small>{new Date(menu.menuDate).toLocaleDateString()} · {menu.items.length} {fr ? 'articles' : 'items'} · {menu._count?.transactions || 0} transactions</small><small>{fr ? 'Mis à jour' : 'Updated'} {new Date(menu.updatedAt).toLocaleString()}</small></span><em className={'badge ' + (menu.status === 'PUBLISHED' ? 'good' : '')}>{menu.status}</em>
-            <div className="menu-row-actions"><button type="button" onClick={() => edit(menu)} disabled={locked || busy} title={fr ? 'Modifier' : 'Edit'}><Edit3 /></button><button type="button" onClick={() => void history(menu.id)} title={fr ? 'Historique' : 'History'}><History /></button><button type="button" className="danger" onClick={() => void remove(menu)} disabled={locked || busy} title={fr ? 'Supprimer' : 'Delete'}><Trash2 /></button></div>
+            <div className="menu-row-actions"><button type="button" onClick={() => edit(menu)} disabled={busy} title={fr ? 'Modifier' : 'Edit'}><Edit3 /></button><button type="button" onClick={() => void history(menu.id)} title={fr ? 'Historique' : 'History'}><History /></button><button type="button" className="danger" onClick={() => void remove(menu)} disabled={busy} title={fr ? 'Supprimer' : 'Delete'}><Trash2 /></button></div>
             {auditMenuId === menu.id && <AuditTrail logs={auditLogs} fr={fr} />}
           </article>
         })}
