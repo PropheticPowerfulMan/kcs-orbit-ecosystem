@@ -1,3 +1,4 @@
+import { academicPeriodAccess, protectAcademicPeriod } from './academicPeriodAccess.service.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { ApiError } from '../utils/api.js'
@@ -7,13 +8,15 @@ import { attendanceWindow, attendanceWithSuspensions } from './reportAttendance.
 import { summarizeAttendanceStatuses } from '../utils/attendancePolicy.js'
 import { synchronizeStudentAcademicMetrics } from './academicSync.js'
 
-type Submission = { courseId: string; academicYear: string; term: string; results: Array<{ studentId: string; studentNumber?: string; percentage: number; comment?: string }> }
+type Submission = { courseId: string; academicYear: string; term: string; ungradedStudentIds?: string[]; results: Array<{ studentId: string; studentNumber?: string; percentage: number; comment?: string }> }
 const letter = (value: number) => value >= 97 ? 'A+' : value >= 93 ? 'A' : value >= 90 ? 'A-' : value >= 87 ? 'B+' : value >= 83 ? 'B' : value >= 80 ? 'B-' : value >= 77 ? 'C+' : value >= 73 ? 'C' : value >= 70 ? 'C-' : value >= 67 ? 'D+' : value >= 63 ? 'D' : value >= 60 ? 'D-' : 'F'
 
 export async function submitCourseFinalGrades(actorId: string, payload: Submission) {
   if (reportCardSourceTerms(payload.term).length > 1) throw new ApiError(400, 'Submit each quarter separately. Semester and annual report cards are calculated from those quarter submissions.')
   const window = await attendanceWindow(payload.academicYear, payload.term)
+  await academicPeriodAccess()
   return prisma.$transaction(async tx => {
+    await protectAcademicPeriod(tx, payload.academicYear, payload.term)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "Course" WHERE id = ${payload.courseId} FOR UPDATE`)
     const course = await tx.course.findUnique({ where: { id: payload.courseId }, include: { teacher: true, enrollments: { select: { studentId: true, student: { select: { studentNumber: true, user: { select: { orbitUserId: true } } } } } } } })
     if (!course) throw new ApiError(404, 'Course not found')
@@ -24,12 +27,15 @@ export async function submitCourseFinalGrades(actorId: string, payload: Submissi
     if (results.some(row => !course.enrollments.some(e => e.studentId === row.studentId))) throw new ApiError(400, 'A submitted student could not be matched to the official Nexus course enrollment')
     const ids = [...new Set(results.map(row => row.studentId))].sort()
     if (ids.length !== results.length) throw new ApiError(400, 'Duplicate student in submission after identity reconciliation')
-    if (ids.length !== course.enrollments.length) throw new ApiError(409, 'The submission must include every officially enrolled learner. Refresh the course roster before submitting.')
+    const ungradedIds = (payload.ungradedStudentIds ?? []).map(id => lookup.get(id.trim().toLowerCase()) ?? id)
+    const covered = new Set([...ids, ...ungradedIds])
+    if (new Set(ungradedIds).size !== ungradedIds.length || ungradedIds.some(id => ids.includes(id) || !course.enrollments.some(enrollment => enrollment.studentId === id))) throw new ApiError(400, 'Invalid or overlapping ungraded learner list')
+    if (covered.size !== course.enrollments.length) throw new ApiError(409, 'The submission must account for every enrolled learner, with a result or an explicit ungraded status. Refresh the roster before submitting.')
     // Student locks also serialize simultaneous submissions for different courses.
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "StudentProfile" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`)
     const periods = academicTermAliases(payload.term).map(term => academicPeriodKey(payload.academicYear, term as Parameters<typeof academicPeriodKey>[1], 'SUBMITTED'))
-    const previous = await tx.grade.findMany({ where: { courseId: course.id, assignmentId: null, period: { in: periods } }, select: { studentId: true, percentage: true, period: true } })
-    await tx.grade.deleteMany({ where: { courseId: course.id, assignmentId: null, period: { in: periods } } })
+    const previous = await tx.grade.findMany({ where: { courseId: course.id, studentId: { in: ids }, assignmentId: null, period: { in: periods } }, select: { studentId: true, percentage: true, period: true } })
+    await tx.grade.deleteMany({ where: { courseId: course.id, studentId: { in: ids }, assignmentId: null, period: { in: periods } } })
     const period = academicPeriodKey(payload.academicYear, payload.term as Parameters<typeof academicPeriodKey>[1], 'SUBMITTED')
     const created = await tx.grade.createMany({ data: results.map(row => ({ courseId: course.id, studentId: row.studentId, assignmentId: null, score: row.percentage, maxScore: 100, percentage: row.percentage, letterGrade: letter(row.percentage), period })) })
     if (created.count !== results.length) throw new ApiError(500, 'The complete grade submission was not saved')
@@ -61,14 +67,26 @@ export async function submitCourseFinalGrades(actorId: string, payload: Submissi
       })
       cards.push(card.id)
     }
-    const affectedLabels = [termLabel, ...derivedTerms.map(term => payload.academicYear + ' · ' + term)]
     // Published aggregate results must return to review when a source quarter changes.
-    await tx.reportCard.updateMany({ where: { studentId: { in: ids }, term: { in: affectedLabels.filter(label => label !== termLabel) } }, data: { principalStatus: 'DRAFT', publicationStatus: 'DRAFT', approvedById: null, approvedAt: null, portalPostedAt: null, emailedAt: null } })
+    for (const derivedTerm of derivedTerms) {
+      const aggregateResults = aggregateReportCardResults(grades, payload.academicYear, derivedTerm)
+      const derivedCards = currentCards.filter(card => card.term === payload.academicYear + ' · ' + derivedTerm)
+      for (const card of derivedCards) {
+        const corrections = (card.academicCorrections ?? {}) as { subjects?: Array<{ courseId: string; percentage: number }>; hiddenCourseIds?: string[] }
+        const subjects = (corrections.subjects ?? []).filter(subject => subject.courseId !== course.id)
+        const overrides = new Map(subjects.map(subject => [subject.courseId, subject.percentage]))
+        const visible = [...aggregateResults.values()].filter(result => result.studentId === card.studentId && result.percentage !== null && !(corrections.hiddenCourseIds ?? []).includes(result.courseId))
+        const weighted = visible.map(result => ({ percentage: overrides.get(result.courseId) ?? result.percentage!, credits: Math.max(1, grades.find(grade => grade.courseId === result.courseId)?.course.credits || 1) }))
+        const credits = weighted.reduce((sum, result) => sum + result.credits, 0)
+        const average = credits ? Number((weighted.reduce((sum, result) => sum + result.percentage * result.credits, 0) / credits).toFixed(2)) : 0
+        await tx.reportCard.update({ where: { id: card.id }, data: { average, academicCorrections: { ...corrections, subjects }, principalStatus: 'DRAFT', publicationStatus: 'DRAFT', approvedById: null, approvedAt: null, portalPostedAt: null, emailedAt: null } })
+      }
+    }
     const approvedPeriods = [payload.term, ...derivedTerms].flatMap(academicTermAliases).map(term => academicPeriodKey(payload.academicYear, term as Parameters<typeof academicPeriodKey>[1], 'APPROVED'))
     await tx.grade.deleteMany({ where: { studentId: { in: ids }, assignmentId: null, period: { in: approvedPeriods } } })
-    await tx.auditLog.create({ data: { actorId, action: 'FINAL_GRADES_SUBMITTED', targetType: 'Course', targetId: course.id, metadata: JSON.parse(JSON.stringify({ academicYear: payload.academicYear, term: payload.term, count: created.count, results, replacesPreviousSubmission: previous.length > 0, previousGrades: previous, previousCards: currentCards, reportCardDraftsUpdated: cards.length })) } })
+    await tx.auditLog.create({ data: { actorId, action: 'FINAL_GRADES_SUBMITTED', targetType: 'Course', targetId: course.id, metadata: JSON.parse(JSON.stringify({ academicYear: payload.academicYear, term: payload.term, count: created.count, results, ungradedStudentIds: ungradedIds, missingResultPolicy: 'Preserve previous submissions for ungraded learners', replacesPreviousSubmission: previous.length > 0, previousGrades: previous, previousCards: currentCards, reportCardDraftsUpdated: cards.length })) } })
     if (recipients.length) await tx.notification.createMany({ data: recipients.map(({ id: userId }) => ({ userId, title: previous.length ? 'Updated final course grades ready for review' : 'Final course grades ready for review', message: course.name + ': ' + created.count + ' final grade(s), ' + termLabel, type: 'INFO', link: '/admin/report-cards' })) })
     await synchronizeStudentAcademicMetrics(tx, ids)
-    return { course: { id: course.id, name: course.name, code: course.code }, academicYear: payload.academicYear, term: payload.term, count: created.count, officialEnrollmentCount: course.enrollments.length, reportCardDraftsUpdated: cards.length, superAdministrationQueued: true, superAdministrationNotified: recipients.length, propagationVerified: true, replacesPreviousSubmission: previous.length > 0 }
+    return { course: { id: course.id, name: course.name, code: course.code }, academicYear: payload.academicYear, term: payload.term, count: created.count, ungradedCount: ungradedIds.length, officialEnrollmentCount: course.enrollments.length, reportCardDraftsUpdated: cards.length, superAdministrationQueued: true, superAdministrationNotified: recipients.length, propagationVerified: true, replacesPreviousSubmission: previous.length > 0 }
   }, { maxWait: 10_000, timeout: 60_000 })
 }

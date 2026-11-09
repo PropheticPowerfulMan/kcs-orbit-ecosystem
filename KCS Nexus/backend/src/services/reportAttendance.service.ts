@@ -1,7 +1,7 @@
 import { env } from '../config/env.js'
 
 type Window = { gte: Date; lte: Date }
-type Calendar = { name: string; startDate: string; endDate: string; periods?: Array<{ type: string; sequence: number; startDate: string; endDate: string }> }
+type Calendar = { isCurrent?: boolean; status?: string; name: string; startDate: string; endDate: string; periods?: Array<{ type: string; sequence: number; startDate: string; endDate: string }> }
 let cached: Calendar[] = []
 let expiresAt = 0
 let pending: Promise<Calendar[]> | null = null
@@ -36,7 +36,9 @@ export function attendanceWindowForCalendar(year: string, term: string, calendar
   return { gte: new Date(start + '-08-01T00:00:00.000Z'), lte: new Date(end + '-07-31T23:59:59.999Z') }
 }
 
-async function calendars(): Promise<Calendar[]> {
+export function invalidateAcademicCalendarCache() { expiresAt = 0 }
+
+export async function academicCalendars(): Promise<Calendar[]> {
   if (Date.now() < expiresAt) return cached
   if (pending) return pending
   const base = env.ACADEMIC_CALENDAR_ORBIT_API_URL || env.KCS_ORBIT_API_URL
@@ -59,7 +61,7 @@ async function calendars(): Promise<Calendar[]> {
 }
 
 export async function attendanceWindow(year: string, term: string) {
-  return attendanceWindowForCalendar(year, term, (await calendars()).find(item => item.name === year))
+  return attendanceWindowForCalendar(year, term, (await academicCalendars()).find(item => item.name === year))
 }
 
 export const attendanceWithSuspensions=(records:Array<{status:string;date:Date}>,suspensions:Array<{suspensionStart:Date|null;suspensionEnd:Date|null}>,window:{gte:Date;lte:Date})=>{

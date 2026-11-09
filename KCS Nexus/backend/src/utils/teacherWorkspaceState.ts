@@ -20,6 +20,8 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
   else delete state.gradebookCategoryWeightsByCycle
   if (existing.gradebookPeriodCorrectionsByCycle !== undefined) state.gradebookPeriodCorrectionsByCycle = existing.gradebookPeriodCorrectionsByCycle
   else delete state.gradebookPeriodCorrectionsByCycle
+  if (existing.gradebookClosedCategoryWeightsByCycle !== undefined) state.gradebookClosedCategoryWeightsByCycle = existing.gradebookClosedCategoryWeightsByCycle
+  else delete state.gradebookClosedCategoryWeightsByCycle
   const previousGradebook: Record<string, unknown> = {}
   let gradebookChanged = false
   for (const field of gradebookFields) {

@@ -1,8 +1,5 @@
-const CACHE_NAME = 'kcs-nexus-shell-gradebook-ranking-autosave-20261109-v5'
-
-const SIBLING_APP_PREFIXES = [
-  '/kitchen/'
-];
+const CACHE_NAME = 'kcs-nexus-shell-academic-delivery-period-closure-20261109-v6'
+const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

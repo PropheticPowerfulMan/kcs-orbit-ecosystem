@@ -1,8 +1,15 @@
+import { Prisma } from '@prisma/client'
+import { createHash } from 'node:crypto'
+import { academicPeriodAccess, lockAcademicYears } from '../services/academicPeriodAccess.service.js'
+import { academicPeriodIsReadOnly, quarterTerms } from '../utils/academicPeriodPolicy.js'
+import { academicCalendars, invalidateAcademicCalendarCache } from '../services/reportAttendance.service.js'
+import { databaseActorId } from '../utils/databaseActor.js'
+import { success } from '../utils/api.js'
 import { Router, type NextFunction, type Response } from 'express'
 import { z } from 'zod'
 import { env } from '../config/env.js'
 import { prisma } from '../config/prisma.js'
-import { authenticate, type AuthenticatedRequest } from '../middleware/auth.js'
+import { authenticate, requireSuperAdmin, type AuthenticatedRequest } from '../middleware/auth.js'
 import { ApiError, asyncHandler } from '../utils/api.js'
 
 const calendarApiUrl = env.ACADEMIC_CALENDAR_ORBIT_API_URL || env.KCS_ORBIT_API_URL
@@ -71,6 +78,55 @@ academicCalendarRouter.get('/', asyncHandler(async (_req, res) => {
   res.json(data)
 }))
 
+academicCalendarRouter.get('/period-access', asyncHandler(async (_req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store')
+  return success(res, await academicPeriodAccess(), 'Academic period access loaded')
+}))
+
+academicCalendarRouter.post('/close-period', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const input = z.object({ academicYear: z.string().regex(/^\d{4}-\d{4}$/), term: z.enum(['Semester 1 · Quarter 1','Semester 1 · Quarter 2','Semester 2 · Quarter 3','Semester 2 · Quarter 4','Semester 1','Semester 2','Annual final']), confirmation: z.string() }).parse(req.body)
+  if (input.confirmation !== input.academicYear + ' · ' + input.term) throw new ApiError(400, 'Confirm the exact academic year and period before closing it')
+  const calendars = await academicCalendars()
+  const calendar = calendars.find(item => item.name === input.academicYear)
+  if (!calendar) throw new ApiError(409, 'Publish this academic year in the central school calendar before closing it')
+  const actorId = await databaseActorId(req.user!.sub)
+  const id = 'academic-period-closed-' + createHash('sha256').update(input.academicYear + '::' + input.term).digest('hex')
+  const result = await prisma.$transaction(async tx => {
+    await lockAcademicYears(tx, [input.academicYear], true)
+    const previous = await tx.auditLog.findUnique({ where: { id } })
+    if (previous) return { alreadyClosed: true, closedAt: previous.createdAt }
+    const access = await academicPeriodAccess(tx)
+    const quarterIndex = quarterTerms.indexOf(input.term)
+    const required = quarterIndex > 0 ? quarterTerms.slice(0, quarterIndex)
+      : input.term === 'Semester 1' ? quarterTerms.slice(0, 2)
+      : input.term === 'Semester 2' ? quarterTerms : input.term === 'Annual final' ? quarterTerms : []
+    if (required.some(term => !academicPeriodIsReadOnly(access, input.academicYear, term))) throw new ApiError(409, 'Close the preceding quarters after their grades are finalized before closing this period')
+    const period = calendar.periods?.find(item => quarterIndex >= 0 ? item.type === 'QUARTER' && item.sequence === quarterIndex + 1 : item.type === 'SEMESTER' && input.term === 'Semester ' + item.sequence)
+    if (new Date(period?.startDate ?? calendar.startDate) > new Date()) throw new ApiError(409, 'A future academic period cannot be closed before it starts')
+    const workspaces = await tx.teacherWorkspace.findMany({ select: { id: true, state: true }, orderBy: { id: 'asc' } })
+    let frozenCourseWeights = 0
+    for (const workspace of workspaces) {
+      const state = workspace.state as Record<string, any>
+      const frozen = { ...(state.gradebookClosedCategoryWeightsByCycle || {}) }
+      const snapshots = new Map<string, any>(Object.entries(state.advancedGradebookByCycle || {}).filter(([key]) => key.endsWith('::' + input.academicYear)))
+      if (input.academicYear === '2026-2027') for (const [courseId, snapshot] of Object.entries(state.advancedGradebookByCourse || {})) {
+        if (!snapshots.has(courseId + '::' + input.academicYear)) snapshots.set(courseId + '::' + input.academicYear, snapshot)
+      }
+      for (const [cycle, weights] of Object.entries(state.gradebookCategoryWeightsByCycle || {})) {
+        if (cycle.endsWith('::' + input.academicYear) && !snapshots.has(cycle)) snapshots.set(cycle, weights)
+      }
+      for (const [cycle, snapshot] of snapshots) {
+        frozen[cycle + '::' + input.term] = { categories: state.gradebookCategoryWeightsByCycle?.[cycle]?.categories ?? snapshot.categories ?? [], closedAt: new Date().toISOString() }
+        frozenCourseWeights++
+      }
+      if (snapshots.size) await tx.teacherWorkspace.update({ where: { id: workspace.id }, data: { state: { ...state, gradebookClosedCategoryWeightsByCycle: frozen } as Prisma.InputJsonValue, revision: { increment: 1 } } })
+    }
+    const audit = await tx.auditLog.create({ data: { id, actorId, action: 'ACADEMIC_PERIOD_CLOSED', targetType: 'AcademicPeriodClosure', targetId: input.academicYear + '::' + input.term, metadata: { academicYear: input.academicYear, term: input.term, frozenCourseWeights, closureMode: 'EXPLICIT_SUPERADMIN_AFTER_GRADE_FINALIZATION' } } })
+    return { alreadyClosed: false, closedAt: audit.createdAt, frozenCourseWeights }
+  }, { maxWait: 10000, timeout: 60000 })
+  return success(res, result, 'The academic period is closed and its academic records are read-only')
+}))
+
 academicCalendarRouter.get('/current', asyncHandler(async (_req, res) => {
   const query = `?organizationId=${encodeURIComponent(calendarOrganizationId!)}`
   const response = await fetch(orbitUrl('/calendar/current' + query), { headers: headers() })
@@ -87,6 +143,7 @@ academicCalendarRouter.put('/', requireCalendarManager, asyncHandler(async (req,
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new ApiError(response.status, data.message || 'Academic calendar update failed.')
+  invalidateAcademicCalendarCache()
   res.json(data)
 }))
 

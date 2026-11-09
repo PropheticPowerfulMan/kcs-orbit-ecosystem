@@ -1,3 +1,6 @@
+import { isKcsAcademicTerm } from '../utils/academicCycle.js'
+import { academicPeriodAccess, academicCycleForDate, lockAcademicYears, protectAcademicPeriod, assertAcademicPeriodOpen } from '../services/academicPeriodAccess.service.js'
+import { closedGradebookChanged } from '../utils/academicPeriodPolicy.js'
 import { mergeTeacherWorkspaceState } from '../utils/teacherWorkspaceState.js'
 import { Router } from 'express'
 import OpenAI from 'openai'
@@ -371,28 +374,39 @@ teachersRouter.get('/me/workspace', authenticate, requireRoles('teacher'), async
   return success(res, workspace)
 }))
 
-teachersRouter.put('/me/gradebook-weights',authenticate,requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const payload=z.object({courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),categories:z.array(z.object({id:z.enum(['homework','quiz','test','project','exam','participation']),name:z.string().min(1).max(80),weight:z.number().min(0).max(100)})).length(6)}).parse(req.body)
- const [year,end]=payload.academicYear.split('-').map(Number)
- if(end!==year+1||new Set(payload.categories.map(item=>item.id)).size!==6||Math.abs(payload.categories.reduce((sum,item)=>sum+item.weight,0)-100)>0.001)throw new ApiError(400,'Category weights must contain six unique categories and total 100%')
- const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:{select:{userId:true}}}})
- if(!course||course.teacher.userId!==req.user!.sub)throw new ApiError(403,'Only the assigned teacher can change this course weighting')
- const result=await prisma.$transaction(async tx=>{
-  const initial=await tx.teacherWorkspace.upsert({where:{userId:req.user!.sub},create:{userId:req.user!.sub,state:{}},update:{},select:{id:true}})
-  await tx.$queryRaw(Prisma.sql`SELECT id FROM "TeacherWorkspace" WHERE id = ${initial.id} FOR UPDATE`)
-  const current=await tx.teacherWorkspace.findUniqueOrThrow({where:{id:initial.id}})
-  const state={...(current.state as Record<string,any>)}
-  const key=payload.courseId+'::'+payload.academicYear
-  const previousWeights=state.gradebookCategoryWeightsByCycle?.[key]??null
-  const weights={categories:payload.categories,updatedAt:new Date().toISOString()}
-  state.gradebookCategoryWeightsByCycle={...(state.gradebookCategoryWeightsByCycle??{}),[key]:weights}
-  if(state.advancedGradebookByCycle?.[key])state.advancedGradebookByCycle={...state.advancedGradebookByCycle,[key]:{...state.advancedGradebookByCycle[key],categories:payload.categories}}
-  if(payload.academicYear==='2026-2027'&&state.advancedGradebookByCourse?.[payload.courseId])state.advancedGradebookByCourse={...state.advancedGradebookByCourse,[payload.courseId]:{...state.advancedGradebookByCourse[payload.courseId],categories:payload.categories}}
-  await tx.teacherWorkspace.update({where:{id:current.id},data:{state:state as Prisma.InputJsonValue,revision:{increment:1}}})
-  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'COURSE_GRADEBOOK_WEIGHTS_SAVED',targetType:'Course',targetId:payload.courseId,metadata:{academicYear:payload.academicYear,previous:previousWeights,categories:payload.categories}}})
-  return weights
- },{maxWait:10000,timeout:30000})
- return success(res,result,'Course weighting saved for the selected school year')
+teachersRouter.put('/me/gradebook-weights', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const payload = z.object({
+    courseId: z.string().min(1), courseIds: z.array(z.string().min(1)).min(1).max(200).optional(),
+    academicYear: z.string().regex(/^\d{4}-\d{4}$/), term: z.string().max(80).optional(),
+    categories: z.array(z.object({ id: z.enum(['homework','quiz','test','project','exam','participation']), name: z.string().min(1).max(80), weight: z.number().min(0).max(100) })).length(6),
+  }).parse(req.body)
+  if (payload.term && !isKcsAcademicTerm(payload.term)) throw new ApiError(400, 'Choose an official academic term before changing course weights')
+  const [year, end] = payload.academicYear.split('-').map(Number)
+  if (end !== year + 1 || new Set(payload.categories.map(item => item.id)).size !== 6 || Math.abs(payload.categories.reduce((sum, item) => sum + item.weight, 0) - 100) > 0.001) throw new ApiError(400, 'Category weights must contain six unique categories and total 100%')
+  const courseIds = [...new Set([payload.courseId, ...(payload.courseIds ?? [])])].sort()
+  await academicPeriodAccess()
+  const result = await prisma.$transaction(async tx => {
+    await protectAcademicPeriod(tx, payload.academicYear, payload.term ?? 'Annual final')
+    const courses = await tx.course.findMany({ where: { id: { in: courseIds }, teacher: { userId: req.user!.sub } }, select: { id: true } })
+    if (courses.length !== courseIds.length) throw new ApiError(403, 'Only courses assigned to this teacher may receive this weighting')
+    const initial = await tx.teacherWorkspace.upsert({ where: { userId: req.user!.sub }, create: { userId: req.user!.sub, state: {} }, update: {}, select: { id: true } })
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "TeacherWorkspace" WHERE id = ${initial.id} FOR UPDATE`)
+    const current = await tx.teacherWorkspace.findUniqueOrThrow({ where: { id: initial.id } })
+    const state = { ...(current.state as Record<string, any>) }
+    const weights = { categories: payload.categories, updatedAt: new Date().toISOString() }
+    const previous: Record<string, Prisma.InputJsonValue | null> = {}
+    for (const courseId of courseIds) {
+      const key = courseId + '::' + payload.academicYear
+      previous[courseId] = state.gradebookCategoryWeightsByCycle?.[key] ?? null
+      state.gradebookCategoryWeightsByCycle = { ...(state.gradebookCategoryWeightsByCycle ?? {}), [key]: weights }
+      if (state.advancedGradebookByCycle?.[key]) state.advancedGradebookByCycle = { ...state.advancedGradebookByCycle, [key]: { ...state.advancedGradebookByCycle[key], categories: payload.categories } }
+      if (payload.academicYear === '2026-2027' && state.advancedGradebookByCourse?.[courseId]) state.advancedGradebookByCourse = { ...state.advancedGradebookByCourse, [courseId]: { ...state.advancedGradebookByCourse[courseId], categories: payload.categories } }
+    }
+    await tx.teacherWorkspace.update({ where: { id: current.id }, data: { state: state as Prisma.InputJsonValue, revision: { increment: 1 } } })
+    await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'COURSE_GRADEBOOK_WEIGHTS_SAVED', targetType: 'Course', targetId: payload.courseId, metadata: { academicYear: payload.academicYear, term: payload.term ?? null, courseIds, previous, categories: payload.categories } } })
+    return { ...weights, courseIds }
+  }, { maxWait: 10000, timeout: 30000 })
+  return success(res, result, 'Course weighting saved for the selected courses and school year')
 }))
 
 teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -401,15 +415,21 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
   if (!user) throw new ApiError(404, 'Authenticated user not found')
   if (user.role !== 'TEACHER' && user.role !== 'ADMIN' && !user.teacherProfile) throw new ApiError(403, 'Teacher workspace access required')
 
+  await academicPeriodAccess()
+  const years = [...new Set(['2026-2027', ...Object.keys((payload.state.advancedGradebookByCycle ?? {}) as object).map(key => key.slice(key.lastIndexOf('::') + 2))])].filter(year => /^\d{4}-\d{4}$/.test(year))
   const workspace = await prisma.$transaction(async (tx) => {
+    await lockAcademicYears(tx, years)
+    const access = await academicPeriodAccess(tx)
     const existing = await tx.teacherWorkspace.findUnique({ where: { userId: user.id } })
     if (existing && payload.revision !== existing.revision) {
       throw new ApiError(409, 'This teacher workspace was updated in another session. Reload it before saving again.')
     }
     if (!existing) {
+      if (closedGradebookChanged({}, payload.state, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_CLOSED: Historical grades are read-only.')
       return tx.teacherWorkspace.create({ data: { userId: user.id, state: payload.state as Prisma.InputJsonValue } })
     }
     const merged = mergeTeacherWorkspaceState(existing.state, payload.state)
+    if (closedGradebookChanged(existing.state, merged.state, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_CLOSED: Grades in a closed academic period cannot be modified.')
     const updated = await tx.teacherWorkspace.updateMany({
       where: { userId: user.id, revision: existing.revision },
       data: { state: merged.state as Prisma.InputJsonValue, revision: { increment: 1 } },
@@ -423,7 +443,7 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
       } })
     }
     return tx.teacherWorkspace.findUniqueOrThrow({ where: { userId: user.id } })
-  })
+  }, { maxWait: 10000, timeout: 30000 })
 
   await prisma.auditLog.create({
     data: { actorId: user.id, action: 'TEACHER_WORKSPACE_SAVED', targetType: 'TeacherWorkspace', targetId: workspace.id, metadata: { revision: workspace.revision } },
@@ -532,7 +552,25 @@ teachersRouter.delete('/me/courses/:courseId', authenticate, requireRoles('teach
   if (!course) return success(res, { id: courseId, alreadyDeleted: true, removedDependencies: {} }, 'Course was already absent from the official registry')
   if (course.teacherId !== teacher.id) throw new ApiError(403, 'This official course belongs to another teacher')
 
+  const oldWorkspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
+  const oldState = (oldWorkspace?.state ?? {}) as Record<string, any>
+  const years = [...new Set(['2026-2027', ...Object.keys(oldState.advancedGradebookByCycle ?? {}).map(key => key.slice(key.lastIndexOf('::') + 2))])]
+  await academicPeriodAccess()
   await prisma.$transaction(async (tx) => {
+    await lockAcademicYears(tx, years)
+    const access = await academicPeriodAccess(tx)
+    const grades = await tx.grade.findMany({ where: { courseId: course.id }, select: { period: true } })
+    for (const grade of grades) {
+      const [year, term] = grade.period.split('::')
+      if (/^\d{4}-\d{4}$/.test(year) && term) assertAcademicPeriodOpen(access, year, term)
+    }
+    const workspace = await tx.teacherWorkspace.findUnique({ where: { userId: req.user!.sub }, select: { state: true } })
+    const before = (workspace?.state ?? {}) as Record<string, any>
+    const after = { ...before }
+    for (const field of ['advancedGradebookByCycle','advancedGradebookByCourse','gradebookColumnsByCourse']) {
+      after[field] = Object.fromEntries(Object.entries(before[field] ?? {}).filter(([key]) => key !== course.id && !key.startsWith(course.id + '::')))
+    }
+    if (closedGradebookChanged(before, after, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_CLOSED: A course with closed academic records cannot be deleted.')
     await tx.course.delete({ where: { id: course.id } })
     await tx.auditLog.create({
       data: {
@@ -743,8 +781,10 @@ teachersRouter.post('/me/attendance/bulk', authenticate, requireRoles('teacher')
   if (payload.entries.some((entry) => !enrolled.has(entry.studentId))) throw new ApiError(403, 'Attendance contains a student who is not enrolled in this course')
   const date = new Date(payload.date)
   date.setUTCHours(0, 0, 0, 0)
+  const cycle = await academicCycleForDate(date)
   const records = await prisma.$transaction(async (tx) => {
     const saved = []
+    if (cycle) await protectAcademicPeriod(tx, cycle.academicYear, cycle.term)
     for (const entry of payload.entries) {
       await tx.attendanceRecord.deleteMany({ where: { studentId: entry.studentId, date, className: course.grade, period: payload.period ?? null } })
       saved.push(await tx.attendanceRecord.create({ data: { studentId: entry.studentId, recordedById: req.user!.sub, date, className: course.grade, period: payload.period, subject: course.name, status: entry.status, note: entry.note } }))
@@ -837,7 +877,9 @@ teachersRouter.patch('/me/assignments/:assignmentId/submissions/:studentId', aut
   if (payload.score > assignment.maxScore) throw new ApiError(400, 'Score cannot exceed the assignment maximum')
   const percentage = Number(((payload.score / assignment.maxScore) * 100).toFixed(2))
   const letterGrade = percentage >= 90 ? 'A' : percentage >= 80 ? 'B' : percentage >= 70 ? 'C' : percentage >= 60 ? 'D' : 'F'
+  const protectedCycle = await academicCycleForDate(assignment.dueDate)
   const result = await prisma.$transaction(async (tx) => {
+    if (protectedCycle) await protectAcademicPeriod(tx, protectedCycle.academicYear, protectedCycle.term)
     const submission = await tx.assignmentSubmission.update({ where: { assignmentId_studentId: { assignmentId, studentId } }, data: { score: payload.score, autoScore: payload.score, percentage, feedback: payload.feedback, status: 'GRADED', gradedAt: new Date() } })
     let grade = null
     if (!assignment.isInteractive) {
@@ -865,7 +907,9 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
   const academicYear = requestedCycle.academicYear ?? inferredCycle.academicYear
   const term = requestedCycle.term ?? inferredCycle.term
   const synchronizedAt = new Date()
+  await academicPeriodAccess()
   const result = await prisma.$transaction(async (tx) => {
+    await protectAcademicPeriod(tx, academicYear, term)
     await tx.grade.deleteMany({ where: { assignmentId, courseId: assignment.courseId } })
     await tx.grade.createMany({ data: assignment.submissions.map((submission) => {
       const score = Number(submission.score)
@@ -912,7 +956,9 @@ teachersRouter.delete('/me/assignments/:assignmentId', authenticate, requireRole
   const assignmentId = getRouteParam(req.params.assignmentId)
   const assignment = await prisma.assignment.findFirst({ where: { id: assignmentId, course: { teacher: { userId: req.user!.sub } } } })
   if (!assignment) throw new ApiError(403, 'This assignment is not assigned to the authenticated teacher')
+  const protectedCycle = await academicCycleForDate(assignment.dueDate)
   await prisma.$transaction(async (tx) => {
+    if (protectedCycle) await protectAcademicPeriod(tx, protectedCycle.academicYear, protectedCycle.term)
     await tx.grade.deleteMany({ where: { assignmentId } })
     await tx.assignment.delete({ where: { id: assignmentId } })
     await tx.auditLog.create({ data: { actorId: req.user!.sub, action: 'TEACHER_ASSIGNMENT_DELETED', targetType: 'Assignment', targetId: assignmentId, metadata: { courseId: assignment.courseId, title: assignment.title } } })

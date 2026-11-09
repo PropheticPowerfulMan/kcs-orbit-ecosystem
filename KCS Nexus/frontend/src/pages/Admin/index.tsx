@@ -505,7 +505,7 @@ const extractStudentApiMessage = (error: unknown, fallback: string) => {
   return responseData?.message || responseData?.error || responseData?.details || (error as { message?: string })?.message || fallback
 }
 
-const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'employees', 'transcripts', 'report-cards', 'certificates', 'reports'])
+const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'employees', 'certificates', 'reports'])
 
 const getAdminRoster = () => studentsAPI.getAll(undefined, {
   headers: {
