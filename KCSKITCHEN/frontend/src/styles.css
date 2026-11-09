@@ -547,3 +547,16 @@ body[data-theme=dark] .sidebar-footer{background:linear-gradient(180deg,rgba(2,2
 .menu-price-editor{display:grid;gap:.65rem;margin-top:1rem;padding:1rem;border:1px solid var(--border);border-radius:18px;background:var(--surface2)}.menu-price-editor-title{display:grid;gap:.2rem}.menu-price-editor-title small,.menu-price-line small{color:var(--muted)}.menu-price-line{display:grid;grid-template-columns:minmax(180px,1fr) minmax(130px,180px) minmax(100px,120px);gap:.75rem;align-items:end;padding:.75rem;border:1px solid var(--border);border-radius:14px;background:var(--surface)}.menu-price-line>span{display:grid;gap:.2rem}.menu-price-line label{margin:0}.menu-price-line input,.menu-price-line select{min-height:42px}
 @media(max-width:700px){.menu-price-line{grid-template-columns:1fr 1fr}.menu-price-line>span{grid-column:1/-1}}
 @media(max-width:560px){.menu-price-line{grid-template-columns:1fr}.menu-price-line>span{grid-column:auto}.online-order-dialog .payment-switch{grid-template-columns:1fr 1fr}}
+
+/* Amount-based portions reuse the dashboard palette and compact form rhythm. */
+.sale-portion { display:grid; gap:.55rem; width:100%; min-width:0; margin-top:.65rem; padding:.75rem; border:1px solid var(--border, #2b6383); border-radius:12px; background:var(--surface2); color:var(--ink); }
+.sale-portion label { display:grid; gap:.3rem; min-width:0; font-size:.72rem; font-weight:650; }
+.sale-portion input, .sale-portion select { width:100%; min-width:0; padding:.5rem .6rem; font:inherit; color:inherit; background:var(--surface); border:1px solid #42738e; border-radius:8px; }
+.sale-portion small { font-size:.68rem; line-height:1.5; opacity:.85; }
+.sale-portion-inputs { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:.5rem; }
+.basket-lines > div > .sale-portion { grid-column:1 / -1; }
+.personal-menu-card > .sale-portion { grid-column:1 / -1; align-self:end; }
+.menu-history-help { font-size:.75rem; line-height:1.6; opacity:.8; margin:12px 0; }
+[data-theme="light"] .sale-portion { color:#143754; background:#e4eff8; border-color:#b8d0e3; }
+[data-theme="light"] .sale-portion input, [data-theme="light"] .sale-portion select { color:#143754; background:#f0f6fc; border-color:#b8d0e3; }
+@media(max-width:600px) { .sale-portion { padding:.6rem; } .sale-portion-inputs { grid-template-columns:minmax(0,1fr) 70px; } }

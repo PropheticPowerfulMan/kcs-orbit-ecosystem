@@ -1,3 +1,4 @@
+import { resolveSalePortion } from './sale-portion.js'
 import express, { type NextFunction, type Request, type Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -598,7 +599,7 @@ app.get('/api/daily-menus/today', authenticate, asyncRoute(async (_req, res) => 
 
 app.get('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'FINANCE', 'AUDITOR'), asyncRoute(async (_req, res) => {
   const [menus, deletedMenus] = await Promise.all([
-    prisma.dailyMenu.findMany({ include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } }, orderBy: { menuDate: 'desc' }, take: 90 }),
+    prisma.dailyMenu.findMany({ where: { archivedAt: null, ...(typeof _req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(_req.query.date) ? { menuDate: menuDate(_req.query.date) } : {}) }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } }, orderBy: { menuDate: 'desc' }, take: 90 }),
     prisma.auditLog.findMany({
       where: { entityType: 'DailyMenu', action: 'DAILY_MENU_DELETED' },
       orderBy: { createdAt: 'desc' },
@@ -649,10 +650,14 @@ app.post('/api/daily-menus', authenticate, allow('KITCHEN_ADMIN'), asyncRoute(as
   const products = await prisma.product.findMany({ where: { id: { in: ids }, archivedAt: null, isAvailable: true } })
   if (products.length !== ids.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
   const date = menuDate(input.date)
-  const existing = await prisma.dailyMenu.findUnique({ where: { menuDate: date }, select: { id: true } })
-  if (existing) return res.status(409).json({ message: 'A menu already exists for this service date. Open it with Edit to preserve its complete audit history.' })
-  const menu = await prisma.$transaction(async tx => {
-    const saved = await tx.dailyMenu.create({ data: { menuDate: date, title: input.title, description: input.description, createdBy: req.kitchenUser!.orbitPersonId, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null } })
+  const existing = await prisma.dailyMenu.findUnique({ where: { menuDate: date }, select: { id: true, archivedAt: true } })
+  if (existing && !existing.archivedAt) return res.status(409).json({ message: 'A menu already exists for this service date. Open it with Edit to preserve its complete audit history.' })
+  const menu = await runKitchenSerializableTransaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${input.date}))::text`)
+    const currentMenu = await tx.dailyMenu.findUnique({ where: { menuDate: date }, select: { id: true, archivedAt: true } })
+    if (currentMenu && !currentMenu.archivedAt) throw Object.assign(new Error('A menu already exists for this date. Open it with Edit.'), { statusCode: 409 })
+    const saved = await tx.dailyMenu.upsert({ where: { menuDate: date }, update: { title: input.title, description: input.description, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null, closedAt: null, archivedAt: null, createdBy: req.kitchenUser!.orbitPersonId }, create: { menuDate: date, title: input.title, description: input.description, createdBy: req.kitchenUser!.orbitPersonId, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null } })
+    if (currentMenu?.archivedAt) await tx.dailyMenuItem.deleteMany({ where: { menuId: saved.id } })
     await tx.dailyMenuItem.createMany({ data: lines.map((line, index) => { const product = products.find(item => item.id === line.productId)!; const unitPrice = line.unitPrice > 0 ? line.unitPrice : Number(product.currentPrice); if (unitPrice <= 0) throw new Error(`${product.name} requires a menu price`); return { menuId: saved.id, productId: product.id, unitPrice: new Prisma.Decimal(unitPrice), currency: line.currency || product.currency, displayOrder: index } }) })
     for (const line of lines) if (line.unitPrice > 0) await tx.product.update({ where: { id: line.productId }, data: { currentPrice: new Prisma.Decimal(line.unitPrice), currency: line.currency, isAvailable: true } })
     const complete = await tx.dailyMenu.findUniqueOrThrow({ where: { id: saved.id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
@@ -673,7 +678,8 @@ app.put('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute
   const input = dailyMenuSchema.parse(req.body)
   const previous = await prisma.dailyMenu.findUnique({ where: { id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
   if (!previous) return res.status(404).json({ message: 'Daily menu not found' })
-  if (previous._count.transactions) return res.status(409).json({ message: 'A menu linked to recorded transactions is immutable and cannot be edited.' })
+  if (previous.archivedAt) return res.status(409).json({ message: 'This menu has been withdrawn. Create a new menu for this date to restore service.' })
+  if (previous._count.transactions && previous.menuDate.toISOString().slice(0, 10) !== input.date) return res.status(409).json({ message: 'A menu with sales keeps its original service date. Its items and future selling prices remain editable.' })
   const date = menuDate(input.date)
   const conflicting = await prisma.dailyMenu.findFirst({ where: { menuDate: date, id: { not: id } }, select: { id: true } })
   if (conflicting) return res.status(409).json({ message: 'Another menu already exists for this service date.' })
@@ -681,7 +687,10 @@ app.put('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRoute
   const productIds = lines.map(item => item.productId)
   const products = await prisma.product.findMany({ where: { id: { in: productIds }, archivedAt: null, isAvailable: true } })
   if (products.length !== productIds.length) return res.status(409).json({ message: 'Every menu item must be an active, available catalog product' })
-  const menu = await prisma.$transaction(async tx => {
+  const menu = await runKitchenSerializableTransaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "DailyMenu" WHERE id = ${id} FOR UPDATE`)
+    const current = await tx.dailyMenu.findUniqueOrThrow({ where: { id } })
+    if (current.updatedAt.getTime() !== previous.updatedAt.getTime() || current.archivedAt) throw Object.assign(new Error('The menu changed in another session. Reload before saving.'), { statusCode: 409 })
     await tx.dailyMenu.update({ where: { id }, data: { menuDate: date, title: input.title, description: input.description, status: input.publish ? 'PUBLISHED' : 'DRAFT', publishedAt: input.publish ? new Date() : null, closedAt: null } })
     await tx.dailyMenuItem.deleteMany({ where: { menuId: id } })
     await tx.dailyMenuItem.createMany({ data: lines.map((line, index) => { const product = products.find(item => item.id === line.productId)!; const unitPrice = line.unitPrice > 0 ? line.unitPrice : Number(product.currentPrice); if (unitPrice <= 0) throw new Error(`${product.name} requires a menu price`); return { menuId: id, productId: product.id, unitPrice: new Prisma.Decimal(unitPrice), currency: line.currency || product.currency, displayOrder: index } }) })
@@ -697,9 +706,12 @@ app.delete('/api/daily-menus/:id', authenticate, allow('KITCHEN_ADMIN'), asyncRo
   const id = routeParam(req, 'id')
   const previous = await prisma.dailyMenu.findUnique({ where: { id }, include: { items: { include: { product: true }, orderBy: { displayOrder: 'asc' } }, _count: { select: { transactions: true } } } })
   if (!previous) return res.status(404).json({ message: 'Daily menu not found' })
-  if (previous._count.transactions) return res.status(409).json({ message: 'A menu linked to recorded transactions is retained for accounting traceability and cannot be deleted.' })
-  await prisma.$transaction(async tx => {
-    await tx.dailyMenu.delete({ where: { id } })
+  if (previous.archivedAt) return res.json({ id, deleted: true })
+  await runKitchenSerializableTransaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "DailyMenu" WHERE id = ${id} FOR UPDATE`)
+    const current = await tx.dailyMenu.findUniqueOrThrow({ where: { id } })
+    if (current.updatedAt.getTime() !== previous.updatedAt.getTime()) throw Object.assign(new Error('The menu changed in another session. Reload before withdrawing it.'), { statusCode: 409 })
+    await tx.dailyMenu.update({ where: { id }, data: { status: 'CLOSED', closedAt: new Date(), archivedAt: new Date() } })
     await tx.auditLog.create({ data: { actorId: req.kitchenUser!.orbitPersonId, actorRole: req.kitchenUser!.role, action: 'DAILY_MENU_DELETED', entityType: 'DailyMenu', entityId: id, oldValue: auditJson(previous), reason: String(req.body?.reason || 'Deleted by Kitchen administration'), ipAddress: req.ip } })
   })
   res.json({ id, deleted: true })
@@ -714,7 +726,8 @@ app.post('/api/daily-menus/:id/close', authenticate, allow('KITCHEN_ADMIN'), asy
 const saleSchema = z.object({
   orbitPersonId: z.string().min(1),
   dailyMenuId: z.string().min(1),
-  items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000) })).min(1).max(50),
+  items: z.array(z.object({ productId: z.string().min(1), quantity: z.coerce.number().positive().max(1000).optional(), amount: z.coerce.number().positive().max(1_000_000_000).optional(), amountCurrency: z.enum(['CDF', 'USD']).optional() }).refine(item => (item.amount !== undefined) !== (item.quantity !== undefined), { message: 'Choose quantity or purchase amount, not both' })).min(1).max(50),
+  menuVersion: z.string().datetime().optional(),
   paymentMode: z.enum(['CASH', 'MOBILE_MONEY', 'BANK', 'EDUPAY', 'CREDIT']),
   notes: z.string().trim().max(500).optional(),
   confirmationType: z.enum(['NONE', 'PIN', 'DASHBOARD', 'QR', 'SIGNATURE']).default('NONE')
@@ -751,13 +764,15 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   }
 
   const activeMenu = await prisma.dailyMenu.findUnique({ where: { id: input.dailyMenuId }, include: { items: true } })
-  if (!activeMenu || activeMenu.status !== 'PUBLISHED' || activeMenu.menuDate.toISOString().slice(0, 10) !== kitchenDateKey(now)) return res.status(409).json({ message: 'Sales and credit require the published menu for today' })
+  if (!activeMenu || activeMenu.archivedAt || activeMenu.status !== 'PUBLISHED' || activeMenu.menuDate.toISOString().slice(0, 10) !== kitchenDateKey(now)) return res.status(409).json({ message: 'Sales and credit require the published menu for today' })
+  if (input.menuVersion && input.menuVersion !== activeMenu.updatedAt.toISOString()) return res.status(409).json({ message: 'The daily menu was updated. Reload the menu and confirm its current prices before ordering.' })
   const productIds = [...new Set(input.items.map(item => item.productId))]
+  if (productIds.length !== input.items.length) return res.status(400).json({ message: 'Each product must appear only once in the basket' })
   const menuItems = new Map(activeMenu.items.filter(item => item.isAvailable).map(item => [item.productId, item]))
   if (productIds.some(id => !menuItems.has(id))) return res.status(409).json({ message: 'One or more selected products are not on today’s menu' })
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
   if (products.length !== productIds.length) return res.status(400).json({ message: 'One or more products no longer exist' })
-  const needsUsdRate = input.items.some(item => menuItems.get(item.productId)?.currency === 'USD')
+  const needsUsdRate = input.items.some(item => menuItems.get(item.productId)?.currency === 'USD' || item.amountCurrency === 'USD')
   let exchangeRate: Awaited<ReturnType<typeof getUsdCdfRate>> | null = null
   if (needsUsdRate) {
     try { exchangeRate = await getUsdCdfRate() }
@@ -769,26 +784,21 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   const lines = input.items.map(item => {
     const product = productMap.get(item.productId)!
     if (!product.isAvailable) throw Object.assign(new Error(product.name + ' is unavailable'), { statusCode: 409 })
-    if (product.trackInventory && Number(product.stockQuantity) < item.quantity) {
-      throw Object.assign(new Error('Insufficient stock for ' + product.name), { statusCode: 409 })
-    }
     const menuItem = menuItems.get(product.id)!
     const unitPriceCdf = Number(menuItem.unitPrice) * (menuItem.currency === 'USD' ? exchangeRate!.rate : 1)
     if (!Number.isFinite(unitPriceCdf) || unitPriceCdf <= 0) {
       throw Object.assign(new Error(product.name + ' requires a manager-configured price before it can be ordered'), { statusCode: 409 })
     }
-    return {
-      product,
-      quantity: item.quantity,
-      unitPriceCdf,
-      subtotal: unitPriceCdf * item.quantity
-    }
+    const portion = resolveSalePortion(item, unitPriceCdf, exchangeRate?.rate)
+    if (product.trackInventory && Number(product.stockQuantity) < portion.quantity) throw Object.assign(new Error('Insufficient stock for ' + product.name), { statusCode: 409 })
+    return { product, ...portion }
   })
-  const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0)
+  const subtotal = new Prisma.Decimal(lines.reduce((sum, line) => sum.plus(line.subtotal), new Prisma.Decimal(0))).toDecimalPlaces(2).toNumber()
 
   let personAccess = await prisma.kitchenAccess.findUnique({ where: { orbitPersonId: person.id } })
   const subsidyRole = person.kind === 'TEACHER' ? 'TEACHER' : ['STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? 'STAFF' : person.kind
-  const eligibleSubtotal = lines.filter(line => line.product.discountEligible && line.product.category !== 'DRINK').reduce((sum, line) => sum + line.subtotal, 0)
+  const eligibleSubtotal = lines.filter(line => line.product.discountEligible && line.product.category !== 'DRINK')
+    .reduce((sum, line) => sum.plus(line.subtotal), new Prisma.Decimal(0)).toDecimalPlaces(2).toNumber()
   const schoolSubsidy = calculateSchoolSubsidy(eligibleSubtotal, subsidyRole)
   if (input.paymentMode === 'CREDIT') {
     if (personAccess?.isActive === false) return res.status(403).json({ message: 'Kitchen access is explicitly disabled for this person' })
@@ -815,6 +825,9 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
   }
 
   const transaction = await runKitchenSerializableTransaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "DailyMenu" WHERE id = ${activeMenu.id} FOR UPDATE`)
+    const verifiedMenu = await tx.dailyMenu.findUniqueOrThrow({ where: { id: activeMenu.id } })
+    if (verifiedMenu.archivedAt || verifiedMenu.status !== 'PUBLISHED' || verifiedMenu.updatedAt.getTime() !== activeMenu.updatedAt.getTime()) throw Object.assign(new Error('The menu changed during checkout. Reload and confirm the current menu.'), { statusCode: 409 })
     const counterName = 'TRANSACTION-' + now.getUTCFullYear()
     const counter = await tx.kitchenCounter.upsert({
       where: { name: counterName },
@@ -849,6 +862,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
         productId: line.product.id,
         productNameSnapshot: line.product.name,
         quantity: new Prisma.Decimal(line.quantity),
+        amountBased: line.amountBased,
         unitPriceAtPurchase: new Prisma.Decimal(line.unitPriceCdf),
         subtotal: new Prisma.Decimal(line.subtotal)
       })) },
@@ -869,7 +883,8 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     for (const line of lines) {
       if (isPersonalOrder) continue
       if (!line.product.trackInventory) continue
-      await tx.product.update({ where: { id: line.product.id }, data: { stockQuantity: { decrement: line.quantity } } })
+      const adjusted = await tx.product.updateMany({ where: { id: line.product.id, stockQuantity: { gte: line.quantity } }, data: { stockQuantity: { decrement: line.quantity } } })
+      if (adjusted.count !== 1) throw Object.assign(new Error('Insufficient stock for ' + line.product.name), { statusCode: 409 })
       await tx.stockMovement.create({ data: {
         productId: line.product.id,
         type: 'SALE',
@@ -889,7 +904,7 @@ app.post('/api/transactions', authenticate, allow('KITCHEN_ADMIN', 'CASHIER', 'F
     return created
   })
 
-  await audit(req, 'TRANSACTION_CREATED', 'KitchenTransaction', transaction.id, undefined, transaction)
+  await audit(req, 'TRANSACTION_CREATED', 'KitchenTransaction', transaction.id, undefined, { ...transaction, pricingRequests: input.items, exchangeRate: exchangeRate ? { rate: exchangeRate.rate, source: exchangeRate.source, fetchedAt: exchangeRate.fetchedAt } : null })
   res.status(201).json({ transaction: withReceiptSignature(transaction), balance: await balanceFor(person.id) })
 }))
 

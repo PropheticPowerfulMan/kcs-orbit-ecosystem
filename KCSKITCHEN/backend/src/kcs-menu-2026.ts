@@ -65,7 +65,7 @@ async function ensureOfficialProducts(prisma: PrismaClient) {
       ? await prisma.product.update({
           where: { id: product.id },
           data: line.managerPriced
-            ? { currency: 'CDF', category: line.category, discountEligible: true, photoUrl: line.photoUrl }
+            ? { category: line.category, discountEligible: true, photoUrl: line.photoUrl }
             : { currentPrice: new Prisma.Decimal(line.price), currency: 'CDF', category: line.category, isAvailable: true, discountEligible: true, photoUrl: line.photoUrl }
         })
       : await prisma.product.create({
@@ -99,7 +99,7 @@ async function ensureOfficialDrinks(prisma: PrismaClient) {
       ? await prisma.product.update({
           where: { id: existing.id },
           data: drink.comingSoon
-            ? { category: 'DRINK', discountEligible: false, photoUrl, currency: 'CDF' }
+            ? { category: 'DRINK', discountEligible: false, photoUrl }
             : { category: 'DRINK', discountEligible: false, photoUrl, description, currentPrice: new Prisma.Decimal(drink.price!), currency: 'CDF', isAvailable: true },
         })
       : await prisma.product.create({
@@ -154,6 +154,14 @@ export async function ensureOfficialMenu(
       }
     }
   })
+  if (existing?.archivedAt) return null
+  if (existing) {
+    const managed = existing.createdBy !== 'SYSTEM_KCS_MENU_2026' || await prisma.auditLog.findFirst({ where: { entityType: 'DailyMenu', entityId: existing.id, action: 'DAILY_MENU_UPDATED' }, select: { id: true } })
+    if (managed) return existing
+  } else {
+    const withdrawn = await prisma.auditLog.findFirst({ where: { entityType: 'DailyMenu', action: 'DAILY_MENU_DELETED', oldValue: { path: ['menuDate'], equals: date.toISOString() } }, select: { id: true } })
+    if (withdrawn) return null
+  }
   const products = preparedProducts ?? await ensureOfficialProducts(prisma)
   if (existing) {
     const legacy = await prisma.product.findMany({ where: { name: 'Chicken & Fries / Cuisse & Frites', archivedAt: null }, select: { id: true } })
@@ -162,10 +170,11 @@ export async function ensureOfficialMenu(
       const product = await prisma.product.findUniqueOrThrow({ where: { id: products.get(line.name)!.id } })
       const configuredPrice = line.managerPriced ? product.currentPrice : new Prisma.Decimal(line.price)
       const available = line.managerPriced ? product.isAvailable && Number(product.currentPrice) > 0 : true
+      const configuredCurrency = line.managerPriced ? product.currency : 'CDF'
       await prisma.dailyMenuItem.upsert({
         where: { menuId_productId: { menuId: existing.id, productId: product.id } },
-        create: { menuId: existing.id, productId: product.id, unitPrice: configuredPrice, currency: 'CDF', displayOrder: index, isAvailable: available },
-        update: { unitPrice: configuredPrice, currency: 'CDF', displayOrder: index, isAvailable: available },
+        create: { menuId: existing.id, productId: product.id, unitPrice: configuredPrice, currency: configuredCurrency, displayOrder: index, isAvailable: available },
+        update: { unitPrice: configuredPrice, currency: configuredCurrency, displayOrder: index, isAvailable: available },
       })
     }
     return attachAvailableDrinks(prisma, existing.id, definition.items.length)
@@ -181,15 +190,20 @@ export async function ensureOfficialMenu(
         publishedAt: new Date()
       }
     })
+    const configuredProducts = await tx.product.findMany({ where: { id: { in: definition.items.filter(line => line.managerPriced).map(line => products.get(line.name)!.id) } } })
     await tx.dailyMenuItem.createMany({
-      data: definition.items.map((line, index) => ({
-        menuId: menu.id,
-        productId: products.get(line.name)!.id,
-        unitPrice: line.managerPriced ? new Prisma.Decimal(0) : new Prisma.Decimal(line.price),
-        currency: 'CDF',
-        displayOrder: index,
-        isAvailable: !line.managerPriced,
-      }))
+      data: definition.items.map((line, index) => {
+        const productId = products.get(line.name)!.id
+        const configured = configuredProducts.find(product => product.id === productId)
+        return {
+          menuId: menu.id,
+          productId,
+          unitPrice: line.managerPriced ? configured!.currentPrice : new Prisma.Decimal(line.price),
+          currency: line.managerPriced ? configured!.currency : 'CDF',
+          displayOrder: index,
+          isAvailable: !line.managerPriced || Boolean(configured?.isAvailable && Number(configured.currentPrice) > 0),
+        }
+      }),
     })
     return menu
   })

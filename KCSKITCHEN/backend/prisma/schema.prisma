@@ -313,6 +313,7 @@ model DailyMenu {
   title String
   description String?
   status DailyMenuStatus @default(DRAFT)
+  archivedAt DateTime?
   createdBy String
   publishedAt DateTime?
   closedAt DateTime?
@@ -383,6 +384,7 @@ model KitchenTransactionItem {
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
   productNameSnapshot String
   quantity Decimal @db.Decimal(14, 3)
+  amountBased Boolean @default(false)
   unitPriceAtPurchase Decimal @db.Decimal(14, 2)
   subtotal Decimal @db.Decimal(14, 2)
   @@index([transactionId])
