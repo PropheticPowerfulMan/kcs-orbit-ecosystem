@@ -549,3 +549,16 @@ body[data-theme=dark] .sidebar-footer{background:linear-gradient(180deg,rgba(2,2
 @media(max-width:560px){.menu-price-line{grid-template-columns:1fr}.menu-price-line>span{grid-column:auto}.online-order-dialog .payment-switch{grid-template-columns:1fr 1fr}}
 .basket-line>span{gap:.35rem}.negotiated-price,.negotiated-reason{display:grid;gap:.35rem;color:var(--muted);font-size:.68rem;font-weight:750}.negotiated-price input,.negotiated-reason input{width:100%;min-width:0;padding:.55rem .65rem;border-radius:9px}.negotiated-reason{margin:.75rem 0;padding:.75rem;border:1px dashed var(--gold);border-radius:12px;background:var(--surface2)}.transaction-correction .correction-line{grid-template-columns:1.4fr .8fr 1fr;gap:.65rem}.transaction-correction h2{margin:.25rem 0}.transaction-correction>p{color:var(--muted);line-height:1.5}.confirmation-card label{display:grid;gap:.4rem;text-align:left;color:var(--muted);font-size:.72rem;font-weight:750}.confirmation-card textarea{min-height:88px}
 @media(max-width:600px){.transaction-correction .correction-line{grid-template-columns:1fr 1fr}.transaction-correction .correction-line label:first-child{grid-column:1/-1}.negotiated-price input{max-width:100%}}
+
+/* Amount-based portions reuse the dashboard palette and compact form rhythm. */
+.sale-portion { display:grid; gap:.55rem; width:100%; min-width:0; margin-top:.65rem; padding:.75rem; border:1px solid var(--border, #2b6383); border-radius:12px; background:var(--surface2); color:var(--ink); }
+.sale-portion label { display:grid; gap:.3rem; min-width:0; font-size:.72rem; font-weight:650; }
+.sale-portion input, .sale-portion select { width:100%; min-width:0; padding:.5rem .6rem; font:inherit; color:inherit; background:var(--surface); border:1px solid #42738e; border-radius:8px; }
+.sale-portion small { font-size:.68rem; line-height:1.5; opacity:.85; }
+.sale-portion-inputs { display:grid; grid-template-columns:minmax(0,1fr) 78px; gap:.5rem; }
+.basket-lines > div > .sale-portion { grid-column:1 / -1; }
+.personal-menu-card > .sale-portion { grid-column:1 / -1; align-self:end; }
+.menu-history-help { font-size:.75rem; line-height:1.6; opacity:.8; margin:12px 0; }
+[data-theme="light"] .sale-portion { color:#143754; background:#e4eff8; border-color:#b8d0e3; }
+[data-theme="light"] .sale-portion input, [data-theme="light"] .sale-portion select { color:#143754; background:#f0f6fc; border-color:#b8d0e3; }
+@media(max-width:600px) { .sale-portion { padding:.6rem; } .sale-portion-inputs { grid-template-columns:minmax(0,1fr) 70px; } }

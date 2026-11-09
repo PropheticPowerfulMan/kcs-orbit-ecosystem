@@ -1,4 +1,5 @@
 const retryableTransactionCodes = new Set(['P2034', 'P2002'])
+const retryableSqlStates = new Set(['40001', '40P01'])
 
 export async function runWithTransactionRetry<T>(
   operation: () => Promise<T>,
@@ -12,7 +13,9 @@ export async function runWithTransactionRetry<T>(
       return await operation()
     } catch (error: any) {
       lastError = error
-      if (!retryableTransactionCodes.has(String(error?.code)) || attempt === maxAttempts - 1) throw error
+      const retryable = retryableTransactionCodes.has(String(error?.code))
+        || (error?.code === 'P2010' && retryableSqlStates.has(String(error?.meta?.code)))
+      if (!retryable || attempt === maxAttempts - 1) throw error
       await delay(attempt)
     }
   }

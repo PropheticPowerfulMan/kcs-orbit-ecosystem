@@ -1,3 +1,4 @@
+import SalePortion, { cartLineTotal, cartRequestItems, type PurchaseAmounts } from './SalePortion'
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import {
   AlertTriangle, Archive, BarChart3, CalendarDays, ChefHat, ClipboardList, CreditCard, Languages,
@@ -641,7 +642,7 @@ function Stat({ icon, label, value, tone = '' }: { icon: ReactNode; label: strin
   return <article className={'stat-card ' + tone}><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>
 }
 
-type PersonalMenu = { id: string; title: string; items: Array<{ product: Product; unitPrice: string; currency: string }> }
+type PersonalMenu = { id: string; title: string; updatedAt: string; items: Array<{ product: Product; unitPrice: string; currency: string }> }
 
 const menuPhotoFor = (product: Product) => {
   const name = product.name.toLowerCase()
@@ -666,6 +667,11 @@ function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; 
   const fr = lang === 'fr'
   const [menu, setMenu] = useState<PersonalMenu | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
+  const [amounts, setAmounts] = useState<PurchaseAmounts>({})
+  const chooseAmount = (productId: string, value?: { amount: string; currency: 'CDF' | 'USD' }) => {
+    setAmounts(current => { const next = { ...current }; if (value) next[productId] = value; else delete next[productId]; return next })
+    if (value) setCart(current => ({ ...current, [productId]: current[productId] || 1 }))
+  }
   const [confirming, setConfirming] = useState(false)
   const [orderType, setOrderType] = useState<'CASH' | 'CREDIT'>('CASH')
   const [busy, setBusy] = useState(false)
@@ -673,16 +679,16 @@ function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; 
   const { rate } = useCurrencyDisplay()
   useEffect(() => { api<{ menu: PersonalMenu }>('/daily-menus/today').then(result => setMenu(result.menu)).catch(error => setNotice({ type: 'error', message: error.message })) }, [])
   const products = menu?.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency })) ?? []
-  const total = products.reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0)
-  const eligibleTotal = products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1) * (cart[product.id] || 0), 0)
+  const total = products.reduce((sum, product) => sum + cartLineTotal(product, cart[product.id] || 0, amounts[product.id], rate?.rate), 0)
+  const eligibleTotal = products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + cartLineTotal(product, cart[product.id] || 0, amounts[product.id], rate?.rate), 0)
   const subsidy = ['TEACHER', 'STAFF'].includes(user.role) ? (eligibleTotal >= 20000 ? 8000 : eligibleTotal >= 10000 ? 4000 : eligibleTotal >= 5000 ? 2000 : 0) : 0
   const change = (id: string, delta: number) => setCart(current => ({ ...current, [id]: Math.max(0, (current[id] || 0) + delta) }))
   async function submitOrder() {
     if (!menu || !total || busy) return
     setBusy(true)
     try {
-      const result = await api<{ transaction: Transaction }>('/transactions', { method: 'POST', body: JSON.stringify({ orbitPersonId: user.orbitPersonId, dailyMenuId: menu.id, items: Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId, quantity })), paymentMode: orderType, confirmationType: 'DASHBOARD', notes: 'Online order from KCS Kitchen dashboard' }) })
-      setCart({}); setConfirming(false); onOrdered()
+      const result = await api<{ transaction: Transaction }>('/transactions', { method: 'POST', body: JSON.stringify({ orbitPersonId: user.orbitPersonId, dailyMenuId: menu.id, menuVersion: menu.updatedAt, items: cartRequestItems(products, cart, amounts), paymentMode: orderType, confirmationType: 'DASHBOARD', notes: 'Online order from KCS Kitchen dashboard' }) })
+      setCart({}); setAmounts({}); setConfirming(false); onOrdered()
       setNotice({ type: 'success', message: fr ? `Commande ${result.transaction.transactionNumber} enregistrée. Kitchen et votre compte ont été notifiés.` : `Order ${result.transaction.transactionNumber} recorded. Kitchen and your account were notified.` })
     } catch (error) { setNotice({ type: 'error', message: (error as Error).message }) }
     finally { setBusy(false) }
@@ -694,7 +700,8 @@ function PersonalDailyMenu({ user, lang, onOrdered }: { user: User; lang: Lang; 
       <div className="personal-menu-grid">{products.map(product => { const purchasable = product.isAvailable && Number(product.currentPrice) > 0; return <article key={product.id} className="personal-menu-card">
         <img src={menuPhotoFor(product)} alt={product.name} loading="lazy" />
         <div><small>{product.category}</small><h3>{product.name}</h3>{purchasable ? <DisplayMoney value={product.currentPrice} currency={product.currency}/> : <b>{fr ? 'Prix à configurer' : 'Price to configure'}</b>}</div>
-        <div className="personal-menu-qty"><button type="button" disabled={!purchasable} onClick={() => change(product.id, -1)} aria-label={fr ? 'Retirer' : 'Remove'}>−</button><b>{cart[product.id] || 0}</b><button type="button" disabled={!purchasable} onClick={() => change(product.id, 1)} aria-label={fr ? 'Ajouter' : 'Add'}>+</button></div>
+        {!amounts[product.id] && <div className="personal-menu-qty"><button type="button" disabled={!purchasable || Boolean(amounts[product.id])} onClick={() => change(product.id, -1)} aria-label={fr ? 'Retirer' : 'Remove'}>−</button><b>{cart[product.id] || 0}</b><button type="button" disabled={!purchasable || Boolean(amounts[product.id])} onClick={() => change(product.id, 1)} aria-label={fr ? 'Ajouter' : 'Add'}>+</button></div>}
+        <SalePortion product={product} value={amounts[product.id]} onChange={value => chooseAmount(product.id, value)} fr={fr} disabled={!purchasable}/>
       </article>})}</div>
       <div className="personal-order-summary"><span>{fr ? 'Total estimé' : 'Estimated total'} <b><DisplayMoney value={Math.max(0, total - subsidy)} currency="CDF"/></b></span>{subsidy > 0 && <small>{fr ? `Prise en charge KCS : ${subsidy.toLocaleString('fr-FR')} CDF` : `KCS subsidy: ${subsidy.toLocaleString('en-US')} CDF`}</small>}<button className="primary" type="button" disabled={!total} onClick={() => setConfirming(true)}><ShoppingCart/>{fr ? 'Commander maintenant' : 'Order now'}</button></div>
     </section>
@@ -785,10 +792,17 @@ function PointOfSale({ user, t, lang }: { user: User; t: Record<string, string>;
   const [products, setProducts] = useState<Product[]>([])
   const [dailyMenuId, setDailyMenuId] = useState('')
   const [menuTitle, setMenuTitle] = useState('')
+  const [menuVersion, setMenuVersion] = useState<string>()
   const [person, setPerson] = useState<Person | null>(null)
   const [cart, setCart] = useState<Record<string, number>>({})
   const [priceOverrides, setPriceOverrides] = useState<Record<string, string>>({})
   const [priceOverrideReason, setPriceOverrideReason] = useState('')
+  const [amounts, setAmounts] = useState<PurchaseAmounts>({})
+  const chooseAmount = (productId: string, value?: { amount: string; currency: 'CDF' | 'USD' }) => {
+    setAmounts(current => { const next = { ...current }; if (value) next[productId] = value; else delete next[productId]; return next })
+    if (value) setPriceOverrides(current => { const next = { ...current }; delete next[productId]; return next })
+    if (value) setCart(current => ({ ...current, [productId]: current[productId] || 1 }))
+  }
   const [paymentMode, setPaymentMode] = useState('CASH')
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -800,10 +814,10 @@ function PointOfSale({ user, t, lang }: { user: User; t: Record<string, string>;
   const unitPriceCdf = (product: Product) => priceOverrides[product.id]?.trim()
     ? Number(priceOverrides[product.id])
     : Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1)
-  useEffect(() => { api<{ menu: { id: string; title: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
-  const total = useMemo(() => products.reduce((sum, product) => sum + unitPriceCdf(product) * (cart[product.id] || 0), 0), [products, cart, rate, priceOverrides])
+  useEffect(() => { api<{ menu: { id: string; title: string; updatedAt: string; items: Array<{ unitPrice: string; currency: string; product: Product }> } }>('/daily-menus/today').then(result => { setDailyMenuId(result.menu.id); setMenuVersion(result.menu.updatedAt); setMenuTitle(result.menu.title); setProducts(result.menu.items.map(item => ({ ...item.product, currentPrice: item.unitPrice, currency: item.currency }))) }).catch(err => setNotice({ type: 'error', message: err.message })) }, [])
+  const total = useMemo(() => products.reduce((sum, product) => sum + cartLineTotal({ ...product, currentPrice: String(unitPriceCdf(product)), currency: 'CDF' }, cart[product.id] || 0, amounts[product.id], rate?.rate), 0), [products, cart, amounts, rate, priceOverrides])
   const [confirming, setConfirming] = useState(false)
-  const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + unitPriceCdf(product) * (cart[product.id] || 0), 0), [products, cart, rate, priceOverrides])
+  const eligibleTotal = useMemo(() => products.filter(product => product.category !== 'DRINK' && product.discountEligible !== false).reduce((sum, product) => sum + cartLineTotal({ ...product, currentPrice: String(unitPriceCdf(product)), currency: 'CDF' }, cart[product.id] || 0, amounts[product.id], rate?.rate), 0), [products, cart, amounts, rate, priceOverrides])
   const subsidy = person && ['TEACHER', 'STAFF', 'ADMINISTRATIVE_STAFF'].includes(person.kind) ? (eligibleTotal >= 20000 ? 8000 : eligibleTotal >= 10000 ? 4000 : eligibleTotal >= 5000 ? 2000 : 0) : 0
   function add(id: string) { setCart(current => ({ ...current, [id]: (current[id] || 0) + 1 })) }
   function change(id: string, quantity: number) { setCart(current => ({ ...current, [id]: Math.max(0, quantity) })) }
@@ -818,13 +832,14 @@ function PointOfSale({ user, t, lang }: { user: User; t: Record<string, string>;
         body: JSON.stringify({
           orbitPersonId: person.id,
           dailyMenuId,
-          items: Object.entries(cart).filter(([, quantity]) => quantity > 0).map(([productId, quantity]) => ({ productId, quantity, ...(priceOverrides[productId]?.trim() ? { unitPriceCdf: Number(priceOverrides[productId]) } : {}) })),
+          menuVersion,
+          items: cartRequestItems(products, cart, amounts).map(item => ({ ...item, ...(!amounts[item.productId] && priceOverrides[item.productId]?.trim() ? { unitPriceCdf: Number(priceOverrides[item.productId]) } : {}) })),
           ...(Object.values(priceOverrides).some(value => value.trim()) ? { priceOverrideReason } : {}),
           paymentMode,
           confirmationType: 'DASHBOARD'
         })
       })
-      setReceipt(result.transaction); setCart({}); setPriceOverrides({}); setPriceOverrideReason(''); setPerson(null); setPaymentMode('CASH'); setConfirming(false); setSaleSequence(current => current + 1)
+      setReceipt(result.transaction); setCart({}); setAmounts({}); setPriceOverrides({}); setPriceOverrideReason(''); setPerson(null); setPaymentMode('CASH'); setConfirming(false); setSaleSequence(current => current + 1)
     } catch (err) { setNotice({ type: 'error', message: (err as Error).message }) }
     finally { checkoutLock.current = false; setSubmitting(false) }
   }
@@ -834,7 +849,7 @@ function PointOfSale({ user, t, lang }: { user: User; t: Record<string, string>;
         <div className="step-title"><span>1</span><div><small>IDENTITY</small><h2>{t.identify}</h2></div></div>
         <PersonSelector key={saleSequence} value={person} onChange={(nextPerson) => {
           if (nextPerson?.id !== person?.id) {
-            setCart({})
+            setCart({}); setAmounts({})
             setPriceOverrides({})
             setPriceOverrideReason('')
             setPaymentMode('CASH')
@@ -851,7 +866,7 @@ function PointOfSale({ user, t, lang }: { user: User; t: Record<string, string>;
       </div>
       <aside className="basket panel">
         <div className="step-title"><span>3</span><div><small>CHECKOUT</small><h2>{t.basket}</h2></div></div>
-        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div className="basket-line" key={product.id}><span><b>{product.name}</b><DisplayMoney value={unitPriceCdf(product)} currency="CDF" />{canNegotiatePrice && <label className="negotiated-price">{lang === 'fr' ? 'Prix convenu / unité (CDF)' : 'Agreed unit price (CDF)'}<input type="number" min="1" step="1" inputMode="decimal" value={priceOverrides[product.id] || ''} placeholder={String(Math.round(Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1)))} onChange={event => setPriceOverrides(current => ({ ...current, [product.id]: event.target.value }))}/></label>}</span><div className="qty"><button onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button onClick={() => add(product.id)}>+</button></div><DisplayMoney value={unitPriceCdf(product) * cart[product.id]} currency="CDF" /></div>)}</div>
+        <div className="basket-lines">{products.filter(product => cart[product.id]).map(product => <div key={product.id}><span><b>{product.name}</b><DisplayMoney value={product.currentPrice} currency={product.currency} />{canNegotiatePrice && !amounts[product.id] && <label className="negotiated-price">{lang === 'fr' ? 'Prix convenu / unité (CDF)' : 'Agreed unit price (CDF)'}<input type="number" min="1" step="1" inputMode="decimal" value={priceOverrides[product.id] || ''} placeholder={String(Math.round(Number(product.currentPrice) * (product.currency === 'USD' && rate ? rate.rate : 1)))} onChange={event => setPriceOverrides(current => ({ ...current, [product.id]: event.target.value }))}/></label>}</span>{!amounts[product.id] && <div className="qty"><button disabled={Boolean(amounts[product.id])} onClick={() => change(product.id, cart[product.id] - 1)}>−</button><b>{cart[product.id]}</b><button disabled={Boolean(amounts[product.id])} onClick={() => add(product.id)}>+</button></div>}<DisplayMoney value={cartLineTotal({ ...product, currentPrice: String(unitPriceCdf(product)), currency: 'CDF' }, cart[product.id], amounts[product.id], rate?.rate)} currency="CDF" /><SalePortion product={product} value={amounts[product.id]} onChange={value => chooseAmount(product.id, value)} fr={lang === 'fr'}/></div>)}</div>
         {canNegotiatePrice && Object.values(priceOverrides).some(value => value.trim()) && <label className="negotiated-reason">{lang === 'fr' ? 'Motif du prix convenu (obligatoire et audité)' : 'Reason for agreed price (required and audited)'}<input value={priceOverrideReason} maxLength={300} required onChange={event => setPriceOverrideReason(event.target.value)} placeholder={lang === 'fr' ? 'Ex. : prix exceptionnel autorisé par le gestionnaire' : 'E.g. exceptional manager-approved sale price'}/></label>}
         {!total && <Empty text={t.noData} />}
         <div className="payment-switch"><button className={paymentMode !== 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CASH')}><Wallet />{t.payNow}</button><button className={paymentMode === 'CREDIT' ? 'active' : ''} onClick={() => setPaymentMode('CREDIT')}><CreditCard />{t.onCredit}</button></div>
@@ -1003,7 +1018,7 @@ function Receipt({ transaction, onClose, lang = 'en', allowDispute = false, canM
   return <Modal wide onClose={onClose}><div className="receipt" id={receiptId}>
     <div className="receipt-head"><img src="./images/kcs-logo.png" alt="Kinshasa Christian School" /><div><span>KINSHASA CHRISTIAN SCHOOL</span><h2>KCS KITCHEN RECEIPT</h2><b>{transaction.transactionNumber}</b></div></div>
     <div className="receipt-meta"><div><small>PERSON</small><b>{transaction.personNameSnapshot}</b></div><div><small>DATE / TIME</small><b>{dateTime(transaction.createdAt)}</b></div><div><small>CASHIER</small><b>{transaction.cashierNameSnapshot}</b></div><div><small>PAYMENT</small><b>{transaction.paymentMode} · {transaction.paymentStatus}</b></div></div>
-    <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.quantity}</td><td><DisplayMoney value={item.unitPriceAtPurchase} /></td><td><DisplayMoney value={item.subtotal} /></td></tr>)}</tbody></table>
+    <table><thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Subtotal</th></tr></thead><tbody>{transaction.items.map(item => <tr key={item.id}><td>{item.productNameSnapshot}</td><td>{item.amountBased ? '≈ ' : ''}{item.quantity}{item.amountBased && <small>Portion / Amount-based sale</small>}</td><td><DisplayMoney value={item.unitPriceAtPurchase} /></td><td><DisplayMoney value={item.subtotal} /></td></tr>)}</tbody></table>
     <div className="receipt-totals"><span>Subtotal <b><DisplayMoney value={transaction.subtotal} /></b></span><span>School subsidy / Prise en charge KCS <b>− <DisplayMoney value={transaction.schoolSubsidy || transaction.discount} /></b></span><strong>Customer payable / À payer <b><DisplayMoney value={transaction.total} /></b></strong></div>
     <div className="receipt-verification"><QRCodeSVG value={verificationUrl} size={92} level="M" includeMargin title="Verify this KCS Kitchen receipt"/><div><b>SCAN TO VERIFY</b><span>Authenticity and current status are checked against the official Kitchen register without exposing private financial data.</span><code>{transaction.transactionNumber}</code></div></div>
     <div className="receipt-proof"><ShieldCheck /> Digitally registered, timestamped and auditable. Original transaction records are never silently deleted.</div>
