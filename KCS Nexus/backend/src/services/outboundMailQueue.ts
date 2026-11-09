@@ -1,3 +1,4 @@
+import { claimQueuedDelivery } from './deliveryLease.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { sendSchoolMail } from '../utils/mail.js'
@@ -68,15 +69,18 @@ export async function processOutboundMailQueue() {
     }).slice(0, MAIL_QUEUE_BATCH_SIZE)
     if (!eligibleRows.length) return
     for (const row of eligibleRows) {
-    const metadata = queueMetadata(row.metadata)
+    const claimed = await claimQueuedDelivery(row)
+    if (!claimed) continue
+    const metadata = queueMetadata(claimed)
     if (!row.recipientEmail) {
       await prisma.correspondenceLog.update({ where: { id: row.id }, data: { status: 'FAILED', failureReason: 'RECIPIENT_EMAIL_MISSING' } })
       continue
     }
     const message = metadata.internalMessageId ? await prisma.internalMessage.findUnique({
       where: { id: metadata.internalMessageId },
-      select: { attachmentName: true, attachmentMime: true, attachmentData: true },
+      select: { attachmentName: true, attachmentMime: true, attachmentData: true, sharedAttachment: { select: { data: true } } },
     }) : null
+    const attachmentData = message?.attachmentData ?? message?.sharedAttachment?.data
     const language = metadata.language === 'en' ? 'en' : 'fr'
     const attachmentNote = message?.attachmentName ? (language === 'fr' ? `\n\nDocument joint : ${message.attachmentName}. Disponible aussi dans votre boîte Nexus.` : `\n\nAttached document: ${message.attachmentName}. Also available in your Nexus inbox.`) : ''
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character))
@@ -88,7 +92,7 @@ export async function processOutboundMailQueue() {
       subject: row.subject,
       text: row.body + attachmentNote,
       html: `${messageHtml}<img src="${trackingUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`,
-      attachments: message?.attachmentData && message.attachmentName ? [{ filename: message.attachmentName, content: Buffer.from(message.attachmentData), contentType: message.attachmentMime ?? undefined }] : undefined,
+      attachments: attachmentData && message?.attachmentName ? [{ filename: message.attachmentName, content: Buffer.from(attachmentData), contentType: message.attachmentMime ?? undefined }] : undefined,
       branded: true,
       language,
     })
@@ -96,7 +100,7 @@ export async function processOutboundMailQueue() {
     if (result.sent) {
       await prisma.correspondenceLog.update({
         where: { id: row.id },
-        data: { status: 'SENT', sentAt: new Date(), failureReason: null, metadata: { ...metadata, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: null } as Prisma.InputJsonValue },
+        data: { status: 'SENT', sentAt: new Date(), failureReason: null, metadata: { ...metadata, leaseId: null, leaseUntil: null, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: null } as Prisma.InputJsonValue },
       })
       continue
     }
@@ -107,7 +111,7 @@ export async function processOutboundMailQueue() {
       data: {
         status: retryable ? 'QUEUED' : 'FAILED',
         failureReason: result.providerDetail || result.reason,
-        metadata: { ...metadata, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: retryable ? new Date(now.getTime() + delay).toISOString() : null } as Prisma.InputJsonValue,
+        metadata: { ...metadata, leaseId: null, leaseUntil: null, attempts, lastAttemptAt: now.toISOString(), nextAttemptAt: retryable ? new Date(now.getTime() + delay).toISOString() : null } as Prisma.InputJsonValue,
       },
     })
     }

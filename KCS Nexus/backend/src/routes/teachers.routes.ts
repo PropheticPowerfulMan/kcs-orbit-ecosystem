@@ -355,6 +355,7 @@ teachersRouter.get('/activity-reports/submitted', authenticate, requireRoles('ad
 }))
 teachersRouter.get('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub } })
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   return success(res, workspace)
 }))
 

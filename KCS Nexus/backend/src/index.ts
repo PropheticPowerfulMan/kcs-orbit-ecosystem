@@ -1,3 +1,4 @@
+import { startOutboundSmsQueue } from './services/outboundSmsQueue.js'
 import { env } from './config/env.js'
 import { prisma } from './config/prisma.js'
 import { app } from './app.js'
@@ -12,6 +13,7 @@ const start = async () => {
     await ensureUserAccessCodeColumn(prisma)
     setDatabaseReady(true)
     startOutboundMailQueue()
+    startOutboundSmsQueue()
     startEventReminderWorker()
   } catch (error) {
     setDatabaseReady(false)

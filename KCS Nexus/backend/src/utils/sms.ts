@@ -32,6 +32,7 @@ export async function sendSchoolSms(to: string | null | undefined, message: stri
           ? { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', apiKey }
           : { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body,
+        signal: AbortSignal.timeout(20_000),
       })
       return { response, responseText: await response.text() }
     }
