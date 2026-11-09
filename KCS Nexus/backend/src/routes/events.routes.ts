@@ -1,3 +1,5 @@
+import { publicMediaUrl } from '../utils/mediaUpload.js'
+import { databaseActorId } from '../utils/databaseActor.js'
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
@@ -13,7 +15,7 @@ const eventSchema = z.object({
   endDate: z.coerce.date(),
   location: z.string().min(2),
   type: z.enum(['ACADEMIC', 'SPIRITUAL', 'SPORTS', 'CULTURAL', 'ADMINISTRATIVE']),
-  coverImage: z.string().trim().refine((value) => /^https?:\/\//i.test(value) || /\/uploads\/media\//i.test(value), 'Cover image must be an HTTPS URL or an uploaded KCS media path').optional(),
+  coverImage: z.string().trim().refine((value) => /^https?:\/\//i.test(value) || /\/uploads\/media\//i.test(value), 'Cover image must be an HTTPS URL or an uploaded KCS media path').nullable().optional(),
   registrationRequired: z.boolean().default(false),
   maxAttendees: z.number().optional(),
   liveStreamEnabled: z.boolean().default(false),
@@ -33,18 +35,19 @@ export const eventsRouter = Router()
 
 eventsRouter.get('/', asyncHandler(async (_req, res) => {
   const events = await prisma.event.findMany({ orderBy: { startDate: 'asc' } })
-  return success(res, events)
+  return success(res, events.map(event => ({ ...event, coverImage: event.coverImage ? publicMediaUrl(event.coverImage) : event.coverImage })))
 }))
 
 eventsRouter.get('/:id', asyncHandler(async (req, res) => {
   const eventId = getRouteParam(req.params.id)
   const event = await prisma.event.findUnique({ where: { id: eventId } })
   if (!event) throw new ApiError(404, 'Event not found')
-  return success(res, event)
+  return success(res, { ...event, coverImage: event.coverImage ? publicMediaUrl(event.coverImage) : event.coverImage })
 }))
 
-eventsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
+eventsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const payload = eventSchema.parse(req.body)
+  if (payload.endDate < payload.startDate) throw new ApiError(400, 'The event end date must follow its start date')
   const event = await prisma.event.create({ data: payload })
   return success(res, event, 'Event created', 201)
 }))
@@ -52,6 +55,9 @@ eventsRouter.post('/', authenticate, requireRoles('admin'), asyncHandler(async (
 eventsRouter.put('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
   const payload = eventSchema.partial().parse(req.body)
   const eventId = getRouteParam(req.params.id)
+  const current = await prisma.event.findUnique({ where: { id: eventId } })
+  if (!current) throw new ApiError(404, 'Event not found')
+  if ((payload.endDate ?? current.endDate) < (payload.startDate ?? current.startDate)) throw new ApiError(400, 'The event end date must follow its start date')
   const event = await prisma.event.update({ where: { id: eventId }, data: { ...payload, reminderRevision: { increment: 1 } } })
   return success(res, event, 'Event updated')
 }))
@@ -77,7 +83,8 @@ eventsRouter.patch('/:id/live-stream', authenticate, requireRoles('admin'), asyn
 
 eventsRouter.delete('/:id', authenticate, requireRoles('admin'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const eventId = getRouteParam(req.params.id)
-  const event = await prisma.event.delete({ where: { id: eventId } })
-  await prisma.auditLog.create({ data: { actorId: req.user!.sub, action: 'SCHOOL_EVENT_DELETED', targetType: 'Event', targetId: eventId, metadata: { title: event.title, startDate: event.startDate } } })
+  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { title: true, startDate: true } })
+  if (event) await prisma.event.deleteMany({ where: { id: eventId } })
+  await prisma.auditLog.create({ data: { actorId: await databaseActorId(req.user!.sub), action: 'SCHOOL_EVENT_DELETED', targetType: 'Event', targetId: eventId, metadata: event ? { title: event.title, startDate: event.startDate } : { alreadyAbsent: true } } })
   return success(res, null, 'Event deleted')
 }))

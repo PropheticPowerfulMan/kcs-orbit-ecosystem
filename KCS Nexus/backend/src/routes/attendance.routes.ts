@@ -1,3 +1,4 @@
+import { academicCycleForDate, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
@@ -200,7 +201,9 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
   const activeSuspensions = await prisma.disciplineCase.findMany({ where: { studentId: { in: ids }, suspensionStart: { lte: date }, suspensionEnd: { gte: date }, status: { not: 'RESOLVED' } }, select: { studentId: true } })
   const suspendedIds = new Set(activeSuspensions.map(item => item.studentId))
   const effectiveEntries = payload.entries.map(entry => suspendedIds.has(entry.studentId) ? { ...entry, status: 'SUSPENDED' as const, note: 'Official disciplinary suspension · automatically marked absent' } : entry)
+  const cycle = await academicCycleForDate(date)
   await prisma.$transaction(async (tx) => {
+    if (cycle) await protectAcademicPeriod(tx, cycle.academicYear, cycle.term)
     for (const entry of effectiveEntries) {
       await tx.attendanceRecord.upsert({
         where: { studentId_date_className_period: { studentId: entry.studentId, date, className, period: payload.period ?? 'Daily' } },
@@ -331,7 +334,9 @@ attendanceRouter.post('/students', requireRoles('admin'), asyncHandler(async (re
   }
   const className = [selectedClass.grade, selectedClass.section].filter(Boolean).join(' ')
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
+  const cycle = await academicCycleForDate(date)
   await prisma.$transaction(async (tx) => {
+    if (cycle) await protectAcademicPeriod(tx, cycle.academicYear, cycle.term)
     for (const entry of payload.entries) {
       await tx.attendanceRecord.upsert({
         where: { studentId_date_className_period: { studentId: entry.studentId, date, className, period: payload.period ?? 'Daily' } },
@@ -406,7 +411,9 @@ attendanceRouter.post('/staff', requireRoles('admin'), asyncHandler(async (req: 
   const ids = payload.entries.map((entry) => entry.staffOrbitId)
   if (new Set(ids).size !== ids.length) throw new ApiError(400, 'Duplicate staff member in attendance register')
   const recorderId = await resolveAttendanceRecorderId(req.user!.sub)
+  const cycle = await academicCycleForDate(date)
   const saved = await prisma.$transaction(async (tx) => {
+    if (cycle) await protectAcademicPeriod(tx, cycle.academicYear, cycle.term)
     const rows = []
     for (const entry of payload.entries) {
       rows.push(await tx.staffAttendanceRecord.upsert({

@@ -1,3 +1,5 @@
+import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPanel'
+import { useAcademicPeriodAccess, isAcademicPeriodReadOnly } from '@/hooks/useAcademicPeriodAccess'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Download, Edit3, FileCheck2, FilterX, History, Loader2, Printer, RefreshCw, Search, Send, ShieldCheck, Upload, X } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
@@ -5,6 +7,8 @@ import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
 import { printOfficialReportCard, type PrintableReportCard } from '@/utils/officialReportCardPrint'
 import { SCHOOL_LEVELS, normalizeSchoolLevel } from '@/constants/schoolLevels'
 import { compareClassLabels } from '@/utils/classLabels'
+import ReportCardDeliveryDialog from './ReportCardDeliveryDialog'
+import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 
 type Grade = {
@@ -57,10 +61,10 @@ const validSection = (value: unknown) => {
 }
 const inputClass = 'w-full rounded-xl border border-sky-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 focus:ring-2 focus:ring-sky-200 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white dark:placeholder:text-slate-400'
 
-const RECORD_CACHE_KEY = 'kcs-academic-records-cache-v2'
-const transcriptCacheKey = (studentId: string) => 'kcs-transcript-cache-v2:' + studentId
-const readRecordCache = () => {
-  try { return JSON.parse(sessionStorage.getItem(RECORD_CACHE_KEY) || '{}') as { grades?: Grade[]; cards?: Card[]; registry?: RegistryStudent[]; savedAt?: string } }
+const recordCacheKey = (year = '2026-2027') => 'kcs-academic-records-cache-v3:' + useAuthStore.getState().user?.id + ':' + year
+const transcriptCacheKey = (studentId: string) => 'kcs-transcript-cache-v3:' + useAuthStore.getState().user?.id + ':' + studentId
+const readRecordCache = (year?: string) => {
+  try { return JSON.parse(sessionStorage.getItem(recordCacheKey(year)) || '{}') as { grades?: Grade[]; cards?: Card[]; registry?: RegistryStudent[]; savedAt?: string } }
   catch { return {} }
 }
 
@@ -70,6 +74,8 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const [academicYear, setAcademicYear] = useState('2026-2027')
 
   const [term, setTerm] = useState('Semester 1 · Quarter 1')
+  const { access: periodAccess } = useAcademicPeriodAccess()
+  const cardReadOnly = (card: Card) => isAcademicPeriodReadOnly(periodAccess, card.term.split(' · ')[0], card.term.split(' · ').slice(1).join(' · '))
   const [grades, setGrades] = useState<Grade[]>(() => readRecordCache().grades ?? [])
   const [cards, setCards] = useState<Card[]>(() => readRecordCache().cards ?? [])
   const [registry, setRegistry] = useState<RegistryStudent[]>(() => readRecordCache().registry ?? [])
@@ -95,6 +101,10 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const deliveryInFlightRef = useRef(false)
   const [selectedParents, setSelectedParents] = useState<Record<string, string[]>>({})
   const [deliveryBusy, setDeliveryBusy] = useState(false)
+  const [deliveryProgress, setDeliveryProgress] = useState('')
+  const [deliveryOpen, setDeliveryOpen] = useState(false)
+  const [visibleLimit, setVisibleLimit] = useState(50)
+  const loadRequestRef = useRef(0)
   const [officialSettings, setOfficialSettings] = useState<ReportCardOfficialSettings>({ principalName: '', signatureImage: '', officialSealImage: '' })
   const [officialSettingsBusy, setOfficialSettingsBusy] = useState(false)
   const signatureInput = useRef<HTMLInputElement>(null)
@@ -102,36 +112,40 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const showTranscripts = view === 'transcripts'
 
   const load = async () => {
+    const requestId = ++loadRequestRef.current
     setBusy(true)
-    try {
-      const [gradeResult, cardResult, registryResult] = await Promise.allSettled([
-        academicRecordsAPI.review({ academicYear }),
-        academicRecordsAPI.reportCards(),
-        academicRecordsAPI.studentRegistry(),
-      ])
-      const nextGrades = gradeResult.status === 'fulfilled' ? (gradeResult.value.data.data ?? []) : grades
-      const nextCards = cardResult.status === 'fulfilled' ? (cardResult.value.data.data ?? []) : cards
-      const nextRegistry = registryResult.status === 'fulfilled' && Array.isArray(registryResult.value.data.data) ? registryResult.value.data.data : registry
-      setGrades(nextGrades); setCards(nextCards); setRegistry(nextRegistry)
-      const failures = [gradeResult, cardResult, registryResult].filter((result) => result.status === 'rejected')
-      if (failures.length < 3) {
-        const savedAt = new Date().toISOString()
-        sessionStorage.setItem(RECORD_CACHE_KEY, JSON.stringify({ grades: nextGrades, cards: nextCards, registry: nextRegistry, savedAt }))
-        setCacheSavedAt(savedAt)
-      }
-      if (registryResult.status === 'rejected') {
-        const error: any = registryResult.reason
-        const detail = error?.response?.data?.message ?? tr('Le registre officiel des élèves est temporairement indisponible.', 'The official student registry is temporarily unavailable.')
-        setNotice(detail + (nextRegistry.length ? tr(' Une copie sécurisée en cache est affichée', ' A secure cached copy is displayed') + (cacheSavedAt ? tr(' depuis ', ' from ') + new Date(cacheSavedAt).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US') : '') + '.' : ''))
-      } else if (failures.length) {
-        setNotice(tr('Le registre des élèves est disponible. Les indicateurs académiques en cache complètent les sections indisponibles ; Actualiser tentera une nouvelle synchronisation.', 'The student registry is available. Cached academic indicators are filling the unavailable sections; Refresh will synchronize them again.'))
-      } else setNotice('')
-    } finally {
-      setBusy(false)
+    const tasks: Array<Promise<void>> = []
+    const failures: unknown[] = []
+    const store = (field: 'grades' | 'cards' | 'registry', data: unknown) => {
+      if (requestId !== loadRequestRef.current) return
+      if (field === 'grades') setGrades(data as Grade[])
+      if (field === 'cards') setCards(data as Card[])
+      if (field === 'registry') setRegistry(data as RegistryStudent[])
+      const savedAt = new Date().toISOString()
+      try { sessionStorage.setItem(recordCacheKey(academicYear), JSON.stringify({ ...readRecordCache(academicYear), [field]: data, savedAt })) } catch { /* Live results remain visible if this browser cannot cache them. */ }
+      setCacheSavedAt(savedAt)
     }
+    const request = (field: 'grades' | 'cards' | 'registry', operation: Promise<any>) => {
+      tasks.push(operation.then(response => store(field, response.data?.data ?? [])).catch(error => { failures.push(error) }))
+    }
+    if (showTranscripts) request('registry', academicRecordsAPI.studentRegistry())
+    else {
+      request('cards', academicRecordsAPI.reportCards({ academicYear }))
+      request('grades', academicRecordsAPI.review({ academicYear }))
+    }
+    await Promise.all(tasks)
+    if (requestId !== loadRequestRef.current) return
+    setBusy(false)
+    setNotice(failures.length ? tr('Une partie des données est temporairement indisponible. Les résultats reçus et la dernière copie de cette année restent visibles. Actualisez pour réessayer.', 'Some data is temporarily unavailable. Received results and the last copy for this school year remain visible. Refresh to retry.') : '')
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    const cached = readRecordCache(academicYear)
+    setCards(cached.cards ?? []); setGrades(cached.grades ?? [])
+    void load()
+    return () => { loadRequestRef.current++ }
+  }, [showTranscripts, academicYear])
+  useEffect(() => { setVisibleLimit(50) }, [studentQuery, gradeFilter, sectionFilter, statusFilter, cardQuery, cardGradeFilter, term])
   useEffect(() => {
     if (showTranscripts) return
     academicRecordsAPI.reportCardOfficialSettings().then((response) => {
@@ -165,11 +179,12 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const visibleCards = useMemo(() => {
     const tokens = normalize(cardQuery).split(/\s+/).filter(Boolean)
     return cards.filter((card) => {
+      if (!card.term.startsWith(academicYear + ' · ') || normalize(card.term.split(' · ').slice(1).join(' · ')).replace(/trimester/g,'quarter') !== normalize(term).replace(/trimester/g,'quarter')) return false
       if (cardGradeFilter !== 'ALL' && normalizeSchoolLevel(card.student.grade) !== cardGradeFilter) return false
       const haystack = normalize([cardStudentName(card), card.student.studentNumber, card.student.grade, card.student.section, card.term, card.publicationStatus].filter(Boolean).join(' '))
       return tokens.every((token) => haystack.includes(token))
     })
-  }, [cardGradeFilter, cardQuery, cards])
+  }, [academicYear, term, cardGradeFilter, cardQuery, cards])
 
   const finalStudentCount = new Set(matching.map((item) => item.student.studentNumber)).size
   const courseCount = new Set(matching.map((item) => item.course.code)).size
@@ -225,6 +240,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   }
 
   const openEditorial = (card: Card) => {
+    if (cardReadOnly(card)) return setNotice(tr('Cette période est clôturée. Le bulletin est en lecture seule.', 'This academic period is closed. The report card is read-only.'))
     setEditingCard(card)
     setEditorialForm({
       teacherComment: card.teacherComment ?? '', conduct: card.conduct ?? '', average: card.average,
@@ -297,19 +313,27 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
 
   const deliverSelected = async () => {
     if (deliveryInFlightRef.current) return
-    const deliveries = visibleCards.flatMap((card) => (selectedParents[card.id]?.length ?? 0) ? [{ reportCardId: card.id, parentIds: selectedParents[card.id] }] : [])
+    const deliveries = cards.filter(card => ['APPROVED', 'POSTED_TO_PORTAL', 'EMAILED'].includes(card.publicationStatus)).flatMap((card) => (selectedParents[card.id]?.length ?? 0) ? [{ reportCardId: card.id, parentIds: [...selectedParents[card.id]].sort() }] : []).sort((left,right)=>left.reportCardId.localeCompare(right.reportCardId))
     if (!deliveries.length) return setNotice(tr('Sélectionnez au moins un parent lié à un bulletin approuvé.', 'Select at least one parent linked to an approved report card.'))
     deliveryInFlightRef.current = true
     setDeliveryBusy(true)
     const signature=JSON.stringify({deliveries,language})
     if(deliveryIntentRef.current?.signature!==signature)deliveryIntentRef.current={signature,requestId:crypto.randomUUID()}
     try {
-      const response = await academicRecordsAPI.deliverReportCards(deliveries, language === 'fr' ? 'fr' : 'en', deliveryIntentRef.current!.requestId)
-      setNotice(language === 'fr' ? `${response.data.data.reportCards} bulletin(s) publié(s) et ${response.data.data.recipients} livraison(s) parent placée(s) dans la file sécurisée.` : `${response.data.data.reportCards} report card(s) published and ${response.data.data.recipients} parent delivery item(s) safely queued.`)
+      let reportCards = 0, recipients = 0
+      const batches = Math.ceil(deliveries.length / 100)
+      for (let start = 0; start < deliveries.length; start += 100) {
+        setDeliveryProgress(tr('Envoi du lot ', 'Sending batch ') + (Math.floor(start / 100) + 1) + ' / ' + batches)
+        const response = await academicRecordsAPI.deliverReportCards(deliveries.slice(start, start + 100), language === 'fr' ? 'fr' : 'en', deliveryIntentRef.current!.requestId + '-' + start)
+        reportCards += response.data.data.reportCards
+        recipients += response.data.data.recipients
+      }
+      setNotice(language === 'fr' ? `${reportCards} bulletin(s) publié(s) et ${recipients} livraison(s) parent placée(s) dans la file sécurisée.` : `${reportCards} report card(s) published and ${recipients} parent delivery item(s) safely queued.`)
       deliveryIntentRef.current=null
       setSelectedParents({})
+      setDeliveryOpen(false)
       await load()
-    } catch (error: any) { setNotice(error?.response?.data?.message ?? tr('L’envoi contrôlé des bulletins a échoué.', 'Controlled report-card delivery failed.')) }
+    } catch (error: any) { const message=error?.response?.data?.message ?? tr('L’envoi contrôlé des bulletins a échoué.', 'Controlled report-card delivery failed.');setNotice(message);setDeliveryProgress(message + tr(' Réessayez avec la même sélection. Les lots déjà reçus seront reconnus sans nouvel envoi.', ' Retry the same selection. Already received batches will be recognized without sending again.')) }
     finally { deliveryInFlightRef.current=false; setDeliveryBusy(false) }
   }
 
@@ -415,8 +439,10 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
       </section>
     </div> : null}
 
+    {deliveryOpen && <ReportCardDeliveryDialog cards={cards} initialYear={academicYear} initialTerm={term} initialGrade={cardGradeFilter} selected={selectedParents} onSelect={setSelectedParents} busy={deliveryBusy} progress={deliveryProgress} onClose={() => setDeliveryOpen(false)} onDeliver={() => void deliverSelected()}/>}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-emerald-700 dark:text-emerald-300"><ShieldCheck size={17}/>{showTranscripts ? tr('Relevés académiques officiels', 'Official Academic Transcripts') : tr('Bulletins scolaires officiels', 'Official Report Cards')}</p><h2 className="mt-1 font-display text-2xl font-black text-kcs-blue-950 dark:text-white">{showTranscripts ? tr('Recherche, génération et impression des relevés', 'Transcript search, generation and printing') : tr('Examen, toilettage, approbation et envoi aux parents', 'Review, edit, approve and deliver to parents')}</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{showTranscripts ? tr('Les relevés restent séparés des bulletins et ne contiennent que les résultats approuvés.', 'Transcripts remain separate from report cards and contain approved records only.') : tr('Sélectionnez précisément un ou plusieurs parents liés avant chaque envoi.', 'Precisely select one or more linked parents before delivery.')}</p></div><button disabled={busy} onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"><RefreshCw size={16} className={busy ? 'animate-spin' : ''}/>{tr('Actualiser', 'Refresh')}</button></div>
 
+    {!showTranscripts && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-700 dark:bg-emerald-950/40"><div><h3 className="font-black text-emerald-950 dark:text-emerald-100">{tr('Envoi des bulletins aux parents', 'Report-card delivery to parents')}</h3><p className="text-xs text-emerald-800 dark:text-emerald-200">{tr('Filtrez par classe, section, période et parent. Vérifiez les destinataires avant de confirmer.', 'Filter by grade, section, period and parent. Review recipients before confirming.')}</p></div><button type="button" onClick={() => setDeliveryOpen(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white hover:bg-emerald-800"><Send size={18}/>{tr('Choisir les parents et envoyer', 'Choose parents and send')}</button></div>}
     {!showTranscripts ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><input value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} className={inputClass} aria-label={tr('Année scolaire', 'Academic year')}/><select value={term} onChange={(event) => setTerm(event.target.value)} className={inputClass} aria-label={tr('Période scolaire', 'Academic term')}><option>Semester 1 · Quarter 1</option><option>Semester 1 · Quarter 2</option><option>Semester 2 · Quarter 3</option><option>Semester 2 · Quarter 4</option><option>Annual final</option></select><div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-semibold text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white"><b>{matching.length}</b> {tr('notes finales', 'final grades')} · <b>{finalStudentCount}</b> {tr('élèves', 'students')} · <b>{courseCount}</b> {tr('cours', 'courses')}</div><button disabled={busy} onClick={() => void generate()} className="inline-flex items-center justify-center rounded-xl bg-kcs-blue-700 px-4 py-3 font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50"><FileCheck2 size={17} className="mr-2"/>{tr('Générer les bulletins', 'Generate report cards')}</button></div> : null}
     {notice ? <p className="rounded-xl border border-sky-100 bg-white p-3 text-sm font-semibold text-kcs-blue-900 dark:border-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-white">{notice}</p> : null}
 
@@ -433,17 +459,19 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
         <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className={inputClass}><option value="ALL">{tr('Tous les statuts', 'All statuses')}</option>{statusOptions.map((status) => <option key={status}>{status}</option>)}</select>
         <button type="button" onClick={resetSearch} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-200 px-3 py-2 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white"><FilterX size={17}/>{tr('Réinitialiser', 'Reset')}</button>
       </div>
-      <div className="mt-4 max-h-[31rem] overflow-y-auto pr-1"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRegistry.map((student) => <article key={student.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{studentName(student)}</p><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{student.studentNumber || tr('Sans matricule', 'No student ID')} · {[normalizeSchoolLevel(student.grade) || student.grade, validSection(student.section)].filter(Boolean).join(' ') || tr('Classe en attente', 'Class pending')}</p></div><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-200 dark:text-emerald-950">{student.status || tr('actif', 'active')}</span></div><button type="button" aria-busy={transcriptLoadingId === student.id} disabled={Boolean(transcriptLoadingId)} onClick={() => void viewTranscript(student.id)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-kcs-blue-700 px-3 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50">{transcriptLoadingId === student.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {transcriptLoadingId === student.id ? tr('Chargement de ce relevé…', 'Loading this transcript…') : tr('Voir et imprimer le relevé officiel', 'View and print official transcript')}</button></article>)}</div>{!busy && !visibleRegistry.length ? <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">{tr('Aucun élève ne correspond à ces filtres précis.', 'No learner matches these precise filters.')}</p> : null}{busy && !registry.length ? <p className="p-6 text-center text-sm font-bold text-kcs-blue-700 dark:text-sky-200">{tr('Chargement sécurisé du registre officiel des élèves…', 'Secure loading of the official student registry…')}</p> : null}</div>
+      <div className="mt-4 max-h-[31rem] overflow-y-auto pr-1"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRegistry.slice(0, visibleLimit).map((student) => <article key={student.id} className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 dark:border-kcs-blue-800 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate font-black text-kcs-blue-950 dark:text-white">{studentName(student)}</p><p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-300">{student.studentNumber || tr('Sans matricule', 'No student ID')} · {[normalizeSchoolLevel(student.grade) || student.grade, validSection(student.section)].filter(Boolean).join(' ') || tr('Classe en attente', 'Class pending')}</p></div><span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-black uppercase text-emerald-800 dark:bg-emerald-200 dark:text-emerald-950">{student.status || tr('actif', 'active')}</span></div><button type="button" aria-busy={transcriptLoadingId === student.id} disabled={Boolean(transcriptLoadingId)} onClick={() => void viewTranscript(student.id)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-kcs-blue-700 px-3 py-2.5 text-sm font-black text-white hover:bg-kcs-blue-800 disabled:opacity-50">{transcriptLoadingId === student.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {transcriptLoadingId === student.id ? tr('Chargement de ce relevé…', 'Loading this transcript…') : tr('Voir et imprimer le relevé officiel', 'View and print official transcript')}</button></article>)}</div>{!busy && !visibleRegistry.length ? <p className="rounded-xl bg-amber-50 p-4 text-sm font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">{tr('Aucun élève ne correspond à ces filtres précis.', 'No learner matches these precise filters.')}</p> : null}{busy && !registry.length ? <p className="p-6 text-center text-sm font-bold text-kcs-blue-700 dark:text-sky-200">{tr('Chargement sécurisé du registre officiel des élèves…', 'Secure loading of the official student registry…')}</p> : null}</div>
     </section>
 
+    {!showTranscripts && <ReportCardAnalyticsPanel academicYear={academicYear} term={term} students={cards.filter(card => card.term.replace(/Trimester/gi,'Quarter') === academicYear + ' · ' + term.replace(/Trimester/gi,'Quarter') && (cardGradeFilter === 'ALL' || normalizeSchoolLevel(card.student.grade) === cardGradeFilter)).map(card => ({ id: card.student.id, name: cardStudentName(card), className: [card.student.grade, card.student.section].filter(Boolean).join(' '), average: card.subjects?.some(subject => Number.isFinite(subject.percentage)) ? card.average : null, subjects: (card.subjects ?? []).map(subject => ({ courseId: subject.courseId ?? subject.id, name: subject.course.name, percentage: subject.percentage })) }))}/>}
     <section id="official-report-cards" className={!showTranscripts ? 'scroll-mt-24 rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5' : 'hidden'}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">{tr('Bulletins officiels', 'Official report cards')}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Examiner, approuver, publier et imprimer', 'Review, approve, publish and print')}</h3></div><div className="grid w-full gap-2 sm:grid-cols-[11rem_minmax(16rem,1fr)] lg:max-w-2xl"><select value={cardGradeFilter} onChange={(event) => setCardGradeFilter(event.target.value)} className={inputClass}><option value="ALL">{tr('Toutes les classes', 'All grades')}</option>{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select><label className="relative"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={cardQuery} onChange={(event) => setCardQuery(event.target.value)} className={inputClass + ' pl-10'} placeholder={tr('Élève, matricule, classe, section ou statut', 'Learner, ID, class, section or status')}/></label></div></div>
       <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-black text-emerald-900 dark:text-emerald-100">{tr('Envoi précis aux parents liés', 'Precise delivery to linked parents')}</p><p className="text-xs text-emerald-800 dark:text-emerald-200">{tr('Cochez individuellement les destinataires sous chaque élève, ou sélectionnez tous les parents des résultats filtrés.', 'Select recipients individually under each learner, or select every parent from the filtered results.')}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={selectAllVisibleParents} className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-black text-emerald-800 dark:bg-kcs-blue-900 dark:text-emerald-200">{tr('Sélectionner tous les parents visibles', 'Select all visible parents')}</button><button type="button" disabled={deliveryBusy} onClick={() => void deliverSelected()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{deliveryBusy ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>} {tr('Envoyer les bulletins sélectionnés', 'Send selected report cards')}</button></div></div>
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">{visibleCards.map((card) => <article key={card.id} className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-base font-black text-kcs-blue-950 dark:text-white">{cardStudentName(card)}</p><p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-200">{card.student.studentNumber} · {[card.student.grade, card.student.section].filter(Boolean).join(' ')} · {card.term}</p><p className="mt-3 text-sm font-bold text-kcs-blue-900 dark:text-sky-100">{tr('Moyenne :', 'Average:')} <strong className="text-lg text-emerald-700 dark:text-emerald-300">{card.average.toFixed(2)}%</strong></p>{card.attendanceSummary ? <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-200">{tr('Présences', 'Present')}: <strong>{card.attendanceSummary.present}</strong> · {tr('Absences', 'Absences')}: <strong>{card.attendanceSummary.absent}</strong> · {tr('Retards', 'Late')}: <strong>{card.attendanceSummary.late}</strong> · {tr('Taux', 'Rate')}: <strong>{card.attendanceSummary.attendanceRate ?? '—'}%</strong></p> : null}</div><span className={card.publicationStatus === 'DRAFT' ? 'shrink-0 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-black text-amber-950 shadow-sm dark:border-amber-300 dark:bg-amber-300 dark:text-kcs-blue-950' : 'shrink-0 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-black text-kcs-blue-900 dark:border-sky-300 dark:bg-sky-200 dark:text-kcs-blue-950'}>{card.publicationStatus.replace(/_/g, ' ')}</span></div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">{visibleCards.slice(0, visibleLimit).map((card) => <article key={card.id} className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-base font-black text-kcs-blue-950 dark:text-white">{cardStudentName(card)}</p><p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-200">{card.student.studentNumber} · {[card.student.grade, card.student.section].filter(Boolean).join(' ')} · {card.term}</p><p className="mt-3 text-sm font-bold text-kcs-blue-900 dark:text-sky-100">{tr('Moyenne :', 'Average:')} <strong className="text-lg text-emerald-700 dark:text-emerald-300">{card.average.toFixed(2)}%</strong></p>{card.attendanceSummary ? <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-200">{tr('Présences', 'Present')}: <strong>{card.attendanceSummary.present}</strong> · {tr('Absences', 'Absences')}: <strong>{card.attendanceSummary.absent}</strong> · {tr('Retards', 'Late')}: <strong>{card.attendanceSummary.late}</strong> · {tr('Taux', 'Rate')}: <strong>{card.attendanceSummary.attendanceRate ?? '—'}%</strong></p> : null}</div><span className={card.publicationStatus === 'DRAFT' ? 'shrink-0 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-black text-amber-950 shadow-sm dark:border-amber-300 dark:bg-amber-300 dark:text-kcs-blue-950' : 'shrink-0 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-black text-kcs-blue-900 dark:border-sky-300 dark:bg-sky-200 dark:text-kcs-blue-950'}>{card.publicationStatus.replace(/_/g, ' ')}</span></div>
         {['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus) ? <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-3 dark:border-emerald-800 dark:bg-kcs-blue-950"><p className="text-xs font-black uppercase tracking-wide text-emerald-800 dark:text-emerald-200">{tr('Parents destinataires', 'Parent recipients')}</p><div className="mt-2 grid gap-2">{(card.student.parentLinks ?? []).map(({ parent }) => <label key={parent.id} className="flex cursor-pointer items-start gap-2 rounded-lg bg-emerald-50 p-2 text-xs text-kcs-blue-950 dark:bg-emerald-950/40 dark:text-white"><input type="checkbox" className="mt-0.5 size-4" checked={(selectedParents[card.id] ?? []).includes(parent.id)} onChange={() => toggleParent(card.id, parent.id)}/><span><b>{[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' ')}</b><br/><span className="text-slate-500 dark:text-slate-300">{parent.email || tr('Aucun email — notification portail uniquement', 'No email — portal notification only')}</span></span></label>)}{!(card.student.parentLinks ?? []).length ? <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">{tr('Aucun parent lié à cet élève.', 'No parent is linked to this learner.')}</p> : null}</div></div> : null}
-        <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={busy || card.publicationStatus === 'EMAILED'} onClick={() => openEditorial(card)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-kcs-blue-300 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 disabled:opacity-50 dark:bg-kcs-blue-950 dark:text-sky-100"><Edit3 size={16}/>{tr('Modifier / toiletter', 'Edit / polish')}</button>{card.publicationStatus === 'READY_FOR_REVIEW' ? <button disabled={busy} onClick={() => void approve(card.id)} className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white"><CheckCircle2 size={16} className="mr-1"/>{tr('Approuver et figer', 'Approve and freeze')}</button> : null}{card.publicationStatus === 'APPROVED' ? <button disabled={busy} onClick={() => void publish(card.id)} className="inline-flex items-center justify-center rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950">{tr('Publier dans les portails', 'Publish to portals')}</button> : null}<button type="button" aria-busy={reportPrintingId === card.id} disabled={Boolean(reportPrintingId)} onClick={() => printReportCard(card)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950 disabled:opacity-60">{reportPrintingId === card.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {reportPrintingId === card.id ? tr('Préparation du PDF…', 'Preparing PDF…') : tr('Imprimer / Enregistrer le bulletin PDF', 'Print / Save report card PDF')}</button></div>
+        <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={busy || cardReadOnly(card)} onClick={() => openEditorial(card)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-kcs-blue-300 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 disabled:opacity-50 dark:bg-kcs-blue-950 dark:text-sky-100"><Edit3 size={16}/>{tr('Modifier / toiletter', 'Edit / polish')}</button>{card.publicationStatus === 'READY_FOR_REVIEW' ? <button disabled={busy} onClick={() => void approve(card.id)} className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white"><CheckCircle2 size={16} className="mr-1"/>{tr('Approuver et figer', 'Approve and freeze')}</button> : null}{card.publicationStatus === 'APPROVED' ? <button disabled={busy} onClick={() => void publish(card.id)} className="inline-flex items-center justify-center rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950">{tr('Publier dans les portails', 'Publish to portals')}</button> : null}<button type="button" aria-busy={reportPrintingId === card.id} disabled={Boolean(reportPrintingId)} onClick={() => printReportCard(card)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950 disabled:opacity-60">{reportPrintingId === card.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {reportPrintingId === card.id ? tr('Préparation du PDF…', 'Preparing PDF…') : tr('Imprimer / Enregistrer le bulletin PDF', 'Print / Save report card PDF')}</button></div>
       </article>)}</div>
       {!visibleCards.length ? <p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-sky-100">{tr('Aucun bulletin ne correspond à cette recherche.', 'No report card matches this search.')}</p> : null}
     </section>
+    {((showTranscripts ? visibleRegistry.length : visibleCards.length) > visibleLimit) && <button type="button" onClick={() => setVisibleLimit(current => current + 50)} className="w-full rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white">{tr('Afficher 50 résultats supplémentaires', 'Show 50 more results')}</button>}
   </section>
 }

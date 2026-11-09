@@ -1,3 +1,4 @@
+import TeacherReportsHub from '@/components/teacher/TeacherReportsHub'
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -3107,7 +3108,7 @@ const TeacherPortal = () => {
           {isDashboard && <PortalSectionPanel />}
           {isDashboard && <SuggestionBox />}
 
-          {!isDashboard && <TeacherSectionView segment={activeSegment} />}
+          {!isDashboard && (['reports', 'messages'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>}/> : <TeacherSectionView segment={activeSegment} />)}
 
           {isDashboard && <TeacherDashboardHome />}
 

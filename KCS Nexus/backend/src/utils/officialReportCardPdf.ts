@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-type Subject = { name: string; code: string; credits?: number; percentage: number; letterGrade: string; termResults?: Record<string, number | null> }
+type Subject = { name: string; code: string; credits?: number; teacherName?: string; percentage: number; letterGrade: string; termResults?: Record<string, number | null> }
 type ImageSignature = { name?: string; image?: string | null }
 const imageBuffer = (value?: string | null) => {
   if (!value?.startsWith('data:image/')) return null
@@ -19,7 +19,7 @@ export async function officialReportCardPdf(input: {
 }) {
   const tr = (fr: string, en: string) => input.language === 'fr' ? fr : en
   const issued = new Date()
-  const digestSource = JSON.stringify({ id: input.id, student: input.studentNumber, term: input.term, average: input.average, status: input.publicationStatus, grade: input.grade, language: input.language, attendance: input.attendance, teacherComment: input.teacherComment, conduct: input.conduct, principal: input.principal.name, signature: input.principal.image ? createHash('sha256').update(input.principal.image).digest('hex') : null, seal: input.seal ? createHash('sha256').update(input.seal).digest('hex') : null, subjects: input.subjects.map(item => [item.code, item.percentage, item.letterGrade]) })
+  const digestSource = JSON.stringify({ id: input.id, student: input.studentNumber, term: input.term, average: input.average, status: input.publicationStatus, grade: input.grade, language: input.language, attendance: input.attendance, teacherComment: input.teacherComment, conduct: input.conduct, principal: input.principal.name, signature: input.principal.image ? createHash('sha256').update(input.principal.image).digest('hex') : null, seal: input.seal ? createHash('sha256').update(input.seal).digest('hex') : null, subjects: input.subjects.map(item => [item.name, item.teacherName ?? '', item.credits ?? 0, item.percentage, item.letterGrade]) })
   const fingerprint = createHash('sha256').update(digestSource).digest('hex').toUpperCase()
   const documentId = `KCS-RC-${issued.toISOString().slice(0, 10).replace(/-/g, '')}-${fingerprint.slice(0, 16)}`
   const verifyUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || 'https://kinshasachristianschool.org'}/verify/report-card?document=${encodeURIComponent(documentId)}&fingerprint=${fingerprint}`
@@ -53,7 +53,7 @@ export async function officialReportCardPdf(input: {
   const left = 43, right = w - 43
   doc.rect(left, y, right - left, 22).fill('#0D5D99')
   doc.fillColor('#FFFFFF').fontSize(7).text(tr('COURS', 'COURSE'), left + 8, y + 8)
-  doc.text(tr('CRÉDITS', 'CREDITS'), right - 150, y + 8, { width: 48, align: 'right' })
+  doc.text(tr('ENSEIGNANT', 'TEACHER'), left + 205, y + 8, { width: 145 })
   doc.text(tr('RÉSULTAT', 'RESULT'), right - 91, y + 8, { width: 48, align: 'right' })
   doc.text(tr('NOTE', 'GRADE'), right - 38, y + 8, { width: 30, align: 'right' })
   y += 25
@@ -62,8 +62,8 @@ export async function officialReportCardPdf(input: {
   rows.forEach((subject, index) => {
     if (y > 485) { doc.addPage(); drawWatermark(); y = 55 }
     if (index % 2 === 0) doc.rect(left, y - 3, right - left, rowHeight).fill('#F4F8FB')
-    doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.name, left + 8, y, { width: right - left - 170, ellipsis: true })
-    doc.fillColor('#173D60').fontSize(8).text(String(subject.credits ?? '—'), right - 150, y, { width: 48, align: 'right' })
+    doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.name, left + 8, y, { width: 190, ellipsis: true })
+    doc.font('Helvetica').fontSize(rows.length > 16 ? 6 : 7).fillColor('#173D60').text(subject.teacherName || '—', left + 205, y, { width: 145, ellipsis: true })
     doc.text(`${subject.percentage.toFixed(2)}%`, right - 91, y, { width: 48, align: 'right' })
     doc.font('Helvetica-Bold').fillColor('#008B7B').text(subject.letterGrade, right - 38, y, { width: 30, align: 'right' })
     y += rowHeight
@@ -95,7 +95,8 @@ export async function officialReportCardPdf(input: {
   doc.image(qr, left, qrY, { fit: [47, 47] })
   doc.font('Helvetica-Bold').fontSize(7).fillColor('#073B70').text(tr('DOCUMENT OFFICIEL VÉRIFIABLE', 'VERIFIABLE OFFICIAL DOCUMENT'), left + 54, qrY + 5)
   doc.font('Helvetica').fontSize(6).fillColor('#52677D').text(`${documentId}\nSHA-256 ${fingerprint}\nQR ISO/IEC 18004 · ECC H`, left + 54, qrY + 17, { width: right - left - 60 })
-  doc.font('Helvetica').fontSize(6).fillColor('#52677D').text(`Kinshasa Christian School · ${issued.toLocaleDateString(input.language === 'fr' ? 'fr-FR' : 'en-GB')}`, left, doc.page.height - 37, { width: right - left, align: 'center' })
+  doc.font('Helvetica').fontSize(6).fillColor('#52677D').text(`Kinshasa Christian School · ${issued.toLocaleDateString(input.language === 'fr' ? 'fr-FR' : 'en-GB')}`, left, doc.page.height - 57, { width: right - left, align: 'center' })
+  doc.text('Avenue de la République n° 1 · Macampagne, Ngaliema · Kinshasa, RDC · Réf. 80 jours\n+243 895 326 011 · +243 994 645 735 · kinshasachristianschool@gmail.com', left, doc.page.height - 48, { width: right - left, align: 'center' })
   doc.end()
   return { buffer: await done, documentId, fingerprint }
 }

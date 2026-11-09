@@ -4,10 +4,10 @@ import { aggregateReportCardResults } from './annualReportCard.service.js'
 import { studentReportAverage } from './studentReportAverage.service.js'
 const grade=(year:string,term:string,courseId:string,percentage:number,credits=1)=>({studentId:'student',courseId,percentage,period:year+'::'+term+'::SUBMITTED',assignmentId:null,course:{credits},createdAt:new Date('2026-11-01')})
 const q1='Semester 1 · Quarter 1',q2='Semester 1 · Quarter 2'
-test('semester results require both quarters and preserve school-year isolation',()=>{
+test('semester results use available quarters and preserve school-year isolation',()=>{
  const rows=[grade('2025-2026',q1,'a',100),grade('2026-2027',q1,'a',80),grade('2026-2027',q2,'a',60)]
  assert.equal(aggregateReportCardResults(rows,'2026-2027','Semester 1').get('student:a')?.percentage,70)
- assert.equal(aggregateReportCardResults(rows.slice(0,2),'2026-2027','Semester 1').get('student:a')?.percentage,null)
+ assert.equal(aggregateReportCardResults(rows.slice(0,2),'2026-2027','Semester 1').get('student:a')?.percentage,80)
 })
 test('student overall average uses the same year, quarter, credits and visibility as the report card',()=>{
  const grades=[grade('2025-2026',q1,'a',100),grade('2026-2027',q1,'a',80),grade('2026-2027',q1,'b',60,3),grade('2026-2027',q2,'a',10)]

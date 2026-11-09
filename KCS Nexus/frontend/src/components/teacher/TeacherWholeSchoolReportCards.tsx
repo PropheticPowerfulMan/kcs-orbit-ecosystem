@@ -1,3 +1,6 @@
+import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPanel';
+import { useUIStore } from '@/store/uiStore';
+import { useAcademicPeriodAccess } from '@/hooks/useAcademicPeriodAccess';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Clock3, Eye, EyeOff, FileCheck2, GraduationCap, Printer, RefreshCw, Save, Search, Send, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
 import { academicRecordsAPI } from '@/services/api';
@@ -119,6 +122,7 @@ const writeReportDashboardCache = (userId: string, academicYear: string, term: s
 };
 
 export default function TeacherWholeSchoolReportCards() {
+  const language = useUIStore(state => state.language);
   const userId = useAuthStore((state) => state.user?.id ?? '');
   const [academicYear, setAcademicYear] = useState('2026-2027');
   const [term, setTerm] = useState(sessions[0]);
@@ -138,6 +142,7 @@ export default function TeacherWholeSchoolReportCards() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingAction, setSavingAction] = useState<'draft' | 'submit' | null>(null);
+  const { readOnly: periodReadOnly } = useAcademicPeriodAccess(academicYear, term);
   const [printing, setPrinting] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
@@ -216,7 +221,7 @@ export default function TeacherWholeSchoolReportCards() {
     setError('');
   }, [selected?.id, term]);
 
-  const locked = Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus));
+  const locked = periodReadOnly || Boolean(selected?.reportCard && ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(selected.reportCard.publicationStatus));
   const awaitingReview = selected?.reportCard?.publicationStatus === 'READY_FOR_REVIEW';
   const visibleSubjects = useMemo(() => selected?.subjects.filter((subject) => !hiddenCourseIds.includes(subject.courseId)) ?? [], [hiddenCourseIds, selected]);
   const visibleSubmittedCount = visibleSubjects.filter((subject) => subject.percentage !== null).length;
@@ -421,6 +426,7 @@ export default function TeacherWholeSchoolReportCards() {
                 name: subject.courseName,
                 code: subject.courseCode,
                 credits: subject.credits,
+                  teacherName: subject.teacherName,
               },
             })),
           student: {
@@ -484,6 +490,7 @@ export default function TeacherWholeSchoolReportCards() {
 
       {(notice || error) && <div className={`rounded-xl border px-4 py-3 text-sm font-semibold ${error ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-200'}`}>{error || notice}</div>}
 
+      <ReportCardAnalyticsPanel academicYear={academicYear} term={term} students={homeroomLearners.map(learner => ({ id: learner.id, name: learner.name, className: [learner.grade, learner.section].filter(Boolean).join(' '), average: learner.average, subjects: learner.subjects.filter(subject => !(learner.reportCard?.hiddenCourseIds ?? []).includes(subject.courseId)).map(subject => ({ courseId: subject.courseId, name: subject.courseName, percentage: subject.percentage })) }))}/>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {[
           [Users, 'My class learners', homeroomLearners.length],
@@ -552,6 +559,7 @@ export default function TeacherWholeSchoolReportCards() {
             <span className="text-xs font-bold text-gray-500">{visibleLearners.length}</span>
           </div>
           <div className="space-y-2">
+      {periodReadOnly && <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{language === 'fr' ? 'Cette période est clôturée. Le bulletin est en lecture seule.' : 'This academic period is closed. Its report-card content is read-only.'}</p>}
             {visibleLearners.map((learner) => (
               <button type="button" key={learner.id} onClick={() => setSelectedId(learner.id)} className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === learner.id ? 'border-kcs-blue-500 bg-kcs-blue-50 ring-2 ring-kcs-blue-100 dark:bg-kcs-blue-950' : 'border-gray-100 hover:border-kcs-blue-200 dark:border-kcs-blue-800'}`}>
                 <div className="flex items-start justify-between gap-2">
@@ -647,7 +655,6 @@ export default function TeacherWholeSchoolReportCards() {
                       <tr>
                         <th className="px-4 py-3">Course</th>
                         <th className="px-4 py-3">Teacher</th>
-                        <th className="px-4 py-3">Credits</th>
                         <th className="px-4 py-3">Final grade</th>
                         <th className="px-4 py-3">Status</th>
                         <th className="px-4 py-3">Report card</th>
@@ -663,7 +670,6 @@ export default function TeacherWholeSchoolReportCards() {
                               <small className="block text-gray-500">{subject.courseCode}</small>
                             </td>
                             <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{subject.teacherName}</td>
-                            <td className="px-4 py-3">{subject.credits}</td>
                             <td className="px-4 py-3 font-bold">{subject.percentage === null ? 'Pending' : `${subject.percentage}% · ${subject.letterGrade}`}</td>
                             <td className="px-4 py-3">{hidden ? <span className="font-bold text-amber-700 dark:text-amber-300">Excluded from average</span> : subject.percentage === null ? <span className="text-amber-600">Teacher submission required</span> : <span className="text-emerald-600">Submitted</span>}</td>
                             <td className="px-4 py-3">
