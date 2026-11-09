@@ -11,6 +11,7 @@ export type GradebookColumn = {
   date: string
   term: string
   description: string
+  confirmedCycle?: string
 }
 
 export type Category = {
@@ -126,6 +127,11 @@ export function recoverGradebook(input: {
     for (const [key, value] of Object.entries(source.snapshot.comments ?? {})) comments[mapKey(key)] = value
     if (source.snapshot.categories?.length) categories = source.snapshot.categories
   }
+  const correction = state.gradebookPeriodCorrectionsByCycle?.[courseId + '::' + academicYear]
+  const correctedIds = new Set<string>(correction?.assessmentIds ?? [])
+  const correctPeriod = (task: GradebookColumn) => correctedIds.has(task.id) && canonicalGradebookTerm(task.term) === correction?.from ? { ...task, term: correction.to } : task
+  for (const [id, task] of assignments) assignments.set(id, correctPeriod(task))
+  for (const [id, entry] of archived) archived.set(id, { ...entry, assignment: correctPeriod(entry.assignment) })
   const officialWeights = state.gradebookCategoryWeightsByCycle?.[courseId + '::' + academicYear]?.categories
   if (Array.isArray(officialWeights) && officialWeights.length) categories = officialWeights
   const primary = state.advancedGradebookByCycle?.[`${courseId}::${academicYear}`]

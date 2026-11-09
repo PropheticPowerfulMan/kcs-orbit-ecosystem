@@ -75,3 +75,12 @@ test('a partial new browser cache also recovers columns from the earlier browser
  assert.equal(result.snapshot.scores['one:s1'],'75')
  assert.equal(result.snapshot.scores['three:s1'],'90')
 })
+
+test('a browser cache cannot undo a confirmed quarter correction', () => {
+ const old = { assignments: [{ ...task('moved'), term: 'Semester 1 · Quarter 2' }, { ...task('future'), term: 'Semester 1 · Quarter 2' }], scores: { 'moved:s1': '80' }, savedAt: '2099-01-01' }
+ const state = { gradebookPeriodCorrectionsByCycle: { 'math-course::2026-2027': { from: 'Semester 1 · Quarter 2', to: 'Semester 1 · Quarter 1', assessmentIds: ['moved'] } } }
+ const recovered = recover(state, { browserSnapshots: [old] }).snapshot
+ assert.equal(recovered.assignments.find(a => a.id === 'moved').term, 'Semester 1 · Quarter 1')
+ assert.equal(recovered.assignments.find(a => a.id === 'future').term, 'Semester 1 · Quarter 2')
+ assert.equal(recovered.scores['moved:s1'], '80')
+})
