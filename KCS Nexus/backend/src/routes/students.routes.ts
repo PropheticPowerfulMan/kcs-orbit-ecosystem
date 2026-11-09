@@ -1,3 +1,4 @@
+import { studentReportAverage } from '../services/studentReportAverage.service.js'
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'node:crypto'
@@ -596,20 +597,24 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
       submissions: { include: { assignment: { include: { course: true } } }, orderBy: { assignment: { dueDate: 'asc' } } },
       enrollments: { include: { course: { include: { schedules: true, teacher: { include: { user: true } } } } } },
       attendanceRecords: { orderBy: { date: 'desc' } },
-      reportCards: { where: { publicationStatus: 'POSTED_TO_PORTAL' }, orderBy: { createdAt: 'desc' } },
+      reportCards: { where: { publicationStatus: { in: ['POSTED_TO_PORTAL','EMAILED'] } }, orderBy: { createdAt: 'desc' } },
       transcripts: { where: { status: { in: ['APPROVED', 'PUBLISHED', 'ISSUED'] } }, orderBy: { createdAt: 'desc' } },
     },
   }) : null
   if (!student) {
-    return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
+    res.setHeader('Cache-Control','private, no-store')
+  return success(res, { profile: null, grades: [], assignments: [], timetable: [], attendance: [], reportCards: [], transcripts: [] }, 'Academic profile synchronization pending')
   }
-  const average = student.grades.length ? Number((student.grades.reduce((sum, grade) => sum + grade.percentage, 0) / student.grades.length).toFixed(1)) : null
+  const summaryCards = await prisma.reportCard.findMany({ where: { studentId: student.id }, select: { term: true, average: true, publicationStatus: true, updatedAt: true, academicCorrections: true } })
+  const reportAverage = studentReportAverage(student.grades, summaryCards)
+  const average = reportAverage.average
+
   const attendanceRate = attendanceRateFromStatuses(student.attendanceRecords.map((record) => record.status))
   const pendingAssignments = student.submissions.filter((submission) => submission.status === 'PENDING').length
   const overdueAssignments = student.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length
   const completedAssignments = student.submissions.filter((submission) => ['SUBMITTED', 'GRADED'].includes(submission.status)).length
   const assignmentCompletion = student.submissions.length ? Number(((completedAssignments / student.submissions.length) * 100).toFixed(1)) : null
-  const academicSummary = { average, attendanceRate, publishedGrades: student.grades.length, attendanceRecords: student.attendanceRecords.length, pendingAssignments, overdueAssignments, assignmentCompletion, enrolledCourses: student.enrollments.length }
+  const academicSummary = { ...reportAverage, average, attendanceRate, publishedGrades: student.grades.length, attendanceRecords: student.attendanceRecords.length, pendingAssignments, overdueAssignments, assignmentCompletion, enrolledCourses: student.enrollments.length }
   const activityDates = [
     ...student.grades.map((record) => record.createdAt),
     ...student.attendanceRecords.map((record) => record.updatedAt),
@@ -630,6 +635,7 @@ studentsRouter.get('/me/overview', authenticate, requireRoles('student'), asyncH
     course: { id: course.id, name: course.name, code: course.code, description: course.description },
     teacher: [course.teacher.user.firstName, course.teacher.user.lastName].filter(Boolean).join(' '),
   })))
+  res.setHeader('Cache-Control','private, no-store')
   return success(res, {
     profile: { id: student.id, studentNumber: student.studentNumber, grade: student.grade, section: student.section, gpa: student.gpa, attendanceRate: student.attendanceRate, status: student.status, user: student.user },
     academicSummary,

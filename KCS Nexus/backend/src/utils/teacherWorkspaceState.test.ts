@@ -24,3 +24,9 @@ test('intentional assessment deletion remains available through its archive', ()
 test('blank score maps cannot erase previously saved grades', () => {
   assert.throws(() => mergeTeacherWorkspaceState(existing, { advancedGradebookByCourse: { algebra: { assignments: snapshot.assignments, scores: {} } } }), /empty gradebook/)
 })
+
+test('ordinary workspace saves cannot revert server-managed per-course weighting',()=>{
+ const weights={'course::2026-2027':{categories:[{id:'quiz',weight:100}],updatedAt:'new'}}
+ const result=mergeTeacherWorkspaceState({gradebookCategoryWeightsByCycle:weights},{gradebookCategoryWeightsByCycle:{'course::2026-2027':{categories:[],updatedAt:'old'}}})
+ assert.deepEqual(result.state.gradebookCategoryWeightsByCycle,weights)
+})

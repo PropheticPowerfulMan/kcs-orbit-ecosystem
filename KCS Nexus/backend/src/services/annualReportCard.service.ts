@@ -29,11 +29,16 @@ export type AggregatedCourseResult = {
 
 export const isAnnualFinalTerm = (term: string) => term.trim().toLowerCase() === 'annual final'
 
-export const reportCardSourceTerms = (term: string) => isAnnualFinalTerm(term)
-  ? [...KCS_QUARTER_TERMS]
-  : [canonicalAcademicTerm(term) ?? term]
+export const reportCardSourceTerms = (term: string): string[] => {
+  if (isAnnualFinalTerm(term)) return [...KCS_QUARTER_TERMS]
+  if (term === 'Semester 1') return KCS_QUARTER_TERMS.slice(0, 2)
+  if (term === 'Semester 2') return KCS_QUARTER_TERMS.slice(2, 4)
+  return [canonicalAcademicTerm(term) ?? term]
+}
 
 export const reportCardSourcePeriodTerms = (term: string) => reportCardSourceTerms(term).flatMap(academicTermAliases)
+
+export const reportCardSourcePeriods = (year: string, term: string) => reportCardSourcePeriodTerms(term).flatMap(source => [year+'::'+source+'::SUBMITTED',year+'::'+source+'::APPROVED'])
 
 export function aggregateReportCardResults(
   grades: ReportGradeSource[],
@@ -47,12 +52,14 @@ export function aggregateReportCardResults(
   for (const grade of grades) {
     const [year, rawGradeTerm, status] = grade.period.split('::')
     const gradeTerm = canonicalAcademicTerm(rawGradeTerm) ?? rawGradeTerm
-    if (year !== academicYear || status !== 'SUBMITTED' || !required.has(gradeTerm as typeof requiredTerms[number])) continue
+    if (year !== academicYear || !['SUBMITTED','APPROVED'].includes(status) || !required.has(gradeTerm)) continue
     const key = `${grade.studentId}:${grade.courseId}:${gradeTerm}`
     const current = newestByTerm.get(key)
     const currentTime = current?.createdAt ? new Date(current.createdAt).getTime() : 0
     const candidateTime = grade.createdAt ? new Date(grade.createdAt).getTime() : 0
-    if (!current || candidateTime >= currentTime) newestByTerm.set(key, grade)
+    const currentApproved=current?.period.endsWith('::APPROVED')??false
+    const candidateApproved=status==='APPROVED'
+    if (!current || (candidateApproved&&!currentApproved) || (candidateApproved===currentApproved&&candidateTime>=currentTime)) newestByTerm.set(key, grade)
   }
 
   const courseKeys = new Set([...newestByTerm.values()].map((grade) => `${grade.studentId}:${grade.courseId}`))

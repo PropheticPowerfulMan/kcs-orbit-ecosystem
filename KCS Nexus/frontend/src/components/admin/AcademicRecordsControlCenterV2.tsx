@@ -91,6 +91,8 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const [legacyConfirmation, setLegacyConfirmation] = useState('')
   const [editingCard, setEditingCard] = useState<Card | null>(null)
   const [editorialForm, setEditorialForm] = useState<EditorialForm>({ teacherComment: '', conduct: '', average: 0, attendanceSummary: null, subjects: [] })
+  const deliveryIntentRef = useRef<{signature:string;requestId:string}|null>(null)
+  const deliveryInFlightRef = useRef(false)
   const [selectedParents, setSelectedParents] = useState<Record<string, string[]>>({})
   const [deliveryBusy, setDeliveryBusy] = useState(false)
   const [officialSettings, setOfficialSettings] = useState<ReportCardOfficialSettings>({ principalName: '', signatureImage: '', officialSealImage: '' })
@@ -294,16 +296,21 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   })
 
   const deliverSelected = async () => {
+    if (deliveryInFlightRef.current) return
     const deliveries = visibleCards.flatMap((card) => (selectedParents[card.id]?.length ?? 0) ? [{ reportCardId: card.id, parentIds: selectedParents[card.id] }] : [])
     if (!deliveries.length) return setNotice(tr('Sélectionnez au moins un parent lié à un bulletin approuvé.', 'Select at least one parent linked to an approved report card.'))
+    deliveryInFlightRef.current = true
     setDeliveryBusy(true)
+    const signature=JSON.stringify({deliveries,language})
+    if(deliveryIntentRef.current?.signature!==signature)deliveryIntentRef.current={signature,requestId:crypto.randomUUID()}
     try {
-      const response = await academicRecordsAPI.deliverReportCards(deliveries, language === 'fr' ? 'fr' : 'en')
+      const response = await academicRecordsAPI.deliverReportCards(deliveries, language === 'fr' ? 'fr' : 'en', deliveryIntentRef.current!.requestId)
       setNotice(language === 'fr' ? `${response.data.data.reportCards} bulletin(s) publié(s) et ${response.data.data.recipients} livraison(s) parent placée(s) dans la file sécurisée.` : `${response.data.data.reportCards} report card(s) published and ${response.data.data.recipients} parent delivery item(s) safely queued.`)
+      deliveryIntentRef.current=null
       setSelectedParents({})
       await load()
     } catch (error: any) { setNotice(error?.response?.data?.message ?? tr('L’envoi contrôlé des bulletins a échoué.', 'Controlled report-card delivery failed.')) }
-    finally { setDeliveryBusy(false) }
+    finally { deliveryInFlightRef.current=false; setDeliveryBusy(false) }
   }
 
   const viewTranscript = async (studentId: string) => {

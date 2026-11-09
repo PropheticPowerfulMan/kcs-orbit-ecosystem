@@ -35,6 +35,15 @@ export type ArchivedAssignment = {
   deletedAt: string
 }
 
+export const defaultGradebookCategories: Category[] = [
+  { id: 'homework', name: 'Homework', weight: 15 },
+  { id: 'quiz', name: 'Quiz', weight: 15 },
+  { id: 'test', name: 'Test', weight: 20 },
+  { id: 'project', name: 'Project', weight: 20 },
+  { id: 'exam', name: 'Exam', weight: 25 },
+  { id: 'participation', name: 'Participation', weight: 5 },
+]
+
 type StudentIdentity = { id: string; studentNumber?: string }
 type Source = { snapshot: Partial<GradebookSnapshot>; browser: boolean; rank: number }
 const legacyYear = '2026-2027'
@@ -65,7 +74,7 @@ export function recoverGradebook(input: {
     if (current) aliases.set(String(student.id), current)
   }
   const mapKey = (key: string) => {
-    const divider = key.indexOf(':')
+    const divider = key.lastIndexOf(':')
     if (divider < 0) return key
     const id = key.slice(divider + 1)
     return key.slice(0, divider + 1) + (aliases.get(id) ?? aliases.get(id.toLowerCase()) ?? id)
@@ -117,11 +126,13 @@ export function recoverGradebook(input: {
     for (const [key, value] of Object.entries(source.snapshot.comments ?? {})) comments[mapKey(key)] = value
     if (source.snapshot.categories?.length) categories = source.snapshot.categories
   }
+  const officialWeights = state.gradebookCategoryWeightsByCycle?.[courseId + '::' + academicYear]?.categories
+  if (Array.isArray(officialWeights) && officialWeights.length) categories = officialWeights
   const primary = state.advancedGradebookByCycle?.[`${courseId}::${academicYear}`]
     ?? (academicYear === legacyYear ? state.advancedGradebookByCourse?.[courseId] : undefined)
   const primaryScores = new Map(Object.entries(primary?.scores ?? {}).map(([key, value]) => [mapKey(key), String(value ?? '')]))
   const primaryTasks = new Set((primary?.assignments ?? []).map((task: GradebookColumn) => task.id))
-  const recoveredCells = Object.entries(scores).filter(([key, value]) => value.trim() !== '' && !primaryScores.has(key) && assignments.has(key.slice(0, key.indexOf(':')))).length
+  const recoveredCells = Object.entries(scores).filter(([key, value]) => value.trim() !== '' && !primaryScores.has(key) && assignments.has(key.slice(0, key.lastIndexOf(':')))).length
   const recoveredTasks = [...assignments.keys()].filter((id) => !primaryTasks.has(id)).length
   return {
     snapshot: { assignments: [...assignments.values()], scores, comments, categories, archivedAssignments: [...archived.values()], savedAt: primary?.savedAt } as GradebookSnapshot,

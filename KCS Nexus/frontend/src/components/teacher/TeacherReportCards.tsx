@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   TrendingUp,
   CheckCircle2,
@@ -17,6 +17,8 @@ import {
   X,
 } from 'lucide-react'
 import { academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
+import { recoverGradebook, defaultGradebookCategories } from '@/utils/gradebookRecovery'
+import { canonicalGradebookTerm } from '@/utils/gradebookPeriods'
 import { printOfficialPdf } from '@/utils/officialPdf'
 import { canonicalClassLabel, compareClassLabels } from '@/utils/classLabels'
 import TeacherWholeSchoolReportCards from './TeacherWholeSchoolReportCards'
@@ -94,6 +96,8 @@ const sessions = [
   'Semester 1 · Quarter 2',
   'Semester 2 · Quarter 3',
   'Semester 2 · Quarter 4',
+  'Semester 1',
+  'Semester 2',
   'Annual final',
 ]
 
@@ -145,6 +149,7 @@ type TeacherReportWorkspace = {
   gradebookColumnsByCourse?: Record<string, WorkspaceGradebookColumn[]>
   gradebookScores?: Record<string, string>
   advancedGradebookByCourse?: Record<string, WorkspaceGradebookSnapshot>
+  advancedGradebookByCycle?: Record<string, WorkspaceGradebookSnapshot>
   reportCardWorkflow?: DraftStore
 }
 
@@ -180,7 +185,7 @@ const normalizedScore = (value: unknown, maxPoints: number) => {
 }
 
 const weightedSnapshotAverage = (snapshot: WorkspaceGradebookSnapshot | undefined, studentId: string, term: string) => {
-  const assignments = (snapshot?.assignments ?? []).filter((assignment) => term === 'Annual final' || assignment.term === term)
+  const assignments = (snapshot?.assignments ?? []).filter((assignment) => term === 'Annual final' || canonicalGradebookTerm(assignment.term) === term)
   const categories = snapshot?.categories ?? []
   let weightedTotal = 0
   let activeWeight = 0
@@ -196,122 +201,19 @@ const weightedSnapshotAverage = (snapshot: WorkspaceGradebookSnapshot | undefine
   return activeWeight ? Number((weightedTotal / activeWeight).toFixed(2)) : null
 }
 
-const buildReportCourses = (overview: Record<string, any>, state?: TeacherReportWorkspace): Course[] => {
-  const studentsById = new Map<string, Student>()
-  const studentsByNumber = new Map<string, Student>()
-
-  const registerStudent = (raw: Record<string, any>, index: number) => {
-    const id = String(raw.id ?? '')
-    const number = String(raw.studentNumber ?? '').trim().toLowerCase()
-    const existing = (id && studentsById.get(id)) || (number && studentsByNumber.get(number)) || undefined
-    const student = normalizeStudent(raw, index, existing)
-    studentsById.set(student.id, student)
-    if (existing && existing.id !== student.id) {
-      studentsById.set(existing.id, { ...student, id: existing.id })
-    }
-    if (student.studentNumber) studentsByNumber.set(student.studentNumber.trim().toLowerCase(), student)
-  }
-
-  const directoryRecords = (overview.studentDirectory?.length ? overview.studentDirectory : (overview.students ?? [])) as Array<Record<string, any>>
-  directoryRecords.forEach((student, index) => registerStudent(student, index))
-  ;(overview.students ?? []).forEach((student: Record<string, any>, index: number) => registerStudent(student, index))
-  ;(state?.teacherStudents ?? []).forEach((student, index) => registerStudent(student, index))
-  const directoryRoster = directoryRecords
-    .map((student) => studentsById.get(String(student.id)))
-    .filter((student): student is Student => Boolean(student))
-  const attendanceByStudent = new Map<string, string[]>()
-  ;(state?.attendanceEntries ?? []).forEach((entry) => {
-    if (!entry.studentId || !entry.status) return
-    attendanceByStudent.set(entry.studentId, [...(attendanceByStudent.get(entry.studentId) ?? []), entry.status.toUpperCase()])
-  })
-  attendanceByStudent.forEach((statuses, studentId) => {
-    const student = studentsById.get(studentId)
-    if (!student || student.analytics?.attendanceSummary?.total) return
-    const count = (status: string) => statuses.filter((item) => item === status).length
-    const attended = statuses.filter((item) => ['PRESENT', 'LATE'].includes(item)).length
-    const absent = statuses.filter((item) => ['ABSENT', 'EXCUSED', 'SICK', 'SUSPENDED'].includes(item)).length
-    student.analytics = {
-      ...(student.analytics ?? {}),
-      attendanceRate: statuses.length ? Number(((attended * 100) / statuses.length).toFixed(1)) : null,
-      attendanceSummary: {
-        total: statuses.length,
-        present: count('PRESENT'),
-        absent,
-        late: count('LATE'),
-        excused: count('EXCUSED'),
-        sick: count('SICK'),
-        suspended: count('SUSPENDED'),
-        attendanceRate: statuses.length ? Number(((attended * 100) / statuses.length).toFixed(1)) : null,
-      },
-    }
-  })
-
-  const officialCourses: Course[] = (overview.courses ?? []).map((rawCourse: Record<string, any>): Course => ({
-    id: String(rawCourse.id),
-    name: String(rawCourse.name ?? 'Subject'),
-    code: String(rawCourse.code ?? ''),
-    grade: canonicalClassLabel(rawCourse.grade),
-    enrollments: (rawCourse.enrollments ?? []).map((enrollment: Record<string, any>, index: number) => {
-      const student = normalizeStudent(enrollment.student ?? { id: enrollment.studentId }, index, studentsById.get(String(enrollment.studentId)))
-      registerStudent(student as unknown as Record<string, any>, index)
+const buildReportCourses = (overview: Record<string, any>, state: TeacherReportWorkspace | undefined, academicYear: string): Course[] => {
+  return (overview.courses ?? []).map((raw: Record<string, any>): Course => {
+    const enrollments = (raw.enrollments ?? []).map((row: Record<string, any>, index: number) => {
+      const student = normalizeStudent(row.student ?? { id: row.studentId }, index)
       return { studentId: student.id, student }
-    }),
-    grades: (rawCourse.grades ?? []) as Grade[],
-    source: 'official',
-  }))
-
-  const usedOfficialIds = new Set<string>()
-  const workspaceCourses = (state?.courses ?? []).map((workspaceCourse): Course => {
-    const grade = canonicalClassLabel(workspaceCourse.className ?? workspaceCourse.gradeLevels?.[0])
-    const abbreviation = String(workspaceCourse.abbreviation ?? workspaceCourse.code ?? '').trim()
-    const officialMatch = officialCourses.find((candidate) => (
-      candidate.id === workspaceCourse.id
-      || (candidate.grade === grade && (
-        candidate.name.localeCompare(workspaceCourse.name, 'fr', { sensitivity: 'base' }) === 0
-        || (abbreviation && candidate.code.localeCompare(abbreviation, 'fr', { sensitivity: 'base' }) === 0)
-      ))
+    })
+    const matches = (state?.courses ?? []).filter(candidate => candidate.id === raw.id || (
+      candidate.name.trim().toLowerCase() === String(raw.name).trim().toLowerCase()
+      && canonicalClassLabel(candidate.className ?? candidate.gradeLevels?.[0]) === canonicalClassLabel(raw.grade)
     ))
-    if (officialMatch) usedOfficialIds.add(officialMatch.id)
-
-    const requestedIds = workspaceCourse.enrollmentMode === 'custom'
-      ? (workspaceCourse.studentIds ?? [])
-      : directoryRoster.filter((student) => canonicalClassLabel(student.grade, student.section) === grade).map((student) => student.id)
-    const enrolledStudents = [...new Set(requestedIds)]
-      .map((studentId) => studentsById.get(studentId))
-      .filter((student): student is Student => Boolean(student))
-      .sort((left, right) => studentName(left).localeCompare(studentName(right), 'fr', { sensitivity: 'base' }))
-
-    const columns = state?.gradebookColumnsByCourse?.[workspaceCourse.id] ?? []
-    const gradebookGrades = enrolledStudents.flatMap((student) => columns.flatMap((column) => {
-      const percentage = normalizedScore(state?.gradebookScores?.[`${workspaceCourse.id}-${column.id}-${student.id}`], column.maxPoints)
-      return percentage === null ? [] : [{
-        id: `workspace-${workspaceCourse.id}-${column.id}-${student.id}`,
-        studentId: student.id,
-        assignmentId: column.id,
-        percentage,
-        letterGrade: letterGrade(percentage),
-        period: 'WORKSPACE_GRADEBOOK',
-        createdAt: new Date(0).toISOString(),
-      }]
-    }))
-
-    return {
-      id: officialMatch?.id ?? workspaceCourse.id,
-      name: workspaceCourse.name,
-      code: abbreviation || officialMatch?.code || 'COURSE',
-      grade,
-      enrollments: enrolledStudents.map((student) => ({ studentId: student.id, student })),
-      grades: gradebookGrades.length ? gradebookGrades : (officialMatch?.grades ?? []),
-      source: officialMatch ? 'official' : 'workspace',
-      gradebookSnapshot: state?.advancedGradebookByCourse?.[workspaceCourse.id],
-    }
-  })
-
-  return [
-    ...workspaceCourses,
-    ...officialCourses.filter((course) => !usedOfficialIds.has(course.id)),
-  ].sort((left, right) => compareClassLabels(left.grade, right.grade)
-    || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' }))
+    const recovery = recoverGradebook({ courseId: String(raw.id), academicYear, state: state ?? {}, students: enrollments.map((row: {student: Student}) => row.student), aliases: matches.length === 1 ? [matches[0].id] : [] })
+    return { id: String(raw.id), name: String(raw.name), code: String(raw.code ?? ''), grade: canonicalClassLabel(raw.grade), enrollments, grades: raw.grades ?? [], source: 'official', gradebookSnapshot: { ...recovery.snapshot, categories: recovery.snapshot.categories.length ? recovery.snapshot.categories : defaultGradebookCategories } }
+  }).sort((left: Course, right: Course) => compareClassLabels(left.grade, right.grade) || left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' }))
 }
 
 function studentName(student: Student) {
@@ -344,6 +246,9 @@ const statusLabel = (card?: ReportCard, submitted = false) => {
 }
 
 function SubjectGradeSubmission() {
+  const actionRef = useRef(false)
+  const [workspaceState, setWorkspaceState] = useState<TeacherReportWorkspace>()
+  const [overviewState, setOverviewState] = useState<Record<string, any>>({})
   const [courses, setCourses] = useState<Course[]>([])
   const [courseId, setCourseId] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
@@ -377,7 +282,9 @@ function SubjectGradeSubmission() {
       ])
       const overview = (overviewResponse.data?.data ?? {}) as Record<string, any>
       const state = workspaceResponse.data?.data?.state as TeacherReportWorkspace | undefined
-      const nextCourses = buildReportCourses(overview, state)
+      setOverviewState(overview)
+      setWorkspaceState(state)
+      const nextCourses = buildReportCourses(overview, state, academicYear)
       setCourses(nextCourses)
       setCourseId((current) => nextCourses.some((item) => item.id === current) ? current : (nextCourses[0]?.id ?? ''))
       setDrafts(state?.reportCardWorkflow ?? {})
@@ -391,13 +298,14 @@ function SubjectGradeSubmission() {
   }
 
   useEffect(() => { void load() }, [])
+  useEffect(() => { setCourses(buildReportCourses(overviewState, workspaceState, academicYear)) }, [academicYear, overviewState, workspaceState])
 
   const allRows = useMemo(() => {
     if (!course) return []
     return course.enrollments
       .map(({ student }) => {
         const snapshotAverage = weightedSnapshotAverage(course.gradebookSnapshot, student.id, term)
-        const assessmentGrades = course.grades.filter((grade) => grade.studentId === student.id && grade.assignmentId && (grade.period === term || grade.period === 'CURRENT' || grade.period === 'WORKSPACE_GRADEBOOK'))
+        const assessmentGrades = course.grades.filter((grade) => grade.studentId === student.id && grade.assignmentId && grade.period === academicYear + '::' + term + '::SUBMITTED')
         const calculated = snapshotAverage ?? (assessmentGrades.length
           ? Number((assessmentGrades.reduce((sum, grade) => sum + grade.percentage, 0) / assessmentGrades.length).toFixed(2))
           : null)
@@ -406,7 +314,7 @@ function SubjectGradeSubmission() {
         const submission = submissions.find((item) => item.courseId === course.id && item.studentId === student.id && item.cycle.academicYear === academicYear && item.cycle.term === term)
         const card = reportCards.find((item) => item.studentId === student.id && item.term === officialTerm)
         const draftFinal = override !== null && Number.isFinite(override) ? Math.max(0, Math.min(100, override)) : calculated
-        const finalGrade = submission?.percentage ?? draftFinal
+        const finalGrade = draftFinal ?? submission?.percentage ?? null
         return { student, calculated, draft, finalGrade, submission, card }
       })
       .sort((left, right) => studentName(left.student).localeCompare(studentName(right.student), 'fr', { sensitivity: 'base' }))
@@ -422,7 +330,8 @@ function SubjectGradeSubmission() {
     return matchesQuery && matchesStatus
   }), [allRows, query, rowFilter])
   const submittedCount = allRows.filter((row) => row.submission).length
-  const locked = allRows.length > 0 && (submittedCount === allRows.length || allRows.some((row) => ['APPROVED', 'EMAILED', 'POSTED_TO_PORTAL'].includes(row.card?.publicationStatus ?? '')))
+  const locked = loading || saving
+  const aggregatePeriod = ['Semester 1', 'Semester 2', 'Annual final'].includes(term)
   const readyCount = allRows.filter((row) => row.finalGrade !== null).length
   const attendanceTotals = allRows.reduce((totals, row) => {
     const summary = row.student.analytics?.attendanceSummary
@@ -468,25 +377,27 @@ function SubjectGradeSubmission() {
     })
     setNotice(`Comment applied to ${rows.length} visible learner(s). Save the draft to persist it.`)
   }
-  const persistDrafts = async (successMessage = 'Report-card draft saved in KCS Nexus.') => {
-    setSaving(true)
+  const persistDrafts = async (successMessage = 'Report-card draft saved in KCS Nexus.', inSubmission = false) => {
+    if (!inSubmission && actionRef.current) return false
+    if (!inSubmission) { actionRef.current = true; setSaving(true) }
     setError('')
     try {
       const latest = await teacherWorkspaceAPI.get()
       const workspace = latest.data?.data
-      await teacherWorkspaceAPI.save({ ...(workspace?.state ?? {}), reportCardWorkflow: drafts }, workspace?.revision)
+      await teacherWorkspaceAPI.save({ ...(workspace?.state ?? {}), reportCardWorkflow: { ...(workspace?.state?.reportCardWorkflow ?? {}), [cycleKey]: drafts[cycleKey] ?? {} } }, workspace?.revision)
       setNotice(successMessage)
       return true
     } catch (reason: any) {
       setError(reason?.response?.data?.message ?? 'The report-card draft could not be saved.')
       return false
     } finally {
-      setSaving(false)
+      if (!inSubmission) { actionRef.current = false; setSaving(false) }
     }
   }
 
   const submit = async () => {
-    if (!course || !allRows.length) return
+    if (!course || !allRows.length || actionRef.current) return
+    if (aggregatePeriod) { setError('Submit each quarter separately. Semester and annual reports are calculated from the quarter submissions.'); return }
     const incomplete = allRows.filter((row) => row.finalGrade === null)
     if (incomplete.length) {
       setError(`Submission blocked: ${incomplete.length} learner(s) have no calculated grade or approved override.`)
@@ -497,10 +408,11 @@ function SubjectGradeSubmission() {
       setError(`Submission blocked: explain every manual override before submission (${unexplained.length} learner(s)).`)
       return
     }
+    actionRef.current = true
     setSaving(true)
     setError('')
     try {
-      if (!await persistDrafts('Draft saved before controlled submission.')) return
+      if (!await persistDrafts('Draft saved before controlled submission.', true)) return
       const synchronizedCourse = await teacherWorkspaceAPI.syncCourse({
         id: course.id,
         name: course.name,
@@ -523,6 +435,7 @@ function SubjectGradeSubmission() {
         term,
         results: allRows.map((row) => ({
           studentId: row.student.id,
+          studentNumber: row.student.studentNumber,
           percentage: row.finalGrade,
           comment: [
             row.draft.teacherComment && `Academic: ${row.draft.teacherComment}`,
@@ -537,11 +450,12 @@ function SubjectGradeSubmission() {
       if (submittedCount !== allRows.length || propagatedCount !== allRows.length) {
         throw new Error(`Official propagation failed: ${submittedCount}/${allRows.length} grades and ${propagatedCount}/${allRows.length} report-card drafts were confirmed.`)
       }
-      setNotice(`${allRows.length} final grade(s) submitted. The session is now read-only pending administrative review.`)
+      setNotice(`${allRows.length} final grade(s) submitted. This submission replaces the previous course results for the selected period.`)
       await load()
     } catch (reason: any) {
       setError(reason?.response?.data?.message ?? 'Final grades could not be submitted.')
     } finally {
+      actionRef.current = false
       setSaving(false)
     }
   }
@@ -599,7 +513,7 @@ function SubjectGradeSubmission() {
       <div className='grid gap-3 lg:grid-cols-[1.25fr_.7fr_.9fr_1fr]'>
         <label className='text-xs font-bold uppercase text-gray-400'>My assigned subject<select className={`${field} mt-1 normal-case`} value={course?.id ?? ''} onChange={(event) => setCourseId(event.target.value)}>{courses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name} · {item.grade}</option>)}</select></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Academic year<input className={`${field} mt-1 normal-case`} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} pattern='\d{4}-\d{4}' /></label>
-        <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((item) => <option key={item}>{item}</option>)}</select></label>
+        <label className='text-xs font-bold uppercase text-gray-400'>Report session<select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>{sessions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <label className='text-xs font-bold uppercase text-gray-400'>Search<input className={`${field} mt-1 normal-case`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder='Name or student number' /></label>
       </div>
         <div className='mt-4 grid gap-3 border-t border-gray-100 pt-4 lg:grid-cols-[auto_220px_1fr_auto] dark:border-kcs-blue-800'>
@@ -641,7 +555,7 @@ function SubjectGradeSubmission() {
     <div className={panel}>
       <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
         <div><h3 className='font-bold text-kcs-blue-950 dark:text-white'>Learner report-card drafts</h3><p className='mt-1 text-sm text-gray-500'>Only students enrolled in the selected assigned subject are shown.</p></div>
-        {locked && <span className='inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200'><LockKeyhole size={14} />Submitted · read-only</span>}
+        {locked && <span className='inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200'><LockKeyhole size={14} />Saving changes…</span>}
       </div>
 
       {viewMode === 'cards' ? <div className='mt-5 space-y-4'>
@@ -739,11 +653,11 @@ function SubjectGradeSubmission() {
     </div>
 
     <div className='sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-kcs-blue-200 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-kcs-blue-700 dark:bg-kcs-blue-950/95 sm:flex-row sm:items-center sm:justify-between'>
-      <div><p className='text-sm font-bold text-kcs-blue-950 dark:text-white'>{locked ? 'This session has been submitted and is protected.' : 'Save drafts freely; submission creates the controlled administrative record.'}</p><p className='text-xs text-gray-500'>Admin approval and publication remain separate institutional actions.</p></div>
+      <div><p className='text-sm font-bold text-kcs-blue-950 dark:text-white'>{locked ? 'A save is in progress.' : 'Save drafts freely. Each new course submission replaces the previous results for this year and quarter.'}</p><p className='text-xs text-gray-500'>Admin approval and publication remain separate institutional actions.</p></div>
       <div className='flex flex-wrap gap-2'>
         <button className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200' onClick={() => setPreviewOpen(true)}><Eye size={16} />Preview</button>
         <button className='inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-700 disabled:opacity-40 dark:border-kcs-blue-700 dark:text-kcs-blue-200' disabled={saving || locked} onClick={() => void persistDrafts()}><Save size={16} />Save draft</button>
-        <button className={primary} disabled={saving || locked || !allRows.length || readyCount !== allRows.length} onClick={() => void submit()}><Send size={16} />Submit subject final grades</button>
+        <button className={primary} disabled={saving || locked || aggregatePeriod || !allRows.length || readyCount !== allRows.length} onClick={() => void submit()}><Send size={16} />Submit subject final grades</button>
       </div>
     </div>
 
