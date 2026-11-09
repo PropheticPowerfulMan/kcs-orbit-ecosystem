@@ -41,6 +41,8 @@ import { printOfficialGradebook } from '@/utils/officialGradebookPrint'
 import { academicCalendarAPI, academicRecordsAPI, teacherWorkspaceAPI } from '@/services/api'
 import { canonicalClassLabel } from '@/utils/classLabels'
 import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
+import { canonicalGradebookTerm, openingGradebookTerm } from '@/utils/gradebookPeriods'
 
 type Course = {
   id: string
@@ -161,6 +163,7 @@ const legacyDemoAssignmentIds = new Set(['gb-lab', 'gb-quiz', 'gb-homework', 'gb
 const sanitizeAssignments = (assignments: GradebookColumn[] | undefined) => (
   (assignments ?? [])
     .filter((assignment) => !legacyDemoAssignmentIds.has(assignment.id))
+    .map((assignment) => ({ ...assignment, term: canonicalGradebookTerm(assignment.term || terms[0]) }))
     .sort((left, right) => {
       const leftTime = Date.parse(left.date || '')
       const rightTime = Date.parse(right.date || '')
@@ -245,6 +248,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     if (key === 'task') setTaskPanelOpen(open); else setWeightPanelOpen(open)
   }
   const language = useUIStore((state) => state.language)
+  const userId = useAuthStore((state) => state.user?.id ?? '')
   const tr = (fr: string, en: string) => language === 'fr' ? fr : en
   const [draggedAssignmentId, setDraggedAssignmentId] = useState('')
   const [pendingDeleteAssignment, setPendingDeleteAssignment] = useState<GradebookColumn | null>(null)
@@ -268,14 +272,27 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [scores, setScores] = useState<Record<string, string>>(() => {
     try { return (JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}').scores as Record<string, string> | undefined) ?? {} } catch { return {} }
   })
+  const [savingSpreadsheet, setSavingSpreadsheet] = useState(false)
+  const [loadedSnapshotSavedAt, setLoadedSnapshotSavedAt] = useState('')
   const saveSpreadsheet = async (silent = false) => {
+    if (savingSpreadsheet) return false
+    if (loadedScope !== cycleKey) {
+      onAction(tr('Attendez le chargement complet des notes avant d’enregistrer.', 'Wait for the saved gradebook to finish loading before saving.'), true)
+      return false
+    }
     const savedAt = new Date().toISOString()
     const snapshot: GradebookSnapshot = { scores, comments, assignments, categories, archivedAssignments, savedAt }
-    localStorage.setItem(browserStorageKey, JSON.stringify(snapshot))
+    setSavingSpreadsheet(true)
+    try { localStorage.setItem(browserStorageKey, JSON.stringify(snapshot)) } catch { /* Server persistence remains available when browser storage is full. */ }
     try {
       const latest = await teacherWorkspaceAPI.get()
       const workspace = latest.data?.data
       const state = (workspace?.state ?? {}) as Record<string, any>
+      const currentSnapshot = state.advancedGradebookByCycle?.[cycleKey]
+        ?? (academicYear === legacyAcademicYear ? state.advancedGradebookByCourse?.[selectedCourseId] : undefined)
+      if (currentSnapshot?.savedAt && currentSnapshot.savedAt !== loadedSnapshotSavedAt) {
+        throw new Error(tr('Ce cours a été modifié dans une autre session. Rechargez les notes avant de réessayer.', 'This course was updated in another session. Reload its saved grades before trying again.'))
+      }
       const legacyColumns = assignments.map(({ id, title, type, date, maxPoints }) => ({ id, title, type, date, maxPoints }))
       const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
       // The legacy mirrors are kept only for the original 2026-2027 cycle so
@@ -310,6 +327,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         gradebookScores: nextLegacyScores,
       }, workspace?.revision)
       window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt, revision: savedWorkspace.data?.data?.revision } }))
+      setLoadedSnapshotSavedAt(savedAt)
       setSaveNotice(`Saved to KCS Nexus at ${new Date().toLocaleTimeString()}`)
       if (!silent) onAction('Tasks, category weights, scores, and comments were synchronized with KCS Nexus successfully.')
       return true
@@ -317,6 +335,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setSaveNotice('Server synchronization failed')
       onAction(error?.response?.data?.message || 'The Gradebook could not be synchronized with KCS Nexus.', true)
       return false
+    } finally {
+      setSavingSpreadsheet(false)
     }
   }
   const [comments, setComments] = useState<Record<string, string>>({})
@@ -327,9 +347,17 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('')
   const [saveNotice, setSaveNotice] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
+  const [officialTerm, setOfficialTerm] = useState(terms[0])
+  const [calendarReady, setCalendarReady] = useState(false)
+  const [loadedScope, setLoadedScope] = useState('')
   const [addingAssignment, setAddingAssignment] = useState(false)
   const cycleKey = `${selectedCourseId}::${academicYear}`
   const browserStorageKey = `kcs-live-gradebook-${cycleKey}`
+  const periodPreferenceKey = `kcs:nexus:gradebook:period:${userId}:${cycleKey}`
+  const chooseTerm = (nextTerm: string) => {
+    setTerm(nextTerm)
+    localStorage.setItem(periodPreferenceKey, nextTerm)
+  }
   const [submittingFinals, setSubmittingFinals] = useState(false)
   const [officialFinalGrades, setOfficialFinalGrades] = useState<OfficialFinalGrade[]>([])
   const [draft, setDraft] = useState({
@@ -351,13 +379,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setAcademicYear(calendar.name)
       const now = Date.now()
       const activeQuarter = (calendar.periods ?? []).find((period: any) => ['QUARTER','TRIMESTER'].includes(period.type) && Date.parse(period.startDate) <= now && Date.parse(period.endDate) >= now)
-      if (activeQuarter?.sequence) setTerm(terms[Math.min(activeQuarter.sequence, 4) - 1])
-    }).catch(() => undefined)
+      if (activeQuarter?.sequence) setOfficialTerm(terms[Math.min(activeQuarter.sequence, 4) - 1])
+    }).catch(() => undefined).finally(() => setCalendarReady(true))
   }, [])
 
   useEffect(() => {
+    if (!calendarReady || !selectedCourseId || !selectedCourse) return
     let active = true
     const loadGradebook = async () => {
+      setLoadedScope('')
       let saved: Partial<GradebookSnapshot> = {}
       setAssignments([])
       setCategories(defaultCategories)
@@ -424,22 +454,28 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         if (serverSnapshot) saved = serverSnapshot
         if (active) setOfficialFinalGrades((officialResponse?.data?.data?.submissions ?? []) as OfficialFinalGrade[])
       } catch {
-        // The browser copy remains a safe fallback while the server is temporarily unavailable.
+        if (!saved.assignments?.length) {
+          if (active) onAction(tr('Les notes enregistrées ne sont pas accessibles pour le moment. Rechargez cette page pour réessayer.', 'Saved grades are temporarily unavailable. Reload this page to try again.'), true)
+          return
+        }
       }
       if (!active) return
       const savedAssignments = sanitizeAssignments(saved.assignments)
       const savedCategories = saved.categories?.length ? saved.categories : defaultCategories
       const completeCategories = defaultCategories.map((category) => savedCategories.find((item) => item.id === category.id) ?? category)
       setAssignments(savedAssignments)
-      setArchivedAssignments(saved.archivedAssignments ?? [])
+      setArchivedAssignments((saved.archivedAssignments ?? []).map((entry) => ({ ...entry, assignment: { ...entry.assignment, term: canonicalGradebookTerm(entry.assignment.term) } })))
       setCategories(completeCategories)
       setComments(saved.comments ?? {})
       setScores(buildMissingScoreCells(savedAssignments, students, saved.scores ?? {}))
       setSelectedAssignmentId(savedAssignments[0]?.id ?? '')
+      setTerm(openingGradebookTerm(savedAssignments, localStorage.getItem(periodPreferenceKey), officialTerm, terms))
+      setLoadedSnapshotSavedAt(saved.savedAt ?? '')
+      setLoadedScope(cycleKey)
     }
     void loadGradebook()
     return () => { active = false }
-  }, [academicYear, browserStorageKey, cycleKey, selectedCourseId, selectedCourse, students])
+  }, [calendarReady, academicYear, browserStorageKey, cycleKey, selectedCourseId, selectedCourse?.id, periodPreferenceKey])
 
   useEffect(() => {
     if (!spreadsheetOpen) return
@@ -450,7 +486,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }
     window.addEventListener('keydown', handleSaveShortcut)
     return () => window.removeEventListener('keydown', handleSaveShortcut)
-  }, [spreadsheetOpen, scores, comments, assignments, selectedCourseId])
+  }, [spreadsheetOpen, scores, comments, assignments, categories, archivedAssignments, selectedCourseId, academicYear, loadedScope, loadedSnapshotSavedAt, savingSpreadsheet])
   const enrolledCourseStudents = useMemo(() => {
     if (!selectedCourse) return []
     return (selectedCourse.studentIds ?? [])
@@ -808,6 +844,14 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   return (
     <div className="gradebook-mobile-surface space-y-6">
+      <section className="rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
+        <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période actuelle du calendrier', 'Current calendar period')} {officialTerm}.</strong>}</p>
+        <div className="mt-2 flex flex-wrap gap-2">{terms.map((period) => {
+          const count = assignments.filter((assignment) => period === 'Annual final' || assignment.term === period).length
+          return <button key={period} type="button" disabled={loadedScope !== cycleKey} aria-pressed={term === period} onClick={() => chooseTerm(period)} className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${term === period ? 'border-kcs-blue-700 bg-kcs-blue-700 text-white' : 'border-sky-200 bg-white text-kcs-blue-900 dark:border-sky-800 dark:bg-kcs-blue-900 dark:text-sky-100'}`}>{period} · {count} {tr('travaux', 'tasks')}</button>
+        })}</div>
+      </section>
       <div className={`grid gap-4 ${commandCenterOpen ? 'xl:grid-cols-[1fr_0.9fr]' : ''}`}>
         <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${commandCenterOpen ? 'p-5' : 'p-3'}`}>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
@@ -834,7 +878,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <select className="input-kcs py-2 text-sm" value={selectedCourse?.id} onChange={(event) => onSelectCourse(event.target.value)}>
               {courses.map((course) => <option key={course.id} value={course.id}>{canonicalClassLabel(course.className || course.gradeLevels[0])} - {course.name}</option>)}
             </select>
-            <select className="input-kcs py-2 text-sm" value={term} onChange={(event) => setTerm(event.target.value)}>
+            <select className="input-kcs py-2 text-sm" value={term} onChange={(event) => chooseTerm(event.target.value)}>
               {terms.map((item) => <option key={item}>{item}</option>)}
             </select>
             <select className="input-kcs py-2 text-sm" value={scale} onChange={(event) => setScale(Number(event.target.value))}>
@@ -986,7 +1030,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap items-end gap-1.5">
-            <button type="button" onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
+            <button type="button" disabled={savingSpreadsheet || loadedScope !== cycleKey} onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
             {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Maximize2 size={15}/> Dedicated window</button>}
             {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white"><Minimize2 size={14}/> Close</button>}
             <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>

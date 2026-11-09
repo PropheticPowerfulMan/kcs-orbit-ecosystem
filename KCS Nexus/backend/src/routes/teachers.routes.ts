@@ -1,3 +1,4 @@
+import { mergeTeacherWorkspaceState } from '../utils/teacherWorkspaceState.js'
 import { Router } from 'express'
 import OpenAI from 'openai'
 import { z } from 'zod'
@@ -365,16 +366,26 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
 
   const workspace = await prisma.$transaction(async (tx) => {
     const existing = await tx.teacherWorkspace.findUnique({ where: { userId: user.id } })
-    if (existing && payload.revision !== undefined && payload.revision !== existing.revision) {
+    if (existing && payload.revision !== existing.revision) {
       throw new ApiError(409, 'This teacher workspace was updated in another session. Reload it before saving again.')
     }
     if (!existing) {
       return tx.teacherWorkspace.create({ data: { userId: user.id, state: payload.state as Prisma.InputJsonValue } })
     }
-    return tx.teacherWorkspace.update({
-      where: { userId: user.id },
-      data: { state: payload.state as Prisma.InputJsonValue, revision: { increment: 1 } },
+    const merged = mergeTeacherWorkspaceState(existing.state, payload.state)
+    const updated = await tx.teacherWorkspace.updateMany({
+      where: { userId: user.id, revision: existing.revision },
+      data: { state: merged.state as Prisma.InputJsonValue, revision: { increment: 1 } },
     })
+    if (updated.count !== 1) throw new ApiError(409, 'Another session saved this workspace. Reload it before saving again.')
+    if (merged.previousGradebook) {
+      await tx.auditLog.create({ data: {
+        actorId: user.id, action: 'TEACHER_GRADEBOOK_RECOVERY_SNAPSHOT',
+        targetType: 'TeacherWorkspace', targetId: existing.id,
+        metadata: { revision: existing.revision, gradebook: merged.previousGradebook } as Prisma.InputJsonValue,
+      } })
+    }
+    return tx.teacherWorkspace.findUniqueOrThrow({ where: { userId: user.id } })
   })
 
   await prisma.auditLog.create({

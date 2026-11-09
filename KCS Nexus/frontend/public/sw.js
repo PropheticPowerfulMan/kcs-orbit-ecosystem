@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-v3'
+const CACHE_NAME = 'kcs-nexus-shell-gradebook-20261109'
 const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
