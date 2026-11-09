@@ -1,3 +1,4 @@
+import { queueMessageBatch } from '../services/messageBatch.js'
 import { Router } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
@@ -23,10 +24,10 @@ messagesRouter.use(authenticate)
 
 const messageSchema = z.object({ recipientId: z.string().min(1), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const jsonArray = (value: unknown) => typeof value === 'string' ? JSON.parse(value) : value
-const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(250)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const parentDeliverySchema = z.object({ recipientIds: z.preprocess(jsonArray, z.array(z.string().min(1)).min(1).max(10000)), channels: z.preprocess(jsonArray, z.array(z.enum(['email','sms'])).min(1)), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000), requestId: z.string().min(8).max(128).optional(), language: z.enum(['fr','en']).optional() })
 const attachmentTypes = new Set(['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv','image/jpeg','image/png','image/webp','audio/mpeg','audio/mp4','audio/ogg','audio/webm','audio/wav','audio/x-wav','video/mp4','video/webm','video/quicktime','video/ogg'])
 const attachmentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 26214400, files: 1 }, fileFilter: (_req, file, cb) => attachmentTypes.has(file.mimetype) ? cb(null, true) : cb(new ApiError(400, 'Unsupported attachment type')) })
-const broadcastSchema = z.object({ audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
+const broadcastSchema = z.object({ requestId: z.string().min(8).max(128).optional(), audience: z.enum(['ALL','PARENTS','STUDENTS','TEACHERS','STAFF','GRADE_9_12_FAMILIES']), subject: z.string().min(2).max(160), body: z.string().min(1).max(10000) })
 const messageLink = (role: string) => role === 'PARENT' ? '/portal/parent/messages' : role === 'STUDENT' ? '/portal/student/messages' : role === 'TEACHER' ? '/portal/teacher/messages' : role === 'STAFF' ? '/portal/staff/messages' : '/admin/communications'
 
 const resolveMessageActorId = async (req: AuthenticatedRequest) => {
@@ -243,67 +244,17 @@ messagesRouter.post('/parent-delivery', attachmentUpload.single('attachment'), a
     }
   })
 
-  const createdMessages = await prisma.$transaction(async (tx) => {
-    const rows = []
-    for (const parent of deliveryParents) {
-      rows.push(await tx.internalMessage.create({ data: { senderId, recipientId: parent.id, subject: data.subject, body: data.body, attachmentName: req.file?.originalname, attachmentMime: req.file?.mimetype, attachmentSize: req.file?.size, attachmentData: req.file?.buffer }, select: { id: true, recipientId: true } }))
-    }
-    await tx.notification.createMany({ data: deliveryParents.map((parent) => ({ userId: parent.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(parent.role) })) })
-    return rows
-  })
-  const messageIdByRecipient = new Map(createdMessages.map((message) => [message.recipientId, message.id]))
-
-  const delivery: Array<Record<string, unknown>> = []
-  for (let index = 0; index < deliveryParents.length; index += 10) {
-    const batch = deliveryParents.slice(index, index + 10)
-    const results = await Promise.all(batch.map(async (parent) => {
-      const row: Record<string, unknown> = { userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') }
-      const attachmentNote = req.file ? `\n\nPièce jointe : ${req.file.originalname}. Disponible aussi dans votre boîte Nexus.` : ''
-      if (data.channels.includes('email')) row.email = parent.email ? { sent: true, queued: true, reason: 'QUEUED' } : { sent: false, reason: 'MISSING_OFFICIAL_EMAIL' }
-      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(parent.phone, `${data.subject}\n\n${data.body}${attachmentNote}`, { brand: false })
-      const internalMessageId = messageIdByRecipient.get(parent.id)
-      const deliveryRows = data.channels.map((channel) => {
-        const result = row[channel] as { sent: boolean; queued?: boolean; reason?: string }
-        const queued = channel === 'email' && Boolean(result.queued)
-        return {
-          channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const,
-          status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const,
-          subject: data.subject,
-          body: data.body,
-          senderId,
-          recipientName: String(row.name),
-          recipientEmail: parent.email,
-          recipientPhone: parent.phone,
-          sentAt: queued ? null : result.sent ? new Date() : null,
-          failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'),
-          metadata: { internalMessageId, recipientId: parent.id, ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: deliveryParents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) },
-        }
-      })
-      await prisma.correspondenceLog.createMany({ data: deliveryRows })
-      return row
-    }))
-    delivery.push(...results)
-  }
-
+  const targets = deliveryParents.map((parent) => ({ userId: parent.id, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' '), email: parent.email, phone: parent.phone }))
+  const allTargets: Array<typeof targets[number] & { relationship?: string }> = [...targets]
   for (const parent of deliveryParents.filter((person) => person.role === 'PARENT')) {
-    const officialParent = findOfficialContact(directory, parent)
-    const mothers = (officialParent?.familyContacts || []).filter((contact) => contact.kind === 'MOTHER' && (contact.email || contact.phone))
-    for (const mother of mothers) {
+    const official = findOfficialContact(directory, parent)
+    for (const mother of (official?.familyContacts ?? []).filter((contact) => contact.kind === 'MOTHER' && (contact.email || contact.phone))) {
       if (mother.email?.trim().toLowerCase() === parent.email?.trim().toLowerCase() && mother.phone?.trim() === parent.phone?.trim()) continue
-      const motherName = [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Mère de l’élève'
-      const row: Record<string, unknown> = { userId: parent.id, relationship: 'MOTHER', name: motherName }
-      if (data.channels.includes('email')) row.email = mother.email ? { sent: true, queued: true, reason: 'QUEUED' } : { sent: false, reason: 'MISSING_EMAIL' }
-      if (data.channels.includes('sms')) row.sms = await sendSchoolSms(mother.phone, `${data.subject}\n\n${data.body}`, { brand: false })
-      await prisma.correspondenceLog.createMany({ data: data.channels.map((channel) => {
-        const result = row[channel] as { sent: boolean; queued?: boolean; reason?: string }
-        const queued = channel === 'email' && Boolean(result.queued)
-        return { channel: channel === 'email' ? 'EMAIL' as const : 'TEXT' as const, status: queued ? 'QUEUED' as const : result.sent ? 'SENT' as const : 'FAILED' as const, subject: data.subject, body: data.body, senderId, recipientName: motherName, recipientEmail: mother.email || null, recipientPhone: mother.phone || null, sentAt: queued ? null : result.sent ? new Date() : null, failureReason: queued || result.sent ? null : (result.reason || 'DELIVERY_FAILED'), metadata: { recipientId: parent.id, relationship: 'MOTHER', ...(queued ? { mailQueueVersion: 1, attempts: 0, nextAttemptAt: new Date().toISOString(), priority: deliveryParents.length <= 10 ? 'HIGH' : 'NORMAL' } : {}) } }
-      }) })
-      delivery.push(row)
+      allTargets.push({ userId: parent.id, name: [mother.lastName, mother.middleName, mother.firstName].filter(Boolean).join(' ') || 'Mother / Mère', email: mother.email || null, phone: mother.phone || null, relationship: 'MOTHER' })
     }
   }
-  const externalDeliverySucceeded = delivery.some((row) => data.channels.some((channel) => { const result = row[channel] as { sent?: boolean; queued?: boolean } | undefined; return Boolean(result?.sent || result?.queued) }))
-  return success(res, { recipients: delivery.length, requestedRecipients: recipientIds.length, primaryRecipients: deliveryParents.length, skippedRecipients: skippedRecipientIds.length, channels: data.channels, delivery, externalDeliverySucceeded }, externalDeliverySucceeded ? 'Parent communication recorded; email delivery is safely queued' : 'Parent communication recorded, but external delivery failed', 201)
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients: deliveryParents.map((parent) => ({ id: parent.id, role: parent.role, name: [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') })), targets: allTargets, channels: data.channels, attachment: req.file, requestId: data.requestId, language: data.language, intent: { recipientIds: [...recipientIds].sort() } })
+  return success(res, { ...result, requestedRecipients: recipientIds.length, skippedRecipients: skippedRecipientIds.length }, 'Parent communication recorded for every valid recipient; external delivery safely queued', 201)
 }))
 
 messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -329,7 +280,7 @@ messagesRouter.post('/', attachmentUpload.single('attachment'), asyncHandler(asy
   return success(res, { ...safeMessage, hasAttachment: Boolean(message.attachmentName), delivery }, 'Message sent', 201)
 }))
 
-messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest, res) => {
+messagesRouter.post('/broadcast', attachmentUpload.single('attachment'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, 'Super Administrator permissions required')
   const data = broadcastSchema.parse(req.body)
   const senderId = await resolveMessageActorId(req)
@@ -337,42 +288,13 @@ messagesRouter.post('/broadcast', asyncHandler(async (req: AuthenticatedRequest,
   const users = await prisma.user.findMany({
     where: data.audience === 'GRADE_9_12_FAMILIES'
       ? { role: 'PARENT', parentLinks: { some: { student: { grade: { in: ['Grade 9','Grade 10','Grade 11','Grade 12'] } } } } }
-      : { role: { in: [...roleMap[data.audience as keyof typeof roleMap]] }, id: { not: req.user!.sub } },
-    select: { id: true, role: true, email: true, firstName: true, middleName: true, lastName: true },
+      : { role: { in: [...roleMap[data.audience as keyof typeof roleMap]] }, id: { not: senderId } },
+    select: { id: true, role: true, email: true, phone: true, firstName: true, middleName: true, lastName: true },
   })
-  const now = new Date()
-  const emailRecipients = users.filter((user) => Boolean(user.email?.trim()))
-  await prisma.$transaction(async (tx) => {
-    const messages = await Promise.all(users.map((user) => tx.internalMessage.create({
-      data: { senderId, recipientId: user.id, subject: data.subject, body: data.body },
-      select: { id: true, recipientId: true },
-    })))
-    const messageIds = new Map(messages.map((message) => [message.recipientId, message.id]))
-    await tx.notification.createMany({ data: users.map((user) => ({ userId: user.id, title: data.subject, message: data.body, type: 'MESSAGE' as const, link: messageLink(user.role) })) })
-    if (emailRecipients.length) {
-      await tx.correspondenceLog.createMany({
-        data: emailRecipients.map((user) => ({
-          channel: 'EMAIL' as const,
-          status: 'QUEUED' as const,
-          subject: data.subject,
-          body: data.body,
-          senderId,
-          recipientName: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' '),
-          recipientEmail: user.email,
-          sentAt: null,
-          failureReason: null,
-          metadata: { internalMessageId: messageIds.get(user.id), recipientId: user.id, mailQueueVersion: 1, attempts: 0, nextAttemptAt: now.toISOString(), audience: data.audience, priority: 'BULK' },
-        })),
-      })
-    }
-  })
-  return success(res, {
-    recipients: users.length,
-    audience: data.audience,
-    emailQueued: emailRecipients.length,
-    emailMissing: users.length - emailRecipients.length,
-    estimatedMinutes: Math.ceil(emailRecipients.length * 20 / 60),
-  }, 'Communication recorded and email delivery safely queued', 201)
+  if (!users.length) return success(res, { recipients: 0, audience: data.audience, emailQueued: 0, emailMissing: 0 }, 'No matching recipients')
+  const recipients = users.map((user) => ({ id: user.id, role: user.role, name: [user.lastName, user.middleName, user.firstName].filter(Boolean).join(' ') }))
+  const result = await queueMessageBatch({ senderId, subject: data.subject, body: data.body, recipients, targets: users.map((user, index) => ({ userId: user.id, name: recipients[index].name, email: user.email, phone: user.phone })), channels: ['email'], attachment: req.file, requestId: data.requestId, intent: { audience: data.audience } })
+  return success(res, { ...result, recipients: users.length, audience: data.audience, emailMissing: users.length - result.emailQueued, estimatedMinutes: Math.ceil(result.emailQueued / 60) }, 'Communication recorded for every recipient and email delivery safely queued', 201)
 }))
 
 messagesRouter.post('/bulk-delete', asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -403,11 +325,12 @@ messagesRouter.patch('/:id/read', asyncHandler(async (req: AuthenticatedRequest,
 }))
 messagesRouter.get('/:id/attachment', asyncHandler(async (req: AuthenticatedRequest, res) => {
   const actorId = await resolveMessageActorId(req)
-  const message = await prisma.internalMessage.findUnique({ where: { id: getRouteParam(req.params.id) } })
+  const message = await prisma.internalMessage.findUnique({ where: { id: getRouteParam(req.params.id) }, include: { sharedAttachment: true } })
   if (!message) throw new ApiError(404, 'Message not found')
   if (message.senderId !== actorId && message.recipientId !== actorId) throw new ApiError(403, 'Access denied')
-  if (!message.attachmentData || !message.attachmentName || !message.attachmentMime) throw new ApiError(404, 'No attachment')
+  const attachmentData = message.attachmentData ?? message.sharedAttachment?.data
+  if (!attachmentData || !message.attachmentName || !message.attachmentMime) throw new ApiError(404, 'No attachment')
   const disposition = message.attachmentMime.startsWith("audio/") || message.attachmentMime.startsWith("video/") || message.attachmentMime.startsWith("image/") ? "inline" : "attachment"
-  res.type(message.attachmentMime).set("Content-Disposition", disposition + "; filename*=UTF-8''" + encodeURIComponent(message.attachmentName)).set("Content-Length", String(message.attachmentSize || message.attachmentData.length)).set("Cache-Control", "private, max-age=300").set("X-Content-Type-Options", "nosniff")
-  return res.send(Buffer.from(message.attachmentData))
+  res.type(message.attachmentMime).set("Content-Disposition", disposition + "; filename*=UTF-8''" + encodeURIComponent(message.attachmentName)).set("Content-Length", String(message.attachmentSize || attachmentData.length)).set("Cache-Control", "private, max-age=300").set("X-Content-Type-Options", "nosniff")
+  return res.send(Buffer.from(attachmentData))
 }))
