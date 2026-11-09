@@ -381,6 +381,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setLoadedSnapshotSavedAt('')
       setRecoveredCells(0)
       let saved: Partial<GradebookSnapshot> = {}
+      let legacyBrowserSnapshot: Partial<GradebookSnapshot> = {}
       setAssignments([])
       setCategories(defaultCategories)
       setComments({})
@@ -388,8 +389,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setSelectedAssignmentId('')
       try {
         saved = JSON.parse(localStorage.getItem(browserStorageKey) || '{}') as Partial<GradebookSnapshot>
-        if (!saved.assignments?.length && academicYear === legacyAcademicYear) {
-          saved = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
+        if (academicYear === legacyAcademicYear) {
+          legacyBrowserSnapshot = JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}') as Partial<GradebookSnapshot>
+          if (!saved.assignments?.length) saved = { ...legacyBrowserSnapshot, savedAt: '' }
         }
         void academicRecordsAPI.myFinalGrades().then(officialResponse => {
           if (active) setOfficialFinalGrades((officialResponse.data?.data?.submissions ?? []) as OfficialFinalGrade[])
@@ -400,7 +402,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           String(course?.name || '').trim().toLowerCase() === selectedCourse.name.trim().toLowerCase()
           && canonicalClassLabel(course?.className || course?.gradeLevels?.[0]) === canonicalClassLabel(selectedCourse.className || selectedCourse.gradeLevels[0]),
         )
-        const recovery = recoverGradebook({ courseId: selectedCourseId, academicYear, aliases: matchingCourses.length === 1 ? [matchingCourses[0].id] : [], state, students, browserSnapshots: [saved] })
+        const recovery = recoverGradebook({ courseId: selectedCourseId, academicYear, aliases: matchingCourses.length === 1 ? [matchingCourses[0].id] : [], state, students, browserSnapshots: [{ ...legacyBrowserSnapshot, savedAt: '' }, saved] })
         saved = recovery.snapshot
         if (active) {
           setLoadedSnapshotSavedAt(recovery.baseSavedAt)
