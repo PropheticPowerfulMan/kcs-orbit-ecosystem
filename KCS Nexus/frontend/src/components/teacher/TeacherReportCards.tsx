@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { useUIStore } from '@/store/uiStore'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   TrendingUp,
@@ -261,6 +263,11 @@ function SubjectGradeSubmission() {
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [confirmPeriodOpen, setConfirmPeriodOpen] = useState(false)
+  const [confirmPeriodChecked, setConfirmPeriodChecked] = useState(false)
+  const language = useUIStore(state => state.language)
+  const tr = (fr: string, en: string) => language === 'fr' ? fr : en
+  useEffect(() => { setConfirmPeriodOpen(false); setConfirmPeriodChecked(false) }, [academicYear, term, courseId])
   const [query, setQuery] = useState('')
   const [viewMode, setViewMode] = useState<'spreadsheet' | 'cards'>('spreadsheet')
   const [rowFilter, setRowFilter] = useState<'all' | 'incomplete' | 'ready' | 'submitted'>('all')
@@ -395,7 +402,7 @@ function SubjectGradeSubmission() {
     }
   }
 
-  const submit = async () => {
+  const submit = async (periodVerified = false) => {
     if (!course || !allRows.length || actionRef.current) return
     if (aggregatePeriod) { setError('Submit each quarter separately. Semester and annual reports are calculated from the quarter submissions.'); return }
     const incomplete = allRows.filter((row) => row.finalGrade === null)
@@ -408,6 +415,8 @@ function SubjectGradeSubmission() {
       setError(`Submission blocked: explain every manual override before submission (${unexplained.length} learner(s)).`)
       return
     }
+    if (!periodVerified) { setConfirmPeriodChecked(false); setConfirmPeriodOpen(true); return }
+    setConfirmPeriodOpen(false)
     actionRef.current = true
     setSaving(true)
     setError('')
@@ -433,6 +442,7 @@ function SubjectGradeSubmission() {
         courseId: officialCourseId,
         academicYear,
         term,
+        confirmedCycle: academicYear + '::' + term,
         results: allRows.map((row) => ({
           studentId: row.student.id,
           studentNumber: row.student.studentNumber,
@@ -661,6 +671,7 @@ function SubjectGradeSubmission() {
       </div>
     </div>
 
+    {confirmPeriodOpen && createPortal(<div className="fixed inset-0 z-[10020] flex items-center justify-center bg-kcs-blue-950/80 p-4" role="dialog" aria-modal="true"><section className="w-full max-w-xl rounded-3xl bg-white p-6 dark:bg-kcs-blue-950"><h3 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Confirmer la période scolaire', 'Confirm academic period')}</h3><div className="my-5 rounded-2xl bg-sky-50 p-4 dark:bg-sky-950 dark:text-white"><p>{course?.name}</p><p className="font-bold">{academicYear}</p><p className="text-lg font-black">{term}</p><p>{allRows.length} {tr('élèves concernés', 'enrolled learners')}</p></div><label className="flex items-start gap-3 text-sm dark:text-white"><input type="checkbox" className="mt-1 h-5 w-5" checked={confirmPeriodChecked} onChange={event => setConfirmPeriodChecked(event.target.checked)}/><span>{tr('Je confirme l’année scolaire et le quarter de ces résultats.', 'I confirm the academic year and quarter of these results.')}</span></label><div className="mt-6 flex justify-center gap-3"><button type="button" onClick={() => setConfirmPeriodOpen(false)} className="rounded-xl border px-4 py-3 font-bold dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" disabled={!confirmPeriodChecked} onClick={() => void submit(true)} className="rounded-xl bg-emerald-700 px-4 py-3 font-bold text-white disabled:opacity-40">{tr('Confirmer et soumettre', 'Confirm and submit')}</button></div></section></div>, document.body)}
     {previewOpen && <div className='fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/80 p-4 backdrop-blur-sm'>
       <div className='max-h-[92vh] w-full max-w-5xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900'>
         <div className='flex items-start justify-between gap-3'><div><p className='text-xs font-black uppercase tracking-[.18em] text-red-600'>Draft — not official</p><h3 className='mt-1 text-xl font-bold text-kcs-blue-950 dark:text-white'>{course?.code} · {course?.name}</h3><p className='text-sm text-gray-500'>{academicYear} · {term}</p></div><button aria-label='Close preview' onClick={() => setPreviewOpen(false)}><X size={20} /></button></div>

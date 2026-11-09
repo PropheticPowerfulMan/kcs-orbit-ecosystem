@@ -25,7 +25,7 @@ import { officialReportCardPdf } from '../utils/officialReportCardPdf.js'
 const academicYearSchema = z.string().refine(isSequentialAcademicYear, 'Academic year must be sequential and use YYYY-YYYY')
 const academicTermSchema = z.string().refine(isKcsAcademicTerm, `Academic term must be one of: ${KCS_ACADEMIC_TERMS.join(', ')}`)
 const submissionSchema=z.object({
- courseId:z.string().min(1),academicYear:academicYearSchema,term:academicTermSchema,
+ courseId:z.string().min(1),academicYear:academicYearSchema,term:academicTermSchema,confirmedCycle:z.string().max(100).optional(),
  results:z.array(z.object({studentId:z.string().min(1),studentNumber:z.string().trim().min(1).max(100).optional(),percentage:z.number().min(0).max(100),comment:z.string().max(1000).optional()})).min(1)
 })
 const cycleSchema=z.object({academicYear:academicYearSchema,term:academicTermSchema})
@@ -306,6 +306,7 @@ academicRecordsRouter.post('/gradebooks/verification',requireRoles('admin','staf
 }))
 academicRecordsRouter.post('/final-grades/submit',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const payload=submissionSchema.parse(req.body)
+ if(payload.confirmedCycle!==payload.academicYear+'::'+payload.term)throw new ApiError(400,'Reload the updated Gradebook and explicitly confirm its academic year and quarter before submitting these results.')
  const result=await submitCourseFinalGrades(req.user!.sub,payload)
  return success(res,result,'Final grades saved, previous course submission replaced, and report-card drafts verified',201)
 }))

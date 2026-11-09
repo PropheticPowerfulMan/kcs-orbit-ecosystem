@@ -366,7 +366,7 @@ export const teacherWorkspaceAPI = {
   saveGradebookWeights: (data: object) => api.put('/teachers/me/gradebook-weights', data, { headers: { 'x-silent-feedback': 'true' } }),
   overview: () => api.get('/teachers/me/overview'),
   get: () => api.get('/teachers/me/workspace'),
-  save: (state: Record<string, unknown>, revision?: number) => api.put('/teachers/me/workspace', { state, revision }),
+  save: (state: Record<string, unknown>, revision?: number, silent = false) => api.put('/teachers/me/workspace', { state, revision }, silent ? { headers: { 'x-silent-feedback': 'true' } } : undefined),
   syncCourse: (data: object) => api.put('/teachers/me/courses/sync', data),
   deleteCourse: (courseId: string) => api.delete('/teachers/me/courses/' + encodeURIComponent(courseId)),
   attendance: (courseId: string, date?: string) => api.get('/teachers/me/attendance', { params: { courseId, date } }),

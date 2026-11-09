@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { rankGradebookRows } from '@/utils/gradebookRanking'
 import DateSelect from '@/components/shared/DateSelect'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
@@ -225,7 +227,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   useEffect(() => {
     if (!spreadsheetOpen) return
     const previousOverflow = document.body.style.overflow
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') setSpreadsheetOpen(false) }
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape' && !document.querySelector('[data-gradebook-overlay]')) setSpreadsheetOpen(false) }
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', closeOnEscape)
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape) }
@@ -239,6 +241,20 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   })
   const [savingSpreadsheet, setSavingSpreadsheet] = useState(false)
   const savingRef = useRef(false)
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const serverVersions = useRef(new Map<string, string>())
+  const syncedContents = useRef(new Map<string, string>())
+  const activeScope = useRef('')
+  const pendingAutosave = useRef<(() => Promise<boolean>) | null>(null)
+  const pausedAutosaves = useRef(new Set<string>())
+  const [autosaveEnabled, setAutosaveEnabled] = useState(false)
+  const [autosaveRetryAt, setAutosaveRetryAt] = useState(0)
+  const [onlineRevision, setOnlineRevision] = useState(0)
+  const [rankingOpen, setRankingOpen] = useState(false)
+  const [rankingLimit, setRankingLimit] = useState('3')
+  const [periodConfirmation, setPeriodConfirmation] = useState<'task' | 'submission' | null>(null)
+  const [confirmedPeriod, setConfirmedPeriod] = useState(false)
+  const [calendarPeriods, setCalendarPeriods] = useState<Array<{ type: string; sequence: number; startDate: string; endDate: string }>>([])
   const saveActionRef = useRef<(silent?: boolean) => Promise<boolean>>(async () => false)
   const weightRequests = useRef(new Map<string, Promise<unknown>>())
   const weightScopeRef = useRef('')
@@ -251,88 +267,107 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
   const [recoveredCells, setRecoveredCells] = useState(0)
   const [loadedSnapshotSavedAt, setLoadedSnapshotSavedAt] = useState('')
-  const saveSpreadsheet = async (silent = false) => {
-    if (savingRef.current) return false
+  const saveSpreadsheet = async (silent = false, automatic = false) => {
     if (loadedScope !== cycleKey) {
       onAction(tr('Attendez le chargement complet des notes avant d’enregistrer.', 'Wait for the saved gradebook to finish loading before saving.'), true)
       return false
     }
     const savedAt = new Date().toISOString()
-    const snapshot: GradebookSnapshot = { scores, comments, assignments, categories, archivedAssignments, savedAt }
-    savingRef.current = true
-    setSavingSpreadsheet(true)
+    const snapshot: GradebookSnapshot = { scores, comments, assignments: sanitizeAssignments(assignments), categories, archivedAssignments, savedAt }
+    const scope = cycleKey
     try { localStorage.setItem(browserStorageKey, JSON.stringify(snapshot)) } catch { /* Server persistence remains available when browser storage is full. */ }
-    try {
-      await persistCourseWeights(selectedCourseId, academicYear, categories)
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const latest = await teacherWorkspaceAPI.get()
-        const workspace = latest.data?.data
-        const state = (workspace?.state ?? {}) as Record<string, any>
-        const currentSnapshot = state.advancedGradebookByCycle?.[cycleKey]
-          ?? (academicYear === legacyAcademicYear ? state.advancedGradebookByCourse?.[selectedCourseId] : undefined)
-        const content = (value: Partial<GradebookSnapshot> | undefined) => value ? { ...value, savedAt: undefined } : undefined
-        const alreadyPersisted = stableGradebookValue(content(currentSnapshot)) === stableGradebookValue(content(snapshot))
-        if (currentSnapshot?.savedAt && currentSnapshot.savedAt !== loadedSnapshotSavedAt && !alreadyPersisted) {
-          throw new Error(tr('Ce cours a été modifié dans une autre session. Rechargez les notes avant de réessayer.', 'This course was updated in another session. Reload its saved grades before trying again.'))
+    const request = saveQueue.current.then(async () => {
+      savingRef.current = true
+      setSavingSpreadsheet(true)
+      try {
+        await persistCourseWeights(selectedCourseId, academicYear, categories)
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const latest = await teacherWorkspaceAPI.get()
+            const workspace = latest.data?.data
+            const state = (workspace?.state ?? {}) as Record<string, any>
+            const currentSnapshot = state.advancedGradebookByCycle?.[cycleKey]
+              ?? (academicYear === legacyAcademicYear ? state.advancedGradebookByCourse?.[selectedCourseId] : undefined)
+            const content = (value: Partial<GradebookSnapshot> | undefined) => value ? { ...value, savedAt: undefined } : undefined
+            const alreadyPersisted = stableGradebookValue(content(currentSnapshot)) === stableGradebookValue(content(snapshot))
+            if (currentSnapshot?.savedAt && currentSnapshot.savedAt !== (serverVersions.current.get(scope) ?? loadedSnapshotSavedAt) && !alreadyPersisted) {
+              throw new Error(tr('Ce cours a été modifié dans une autre session. Rechargez les notes avant de réessayer.', 'This course was updated in another session. Reload its saved grades before trying again.'))
+            }
+            if (alreadyPersisted && currentSnapshot.savedAt) snapshot.savedAt = currentSnapshot.savedAt
+            const legacyColumns = assignments.map(({ id, title, type, date, maxPoints, term, category, confirmedCycle }) => ({ id, title, type, date, maxPoints, term, category, confirmedCycle }))
+            const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
+            // The legacy mirrors are kept only for the original 2026-2027 cycle so
+            // older report-card readers remain compatible without leaking one
+            // academic year's scores into another one.
+            if (academicYear === legacyAcademicYear) {
+              const legacyPrefix = `${selectedCourseId}-`
+              Object.keys(nextLegacyScores).forEach((key) => {
+                if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
+              })
+              assignments.forEach((assignment) => {
+                enrolledCourseStudents.forEach((student) => {
+                  const value = scores[`${assignment.id}:${student.id}`]
+                  if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
+                })
+              })
+            }
+            const nextAdvancedByCourse = { ...(state.advancedGradebookByCourse ?? {}) }
+            const nextLegacyColumns = { ...(state.gradebookColumnsByCourse ?? {}) }
+            if (academicYear === legacyAcademicYear) {
+              nextAdvancedByCourse[selectedCourseId] = snapshot
+              nextLegacyColumns[selectedCourseId] = legacyColumns
+            }
+            await teacherWorkspaceAPI.save({
+              ...state,
+              advancedGradebookByCourse: nextAdvancedByCourse,
+              advancedGradebookByCycle: {
+                ...(state.advancedGradebookByCycle ?? {}),
+                [cycleKey]: snapshot,
+              },
+              gradebookColumnsByCourse: nextLegacyColumns,
+              gradebookScores: nextLegacyScores,
+            }, workspace?.revision, automatic)
+            const confirmation = await teacherWorkspaceAPI.get()
+            const persisted = confirmation.data?.data?.state?.advancedGradebookByCycle?.[cycleKey]
+            if (stableGradebookValue(persisted) !== stableGradebookValue(snapshot)) throw new Error(tr('La vérification sur le serveur a échoué. Vos notes restent conservées sur cet appareil. Réessayez.', 'Server verification did not confirm this save. Your grades remain on this device. Please retry.'))
+            window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt: snapshot.savedAt, revision: confirmation.data?.data?.revision } }))
+            serverVersions.current.set(scope, snapshot.savedAt ?? savedAt)
+            syncedContents.current.set(scope, stableGradebookValue({ ...snapshot, savedAt: undefined }))
+            if (!automatic) {
+              localStorage.setItem(autosavePreferenceKey, 'enabled')
+              pausedAutosaves.current.delete(scope)
+            }
+            if (activeScope.current === scope) {
+              setLoadedSnapshotSavedAt(snapshot.savedAt ?? savedAt)
+              setRecoveredCells(0)
+              if (!automatic) setAutosaveEnabled(true)
+              setAutosaveRetryAt(0)
+              setSaveNotice(tr('Enregistré et vérifié sur le serveur à ', 'Saved and verified on the server at ') + new Date().toLocaleTimeString())
+            }
+            if (!silent) onAction('Tasks, category weights, scores, and comments were synchronized with KCS Nexus successfully.')
+            return true
+          } catch (error: any) {
+            if (attempt === 0 && error?.response?.status === 409) continue
+            throw error
+          }
         }
-        if (alreadyPersisted && currentSnapshot.savedAt) snapshot.savedAt = currentSnapshot.savedAt
-        const legacyColumns = assignments.map(({ id, title, type, date, maxPoints, term, category }) => ({ id, title, type, date, maxPoints, term, category }))
-        const nextLegacyScores = { ...(state.gradebookScores ?? {}) } as Record<string, string>
-        // The legacy mirrors are kept only for the original 2026-2027 cycle so
-        // older report-card readers remain compatible without leaking one
-        // academic year's scores into another one.
-        if (academicYear === legacyAcademicYear) {
-          const legacyPrefix = `${selectedCourseId}-`
-          Object.keys(nextLegacyScores).forEach((key) => {
-            if (key.startsWith(legacyPrefix)) delete nextLegacyScores[key]
-          })
-          assignments.forEach((assignment) => {
-            enrolledCourseStudents.forEach((student) => {
-              const value = scores[`${assignment.id}:${student.id}`]
-              if (value !== undefined) nextLegacyScores[`${selectedCourseId}-${assignment.id}-${student.id}`] = value
-            })
-          })
+        throw new Error(tr('Un autre enregistrement a modifié le carnet. Réessayez.', 'Another save changed the workspace. Retry saving.'))
+      } catch (error: any) {
+        const conflict = error?.response?.status === 409 || String(error?.message || '').includes('another session') || String(error?.message || '').includes('autre session')
+        if (conflict) pausedAutosaves.current.add(scope)
+        if (activeScope.current === scope) {
+          setSaveNotice(error?.response?.data?.message || error?.message || tr('En attente de connexion. Les modifications restent conservées sur cet appareil.', 'Waiting for connection. Changes remain saved on this device.'))
+          setAutosaveRetryAt(Date.now() + 15_000)
         }
-        const nextAdvancedByCourse = { ...(state.advancedGradebookByCourse ?? {}) }
-        const nextLegacyColumns = { ...(state.gradebookColumnsByCourse ?? {}) }
-        if (academicYear === legacyAcademicYear) {
-          nextAdvancedByCourse[selectedCourseId] = snapshot
-          nextLegacyColumns[selectedCourseId] = legacyColumns
-        }
-        try {
-          await teacherWorkspaceAPI.save({
-            ...state,
-            advancedGradebookByCourse: nextAdvancedByCourse,
-            advancedGradebookByCycle: {
-              ...(state.advancedGradebookByCycle ?? {}),
-              [cycleKey]: snapshot,
-            },
-            gradebookColumnsByCourse: nextLegacyColumns,
-            gradebookScores: nextLegacyScores,
-          }, workspace?.revision)
-          const confirmation = await teacherWorkspaceAPI.get()
-          const persisted = confirmation.data?.data?.state?.advancedGradebookByCycle?.[cycleKey]
-          if (stableGradebookValue(persisted) !== stableGradebookValue(snapshot)) throw new Error(tr('La vérification sur le serveur a échoué. Vos notes restent conservées sur cet appareil. Réessayez.', 'Server verification did not confirm this save. Your grades remain on this device. Please retry.'))
-          window.dispatchEvent(new CustomEvent('kcs-gradebook-saved', { detail: { courseId: selectedCourseId, savedAt: snapshot.savedAt, revision: confirmation.data?.data?.revision } }))
-          setLoadedSnapshotSavedAt(snapshot.savedAt ?? savedAt)
-          setRecoveredCells(0)
-          setSaveNotice(`Saved to KCS Nexus at ${new Date().toLocaleTimeString()}`)
-          if (!silent) onAction('Tasks, category weights, scores, and comments were synchronized with KCS Nexus successfully.')
-          return true
-        } catch (error: any) {
-          if (attempt === 0 && error?.response?.status === 409) continue
-          throw error
-        }
+        if (!automatic) onAction(error?.response?.data?.message || error?.message || 'The Gradebook could not be synchronized with KCS Nexus.', true)
+        return false
+      } finally {
+        savingRef.current = false
+        setSavingSpreadsheet(false)
       }
-      throw new Error('Gradebook synchronization conflicted with another save. Retry the save.')
-    } catch (error: any) {
-      setSaveNotice('Server synchronization failed')
-      onAction(error?.response?.data?.message || error?.message || 'The Gradebook could not be synchronized with KCS Nexus.', true)
-      return false
-    } finally {
-      savingRef.current = false
-      setSavingSpreadsheet(false)
-    }
+    })
+    saveQueue.current = request.catch(() => undefined)
+    return request
   }
   saveActionRef.current = saveSpreadsheet
   useEffect(() => { onRegisterSave?.(() => saveActionRef.current()) }, [onRegisterSave])
@@ -352,6 +387,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   weightScopeRef.current = cycleKey
   const browserStorageKey = `kcs-live-gradebook-${cycleKey}`
   const periodPreferenceKey = `kcs:nexus:gradebook:period:${userId}:${cycleKey}`
+  const autosavePreferenceKey = `kcs:nexus:gradebook:autosave:${userId}:${cycleKey}`
+  activeScope.current = cycleKey
   const chooseTerm = (nextTerm: string) => {
     setTerm(nextTerm)
     localStorage.setItem(periodPreferenceKey, nextTerm)
@@ -375,6 +412,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       const calendar = data?.calendar
       if (!calendar?.name) return
       setAcademicYear(calendar.name)
+      setCalendarPeriods(calendar.periods ?? [])
       const now = Date.now()
       const activeQuarter = (calendar.periods ?? []).find((period: any) => ['QUARTER','TRIMESTER'].includes(period.type) && Date.parse(period.startDate) <= now && Date.parse(period.endDate) >= now)
       if (activeQuarter?.sequence) setOfficialTerm(terms[Math.min(activeQuarter.sequence, 4) - 1])
@@ -386,6 +424,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     let active = true
     const loadGradebook = async () => {
       setLoadedScope('')
+      setEditingAssignment(null)
+      setPendingDeleteAssignment(null)
+      setCellDialog(null)
+      setRankingOpen(false)
+      setAutosaveEnabled(localStorage.getItem(autosavePreferenceKey) === 'enabled')
+      setPeriodConfirmation(null)
+      setConfirmedPeriod(false)
       setLoadedSnapshotSavedAt('')
       setRecoveredCells(0)
       let saved: Partial<GradebookSnapshot> = {}
@@ -411,9 +456,17 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           && canonicalClassLabel(course?.className || course?.gradeLevels?.[0]) === canonicalClassLabel(selectedCourse.className || selectedCourse.gradeLevels[0]),
         )
         const recovery = recoverGradebook({ courseId: selectedCourseId, academicYear, aliases: matchingCourses.length === 1 ? [matchingCourses[0].id] : [], state, students, browserSnapshots: [{ ...legacyBrowserSnapshot, savedAt: '' }, saved] })
+        const correction = state.gradebookPeriodCorrectionsByCycle?.[cycleKey]
+        if (correction?.correctedAt && localStorage.getItem(periodPreferenceKey + ':correction') !== correction.correctedAt) {
+          localStorage.setItem(periodPreferenceKey, correction.to)
+          localStorage.setItem(periodPreferenceKey + ':correction', correction.correctedAt)
+        }
         saved = recovery.snapshot
         if (active) {
           setLoadedSnapshotSavedAt(recovery.baseSavedAt)
+          serverVersions.current.set(cycleKey, recovery.baseSavedAt)
+          const serverSnapshot = state.advancedGradebookByCycle?.[cycleKey] ?? (academicYear === legacyAcademicYear ? state.advancedGradebookByCourse?.[selectedCourseId] : undefined)
+          syncedContents.current.set(cycleKey, stableGradebookValue(serverSnapshot ? { ...serverSnapshot, savedAt: undefined } : {}))
           setRecoveredCells(recovery.recoveredCells)
         }
       } catch {
@@ -527,7 +580,42 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const classAverage = studentAnalytics.filter((item) => item.average !== null).reduce((sum, item) => sum + (item.average ?? 0), 0) / Math.max(1, studentAnalytics.filter((item) => item.average !== null).length)
   const atRiskCount = studentAnalytics.filter((item) => item.risk !== 'low').length
   const missingCount = studentAnalytics.reduce((sum, item) => sum + item.missing, 0)
-  const topStudent = [...studentAnalytics].filter((item) => item.average !== null).sort((a, b) => (b.average ?? 0) - (a.average ?? 0))[0]
+  const rankedStudents = rankGradebookRows(submissionAnalytics.map((item) => ({ ...item, name: item.student.name })))
+  const topThree = rankedStudents.slice(0, 3)
+  const rankingCount = Math.min(rankedStudents.length, Math.max(0, Math.floor(Number(rankingLimit) || 0)))
+  const assessmentDateTerm = calendarPeriods.find((period) => ['QUARTER', 'TRIMESTER'].includes(period.type) && draft.date >= period.startDate.slice(0, 10) && draft.date <= period.endDate.slice(0, 10))
+  const dateSuggestedTerm = assessmentDateTerm ? terms[assessmentDateTerm.sequence - 1] : undefined
+
+  const currentSnapshotContent = stableGradebookValue({ scores, comments, assignments: sanitizeAssignments(assignments), categories, archivedAssignments })
+  const currentContent = useRef(currentSnapshotContent)
+  currentContent.current = currentSnapshotContent
+
+  useEffect(() => {
+    if (loadedScope !== cycleKey) return
+    const dirty = syncedContents.current.get(cycleKey) !== currentSnapshotContent
+    if (dirty) {
+      try { localStorage.setItem(browserStorageKey, JSON.stringify({ scores, comments, assignments: sanitizeAssignments(assignments), categories, archivedAssignments, savedAt: new Date().toISOString() })) } catch { /* The server save is still available. */ }
+    }
+    pendingAutosave.current = dirty && autosaveEnabled && !pausedAutosaves.current.has(cycleKey) ? () => saveSpreadsheet(true, true) : null
+    if (!dirty || !autosaveEnabled || savingSpreadsheet || pausedAutosaves.current.has(cycleKey)) return
+    setSaveNotice(tr('Modifications conservées sur cet appareil · synchronisation automatique en attente…', 'Changes saved on this device · automatic synchronization pending…'))
+    if (!navigator.onLine) return
+    const timer = window.setTimeout(() => { pendingAutosave.current = null; void saveSpreadsheet(true, true) }, Math.max(900, autosaveRetryAt - Date.now()))
+    return () => window.clearTimeout(timer)
+  }, [currentSnapshotContent, loadedScope, cycleKey, autosaveEnabled, savingSpreadsheet, autosaveRetryAt, onlineRevision])
+
+  useEffect(() => () => { const pending = pendingAutosave.current; pendingAutosave.current = null; if (pending) void pending() }, [cycleKey])
+  useEffect(() => {
+    const retry = () => { setAutosaveRetryAt(0); setOnlineRevision(value => value + 1) }
+    const warnUnsaved = (event: BeforeUnloadEvent) => {
+      if (syncedContents.current.get(activeScope.current) === currentContent.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('online', retry)
+    window.addEventListener('beforeunload', warnUnsaved)
+    return () => { window.removeEventListener('online', retry); window.removeEventListener('beforeunload', warnUnsaved) }
+  }, [])
 
   const getAssignmentAverage = (assignment: GradebookColumn) => {
     const values = courseStudents.map((student) => getScore(assignment, student.id)).filter((value): value is number => value !== null)
@@ -550,10 +638,18 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     { month: 'May', average: Math.min(98, Math.round(classAverage + 2)) },
   ]
 
-  const addAssignment = async () => {
+  const addAssignment = async (periodVerified = false) => {
+    if (loadedScope !== cycleKey) return onAction(tr('Attendez le chargement du cours avant de créer une évaluation.', 'Wait for the course to finish loading before creating an assessment.'), true)
     if (!draft.title.trim()) return onAction('Enter a clear task title before adding it.', true)
     if (!draft.date) return onAction('Select the assessment date before adding the task.', true)
     if (addingAssignment) return
+    if (term === 'Annual final') return onAction(tr('Choisissez le quarter de cette évaluation. Le bilan annuel regroupe les quarters.', 'Choose this assessment’s quarter. The annual result combines the quarters.'), true)
+    if (!periodVerified) {
+      setConfirmedPeriod(false)
+      setPeriodConfirmation('task')
+      return
+    }
+    setPeriodConfirmation(null)
     setAddingAssignment(true)
     const nextAssignment = {
       id: `gb-${Date.now()}`,
@@ -563,11 +659,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       maxPoints: Math.max(1, Number(draft.maxPoints) || scale),
       date: draft.date,
       term,
+      confirmedCycle: academicYear + '::' + term,
       description: draft.description,
     }
     try {
       await new Promise((resolve) => window.setTimeout(resolve, 320))
-      setAssignments((current) => [...current, nextAssignment])
+      setAssignments((current) => sanitizeAssignments([...current, nextAssignment]))
       setScores((current) => buildMissingScoreCells([nextAssignment], courseStudents, current))
       setSelectedAssignmentId(nextAssignment.id)
       setDraft({ title: '', type: 'quiz', category: 'quiz', maxPoints: '', date: '', description: '' })
@@ -640,10 +737,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       const next = [...current]
       const [moved] = next.splice(sourceIndex, 1)
       next.splice(targetIndex, 0, moved)
-      return next
+      return sanitizeAssignments(next)
     })
     setDraggedAssignmentId('')
-    onAction(tr('Ordre des colonnes mis à jour. Enregistrez pour le synchroniser.', 'Column order updated. Save to synchronize it.'))
+    onAction(tr('Colonnes organisées de la date la plus ancienne à la plus récente.', 'Columns are ordered from the oldest assessment date to the newest.'))
   }
 
   const updateScore = (assignmentId: string, studentId: string, value: string) => {
@@ -703,13 +800,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     onAction(`AI feedback generated for ${student.name}.`)
   }
 
-  const submitFinalGrades = async () => {
+  const submitFinalGrades = async (periodVerified = false) => {
     if (!selectedCourse) return onAction('Select a course before submitting final grades.', true)
     if (!enrolledCourseStudents.length) return onAction('This course has no enrolled students.', true)
     if (term === 'Annual final') return onAction(tr('Soumettez les quatre quarters séparément. Le bulletin annuel est calculé à partir de ces soumissions.', 'Submit the four quarters separately. The annual report card is calculated from those submissions.'), true)
     if (categories.reduce((sum, category) => sum + category.weight, 0) !== 100) return onAction('Category weights must total exactly 100% before final grades can be submitted.', true)
     const incomplete = submissionAnalytics.filter((item) => item.average === null || item.missing > 0)
     if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`, true)
+    if (!periodVerified) { setConfirmedPeriod(false); setPeriodConfirmation('submission'); return }
+    setPeriodConfirmation(null)
     setSubmittingFinals(true)
     try {
       if (!await saveSpreadsheet(true)) return
@@ -733,6 +832,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         courseId: officialCourseId,
         academicYear,
         term,
+        confirmedCycle: academicYear + '::' + term,
         results: submissionAnalytics.map((item) => ({ studentId: item.student.id, studentNumber: item.student.studentNumber || undefined, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
       })
       const savedCount = Number(response.data?.data?.count ?? 0)
@@ -761,7 +861,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     } finally { setSubmittingFinals(false) }
   }
 
-  const exportGradebook = async (format: 'PDF' | 'Excel' | 'CSV') => {
+  const exportGradebook = async (format: 'PDF' | 'Excel' | 'CSV', ranked = false) => {
     const rows = studentAnalytics.map(({ student, average, projected, missing, risk }) => [student.name, canonicalClassLabel(student.grade, student.section), formatPercent(average), internationalGrade(average), formatPercent(projected), String(missing), risk])
     const heading = ['Student', 'Class', 'Average', 'International grade', 'Prediction', 'Missing work', 'Risk']
     const csv = [heading, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -770,9 +870,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     else if (format === 'Excel') downloadFile(`${safeName}-gradebook.xls`, `<table><thead><tr>${heading.map((cell) => `<th>${cell}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table>`, 'application/vnd.ms-excel')
     else {
       const reserved=window.open('','_blank','width=1250,height=900')
-      const numeric=studentAnalytics.flatMap(item=>item.average==null?[]:[item.average]).sort((a,b)=>a-b)
+      const numeric=submissionAnalytics.flatMap(item=>item.average==null?[]:[item.average]).sort((a,b)=>a-b)
       const median=numeric.length?(numeric.length%2?numeric[(numeric.length-1)/2]:(numeric[numeric.length/2-1]+numeric[numeric.length/2])/2):0
-      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rows:studentAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk})),categories:categories.map(category=>{const values=courseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution,classAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:missingCount},message=>onAction(message,true),reserved)
+      const pdfClassAverage = numeric.length ? numeric.reduce((sum, value) => sum + value, 0) / numeric.length : 0
+      const pdfDistribution = [
+        { ...distribution[0], count: submissionAnalytics.filter(item => item.average !== null && item.average >= 90).length },
+        { ...distribution[1], count: submissionAnalytics.filter(item => item.average !== null && item.average >= 80 && item.average < 90).length },
+        { ...distribution[2], count: submissionAnalytics.filter(item => item.average !== null && item.average >= 70 && item.average < 80).length },
+        { ...distribution[3], count: submissionAnalytics.filter(item => item.average === null || item.average < 70).length },
+      ]
+      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rankingLimit:ranked?rankingCount:undefined,rows:submissionAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk})),categories:categories.map(category=>{const values=enrolledCourseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution:pdfDistribution,classAverage:pdfClassAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:submissionAnalytics.reduce((sum, item) => sum + item.missing, 0)},message=>onAction(message,true),reserved)
       if(!ok)return
     }
     onAction(`${format} export created with the current calculations and international grading scale.`)
@@ -843,6 +950,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                 {academicYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
               <button disabled={submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
+              <button type="button" onClick={() => setRankingOpen(true)} className="rounded-xl bg-indigo-700 px-3 py-2 text-sm font-semibold text-white"><BarChart3 size={15} className="mr-1 inline"/>{tr('Classement des élèves', 'Learner ranking')}</button>
               <button onClick={() => void exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
               <button onClick={() => void exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
               <button onClick={() => void exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
@@ -870,13 +978,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             { label: 'Class average', value: `${Math.round(classAverage)}%`, icon: TrendingUp, tone: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' },
             { label: 'At risk', value: String(atRiskCount), icon: AlertTriangle, tone: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' },
             { label: 'Missing work', value: String(missingCount), icon: Bell, tone: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300' },
-            { label: 'Top performer', value: topStudent?.student.name.split(' ')[0] ?? 'None', icon: Sparkles, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200' },
+            { label: tr('Les trois premiers', 'Top three learners'), value: <ol className="space-y-1.5 text-xs">{topThree.length ? topThree.map(item => <li key={item.student.id} className="flex items-start justify-between gap-2"><span className="min-w-0 break-words">{item.rank}. {item.student.name}</span><strong className="shrink-0">{item.average!.toFixed(2)}%</strong></li>) : <li>{tr('Aucune note', 'No grades yet')}</li>}</ol>, icon: Sparkles, tone: 'bg-kcs-blue-50 text-kcs-blue-700 dark:bg-kcs-blue-900/30 dark:text-kcs-blue-200' },
           ].map((item) => {
             const Icon = item.icon
             return (
               <div key={item.label} className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
                 <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${item.tone}`}><Icon size={18} /></div>
-                <p className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</p>
+                <div className="font-display text-2xl font-bold text-kcs-blue-900 dark:text-white">{item.value}</div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{item.label}</p>
               </div>
             )
@@ -951,7 +1059,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <button
               type="button"
               onClick={() => void addAssignment()}
-              disabled={addingAssignment}
+              disabled={addingAssignment || loadedScope !== cycleKey}
               aria-busy={addingAssignment}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-kcs-blue-800 hover:shadow-md active:translate-y-0 disabled:cursor-wait disabled:opacity-75"
             >
@@ -1023,7 +1131,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Score / {selectedBulkAssignment?.maxPoints ?? '—'}</span><input aria-label="Bulk score value" type="number" min={0} max={selectedBulkAssignment?.maxPoints} disabled={!selectedBulkAssignment} className="input-kcs w-28 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50" value={bulkValue} onChange={(event) => setBulkValue(event.target.value)} placeholder="Enter score" /></label>
             <button type="button" disabled={!selectedBulkAssignment} onClick={applyBulkScore} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800 disabled:cursor-not-allowed disabled:opacity-50">Apply to all students</button>
           </div>
-          {saveNotice && <p className="text-xs font-bold text-green-700 dark:text-green-300">{saveNotice}</p>}
+          <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">{autosaveEnabled ? tr('Enregistrement automatique activé pour ce cours et cette année.', 'Automatic saving is enabled for this course and year.') : tr('Cliquez une première fois sur Save pour activer l’enregistrement automatique.', 'Click Save once to enable automatic saving.')}</p>
+          {saveNotice && <p role="status" className={`text-xs font-bold ${syncedContents.current.get(cycleKey) === currentSnapshotContent ? 'text-green-700 dark:text-green-300' : 'text-amber-800 dark:text-amber-300'}`}>{saveNotice}</p>}
         </div>
 
         {!visibleAssignments.length && (
@@ -1038,7 +1147,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <tr>
                 <th className="sticky left-0 z-30 w-56 bg-gray-50 px-3 py-2 text-left dark:bg-kcs-blue-900">Student<span className="mt-1 block text-[10px] font-semibold normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{canonicalClassLabel(selectedCourse?.className || selectedCourse?.gradeLevels?.[0])} - Official course enrollment</span></th>
                 {visibleAssignments.map((assignment) => (
-                  <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour déplacer cette colonne', 'Drag to move this column')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
+                  <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour ordonner les colonnes de même date', 'Drag to arrange columns sharing the same assessment date')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
                     <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
                     <span className="block normal-case text-gray-400">{assignment.type} · {assignment.maxPoints} pts</span><span className="mt-0.5 block normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{assignment.date ? new Date(`${assignment.date}T12:00:00`).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB') : tr('Date non définie', 'No date')}</span>
                     <span className="mt-1 flex items-center justify-center gap-2 normal-case"><button type="button" onClick={() => setEditingAssignment({ ...assignment })} className="inline-flex items-center gap-1 text-[11px] font-bold text-kcs-blue-600 hover:text-kcs-blue-800 dark:text-sky-300"><Pencil size={12} /> {tr('Modifier','Edit')}</button><button type="button" onClick={() => deleteAssignment(assignment)} className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 hover:text-red-600"><Trash2 size={12} /> {tr('Supprimer','Delete')}</button></span>
@@ -1135,11 +1244,60 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
           </table>
         </div>
       </div>
-      {pendingDeleteAssignment && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-xl rounded-3xl border border-red-100 bg-white p-6 shadow-2xl dark:border-red-900/50 dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-red-600">{tr('Suppression contrôlée', 'Controlled deletion')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Supprimer réellement cette évaluation ?', 'Really delete this assignment?')}</h3><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{tr(`« ${pendingDeleteAssignment.title} » et tous ses points saisis seront retirés de ce Gradebook.`, `“${pendingDeleteAssignment.title}” and all entered scores will be removed from this Gradebook.`)}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-700 dark:bg-kcs-blue-950 dark:text-gray-200"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={rememberDeleteChoice} onChange={(event) => setRememberDeleteChoice(event.target.checked)}/><span><b className="block">{tr('Ne plus demander sur cet appareil', 'Do not ask again on this device')}</b><small>{tr('Vous pourrez réactiver cette confirmation en supprimant les préférences locales du navigateur.', 'You can restore this prompt by clearing the browser’s local preferences.')}</small></span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteAssignment(null)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-900 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" onClick={confirmDeleteAssignment} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"><Trash2 size={15} className="mr-2 inline"/>{tr('Supprimer définitivement', 'Delete permanently')}</button></div></div></div>}
-      {cellDialog && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-kcs-blue-950/75 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-bold uppercase text-kcs-gold-600">{cellDialog.mode === 'ai' ? 'AI grade suggestion' : 'Teacher cell note'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{cellDialog.student.name} · {cellDialog.assignment.title}</h3>{cellDialog.mode === 'ai' ? <><div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-sm text-gray-600 dark:text-gray-300">Current score: <strong>{getRawScore(cellDialog.assignment.id, cellDialog.student.id) || 'Not entered'}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Suggested score: <strong>{suggestGrade(cellDialog.assignment, cellDialog.student)}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-xs text-gray-500">Based on the learner's weighted average and class trend. It is never applied without teacher confirmation.</p></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Keep current score</button><button type="button" onClick={applyAiSuggestion} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Apply suggestion</button></div></> : <><textarea autoFocus value={cellNoteDraft} onChange={(event) => setCellNoteDraft(event.target.value)} className="input-kcs mt-5 min-h-32" placeholder="Write an observation, correction note, accommodation, or follow-up..."/><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Cancel</button><button type="button" onClick={saveCellNote} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white">Save note</button></div></>}</div></div>}
+      {rankingOpen && createPortal(<div className="fixed inset-0 z-[10010] flex items-center justify-center bg-kcs-blue-950/80 p-3" role="dialog" data-gradebook-overlay aria-modal="true" aria-label={tr('Classement des élèves', 'Learner ranking')}>
+        <section className="flex max-h-[92dvh] w-full max-w-4xl flex-col rounded-3xl bg-white p-5 shadow-2xl dark:bg-kcs-blue-950">
+        <h3 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Classement des élèves', 'Learner ranking')} · {selectedCourse?.name}</h3>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{academicYear} · {term} · {tr('Moyennes pondérées décroissantes. Les ex æquo partagent le même rang. Les élèves sans notes sont exclus.', 'Weighted averages in descending order. Tied learners share a rank. Learners without grades are excluded.')}</p>
+        <label className="mt-4 flex items-center gap-3 text-sm font-bold dark:text-white">{tr('Nombre d’élèves à afficher', 'Number of learners to display')}<input aria-label="Ranking limit" type="number" min="1" max={rankedStudents.length || 1} className="input-kcs w-24" value={rankingLimit} onChange={event => setRankingLimit(event.target.value)}/>
+        </label>
+        <div className="mt-4 min-h-0 overflow-auto">
+        <table className="w-full text-sm">
+        <thead>
+        <tr className="bg-kcs-blue-800 text-white">
+        <th className="p-3">{tr('Rang', 'Rank')}</th>
+        <th className="p-3 text-left">{tr('Élève', 'Learner')}</th>
+        <th className="p-3">{tr('Moyenne', 'Average')}</th>
+        </tr>
+        </thead>
+        <tbody>{rankedStudents.slice(0, rankingCount).map(item => <tr key={item.student.id} className="border-b border-slate-200 dark:border-slate-800 dark:text-white">
+        <td className="p-3 text-center font-bold">{item.rank}</td>
+        <td className="p-3">{item.student.name}</td>
+        <td className="p-3 text-center font-bold">{item.average!.toFixed(2)}%</td>
+        </tr>)}</tbody>
+        </table>{!rankedStudents.length && <p className="p-5 text-sm dark:text-white">{tr('Aucune moyenne disponible pour cette période.', 'No averages are available for this period.')}</p>}</div>
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
+        <button type="button" onClick={() => setRankingOpen(false)} className="rounded-xl border px-5 py-3 font-bold dark:border-slate-700 dark:text-white">{tr('Fermer', 'Close')}</button>
+        <button type="button" disabled={!rankingCount} onClick={() => void exportGradebook('PDF', true)} className="rounded-xl bg-kcs-blue-700 px-5 py-3 font-bold text-white disabled:opacity-50">
+        <FileText size={16} className="mr-2 inline"/>{tr('Imprimer / PDF du classement', 'Print / Ranking PDF')}</button>
+        </div>
+        </section>
+        </div>, document.body)}
+      {periodConfirmation && createPortal(<div className="fixed inset-0 z-[10020] flex items-center justify-center bg-kcs-blue-950/80 p-4" role="dialog" data-gradebook-overlay aria-modal="true" aria-label={tr('Confirmer la période scolaire', 'Confirm academic period')}>
+        <section className="max-h-[92dvh] w-full max-w-xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-950">
+        <h3 className="text-xl font-bold text-kcs-blue-950 dark:text-white">{tr('Vérifiez la période avant de continuer', 'Check the academic period before continuing')}</h3>
+        <div className="my-5 rounded-2xl bg-sky-50 p-4 dark:bg-sky-950 dark:text-white">
+        <p className="font-bold">{selectedCourse?.name}</p>
+        <p>{academicYear}</p>
+        <p className="mt-2 text-lg font-black">{term}</p>
+        <p className="mt-2 text-sm">{periodConfirmation === 'task' ? draft.title + ' · ' + draft.date : tr('Soumission des résultats de tous les élèves du cours', 'Submission of all enrolled learners’ course results')}</p>
+        </div>{periodConfirmation === 'task' && dateSuggestedTerm && dateSuggestedTerm !== term && <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <p>{tr('La date saisie correspond au calendrier officiel de', 'The entered date belongs to the official calendar period')} <b>{dateSuggestedTerm}</b>.</p>
+        <button type="button" onClick={() => { chooseTerm(dateSuggestedTerm); setConfirmedPeriod(false) }} className="mt-3 rounded-lg bg-amber-700 px-4 py-2 font-bold text-white">{tr('Utiliser la période de cette date', 'Use the period for this date')}</button>
+        </div>}<label className="flex items-start gap-3 text-sm dark:text-white">
+        <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={confirmedPeriod} onChange={event => setConfirmedPeriod(event.target.checked)}/>
+        <span>{tr('Je confirme que cette année scolaire et ce quarter sont corrects.', 'I confirm that this academic year and quarter are correct.')}</span>
+        </label>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <button type="button" onClick={() => setPeriodConfirmation(null)} className="rounded-xl border px-5 py-3 font-bold dark:border-slate-700 dark:text-white">{tr('Annuler', 'Cancel')}</button>
+        <button type="button" disabled={!confirmedPeriod} onClick={() => periodConfirmation === 'task' ? void addAssignment(true) : void submitFinalGrades(true)} className="rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white disabled:opacity-40">{tr('Confirmer et continuer', 'Confirm and continue')}</button>
+        </div>
+        </section>
+        </div>, document.body)}
+      {pendingDeleteAssignment && createPortal(<div className="fixed inset-0 z-[10010] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" data-gradebook-overlay aria-modal="true"><div className="w-full max-w-xl rounded-3xl border border-red-100 bg-white p-6 shadow-2xl dark:border-red-900/50 dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-red-600">{tr('Suppression contrôlée', 'Controlled deletion')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{tr('Supprimer réellement cette évaluation ?', 'Really delete this assignment?')}</h3><p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{tr(`« ${pendingDeleteAssignment.title} » et tous ses points saisis seront retirés de ce Gradebook.`, `“${pendingDeleteAssignment.title}” and all entered scores will be removed from this Gradebook.`)}</p><label className="mt-5 flex items-start gap-3 rounded-xl bg-gray-50 p-4 text-sm text-gray-700 dark:bg-kcs-blue-950 dark:text-gray-200"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={rememberDeleteChoice} onChange={(event) => setRememberDeleteChoice(event.target.checked)}/><span><b className="block">{tr('Ne plus demander sur cet appareil', 'Do not ask again on this device')}</b><small>{tr('Vous pourrez réactiver cette confirmation en supprimant les préférences locales du navigateur.', 'You can restore this prompt by clearing the browser’s local preferences.')}</small></span></label><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setPendingDeleteAssignment(null)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-900 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" onClick={confirmDeleteAssignment} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700"><Trash2 size={15} className="mr-2 inline"/>{tr('Supprimer définitivement', 'Delete permanently')}</button></div></div></div>, document.body)}
+      {cellDialog && createPortal(<div className="fixed inset-0 z-[10010] flex items-center justify-center bg-kcs-blue-950/75 p-4"><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-bold uppercase text-kcs-gold-600">{cellDialog.mode === 'ai' ? 'AI grade suggestion' : 'Teacher cell note'}</p><h3 className="mt-1 text-xl font-bold text-kcs-blue-900 dark:text-white">{cellDialog.student.name} · {cellDialog.assignment.title}</h3>{cellDialog.mode === 'ai' ? <><div className="mt-5 rounded-xl bg-kcs-blue-50 p-4 dark:bg-kcs-blue-800/30"><p className="text-sm text-gray-600 dark:text-gray-300">Current score: <strong>{getRawScore(cellDialog.assignment.id, cellDialog.student.id) || 'Not entered'}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Suggested score: <strong>{suggestGrade(cellDialog.assignment, cellDialog.student)}</strong> / {cellDialog.assignment.maxPoints}</p><p className="mt-2 text-xs text-gray-500">Based on the learner's weighted average and class trend. It is never applied without teacher confirmation.</p></div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Keep current score</button><button type="button" onClick={applyAiSuggestion} className="rounded-xl bg-kcs-blue-700 px-4 py-2 text-sm font-bold text-white">Apply suggestion</button></div></> : <><textarea autoFocus value={cellNoteDraft} onChange={(event) => setCellNoteDraft(event.target.value)} className="input-kcs mt-5 min-h-32" placeholder="Write an observation, correction note, accommodation, or follow-up..."/><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCellDialog(null)} className="rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">Cancel</button><button type="button" onClick={saveCellNote} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white">Save note</button></div></>}</div></div>, document.body)}
 
       {archivedAssignments.length > 0 && <section className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/60 dark:bg-amber-950/20"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">{tr('Corbeille du Gradebook','Gradebook recycle bin')}</p><p className="text-xs text-amber-800/80 dark:text-amber-200/80">{tr('Les evaluations supprimees et leurs points restent restaurables.','Deleted assignments and their scores remain restorable.')}</p></div><div className="flex flex-wrap gap-2">{archivedAssignments.map((archived) => <button key={archived.assignment.id + archived.deletedAt} type="button" onClick={() => restoreAssignment(archived)} className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-amber-800 shadow-sm dark:bg-kcs-blue-950 dark:text-amber-200"><RotateCcw size={13}/>{tr('Restaurer','Restore')} {archived.assignment.title}</button>)}</div></div></section>}
-      {editingAssignment && <div className="fixed inset-0 z-[85] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-kcs-blue-600 dark:text-sky-300">{tr('Modifier la colonne','Edit grade column')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{editingAssignment.title}</h3><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Titre','Title')}<input className="input-kcs" value={editingAssignment.title} onChange={(event) => setEditingAssignment({...editingAssignment,title:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Date','Date')}<DateSelect className="input-kcs" value={editingAssignment.date} onChange={(event) => setEditingAssignment({...editingAssignment,date:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Type','Type')}<select className="input-kcs" value={editingAssignment.type} onChange={(event) => {const type=event.target.value as AssignmentType;setEditingAssignment({...editingAssignment,type,category:type})}}>{assignmentTypes.map((item)=><option key={item} value={item}>{assignmentTypeLabels[item].name}</option>)}</select></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Maximum de points','Maximum points')}<input className="input-kcs" type="number" min={1} value={editingAssignment.maxPoints} onChange={(event)=>setEditingAssignment({...editingAssignment,maxPoints:Math.max(1,Number(event.target.value)||1)})}/></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={()=>setEditingAssignment(null)} className="rounded-xl border px-4 py-2.5 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr('Annuler','Cancel')}</button><button type="button" onClick={saveAssignmentEdit} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white"><Pencil size={15} className="mr-2 inline"/>{tr('Enregistrer','Save changes')}</button></div></div></div>}
+      {editingAssignment && createPortal(<div className="fixed inset-0 z-[10010] flex items-center justify-center bg-kcs-blue-950/75 p-4" role="dialog" data-gradebook-overlay aria-modal="true"><div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900"><p className="text-xs font-black uppercase tracking-widest text-kcs-blue-600 dark:text-sky-300">{tr('Modifier la colonne','Edit grade column')}</p><h3 className="mt-2 text-2xl font-bold text-kcs-blue-950 dark:text-white">{editingAssignment.title}</h3><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Titre','Title')}<input className="input-kcs" value={editingAssignment.title} onChange={(event) => setEditingAssignment({...editingAssignment,title:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Date','Date')}<DateSelect className="input-kcs" value={editingAssignment.date} onChange={(event) => setEditingAssignment({...editingAssignment,date:event.target.value})}/></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Type','Type')}<select className="input-kcs" value={editingAssignment.type} onChange={(event) => {const type=event.target.value as AssignmentType;setEditingAssignment({...editingAssignment,type,category:type})}}>{assignmentTypes.map((item)=><option key={item} value={item}>{assignmentTypeLabels[item].name}</option>)}</select></label><label className="grid gap-1 text-xs font-bold dark:text-white">{tr('Maximum de points','Maximum points')}<input className="input-kcs" type="number" min={1} value={editingAssignment.maxPoints} onChange={(event)=>setEditingAssignment({...editingAssignment,maxPoints:Math.max(1,Number(event.target.value)||1)})}/></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={()=>setEditingAssignment(null)} className="rounded-xl border px-4 py-2.5 text-sm font-bold dark:border-kcs-blue-700 dark:text-white">{tr('Annuler','Cancel')}</button><button type="button" onClick={saveAssignmentEdit} className="rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white"><Pencil size={15} className="mr-2 inline"/>{tr('Enregistrer','Save changes')}</button></div></div></div>, document.body)}
       <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50">
