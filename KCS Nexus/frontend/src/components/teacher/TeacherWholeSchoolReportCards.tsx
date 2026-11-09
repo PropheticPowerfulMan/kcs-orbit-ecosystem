@@ -68,7 +68,7 @@ type Dashboard = {
   hierarchy: Record<string, string>;
 };
 
-const sessions = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Annual final'];
+const sessions = ['Semester 1 · Quarter 1', 'Semester 1 · Quarter 2', 'Semester 2 · Quarter 3', 'Semester 2 · Quarter 4', 'Semester 1', 'Semester 2', 'Annual final'];
 const panel = 'rounded-2xl border border-gray-100 bg-white p-5 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50';
 const field = 'w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-kcs-blue-950 outline-none focus:border-kcs-blue-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white';
 
@@ -270,8 +270,10 @@ export default function TeacherWholeSchoolReportCards() {
       setVisibilityBusy(false);
     }
   };
+  const reportSaveRef = useRef(false);
   const updateReport = async (submit: boolean) => {
-    if (!selected) return;
+    if (!selected || reportSaveRef.current) return;
+    reportSaveRef.current = true;
     setSaving(true);
     setSavingAction(submit ? 'submit' : 'draft');
     setError('');
@@ -299,7 +301,11 @@ export default function TeacherWholeSchoolReportCards() {
           throw new Error('The report-card draft was not confirmed in the official Nexus register.');
         }
       }
-      const savedCard = submission ?? draft;
+      const verification = await academicRecordsAPI.teacherReportDashboard({ academicYear, term });
+      const confirmed = (verification.data?.data as Dashboard)?.learners?.find(item => item.id === selected.id)?.reportCard;
+      const expected = submission ?? draft;
+      if (confirmed?.id !== expected?.id || confirmed?.publicationStatus !== expected?.publicationStatus || confirmed?.teacherComment !== teacherComment.trim() || confirmed?.conduct !== conduct.trim()) throw new Error('The server readback did not confirm this report-card save. Reload the selected period before retrying.');
+      const savedCard = expected;
       setDashboard((current) => {
         if (!current || !savedCard) return current;
         const next: Dashboard = {
@@ -331,6 +337,7 @@ export default function TeacherWholeSchoolReportCards() {
     } catch (reason: any) {
       setError(reason?.response?.data?.message ?? reason?.message ?? 'The report-card operation failed.');
     } finally {
+      reportSaveRef.current = false;
       setSaving(false);
       setSavingAction(null);
     }
@@ -506,7 +513,7 @@ export default function TeacherWholeSchoolReportCards() {
             Report session
             <select className={`${field} mt-1 normal-case`} value={term} onChange={(event) => setTerm(event.target.value)}>
               {sessions.map((session) => (
-                <option key={session}>{session}</option>
+                <option key={session} value={session}>{session}</option>
               ))}
             </select>
           </label>

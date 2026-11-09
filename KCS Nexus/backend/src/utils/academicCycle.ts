@@ -3,6 +3,8 @@ export const KCS_ACADEMIC_TERMS = [
   'Semester 1 · Quarter 2',
   'Semester 2 · Quarter 3',
   'Semester 2 · Quarter 4',
+  'Semester 1',
+  'Semester 2',
   'Annual final',
 ] as const
 

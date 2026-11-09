@@ -19,19 +19,19 @@ export async function officialReportCardPdf(input: {
 }) {
   const tr = (fr: string, en: string) => input.language === 'fr' ? fr : en
   const issued = new Date()
-  const digestSource = JSON.stringify({ id: input.id, student: input.studentNumber, term: input.term, average: input.average, status: input.publicationStatus, principal: input.principal.name, signature: input.principal.image ? createHash('sha256').update(input.principal.image).digest('hex') : null, seal: input.seal ? createHash('sha256').update(input.seal).digest('hex') : null, subjects: input.subjects.map(item => [item.code, item.percentage, item.letterGrade]) })
+  const digestSource = JSON.stringify({ id: input.id, student: input.studentNumber, term: input.term, average: input.average, status: input.publicationStatus, grade: input.grade, language: input.language, attendance: input.attendance, teacherComment: input.teacherComment, conduct: input.conduct, principal: input.principal.name, signature: input.principal.image ? createHash('sha256').update(input.principal.image).digest('hex') : null, seal: input.seal ? createHash('sha256').update(input.seal).digest('hex') : null, subjects: input.subjects.map(item => [item.code, item.percentage, item.letterGrade]) })
   const fingerprint = createHash('sha256').update(digestSource).digest('hex').toUpperCase()
   const documentId = `KCS-RC-${issued.toISOString().slice(0, 10).replace(/-/g, '')}-${fingerprint.slice(0, 16)}`
   const verifyUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || 'https://kinshasachristianschool.org'}/verify/report-card?document=${encodeURIComponent(documentId)}&fingerprint=${fingerprint}`
   const qr = await QRCode.toBuffer(verifyUrl, { errorCorrectionLevel: 'H', width: 300, margin: 1 })
-  const logo = await readFile(join(process.cwd(), 'assets', 'kcs-logo.png')).catch(() => null)
+  const logo = await readFile(join(process.cwd(), 'assets', 'kcs-watermark.jpg')).catch(() => null)
   const watermark = await readFile(join(process.cwd(), 'assets', 'kcs-watermark.jpg')).catch(() => logo)
-  const doc = new PDFDocument({ size: 'A4', margin: 38, bufferPages: true, info: { Title: `KCS Official Report Card · ${input.studentName}`, Author: 'Kinshasa Christian School', Subject: documentId } })
+  const doc = new PDFDocument({ size: 'A4', margins: { top: 38, left: 38, right: 38, bottom: 20 }, bufferPages: true, info: { Title: `KCS Official Report Card · ${input.studentName}`, Author: 'Kinshasa Christian School', Subject: documentId } })
   const chunks: Buffer[] = []
   doc.on('data', chunk => chunks.push(chunk))
   const done = new Promise<Buffer>((resolve, reject) => { doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject) })
   const w = doc.page.width
-  const drawWatermark = () => { if (watermark) doc.save().opacity(0.055).image(watermark, w / 2 - 125, doc.page.height / 2 - 125, { fit: [250, 250] }).restore() }
+  const drawWatermark = () => { if (watermark) doc.save().opacity(0.055).image(watermark, w / 2 - 180, doc.page.height / 2 - 180, { fit: [360, 360] }).restore() }
   drawWatermark()
   doc.lineWidth(2).strokeColor('#0D5D99').roundedRect(25, 25, w - 50, doc.page.height - 50, 12).stroke()
   if (logo) doc.image(logo, 43, 39, { fit: [72, 56] })
@@ -39,12 +39,15 @@ export async function officialReportCardPdf(input: {
   doc.fillColor('#073B70').fontSize(19).text(tr('BULLETIN SCOLAIRE OFFICIEL', 'OFFICIAL REPORT CARD'), 126, 59)
   doc.fillColor('#52677D').font('Helvetica').fontSize(8).text(documentId, 126, 84)
   doc.moveTo(43, 108).lineTo(w - 43, 108).lineWidth(1.5).strokeColor('#D6A62A').stroke()
-  doc.roundedRect(43, 119, w - 86, 82, 10).fill('#F1F7FB')
-  doc.fillColor('#073B70').font('Helvetica-Bold').fontSize(14).text(input.studentName, 56, 132, { width: w - 200 })
-  doc.font('Helvetica').fontSize(8).fillColor('#52677D').text(`${tr('Matricule', 'Student ID')}: ${input.studentNumber}   ·   ${tr('Classe', 'Class')}: ${input.grade}   ·   ${tr('Période', 'Period')}: ${input.term}`, 56, 154, { width: w - 130 })
+  doc.roundedRect(43, 119, w - 86, 96, 10).fill('#F1F7FB')
+  doc.fillColor('#073B70').font('Helvetica-Bold').fontSize(input.studentName.length > 45 ? 10 : 13).text(input.studentName, 56, 132, { width: w - 240, height: 30 })
+  const periodLabel = input.language === 'fr' ? input.term.replace(/Semester/g, 'Semestre').replace('Annual final', 'Bilan annuel') : input.term
+  doc.font('Helvetica').fontSize(8).fillColor('#52677D').text(tr('Matricule', 'Student ID') + ' · ' + input.studentNumber, 56, 166, { width: w - 240 })
+  doc.text(tr('Classe', 'Class') + ' · ' + input.grade, 56, 178, { width: w - 240 })
+  doc.text(tr('Période', 'Period') + ' · ' + periodLabel, 56, 190, { width: w - 125 })
   doc.font('Helvetica-Bold').fontSize(8).fillColor('#62788B').text(tr('MOYENNE OFFICIELLE', 'OFFICIAL AVERAGE'), w - 150, 132, { width: 90, align: 'right' })
   doc.fontSize(17).fillColor('#008B7B').text(`${input.average.toFixed(2)}%`, w - 150, 150, { width: 90, align: 'right' })
-  let y = 220
+  let y = 232
   doc.font('Helvetica-Bold').fontSize(10).fillColor('#073B70').text(tr('RÉSULTATS ACADÉMIQUES', 'ACADEMIC PERFORMANCE'), 43, y)
   y += 17
   const left = 43, right = w - 43
@@ -55,12 +58,11 @@ export async function officialReportCardPdf(input: {
   doc.text(tr('NOTE', 'GRADE'), right - 38, y + 8, { width: 30, align: 'right' })
   y += 25
   const rows = input.subjects
-  const rowHeight = rows.length > 16 ? 14 : 21
+  const rowHeight = Math.max(11, Math.min(21, 235 / Math.max(1, rows.length)))
   rows.forEach((subject, index) => {
     if (y > 485) { doc.addPage(); drawWatermark(); y = 55 }
     if (index % 2 === 0) doc.rect(left, y - 3, right - left, rowHeight).fill('#F4F8FB')
-    doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.code || subject.name, left + 8, y, { width: 95, ellipsis: true })
-    doc.font('Helvetica').fontSize(rows.length > 16 ? 6 : 7).fillColor('#5C7185').text(subject.name, left + 110, y, { width: right - left - 285, ellipsis: true })
+    doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.name, left + 8, y, { width: right - left - 170, ellipsis: true })
     doc.fillColor('#173D60').fontSize(8).text(String(subject.credits ?? '—'), right - 150, y, { width: 48, align: 'right' })
     doc.text(`${subject.percentage.toFixed(2)}%`, right - 91, y, { width: 48, align: 'right' })
     doc.font('Helvetica-Bold').fillColor('#008B7B').text(subject.letterGrade, right - 38, y, { width: 30, align: 'right' })

@@ -16,6 +16,8 @@ function record(value: unknown): Record<string, unknown> {
 export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<string, unknown>) {
   const existing = record(previous)
   const state = { ...existing, ...incoming }
+  if (existing.gradebookCategoryWeightsByCycle !== undefined) state.gradebookCategoryWeightsByCycle = existing.gradebookCategoryWeightsByCycle
+  else delete state.gradebookCategoryWeightsByCycle
   const previousGradebook: Record<string, unknown> = {}
   let gradebookChanged = false
   for (const field of gradebookFields) {

@@ -353,10 +353,46 @@ teachersRouter.get('/activity-reports/submitted', authenticate, requireRoles('ad
   const reports = await prisma.teacherActivityReport.findMany({ where: { status: { in: ['SUBMITTED', 'REVIEWED', 'RETURNED'] } }, include: { teacher: { include: { user: { select: { firstName: true, middleName: true, lastName: true, email: true } } } } }, orderBy: { submittedAt: 'desc' } })
   return success(res, reports, 'Submitted teacher activity reports loaded.')
 }))
+teachersRouter.get('/me/gradebook-overview',authenticate,requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const teacher=await ensureTeacherProfile(req.user!.sub)
+ const courses=await prisma.course.findMany({
+  where:{teacherId:teacher.id},
+  select:{id:true,name:true,code:true,grade:true,description:true,credits:true,schedules:{select:{room:true}},enrollments:{select:{studentId:true,student:{select:{id:true,studentNumber:true,grade:true,section:true,status:true,user:{select:{firstName:true,middleName:true,lastName:true}}}}}}},
+  orderBy:{name:'asc'},
+ })
+ const students=[...new Map(courses.flatMap(course=>course.enrollments.map(row=>[row.studentId,row.student] as const))).values()]
+ res.setHeader('Cache-Control','private, no-store')
+ return success(res,{courses,students,courseStudents:students,studentDirectory:students},'Official course rosters loaded for Gradebook')
+}))
+
 teachersRouter.get('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
   const workspace = await prisma.teacherWorkspace.findUnique({ where: { userId: req.user!.sub } })
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   return success(res, workspace)
+}))
+
+teachersRouter.put('/me/gradebook-weights',authenticate,requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
+ const payload=z.object({courseId:z.string().min(1),academicYear:z.string().regex(/^\d{4}-\d{4}$/),categories:z.array(z.object({id:z.enum(['homework','quiz','test','project','exam','participation']),name:z.string().min(1).max(80),weight:z.number().min(0).max(100)})).length(6)}).parse(req.body)
+ const [year,end]=payload.academicYear.split('-').map(Number)
+ if(end!==year+1||new Set(payload.categories.map(item=>item.id)).size!==6||Math.abs(payload.categories.reduce((sum,item)=>sum+item.weight,0)-100)>0.001)throw new ApiError(400,'Category weights must contain six unique categories and total 100%')
+ const course=await prisma.course.findUnique({where:{id:payload.courseId},include:{teacher:{select:{userId:true}}}})
+ if(!course||course.teacher.userId!==req.user!.sub)throw new ApiError(403,'Only the assigned teacher can change this course weighting')
+ const result=await prisma.$transaction(async tx=>{
+  const initial=await tx.teacherWorkspace.upsert({where:{userId:req.user!.sub},create:{userId:req.user!.sub,state:{}},update:{},select:{id:true}})
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM "TeacherWorkspace" WHERE id = ${initial.id} FOR UPDATE`)
+  const current=await tx.teacherWorkspace.findUniqueOrThrow({where:{id:initial.id}})
+  const state={...(current.state as Record<string,any>)}
+  const key=payload.courseId+'::'+payload.academicYear
+  const previousWeights=state.gradebookCategoryWeightsByCycle?.[key]??null
+  const weights={categories:payload.categories,updatedAt:new Date().toISOString()}
+  state.gradebookCategoryWeightsByCycle={...(state.gradebookCategoryWeightsByCycle??{}),[key]:weights}
+  if(state.advancedGradebookByCycle?.[key])state.advancedGradebookByCycle={...state.advancedGradebookByCycle,[key]:{...state.advancedGradebookByCycle[key],categories:payload.categories}}
+  if(payload.academicYear==='2026-2027'&&state.advancedGradebookByCourse?.[payload.courseId])state.advancedGradebookByCourse={...state.advancedGradebookByCourse,[payload.courseId]:{...state.advancedGradebookByCourse[payload.courseId],categories:payload.categories}}
+  await tx.teacherWorkspace.update({where:{id:current.id},data:{state:state as Prisma.InputJsonValue,revision:{increment:1}}})
+  await tx.auditLog.create({data:{actorId:req.user!.sub,action:'COURSE_GRADEBOOK_WEIGHTS_SAVED',targetType:'Course',targetId:payload.courseId,metadata:{academicYear:payload.academicYear,previous:previousWeights,categories:payload.categories}}})
+  return weights
+ },{maxWait:10000,timeout:30000})
+ return success(res,result,'Course weighting saved for the selected school year')
 }))
 
 teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
