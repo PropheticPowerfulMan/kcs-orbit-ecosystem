@@ -65,3 +65,13 @@ test('assessment identifiers containing colons keep stable student identity mapp
  const state={teacherStudents:[{id:'old',studentNumber:'N001'}],advancedGradebookByCycle:{'math-course::2026-2027':{assignments:[task('assignment:quiz')],scores:{'assignment:quiz:old':'75'}}}}
  assert.equal(recover(state,{students:[{id:'new',studentNumber:'N001'}]}).snapshot.scores['assignment:quiz:new'],'75')
 })
+
+test('a partial new browser cache also recovers columns from the earlier browser key',()=>{
+ const old={assignments:[task('one'),task('two'),task('three')],scores:{'one:s1':'70','two:s1':'80','three:s1':'90'}}
+ const newer={assignments:[task('one'),task('two')],scores:{'one:s1':'75','two:s1':'85'},savedAt:'2026-11-09'}
+ const state={advancedGradebookByCycle:{'math-course::2026-2027':newer}}
+ const result=recover(state,{browserSnapshots:[{...old,savedAt:''},newer]})
+ assert.equal(result.snapshot.assignments.length,3)
+ assert.equal(result.snapshot.scores['one:s1'],'75')
+ assert.equal(result.snapshot.scores['three:s1'],'90')
+})
