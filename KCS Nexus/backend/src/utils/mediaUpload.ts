@@ -38,3 +38,7 @@ export function safeMediaFilename(originalName: string) {
     .slice(0, 80) || 'media'
   return `${Date.now()}-${base}${extension}`
 }
+export function publicMediaUrl(value: string): string {
+  const prefix = (process.env.PUBLIC_API_BASE_PATH || '/api').replace(/\/$/, '')
+  return value.startsWith('/nexus/api/uploads/') ? prefix + value.slice('/nexus/api'.length) : value
+}

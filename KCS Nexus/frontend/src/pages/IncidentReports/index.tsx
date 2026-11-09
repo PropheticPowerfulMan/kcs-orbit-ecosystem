@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Download, FileCheck2, FileText, PlusCircle, Printer, Send, ShieldCheck } from 'lucide-react'
 import PortalSidebar from '@/components/layout/PortalSidebar'
@@ -11,7 +12,7 @@ type Report={id:string;reference:string;title:string;category:string;occurredAt:
 const empty={title:'',category:'Operational',occurredAt:'',location:'',description:'',peopleInvolved:'',immediateActions:'',confidentiality:'STANDARD'}
 const labels={SUBMITTED:'Reçu',UNDER_REVIEW:'En analyse',CLOSED:'Clôturé'}
 
-export default function IncidentReportsPage(){
+export default function IncidentReportsPage({ embedded = false }: { embedded?: boolean }){
  const {user}=useAuthStore();const superAdmin=user?.id==='configured-superadmin';const ordinaryAdministrator=user?.role==='admin'&&!superAdmin;const language=useUIStore(state=>state.language);const tr=(fr:string,en:string)=>language==='fr'?fr:en
  const fieldClass='block w-full min-w-0 max-w-full rounded-2xl border border-kcs-blue-200 bg-kcs-blue-50/70 px-4 py-3 text-sm text-kcs-blue-950 outline-none transition focus:border-kcs-gold-500 focus:ring-4 focus:ring-kcs-gold-100/60 dark:border-kcs-blue-700 dark:bg-kcs-blue-950/70 dark:text-white dark:focus:ring-kcs-gold-900/30';
  const blankFilters={q:'',status:'',category:'',authorRole:'',confidentiality:'',dateFrom:'',dateTo:'',hasAttachment:''}
@@ -24,9 +25,10 @@ export default function IncidentReportsPage(){
  const download=async(report:Report)=>{try{const response=await incidentReportsAPI.attachment(report.id);const url=URL.createObjectURL(response.data);const link=document.createElement('a');link.href=url;link.download=report.attachmentName||'preuve';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url)}catch(error:any){setMessage(error?.response?.data?.message||'Téléchargement impossible.')}}
  const print=(r:Report)=>printOfficialPdf({title:'INCIDENT REPORT',subtitle:'Rapport officiel hors discipline',metadata:[['Référence',r.reference],['Statut',labels[r.status]],['Auteur',r.authorName],['Rôle',r.authorRole],['Date du fait',new Date(r.occurredAt).toLocaleString('fr-CD')],['Lieu',r.location],['Catégorie',r.category],['Confidentialité',r.confidentiality],['Empreinte SHA-256',r.verificationHash],['Vérification',`${location.origin}/api/incident-reports/verify/${r.reference}`]],narrative:`${r.description}\n\nPersonnes concernées : ${r.peopleInvolved||'Non renseigné'}\nMesures immédiates : ${r.immediateActions||'Aucune'}\n\nPièce justificative : ${r.attachmentName||'Aucune'}`})
  const update=async(r:Report,status:Report['status'])=>{setBusy(true);setMessage('');try{await incidentReportsAPI.updateStatus(r.id,{status,adminNotes:r.adminNotes||''});setMessage('Rapport mis à jour avec succès.');await load()}catch(error:any){setMessage(error?.response?.data?.message||'Mise à jour impossible.')}finally{setBusy(false)}}
- return <div className="portal-shell flex"><PortalSidebar/><main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 pt-20 sm:p-6 sm:pt-20 dark:bg-kcs-blue-950 lg:p-8 lg:pt-8">
+ if (user?.role === 'teacher' && !embedded) return <Navigate to="/portal/teacher/reports?view=incident" replace/>
+ return <div className={embedded ? 'min-w-0' : 'portal-shell flex'}>{!embedded && <PortalSidebar/>}<main className={embedded ? 'min-w-0' : 'min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 pt-20 sm:p-6 sm:pt-20 dark:bg-kcs-blue-950 lg:p-8 lg:pt-8'}>
   <div className="portal-edge-header w-full min-w-0 max-w-none space-y-6">
-   {ordinaryAdministrator ? <AdministratorPortalHeader/> : <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
+   {!embedded && (ordinaryAdministrator ? <AdministratorPortalHeader/> : <div className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
@@ -38,7 +40,7 @@ export default function IncidentReportsPage(){
           </div>
           <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">Live production snapshot</div>
         </div>
-      </div>}
+      </div>)}
       <header className="min-w-0 rounded-3xl bg-gradient-to-r from-kcs-blue-900 to-kcs-blue-700 p-4 sm:p-6 text-white shadow-xl"><div className="flex min-w-0 items-center gap-3"><ShieldCheck className="shrink-0 text-kcs-gold-400"/><div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[.22em] text-kcs-gold-300">KCS Nexus</p><h1 className="break-words font-display text-2xl font-bold sm:text-3xl">Incident Report</h1></div></div><p className="mt-3 max-w-3xl text-sm text-blue-100">{superAdmin?'Consultez les rapports reçus et créez également vos propres rapports officiels.':'Signalez ici tout événement important qui ne relève pas d’un incident disciplinaire.'}</p></header>
    <form onSubmit={submit} className="grid min-w-0 gap-4 rounded-3xl bg-white p-4 shadow-lg sm:p-6 dark:bg-kcs-blue-900 md:grid-cols-2">
     <h2 className="md:col-span-2 flex items-center gap-3 font-display text-xl font-bold dark:text-white"><PlusCircle className="text-kcs-gold-500"/>Créer un nouveau rapport</h2>

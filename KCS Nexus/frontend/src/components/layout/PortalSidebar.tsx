@@ -94,7 +94,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
-    { to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList },
+    ...(role === "teacher" ? [] : [{ to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
     ...(["student", "parent", "admin"].includes(role) ? [{ to: "/shining-students", label: "Shining Student", icon: GraduationCap }] : []),
     ...(["student", "teacher"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
     ...(["student", "teacher"].includes(role) ? [{ to: "/course-syllabi", label: "Syllabus", icon: FileText }] : []),
@@ -140,7 +140,6 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/portal/teacher/timetable', label: t('portalNav.timetable'), icon: Calendar },
         { to: '/portal/teacher/resources', label: t('portalNav.resources'), icon: LibraryBig },
         { to: '/portal/teacher/discipline', label: t('portalNav.disciplineReport'), icon: AlertTriangle },
-        { to: '/portal/teacher/messages', label: t('portalNav.messages'), icon: MessageSquare },
         { to: '/portal/teacher/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'staff':

@@ -1,3 +1,5 @@
+import GradebookWeightScopeDialog from './GradebookWeightScopeDialog'
+import { useAcademicPeriodAccess, isAcademicPeriodReadOnly } from '@/hooks/useAcademicPeriodAccess'
 import { createPortal } from 'react-dom'
 import { rankGradebookRows } from '@/utils/gradebookRanking'
 import DateSelect from '@/components/shared/DateSelect'
@@ -236,6 +238,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [cellNoteDraft, setCellNoteDraft] = useState('')
   const [assignments, setAssignments] = useState<GradebookColumn[]>([])
   const [categories, setCategories] = useState(defaultCategories)
+  const [frozenCategoryWeights, setFrozenCategoryWeights] = useState<Record<string, Category[]>>({})
   const [scores, setScores] = useState<Record<string, string>>(() => {
     try { return (JSON.parse(localStorage.getItem(`kcs-live-gradebook-${selectedCourseId}`) || '{}').scores as Record<string, string> | undefined) ?? {} } catch { return {} }
   })
@@ -247,6 +250,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const activeScope = useRef('')
   const pendingAutosave = useRef<(() => Promise<boolean>) | null>(null)
   const pausedAutosaves = useRef(new Set<string>())
+  const [weightScopeOpen, setWeightScopeOpen] = useState(false)
   const [autosaveEnabled, setAutosaveEnabled] = useState(false)
   const [autosaveRetryAt, setAutosaveRetryAt] = useState(0)
   const [onlineRevision, setOnlineRevision] = useState(0)
@@ -261,13 +265,14 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const persistCourseWeights = (courseId: string, year: string, next: Category[]) => {
     if (Math.abs(next.reduce((sum, item) => sum + item.weight, 0) - 100) > 0.001) return Promise.resolve()
     const key = courseId + '::' + year
-    const request = (weightRequests.current.get(key) ?? Promise.resolve()).catch(() => undefined).then(() => teacherWorkspaceAPI.saveGradebookWeights({ courseId, academicYear: year, categories: next }))
+    const request = (weightRequests.current.get(key) ?? Promise.resolve()).catch(() => undefined).then(() => teacherWorkspaceAPI.saveGradebookWeights({ courseId, academicYear: year, term, categories: next }))
     weightRequests.current.set(key, request)
     return request
   }
   const [recoveredCells, setRecoveredCells] = useState(0)
   const [loadedSnapshotSavedAt, setLoadedSnapshotSavedAt] = useState('')
   const saveSpreadsheet = async (silent = false, automatic = false) => {
+    if (periodReadOnly) { if (!automatic) closedNotice(); return false }
     if (loadedScope !== cycleKey) {
       onAction(tr('Attendez le chargement complet des notes avant d’enregistrer.', 'Wait for the saved gradebook to finish loading before saving.'), true)
       return false
@@ -379,6 +384,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('')
   const [saveNotice, setSaveNotice] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
+  const { readOnly: periodReadOnly, access: periodAccess } = useAcademicPeriodAccess(academicYear, term)
+  const assignmentReadOnly = (assignment?: GradebookColumn) => Boolean(assignment && isAcademicPeriodReadOnly(periodAccess, academicYear, assignment.term))
+  const closedNotice = () => onAction(tr('Cette période est clôturée. Les notes sont en lecture seule.', 'This academic period is closed. Grades are read-only.'), true)
+  const displayCategories = periodReadOnly && frozenCategoryWeights[term]?.length ? frozenCategoryWeights[term] : categories
   const [officialTerm, setOfficialTerm] = useState(terms[0])
   const [calendarReady, setCalendarReady] = useState(false)
   const [loadedScope, setLoadedScope] = useState('')
@@ -390,6 +399,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const autosavePreferenceKey = `kcs:nexus:gradebook:autosave:${userId}:${cycleKey}`
   activeScope.current = cycleKey
   const chooseTerm = (nextTerm: string) => {
+    const pending = pendingAutosave.current
+    pendingAutosave.current = null
+    if (pending) void pending()
     setTerm(nextTerm)
     localStorage.setItem(periodPreferenceKey, nextTerm)
   }
@@ -428,6 +440,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setPendingDeleteAssignment(null)
       setCellDialog(null)
       setRankingOpen(false)
+      setWeightScopeOpen(false)
       setAutosaveEnabled(localStorage.getItem(autosavePreferenceKey) === 'enabled')
       setPeriodConfirmation(null)
       setConfirmedPeriod(false)
@@ -437,6 +450,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       let legacyBrowserSnapshot: Partial<GradebookSnapshot> = {}
       setAssignments([])
       setCategories(defaultCategories)
+      setFrozenCategoryWeights({})
       setComments({})
       setScores({})
       setSelectedAssignmentId('')
@@ -451,6 +465,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         }).catch(() => undefined)
         const response = await teacherWorkspaceAPI.get()
         const state = (response.data?.data?.state ?? {}) as Record<string, any>
+        if (active) setFrozenCategoryWeights(Object.fromEntries(Object.entries(state.gradebookClosedCategoryWeightsByCycle ?? {}).filter(([key]) => key.startsWith(cycleKey + '::')).map(([key, value]) => [key.slice((cycleKey + '::').length), (value as any).categories ?? []])))
         const matchingCourses = (Array.isArray(state.courses) ? state.courses : []).filter((course: any) =>
           String(course?.name || '').trim().toLowerCase() === selectedCourse.name.trim().toLowerCase()
           && canonicalClassLabel(course?.className || course?.gradeLevels?.[0]) === canonicalClassLabel(selectedCourse.className || selectedCourse.gradeLevels[0]),
@@ -522,6 +537,16 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     `${student.name} ${canonicalClassLabel(student.grade, student.section)}`.toLowerCase().includes(query.toLowerCase()),
   ), [enrolledCourseStudents, query])
 
+  useEffect(() => {
+    if (!periodReadOnly) return
+    let active = true
+    teacherWorkspaceAPI.get().then(response => {
+      const frozen = response.data?.data?.state?.gradebookClosedCategoryWeightsByCycle ?? {}
+      if (active) setFrozenCategoryWeights(Object.fromEntries(Object.entries(frozen).filter(([key]) => key.startsWith(cycleKey + '::')).map(([key, value]) => [key.slice((cycleKey + '::').length), (value as any).categories ?? []])))
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [periodReadOnly, cycleKey])
+
   const visibleAssignments = assignments.filter((assignment) => assignment.term === term || term === 'Annual final')
 
   const scoreKey = (assignmentId: string, studentId: string) => `${assignmentId}:${studentId}`
@@ -557,7 +582,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const getWeightedAverage = (studentId: string) => {
     let weighted = 0
     let activeWeight = 0
-    categories.forEach((category) => {
+    displayCategories.forEach((category) => {
       const average = getCategoryAverage(studentId, category.id)
       if (average !== null) {
         weighted += average * category.weight
@@ -639,6 +664,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   ]
 
   const addAssignment = async (periodVerified = false) => {
+    if (periodReadOnly) return closedNotice()
     if (loadedScope !== cycleKey) return onAction(tr('Attendez le chargement du cours avant de créer une évaluation.', 'Wait for the course to finish loading before creating an assessment.'), true)
     if (!draft.title.trim()) return onAction('Enter a clear task title before adding it.', true)
     if (!draft.date) return onAction('Select the assessment date before adding the task.', true)
@@ -676,7 +702,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   const performDeleteAssignment = (assignmentId: string) => {
     const assignment = assignments.find((item) => item.id === assignmentId)
-    if (!assignment) return
+    if (!assignment || assignmentReadOnly(assignment)) return
     const removedScores = Object.fromEntries(Object.entries(scores).filter(([key]) => key.startsWith(assignmentId + ':')))
     const removedComments = Object.fromEntries(Object.entries(comments).filter(([key]) => key.startsWith(assignmentId + ':')))
     setArchivedAssignments((current) => [{ assignment, scores: removedScores, comments: removedComments, deletedAt: new Date().toISOString() }, ...current].slice(0, 25))
@@ -696,6 +722,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const restoreAssignment = (archived: ArchivedAssignment) => {
+    if (assignmentReadOnly(archived.assignment)) return closedNotice()
     setAssignments((current) => sanitizeAssignments([...current, archived.assignment]))
     setScores((current) => ({ ...current, ...archived.scores }))
     setComments((current) => ({ ...current, ...archived.comments }))
@@ -705,6 +732,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const saveAssignmentEdit = () => {
+    if (assignmentReadOnly(editingAssignment ?? undefined)) return closedNotice()
     if (!editingAssignment?.title.trim() || !editingAssignment.date || editingAssignment.maxPoints < 1) {
       return onAction(tr('Renseignez le titre, la date et un maximum de points valide.', 'Enter a title, date, and valid maximum score.'), true)
     }
@@ -714,6 +742,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const deleteAssignment = (assignment: GradebookColumn) => {
+    if (assignmentReadOnly(assignment)) return closedNotice()
     if (skipDeleteConfirmation) return performDeleteAssignment(assignment.id)
     setRememberDeleteChoice(false)
     setPendingDeleteAssignment(assignment)
@@ -744,10 +773,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const updateScore = (assignmentId: string, studentId: string, value: string) => {
+    if (assignmentReadOnly(assignments.find(item => item.id === assignmentId))) return closedNotice()
     setScores((current) => ({ ...current, [scoreKey(assignmentId, studentId)]: value }))
   }
 
   const applyBulkScore = () => {
+    if (assignmentReadOnly(selectedBulkAssignment)) return closedNotice()
     if (!selectedAssignmentId || !selectedBulkAssignment) return onAction('Select an assignment before applying a bulk score.')
     const numericScore = Number(bulkValue)
     if (!bulkValue.trim() || !Number.isFinite(numericScore) || numericScore < 0 || numericScore > selectedBulkAssignment.maxPoints) return onAction(`Enter a score between 0 and ${selectedBulkAssignment.maxPoints}.`)
@@ -768,11 +799,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const openCellDialog = (mode: 'ai' | 'note', assignment: GradebookColumn, student: GradebookStudent) => {
+    if (assignmentReadOnly(assignment)) return closedNotice()
     setCellDialog({ mode, assignment, student })
     setCellNoteDraft(comments[scoreKey(assignment.id, student.id)] ?? '')
   }
 
   const applyAiSuggestion = () => {
+    if (assignmentReadOnly(cellDialog?.assignment)) return closedNotice()
     if (!cellDialog) return
     const suggestion = suggestGrade(cellDialog.assignment, cellDialog.student)
     updateScore(cellDialog.assignment.id, cellDialog.student.id, suggestion)
@@ -782,6 +815,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const saveCellNote = () => {
+    if (assignmentReadOnly(cellDialog?.assignment)) return closedNotice()
     if (!cellDialog) return
     setComments((current) => ({ ...current, [scoreKey(cellDialog.assignment.id, cellDialog.student.id)]: cellNoteDraft.trim() }))
     onAction(`Teacher note saved for ${cellDialog.student.name} in ${cellDialog.assignment.title}.`)
@@ -801,12 +835,14 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   }
 
   const submitFinalGrades = async (periodVerified = false) => {
+    if (periodReadOnly) return closedNotice()
     if (!selectedCourse) return onAction('Select a course before submitting final grades.', true)
     if (!enrolledCourseStudents.length) return onAction('This course has no enrolled students.', true)
-    if (term === 'Annual final') return onAction(tr('Soumettez les quatre quarters séparément. Le bulletin annuel est calculé à partir de ces soumissions.', 'Submit the four quarters separately. The annual report card is calculated from those submissions.'), true)
+    if (term === 'Annual final') return onAction(tr('Soumettez chaque quarter suivi séparément. Le bulletin annuel utilise les périodes soumises disponibles.', 'Submit each attended quarter separately. The annual report card uses the available submitted periods.'), true)
     if (categories.reduce((sum, category) => sum + category.weight, 0) !== 100) return onAction('Category weights must total exactly 100% before final grades can be submitted.', true)
-    const incomplete = submissionAnalytics.filter((item) => item.average === null || item.missing > 0)
-    if (incomplete.length) return onAction(`Submission blocked: ${incomplete.length} student(s) still have missing or incomplete grades.`, true)
+    const gradedRows = submissionAnalytics.filter(item => item.average !== null)
+    const ungradedRows = submissionAnalytics.filter(item => item.average === null)
+    if (!gradedRows.length) return onAction(tr('Saisissez au moins une note numérique avant de soumettre ce cours.', 'Enter at least one numeric grade before submitting this course.'), true)
     if (!periodVerified) { setConfirmedPeriod(false); setPeriodConfirmation('submission'); return }
     setPeriodConfirmation(null)
     setSubmittingFinals(true)
@@ -833,14 +869,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         academicYear,
         term,
         confirmedCycle: academicYear + '::' + term,
-        results: submissionAnalytics.map((item) => ({ studentId: item.student.id, studentNumber: item.student.studentNumber || undefined, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
+        ungradedStudentIds: ungradedRows.map(item => item.student.id),
+        results: gradedRows.map((item) => ({ studentId: item.student.id, studentNumber: item.student.studentNumber || undefined, percentage: Number(item.average!.toFixed(2)), comment: comments[`feedback:${item.student.id}`] || undefined })),
       })
       const savedCount = Number(response.data?.data?.count ?? 0)
       const propagatedCount = Number(response.data?.data?.reportCardDraftsUpdated ?? 0)
       const queuedForSuperAdministration = response.data?.data?.superAdministrationQueued === true
       const propagationVerified = response.data?.data?.propagationVerified === true
-      if (savedCount !== submissionAnalytics.length || propagatedCount !== submissionAnalytics.length || !queuedForSuperAdministration || !propagationVerified) {
-        throw new Error(`Propagation check failed: ${savedCount}/${submissionAnalytics.length} grades and ${propagatedCount}/${submissionAnalytics.length} report-card drafts were confirmed.`)
+      if (savedCount !== gradedRows.length || propagatedCount !== gradedRows.length || !queuedForSuperAdministration || !propagationVerified) {
+        throw new Error(`Propagation check failed: ${savedCount}/${gradedRows.length} grades and ${propagatedCount}/${gradedRows.length} report-card drafts were confirmed.`)
       }
       const confirmation = await academicRecordsAPI.myFinalGrades()
       const confirmedRows = ((confirmation.data?.data?.submissions ?? []) as OfficialFinalGrade[]).filter((grade) => (
@@ -848,14 +885,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         && grade.cycle?.academicYear === academicYear
         && grade.cycle?.term === term
         && grade.cycle?.status === 'SUBMITTED'
+        && gradedRows.some(item => item.student.id === grade.studentId)
       ))
-      if (confirmedRows.length !== submissionAnalytics.length) {
-        throw new Error(`Official verification failed: ${confirmedRows.length}/${submissionAnalytics.length} submitted grades are visible in the server register.`)
+      if (confirmedRows.length !== gradedRows.length) {
+        throw new Error(`Official verification failed: ${confirmedRows.length}/${gradedRows.length} submitted grades are visible in the server register.`)
       }
       setOfficialFinalGrades((confirmation.data?.data?.submissions ?? []) as OfficialFinalGrade[])
       window.dispatchEvent(new CustomEvent('kcs-final-grades-submitted', { detail: { courseId: officialCourseId, academicYear, term, count: savedCount } }))
       const notified = Number(response.data?.data?.superAdministrationNotified ?? 0)
-      onAction(`${submissionAnalytics.length} final grade(s) submitted and independently verified for Super Administration review${notified ? `; ${notified} administrator notification(s) created` : ''}.`)
+      onAction(`${gradedRows.length} final grade(s) submitted and independently verified for Super Administration review${notified ? `; ${notified} administrator notification(s) created` : ''}.`)
     } catch (error: any) {
       onAction(error?.response?.data?.message || error?.message || 'Final-grade submission failed.', true)
     } finally { setSubmittingFinals(false) }
@@ -879,18 +917,20 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         { ...distribution[2], count: submissionAnalytics.filter(item => item.average !== null && item.average >= 70 && item.average < 80).length },
         { ...distribution[3], count: submissionAnalytics.filter(item => item.average === null || item.average < 70).length },
       ]
-      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rankingLimit:ranked?rankingCount:undefined,rows:submissionAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk})),categories:categories.map(category=>{const values=enrolledCourseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution:pdfDistribution,classAverage:pdfClassAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:submissionAnalytics.reduce((sum, item) => sum + item.missing, 0)},message=>onAction(message,true),reserved)
+      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rankingLimit:ranked?rankingCount:undefined,rows:submissionAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk})),categories:displayCategories.map(category=>{const values=enrolledCourseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution:pdfDistribution,classAverage:pdfClassAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:submissionAnalytics.reduce((sum, item) => sum + item.missing, 0)},message=>onAction(message,true),reserved)
       if(!ok)return
     }
     onAction(`${format} export created with the current calculations and international grading scale.`)
   }
 
   const applyCategoryWeights = (next: Category[]) => {
+    if (periodReadOnly) return closedNotice()
     setCategories(next)
     if (Math.abs(next.reduce((sum, item) => sum + item.weight, 0) - 100) > 0.001) {
       setSaveNotice(tr('Ajustez la pondération à 100 % pour l’enregistrer pour ce cours.', 'Adjust the total to 100% to save this course weighting.'))
       return
     }
+    setWeightScopeOpen(true)
     const scope = cycleKey
     setSaveNotice(tr('Enregistrement de la pondération de ce cours…', 'Saving this course weighting…'))
     void persistCourseWeights(selectedCourseId, academicYear, next).then(() => {
@@ -899,6 +939,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       if (weightScopeRef.current === scope) onAction(error?.response?.data?.message || tr('La pondération reste à enregistrer. Utilisez Save pour réessayer.', 'Weighting still needs to be saved. Use Save to retry.'), true)
     })
   }
+  const applyWeightsToCourses = async (courseIds: string[]) => {
+    await Promise.all([...weightRequests.current.values()])
+    await teacherWorkspaceAPI.saveGradebookWeights({ courseId: selectedCourseId, courseIds, academicYear, term, categories })
+    window.dispatchEvent(new Event('kcs-gradebook-weights-changed'))
+    onAction(tr('Pondération enregistrée pour ', 'Weighting saved for ') + courseIds.length + tr(' cours.', ' course(s).'))
+  }
+
   const updateCategoryWeight = (categoryId: string, weight: number) => {
     applyCategoryWeights(categories.map(category => category.id === categoryId ? { ...category, weight: Math.max(0, Math.min(100, weight || 0)) } : category))
   }
@@ -910,7 +957,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     if(target){event.preventDefault();target.focus();target.select()}
   }
 
-  const categoryWeightTotal = categories.reduce((sum, category) => sum + category.weight, 0)
+  const categoryWeightTotal = displayCategories.reduce((sum, category) => sum + category.weight, 0)
   const normalizeCategoryWeights = () => {
     const currentTotal = categories.reduce((sum, category) => sum + category.weight, 0)
     if (!currentTotal) return applyCategoryWeights(defaultCategories)
@@ -933,6 +980,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
 
   return (
     <div data-kcs-gradebook="true" className="gradebook-mobile-surface space-y-6">
+      {weightScopeOpen && <GradebookWeightScopeDialog key={cycleKey} courses={courses} currentCourseId={selectedCourseId} academicYear={academicYear} term={term} categories={categories} onApply={applyWeightsToCourses} onClose={() => setWeightScopeOpen(false)}/>}
+      {periodReadOnly && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{tr('Période clôturée · lecture seule', 'Closed academic period · read-only')}</p>}
       <div className={`grid gap-4 ${commandCenterOpen ? 'xl:grid-cols-[1fr_0.9fr]' : ''}`}>
         <div className={`rounded-2xl border border-gray-100 bg-white transition-all dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50 ${commandCenterOpen ? 'p-5' : 'p-3'}`}>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
@@ -949,7 +998,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <select aria-label="Academic year" value={academicYear} onChange={(event)=>setAcademicYear(event.target.value)} className="w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white">
                 {academicYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}
               </select>
-              <button disabled={submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
+              <button disabled={periodReadOnly || submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
               <button type="button" onClick={() => setRankingOpen(true)} className="rounded-xl bg-indigo-700 px-3 py-2 text-sm font-semibold text-white"><BarChart3 size={15} className="mr-1 inline"/>{tr('Classement des élèves', 'Learner ranking')}</button>
               <button onClick={() => void exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
               <button onClick={() => void exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
@@ -1059,7 +1108,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
             <button
               type="button"
               onClick={() => void addAssignment()}
-              disabled={addingAssignment || loadedScope !== cycleKey}
+              disabled={periodReadOnly || addingAssignment || loadedScope !== cycleKey}
               aria-busy={addingAssignment}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-kcs-blue-800 hover:shadow-md active:translate-y-0 disabled:cursor-wait disabled:opacity-75"
             >
@@ -1081,9 +1130,9 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <button type="button" aria-expanded={weightPanelOpen} onClick={() => togglePanel('weight', !weightPanelOpen)} className="rounded-xl border border-kcs-blue-200 p-2 text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><ChevronDown size={18} className={`transition-transform ${weightPanelOpen ? 'rotate-180' : ''}`} /><span className="sr-only">{weightPanelOpen ? 'Hide section' : 'Show section'}</span></button>
             </div>
           </div>
-          {weightPanelOpen && <>{categoryWeightTotal !== 100 && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">Final-grade submission is locked until the category total equals exactly 100%.</p>}
+          {weightPanelOpen && <><button type="button" disabled={periodReadOnly || categoryWeightTotal !== 100} onClick={() => setWeightScopeOpen(true)} className="mt-3 rounded-xl bg-kcs-blue-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-40">{tr('Appliquer cette répartition à un ou plusieurs cours', 'Apply this distribution to one or more courses')}</button>{categoryWeightTotal !== 100 && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-200">Final-grade submission is locked until the category total equals exactly 100%.</p>}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {categories.map((category) => {
+            {displayCategories.map((category) => {
               const categoryValues = studentAnalytics.map(({ student }) => getCategoryAverage(student.id, category.id)).filter((value): value is number => value !== null)
               const categoryAverage = categoryValues.length ? Math.round(categoryValues.reduce((sum, value) => sum + value, 0) / categoryValues.length) : 0
               const taskCount = visibleAssignments.filter((assignment) => assignment.category === category.id).length
@@ -1094,8 +1143,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                     <span className="text-xs font-bold text-kcs-blue-700 dark:text-kcs-blue-200">{categoryAverage}% average</span>
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <input aria-label={`${category.name} weighting`} className="h-2 flex-1 accent-kcs-blue-700" type="range" min={0} max={100} value={category.weight} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} />
-                    <div className="relative"><input aria-label={`${category.name} percentage`} className="w-20 rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-right text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" type="number" min={0} max={100} value={category.weight} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} /><span className="pointer-events-none absolute right-2 top-1.5 text-xs text-gray-400">%</span></div>
+                    <input aria-label={`${category.name} weighting`} className="h-2 flex-1 accent-kcs-blue-700" type="range" min={0} max={100} value={category.weight} disabled={periodReadOnly} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} />
+                    <div className="relative"><input aria-label={`${category.name} percentage`} className="w-20 rounded-lg border border-gray-200 py-1 pl-2 pr-6 text-right text-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white" type="number" min={0} max={100} value={category.weight} disabled={periodReadOnly} onChange={(event) => updateCategoryWeight(category.id, Number(event.target.value))} /><span className="pointer-events-none absolute right-2 top-1.5 text-xs text-gray-400">%</span></div>
                   </div>
                 </div>
               )
@@ -1117,11 +1166,11 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       </section>
         <div className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
           <div>
-            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>
+            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>{periodReadOnly && <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{tr('Période clôturée · lecture seule', 'Closed academic period · read-only')}</p>}
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap items-end gap-1.5">
-            <button type="button" disabled={savingSpreadsheet || loadedScope !== cycleKey} onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
+            <button type="button" disabled={periodReadOnly || savingSpreadsheet || loadedScope !== cycleKey} onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
             {skipDeleteConfirmation && <button type="button" onClick={() => { localStorage.removeItem('kcs:nexus:gradebook:skip-delete-confirmation'); setSkipDeleteConfirmation(false) }} className="inline-flex items-center rounded-xl border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-700 dark:text-amber-200">{tr('Réactiver la confirmation', 'Restore delete prompts')}</button>}
             {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Maximize2 size={15}/> Dedicated window</button>}
             {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white"><Minimize2 size={14}/> Close</button>}
@@ -1150,7 +1199,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                   <th key={assignment.id} draggable onDragStart={() => setDraggedAssignmentId(assignment.id)} onDragEnd={() => setDraggedAssignmentId('')} onDragOver={(event) => event.preventDefault()} onDrop={() => moveAssignment(assignment.id)} title={tr('Glissez pour ordonner les colonnes de même date', 'Drag to arrange columns sharing the same assessment date')} className={`min-w-32 cursor-move border-l border-gray-100 px-2 py-2 text-center dark:border-kcs-blue-800 ${draggedAssignmentId === assignment.id ? 'opacity-50' : ''}`}>
                     <span className="block font-bold text-kcs-blue-900 dark:text-white">{assignment.title}</span>
                     <span className="block normal-case text-gray-400">{assignment.type} · {assignment.maxPoints} pts</span><span className="mt-0.5 block normal-case text-kcs-blue-500 dark:text-kcs-blue-300">{assignment.date ? new Date(`${assignment.date}T12:00:00`).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-GB') : tr('Date non définie', 'No date')}</span>
-                    <span className="mt-1 flex items-center justify-center gap-2 normal-case"><button type="button" onClick={() => setEditingAssignment({ ...assignment })} className="inline-flex items-center gap-1 text-[11px] font-bold text-kcs-blue-600 hover:text-kcs-blue-800 dark:text-sky-300"><Pencil size={12} /> {tr('Modifier','Edit')}</button><button type="button" onClick={() => deleteAssignment(assignment)} className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 hover:text-red-600"><Trash2 size={12} /> {tr('Supprimer','Delete')}</button></span>
+                    <span className="mt-1 flex items-center justify-center gap-2 normal-case"><button type="button" onClick={() => setEditingAssignment({ ...assignment })} className="inline-flex items-center gap-1 text-[11px] font-bold text-kcs-blue-600 hover:text-kcs-blue-800 dark:text-sky-300"><Pencil size={12} /> {tr('Modifier','Edit')}</button><button type="button" disabled={assignmentReadOnly(assignment)} onClick={() => deleteAssignment(assignment)} className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 hover:text-red-600"><Trash2 size={12} /> {tr('Supprimer','Delete')}</button></span>
                   </th>
                 ))}
                 <th className="min-w-32 border-l border-gray-100 px-3 py-3 text-center dark:border-kcs-blue-800">Average</th>
@@ -1176,15 +1225,15 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
                             data-grade-column={columnIndex}
                             className={`w-16 rounded-md px-1.5 py-1 text-center text-xs font-bold outline-none ring-1 transition-colors focus:ring-2 focus:ring-kcs-blue-400 ${toneForScore(normalized)}`}
                             value={getRawScore(assignment.id, student.id)}
-                            onChange={(event) => updateScore(assignment.id, student.id, event.target.value)}
+                            readOnly={assignmentReadOnly(assignment)} onChange={(event) => updateScore(assignment.id, student.id, event.target.value)}
                             onKeyDown={(event)=>moveScoreFocus(event,rowIndex,columnIndex)}
                             placeholder="I"
                           />
                           <div className="flex gap-0.5">
-                            <button type="button" className="rounded-md bg-gray-100 px-1.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('ai', assignment, student)}>
+                            <button type="button" className="rounded-md bg-gray-100 px-1.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" disabled={assignmentReadOnly(assignment)} onClick={() => openCellDialog('ai', assignment, student)}>
                               AI
                             </button>
-                            <button type="button" className="rounded-md bg-gray-100 px-1.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" onClick={() => openCellDialog('note', assignment, student)}>
+                            <button type="button" className="rounded-md bg-gray-100 px-1.5 py-1 text-[10px] font-bold text-gray-600 hover:bg-kcs-blue-50 dark:bg-kcs-blue-800 dark:text-gray-300" disabled={assignmentReadOnly(assignment)} onClick={() => openCellDialog('note', assignment, student)}>
                               Note
                             </button>
                           </div>
@@ -1279,8 +1328,8 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         <p className="font-bold">{selectedCourse?.name}</p>
         <p>{academicYear}</p>
         <p className="mt-2 text-lg font-black">{term}</p>
-        <p className="mt-2 text-sm">{periodConfirmation === 'task' ? draft.title + ' · ' + draft.date : tr('Soumission des résultats de tous les élèves du cours', 'Submission of all enrolled learners’ course results')}</p>
-        </div>{periodConfirmation === 'task' && dateSuggestedTerm && dateSuggestedTerm !== term && <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+        <p className="mt-2 text-sm">{periodConfirmation === 'task' ? draft.title + ' · ' + draft.date : tr('Soumission des résultats disponibles du cours', 'Submit available course results')}</p>
+        </div>{periodConfirmation === 'submission' && <p className="mb-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-950 dark:text-sky-100">{tr('Les cellules vides sont exclues du calcul. Les élèves sans aucune note ne sont pas resoumis et leurs anciennes soumissions sont conservées.', 'Blank cells are excluded from calculations. Learners without any grades are not resubmitted and their earlier submissions are preserved.')} {submissionAnalytics.filter(item => item.average !== null).length} / {submissionAnalytics.length}</p>}{periodConfirmation === 'task' && dateSuggestedTerm && dateSuggestedTerm !== term && <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
         <p>{tr('La date saisie correspond au calendrier officiel de', 'The entered date belongs to the official calendar period')} <b>{dateSuggestedTerm}</b>.</p>
         <button type="button" onClick={() => { chooseTerm(dateSuggestedTerm); setConfirmedPeriod(false) }} className="mt-3 rounded-lg bg-amber-700 px-4 py-2 font-bold text-white">{tr('Utiliser la période de cette date', 'Use the period for this date')}</button>
         </div>}<label className="flex items-start gap-3 text-sm dark:text-white">

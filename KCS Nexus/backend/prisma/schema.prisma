@@ -716,6 +716,8 @@ model Grade {
   createdAt    DateTime       @default(now())
   student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   course       Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, period, createdAt])
 }
 
 model NewsPost {
@@ -912,6 +914,8 @@ model ReportCard {
   correspondenceLogs CorrespondenceLog[]
 
   @@unique([studentId, term])
+
+  @@index([term, updatedAt])
 }
 
 model LegacyTranscriptRecord {

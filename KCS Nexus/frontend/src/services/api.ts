@@ -585,6 +585,8 @@ export const lessonPlanAPI = {
 }
 
 export const academicCalendarAPI = {
+  periodAccess: () => api.get('/academic-calendar/period-access'),
+  closePeriod: (academicYear: string, term: string, confirmation: string) => api.post('/academic-calendar/close-period', { academicYear, term, confirmation }, { timeout: 90_000 }),
   current: () => api.get('/academic-calendar/current'),
   list: () => api.get('/academic-calendar'),
   save: (data: object) => api.put('/academic-calendar', data),
@@ -630,6 +632,8 @@ export const academicRecordsAPI = {
   registerGradebookVerification: (data: { documentId: string; fingerprint: string; courseId: string; academicYear: string; term: string }) => api.post('/academic-records/gradebooks/verification', data),
   registerCertificateVerification: (data: { documentId: string; fingerprint: string; studentId: string; academicYear: string }) => api.post('/academic-records/certificates/verification', data),
   verifyReportCard: (document: string, fingerprint: string) => api.get('/academic-records/report-cards/verify', { params: { document, fingerprint } }),
+  registerReportCardAnalytics: (data: object) => api.post('/academic-records/report-card-analytics/verification', data),
+  verifyReportCardAnalytics: (document: string, fingerprint: string) => api.get('/academic-records/report-card-analytics/verify', { params: { document, fingerprint } }),
   verifyGradebook: (document: string, fingerprint: string) => api.get('/academic-records/gradebooks/verify', { params: { document, fingerprint } }),
   verifyTranscript: (document: string, fingerprint: string) => api.get('/academic-records/transcripts/verify', { params: { document, fingerprint } }),
   verifyCertificate: (document: string, fingerprint: string) => api.get('/academic-records/certificates/verify', { params: { document, fingerprint } }),
