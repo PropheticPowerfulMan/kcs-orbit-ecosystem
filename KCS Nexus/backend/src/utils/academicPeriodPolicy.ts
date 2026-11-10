@@ -31,11 +31,6 @@ export function academicPeriodIsReadOnly(
   year: string,
   term: string,
 ) {
-  if (
-    access.activeAcademicYear &&
-    Number(year.slice(0, 4)) < Number(access.activeAcademicYear.slice(0, 4))
-  )
-    return true;
   const current = termName(term);
   const quarter = quarterTerms.indexOf(current);
   const semester =
@@ -206,4 +201,12 @@ export function closedGradebookChanged(
     }
   }
   return false;
+}
+
+export function academicEntryPeriod(access: AcademicPeriodAccess, year: string) {
+  const workflow = [quarterTerms[0], quarterTerms[1], 'Semester 1', quarterTerms[2], quarterTerms[3], 'Semester 2', 'Annual final']
+  const pendingClosureTerm = workflow.find(term => !academicPeriodIsReadOnly(access, year, term)) ?? null
+  const activeEntryTerm = pendingClosureTerm === 'Semester 1' ? quarterTerms[1]
+    : pendingClosureTerm === 'Semester 2' ? quarterTerms[3] : pendingClosureTerm
+  return { pendingClosureTerm, activeEntryTerm }
 }

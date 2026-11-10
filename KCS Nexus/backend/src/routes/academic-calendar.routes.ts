@@ -84,11 +84,12 @@ academicCalendarRouter.get('/period-access', asyncHandler(async (_req, res) => {
 }))
 
 academicCalendarRouter.post('/close-period', requireSuperAdmin(), asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const tr = (fr: string, en: string) => req.get('x-ui-language') === 'en' ? en : fr
   const input = z.object({ academicYear: z.string().regex(/^\d{4}-\d{4}$/), term: z.enum(['Semester 1 · Quarter 1','Semester 1 · Quarter 2','Semester 2 · Quarter 3','Semester 2 · Quarter 4','Semester 1','Semester 2','Annual final']), confirmation: z.string() }).parse(req.body)
-  if (input.confirmation !== input.academicYear + ' · ' + input.term) throw new ApiError(400, 'Confirm the exact academic year and period before closing it')
+  if (input.confirmation !== input.academicYear + ' · ' + input.term) throw new ApiError(400, tr('Confirmez exactement l’année scolaire et la période avant la clôture.','Confirm the exact academic year and period before closing it'))
   const calendars = await academicCalendars()
   const calendar = calendars.find(item => item.name === input.academicYear)
-  if (!calendar) throw new ApiError(409, 'Publish this academic year in the central school calendar before closing it')
+  if (!calendar) throw new ApiError(409, tr('Publiez cette année dans le calendrier scolaire central avant de la clôturer.','Publish this academic year in the central school calendar before closing it'))
   const actorId = await databaseActorId(req.user!.sub)
   const id = 'academic-period-closed-' + createHash('sha256').update(input.academicYear + '::' + input.term).digest('hex')
   const result = await prisma.$transaction(async tx => {
@@ -100,9 +101,9 @@ academicCalendarRouter.post('/close-period', requireSuperAdmin(), asyncHandler(a
     const required = quarterIndex > 0 ? quarterTerms.slice(0, quarterIndex)
       : input.term === 'Semester 1' ? quarterTerms.slice(0, 2)
       : input.term === 'Semester 2' ? quarterTerms : input.term === 'Annual final' ? quarterTerms : []
-    if (required.some(term => !academicPeriodIsReadOnly(access, input.academicYear, term))) throw new ApiError(409, 'Close the preceding quarters after their grades are finalized before closing this period')
+    if (required.some(term => !academicPeriodIsReadOnly(access, input.academicYear, term))) throw new ApiError(409, tr('Clôturez d’abord les quarters précédents après finalisation de leurs notes et bulletins.','Close the preceding quarters after their grades are finalized before closing this period'))
     const period = calendar.periods?.find(item => quarterIndex >= 0 ? item.type === 'QUARTER' && item.sequence === quarterIndex + 1 : item.type === 'SEMESTER' && input.term === 'Semester ' + item.sequence)
-    if (new Date(period?.startDate ?? calendar.startDate) > new Date()) throw new ApiError(409, 'A future academic period cannot be closed before it starts')
+    if (new Date(period?.startDate ?? calendar.startDate) > new Date()) throw new ApiError(409, tr('Une période scolaire future ne peut pas être clôturée avant son début.','A future academic period cannot be closed before it starts'))
     const workspaces = await tx.teacherWorkspace.findMany({ select: { id: true, state: true }, orderBy: { id: 'asc' } })
     let frozenCourseWeights = 0
     for (const workspace of workspaces) {
@@ -124,7 +125,7 @@ academicCalendarRouter.post('/close-period', requireSuperAdmin(), asyncHandler(a
     const audit = await tx.auditLog.create({ data: { id, actorId, action: 'ACADEMIC_PERIOD_CLOSED', targetType: 'AcademicPeriodClosure', targetId: input.academicYear + '::' + input.term, metadata: { academicYear: input.academicYear, term: input.term, frozenCourseWeights, closureMode: 'EXPLICIT_SUPERADMIN_AFTER_GRADE_FINALIZATION' } } })
     return { alreadyClosed: false, closedAt: audit.createdAt, frozenCourseWeights }
   }, { maxWait: 10000, timeout: 60000 })
-  return success(res, result, 'The academic period is closed and its academic records are read-only')
+  return success(res, result, tr('La période est clôturée et ses dossiers académiques sont en lecture seule.','The academic period is closed and its academic records are read-only'))
 }))
 
 academicCalendarRouter.get('/current', asyncHandler(async (_req, res) => {
@@ -135,16 +136,35 @@ academicCalendarRouter.get('/current', asyncHandler(async (_req, res) => {
   res.json(data)
 }))
 
-academicCalendarRouter.put('/', requireCalendarManager, asyncHandler(async (req, res) => {
-  const response = await fetch(orbitUrl('/calendar'), {
-    method: 'PUT',
-    headers: headers(true),
-    body: JSON.stringify({ ...req.body, organizationId: calendarOrganizationId }),
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new ApiError(response.status, data.message || 'Academic calendar update failed.')
+academicCalendarRouter.put('/', requireCalendarManager, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const tr = (fr: string, en: string) => req.get('x-ui-language') === 'en' ? en : fr
+  const payload = z.object({name:z.string().regex(/^\d{4}-\d{4}$/),isCurrent:z.boolean().optional(),status:z.string().optional()}).passthrough().parse(req.body)
+  const actorId = await databaseActorId(req.user!.sub)
+  const result = await prisma.$transaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT 1 FROM pg_advisory_xact_lock(hashtext('kcs-calendar-activation'))`)
+    const currentResponse = await fetch(orbitUrl('/calendar/current?organizationId=' + encodeURIComponent(calendarOrganizationId!)), { headers: headers(), signal: AbortSignal.timeout(10000) })
+    if (!currentResponse.ok) throw new ApiError(503, tr('Le calendrier officiel doit être disponible avant une activation.', 'The official calendar must be available before activation.'))
+    const current = (await currentResponse.json() as {calendar?:{name:string}}).calendar
+    payload.isCurrent ??= current?.name === payload.name
+    const changesYear = payload.isCurrent === true && current?.name !== payload.name
+    const closesCalendar = payload.status === 'CLOSED' || (current?.name === payload.name && payload.isCurrent === false)
+    if (changesYear || closesCalendar) {
+      if (req.user!.sub !== 'configured-superadmin') throw new ApiError(403, tr('Seul le SuperAdmin peut confirmer le passage à une autre année scolaire.', 'Only the SuperAdmin can confirm transition to another academic year.'))
+      const previousYear = changesYear ? current?.name : payload.name
+      if (previousYear) {
+        await lockAcademicYears(tx, [previousYear, payload.name], true)
+        const access = await academicPeriodAccess(tx)
+        if (!access.closedPeriods.some(item => item.academicYear === previousYear && item.term === 'Annual final')) throw new ApiError(409, tr('Confirmez d’abord la clôture annuelle de ' + previousYear + ' dans « Clôture et protection des périodes ». Les dates ne déclenchent aucun passage automatique.', 'First confirm annual closure of ' + previousYear + ' in “Academic period closure and protection”. Dates never trigger an automatic transition.'))
+      }
+    }
+    const response = await fetch(orbitUrl('/calendar'), { method:'PUT', headers:headers(true), body:JSON.stringify({...payload,organizationId:calendarOrganizationId}), signal:AbortSignal.timeout(10000) })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new ApiError(response.status, data.message || tr('La mise à jour du calendrier a échoué.', 'Academic calendar update failed.'))
+    if (changesYear || closesCalendar) await tx.auditLog.create({data:{actorId,action:'ACADEMIC_YEAR_TRANSITION_CONFIRMED',targetType:'AcademicCalendar',targetId:payload.name,metadata:{previousYear:current?.name??null,nextYear:payload.name,confirmationMode:'EXPLICIT_SUPERADMIN_AFTER_ANNUAL_CLOSURE'}}})
+    return data
+  }, {maxWait:10000,timeout:40000})
   invalidateAcademicCalendarCache()
-  res.json(data)
+  res.json(result)
 }))
 
 academicCalendarRouter.get('/schedule', requireCalendarManager, asyncHandler(async (req, res) => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { academicPeriodIsReadOnly, closedGradebookChanged } from './academicPeriodPolicy.js'
+import { academicPeriodIsReadOnly, closedGradebookChanged, academicEntryPeriod } from './academicPeriodPolicy.js'
 const year = '2026-2027'
 const q1 = 'Semester 1 · Quarter 1'
 const q2 = 'Semester 1 · Quarter 2'
@@ -12,8 +12,8 @@ test('the current quarter stays open until explicit SuperAdmin closure', () => {
   assert.equal(academicPeriodIsReadOnly(closed, year, q1), true)
   assert.equal(academicPeriodIsReadOnly(closed, year, q2), false)
 })
-test('a past academic year is read-only and semester closure covers its quarters', () => {
-  assert.equal(academicPeriodIsReadOnly(open, '2025-2026', q1), true)
+test('a past year remains open until confirmed closure and semester closure covers its quarters', () => {
+  assert.equal(academicPeriodIsReadOnly(open, '2025-2026', q1), false)
   assert.equal(academicPeriodIsReadOnly({ ...open, closedPeriods: [{ academicYear: year, term: 'Semester 1' }] }, year, q2), true)
 })
 test('a stale browser cannot edit a closed score or a cell comment', () => {
@@ -66,4 +66,24 @@ test('initializing a legacy mirror cannot create a new closed assessment', () =>
   const before = state(), after: Record<string, any> = structuredClone(before)
   after.gradebookColumnsByCourse = { course: [{ id: 'invented', term: q1, maxPoints: 100 }] }
   assert.equal(closedGradebookChanged(before, after, closed), true)
+})
+
+test('calendar dates and a newer active year cannot silently close an older year', () => {
+ const access = { activeAcademicYear: '2027-2028', closedPeriods: [], calendars: [{name: year, startDate:'2026-09-01', endDate:'2027-06-30'}] }
+ assert.equal(academicPeriodIsReadOnly(access,year,q1),false)
+ assert.equal(academicPeriodIsReadOnly({...access,closedPeriods:[{academicYear:year,term:'Annual final'}]},year,q1),true)
+})
+test('entry defaults advance only after quarter and semester confirmations', () => {
+ let access={...open,closedPeriods:[] as Array<{academicYear:string;term:string}>}
+ assert.equal(academicEntryPeriod(access,year).activeEntryTerm,q1)
+ access.closedPeriods.push({academicYear:year,term:q1})
+ assert.equal(academicEntryPeriod(access,year).activeEntryTerm,q2)
+ access.closedPeriods.push({academicYear:year,term:q2})
+ assert.deepEqual(academicEntryPeriod(access,year),{pendingClosureTerm:'Semester 1',activeEntryTerm:q2})
+ access.closedPeriods.push({academicYear:year,term:'Semester 1'})
+ assert.equal(academicEntryPeriod(access,year).activeEntryTerm,'Semester 2 · Quarter 3')
+ access.closedPeriods.push({academicYear:year,term:'Semester 2 · Quarter 3'},{academicYear:year,term:'Semester 2 · Quarter 4'},{academicYear:year,term:'Semester 2'})
+ assert.equal(academicEntryPeriod(access,year).activeEntryTerm,'Annual final')
+ access.closedPeriods.push({academicYear:year,term:'Annual final'})
+ assert.equal(academicEntryPeriod(access,year).activeEntryTerm,null)
 })

@@ -420,14 +420,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const selectedBulkAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId)
 
   useEffect(() => {
-    academicCalendarAPI.current().then(({ data }) => {
-      const calendar = data?.calendar
+    academicCalendarAPI.periodAccess().then(({ data }) => {
+      const control = data?.data
+      const calendar = control?.calendars?.find((item: { name: string }) => item.name === control.activeAcademicYear)
       if (!calendar?.name) return
       setAcademicYear(calendar.name)
       setCalendarPeriods(calendar.periods ?? [])
-      const now = Date.now()
-      const activeQuarter = (calendar.periods ?? []).find((period: any) => ['QUARTER','TRIMESTER'].includes(period.type) && Date.parse(period.startDate) <= now && Date.parse(period.endDate) >= now)
-      if (activeQuarter?.sequence) setOfficialTerm(terms[Math.min(activeQuarter.sequence, 4) - 1])
+      setOfficialTerm(control.activeEntryTerm || 'Annual final')
     }).catch(() => undefined).finally(() => setCalendarReady(true))
   }, [])
 

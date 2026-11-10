@@ -3090,7 +3090,7 @@ const TeacherPortal = () => {
                 {getLocalizedGreeting(language)}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {getLocalizedPortalDate(language)} - Today&apos;s overview for teaching, assessment, and student support.
+                {getLocalizedPortalDate(language)} - {language === 'fr' ? 'Suivi de l’enseignement, des évaluations et de l’accompagnement des élèves.' : 'Today’s overview for teaching, assessment and student support.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
