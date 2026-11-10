@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-teacher-reports-certificates-20261110-v12'
+const CACHE_NAME = 'kcs-nexus-shell-attendance-history-20261110-v13'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {
