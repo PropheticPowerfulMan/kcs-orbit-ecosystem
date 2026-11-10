@@ -578,7 +578,7 @@ function SubjectGradeSubmission() {
               <div className='flex flex-wrap gap-2 text-xs font-bold'>
                 <span className='rounded-full bg-white px-3 py-1.5 text-kcs-blue-700 shadow-sm dark:bg-kcs-blue-900 dark:text-kcs-blue-200'>Gradebook: {row.calculated === null ? 'Incomplete' : `${row.calculated}% · ${letterGrade(row.calculated)}`}</span>
                 <span className={`rounded-full px-3 py-1.5 ${overrideChanged ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-200' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200'}`}>Final: {row.finalGrade === null ? 'Incomplete' : `${row.finalGrade}% · ${letterGrade(row.finalGrade)}`}{overrideChanged ? ' · override' : ''}</span>
-                <span className='rounded-full bg-kcs-gold-100 px-3 py-1.5 text-kcs-blue-900'>{statusLabel(row.card, Boolean(row.submission))}</span>
+                <span data-subject-workflow-status className='inline-flex max-w-full rounded-full border px-3 py-1.5 text-xs font-bold leading-5'>{statusLabel(row.card, Boolean(row.submission))}</span>
               </div>
             </div>
 
@@ -615,7 +615,7 @@ function SubjectGradeSubmission() {
                   <th className='px-3 py-3'>Override audit reason</th>
                   <th className='px-3 py-3'>Attendance</th>
                   <th className='px-3 py-3'>Subject evidence note</th>
-                  <th className='bg-kcs-blue-800 px-3 py-3 text-white dark:bg-kcs-gold-300 dark:text-kcs-blue-950'>Workflow status</th>
+                  <th data-subject-workflow-heading className='px-3 py-3'>Workflow status</th>
                 </tr>
               </thead>
               <tbody className='divide-y divide-gray-100 dark:divide-kcs-blue-800'>
@@ -644,7 +644,7 @@ function SubjectGradeSubmission() {
                     <td className='min-w-72 px-3 py-3'>
                       <textarea aria-label={`Subject evidence note for ${studentName(row.student)}`} disabled={locked} className={field} rows={2} maxLength={400} value={row.draft.teacherComment} onChange={(event) => updateEntry(row.student.id, { teacherComment: event.target.value })} placeholder='Subject evidence note — not the official report-card comment' />
                     </td>
-                    <td className='min-w-44 bg-kcs-gold-50/80 px-3 py-3 dark:bg-kcs-blue-900'><span className='inline-flex rounded-full bg-kcs-gold-100 px-3 py-1.5 text-xs font-bold text-kcs-blue-900 ring-1 ring-kcs-gold-300 dark:bg-kcs-gold-300 dark:text-kcs-blue-950 dark:ring-kcs-gold-200'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
+                    <td className='min-w-44 bg-kcs-gold-50/80 px-3 py-3 dark:bg-kcs-blue-900'><span data-subject-workflow-status className='inline-flex max-w-full rounded-full border px-3 py-1.5 text-xs font-bold leading-5'>{statusLabel(row.card, Boolean(row.submission))}</span></td>
                   </tr>
                 })}
                 {!rows.length && <tr><td colSpan={7} className='px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-300'>
@@ -675,7 +675,7 @@ function SubjectGradeSubmission() {
     {previewOpen && <div className='fixed inset-0 z-[80] flex items-center justify-center bg-kcs-blue-950/80 p-4 backdrop-blur-sm'>
       <div className='max-h-[92vh] w-full max-w-5xl overflow-auto rounded-3xl bg-white p-6 shadow-2xl dark:bg-kcs-blue-900'>
         <div className='flex items-start justify-between gap-3'><div><p className='text-xs font-black uppercase tracking-[.18em] text-red-600'>Draft — not official</p><h3 className='mt-1 text-xl font-bold text-kcs-blue-950 dark:text-white'>{course?.code} · {course?.name}</h3><p className='text-sm text-gray-500'>{academicYear} · {term}</p></div><button aria-label='Close preview' onClick={() => setPreviewOpen(false)}><X size={20} /></button></div>
-        <div className='mt-5 overflow-x-auto'><table className='min-w-[820px] w-full text-sm'><thead><tr className='border-b text-left text-xs uppercase text-gray-400'><th className='pb-3'>Student</th><th>Gradebook</th><th>Final</th><th>Attendance</th><th>Comment</th><th>Status</th></tr></thead><tbody>{allRows.map((row) => <tr key={row.student.id} className='border-b align-top dark:border-kcs-blue-800'><td className='py-3 font-bold dark:text-white'>{studentName(row.student)}</td><td>{row.calculated === null ? 'Incomplete' : `${row.calculated}%`}</td><td className='font-bold'>{row.finalGrade === null ? 'Incomplete' : `${row.finalGrade}% · ${letterGrade(row.finalGrade)}`}</td><td>{row.student.analytics?.attendanceSummary?.present ?? 0} P / {row.student.analytics?.attendanceSummary?.absent ?? 0} A / {row.student.analytics?.attendanceSummary?.late ?? 0} L</td><td className='max-w-xs'>{row.draft.teacherComment || 'Pending'}</td><td>{statusLabel(row.card, Boolean(row.submission))}</td></tr>)}</tbody></table></div>
+        <div className='mt-5 overflow-x-auto'><table className='min-w-[820px] w-full text-sm'><thead><tr className='border-b text-left text-xs uppercase text-gray-400'><th className='pb-3'>Student</th><th>Gradebook</th><th>Final</th><th>Attendance</th><th>Comment</th><th>Status</th></tr></thead><tbody>{allRows.map((row) => <tr key={row.student.id} className='border-b align-top dark:border-kcs-blue-800'><td className='py-3 font-bold dark:text-white'>{studentName(row.student)}</td><td>{row.calculated === null ? 'Incomplete' : `${row.calculated}%`}</td><td className='font-bold'>{row.finalGrade === null ? 'Incomplete' : `${row.finalGrade}% · ${letterGrade(row.finalGrade)}`}</td><td>{row.student.analytics?.attendanceSummary?.present ?? 0} P / {row.student.analytics?.attendanceSummary?.absent ?? 0} A / {row.student.analytics?.attendanceSummary?.late ?? 0} L</td><td className='max-w-xs'>{row.draft.teacherComment || 'Pending'}</td><td><span data-subject-workflow-status className='inline-flex max-w-full rounded-full border px-3 py-1.5 text-xs font-bold leading-5'>{statusLabel(row.card, Boolean(row.submission))}</span></td></tr>)}</tbody></table></div>
         <div className='mt-5 flex justify-end gap-2'><button className='rounded-xl border px-4 py-2 text-sm font-bold dark:border-kcs-blue-700 dark:text-white' onClick={() => setPreviewOpen(false)}>Close</button><button className={primary} onClick={exportPreview}><Sparkles size={16} />Print controlled preview</button></div>
       </div>
     </div>}
