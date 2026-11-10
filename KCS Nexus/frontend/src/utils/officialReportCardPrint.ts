@@ -9,9 +9,9 @@ type ReportSubject = {
   course: { name: string; code: string; credits?: number; teacherName?: string }
 }
 
-const teacherDisplayName = (value: string) => {
-  const name = value.trim().toLocaleLowerCase()
-  return name.charAt(0).toLocaleUpperCase() + name.slice(1)
+export const teacherDisplayName = (value?: string | null) => {
+  const name = (value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
+  return name.replace(/(^|[\s'’-])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toLocaleUpperCase('fr'))
 }
 
 export type PrintableReportCard = {
@@ -85,8 +85,8 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   if (officialSettings.principalName || officialSettings.signatureImage) signatures.principal = { name: officialSettings.principalName || signatures.principal?.name, image: officialSettings.signatureImage || signatures.principal?.image }
   signatures.officialSealImage = officialSettings.officialSealImage || signatures.officialSealImage
   const signatureBlock = (entry: { image?: string | null; name?: string } | null | undefined, label: string) => entry?.image
-    ? `<div class="signature"><img src="${escapeHtml(entry.image)}" alt=""><b>${escapeHtml(entry.name || label)}</b><span>${escapeHtml(label)}</span></div>`
-    : `<div class="signature"><b>${escapeHtml(entry?.name || '')}</b><span>${escapeHtml(label)}</span></div>`
+    ? `<div class="signature"><img src="${escapeHtml(entry.image)}" alt=""><b>${escapeHtml(teacherDisplayName(entry.name || '') || label)}</b><span>${escapeHtml(label)}</span></div>`
+    : `<div class="signature"><b>${escapeHtml(teacherDisplayName(entry?.name || ''))}</b><span>${escapeHtml(label)}</span></div>`
   const studentName = [card.student.user.lastName, card.student.user.middleName, card.student.user.firstName].filter(Boolean).join(' ')
   const issuedAt = new Date()
   const canonicalRecord = JSON.stringify({ id: card.id, student: card.student.studentNumber, term: card.term, average: card.average, status: card.publicationStatus, subjects: (card.subjects ?? []).map(({ course, percentage, letterGrade, termResults }) => [course.name, course.teacherName ?? '', course.credits ?? 0, percentage, letterGrade, termResults ?? null]) })

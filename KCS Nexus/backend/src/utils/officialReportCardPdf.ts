@@ -11,9 +11,9 @@ const imageBuffer = (value?: string | null) => {
   try { return Buffer.from(value.slice(value.indexOf(',') + 1), 'base64') } catch { return null }
 }
 
-const teacherDisplayName = (value: string) => {
-  const name = value.trim().toLocaleLowerCase()
-  return name.charAt(0).toLocaleUpperCase() + name.slice(1)
+export const teacherDisplayName = (value?: string | null) => {
+  const name = (value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
+  return name.replace(/(^|[\s'’-])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toLocaleUpperCase('fr'))
 }
 
 export async function officialReportCardPdf(input: {
@@ -93,7 +93,7 @@ export async function officialReportCardPdf(input: {
     const image = imageBuffer(signature?.image)
     if (image) try { doc.image(image, x + 16, y - 27, { fit: [145, 28] }) } catch { /* Invalid optional upload; keep the signature line. */ }
     doc.moveTo(x, y).lineTo(x + 175, y).strokeColor('#56728A').lineWidth(.7).stroke()
-    doc.font('Helvetica-Bold').fontSize(7).fillColor('#173D60').text(signature?.name || '', x, y + 4, { width: 175, align: 'center' })
+    doc.font('Helvetica-Bold').fontSize(7).fillColor('#173D60').text(teacherDisplayName(signature?.name || ''), x, y + 4, { width: 175, align: 'center' })
     doc.font('Helvetica').fontSize(7).fillColor('#52677D').text(label, x, y + 14, { width: 175, align: 'center' })
   }
   drawSignature(left, input.mainTeacher, tr('Enseignant titulaire', 'Main Teacher'))
