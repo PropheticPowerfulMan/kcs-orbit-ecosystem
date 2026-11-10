@@ -1,5 +1,5 @@
 import { replaceSubmittedSubjectCorrection } from '../utils/reportSubjectPresentation.js'
-import { academicPeriodAccess, protectAcademicPeriod } from './academicPeriodAccess.service.js'
+import { academicPeriodAccess, protectGradebookEntry } from './academicPeriodAccess.service.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
 import { ApiError } from '../utils/api.js'
@@ -17,7 +17,7 @@ export async function submitCourseFinalGrades(actorId: string, payload: Submissi
   const window = await attendanceWindow(payload.academicYear, payload.term)
   await academicPeriodAccess()
   return prisma.$transaction(async tx => {
-    await protectAcademicPeriod(tx, payload.academicYear, payload.term)
+    await protectGradebookEntry(tx, payload.academicYear, payload.term)
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "Course" WHERE id = ${payload.courseId} FOR UPDATE`)
     const course = await tx.course.findUnique({ where: { id: payload.courseId }, include: { teacher: true, enrollments: { select: { studentId: true, student: { select: { studentNumber: true, user: { select: { orbitUserId: true } } } } } } } })
     if (!course) throw new ApiError(404, 'Course not found')

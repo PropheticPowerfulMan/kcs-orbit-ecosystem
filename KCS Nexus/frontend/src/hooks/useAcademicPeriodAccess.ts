@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 
 type Access = {
   activeAcademicYear: string | null;
+  activeEntryTerm?: string | null;
   closedPeriods: Array<{
     academicYear: string;
     term: string;
@@ -131,4 +132,11 @@ export function useAcademicPeriodAccess(
     loading,
     readOnly: isAcademicPeriodReadOnly(access, selectedYear, selectedTerm),
   };
+}
+
+export function isFutureGradebookPeriod(access: Access | null, year: string, term: string) {
+  if (!access || access.activeAcademicYear !== year) return false;
+  const active = /Quarter (\d)/.exec(access.activeEntryTerm || '');
+  const selected = /Quarter (\d)/.exec(term.replace(/Trimester/gi, 'Quarter'));
+  return Boolean(active && selected && Number(selected[1]) > Number(active[1]));
 }

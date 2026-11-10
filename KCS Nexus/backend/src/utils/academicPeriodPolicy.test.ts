@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { academicPeriodIsReadOnly, closedGradebookChanged, academicEntryPeriod } from './academicPeriodPolicy.js'
+import { academicPeriodIsReadOnly, closedGradebookChanged, academicEntryPeriod, futureGradebookPeriods, futureGradebookChanged } from './academicPeriodPolicy.js'
 const year = '2026-2027'
 const q1 = 'Semester 1 · Quarter 1'
 const q2 = 'Semester 1 · Quarter 2'
@@ -86,4 +86,23 @@ test('entry defaults advance only after quarter and semester confirmations', () 
  assert.equal(academicEntryPeriod(access,year).activeEntryTerm,'Annual final')
  access.closedPeriods.push({academicYear:year,term:'Annual final'})
  assert.equal(academicEntryPeriod(access,year).activeEntryTerm,null)
+})
+
+
+test('future quarters reject task and score edits while existing records remain intact', () => {
+ const before=state(), after=structuredClone(before)
+ assert.equal(futureGradebookChanged(before,before,open),false)
+ after.advancedGradebookByCycle['course::'+year].scores['task:new:learner']='91'
+ assert.equal(futureGradebookChanged(before,after,open),true)
+ assert.equal(futureGradebookChanged(before,after,closed),false)
+ const current=structuredClone(before)
+ current.advancedGradebookByCycle['course::'+year].scores['task:old:learner']='95'
+ assert.equal(futureGradebookChanged(before,current,open),false)
+ assert.deepEqual(futureGradebookPeriods(open,'2025-2026'),[])
+ assert.equal(futureGradebookChanged(before,after,{...open,activeAcademicYear:'2027-2028'}),false)
+})
+test('confirmed future-quarter task creation is still rejected until explicit advancement',()=>{
+ const next={advancedGradebookByCycle:{['course::'+year]:{assignments:[{id:'new',term:q2,confirmedCycle:year+'::'+q2}],scores:{'new:learner':'0'}}}}
+ assert.equal(futureGradebookChanged({},next,open),true)
+ assert.equal(futureGradebookChanged({},next,closed),false)
 })

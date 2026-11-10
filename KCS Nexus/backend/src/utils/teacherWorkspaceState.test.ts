@@ -56,3 +56,23 @@ test('legacy later-quarter assessments remain saveable when first mirrored to th
   const incoming = { advancedGradebookByCycle: { 'course::2026-2027': { assignments: [task], scores: { 'existing:s1': '75' } } } }
   assert.doesNotThrow(() => mergeTeacherWorkspaceState(previous, incoming))
 })
+
+
+test('authorized browser-only recovery moves only the designated course and preserves every score',()=>{
+ const cycle='spelling::2026-2027', q1='Semester 1 · Quarter 1',q2='Semester 1 · Quarter 2'
+ const before={gradebookPeriodCorrectionsByCycle:{[cycle]:{from:q2,to:q1,assessmentIds:[],recoverBrowserWhileActive:true}}}
+ const browser={assignments:[{id:'unsaved',term:q2}],scores:{'unsaved:s1':'0','unsaved:s2':'87'},comments:{'unsaved:s1':'Reviewed'}}
+ const incoming={advancedGradebookByCycle:{[cycle]:browser,'math::2026-2027':{assignments:[{id:'math',term:q1}],scores:{'math:s1':'99'}}}}
+ const result=mergeTeacherWorkspaceState(before,incoming,{academicYear:'2026-2027',term:q1}).state as any
+ assert.equal(result.advancedGradebookByCycle[cycle].assignments[0].term,q1)
+ assert.equal(result.advancedGradebookByCycle[cycle].assignments[0].confirmedCycle,'2026-2027::'+q1)
+ assert.deepEqual(result.advancedGradebookByCycle[cycle].scores,browser.scores)
+ assert.deepEqual(result.advancedGradebookByCycle[cycle].comments,browser.comments)
+ assert.deepEqual(result.gradebookPeriodCorrectionsByCycle[cycle].assessmentIds,['unsaved'])
+ const stale=mergeTeacherWorkspaceState(result,incoming,{academicYear:'2026-2027',term:q2}).state as any
+ assert.equal(stale.advancedGradebookByCycle[cycle].assignments[0].term,q1)
+ const future=structuredClone(incoming)
+ future.advancedGradebookByCycle[cycle].assignments=[{id:'legitimate-q2',term:q2,confirmedCycle:'2026-2027::'+q2} as any]
+ const activated=mergeTeacherWorkspaceState(result,future,{academicYear:'2026-2027',term:q2}).state as any
+ assert.equal(activated.advancedGradebookByCycle[cycle].assignments[0].term,q2)
+})
