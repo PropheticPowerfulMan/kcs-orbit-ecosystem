@@ -1,3 +1,4 @@
+import { certificateDeliveryRouter } from './certificateDelivery.routes.js'
 import { officialStudentPortrait } from '../services/officialPortrait.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
 import { academicPeriodAccess, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
@@ -160,7 +161,7 @@ academicRecordsRouter.get('/transcripts/verify', asyncHandler(async (req, res) =
  return success(res, { valid: true, documentType: 'TRANSCRIPT', documentId, issuedAt: record.createdAt }, 'Authentic KCS transcript verified')
 }))
 academicRecordsRouter.get('/certificates/verify',asyncHandler(async(req,res)=>{
- const documentId=z.string().regex(new RegExp('^KCS-CERT-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
+ const documentId=z.string().regex(new RegExp('^KCS-(?:CERT|ATT)-[0-9]{8}-[A-Z0-9-]+$','i')).parse(req.query.document)
  const fingerprint=z.string().regex(/^[A-F0-9]{64}$/i).parse(req.query.fingerprint)
  const record=await prisma.auditLog.findFirst({where:{action:'CERTIFICATE_VERIFICATION_ISSUED',targetType:'OfficialCompletionCertificate',targetId:documentId},orderBy:{createdAt:'desc'}})
  const metadata=(record?.metadata??{}) as Record<string,unknown>
@@ -198,6 +199,7 @@ academicRecordsRouter.get('/report-card-analytics/verify', asyncHandler(async (r
 }))
 
 academicRecordsRouter.use(authenticate)
+academicRecordsRouter.use('/certificates', certificateDeliveryRouter)
 
 academicRecordsRouter.post('/report-card-analytics/verification', requireRoles('admin','staff','teacher'), asyncHandler(async (req:AuthenticatedRequest,res)=>{
  const payload=cycleSchema.extend({documentId:z.string().regex(/^KCS-RA-[0-9]{8}-[A-Z0-9-]+$/i),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),studentIds:z.array(z.string().min(1)).min(1).max(5000),rankedCount:z.number().int().min(1).max(5000)}).parse(req.body)
@@ -335,11 +337,11 @@ academicRecordsRouter.post('/report-cards/verification', requireRoles('admin','s
  return success(res, { registered: true, documentId: payload.documentId }, 'Report card registered for public verification')
 }))
 academicRecordsRouter.post('/certificates/verification',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
- const payload=z.object({documentId:z.string().regex(new RegExp('^KCS-CERT-[0-9]{8}-[A-Z0-9-]+$','i')),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),studentId:z.string().min(1),academicYear:academicYearSchema}).parse(req.body)
+ const payload=z.object({documentId:z.string().regex(new RegExp('^KCS-(?:CERT|ATT)-[0-9]{8}-[A-Z0-9-]+$','i')),fingerprint:z.string().regex(/^[A-F0-9]{64}$/i),studentId:z.string().min(1),academicYear:academicYearSchema}).parse(req.body)
  const student=await prisma.studentProfile.findUnique({where:{id:payload.studentId},include:{user:true}})
  if(!student)throw new ApiError(404,'Student not found')
  const grade=normalizeClassParts(student.grade,student.section).grade
- if(!['K4','Grade 4','Grade 8'].includes(grade))throw new ApiError(409,'Certificates are restricted to K4, Grade 4 and Grade 8')
+ if(payload.documentId.toUpperCase().startsWith('KCS-CERT-')&&!['K4','Grade 4','Grade 8'].includes(grade))throw new ApiError(409,'Certificates are restricted to K4, Grade 4 and Grade 8')
  const studentName=[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' ')
  const actorId=await resolveAcademicActorId(req)
  await prisma.auditLog.create({data:{actorId,action:'CERTIFICATE_VERIFICATION_ISSUED',targetType:'OfficialCompletionCertificate',targetId:payload.documentId,metadata:{fingerprint:payload.fingerprint,studentId:student.id,studentName,studentNumber:student.studentNumber,grade,academicYear:payload.academicYear}}})

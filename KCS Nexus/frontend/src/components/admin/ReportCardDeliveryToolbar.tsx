@@ -64,7 +64,7 @@ export default function ReportCardDeliveryToolbar({
     [cards],
   );
   const eligible = (row: (typeof rows)[number]) =>
-    approved(row.card) && Boolean(row.parent.email?.trim());
+    Boolean(row.parent.email?.trim());
   const periods = [
     ...new Set([
       ...ACADEMIC_REPORT_PERIODS,
@@ -370,7 +370,7 @@ export default function ReportCardDeliveryToolbar({
           <small className="mt-1 block font-normal">
             {tr(
               "La sélection est conservée quand vous changez les filtres. Seuls les bulletins approuvés sont envoyables.",
-              "Selection is retained when filters change. Only approved report cards can be sent.",
+              "Selection is retained when filters change. Approved report cards can be sent.",
             )}
           </small>
         </p>

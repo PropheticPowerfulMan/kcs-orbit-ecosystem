@@ -1,5 +1,6 @@
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Download, Loader2, Search, Trash2 } from "lucide-react";
+import { Archive, Download, Loader2, Search, Trash2, X } from "lucide-react";
 import { disciplineAPI } from "@/services/api";
 import { useUIStore } from "@/store/uiStore";
 import { canonicalClassLabel } from "@/utils/classLabels";
@@ -18,6 +19,13 @@ export default function StudentArchivesCenter() {
     [grade, setGrade] = useState("ALL"),
     [notice, setNotice] = useState(""),
     [backedUp, setBackedUp] = useState<Set<string>>(new Set());
+  const [deleteCandidate, setDeleteCandidate] = useState<any | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteStudentNumber, setDeleteStudentNumber] = useState("");
+  const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [backupBusy, setBackupBusy] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const requiredPhrase = tr("SUPPRIMER ARCHIVE", "DELETE ARCHIVE");
   const load = async () => {
     setBusy(true);
     try {
@@ -66,14 +74,18 @@ export default function StudentArchivesCenter() {
       );
   }, [rows, query, grade, fr]);
   const backup = async (row: any) => {
+    if (backupBusy) return;
+    setBackupBusy(row.id);
     try {
       const response = await disciplineAPI.archiveBackup(row.id);
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
       link.download = `KCS-ARCHIVE-${row.studentNumber}-${row.id}.json`;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
       setBackedUp((current) => new Set(current).add(row.id));
       setNotice(
         tr(
@@ -86,56 +98,176 @@ export default function StudentArchivesCenter() {
         e?.response?.data?.message ??
           tr("Sauvegarde impossible.", "Backup failed."),
       );
+    } finally {
+      setBackupBusy("");
     }
   };
-  const remove = async (row: any) => {
-    if (!backedUp.has(row.id)) {
-      setNotice(
-        tr(
-          "Téléchargez d’abord la sauvegarde obligatoire de ce dossier.",
-          "Download the mandatory backup of this record first.",
-        ),
-      );
+  const remove = async () => {
+    const row = deleteCandidate;
+    if (
+      !row ||
+      deleting ||
+      !backedUp.has(row.id) ||
+      !backupConfirmed ||
+      deleteConfirmation.trim() !== requiredPhrase ||
+      deleteStudentNumber.trim() !== row.studentNumber
+    )
       return;
-    }
-    const confirmation = window.prompt(
-      tr(
-        `Suppression définitive de l’entrée d’archive de ${row.fullName}. Les preuves académiques restent conservées. Tapez SUPPRIMER ARCHIVE puis confirmez le matricule ${row.studentNumber}.`,
-        `Permanent removal of ${row.fullName}'s archive entry. Academic evidence remains preserved. Type SUPPRIMER ARCHIVE, then confirm student ID ${row.studentNumber}.`,
-      ),
-    );
-    if (confirmation !== "SUPPRIMER ARCHIVE") return;
-    const studentNumber = window.prompt(
-      tr("Confirmez le matricule exact :", "Confirm the exact student ID:"),
-    );
-    if (studentNumber !== row.studentNumber)
-      return setNotice(
-        tr(
-          "Matricule incorrect : aucune suppression effectuée.",
-          "Student ID mismatch: nothing was deleted.",
-        ),
-      );
+    setDeleting(true);
     try {
       await disciplineAPI.deleteArchive(row.id, {
         confirmation: "SUPPRIMER ARCHIVE",
-        studentNumber: String(studentNumber),
+        studentNumber: row.studentNumber,
       });
+      setDeleteCandidate(null);
       setNotice(
         tr(
-          "Entrée d’archive supprimée; la trace d’audit et les preuves académiques sont conservées.",
-          "Archive entry removed; audit trail and academic evidence are preserved.",
+          "Entrée d’archive supprimée. La piste d’audit et les preuves académiques restent conservées.",
+          "Archive entry removed. The audit trail and academic evidence are retained.",
         ),
       );
       await load();
-    } catch (e: any) {
+    } catch (error: any) {
       setNotice(
-        e?.response?.data?.message ??
-          tr("Suppression impossible.", "Deletion failed."),
+        error?.response?.data?.message ||
+          tr("Suppression impossible.", "Unable to delete the archive entry."),
       );
+    } finally {
+      setDeleting(false);
     }
   };
   return (
     <div className="space-y-5">
+      {deleteCandidate &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[10030] grid place-items-center bg-kcs-blue-950/80 p-3 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archive-delete-title"
+          >
+            <section className="flex max-h-[94dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-rose-200 bg-white shadow-2xl dark:border-rose-800 dark:bg-kcs-blue-950">
+              <header className="flex items-start justify-between gap-3 border-b border-rose-100 p-5 dark:border-rose-900">
+                <div>
+                  <h2
+                    id="archive-delete-title"
+                    className="text-xl font-black text-kcs-blue-950 dark:text-white"
+                  >
+                    {tr(
+                      "Supprimer une entrée d’archive",
+                      "Delete an archive entry",
+                    )}
+                  </h2>
+                  <p className="mt-2 text-sm font-bold text-rose-800 dark:text-rose-200">
+                    {deleteCandidate.fullName} · {deleteCandidate.studentNumber}
+                  </p>
+                </div>
+                <button
+                  disabled={deleting || Boolean(backupBusy)}
+                  onClick={() => setDeleteCandidate(null)}
+                  aria-label={tr("Fermer", "Close")}
+                  className="rounded-xl border p-2 dark:border-kcs-blue-700 dark:text-white"
+                >
+                  <X size={19} />
+                </button>
+              </header>
+              <div className="min-h-0 space-y-4 overflow-y-auto p-5">
+                <p className="text-sm text-slate-600 dark:text-slate-200">
+                  {tr(
+                    "Téléchargez d’abord la sauvegarde du dossier, puis confirmez le matricule et la décision. Les preuves académiques et la trace d’audit sont conservées.",
+                    "Download the record backup first, then confirm the student ID and your decision. Academic evidence and the audit trail are retained.",
+                  )}
+                </p>
+                <button
+                  disabled={Boolean(backupBusy) || deleting}
+                  onClick={() => void backup(deleteCandidate)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {backupBusy ? (
+                    <Loader2 size={17} className="animate-spin" />
+                  ) : (
+                    <Download size={17} />
+                  )}{" "}
+                  {tr(
+                    "1. Télécharger la sauvegarde obligatoire",
+                    "1. Download the required backup",
+                  )}
+                </button>
+                <label className="flex items-start gap-3 rounded-xl bg-sky-50 p-3 text-sm font-bold text-kcs-blue-950 dark:bg-kcs-blue-900 dark:text-white">
+                  <input
+                    type="checkbox"
+                    disabled={!backedUp.has(deleteCandidate.id) || deleting}
+                    checked={backupConfirmed}
+                    onChange={(event) =>
+                      setBackupConfirmed(event.target.checked)
+                    }
+                    className="mt-1 size-4"
+                  />
+                  {tr(
+                    "J’ai conservé le fichier de sauvegarde téléchargé.",
+                    "I have saved the downloaded backup file.",
+                  )}
+                </label>
+                <label className="block text-sm font-bold dark:text-white">
+                  {tr(
+                    "2. Confirmez le matricule exact",
+                    "2. Confirm the exact student ID",
+                  )}
+                  <input
+                    className={field + " mt-2"}
+                    value={deleteStudentNumber}
+                    onChange={(event) =>
+                      setDeleteStudentNumber(event.target.value)
+                    }
+                    autoComplete="off"
+                    disabled={deleting}
+                  />
+                </label>
+                <label className="block text-sm font-bold dark:text-white">
+                  {tr("3. Recopiez", "3. Type")} « {requiredPhrase} »
+                  <input
+                    className={field + " mt-2"}
+                    value={deleteConfirmation}
+                    onChange={(event) =>
+                      setDeleteConfirmation(event.target.value)
+                    }
+                    autoComplete="off"
+                    disabled={deleting}
+                  />
+                </label>
+              </div>
+              <footer className="flex flex-wrap justify-end gap-3 border-t border-rose-100 p-4 dark:border-rose-900">
+                <button
+                  disabled={deleting || Boolean(backupBusy)}
+                  onClick={() => setDeleteCandidate(null)}
+                  className="rounded-xl border px-4 py-2.5 text-sm font-bold dark:border-kcs-blue-700 dark:text-white"
+                >
+                  {tr("Annuler", "Cancel")}
+                </button>
+                <button
+                  disabled={
+                    deleting ||
+                    !backedUp.has(deleteCandidate.id) ||
+                    !backupConfirmed ||
+                    deleteConfirmation.trim() !== requiredPhrase ||
+                    deleteStudentNumber.trim() !== deleteCandidate.studentNumber
+                  }
+                  onClick={() => void remove()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  {deleting ? (
+                    <Loader2 size={17} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={17} />
+                  )}{" "}
+                  {tr("Confirmer la suppression", "Confirm deletion")}
+                </button>
+              </footer>
+            </section>
+          </div>,
+          document.body,
+        )}
+
       <header className="rounded-3xl bg-gradient-to-br from-kcs-blue-950 to-slate-800 p-6 text-white">
         <p className="text-xs font-black uppercase tracking-[.18em] text-sky-200">
           {tr("Conservation institutionnelle", "Institutional retention")}
@@ -246,8 +378,13 @@ export default function StudentArchivesCenter() {
                 </button>
                 <button
                   type="button"
-                  disabled={!backedUp.has(row.id)}
-                  onClick={() => void remove(row)}
+                  disabled={deleting || Boolean(backupBusy)}
+                  onClick={() => {
+                    setDeleteCandidate(row);
+                    setDeleteConfirmation("");
+                    setDeleteStudentNumber("");
+                    setBackupConfirmed(false);
+                  }}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-300 px-3 py-2.5 text-sm font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-rose-200"
                 >
                   <Trash2 size={16} />

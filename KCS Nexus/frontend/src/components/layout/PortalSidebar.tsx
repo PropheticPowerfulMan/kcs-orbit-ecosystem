@@ -94,7 +94,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
   const dashboardPath = role === 'admin' ? '/admin' : `/portal/${role}`
   const base: NavItem[] = [
     { to: dashboardPath, label: t("portalNav.dashboard"), icon: LayoutDashboard },
-    ...(role === "teacher" ? [] : [{ to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
+    ...(["teacher", "admin"].includes(role) ? [] : [{ to: "/incident-reports", label: t("portalNav.incidentReport"), icon: ClipboardList }]),
     ...(["student", "parent", "admin"].includes(role) ? [{ to: "/shining-students", label: "Shining Student", icon: GraduationCap }] : []),
     ...(["student", "teacher"].includes(role) ? [{ to: "/electives", label: t("portalNav.electives"), icon: BookOpenCheck }] : []),
     ...(["student", "teacher"].includes(role) ? [{ to: "/course-syllabi", label: "Syllabus", icon: FileText }] : []),
@@ -136,10 +136,7 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/portal/teacher/grades', label: t('portalNav.gradebook'), icon: BarChart3 },
         { to: '/portal/teacher/report-card', label: t('portalNav.reportCards'), icon: GraduationCap },
         { to: '/portal/teacher/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
-        { to: '/portal/teacher/diagnostics', label: 'Diagnostic Tests', icon: ClipboardCheck },
         { to: '/portal/teacher/timetable', label: t('portalNav.timetable'), icon: Calendar },
-        { to: '/portal/teacher/resources', label: t('portalNav.resources'), icon: LibraryBig },
-        { to: '/portal/teacher/discipline', label: t('portalNav.disciplineReport'), icon: AlertTriangle },
         { to: '/portal/teacher/settings', label: t('portalNav.settings'), icon: Settings },
       ]
     case 'staff':
@@ -173,7 +170,6 @@ const getNavItems = (role: UserRole, t: (key: string) => string, language: strin
         { to: '/admin/employees', label: t('portalNav.employees'), icon: Users },
         { to: '/admin/admissions', label: t('portalNav.admissions'), icon: ClipboardList },
         { to: '/admin/pre-enrollments', label: language === 'fr' ? 'Préinscriptions' : 'Pre-enrollment', icon: UserPlus },
-        { to: '/admin/finance', label: t('portalNav.finance'), icon: WalletCards },
         { to: '/admin/reports', label: t('portalNav.reports'), icon: FileSpreadsheet },
         { to: '/admin/teacher-reports', label: 'Teacher Activity Reports', icon: FileSpreadsheet },
         { to: '/admin/news', label: t('portalNav.newsEvents'), icon: FileText },

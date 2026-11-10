@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-manual-periods-attendance-20261110-v8'
+const CACHE_NAME = 'kcs-nexus-shell-teacher-reports-certificates-20261110-v9'
 const SHELL = ['./', './manifest.webmanifest', './icons/nexus-192.png', './icons/nexus-512.png', './icons/nexus-apple-180.png']
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
