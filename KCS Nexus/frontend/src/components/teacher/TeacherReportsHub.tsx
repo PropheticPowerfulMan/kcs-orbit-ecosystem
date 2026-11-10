@@ -1,19 +1,21 @@
 import { type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ClipboardList, GraduationCap, MessageSquare } from "lucide-react";
+import { ClipboardList, GraduationCap, MessageSquare, ShieldAlert } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
 import IncidentReportsPage from "@/pages/IncidentReports";
 import ParentCommunicationPanel from "@/pages/Admin/ParentCommunicationPanel";
 
-type Props = { academicReports: ReactNode };
-export default function TeacherReportsHub({ academicReports }: Props) {
+type Props = { academicReports: ReactNode; disciplineReports: ReactNode };
+export default function TeacherReportsHub({ academicReports, disciplineReports }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
   const location = useLocation();
   const requested = new URLSearchParams(location.search).get("view");
-  const active = location.pathname.endsWith("/messages")
+  const active = location.pathname.endsWith("/discipline")
+    ? "discipline"
+    : location.pathname.endsWith("/messages")
     ? "messages"
-    : ["academic", "incident", "messages"].includes(requested ?? "")
+    : ["academic", "incident", "messages", "discipline"].includes(requested ?? "")
       ? requested
       : "incident";
   const sections = [
@@ -44,6 +46,12 @@ export default function TeacherReportsHub({ academicReports }: Props) {
       ),
       icon: MessageSquare,
     },
+    {
+      id: "discipline",
+      title: tr("Rapport disciplinaire", "Discipline report"),
+      description: tr("Consigner les mesures, suivre les dossiers et informer les familles.", "Record measures, follow up cases and inform families."),
+      icon: ShieldAlert,
+    },
   ];
   return (
     <section className="min-w-0 space-y-5">
@@ -63,7 +71,7 @@ export default function TeacherReportsHub({ academicReports }: Props) {
       </header>
       <nav
         aria-label={tr("Types de rapports", "Report types")}
-        className="grid gap-3 md:grid-cols-3"
+        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
       >
         {sections.map((section) => (
           <Link
@@ -112,7 +120,9 @@ export default function TeacherReportsHub({ academicReports }: Props) {
         ))}
       </nav>
       <div className="min-w-0">
-        {active === "academic" ? (
+        {active === "discipline" ? (
+          disciplineReports
+        ) : active === "academic" ? (
           academicReports
         ) : active === "messages" ? (
           <ParentCommunicationPanel />

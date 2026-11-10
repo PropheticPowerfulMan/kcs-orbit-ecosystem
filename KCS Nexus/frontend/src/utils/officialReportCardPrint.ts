@@ -9,6 +9,11 @@ type ReportSubject = {
   course: { name: string; code: string; credits?: number; teacherName?: string }
 }
 
+const teacherDisplayName = (value: string) => {
+  const name = value.trim().toLocaleLowerCase()
+  return name.charAt(0).toLocaleUpperCase() + name.slice(1)
+}
+
 export type PrintableReportCard = {
   id: string
   term: string
@@ -112,7 +117,7 @@ export async function printOfficialReportCard(card: PrintableReportCard, onBlock
   }
   const subjects = (card.subjects ?? []).map((subject) => `
     <tr><td><b>${escapeHtml(subject.course.name)}</b></td>
-    <td class="number">${escapeHtml(subject.course.teacherName || '—')}</td>${annual ? quarterTerms.map((sourceTerm) => `<td class="number">${termValue(subject, sourceTerm)}</td>`).join('') : ''}<td class="number">${subject.percentage.toFixed(2)}%</td>
+    <td class="number">${escapeHtml(teacherDisplayName(subject.course.teacherName || '—'))}</td>${annual ? quarterTerms.map((sourceTerm) => `<td class="number">${termValue(subject, sourceTerm)}</td>`).join('') : ''}<td class="number">${subject.percentage.toFixed(2)}%</td>
     <td class="grade">${escapeHtml(subject.letterGrade)}</td></tr>`).join('')
   const attendance = card.attendanceSummary
   const photoBlock = photo

@@ -1,4 +1,7 @@
 const pairs: Array<[string, string]> = [
+  ['Entrée d’archive supprimée. Les preuves académiques restent conservées.', 'Archived learner record removed; academic evidence remains preserved'],
+  ['Suspension officielle enregistrée et synchronisée avec les présences.', 'Official suspension scheduled and synchronized with attendance'],
+  ['Suspension annulée.', 'Suspension cancelled'],
  ['Bulletins générés à partir des notes soumises.','Report cards generated from submitted grades'],
  ['Le bulletin est approuvé et les notes officielles sont figées.','Report card approved and official grades frozen'],
  ['Six préférences électives classées ont été enregistrées.','Six ranked elective choices submitted'],

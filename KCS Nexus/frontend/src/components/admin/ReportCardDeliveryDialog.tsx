@@ -43,7 +43,7 @@ type Props = {
   busy: boolean;
   progress?: string;
   onClose: () => void;
-  onDeliver: () => void;
+  onDeliver: (approvePending?: boolean) => void;
 };
 const field =
   "w-full rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-950 dark:text-white";
@@ -82,6 +82,8 @@ export default function ReportCardDeliveryDialog({
   const [term, setTerm] = useState(initialTerm);
   const [query, setQuery] = useState("");
   const [review, setReview] = useState(initialReview);
+  const [approvalConfirmed, setApprovalConfirmed] = useState(false);
+  useEffect(() => setApprovalConfirmed(false), [selected]);
   const rows = useMemo(
     () =>
       cards.flatMap((card) =>
@@ -93,7 +95,7 @@ export default function ReportCardDeliveryDialog({
     [cards],
   );
   const eligible = (row: (typeof rows)[number]) =>
-    approved(row.card) && Boolean(row.parent.email?.trim());
+    Boolean(row.parent.email?.trim());
   useEffect(() => {
     onSelect((current) =>
       Object.fromEntries(
@@ -154,6 +156,7 @@ export default function ReportCardDeliveryDialog({
   const selectedRows = rows.filter(
     (row) => eligible(row) && selected[row.card.id]?.includes(row.parent.id),
   );
+  const pendingApprovalCount = new Set(selectedRows.filter(row => !approved(row.card)).map(row => row.card.id)).size;
   const selectedCardCount = new Set(selectedRows.map((row) => row.card.id))
     .size;
   const years = [
@@ -456,6 +459,7 @@ export default function ReportCardDeliveryDialog({
             )}
           </div>
         </div>
+        {review && pendingApprovalCount > 0 && <label className="mx-4 mb-3 flex shrink-0 items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-200"><input type="checkbox" checked={approvalConfirmed} disabled={busy} onChange={event => setApprovalConfirmed(event.target.checked)} className="mt-1 size-4 shrink-0"/><span>{tr(`J’ai vérifié les ${pendingApprovalCount} bulletin(s) encore non approuvé(s). Je confirme leur approbation avant l’envoi aux parents sélectionnés.`, `I have reviewed the ${pendingApprovalCount} report card(s) awaiting approval. I confirm their approval before delivery to the selected parents.`)}</span></label>}
         <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-sky-100 p-4 dark:border-kcs-blue-800">
           <button
             type="button"
@@ -469,8 +473,8 @@ export default function ReportCardDeliveryDialog({
           </button>
           <button
             type="button"
-            disabled={busy || !selectedRows.length}
-            onClick={() => (review ? onDeliver() : setReview(true))}
+            disabled={busy || !selectedRows.length || (review && pendingApprovalCount > 0 && !approvalConfirmed)}
+            onClick={() => (review ? onDeliver(approvalConfirmed) : setReview(true))}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"
           >
             {busy ? (
@@ -481,7 +485,7 @@ export default function ReportCardDeliveryDialog({
               <CheckCircle2 size={17} />
             )}{" "}
             {review
-              ? tr("Confirmer l’envoi", "Confirm delivery")
+              ? pendingApprovalCount > 0 ? tr("Approuver et envoyer", "Approve and send") : tr("Confirmer l’envoi", "Confirm delivery")
               : tr("Prévisualiser les destinataires", "Preview recipients")}
           </button>
         </footer>

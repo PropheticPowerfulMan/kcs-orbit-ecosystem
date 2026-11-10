@@ -1,3 +1,4 @@
+import AdminReportsHub from '@/components/admin/AdminReportsHub'
 import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import QRCode from 'qrcode';
 import InternationalPhoneInput from "../../components/InternationalPhoneInput";
@@ -3771,6 +3772,14 @@ const AdminDashboard = () => {
     setDashboardAction('The SMS composer was opened for the selected synchronized family contact.')
   }
 
+  const sectionView = (<AdminSectionView
+              segment={activeSegment}
+              officialRoster={officialRoster}
+              setOfficialRoster={setOfficialRoster}
+              admissionRequests={admissionRequests}
+              setAdmissionRequests={setAdmissionRequests}
+            />);
+
   return (
     <div className="portal-shell flex">
       <PortalSidebar />
@@ -3794,13 +3803,7 @@ const AdminDashboard = () => {
 
         <div className="space-y-6 p-4 sm:p-6">
           {activeSegment !== 'dashboard' ? (
-            <AdminSectionView
-              segment={activeSegment}
-              officialRoster={officialRoster}
-              setOfficialRoster={setOfficialRoster}
-              admissionRequests={admissionRequests}
-              setAdmissionRequests={setAdmissionRequests}
-            />
+            activeSegment === 'reports' ? <AdminReportsHub administrativeReports={sectionView}/> : sectionView
           ) : (
             <>
           <PortalSectionPanel />

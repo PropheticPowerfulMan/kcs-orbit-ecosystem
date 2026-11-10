@@ -260,7 +260,7 @@ const TeacherSectionView = ({ segment }: { segment: string }) => {
     'report-card': { title: 'Report Cards', subtitle: 'Official Gradebook synthesis, attendance, comments, controlled submission, and publication status.', icon: GraduationCap },
     reports: { title: 'Reports', subtitle: 'Report cards, AI comments, exports, and principal approval status.', icon: GraduationCap },
     diagnostics: { title: 'AI Diagnostics', subtitle: 'Actionable academic and attendance signals based on your assigned learners.', icon: Brain },
-    timetable: { title: 'Timetable', subtitle: 'Your synchronized teaching schedule, rooms, and class details.', icon: Calendar },
+    timetable: { title: language === 'fr' ? 'Emploi du temps' : 'Timetable', subtitle: language === 'fr' ? 'Vos cours, salles et classes synchronisés avec l’horaire officiel.' : 'Your synchronized teaching schedule, rooms, and class details.', icon: Calendar },
     resources: { title: 'Learning Resources', subtitle: 'Search, review, and manage resources shared with your classes.', icon: LibraryBig },
     discipline: { title: 'Detailed Student Discipline Report', subtitle: 'Incident context, action taken, parent contact, and follow-up plan.', icon: AlertTriangle },
     messages: { title: 'Messages', subtitle: 'Teacher inbox, parent threads, and internal coordination messages.', icon: MessageSquare },
@@ -3132,7 +3132,7 @@ const TeacherPortal = () => {
           {isDashboard && <PortalSectionPanel />}
           {isDashboard && <SuggestionBox />}
 
-          {!isDashboard && (['reports', 'messages'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>}/> : <TeacherSectionView segment={activeSegment} />)}
+          {!isDashboard && (['reports', 'messages', 'discipline'].includes(activeSegment) ? <TeacherReportsHub academicReports={<TeacherSectionView segment="reports"/>} disciplineReports={<TeacherSectionView segment="discipline"/>}/> : <TeacherSectionView segment={activeSegment} />)}
 
           {isDashboard && <TeacherDashboardHome />}
 

@@ -128,6 +128,8 @@ export default function AdminSuspensionCenter({
   );
 
   const createSuspension = async () => {
+    if (saving) return;
+    if (!draft.startDate || !draft.endDate || draft.endDate < draft.startDate) return setNotice(tr('Choisissez une date de début et une date de fin dans le bon ordre.', 'Choose a start date and an end date in the correct order.'));
     if (!draft.studentId)
       return setNotice(tr("Sélectionnez un élève.", "Select a learner."));
     if (draft.reason.trim().length < 5)
@@ -225,7 +227,8 @@ export default function AdminSuspensionCenter({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="nexus-suspension-center space-y-6">
+      <style>{`.dark .portal-shell .nexus-suspension-center button.suspension-reset { color:#041e34!important; background-color:#ffd566!important; background-image:none!important; opacity:1!important; border-color:#f2cb52!important; } .portal-shell .nexus-suspension-center button.suspension-reset:focus-visible { outline:3px solid #22d3ee; outline-offset:3px; }`}</style>
       <section className="rounded-3xl bg-gradient-to-br from-kcs-blue-950 to-rose-900 p-6 text-white shadow-xl">
         <div className="flex items-start gap-4">
           <span className="rounded-2xl bg-white/10 p-3">
@@ -256,7 +259,7 @@ export default function AdminSuspensionCenter({
           <button
             type="button"
             onClick={() => setMode("suspension")}
-            className={`rounded-xl px-4 py-2 text-sm font-black ${mode === "suspension" ? "bg-white text-rose-800" : "bg-white/10 text-white"}`}
+            className={`rounded-xl px-4 py-2 text-sm font-black ${mode === "suspension" ? "bg-white text-rose-800 dark:!bg-rose-100 dark:!text-rose-950" : "bg-white/10 text-white dark:!text-white"}`}
           >
             <Ban className="mr-2 inline" size={16} />
             {tr("Suspension temporaire", "Temporary suspension")}
@@ -264,7 +267,7 @@ export default function AdminSuspensionCenter({
           <button
             type="button"
             onClick={() => setMode("dismissal")}
-            className={`rounded-xl px-4 py-2 text-sm font-black ${mode === "dismissal" ? "bg-white text-rose-800" : "bg-white/10 text-white"}`}
+            className={`rounded-xl px-4 py-2 text-sm font-black ${mode === "dismissal" ? "bg-white text-rose-800 dark:!bg-rose-100 dark:!text-rose-950" : "bg-white/10 text-white dark:!text-white"}`}
           >
             <UserX className="mr-2 inline" size={16} />
             {tr("Renvoi définitif", "Permanent dismissal")}
@@ -407,7 +410,7 @@ function StudentSearch({
         <button
           type="button"
           onClick={reset}
-          className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 dark:border-kcs-blue-600 dark:bg-kcs-blue-900 dark:text-white"
+          className="suspension-reset rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 dark:border-kcs-blue-600 dark:border-kcs-gold-300 dark:!bg-kcs-gold-400 dark:!text-kcs-blue-950 dark:hover:!bg-kcs-gold-300 focus-visible:ring-2 focus-visible:ring-kcs-gold-400"
         >
           {tr("Réinitialiser", "Reset")}
         </button>
@@ -610,7 +613,7 @@ function SuspensionWorkspace({
                     <p className="font-black dark:text-white">
                       {nameOf(record.student)}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 dark:text-slate-300">
                       {record.student?.studentNumber} ·{" "}
                       {canonicalClassLabel(
                         record.student?.grade,
@@ -644,7 +647,7 @@ function SuspensionWorkspace({
             );
           })}
           {!records.length ? (
-            <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
+            <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 dark:text-slate-300">
               {tr("Aucune suspension enregistrée.", "No suspension recorded.")}
             </p>
           ) : null}
@@ -853,11 +856,11 @@ function DismissalWorkspace({
               className="rounded-2xl border border-sky-100 p-4 dark:border-kcs-blue-700"
             >
               <p className="font-black dark:text-white">{archive.fullName}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-300">
                 {archive.studentNumber} ·{" "}
                 {canonicalClassLabel(archive.grade, archive.section)}
               </p>
-              <p className="mt-2 text-xs font-bold text-rose-700">
+              <p className="mt-2 text-xs font-bold text-rose-700 dark:text-rose-200">
                 {new Date(archive.effectiveDate).toLocaleDateString()}
               </p>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
@@ -866,7 +869,7 @@ function DismissalWorkspace({
             </article>
           ))}
           {!archives.length ? (
-            <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
+            <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500 dark:text-slate-300">
               {tr(
                 "Aucun dossier de renvoi archivé.",
                 "No dismissed record archived.",

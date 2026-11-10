@@ -11,6 +11,11 @@ const imageBuffer = (value?: string | null) => {
   try { return Buffer.from(value.slice(value.indexOf(',') + 1), 'base64') } catch { return null }
 }
 
+const teacherDisplayName = (value: string) => {
+  const name = value.trim().toLocaleLowerCase()
+  return name.charAt(0).toLocaleUpperCase() + name.slice(1)
+}
+
 export async function officialReportCardPdf(input: {
   id: string; studentName: string; studentNumber: string; grade: string; term: string; average: number
   publicationStatus: string; studentPhoto?: string | null; subjects: Subject[]; teacherComment?: string | null; conduct?: string | null
@@ -67,7 +72,7 @@ export async function officialReportCardPdf(input: {
     if (y > 565) { doc.addPage(); drawWatermark(); y = 55 }
     if (index % 2 === 0) doc.rect(left, y - 3, right - left, rowHeight).fill('#F4F8FB')
     doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.name, left + 8, y, { width: 190, height: rowHeight - 1, ellipsis: true })
-    doc.font('Helvetica').fontSize(rows.length > 16 ? 6 : 7).fillColor('#173D60').text(subject.teacherName || '—', left + 205, y, { width: 145, height: rowHeight - 1, ellipsis: true })
+    doc.font('Helvetica').fontSize(rows.length > 16 ? 6 : 7).fillColor('#173D60').text(teacherDisplayName(subject.teacherName || '—'), left + 205, y, { width: 145, height: rowHeight - 1, ellipsis: true })
     doc.text(`${subject.percentage.toFixed(2)}%`, right - 91, y, { width: 48, align: 'right' })
     doc.font('Helvetica-Bold').fillColor('#008B7B').text(subject.letterGrade, right - 38, y, { width: 30, align: 'right' })
     y += rowHeight

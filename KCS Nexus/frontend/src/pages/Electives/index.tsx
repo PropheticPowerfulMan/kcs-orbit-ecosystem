@@ -1,3 +1,4 @@
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import "./electives.css";
 import { useEffect, useState, type FormEvent } from "react";
 import {
@@ -235,7 +236,9 @@ export default function ElectivesPage() {
   return (
     <div className="portal-shell elective-workspace flex">
       <PortalSidebar />
-      <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50 p-4 pt-20 sm:p-6 sm:pt-20 dark:bg-kcs-blue-950 lg:p-8 lg:pt-8">
+      <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50 dark:bg-kcs-blue-950">
+        {teacherRole && <header className="portal-dashboard-topbar sticky top-0 z-20 border-b px-4 py-3 backdrop-blur-2xl sm:px-6 sm:py-4"><h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">{getLocalizedGreeting(language)}, {user?.firstName}</h1><p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">{getLocalizedPortalDate(language)} · {tr('Cours électifs et accompagnement des élèves.', 'Elective courses and learner support.')}</p></header>}
+        <div className="p-4 pt-20 sm:p-6 sm:pt-20 lg:p-8 lg:pt-8">
         <div className="w-full max-w-none space-y-6">
           <header className="elective-hero">
             <div className="elective-hero-row">
@@ -1086,6 +1089,7 @@ export default function ElectivesPage() {
               )}
             </>
           )}
+        </div>
         </div>
       </main>
     </div>
