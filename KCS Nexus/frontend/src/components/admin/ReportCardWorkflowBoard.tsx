@@ -28,6 +28,7 @@ type Props = {
   onClass: (grade: string, section: string) => void;
   onQueue: (queue: ReportQueue) => void;
   onReadyDelivery: () => void;
+  readyDeliveryCount?: number;
 };
 export default function ReportCardWorkflowBoard({
   documentKind = "report-card",
@@ -39,6 +40,7 @@ export default function ReportCardWorkflowBoard({
   onClass,
   onQueue,
   onReadyDelivery,
+  readyDeliveryCount,
 }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
@@ -127,8 +129,8 @@ export default function ReportCardWorkflowBoard({
           <p className="text-xs text-slate-600 dark:text-slate-200">
             {certificates
               ? tr(
-                  "Préparez les certificats filtrés ou sélectionnés, puis choisissez leurs parents destinataires. Le classement est conservé sur le serveur.",
-                  "Prepare filtered or selected certificates, then choose their parent recipients. Workflow status is saved on the server.",
+                  "Les états ci-dessous filtrent la liste des élèves. Préparez les certificats, puis choisissez leurs parents destinataires avec le bouton d’envoi.",
+                  "The statuses below filter the learner list. Prepare certificates, then use the delivery button to choose their parent recipients.",
                 )
               : tr(
                   "Enregistrez vos corrections, puis marquez le bulletin prêt après vérification. Chaque nouvelle correction d’un bulletin approuvé le replace dans la file à vérifier.",
@@ -179,6 +181,7 @@ export default function ReportCardWorkflowBoard({
         {steps.map((step) => (
           <button
             key={step.id}
+            data-certificate-workflow-step={certificates ? step.id : undefined}
             type="button"
             aria-pressed={queue === step.id}
             onClick={() => onQueue(step.id)}
@@ -205,7 +208,7 @@ export default function ReportCardWorkflowBoard({
       <button
         type="button"
         disabled={
-          busy || !scoped.some((card) => reportCardQueue(card) === "READY")
+          busy || (readyDeliveryCount !== undefined ? !readyDeliveryCount : !scoped.some((card) => reportCardQueue(card) === "READY"))
         }
         onClick={onReadyDelivery}
         className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
@@ -219,6 +222,7 @@ export default function ReportCardWorkflowBoard({
               "Choisir les parents des bulletins prêts",
               "Select parents for ready report cards",
             )}
+        {certificates && readyDeliveryCount !== undefined ? ` · ${readyDeliveryCount}` : ''}
       </button>
     </section>
   );

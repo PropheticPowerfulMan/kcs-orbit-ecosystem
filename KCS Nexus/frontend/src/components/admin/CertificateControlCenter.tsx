@@ -1,4 +1,4 @@
-import ReportCardWorkflowBoard, { reportCardQueue, type ReportQueue } from './ReportCardWorkflowBoard'
+import ReportCardWorkflowBoard, { type ReportQueue } from './ReportCardWorkflowBoard'
 import CertificateDeliveryDialog from './CertificateDeliveryDialog'
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -131,7 +131,9 @@ export default function CertificateControlCenter() {
     try {
       const { data } = await academicRecordsAPI.certificateWorkflow(academicYear, documentType);
       if (workflowScope.current !== scope || request !== workflowRequest.current) return;
-      setWorkflow(Object.fromEntries((data.data ?? []).map((item: { studentId: string; status: 'READY' | 'SENT' }) => [item.studentId, item.status])));
+      const statuses = Object.fromEntries((data.data ?? []).map((item: { studentId: string; status: 'READY' | 'SENT' }) => [item.studentId, item.status]));
+      setWorkflow(statuses);
+      return statuses;
     } catch { if (workflowScope.current !== scope || request !== workflowRequest.current) return; setNotice(tr('Le classement serveur des certificats est indisponible. Actualisez avant de poursuivre.', 'The certificate workflow is unavailable. Refresh before continuing.')); }
   };
   useEffect(() => { setWorkflow({}); void loadWorkflow(); }, [academicYear, documentType]);
@@ -141,8 +143,8 @@ export default function CertificateControlCenter() {
     try {
       const response = await academicRecordsAPI.studentRegistry();
       setStudents(response.data.data ?? []);
-      await loadWorkflow();
       setNotice("");
+      await loadWorkflow();
     } catch (error: any) {
       setNotice(
         error?.response?.data?.message ??
@@ -159,7 +161,7 @@ export default function CertificateControlCenter() {
     void load();
     void loadAssets();
   }, []);
-  const visible = useMemo(() => {
+  const filteredStudents = useMemo(() => {
     const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
     return students
       .filter((student) => {
@@ -171,8 +173,6 @@ export default function CertificateControlCenter() {
           return false;
         if (grade !== "ALL" && normalizedGrade !== grade) return false;
         if (workflowSection !== 'ALL' && student.section !== workflowSection) return false;
-        const status = workflow[student.id] === 'READY' ? 'READY' : workflow[student.id] === 'SENT' ? 'SENT' : 'WAITING';
-        if (workflowQueue !== 'ALL' && status !== workflowQueue) return false;
         const haystack = [
           fullName(student),
           student.studentNumber,
@@ -189,7 +189,11 @@ export default function CertificateControlCenter() {
             SCHOOL_LEVELS.indexOf(normalizeSchoolLevel(b.grade)!) ||
           fullName(a).localeCompare(fullName(b), "fr", { sensitivity: "base" }),
       );
-  }, [documentType, grade, query, students, workflow, workflowQueue, workflowSection]);
+  }, [documentType, grade, query, students, workflowSection]);
+  const visible = useMemo(() => filteredStudents.filter(student => {
+    const status = workflow[student.id] === 'READY' ? 'READY' : workflow[student.id] === 'SENT' ? 'SENT' : 'WAITING';
+    return workflowQueue === 'ALL' || status === workflowQueue;
+  }), [filteredStudents, workflow, workflowQueue]);
   const selectedStudents = useMemo(
     () =>
       students
@@ -199,6 +203,13 @@ export default function CertificateControlCenter() {
         ),
     [selected, students],
   );
+  const deliveryTargets = selectedStudents.length ? selectedStudents : visible;
+  const readyTargets = (selectedStudents.length ? selectedStudents : filteredStudents).filter(student => workflow[student.id] === 'READY');
+  const openRecipients = (targets: CertificateStudent[]) => {
+    if (!targets.length) return;
+    setDeliveryScope(targets.map(student => student.id));
+    setDeliveryOpen(true);
+  };
   const print = async (student: CertificateStudent) => {
     setPrintingId(student.id);
     try {
@@ -247,15 +258,23 @@ export default function CertificateControlCenter() {
     setBusy(true);
     try {
       for (let start = 0; start < targets.length; start += 50) await academicRecordsAPI.prepareCertificates({ academicYear, documentType, language: documentLanguage, includeAuthentication: authenticated, studentIds: targets.slice(start, start + 50).map(student => student.id) });
-      await loadWorkflow(); setWorkflowQueue('READY');
-      setNotice(tr('Certificats préparés et classés dans « Prêts à envoyer ».', 'Certificates prepared and filed under “Ready to send”.'));
+      const statuses = await loadWorkflow();
+      if (!statuses) return;
+      const readyCount = targets.filter(student => statuses[student.id] === 'READY').length;
+      setWorkflowQueue(readyCount ? 'READY' : 'SENT');
+      setNotice(readyCount
+        ? tr('Certificats préparés et classés dans « Prêts à envoyer ».', 'Certificates prepared and filed under “Ready to send”.')
+        : tr('Ces certificats figurent déjà dans Envois enregistrés. Utilisez le bouton d’envoi pour choisir les parents d’un nouvel envoi.', 'These certificates are already filed under Delivery recorded. Use the delivery button to choose parents for another delivery.'));
     } catch (failure: any) { setNotice(failure?.response?.data?.message || tr('Préparation impossible.', 'Unable to prepare certificates.')); }
     finally { setBusy(false); }
   };
   return (
     <section className="space-y-5">
-      {deliveryOpen && <CertificateDeliveryDialog studentIds={deliveryScope} academicYear={academicYear} documentType={documentType} documentLanguage={documentLanguage} authenticated={authenticated} initialGrade={grade} onClose={() => { setDeliveryOpen(false); setDeliveryScope(undefined); void loadWorkflow() }}/>}
-      <div className="flex justify-end"><button type="button" onClick={() => { setDeliveryScope(undefined); setDeliveryOpen(true) }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white"><Send size={17}/>{tr('Envoyer les certificats aux parents', 'Send certificates to parents')}</button></div>
+      {deliveryOpen && <CertificateDeliveryDialog studentIds={deliveryScope} academicYear={academicYear} documentType={documentType} documentLanguage={documentLanguage} authenticated={authenticated} initialGrade="ALL" onDelivered={() => { setSelected(new Set()); setGrade('ALL'); setWorkflowSection('ALL'); setQuery(''); setWorkflowQueue('SENT'); setNotice(tr('Envoi enregistré. Les certificats concernés sont classés dans Envois enregistrés.', 'Delivery recorded. The certificates are filed under Delivery recorded.')); void loadWorkflow() }} onClose={() => { setDeliveryOpen(false); setDeliveryScope(undefined); void loadWorkflow() }}/>}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+        <div className="text-sm text-kcs-blue-950 dark:text-white"><b>{deliveryTargets.length} {tr('élève(s) ciblé(s)', 'targeted learner(s)')}</b><p className="text-xs text-slate-600 dark:text-slate-300">{selectedStudents.length ? tr('La sélection nominative ci-dessous sera utilisée.', 'The named selection below will be used.') : tr('Les élèves de la liste actuellement affichée seront utilisés.', 'Learners in the currently displayed list will be used.')}</p></div>
+        <button type="button" disabled={busy || !deliveryTargets.length} onClick={() => openRecipients(deliveryTargets)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white disabled:opacity-50"><Send size={17}/>{tr('Envoyer les certificats aux parents', 'Send certificates to parents')}</button>
+      </div>
       <header className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-sky-50 p-5 shadow-sm dark:border-amber-800 dark:from-kcs-blue-900 dark:via-kcs-blue-950 dark:to-kcs-blue-900">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -270,7 +289,10 @@ export default function CertificateControlCenter() {
               {tr("Centre des certificats KCS", "KCS Certificate Center")}
             </h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-600 dark:text-slate-300">
-              {tr(
+              {documentType === 'attendance' ? tr(
+                'Émettez des attestations de fréquentation pour les élèves de toutes les classes. Chaque document comporte un numéro unique, un filigrane et un QR de vérification.',
+                'Issue attendance certificates for learners in every grade. Each document carries a unique number, watermark and verification QR code.',
+              ) : tr(
                 "Émettez exclusivement les certificats de fin de cycle pour K4, Grade 4 et Grade 8. Chaque document comporte un numéro unique, un filigrane et un QR de vérification en direct.",
                 "Issue completion certificates exclusively for K4, Grade 4 and Grade 8. Every document carries a unique number, watermark and live verification QR code.",
               )}
@@ -292,6 +314,17 @@ export default function CertificateControlCenter() {
           {notice}
         </p>
       ) : null}
+      <section data-certificate-delivery-guide className="space-y-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-950">
+        <h3 className="font-black text-kcs-blue-950 dark:text-white">{tr('Envoyer un certificat aux parents en trois étapes', 'Send a certificate to parents in three steps')}</h3>
+        <ol className="grid gap-3 md:grid-cols-3">
+          {[
+            [tr('1 · Choisir les élèves', '1 · Choose learners'), tr('Réglez le type, l’année et la langue. Filtrez la classe, puis cochez les élèves. Leurs noms restent visibles dans votre sélection.', 'Set the type, year and language. Filter the grade, then check learners. Their names remain visible in your selection.')],
+            [tr('2 · Préparer et vérifier', '2 · Prepare and review'), tr('Cliquez sur Préparer pour classer les certificats dans Prêts à envoyer. Ouvrez un PDF pour vérifier le document si nécessaire.', 'Click Prepare to file certificates under Ready to send. Open a PDF to review the document when needed.')],
+            [tr('3 · Choisir les parents et envoyer', '3 · Choose parents and send'), tr('Cliquez sur Envoyer les certificats aux parents. Cochez précisément les parents, vérifiez le récapitulatif, puis confirmez l’envoi des PDF.', 'Click Send certificates to parents. Check the exact parents, review the summary, then confirm PDF delivery.')],
+          ].map(([title, description]) => <li key={title} className="rounded-xl border border-sky-200 bg-white p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><b className="block text-sm text-kcs-blue-950 dark:text-white">{title}</b><p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-200">{description}</p></li>)}
+        </ol>
+        <p className="text-xs font-semibold text-slate-600 dark:text-slate-200">{tr('Chaque parent choisi reçoit un message dans la langue du document avec le PDF en pièce jointe, ainsi qu’une copie dans sa messagerie Nexus.', 'Each selected parent receives a message in the document language with the PDF attached, plus a copy in their Nexus inbox.')}</p>
+      </section>
       <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -398,6 +431,7 @@ export default function CertificateControlCenter() {
           </article>
         </div>
       </section>
+
       <section className="rounded-2xl border border-sky-200 bg-white p-4 dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5">
         <div className="mb-4 grid gap-3 rounded-2xl border border-sky-100 bg-sky-50 p-3 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 md:grid-cols-4">
           <label className="text-xs font-bold dark:text-white">
@@ -525,7 +559,7 @@ export default function CertificateControlCenter() {
           · 45 {tr("jours par quarter", "days per quarter")} · 180{" "}
           {tr("jours ouvrables par année", "instructional days per year")}
         </p>
-        {documentType === "attendance" ? (
+        {(
           <div className="mt-3 flex gap-2">
             <button
               type="button"
@@ -543,8 +577,8 @@ export default function CertificateControlCenter() {
               {tr("Effacer la sélection", "Clear selection")}
             </button>
           </div>
-        ) : null}
-        {documentType === "attendance" ? (
+        )}
+        {(
           <section className="mt-3 rounded-2xl border-2 border-kcs-blue-200 bg-kcs-blue-50 p-3 dark:border-kcs-gold-400/60 dark:bg-kcs-blue-900">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -557,8 +591,8 @@ export default function CertificateControlCenter() {
                 <p className="text-sm font-bold text-kcs-blue-950 dark:text-white">
                   {selectedStudents.length
                     ? tr(
-                        `${selectedStudents.length} élève(s) seront imprimé(s).`,
-                        `${selectedStudents.length} learner(s) will be printed.`,
+                        `${selectedStudents.length} élève(s) retenu(s) pour la préparation ou l’envoi.`,
+                        `${selectedStudents.length} learner(s) selected for preparation or delivery.`,
                       )
                     : tr(
                         "Aucun élève sélectionné. Cochez les cartes ci-dessous.",
@@ -596,8 +630,8 @@ export default function CertificateControlCenter() {
               </div>
             ) : null}
           </section>
-        ) : null}
-        <ReportCardWorkflowBoard documentKind="certificate" cards={workflowCards} grade={grade} section={workflowSection} queue={workflowQueue} busy={busy} onClass={(grade, section) => { setGrade(grade); setWorkflowSection(section) }} onQueue={setWorkflowQueue} onReadyDelivery={() => { setDeliveryScope(workflowCards.filter(card => reportCardQueue(card) === 'READY' && (grade === 'ALL' || normalizeSchoolLevel(card.student.grade) === grade) && (workflowSection === 'ALL' || card.student.section === workflowSection)).map(card => card.id)); setDeliveryOpen(true) }}/>
+        )}
+        <ReportCardWorkflowBoard documentKind="certificate" cards={workflowCards} grade={grade} section={workflowSection} queue={workflowQueue} busy={busy} onClass={(grade, section) => { setGrade(grade); setWorkflowSection(section) }} onQueue={setWorkflowQueue} readyDeliveryCount={readyTargets.length} onReadyDelivery={() => openRecipients(readyTargets)}/>
         <button type="button" disabled={busy || !(selectedStudents.length || visible.length)} onClick={() => void prepare()} className="my-3 inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy && <Loader2 size={17} className="animate-spin"/>}{tr('Préparer', 'Prepare')} {selectedStudents.length || visible.length} {tr('certificat(s)', 'certificate(s)')}</button>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((student) => (
@@ -605,11 +639,11 @@ export default function CertificateControlCenter() {
               key={student.id}
               className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900"
             >
-              <p className="mb-3 w-fit rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-kcs-blue-900 dark:bg-sky-200 dark:text-kcs-blue-950">{workflow[student.id] === 'READY' ? tr('Prêt à envoyer', 'Ready to send') : workflow[student.id] === 'SENT' ? tr('Envoi enregistré', 'Delivery recorded') : tr('À préparer', 'Awaiting preparation')}</p>
+              <p data-certificate-workflow-status className="mb-3 w-fit rounded-full border px-3 py-1 text-xs font-bold">{workflow[student.id] === 'READY' ? tr('Prêt à envoyer', 'Ready to send') : workflow[student.id] === 'SENT' ? tr('Envoi enregistré', 'Delivery recorded') : tr('À préparer', 'Awaiting preparation')}</p>
               <div className="flex items-center gap-3">
-                {documentType === "attendance" ? (
+                {(
                   <input
-                    aria-label={tr("Sélectionner", "Select")}
+                    aria-label={`${tr("Sélectionner", "Select")} ${fullName(student)}`}
                     type="checkbox"
                     checked={selected.has(student.id)}
                     onChange={(e) =>
@@ -622,7 +656,7 @@ export default function CertificateControlCenter() {
                       })
                     }
                   />
-                ) : null}
+                )}
                 <span className="rounded-xl bg-amber-100 p-3 text-amber-700 dark:bg-amber-300 dark:text-kcs-blue-950">
                   <Award size={22} />
                 </span>

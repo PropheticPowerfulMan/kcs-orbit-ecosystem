@@ -29,6 +29,7 @@ type Props = {
   authenticated: boolean;
   initialGrade: string;
   onClose: () => void;
+  onDelivered: () => void;
 };
 const name = (person: Person) =>
   [person.lastName, person.middleName, person.firstName]
@@ -49,6 +50,7 @@ export default function CertificateDeliveryDialog({
   authenticated,
   initialGrade,
   onClose,
+  onDelivered,
 }: Props) {
   const language = useUIStore((state) => state.language);
   const tr = (fr: string, en: string) => (language === "fr" ? fr : en);
@@ -177,6 +179,7 @@ export default function CertificateDeliveryDialog({
         });
       }
       setCompleted(true);
+      onDelivered();
       setProgress(
         tr(
           "Les PDF sont disponibles dans la messagerie des parents et placés dans la file sécurisée d’envoi par e-mail.",
@@ -245,6 +248,11 @@ export default function CertificateDeliveryDialog({
           </button>
         </header>
         <div className="min-h-0 space-y-4 overflow-y-auto p-4 sm:p-5">
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-kcs-blue-950 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white">
+            <p className="font-black">{completed ? tr('3 · Envoi enregistré', '3 · Delivery recorded') : review ? tr('2 · Vérifier avant l’envoi', '2 · Review before sending') : tr('1 · Cocher les parents destinataires', '1 · Check parent recipients')}</p>
+            <p className="mt-2 text-xs leading-5">{completed ? tr('Les PDF sont enregistrés dans les messageries Nexus et leur envoi par e-mail est placé dans la file sécurisée.', 'PDFs are saved in Nexus inboxes and email delivery is recorded in the secure queue.') : review ? tr('Relisez les noms des enfants, les parents et leurs e-mails ci-dessous. Confirmer l’envoi prépare les PDF et les place dans la file sécurisée de courriels.', 'Review the children, parents and email addresses below. Confirming delivery prepares the PDFs and places them in the secure email queue.') : tr('Chaque ligne relie un enfant à son parent. Cochez uniquement les parents qui doivent recevoir son certificat. Vous pouvez sélectionner plusieurs parents pour le même enfant.', 'Each row links a child to their parent. Check the parents who should receive that certificate. You can select multiple parents for the same child.')}</p>
+            <p className="mt-3 font-bold">{new Set(chosen.map(row => row.student.id)).size} {tr('certificat(s)', 'certificate(s)')} · {new Set(chosen.map(row => row.parent.id)).size} {tr('parent(s) choisi(s)', 'selected parent(s)')}</p>
+          </div>
           {error && (
             <p
               role="alert"
@@ -273,7 +281,7 @@ export default function CertificateDeliveryDialog({
                   {tr("Classe", "Grade")}
                   <select
                     value={grade}
-                    onChange={(event) => setGrade(event.target.value)}
+                    onChange={(event) => { setGrade(event.target.value); setSection("ALL"); }}
                     className={field}
                   >
                     <option value="ALL">
@@ -410,8 +418,8 @@ export default function CertificateDeliveryDialog({
                 {!(review ? chosen : filtered).length && (
                   <p className="text-sm dark:text-white">
                     {tr(
-                      "Aucun destinataire correspondant.",
-                      "No matching recipients.",
+                      "Aucun parent correspondant. Vérifiez les filtres, puis les liens familiaux et les adresses e-mail dans Parents.",
+                      "No matching parent. Check the filters, then family links and email addresses in Parents.",
                     )}
                   </p>
                 )}
