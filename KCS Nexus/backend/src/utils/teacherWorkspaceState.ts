@@ -77,6 +77,8 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
     const redirectCurrent = correction.recoverBrowserWhileActive === true && entry?.academicYear === year && entry.term === correction.to
     const fixTask = (value: unknown) => {
       const task = record(value)
+      const taskTerm = String(task.term ?? '').replace(/Trimester/gi, 'Quarter')
+      if (redirectCurrent && typeof task.id === 'string' && taskTerm === correction.to) ids.add(task.id)
       if ((ids.has(task.id) || redirectCurrent) && String(task.term ?? '').replace(/Trimester/gi, 'Quarter') === correction.from) {
         ids.add(task.id)
         return { ...task, term: correction.to, confirmedCycle: year + '::' + correction.to }
