@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { ACADEMIC_REPORT_PERIODS, academicPeriodLabel } from '@/constants/academicPeriods'
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { LockKeyhole, X } from "lucide-react";
 import { academicCalendarAPI } from "@/services/api";
@@ -9,15 +10,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { useUIStore } from "@/store/uiStore";
 
-const terms = [
-  "Semester 1 · Quarter 1",
-  "Semester 1 · Quarter 2",
-  "Semester 2 · Quarter 3",
-  "Semester 2 · Quarter 4",
-  "Semester 1",
-  "Semester 2",
-  "Annual final",
-];
+const terms = ACADEMIC_REPORT_PERIODS;
 export default function AcademicPeriodClosurePanel({
   academicYear,
 }: {
@@ -31,15 +24,18 @@ export default function AcademicPeriodClosurePanel({
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const required = academicYear + " · " + selected;
+  const [year, setYear] = useState(academicYear);
+  useEffect(() => { setYear(academicYear); setSelected(''); setConfirmation('') }, [academicYear]);
+  const years = [...new Set([academicYear, ...(access?.calendars ?? []).map(calendar => calendar.name)])].sort().reverse();
+  const required = year + " · " + academicPeriodLabel(selected, language);
   const closePeriod = async () => {
     if (confirmation !== required || busy) return;
     setBusy(true);
     try {
       await academicCalendarAPI.closePeriod(
-        academicYear,
+        year,
         selected,
-        confirmation,
+        year + " · " + selected,
       );
       window.dispatchEvent(new Event("kcs-academic-period-closed"));
       setSelected("");
@@ -75,10 +71,11 @@ export default function AcademicPeriodClosurePanel({
       </div>
       <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
         {tr(
-          "Le SuperAdmin clôture chaque période après finalisation des notes. Quarter 1 reste ouvert jusqu’à cette action explicite. Les années antérieures à l’année active sont protégées.",
-          "The SuperAdmin closes each period once grades are finalized. Quarter 1 remains open until this explicit action. Academic years preceding the active year are protected.",
+          "Le SuperAdmin confirme la clôture de chaque quarter, semestre et année après finalisation des notes. Les dates du calendrier ne clôturent aucune période. Les données clôturées restent consultables en lecture seule.",
+          "The SuperAdmin confirms closure of each quarter, semester and year after grades are finalized. Calendar dates never close a period. Closed records remain available read-only.",
         )}
       </p>
+      <label className="mt-4 block max-w-sm text-xs font-bold text-kcs-blue-950 dark:text-white">{tr('Année à examiner ou clôturer', 'Year to review or close')}<select className="mt-1 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-kcs-blue-950 dark:border-amber-700 dark:bg-kcs-blue-950 dark:text-white" value={year} disabled={busy} onChange={event => { setYear(event.target.value); setSelected(''); setConfirmation('') }}>{years.map(value => <option key={value}>{value}</option>)}</select></label>
       {notice && (
         <p
           role="status"
@@ -89,14 +86,14 @@ export default function AcademicPeriodClosurePanel({
       )}
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {terms.map((term) => {
-          const readOnly = isAcademicPeriodReadOnly(access, academicYear, term);
+          const readOnly = isAcademicPeriodReadOnly(access, year, term);
           return (
             <article
               key={term}
               className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3 dark:border-amber-800 dark:bg-kcs-blue-950"
             >
               <div>
-                <b className="block text-xs dark:text-white">{term}</b>
+                <b className="block text-xs dark:text-white">{academicPeriodLabel(term, language)}</b>
                 <span
                   className={
                     readOnly

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kcs-nexus-shell-reports-electives-contrast-20261110-v7'
+const CACHE_NAME = 'kcs-nexus-shell-manual-periods-attendance-20261110-v8'
 const SIBLING_APP_PREFIXES = ['/kitchen/', '/sentinel/', '/academy/', '/eduplanner/', '/edupay/', '/savanex/']
 
 self.addEventListener('install', (event) => {

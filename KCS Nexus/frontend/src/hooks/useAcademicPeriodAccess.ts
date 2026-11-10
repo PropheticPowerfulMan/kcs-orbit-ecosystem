@@ -31,11 +31,6 @@ export function isAcademicPeriodReadOnly(
   term: string,
 ) {
   if (!access) return false;
-  if (
-    access.activeAcademicYear &&
-    Number(year.slice(0, 4)) < Number(access.activeAcademicYear.slice(0, 4))
-  )
-    return true;
   const normalized = term.replace(/Trimester/gi, "Quarter");
   const quarter = /Quarter (\d)/.exec(normalized);
   const semester = quarter

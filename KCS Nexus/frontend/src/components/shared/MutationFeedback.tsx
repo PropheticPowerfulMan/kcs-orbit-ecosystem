@@ -1,3 +1,4 @@
+import { localizeMutationMessage } from '@/utils/mutationMessages'
 import { createPortal } from 'react-dom'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -42,7 +43,7 @@ export default function MutationFeedback() {
           {feedback.isError ? '!' : '✓'}
         </div>
         <h2 id="mutation-feedback-title" className="mt-4 font-display text-2xl font-bold text-kcs-blue-950 dark:text-white">{title}</h2>
-        <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-600 dark:text-gray-200">{feedback.message}</p>
+        <p className="mt-3 whitespace-pre-line text-sm leading-6 text-gray-600 dark:text-gray-200">{localizeMutationMessage(feedback.message, isFrench ? 'fr' : 'en')}</p>
         <button type="button" autoFocus onClick={() => setFeedback(null)} className={`mt-6 w-full rounded-xl px-5 py-3 font-bold text-white transition focus:outline-none focus:ring-4 ${feedback.isError ? 'bg-red-700 hover:bg-red-800 focus:ring-red-200' : 'bg-kcs-blue-800 hover:bg-kcs-blue-950 focus:ring-kcs-blue-200'}`}>
           {closeLabel}
         </button>

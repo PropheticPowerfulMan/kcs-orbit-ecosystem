@@ -1,3 +1,4 @@
+import { ACADEMIC_REPORT_PERIODS, academicPeriodLabel } from '@/constants/academicPeriods'
 import {
   useEffect,
   useMemo,
@@ -66,7 +67,7 @@ export default function ReportCardDeliveryToolbar({
     approved(row.card) && Boolean(row.parent.email?.trim());
   const periods = [
     ...new Set([
-      term,
+      ...ACADEMIC_REPORT_PERIODS,
       ...cards
         .filter((card) => card.term.startsWith(year + " · "))
         .map((card) => card.term.split(" · ").slice(1).join(" · ")),
@@ -235,7 +236,7 @@ export default function ReportCardDeliveryToolbar({
             </option>
             <option value="NONE">{tr("Sans section", "No section")}</option>
             {sections.map((value) => (
-              <option key={value}>{value}</option>
+              <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>
             ))}
           </select>
         </label>
@@ -250,7 +251,7 @@ export default function ReportCardDeliveryToolbar({
               {tr("Toutes les périodes", "All periods")}
             </option>
             {periods.map((value) => (
-              <option key={value}>{value}</option>
+              <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>
             ))}
           </select>
         </label>
@@ -323,7 +324,7 @@ export default function ReportCardDeliveryToolbar({
                   {[card.student.grade, card.student.section]
                     .filter(Boolean)
                     .join(" ")}{" "}
-                  · {card.term}
+                  · {academicPeriodLabel(card.term, language)}
                 </span>
               </span>
               <span className="break-words text-kcs-blue-950 dark:!text-white">

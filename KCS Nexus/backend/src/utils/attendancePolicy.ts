@@ -38,3 +38,9 @@ export function summarizeAttendanceStatuses(statuses: string[]): AttendanceStatu
 
 export const attendanceRateFromStatuses = (statuses: string[]) => summarizeAttendanceStatuses(statuses).attendanceRate
 
+
+export function normalizeAttendanceCorrection(input: AttendanceStatusCount): AttendanceStatusCount {
+  const absent = Math.max(input.absent, input.excused + input.sick + input.suspended)
+  const total = input.present + input.late + absent
+  return { ...input, absent, total, attendanceRate: total ? Number(((input.present + input.late) / total * 100).toFixed(1)) : null }
+}
