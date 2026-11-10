@@ -1,5 +1,5 @@
 import GradebookWeightScopeDialog from './GradebookWeightScopeDialog'
-import { useAcademicPeriodAccess, isAcademicPeriodReadOnly } from '@/hooks/useAcademicPeriodAccess'
+import { useAcademicPeriodAccess, isAcademicPeriodReadOnly, isFutureGradebookPeriod } from '@/hooks/useAcademicPeriodAccess'
 import { createPortal } from 'react-dom'
 import { rankGradebookRows } from '@/utils/gradebookRanking'
 import DateSelect from '@/components/shared/DateSelect'
@@ -270,6 +270,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     return request
   }
   const [recoveredCells, setRecoveredCells] = useState(0)
+  const [periodRecoveryScope, setPeriodRecoveryScope] = useState('')
   const [loadedSnapshotSavedAt, setLoadedSnapshotSavedAt] = useState('')
   const saveSpreadsheet = async (silent = false, automatic = false) => {
     if (periodReadOnly) { if (!automatic) closedNotice(); return false }
@@ -384,9 +385,14 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   const [selectedAssignmentId, setSelectedAssignmentId] = useState('')
   const [saveNotice, setSaveNotice] = useState('')
   const [academicYear, setAcademicYear] = useState('2026-2027')
-  const { readOnly: periodReadOnly, access: periodAccess } = useAcademicPeriodAccess(academicYear, term)
-  const assignmentReadOnly = (assignment?: GradebookColumn) => Boolean(assignment && isAcademicPeriodReadOnly(periodAccess, academicYear, assignment.term))
-  const closedNotice = () => onAction(tr('Cette période est clôturée. Les notes sont en lecture seule.', 'This academic period is closed. Grades are read-only.'), true)
+  const { readOnly: periodClosed, access: periodAccess } = useAcademicPeriodAccess(academicYear, term)
+  const futurePeriod = isFutureGradebookPeriod(periodAccess, academicYear, term)
+  const periodReadOnly = periodClosed || futurePeriod
+  const assignmentReadOnly = (assignment?: GradebookColumn) => Boolean(assignment && (isAcademicPeriodReadOnly(periodAccess, academicYear, assignment.term) || isFutureGradebookPeriod(periodAccess, academicYear, assignment.term)))
+  const periodNotice = futurePeriod
+    ? tr('Ce quarter n’est pas encore ouvert. Saisissez les notes dans ', 'This quarter is not open yet. Enter grades in ') + (periodAccess?.activeEntryTerm || '') + tr(' jusqu’au passage confirmé par le SuperAdmin.', ' until the SuperAdmin confirms advancement.')
+    : tr('Cette période est clôturée. Les notes sont en lecture seule.', 'This academic period is closed. Grades are read-only.')
+  const closedNotice = () => onAction(periodNotice, true)
   const displayCategories = periodReadOnly && frozenCategoryWeights[term]?.length ? frozenCategoryWeights[term] : categories
   const [officialTerm, setOfficialTerm] = useState(terms[0])
   const [calendarReady, setCalendarReady] = useState(false)
@@ -445,6 +451,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       setConfirmedPeriod(false)
       setLoadedSnapshotSavedAt('')
       setRecoveredCells(0)
+      setPeriodRecoveryScope('')
       let saved: Partial<GradebookSnapshot> = {}
       let legacyBrowserSnapshot: Partial<GradebookSnapshot> = {}
       setAssignments([])
@@ -462,18 +469,23 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         void academicRecordsAPI.myFinalGrades().then(officialResponse => {
           if (active) setOfficialFinalGrades((officialResponse.data?.data?.submissions ?? []) as OfficialFinalGrade[])
         }).catch(() => undefined)
-        const response = await teacherWorkspaceAPI.get()
+        const [response, periodResponse] = await Promise.all([teacherWorkspaceAPI.get(), academicCalendarAPI.periodAccess().catch(() => ({ data: { data: periodAccess } }))])
+        const activeControl = periodResponse.data?.data
         const state = (response.data?.data?.state ?? {}) as Record<string, any>
         if (active) setFrozenCategoryWeights(Object.fromEntries(Object.entries(state.gradebookClosedCategoryWeightsByCycle ?? {}).filter(([key]) => key.startsWith(cycleKey + '::')).map(([key, value]) => [key.slice((cycleKey + '::').length), (value as any).categories ?? []])))
         const matchingCourses = (Array.isArray(state.courses) ? state.courses : []).filter((course: any) =>
           String(course?.name || '').trim().toLowerCase() === selectedCourse.name.trim().toLowerCase()
           && canonicalClassLabel(course?.className || course?.gradeLevels?.[0]) === canonicalClassLabel(selectedCourse.className || selectedCourse.gradeLevels[0]),
         )
-        const recovery = recoverGradebook({ courseId: selectedCourseId, academicYear, aliases: matchingCourses.length === 1 ? [matchingCourses[0].id] : [], state, students, browserSnapshots: [{ ...legacyBrowserSnapshot, savedAt: '' }, saved] })
+        const recovery = recoverGradebook({ courseId: selectedCourseId, academicYear, aliases: matchingCourses.length === 1 ? [matchingCourses[0].id] : [], state, students, activeEntry: { academicYear: activeControl?.activeAcademicYear, term: activeControl?.activeEntryTerm }, browserSnapshots: [{ ...legacyBrowserSnapshot, savedAt: '' }, saved] })
         const correction = state.gradebookPeriodCorrectionsByCycle?.[cycleKey]
         if (correction?.correctedAt && localStorage.getItem(periodPreferenceKey + ':correction') !== correction.correctedAt) {
           localStorage.setItem(periodPreferenceKey, correction.to)
           localStorage.setItem(periodPreferenceKey + ':correction', correction.correctedAt)
+        }
+        if (active && correction?.recoverBrowserWhileActive && recovery.recoveredTasks > 0
+          && activeControl?.activeAcademicYear === academicYear && activeControl?.activeEntryTerm === correction.to) {
+          setPeriodRecoveryScope(cycleKey)
         }
         saved = recovery.snapshot
         if (active) {
@@ -545,6 +557,13 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     }).catch(() => undefined)
     return () => { active = false }
   }, [periodReadOnly, cycleKey])
+
+  useEffect(() => {
+    if (periodRecoveryScope !== cycleKey || loadedScope !== cycleKey || periodReadOnly || !assignments.length) return
+    setPeriodRecoveryScope('')
+    setSaveNotice(tr('Récupération des colonnes dans le quarter corrigé…', 'Recovering columns into the corrected quarter…'))
+    void saveSpreadsheet(true, true)
+  }, [periodRecoveryScope, loadedScope, cycleKey, periodReadOnly, assignments.length])
 
   const visibleAssignments = assignments.filter((assignment) => assignment.term === term || term === 'Annual final')
 
@@ -898,7 +917,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
     } finally { setSubmittingFinals(false) }
   }
 
-  const exportGradebook = async (format: 'PDF' | 'Excel' | 'CSV', ranked = false) => {
+  const exportGradebook = async (format: 'PDF' | 'Excel' | 'CSV', ranked = false, detailed = false) => {
     const rows = studentAnalytics.map(({ student, average, projected, missing, risk }) => [student.name, canonicalClassLabel(student.grade, student.section), formatPercent(average), internationalGrade(average), formatPercent(projected), String(missing), risk])
     const heading = ['Student', 'Class', 'Average', 'International grade', 'Prediction', 'Missing work', 'Risk']
     const csv = [heading, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -916,7 +935,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         { ...distribution[2], count: submissionAnalytics.filter(item => item.average !== null && item.average >= 70 && item.average < 80).length },
         { ...distribution[3], count: submissionAnalytics.filter(item => item.average === null || item.average < 70).length },
       ]
-      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rankingLimit:ranked?rankingCount:undefined,rows:submissionAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk})),categories:displayCategories.map(category=>{const values=enrolledCourseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution:pdfDistribution,classAverage:pdfClassAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:submissionAnalytics.reduce((sum, item) => sum + item.missing, 0)},message=>onAction(message,true),reserved)
+      const ok=await printOfficialGradebook({courseId:selectedCourse?.id??selectedCourseId,courseName:selectedCourse?.name??'Gradebook',courseCode:selectedCourse?.abbreviation,academicYear,term,rankingLimit:ranked?rankingCount:undefined,assessments:detailed?visibleAssignments.map(task=>({...task,category:displayCategories.find(category=>category.id===task.category)?.name || task.category})):undefined,rows:submissionAnalytics.map(item=>({name:item.student.name,className:canonicalClassLabel(item.student.grade,item.student.section),average:item.average,letter:internationalGrade(item.average),missing:item.missing,risk:item.risk,scores:detailed?Object.fromEntries(visibleAssignments.map(task=>[task.id,getRawScore(task.id,item.student.id)])):undefined})),categories:displayCategories.map(category=>{const values=enrolledCourseStudents.flatMap(student=>{const value=getCategoryAverage(student.id,category.id);return value==null?[]:[value]});return{name:category.name,weight:category.weight,average:values.length?values.reduce((a,b)=>a+b,0)/values.length:null}}),distribution:pdfDistribution,classAverage:pdfClassAverage,median,successRate:numeric.length?numeric.filter(value=>value>=70).length*100/numeric.length:0,missingWork:submissionAnalytics.reduce((sum, item) => sum + item.missing, 0)},message=>onAction(message,true),reserved)
       if(!ok)return
     }
     onAction(`${format} export created with the current calculations and international grading scale.`)
@@ -980,10 +999,10 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
   return (
     <div data-kcs-gradebook="true" className="gradebook-mobile-surface space-y-6">
       {weightScopeOpen && <GradebookWeightScopeDialog key={cycleKey} courses={courses} currentCourseId={selectedCourseId} academicYear={academicYear} term={term} categories={categories} onApply={applyWeightsToCourses} onClose={() => setWeightScopeOpen(false)}/>}
-      {periodReadOnly && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{tr('Période clôturée · lecture seule', 'Closed academic period · read-only')}</p>}
+      {periodReadOnly && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-amber-950 dark:bg-amber-950/40 dark:text-amber-200">{periodNotice}</p>}
       <section className="rounded-2xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-kcs-blue-950" aria-label={tr('Périodes et notes enregistrées', 'Periods and saved grades')}>
         <p className="text-sm font-bold text-kcs-blue-950 dark:text-sky-100">{academicYear} · {tr('Période affichée', 'Displayed period')} {term}</p>
-        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période actuelle du calendrier', 'Current calendar period')} {officialTerm}.</strong>}</p>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{loadedScope !== cycleKey ? tr('Chargement sécurisé des notes enregistrées…', 'Loading saved gradebook securely…') : tr('Vos notes restent conservées dans leur période. Choisissez une période ci-dessous pour les retrouver.', 'Your grades remain saved in their original period. Choose a period below to view them.')} {officialTerm !== term && <strong>{tr('Période de saisie ouverte', 'Open grade-entry period')} {officialTerm}.</strong>}</p>
         {recoveredCells > 0 && <p className="mt-2 text-xs font-bold text-amber-800 dark:text-amber-200">{tr('Notes retrouvées dans les anciens formats', 'Grades recovered from older formats')} · {recoveredCells}. {tr('Enregistrez pour confirmer leur synchronisation.', 'Save to confirm synchronization.')}</p>}
         <div className="mt-2 flex flex-wrap gap-2">{terms.map((period) => {
           const count = assignments.filter((assignment) => period === 'Annual final' || assignment.term === period).length
@@ -1009,6 +1028,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
               <button disabled={periodReadOnly || submittingFinals} onClick={()=>void submitFinalGrades()} className="rounded-xl bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><CheckCircle2 size={15} className="mr-1 inline"/>{submittingFinals?'Submitting…':'Submit final grades'}</button>
               <button type="button" onClick={() => setRankingOpen(true)} className="rounded-xl bg-indigo-700 px-3 py-2 text-sm font-semibold text-white"><BarChart3 size={15} className="mr-1 inline"/>{tr('Classement des élèves', 'Learner ranking')}</button>
               <button onClick={() => void exportGradebook('PDF')} className="rounded-xl bg-kcs-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-kcs-blue-800"><FileText size={15} className="mr-1 inline" /> PDF</button>
+              <button type="button" onClick={() => void exportGradebook('PDF', false, true)} className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"><FileText size={15}/>{tr('PDF détaillé', 'Detailed PDF')}</button>
               <button onClick={() => void exportGradebook('Excel')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><FileSpreadsheet size={15} className="mr-1 inline" /> Excel</button>
               <button onClick={() => void exportGradebook('CSV')} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-kcs-blue-700 hover:bg-kcs-blue-50 dark:border-kcs-blue-700 dark:text-kcs-blue-200 dark:hover:bg-kcs-blue-800"><Download size={15} className="mr-1 inline" /> CSV</button>
           </div>}
@@ -1165,11 +1185,12 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
       <div className={spreadsheetOpen ? "gradebook-focus-window fixed inset-0 z-[9990] flex flex-col overflow-hidden border border-kcs-blue-300 bg-[#e8f1fc] text-kcs-blue-950 shadow-2xl dark:border-kcs-gold-500/60 dark:bg-slate-950 dark:text-white" : "overflow-hidden rounded-2xl border border-gray-100 bg-white dark:border-kcs-blue-800 dark:bg-kcs-blue-900/50"}>
         <div className={`flex flex-col gap-2 border-b p-3 dark:border-kcs-blue-800 lg:flex-row lg:items-center lg:justify-between ${spreadsheetOpen ? 'border-kcs-blue-200 bg-[#dceaf9] dark:border-kcs-blue-700 dark:bg-kcs-blue-950' : 'border-gray-100'}`}>
           <div>
-            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>{periodReadOnly && <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{tr('Période clôturée · lecture seule', 'Closed academic period · read-only')}</p>}
+            <h4 className="font-bold text-kcs-blue-900 dark:text-white">Live spreadsheet</h4>{periodReadOnly && <p className="text-xs font-bold text-amber-800 dark:text-amber-300">{periodNotice}</p>}
             <p className="text-xs text-gray-500 dark:text-gray-400">Sticky roster, editable cells, comments, missing detection, weighted final average, and predictive final grade.</p>
           </div>
           <div className="flex flex-wrap items-end gap-1.5">
             <button type="button" disabled={periodReadOnly || savingSpreadsheet || loadedScope !== cycleKey} onClick={() => void saveSpreadsheet()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700"><CheckCircle2 size={15}/> Save</button>
+            <button type="button" onClick={() => void exportGradebook('PDF', false, true)} className="inline-flex items-center justify-center gap-1 rounded-xl bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800"><FileText size={15}/>{tr('PDF détaillé', 'Detailed PDF')}</button>
             {!spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-kcs-blue-200 px-4 py-2 text-sm font-bold text-kcs-blue-700 dark:border-kcs-blue-700 dark:text-kcs-blue-200"><Maximize2 size={15}/> Dedicated window</button>}
             {spreadsheetOpen && <button type="button" onClick={() => setSpreadsheetOpen(false)} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white"><Minimize2 size={14}/> Close</button>}
             <label className="grid gap-1 text-[10px] font-bold uppercase text-gray-500 dark:text-gray-300"><span>Assignment to fill</span><select aria-label="Assignment for bulk score" className="input-kcs py-2 text-sm" value={selectedAssignmentId} disabled={!visibleAssignments.length} onChange={(event) => setSelectedAssignmentId(event.target.value)}>
@@ -1329,7 +1350,7 @@ const AdvancedGradebook = ({ courses, students, selectedCourseId, onSelectCourse
         <p className="mt-2 text-sm">{periodConfirmation === 'task' ? draft.title + ' · ' + draft.date : tr('Soumission des résultats disponibles du cours', 'Submit available course results')}</p>
         </div>{periodConfirmation === 'submission' && <p className="mb-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-900 dark:bg-sky-950 dark:text-sky-100">{tr('Les cellules vides sont exclues du calcul. Les élèves sans aucune note ne sont pas resoumis et leurs anciennes soumissions sont conservées.', 'Blank cells are excluded from calculations. Learners without any grades are not resubmitted and their earlier submissions are preserved.')} {submissionAnalytics.filter(item => item.average !== null).length} / {submissionAnalytics.length}</p>}{periodConfirmation === 'task' && dateSuggestedTerm && dateSuggestedTerm !== term && <div className="mb-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
         <p>{tr('La date saisie correspond au calendrier officiel de', 'The entered date belongs to the official calendar period')} <b>{dateSuggestedTerm}</b>.</p>
-        <button type="button" onClick={() => { chooseTerm(dateSuggestedTerm); setConfirmedPeriod(false) }} className="mt-3 rounded-lg bg-amber-700 px-4 py-2 font-bold text-white">{tr('Utiliser la période de cette date', 'Use the period for this date')}</button>
+        <button type="button" disabled={isFutureGradebookPeriod(periodAccess, academicYear, dateSuggestedTerm)} onClick={() => { chooseTerm(dateSuggestedTerm); setConfirmedPeriod(false) }} className="mt-3 rounded-lg bg-amber-700 px-4 py-2 font-bold text-white">{tr('Utiliser la période de cette date', 'Use the period for this date')}</button>{isFutureGradebookPeriod(periodAccess, academicYear, dateSuggestedTerm) && <p className="mt-2 font-semibold">{tr('La saisie reste dans le quarter ouvert par le SuperAdmin.', 'Grade entry remains in the quarter opened by the SuperAdmin.')}</p>}
         </div>}<label className="flex items-start gap-3 text-sm dark:text-white">
         <input type="checkbox" className="mt-1 h-5 w-5 shrink-0" checked={confirmedPeriod} onChange={event => setConfirmedPeriod(event.target.checked)}/>
         <span>{tr('Je confirme que cette année scolaire et ce quarter sont corrects.', 'I confirm that this academic year and quarter are correct.')}</span>

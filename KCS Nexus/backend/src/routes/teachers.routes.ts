@@ -1,5 +1,6 @@
+import { academicEntryPeriod, futureGradebookChanged } from '../utils/academicPeriodPolicy.js'
 import { isKcsAcademicTerm } from '../utils/academicCycle.js'
-import { academicPeriodAccess, academicCycleForDate, lockAcademicYears, protectAcademicPeriod, assertAcademicPeriodOpen } from '../services/academicPeriodAccess.service.js'
+import { academicPeriodAccess, academicCycleForDate, lockAcademicYears, protectAcademicPeriod, protectGradebookEntry, assertAcademicPeriodOpen } from '../services/academicPeriodAccess.service.js'
 import { closedGradebookChanged } from '../utils/academicPeriodPolicy.js'
 import { mergeTeacherWorkspaceState } from '../utils/teacherWorkspaceState.js'
 import { Router } from 'express'
@@ -425,10 +426,13 @@ teachersRouter.put('/me/workspace', authenticate, requireRoles('teacher'), async
       throw new ApiError(409, 'This teacher workspace was updated in another session. Reload it before saving again.')
     }
     if (!existing) {
+      if (futureGradebookChanged({}, payload.state, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_NOT_ACTIVE: Use the active quarter selected by the SuperAdmin.')
       if (closedGradebookChanged({}, payload.state, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_CLOSED: Historical grades are read-only.')
-      return tx.teacherWorkspace.create({ data: { userId: user.id, state: payload.state as Prisma.InputJsonValue } })
+      const initial = mergeTeacherWorkspaceState({}, payload.state)
+      return tx.teacherWorkspace.create({ data: { userId: user.id, state: initial.state as Prisma.InputJsonValue } })
     }
-    const merged = mergeTeacherWorkspaceState(existing.state, payload.state)
+    const merged = mergeTeacherWorkspaceState(existing.state, payload.state, { academicYear: access.activeAcademicYear, term: academicEntryPeriod(access, access.activeAcademicYear || '').activeEntryTerm })
+    if (futureGradebookChanged(existing.state, merged.state, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_NOT_ACTIVE: Use the active quarter selected by the SuperAdmin.')
     if (closedGradebookChanged(existing.state, merged.state, access)) throw new ApiError(409, 'ACADEMIC_PERIOD_CLOSED: Grades in a closed academic period cannot be modified.')
     const updated = await tx.teacherWorkspace.updateMany({
       where: { userId: user.id, revision: existing.revision },
@@ -909,7 +913,7 @@ teachersRouter.post('/me/assignments/:assignmentId/sync-gradebook', authenticate
   const synchronizedAt = new Date()
   await academicPeriodAccess()
   const result = await prisma.$transaction(async (tx) => {
-    await protectAcademicPeriod(tx, academicYear, term)
+    await protectGradebookEntry(tx, academicYear, term)
     await tx.grade.deleteMany({ where: { assignmentId, courseId: assignment.courseId } })
     await tx.grade.createMany({ data: assignment.submissions.map((submission) => {
       const score = Number(submission.score)

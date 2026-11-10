@@ -13,7 +13,7 @@ function record(value: unknown): Record<string, unknown> {
     : {}
 }
 
-export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<string, unknown>) {
+export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<string, unknown>, entry?: { academicYear: string | null; term: string | null }) {
   const existing = record(previous)
   const state = { ...existing, ...incoming }
   if (existing.gradebookCategoryWeightsByCycle !== undefined) state.gradebookCategoryWeightsByCycle = existing.gradebookCategoryWeightsByCycle
@@ -38,7 +38,9 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
         const cycleSnapshot = record(record(existing.advancedGradebookByCycle)[courseId + '::' + academicYear])
         const legacySnapshot = academicYear === '2026-2027' ? record(record(existing.advancedGradebookByCourse)[courseId]) : {}
         const legacyColumns = academicYear === '2026-2027' ? record(existing.gradebookColumnsByCourse)[courseId] : []
-        const correctedIds = record(record(existing.gradebookPeriodCorrectionsByCycle)[courseId + '::' + academicYear]).assessmentIds
+        const correction = record(record(existing.gradebookPeriodCorrectionsByCycle)[courseId + '::' + academicYear])
+        const redirectCurrent = correction.recoverBrowserWhileActive === true && entry?.academicYear === academicYear && entry.term === correction.to
+        const correctedIds = correction.assessmentIds
         const knownIds = new Set([
           ...[before, cycleSnapshot, legacySnapshot].flatMap(source => Array.isArray(source.assignments) ? source.assignments : []),
           ...(Array.isArray(legacyColumns) ? legacyColumns : []),
@@ -48,7 +50,7 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
         for (const value of Array.isArray(after.assignments) ? after.assignments : []) {
           const task = record(value)
           const term = String(task.term || '').replace(/Trimester/gi, 'Quarter')
-          if (!knownIds.has(task.id) && /Quarter [234]$/.test(term) && task.confirmedCycle !== academicYear + '::' + term) {
+          if (!(redirectCurrent && term === correction.from) && !knownIds.has(task.id) && /Quarter [234]$/.test(term) && task.confirmedCycle !== academicYear + '::' + term) {
             throw new ApiError(409, 'Reload the updated Gradebook and confirm the academic year and quarter before creating an assessment in a new quarter.')
           }
         }
@@ -72,9 +74,14 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
     const courseId = cycle.slice(0, divider)
     const year = cycle.slice(divider + 2)
     const ids = new Set(Array.isArray(correction.assessmentIds) ? correction.assessmentIds : [])
+    const redirectCurrent = correction.recoverBrowserWhileActive === true && entry?.academicYear === year && entry.term === correction.to
     const fixTask = (value: unknown) => {
       const task = record(value)
-      return ids.has(task.id) && String(task.term ?? '').replace(/Trimester/gi, 'Quarter') === correction.from ? { ...task, term: correction.to } : task
+      if ((ids.has(task.id) || redirectCurrent) && String(task.term ?? '').replace(/Trimester/gi, 'Quarter') === correction.from) {
+        ids.add(task.id)
+        return { ...task, term: correction.to, confirmedCycle: year + '::' + correction.to }
+      }
+      return task
     }
     for (const field of ['advancedGradebookByCycle', ...(year === '2026-2027' ? ['advancedGradebookByCourse', 'gradebookColumnsByCourse'] : [])]) {
       const key = field === 'advancedGradebookByCycle' ? cycle : courseId
@@ -86,6 +93,7 @@ export function mergeTeacherWorkspaceState(previous: unknown, incoming: Record<s
         : { ...snapshot, assignments: (Array.isArray(snapshot.assignments) ? snapshot.assignments : []).map(fixTask), archivedAssignments: (Array.isArray(snapshot.archivedAssignments) ? snapshot.archivedAssignments : []).map(entry => ({ ...record(entry), assignment: fixTask(record(entry).assignment) })) }
       state[field] = { ...values, [key]: corrected }
     }
+    state.gradebookPeriodCorrectionsByCycle = { ...record(state.gradebookPeriodCorrectionsByCycle), [cycle]: { ...correction, assessmentIds: [...ids] } }
   }
   return { state, previousGradebook: gradebookChanged ? previousGradebook : undefined }
 }
