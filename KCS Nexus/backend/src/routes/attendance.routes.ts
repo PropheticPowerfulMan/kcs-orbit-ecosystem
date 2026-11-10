@@ -1,5 +1,6 @@
 import { academicCycleForDate, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
 import { Router } from 'express'
+import type { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '../config/prisma.js'
 import { env } from '../config/env.js'
@@ -207,14 +208,23 @@ attendanceRouter.post('/teacher/homeroom', requireRoles('teacher'), asyncHandler
     for (const entry of effectiveEntries) {
       await tx.attendanceRecord.upsert({
         where: { studentId_date_className_period: { studentId: entry.studentId, date, className, period: payload.period ?? 'Daily' } },
-        create: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period ?? 'Daily', status: entry.status, note: entry.note },
-        update: { recordedById: recorderId, status: entry.status, note: entry.note },
+        create: { studentId: entry.studentId, recordedById: recorderId, date, className, period: payload.period ?? 'Daily', status: entry.status, note: entry.note?.trim() || null },
+        update: { recordedById: recorderId, status: entry.status, note: entry.note?.trim() || null },
       })
     }
+    const persisted = await tx.attendanceRecord.findMany({
+      where: { date, className, period: payload.period ?? 'Daily', studentId: { in: ids }, recordedById: recorderId },
+      select: { studentId: true, status: true, note: true },
+    })
+    const byStudent = new Map(persisted.map(record => [record.studentId, record]))
+    if (persisted.length !== effectiveEntries.length || effectiveEntries.some(entry => {
+      const record = byStudent.get(entry.studentId)
+      return !record || record.status !== entry.status || record.note !== (entry.note?.trim() || null)
+    })) throw new ApiError(500, 'Attendance persistence verification failed. Reload the register before retrying.')
     await tx.auditLog.create({ data: { actorId: recorderId, action: 'MAIN_TEACHER_ATTENDANCE_RECORDED', targetType: 'Class', targetId: className, metadata: { date: date.toISOString(), period: payload.period, count: payload.entries.length } } })
     await synchronizeStudentAcademicMetrics(tx, ids)
-  })
-  return success(res, { date: date.toISOString().slice(0, 10), className, saved: effectiveEntries.length, suspended: suspendedIds.size, summary: summarize(effectiveEntries) }, 'Official class attendance saved')
+  }, { maxWait: 10_000, timeout: 30_000 })
+  return success(res, { date: date.toISOString().slice(0, 10), className, verified: true, saved: effectiveEntries.length, suspended: suspendedIds.size, summary: summarize(effectiveEntries) }, 'Official class attendance saved')
 }))
 
 attendanceRouter.get('/history', requireRoles('admin', 'teacher'), asyncHandler(async (req: AuthenticatedRequest, res) => {
@@ -228,17 +238,43 @@ attendanceRouter.get('/history', requireRoles('admin', 'teacher'), asyncHandler(
   maximumTo.setUTCDate(maximumTo.getUTCDate() + 366)
   if (to > maximumTo) throw new ApiError(400, 'Attendance history is limited to 366 days per request')
 
+  const where: Prisma.AttendanceRecordWhereInput = {
+    date: { gte: from, lte: to },
+    ...(req.user!.role !== 'admin' ? { recordedById: await resolveAttendanceRecorderId(req.user!.sub) } : {}),
+  }
+  let pagination: { page: number; pageSize: number; total: number; pageCount: number } | undefined
+  let registerFilter: Prisma.AttendanceRecordWhereInput = where
+  if (req.query.page !== undefined) {
+    const requestedPage = z.coerce.number().int().min(1).parse(req.query.page)
+    const pageSize = z.coerce.number().int().min(1).max(50).parse(req.query.pageSize ?? 20)
+    const query = z.string().max(200).parse(req.query.q ?? '').trim()
+    const search: Prisma.AttendanceRecordWhereInput[] = query.split(/\s+/).filter(Boolean).map(token => ({ OR: [
+      { className: { contains: token, mode: 'insensitive' } },
+      { note: { contains: token, mode: 'insensitive' } },
+      { student: { studentNumber: { contains: token, mode: 'insensitive' } } },
+      ...(['firstName', 'middleName', 'lastName'] as const).map(field => ({ student: { user: { [field]: { contains: token, mode: 'insensitive' as const } } } })),
+    ] }))
+    // Page complete registers, so a large class can never be cut in half by a row limit.
+    const groups = await prisma.attendanceRecord.groupBy({
+      by: ['date', 'className', 'period', 'recordedById'],
+      where: { AND: [where, ...search] },
+      orderBy: [{ date: 'desc' }, { className: 'asc' }, { period: 'asc' }, { recordedById: 'asc' }],
+    })
+    const pageCount = Math.max(1, Math.ceil(groups.length / pageSize))
+    const page = Math.min(requestedPage, pageCount)
+    pagination = { page, pageSize, total: groups.length, pageCount }
+    const selected = groups.slice((page - 1) * pageSize, page * pageSize)
+    // A matching pupil selects their whole register, including all attendance totals.
+    registerFilter = { AND: [where, { OR: selected.length ? selected : [{ id: { in: [] } }] }] }
+  }
   const records = await prisma.attendanceRecord.findMany({
-    where: {
-      date: { gte: from, lte: to },
-      ...(req.user!.role === 'teacher' ? { recordedById: await resolveAttendanceRecorderId(req.user!.sub) } : {}),
-    },
+    where: registerFilter,
     include: {
       student: { include: { user: { select: { firstName: true, middleName: true, lastName: true } } } },
       recordedBy: { select: { firstName: true, middleName: true, lastName: true } },
     },
     orderBy: [{ date: 'desc' }, { className: 'asc' }, { student: { user: { lastName: 'asc' } } }],
-    take: 10000,
+    ...(pagination ? {} : { take: 10000 }),
   })
   const grouped = new Map<string, { date: string; className: string; period: string | null; recordedBy: string | null; records: typeof records }>()
   for (const record of records) {
@@ -265,7 +301,7 @@ attendanceRouter.get('/history', requireRoles('admin', 'teacher'), asyncHandler(
       note: record.note,
     })),
   }))
-  return success(res, { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), registers }, 'Official attendance history loaded')
+  return success(res, { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), registers, ...(pagination ? { pagination } : {}) }, 'Official attendance history loaded')
 }))
 
 attendanceRouter.get('/students/:studentId/analytics', requireRoles('admin'), asyncHandler(async (req, res) => {
