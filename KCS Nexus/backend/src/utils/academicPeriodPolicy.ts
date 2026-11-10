@@ -210,3 +210,19 @@ export function academicEntryPeriod(access: AcademicPeriodAccess, year: string) 
     : pendingClosureTerm === 'Semester 2' ? quarterTerms[3] : pendingClosureTerm
   return { pendingClosureTerm, activeEntryTerm }
 }
+
+// Quarter advancement is authorized by explicit closure, never by the device date.
+export function futureGradebookPeriods(access: AcademicPeriodAccess, year: string) {
+  if (access.activeAcademicYear !== year) return [];
+  const active = academicEntryPeriod(access, year).activeEntryTerm;
+  const index = quarterTerms.indexOf(active || '');
+  return index < 0 ? [] : quarterTerms.slice(index + 1);
+}
+export function futureGradebookChanged(previous: unknown, next: unknown, access: AcademicPeriodAccess) {
+  const year = access.activeAcademicYear;
+  if (!year) return false;
+  return closedGradebookChanged(previous, next, {
+    ...access,
+    closedPeriods: futureGradebookPeriods(access, year).map(term => ({ academicYear: year, term })),
+  });
+}

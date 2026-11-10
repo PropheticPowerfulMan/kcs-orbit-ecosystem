@@ -62,6 +62,7 @@ export function stableGradebookValue(value: unknown): string {
 export function recoverGradebook(input: {
   courseId: string; academicYear: string; aliases?: string[]; state: Record<string, any>;
   students: StudentIdentity[]; browserSnapshots?: Array<Partial<GradebookSnapshot>>;
+  activeEntry?: { academicYear: string | null; term: string | null };
 }) {
   const { state, courseId, academicYear } = input
   const ids = academicYear === legacyYear ? [...new Set([courseId, ...(input.aliases ?? [])])] : [courseId]
@@ -129,7 +130,9 @@ export function recoverGradebook(input: {
   }
   const correction = state.gradebookPeriodCorrectionsByCycle?.[courseId + '::' + academicYear]
   const correctedIds = new Set<string>(correction?.assessmentIds ?? [])
-  const correctPeriod = (task: GradebookColumn) => correctedIds.has(task.id) && canonicalGradebookTerm(task.term) === correction?.from ? { ...task, term: correction.to } : task
+  const redirectCurrent = correction?.recoverBrowserWhileActive === true && input.activeEntry?.academicYear === academicYear && input.activeEntry.term === correction.to
+  const correctPeriod = (task: GradebookColumn) => (correctedIds.has(task.id) || redirectCurrent) && canonicalGradebookTerm(task.term) === correction?.from
+    ? { ...task, term: correction.to, confirmedCycle: academicYear + '::' + correction.to } : task
   for (const [id, task] of assignments) assignments.set(id, correctPeriod(task))
   for (const [id, entry] of archived) archived.set(id, { ...entry, assignment: correctPeriod(entry.assignment) })
   const officialWeights = state.gradebookCategoryWeightsByCycle?.[courseId + '::' + academicYear]?.categories

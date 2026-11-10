@@ -5,6 +5,7 @@ import {
   academicPeriodIsReadOnly,
   academicEntryPeriod,
   quarterTerms,
+  futureGradebookPeriods,
   type AcademicPeriodAccess,
 } from "../utils/academicPeriodPolicy.js";
 import { academicCalendars } from "./reportAttendance.service.js";
@@ -103,4 +104,14 @@ export async function academicCycleForDate(date: Date) {
     academicYear: calendar.name,
     term: quarter ? quarterTerms[quarter.sequence - 1] : "Annual final",
   };
+}
+
+export async function protectGradebookEntry(db: Prisma.TransactionClient, year: string, term: string) {
+  await lockAcademicYears(db, [year]);
+  const access = await academicPeriodAccess(db);
+  assertAcademicPeriodOpen(access, year, term);
+  if (futureGradebookPeriods(access, year).includes(term.replace(/Trimester/gi, 'Quarter'))) {
+    throw new ApiError(409, 'ACADEMIC_PERIOD_NOT_ACTIVE: ' + year + ' · ' + term
+      + ' is not open for grade entry. Use ' + access.activeEntryTerm + ' until the SuperAdmin advances the period.');
+  }
 }

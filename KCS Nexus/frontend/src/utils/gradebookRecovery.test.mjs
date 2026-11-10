@@ -84,3 +84,14 @@ test('a browser cache cannot undo a confirmed quarter correction', () => {
  assert.equal(recovered.assignments.find(a => a.id === 'future').term, 'Semester 1 · Quarter 2')
  assert.equal(recovered.scores['moved:s1'], '80')
 })
+
+test('authorized recovery restores browser-only Spelling tasks to the active Q1 and preserves zeros',()=>{
+ const q1='Semester 1 · Quarter 1',q2='Semester 1 · Quarter 2',cycle='spelling::2026-2027'
+ const state={gradebookPeriodCorrectionsByCycle:{[cycle]:{from:q2,to:q1,assessmentIds:[],recoverBrowserWhileActive:true}}}
+ const browser={assignments:[{id:'local',title:'Quiz',date:'2026-10-15',category:'quiz',type:'quiz',maxPoints:100,term:q2}],scores:{'local:s1':'0','local:s2':'91'}}
+ const input={courseId:'spelling',academicYear:'2026-2027',state,students:[{id:'s1'},{id:'s2'}],browserSnapshots:[browser]}
+ const recovered=recoverGradebook({...input,activeEntry:{academicYear:'2026-2027',term:q1}}).snapshot
+ assert.equal(recovered.assignments[0].term,q1)
+ assert.deepEqual(recovered.scores,browser.scores)
+ assert.equal(recoverGradebook({...input,activeEntry:{academicYear:'2026-2027',term:q2}}).snapshot.assignments[0].term,q2)
+})
