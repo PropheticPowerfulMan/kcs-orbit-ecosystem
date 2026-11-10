@@ -8,17 +8,24 @@ const assessments=Array.from({length:50},(_,i)=>({id:'t'+i,title:'Task <'+i+'>',
 const rows=Array.from({length:40},(_,i)=>({name:'Learner '+i,className:'Grade 5',average:85+i/100,letter:'B',scores:Object.fromEntries(assessments.map(task=>[task.id,'80']))}))
 test('matrix preserves all 2000 cells across readable horizontal and vertical pages',()=>{
  const pages=gradebookMatrixPages(assessments,rows)
- assert.equal(pages.length,27)
+ assert.equal(pages.length,36)
  const cells=new Set()
- for(const page of pages){assert.ok(page.assessments.length<=6);assert.ok(page.rows.length<=16);for(const row of page.rows)for(const task of page.assessments)cells.add(row.name+'::'+task.id)}
+ for(const page of pages){assert.ok(page.assessments.length<=6);assert.ok(page.rows.length<=12);for(const row of page.rows)for(const task of page.assessments)cells.add(row.name+'::'+task.id)}
  assert.equal(cells.size,2000)
  assert.equal(gradebookMatrixPages([],[]).length,1)
- assert.equal(gradebookMatrixPages(assessments.slice(0,6),rows.slice(0,16)).length,1)
+ assert.equal(gradebookMatrixPages(assessments.slice(0,6),rows.slice(0,12)).length,1)
 })
 test('matrix escapes user input, repeats exact averages and includes every column',()=>{
  const html=renderGradebookMatrix({courseName:'Spelling <script>',academicYear:'2026-2027',term:'Quarter 1',assessments,rows,categories:[{name:'Quiz',weight:100}],classAverage:85,median:85,successRate:100,origin:'https://example.invalid',documentId:'KCS-GB-TEST',fingerprint:'A'.repeat(64),qr:'data:image/png;base64,test',verificationUrl:'https://example.invalid/verify',issuedAt:'2026-11-10T12:00:00Z',french:true})
  assert.ok(html.includes('Spelling &lt;script&gt;'))
  for(const task of assessments)assert.ok(html.includes(task.title.replace('<','&lt;').replace('>','&gt;')))
  assert.equal((html.match(/class="final">85.00%/g)||[]).length,9)
- assert.ok(html.includes('Page 27 / 27'))
+ assert.ok(html.includes('Page 36 / 36'))
+})
+
+test('long learner names reserve extra vertical space without losing learners',()=>{
+ const longRows=rows.map(row=>({...row,name:row.name+' '+ 'Family name '.repeat(7)}))
+ const pages=gradebookMatrixPages(assessments.slice(0,6),longRows)
+ assert.ok(pages.every(page=>page.rows.length<=6))
+ assert.equal(pages.flatMap(page=>page.rows).length,40)
 })
