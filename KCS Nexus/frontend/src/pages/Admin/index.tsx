@@ -1763,6 +1763,7 @@ const AdminSectionView = ({
         setApiSynced(true)
       })
       .catch(() => {
+        if (!mounted || requestId !== rosterRequestRef.current) return
         const fallbackRoster = readStoredRoster()
         const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
         setOfficialRoster(roster)
