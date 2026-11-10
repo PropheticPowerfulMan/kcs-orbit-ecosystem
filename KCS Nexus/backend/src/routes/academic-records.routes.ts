@@ -1,3 +1,4 @@
+import { officialStudentPortrait } from '../services/officialPortrait.service.js'
 import { databaseActorId } from '../utils/databaseActor.js'
 import { academicPeriodAccess, protectAcademicPeriod } from '../services/academicPeriodAccess.service.js'
 import { Prisma } from '@prisma/client'
@@ -47,7 +48,7 @@ const attendanceCorrectionSchema=z.object({
 const reportCardEditorialSchema=z.object({
  teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500),average:z.number().min(0).max(100),
  attendanceSummary:attendanceCorrectionSchema.nullable(),
- subjects:z.array(z.object({courseId:z.string().min(1),percentage:z.number().min(0).max(100)})).max(100),
+ subjects:z.array(z.object({courseId:z.string().min(1),courseName:z.string().trim().min(2).max(160).optional(),percentage:z.number().min(0).max(100)})).max(100),
 })
 const reportCardOfficialSettingsSchema=z.object({
  principalName:z.string().trim().min(2).max(120),
@@ -98,7 +99,7 @@ const lockedReportCard=async(tx:Prisma.TransactionClient,id:string)=>{
  await tx.$queryRaw(Prisma.sql`SELECT id FROM "StudentProfile" WHERE id = ${initial.studentId} FOR UPDATE`)
  return tx.reportCard.findUniqueOrThrow({where:{id}})
 }
-type AcademicCorrections={subjects?:Array<{courseId:string;percentage:number;letterGrade?:string}>;hiddenCourseIds?:string[]}
+type AcademicCorrections={subjects?:Array<{courseId:string;courseName?:string;percentage:number;letterGrade?:string}>;hiddenCourseIds?:string[]}
 const academicCorrections=(value:unknown):AcademicCorrections=>value&&typeof value==='object'&&!Array.isArray(value)?value as AcademicCorrections:{}
 const correctionMap=(value:unknown)=>new Map((academicCorrections(value).subjects??[]).map(item=>[item.courseId,item]))
 const reportCardVisibility=(courseIds:string[],requested:string[])=>{
@@ -489,10 +490,11 @@ academicRecordsRouter.get('/report-cards/teacher-dashboard',requireRoles('teache
 academicRecordsRouter.get('/report-cards/student-photo/:studentId',requireRoles('admin','staff','teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const studentId=getRouteParam(req.params.studentId)
  if(req.user!.role==='admin'||req.user!.role==='staff'){
-  const student=await prisma.studentProfile.findUnique({where:{id:studentId},select:{officialAvatar:true,user:{select:{avatar:true}}}})
+  const student=await prisma.studentProfile.findUnique({where:{id:studentId},select:{studentNumber:true,officialAvatar:true,user:{select:{orbitUserId:true}}}})
   if(!student)throw new ApiError(404,'Student not found')
   res.setHeader('Cache-Control','private, max-age=300')
-  return success(res,{officialAvatar:student.officialAvatar,avatar:student.user.avatar},'Official learner portrait loaded')
+  const portrait=await officialStudentPortrait(student)
+ return success(res,{officialAvatar:portrait,avatar:portrait},'Official learner portrait loaded')
  }
  await ensureTeacherProfile(req.user!.sub)
  const [teacher,student]=await Promise.all([
@@ -505,7 +507,7 @@ academicRecordsRouter.get('/report-cards/student-photo/:studentId',requireRoles(
   }),
   prisma.studentProfile.findUnique({
    where:{id:studentId},
-   select:{id:true,grade:true,section:true,officialAvatar:true,user:{select:{avatar:true}}},
+   select:{id:true,studentNumber:true,grade:true,section:true,officialAvatar:true,user:{select:{orbitUserId:true}}},
   }),
  ])
  if(!teacher)throw new ApiError(404,'Teacher profile synchronization pending')
@@ -513,7 +515,8 @@ academicRecordsRouter.get('/report-cards/student-photo/:studentId',requireRoles(
  const allowed=isTeacherHomeroomForStudent(teacher,student)||teacher.courses.length>0
  if(!allowed)throw new ApiError(403,'This learner is outside the assigned teacher scope')
  res.setHeader('Cache-Control','private, max-age=300')
- return success(res,{officialAvatar:student.officialAvatar,avatar:student.user.avatar},'Official learner portrait loaded')
+ const portrait=await officialStudentPortrait(student)
+ return success(res,{officialAvatar:portrait,avatar:portrait},'Official learner portrait loaded')
 }))
 academicRecordsRouter.put('/report-cards/teacher-draft/:studentId',requireRoles('teacher'),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const studentId=getRouteParam(req.params.studentId)
@@ -721,7 +724,7 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
   const hiddenCourseIds=correctionState.hiddenCourseIds??[]
   const correctedSubjects=baseSubjects.filter(subject=>!hiddenCourseIds.includes(subject.courseId)).map(subject=>{
    const correction=corrections.get(subject.courseId)
-   return correction?{...subject,percentage:correction.percentage,letterGrade:letter(correction.percentage)}:subject
+   return correction?{...subject,course:{...subject.course,name:correction.courseName||subject.course.name},percentage:correction.percentage,letterGrade:letter(correction.percentage)}:subject
   })
   const attendanceSummary=card.attendanceSummary??missingAttendance.get(card.id)??null
   return {...card,attendanceSummary,student,subjects:correctedSubjects.map(subject=>({...subject,course:{...subject.course,teacherName:[subject.course.teacher.user.lastName,subject.course.teacher.user.middleName,subject.course.teacher.user.firstName].filter(Boolean).join(' ')}})),hiddenCourseIds}
@@ -749,7 +752,7 @@ academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),as
  if(payload.subjects.some(item=>!officialCourseIds.has(item.courseId)))throw new ApiError(400,'A corrected subject is not part of this learner report card')
  const sourceResults=aggregateReportCardResults(officialSources,parsedCycle.academicYear,parsedCycle.term)
  const previousCorrections=correctionMap(current.academicCorrections)
- for(const subject of payload.subjects)previousCorrections.set(subject.courseId,{...subject,percentage:Number(subject.percentage.toFixed(2)),letterGrade:letter(subject.percentage)})
+ for(const subject of payload.subjects)previousCorrections.set(subject.courseId,{...previousCorrections.get(subject.courseId),...subject,percentage:Number(subject.percentage.toFixed(2)),letterGrade:letter(subject.percentage)})
  const correctedSubjects=[...previousCorrections.values()]
  const hidden=new Set(academicCorrections(current.academicCorrections).hiddenCourseIds??[])
  const visible=[...sourceResults.values()].filter(item=>item.percentage!==null&&!hidden.has(item.courseId))
@@ -802,7 +805,7 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
  const deliveryByCard=new Map<string,{reportCardId:string;parentIds:string[]}>()
  for(const item of payload.deliveries){const old=deliveryByCard.get(item.reportCardId);deliveryByCard.set(item.reportCardId,{reportCardId:item.reportCardId,parentIds:[...new Set([...(old?.parentIds??[]),...item.parentIds])]})}
  const uniqueDeliveries=[...deliveryByCard.values()]
- const cards=await prisma.reportCard.findMany({where:{id:{in:uniqueDeliveries.map(item=>item.reportCardId)}},include:{student:{select:{id:true,studentNumber:true,grade:true,section:true,user:{select:{firstName:true,middleName:true,lastName:true}},parentLinks:{include:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}}}}})
+ const cards=await prisma.reportCard.findMany({where:{id:{in:uniqueDeliveries.map(item=>item.reportCardId)}},include:{student:{select:{id:true,studentNumber:true,officialAvatar:true,grade:true,section:true,user:{select:{firstName:true,middleName:true,lastName:true,orbitUserId:true}},parentLinks:{include:{parent:{select:{id:true,firstName:true,middleName:true,lastName:true,email:true,phone:true}}}}}}}})
  if(cards.length!==uniqueDeliveries.length)throw new ApiError(404,'One or more selected report cards no longer exist')
  const invalid=cards.filter(card=>!['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus))
  if(invalid.length)throw new ApiError(409,'Only approved report cards may be sent to parents')
@@ -829,13 +832,13 @@ academicRecordsRouter.post('/report-cards/deliver',requireSuperAdmin(),asyncHand
    const course=latestCourse.get(item.courseId);if(!course)return[]
    const corrected=override.get(item.courseId)
    const percentage=corrected?.percentage??item.percentage
-   const name=course.name
+   const name=corrected?.courseName||course.name
    const teacherName=[course.teacher.user.lastName,course.teacher.user.middleName,course.teacher.user.firstName].filter(Boolean).join(' ')
    return[{name,teacherName,code:course.code,credits:course.credits,percentage,letterGrade:letter(percentage),termResults:item.termResults}]
   })
   const learner=[card.student.user.lastName,card.student.user.middleName,card.student.user.firstName].filter(Boolean).join(' ')
   const mainTeacher=mainTeachers.find(teacher=>isTeacherHomeroomForStudent(teacher,card.student))
-  const pdf=await officialReportCardPdf({id:card.id,studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language:payload.language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
+  const pdf=await officialReportCardPdf({id:card.id,studentPhoto:await officialStudentPortrait(card.student),studentName:learner,studentNumber:card.student.studentNumber,grade:[card.student.grade,card.student.section].filter(Boolean).join(' '),term:card.term,average:card.average,publicationStatus:card.publicationStatus,subjects,teacherComment:card.teacherComment,conduct:card.conduct,attendance:(card.attendanceSummary??missingAttendance.get(card.id)) as any,language:payload.language,mainTeacher:mainTeacher?{name:[mainTeacher.user.lastName,mainTeacher.user.middleName,mainTeacher.user.firstName].filter(Boolean).join(' '),image:mainTeacher.user.signatureImage}:null,principal:{name:officialSettings.principalName||'Principal',image:officialSettings.signatureImage??officialAccount?.signatureImage},seal:officialSettings.officialSealImage??officialAccount?.officialSealImage})
   pdfByCard.set(card.id,pdf)
  }
  let recipients=0
@@ -939,5 +942,5 @@ academicRecordsRouter.get('/transcripts/:studentId',requireRoles('admin','staff'
  const legacyRows=legacy.map(item=>({id:item.id,studentId:item.studentId,percentage:item.percentage,letterGrade:item.letterGrade,cycle:{academicYear:item.academicYear,term:item.term,status:'VERIFIED_LEGACY'},credits:item.credits,qualityPoints:(item.percentage>=90?4:item.percentage>=80?3:item.percentage>=70?2:item.percentage>=60?1:0)*item.credits,course:{id:'legacy-'+item.id,code:item.courseCode,name:item.courseName,credits:item.credits},source:'QUICKSCHOOLS_VERIFIED',gradeLevel:item.gradeLevel,sourceSchool:item.sourceSchool,sourceDocument:item.sourceDocument}))
  const rows=[...legacyRows,...currentRows].sort((left,right)=>left.cycle.academicYear.localeCompare(right.cycle.academicYear)||left.cycle.term.localeCompare(right.cycle.term)||left.course.code.localeCompare(right.course.code))
  const credits=rows.reduce((sum,item)=>sum+item.credits,0),points=rows.reduce((sum,item)=>sum+item.qualityPoints,0)
- return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:student.officialAvatar ?? student.user.avatar,transcriptVisible:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length,legacyRecords:legacyRows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_AND_VERIFIED_LEGACY_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
+ return success(res,{student:{id:student.id,studentNumber:student.studentNumber,name:[student.user.lastName,student.user.middleName,student.user.firstName].filter(Boolean).join(' '),grade:student.grade,photoUrl:await officialStudentPortrait(student),transcriptVisible:student.transcriptVisible},rows,summary:{credits,cumulativeGpa:credits?Number((points/credits).toFixed(2)):null,officialRecords:rows.length,legacyRecords:legacyRows.length},generatedAt:new Date().toISOString(),dataPolicy:rows.length?'APPROVED_AND_VERIFIED_LEGACY_RECORDS_ONLY':'NO_OFFICIAL_DATA'})
 }))
