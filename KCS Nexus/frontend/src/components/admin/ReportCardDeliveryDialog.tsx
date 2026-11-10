@@ -1,3 +1,4 @@
+import { ACADEMIC_REPORT_PERIODS, academicPeriodLabel } from '@/constants/academicPeriods'
 import {
   useEffect,
   useMemo,
@@ -267,7 +268,7 @@ export default function ReportCardDeliveryDialog({
                   }}
                 >
                   {years.map((value) => (
-                    <option key={value}>{value}</option>
+                    <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>
                   ))}
                 </select>
               </label>
@@ -281,8 +282,8 @@ export default function ReportCardDeliveryDialog({
                   <option value="ALL">
                     {tr("Toutes les périodes", "All periods")}
                   </option>
-                  {[...new Set([initialTerm, ...terms])].map((value) => (
-                    <option key={value}>{value}</option>
+                  {[...new Set([...ACADEMIC_REPORT_PERIODS, initialTerm, ...terms])].map((value) => (
+                    <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>
                   ))}
                 </select>
               </label>
@@ -300,7 +301,7 @@ export default function ReportCardDeliveryDialog({
                     {tr("Toutes les classes", "All grades")}
                   </option>
                   {SCHOOL_LEVELS.map((value) => (
-                    <option key={value}>{value}</option>
+                    <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>
                   ))}
                 </select>
               </label>
@@ -315,7 +316,7 @@ export default function ReportCardDeliveryDialog({
                     {tr("Toutes les sections", "All sections")}
                   </option>
                   {sections.map((value) => (
-                    <option key={value}>{value}</option>
+                    <option key={value} value={value}>{academicPeriodLabel(value, language)}</option>
                   ))}
                 </select>
               </label>
@@ -412,7 +413,7 @@ export default function ReportCardDeliveryDialog({
                           .filter(Boolean)
                           .join(" ")}
                         <br />
-                        {row.card.term}
+                        {academicPeriodLabel(row.card.term, language)}
                       </span>
                     </td>
                     <td className="p-3 font-bold">{name(row.parent)}</td>

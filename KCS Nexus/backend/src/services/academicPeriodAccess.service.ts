@@ -3,6 +3,7 @@ import { prisma } from "../config/prisma.js";
 import { ApiError } from "../utils/api.js";
 import {
   academicPeriodIsReadOnly,
+  academicEntryPeriod,
   quarterTerms,
   type AcademicPeriodAccess,
 } from "../utils/academicPeriodPolicy.js";
@@ -11,7 +12,7 @@ import { academicCalendars } from "./reportAttendance.service.js";
 type Database = Prisma.TransactionClient | typeof prisma;
 export async function academicPeriodAccess(
   db: Database = prisma,
-): Promise<AcademicPeriodAccess> {
+): Promise<AcademicPeriodAccess & { activeEntryTerm: string | null; pendingClosureTerm: string | null; closureMode: string }> {
   const [calendars, closures] = await Promise.all([
     academicCalendars(),
     db.auditLog.findMany({
@@ -22,7 +23,7 @@ export async function academicPeriodAccess(
       select: { metadata: true, createdAt: true },
     }),
   ]);
-  return {
+  const access: AcademicPeriodAccess = {
     calendars: calendars.map((calendar) => ({
       name: calendar.name,
       startDate: calendar.startDate,
@@ -36,6 +37,7 @@ export async function academicPeriodAccess(
       closedAt: row.createdAt.toISOString(),
     })),
   };
+  return { ...access, ...academicEntryPeriod(access, access.activeAcademicYear || ''), closureMode: 'EXPLICIT_SUPERADMIN' as const };
 }
 export async function lockAcademicYears(
   db: Prisma.TransactionClient,

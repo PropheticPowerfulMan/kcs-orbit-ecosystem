@@ -19,7 +19,7 @@ import { synchronizeStudentAcademicMetrics } from '../services/academicSync.js'
 import { MAX_IMPORT_BYTES, parseImportBuffer, validateImportFile } from '../modules/data-migration/file-parser.js'
 import { academicPeriodKey, isKcsAcademicTerm, isSequentialAcademicYear, KCS_ACADEMIC_TERMS } from '../utils/academicCycle.js'
 import { isVisibleInSuperAdministrationQueue } from '../services/academicSubmissionWorkflow.js'
-import { summarizeAttendanceStatuses } from '../utils/attendancePolicy.js'
+import { summarizeAttendanceStatuses, normalizeAttendanceCorrection } from '../utils/attendancePolicy.js'
 import { aggregateReportCardResults, reportCardSourcePeriods } from '../services/annualReportCard.service.js'
 import { attendanceWindow, attendanceWithSuspensions } from '../services/reportAttendance.service.js'
 import { submitCourseFinalGrades } from '../services/finalGradeSubmission.service.js'
@@ -43,7 +43,7 @@ const teacherReportVisibilityBulkSchema=cycleSchema.extend({
  courseIds:z.array(z.string().min(1)).min(1).max(100),
 })
 const attendanceCorrectionSchema=z.object({
- total:z.number().int().min(0).max(1000),present:z.number().int().min(0).max(1000),absent:z.number().int().min(0).max(1000),late:z.number().int().min(0).max(1000),excused:z.number().int().min(0).max(1000),sick:z.number().int().min(0).max(1000),suspended:z.number().int().min(0).max(1000),attendanceRate:z.number().min(0).max(100).nullable(),
+ total:z.number().int().min(0).max(6000),present:z.number().int().min(0).max(1000),absent:z.number().int().min(0).max(4000),late:z.number().int().min(0).max(1000),excused:z.number().int().min(0).max(1000),sick:z.number().int().min(0).max(1000),suspended:z.number().int().min(0).max(1000),attendanceRate:z.number().min(0).max(100).nullable(),
 })
 const reportCardEditorialSchema=z.object({
  teacherComment:z.string().trim().max(1500),conduct:z.string().trim().max(500),average:z.number().min(0).max(100),
@@ -736,6 +736,7 @@ academicRecordsRouter.get('/report-cards',requireRoles('admin','staff'),asyncHan
 academicRecordsRouter.patch('/report-cards/:id/editorial',requireSuperAdmin(),asyncHandler(async(req:AuthenticatedRequest,res)=>{
  const id=getRouteParam(req.params.id)
  const payload=reportCardEditorialSchema.parse(req.body)
+ if(payload.attendanceSummary)payload.attendanceSummary=normalizeAttendanceCorrection(payload.attendanceSummary)
  const actorId=await resolveAcademicActorId(req)
  const preview=await prisma.reportCard.findUnique({where:{id},select:{term:true}})
  if(!preview)throw new ApiError(404,'Report card not found')

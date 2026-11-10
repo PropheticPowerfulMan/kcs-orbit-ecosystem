@@ -1,3 +1,4 @@
+import { getLocalizedGreeting, getLocalizedPortalDate } from '@/utils/portalGreeting'
 import QRCode from 'qrcode';
 import InternationalPhoneInput from "../../components/InternationalPhoneInput";
 import ParentCommunicationPanel from './ParentCommunicationPanel'
@@ -3660,6 +3661,7 @@ const AdminSectionView = ({
 }
 
 const AdminDashboard = () => {
+  const language = useUIStore((state) => state.language)
   const { user } = useAuthStore()
   const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
   const location = useLocation()
@@ -3778,14 +3780,14 @@ const AdminDashboard = () => {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <h1 className="portal-dashboard-title font-display text-xl font-bold leading-tight sm:text-2xl">
-                {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}, {user?.firstName}
+                {getLocalizedGreeting(language)}, {user?.firstName}
               </h1>
               <p className="mt-1 text-sm font-medium text-kcs-blue-700 dark:text-kcs-blue-100">
-                {new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())} - A high-level operational view of academics, admissions, staff load, and AI-driven risk monitoring.
+                {getLocalizedPortalDate(language)} - {language === 'fr' ? 'Vue d’ensemble des études, admissions, équipes et alertes institutionnelles.' : 'A high-level view of academics, admissions, staff and institutional alerts.'}
               </p>
             </div>
             <div className="w-fit rounded-2xl border border-white/60 bg-white/65 px-4 py-2 text-sm font-semibold text-kcs-blue-800 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-kcs-blue-900/45 dark:text-kcs-blue-100">
-              Live production snapshot
+              {language === 'fr' ? 'Vue institutionnelle en direct' : 'Live production snapshot'}
             </div>
           </div>
         </div>

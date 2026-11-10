@@ -1,3 +1,4 @@
+import { useUIStore } from '@/store/uiStore'
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/store/authStore'
 import { getRouteUrl } from '@/utils/assets'
@@ -586,10 +587,10 @@ export const lessonPlanAPI = {
 
 export const academicCalendarAPI = {
   periodAccess: () => api.get('/academic-calendar/period-access'),
-  closePeriod: (academicYear: string, term: string, confirmation: string) => api.post('/academic-calendar/close-period', { academicYear, term, confirmation }, { timeout: 90_000 }),
+  closePeriod: (academicYear: string, term: string, confirmation: string) => api.post('/academic-calendar/close-period', { academicYear, term, confirmation }, { timeout: 90_000, headers: { 'x-silent-feedback': 'true', 'x-ui-language': useUIStore.getState().language } }),
   current: () => api.get('/academic-calendar/current'),
   list: () => api.get('/academic-calendar'),
-  save: (data: object) => api.put('/academic-calendar', data),
+  save: (data: object) => api.put('/academic-calendar', data, { headers: { 'x-silent-feedback': 'true', 'x-ui-language': useUIStore.getState().language } }),
   schedule: (academicYear: string, semester: number) => api.get('/academic-calendar/schedule', { params: { academicYear, semester } }),
   publishSchedule: (data: object) => api.put('/academic-calendar/schedule', data),
   previewPromotion: (data: object) => api.post('/academic-calendar/rollover/preview', data),
