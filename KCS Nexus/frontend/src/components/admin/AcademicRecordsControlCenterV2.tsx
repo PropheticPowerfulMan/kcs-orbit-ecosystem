@@ -1,8 +1,9 @@
+import ReportCardWorkflowBoard, { reportCardQueue, reportCardClass, type ReportQueue } from './ReportCardWorkflowBoard'
 import { ACADEMIC_REPORT_PERIODS, academicPeriodLabel, reportPeriodIncludesSource, reportStatusLabel } from '@/constants/academicPeriods'
 import ReportCardDeliveryToolbar from './ReportCardDeliveryToolbar'
 import ReportCardAnalyticsPanel from '@/components/shared/ReportCardAnalyticsPanel'
 import { useAcademicPeriodAccess, isAcademicPeriodReadOnly } from '@/hooks/useAcademicPeriodAccess'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Download, Edit3, FileCheck2, FilterX, History, Loader2, Printer, RefreshCw, Search, Send, ShieldCheck, Upload, X } from 'lucide-react'
 import { academicRecordsAPI } from '@/services/api'
 import { printOfficialTranscript } from '@/utils/officialTranscriptPrint'
@@ -91,6 +92,8 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [cardQuery, setCardQuery] = useState('')
   const [cardGradeFilter, setCardGradeFilter] = useState('ALL')
+  const [cardSectionFilter, setCardSectionFilter] = useState('ALL')
+  const [cardQueue, setCardQueue] = useState<ReportQueue>('ALL')
   const [transcriptLoadingId, setTranscriptLoadingId] = useState('')
   const [transcriptPrinting, setTranscriptPrinting] = useState(false)
   const [reportPrintingId, setReportPrintingId] = useState('')
@@ -150,7 +153,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     void load()
     return () => { loadRequestRef.current++ }
   }, [showTranscripts, academicYear])
-  useEffect(() => { setVisibleLimit(50) }, [studentQuery, gradeFilter, sectionFilter, statusFilter, cardQuery, cardGradeFilter, term])
+  useEffect(() => { setVisibleLimit(50) }, [studentQuery, gradeFilter, sectionFilter, statusFilter, cardQuery, cardGradeFilter, cardSectionFilter, cardQueue, term])
   useEffect(() => {
     if (showTranscripts) return
     academicRecordsAPI.reportCardOfficialSettings().then((response) => {
@@ -179,15 +182,22 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     }).sort((left, right) => compareClassLabels(String(left.grade ?? ''), String(right.grade ?? '')) || validSection(left.section).localeCompare(validSection(right.section), 'en', { numeric: true, sensitivity: 'base' }) || studentName(left).localeCompare(studentName(right), 'en', { sensitivity: 'base' }))
   }, [gradeFilter, registry, sectionFilter, statusFilter, studentQuery])
 
+  const periodCards = useMemo(() => cards.filter(card => card.term.startsWith(academicYear + ' · ') && normalize(card.term.split(' · ').slice(1).join(' · ')).replace(/trimester/g, 'quarter') === normalize(term).replace(/trimester/g, 'quarter')), [cards, academicYear, term])
   const visibleCards = useMemo(() => {
     const tokens = normalize(cardQuery).split(/\s+/).filter(Boolean)
-    return cards.filter((card) => {
-      if (!card.term.startsWith(academicYear + ' · ') || normalize(card.term.split(' · ').slice(1).join(' · ')).replace(/trimester/g,'quarter') !== normalize(term).replace(/trimester/g,'quarter')) return false
+    return periodCards.filter(card => {
       if (cardGradeFilter !== 'ALL' && normalizeSchoolLevel(card.student.grade) !== cardGradeFilter) return false
+      if (cardSectionFilter !== 'ALL' && card.student.section !== cardSectionFilter) return false
+      if (cardQueue !== 'ALL' && reportCardQueue(card) !== cardQueue) return false
       const haystack = normalize([cardStudentName(card), card.student.studentNumber, card.student.grade, card.student.section, card.term, card.publicationStatus].filter(Boolean).join(' '))
-      return tokens.every((token) => haystack.includes(token))
-    })
-  }, [academicYear, term, cardGradeFilter, cardQuery, cards])
+      return tokens.every(token => haystack.includes(token))
+    }).sort((a, b) => SCHOOL_LEVELS.indexOf(normalizeSchoolLevel(a.student.grade)!) - SCHOOL_LEVELS.indexOf(normalizeSchoolLevel(b.student.grade)!) || String(a.student.section || '').localeCompare(String(b.student.section || '')) || cardStudentName(a).localeCompare(cardStudentName(b), language, { sensitivity: 'base' }))
+  }, [periodCards, cardGradeFilter, cardSectionFilter, cardQueue, cardQuery, language])
+  const prepareReadyDelivery = () => {
+    const ready = periodCards.filter(card => reportCardQueue(card) === 'READY' && (cardGradeFilter === 'ALL' || normalizeSchoolLevel(card.student.grade) === cardGradeFilter) && (cardSectionFilter === 'ALL' || card.student.section === cardSectionFilter))
+    setSelectedParents(Object.fromEntries(ready.map(card => [card.id, (card.student.parentLinks ?? []).filter(link => link.parent.email?.trim()).map(link => link.parent.id)])))
+    setDeliveryCardId(''); setDeliveryReview(false); setDeliveryOpen(true)
+  }
 
   const finalStudentCount = new Set(matching.map((item) => item.student.studentNumber)).size
   const courseCount = new Set(matching.map((item) => item.course.code)).size
@@ -299,17 +309,22 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     finally { setOfficialSettingsBusy(false) }
   }
 
-  const saveEditorial = async (chooseParents = false) => {
+  const saveEditorial = async (mode: 'draft' | 'ready' | 'parents' = 'draft') => {
+    const chooseParents = mode === 'parents'
+    const markReady = mode !== 'draft'
     if (!editingCard) return
     setEditorialError('')
     setBusy(true)
     try {
-      await academicRecordsAPI.updateReportCardEditorial(editingCard.id, { ...editorialForm, average: computedEditorialAverage, subjects: editorialForm.subjects.map(({ courseId, courseName, percentage }) => ({ courseId, courseName: courseName.trim(), percentage })) }, chooseParents)
+      await academicRecordsAPI.updateReportCardEditorial(editingCard.id, { ...editorialForm, average: computedEditorialAverage, subjects: editorialForm.subjects.map(({ courseId, courseName, percentage }) => ({ courseId, courseName: courseName.trim(), percentage })) }, markReady)
       setNotice(tr('Toutes les corrections du bulletin ont été enregistrées dans la piste d’audit. Un bulletin déjà approuvé est rouvert pour une nouvelle approbation avant publication.', 'All report-card corrections were saved in the audit trail. A previously approved card is reopened for reapproval before publication.'))
-      if (chooseParents) await academicRecordsAPI.approveReportCard(editingCard.id, true)
+      if (markReady) await academicRecordsAPI.approveReportCard(editingCard.id, true)
       const savedCardId = editingCard.id
+      const savedGrade = normalizeSchoolLevel(editingCard.student.grade) || 'ALL'
+      const savedSection = editingCard.student.section || 'ALL'
       setEditingCard(null)
       await load()
+      if (mode === 'ready') { setCardGradeFilter(savedGrade); setCardSectionFilter(savedSection); setCardQueue('READY'); setNotice(tr('Bulletin corrigé et approuvé, classé dans « Prêts à envoyer ».', 'Report card corrected, approved and filed under “Ready to send”.')) }
       if (chooseParents) {
         setNotice(tr('Bulletin enregistré et approuvé. Choisissez maintenant ses parents destinataires.', 'Report card saved and approved. Choose its parent recipients now.'))
         setSelectedParents({})
@@ -330,24 +345,22 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
     return { ...current, [cardId]: [...selected] }
   })
 
-  const selectAllVisibleParents = () => setSelectedParents((current) => {
-    const next = { ...current }
-    for (const card of visibleCards) {
-      if (!['APPROVED', 'POSTED_TO_PORTAL', 'EMAILED'].includes(card.publicationStatus)) continue
-      next[card.id] = (card.student.parentLinks ?? []).map((link) => link.parent.id)
-    }
-    return next
-  })
 
-  const deliverSelected = async () => {
+  const deliverSelected = async (approvePending = false) => {
     if (deliveryInFlightRef.current) return
-    const deliveries = cards.filter(card => ['APPROVED', 'POSTED_TO_PORTAL', 'EMAILED'].includes(card.publicationStatus)).flatMap((card) => (selectedParents[card.id]?.length ?? 0) ? [{ reportCardId: card.id, parentIds: [...selectedParents[card.id]].sort() }] : []).sort((left,right)=>left.reportCardId.localeCompare(right.reportCardId))
+    const deliveries = cards.flatMap((card) => (selectedParents[card.id]?.length ?? 0) ? [{ reportCardId: card.id, parentIds: [...selectedParents[card.id]].sort() }] : []).sort((left,right)=>left.reportCardId.localeCompare(right.reportCardId))
     if (!deliveries.length) return setNotice(tr('Sélectionnez au moins un parent lié à un bulletin approuvé.', 'Select at least one parent linked to an approved report card.'))
+    const awaitingApproval = cards.filter(card => selectedParents[card.id]?.length && !['APPROVED', 'POSTED_TO_PORTAL', 'EMAILED'].includes(card.publicationStatus))
+    if (awaitingApproval.length && !approvePending) { setDeliveryCardId(''); setDeliveryReview(true); setDeliveryOpen(true); return }
     deliveryInFlightRef.current = true
     setDeliveryBusy(true)
     const signature=JSON.stringify({deliveries,language})
     if(deliveryIntentRef.current?.signature!==signature)deliveryIntentRef.current={signature,requestId:crypto.randomUUID()}
     try {
+      for (const card of awaitingApproval) {
+        setDeliveryProgress(tr('Approbation du bulletin ', 'Approving report card ') + cardStudentName(card))
+        await academicRecordsAPI.approveReportCard(card.id, true)
+      }
       let reportCards = 0, recipients = 0
       const batches = Math.ceil(deliveries.length / 100)
       for (let start = 0; start < deliveries.length; start += 100) {
@@ -450,7 +463,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
           <div className="grid gap-4 md:grid-cols-2"><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Commentaire institutionnel', 'Institutional comment')}<textarea rows={5} maxLength={1500} value={editorialForm.teacherComment} onChange={(event) => setEditorialForm((current) => ({ ...current, teacherComment: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label><label className="text-xs font-bold text-slate-600 dark:text-slate-300">{tr('Conduite / appréciation', 'Conduct / appreciation')}<textarea rows={5} maxLength={500} value={editorialForm.conduct} onChange={(event) => setEditorialForm((current) => ({ ...current, conduct: event.target.value }))} className={inputClass + ' mt-1 resize-y'} /></label></div>
           <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-900 dark:bg-amber-200 dark:text-amber-950">{tr('Les notes sources des enseignants ne sont jamais écrasées. Les corrections du SuperAdministrateur sont historisées et deviennent les valeurs officielles au moment de l’approbation. Modifier un bulletin déjà envoyé le rouvre pour un nouvel envoi.', 'Teacher source grades are never overwritten. Super Administrator corrections are audited and become official on approval. Editing an already delivered card reopens it for a new delivery.')}</p>
         </div>
-        <footer className="flex flex-col-reverse gap-2 border-t border-sky-100 p-5 dark:border-kcs-blue-800 sm:flex-row sm:justify-end"><button type="button" disabled={busy || editorialForm.subjects.some(subject => subject.courseName.trim().length < 2)} onClick={() => void saveEditorial(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"><Send size={17}/>{tr('Enregistrer, approuver et choisir les parents', 'Save, approve and choose parents')}</button><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" disabled={busy || editorialForm.subjects.some(subject => subject.courseName.trim().length < 2)} onClick={() => void saveEditorial()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 size={17} className="animate-spin"/> : <Edit3 size={17}/>} {tr('Enregistrer toutes les corrections', 'Save all corrections')}</button></footer>
+        <footer className="flex flex-col-reverse gap-2 border-t border-sky-100 p-5 dark:border-kcs-blue-800 sm:flex-row sm:justify-end"><button type="button" disabled={busy || editorialForm.subjects.some(subject => subject.courseName.trim().length < 2)} onClick={() => void saveEditorial('ready')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50">{tr('Enregistrer et marquer prêt', 'Save and mark ready')}</button><button type="button" disabled={busy || editorialForm.subjects.some(subject => subject.courseName.trim().length < 2)} onClick={() => void saveEditorial('parents')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"><Send size={17}/>{tr('Enregistrer, approuver et choisir les parents', 'Save, approve and choose parents')}</button><button type="button" onClick={() => setEditingCard(null)} className="rounded-xl border border-sky-200 px-4 py-2.5 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:text-white">{tr('Annuler', 'Cancel')}</button><button type="button" disabled={busy || editorialForm.subjects.some(subject => subject.courseName.trim().length < 2)} onClick={() => void saveEditorial()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-blue-700 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 size={17} className="animate-spin"/> : <Edit3 size={17}/>} {tr('Enregistrer toutes les corrections', 'Save all corrections')}</button></footer>
       </section>
     </div> : null}
     {transcript ? <div className="fixed inset-0 z-[190] flex items-center justify-center bg-kcs-blue-950/80 p-2 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-label={tr('Aperçu du relevé officiel', 'Official transcript preview')} onClick={() => setTranscript(null)}>
@@ -467,7 +480,7 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
       </section>
     </div> : null}
 
-    {deliveryOpen && <ReportCardDeliveryDialog cards={deliveryCardId ? cards.filter(card => card.id === deliveryCardId) : cards} initialReview={deliveryReview} initialYear={academicYear} initialTerm={term} initialGrade={cardGradeFilter} selected={selectedParents} onSelect={setSelectedParents} busy={deliveryBusy} progress={deliveryProgress} onClose={() => setDeliveryOpen(false)} onDeliver={() => void deliverSelected()}/>}
+    {deliveryOpen && <ReportCardDeliveryDialog cards={deliveryCardId ? cards.filter(card => card.id === deliveryCardId) : cards} initialReview={deliveryReview} initialYear={academicYear} initialTerm={term} initialGrade={cardGradeFilter} selected={selectedParents} onSelect={setSelectedParents} busy={deliveryBusy} progress={deliveryProgress} onClose={() => setDeliveryOpen(false)} onDeliver={(approvePending) => void deliverSelected(approvePending)}/>}
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-emerald-700 dark:text-emerald-300"><ShieldCheck size={17}/>{showTranscripts ? tr('Relevés académiques officiels', 'Official Academic Transcripts') : tr('Bulletins scolaires officiels', 'Official Report Cards')}</p><h2 className="mt-1 font-display text-2xl font-black text-kcs-blue-950 dark:text-white">{showTranscripts ? tr('Recherche, génération et impression des relevés', 'Transcript search, generation and printing') : tr('Examen, toilettage, approbation et envoi aux parents', 'Review, edit, approve and deliver to parents')}</h2><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{showTranscripts ? tr('Les relevés restent séparés des bulletins et ne contiennent que les résultats approuvés.', 'Transcripts remain separate from report cards and contain approved records only.') : tr('Sélectionnez précisément un ou plusieurs parents liés avant chaque envoi.', 'Precisely select one or more linked parents before delivery.')}</p></div><button disabled={busy} onClick={() => void load()} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 px-3 py-2 text-sm font-bold text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"><RefreshCw size={16} className={busy ? 'animate-spin' : ''}/>{tr('Actualiser', 'Refresh')}</button></div>
 
     {!showTranscripts && <ReportCardDeliveryToolbar cards={cards} year={academicYear} term={term} selected={selectedParents} onSelect={setSelectedParents} busy={busy || deliveryBusy} onReview={() => { setDeliveryCardId(''); setDeliveryReview(true); setDeliveryOpen(true) }}/>}
@@ -492,12 +505,12 @@ export default function AcademicRecordsControlCenterV2({ view = 'transcripts' }:
 
     {!showTranscripts && <ReportCardAnalyticsPanel academicYear={academicYear} term={term} students={cards.filter(card => card.term.replace(/Trimester/gi,'Quarter') === academicYear + ' · ' + term.replace(/Trimester/gi,'Quarter') && (cardGradeFilter === 'ALL' || normalizeSchoolLevel(card.student.grade) === cardGradeFilter)).map(card => ({ id: card.student.id, name: cardStudentName(card), className: [card.student.grade, card.student.section].filter(Boolean).join(' '), average: card.subjects?.some(subject => Number.isFinite(subject.percentage)) ? card.average : null, subjects: (card.subjects ?? []).map(subject => ({ courseId: subject.courseId ?? subject.id, name: subject.course.name, percentage: subject.percentage })) }))}/>}
     <section id="official-report-cards" className={!showTranscripts ? 'scroll-mt-24 rounded-2xl border border-sky-200 bg-white p-4 shadow-sm dark:border-kcs-blue-800 dark:bg-kcs-blue-950 sm:p-5' : 'hidden'}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">{tr('Bulletins officiels', 'Official report cards')}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Examiner, approuver, publier et imprimer', 'Review, approve, publish and print')}</h3></div><div className="grid w-full gap-2 sm:grid-cols-[11rem_minmax(16rem,1fr)] lg:max-w-2xl"><select value={cardGradeFilter} onChange={(event) => setCardGradeFilter(event.target.value)} className={inputClass}><option value="ALL">{tr('Toutes les classes', 'All grades')}</option>{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select><label className="relative"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={cardQuery} onChange={(event) => setCardQuery(event.target.value)} className={inputClass + ' pl-10'} placeholder={tr('Élève, matricule, classe, section ou statut', 'Learner, ID, class, section or status')}/></label></div></div>
-      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-black text-emerald-900 dark:text-emerald-100">{tr('Envoi précis aux parents liés', 'Precise delivery to linked parents')}</p><p className="text-xs text-emerald-800 dark:text-emerald-200">{tr('Cochez individuellement les destinataires sous chaque élève, ou sélectionnez tous les parents des résultats filtrés.', 'Select recipients individually under each learner, or select every parent from the filtered results.')}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={selectAllVisibleParents} className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-sm font-black text-emerald-800 dark:bg-kcs-blue-900 dark:text-emerald-200">{tr('Sélectionner tous les parents visibles', 'Select all visible parents')}</button><button type="button" disabled={deliveryBusy} onClick={() => void deliverSelected()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-black text-white disabled:opacity-50">{deliveryBusy ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>} {tr('Envoyer les bulletins sélectionnés', 'Send selected report cards')}</button></div></div>
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">{visibleCards.slice(0, visibleLimit).map((card) => <article key={card.id} className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-base font-black text-kcs-blue-950 dark:text-white">{cardStudentName(card)}</p><p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-200">{card.student.studentNumber} · {[card.student.grade, card.student.section].filter(Boolean).join(' ')} · {academicPeriodLabel(card.term, language)}</p><p className="mt-3 text-sm font-bold text-kcs-blue-900 dark:text-sky-100">{tr('Moyenne :', 'Average:')} <strong className="text-lg text-emerald-700 dark:text-emerald-300">{card.average.toFixed(2)}%</strong></p>{card.attendanceSummary ? <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-200">{tr('Présences', 'Present')}: <strong>{card.attendanceSummary.present}</strong> · {tr('Absences', 'Absences')}: <strong>{card.attendanceSummary.absent}</strong> · {tr('Retards', 'Late')}: <strong>{card.attendanceSummary.late}</strong> · {tr('Taux', 'Rate')}: <strong>{card.attendanceSummary.attendanceRate ?? '—'}%</strong></p> : null}</div><span className={card.publicationStatus === 'DRAFT' ? 'shrink-0 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-black text-amber-950 shadow-sm dark:border-amber-300 dark:bg-amber-300 dark:text-kcs-blue-950' : 'shrink-0 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-black text-kcs-blue-900 dark:border-sky-300 dark:bg-sky-200 dark:text-kcs-blue-950'}>{reportStatusLabel(card.publicationStatus, language)}</span></div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-xs font-black uppercase tracking-[.16em] text-kcs-gold-600">{tr('Bulletins officiels', 'Official report cards')}</p><h3 className="mt-1 text-xl font-black text-kcs-blue-950 dark:text-white">{tr('Examiner, approuver, publier et imprimer', 'Review, approve, publish and print')}</h3></div><div className="grid w-full gap-2 sm:grid-cols-[11rem_minmax(16rem,1fr)] lg:max-w-2xl"><select value={cardGradeFilter} onChange={(event) => { setCardGradeFilter(event.target.value); setCardSectionFilter('ALL') }} className={inputClass}><option value="ALL">{tr('Toutes les classes', 'All grades')}</option>{SCHOOL_LEVELS.map((grade) => <option key={grade}>{grade}</option>)}</select><label className="relative"><Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/><input value={cardQuery} onChange={(event) => setCardQuery(event.target.value)} className={inputClass + ' pl-10'} placeholder={tr('Élève, matricule, classe, section ou statut', 'Learner, ID, class, section or status')}/></label></div></div>
+      <ReportCardWorkflowBoard cards={periodCards} grade={cardGradeFilter} section={cardSectionFilter} queue={cardQueue} busy={busy || deliveryBusy} onClass={(grade, section) => { setCardGradeFilter(grade); setCardSectionFilter(section) }} onQueue={setCardQueue} onReadyDelivery={prepareReadyDelivery}/>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">{visibleCards.slice(0, visibleLimit).map((card, index) => <Fragment key={card.id}>{(index === 0 || reportCardClass(card) !== reportCardClass(visibleCards[index - 1])) && <h4 className="col-span-full mt-2 rounded-xl bg-kcs-blue-700 px-4 py-2 font-black text-white">{reportCardClass(card)}</h4>}<article key={card.id} className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4 shadow-sm dark:border-kcs-blue-700 dark:bg-kcs-blue-900"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-base font-black text-kcs-blue-950 dark:text-white">{cardStudentName(card)}</p><p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-200">{card.student.studentNumber} · {[card.student.grade, card.student.section].filter(Boolean).join(' ')} · {academicPeriodLabel(card.term, language)}</p><p className="mt-3 text-sm font-bold text-kcs-blue-900 dark:text-sky-100">{tr('Moyenne :', 'Average:')} <strong className="text-lg text-emerald-700 dark:text-emerald-300">{card.average.toFixed(2)}%</strong></p>{card.attendanceSummary ? <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-200">{tr('Présences', 'Present')}: <strong>{card.attendanceSummary.present}</strong> · {tr('Absences', 'Absences')}: <strong>{card.attendanceSummary.absent}</strong> · {tr('Retards', 'Late')}: <strong>{card.attendanceSummary.late}</strong> · {tr('Taux', 'Rate')}: <strong>{card.attendanceSummary.attendanceRate ?? '—'}%</strong></p> : null}</div><span className={card.publicationStatus === 'DRAFT' ? 'shrink-0 rounded-full border border-amber-300 bg-amber-100 px-3 py-1 text-xs font-black text-amber-950 shadow-sm dark:border-amber-300 dark:bg-amber-300 dark:text-kcs-blue-950' : 'shrink-0 rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-black text-kcs-blue-900 dark:border-sky-300 dark:bg-sky-200 dark:text-kcs-blue-950'}>{reportStatusLabel(card.publicationStatus, language)}</span></div>
         {['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(card.publicationStatus) ? <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-3 dark:border-emerald-800 dark:bg-kcs-blue-950"><p className="text-xs font-black uppercase tracking-wide text-emerald-800 dark:text-emerald-200">{tr('Parents destinataires', 'Parent recipients')}</p><div className="mt-2 grid gap-2">{(card.student.parentLinks ?? []).map(({ parent }) => <label key={parent.id} className="flex cursor-pointer items-start gap-2 rounded-lg bg-emerald-50 p-2 text-xs text-kcs-blue-950 dark:bg-emerald-950/40 dark:text-white"><input type="checkbox" className="mt-0.5 size-4" checked={(selectedParents[card.id] ?? []).includes(parent.id)} onChange={() => toggleParent(card.id, parent.id)}/><span><b>{[parent.lastName,parent.middleName,parent.firstName].filter(Boolean).join(' ')}</b><br/><span className="text-slate-500 dark:text-slate-300">{parent.email || tr('Aucun email — notification portail uniquement', 'No email — portal notification only')}</span></span></label>)}{!(card.student.parentLinks ?? []).length ? <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">{tr('Aucun parent lié à cet élève.', 'No parent is linked to this learner.')}</p> : null}</div></div> : null}
         <div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={busy || cardReadOnly(card)} onClick={() => openEditorial(card)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-kcs-blue-300 bg-white px-3 py-2 text-sm font-black text-kcs-blue-800 disabled:opacity-50 dark:bg-kcs-blue-950 dark:text-sky-100"><Edit3 size={16}/>{tr('Modifier / toiletter', 'Edit / polish')}</button>{card.publicationStatus === 'READY_FOR_REVIEW' ? <button disabled={busy} onClick={() => void approve(card.id)} className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-3 py-2 text-sm font-black text-white"><CheckCircle2 size={16} className="mr-1"/>{tr('Approuver et figer', 'Approve and freeze')}</button> : null}{card.publicationStatus === 'APPROVED' ? <button disabled={busy} onClick={() => void publish(card.id)} className="inline-flex items-center justify-center rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950">{tr('Publier dans les portails', 'Publish to portals')}</button> : null}<button type="button" aria-busy={reportPrintingId === card.id} disabled={Boolean(reportPrintingId)} onClick={() => printReportCard(card)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-kcs-gold-400 px-3 py-2 text-sm font-black text-kcs-blue-950 disabled:opacity-60">{reportPrintingId === card.id ? <Loader2 size={16} className="animate-spin"/> : <Printer size={16}/>} {reportPrintingId === card.id ? tr('Préparation du PDF…', 'Preparing PDF…') : tr('Imprimer / Enregistrer le bulletin PDF', 'Print / Save report card PDF')}</button></div>
-      </article>)}</div>
+      </article></Fragment>)}</div>
       {!visibleCards.length ? <p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm font-semibold text-kcs-blue-800 dark:bg-kcs-blue-900 dark:text-sky-100">{tr('Aucun bulletin ne correspond à cette recherche.', 'No report card matches this search.')}</p> : null}
     </section>
     {((showTranscripts ? visibleRegistry.length : visibleCards.length) > visibleLimit) && <button type="button" onClick={() => setVisibleLimit(current => current + 50)} className="w-full rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm font-bold text-kcs-blue-800 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white">{tr('Afficher 50 résultats supplémentaires', 'Show 50 more results')}</button>}

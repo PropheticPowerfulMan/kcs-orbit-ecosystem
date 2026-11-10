@@ -1,3 +1,5 @@
+import ReportCardWorkflowBoard, { reportCardQueue, type ReportQueue } from './ReportCardWorkflowBoard'
+import CertificateDeliveryDialog from './CertificateDeliveryDialog'
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Award,
@@ -11,6 +13,7 @@ import {
   ShieldCheck,
   Upload,
   Save,
+  Send,
 } from "lucide-react";
 import { academicRecordsAPI, authAPI } from "@/services/api";
 import { normalizeSchoolLevel, SCHOOL_LEVELS } from "@/constants/schoolLevels";
@@ -39,6 +42,11 @@ export default function CertificateControlCenter() {
   const [busy, setBusy] = useState(false);
   const [printingId, setPrintingId] = useState("");
   const [notice, setNotice] = useState("");
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [deliveryScope, setDeliveryScope] = useState<string[] | undefined>();
+  const [workflow, setWorkflow] = useState<Record<string, 'READY' | 'SENT'>>({});
+  const [workflowQueue, setWorkflowQueue] = useState<ReportQueue>('ALL');
+  const [workflowSection, setWorkflowSection] = useState('ALL');
   const [documentType, setDocumentType] = useState<"completion" | "attendance">(
     "completion",
   );
@@ -112,11 +120,28 @@ export default function CertificateControlCenter() {
       setAssetsBusy(false);
     }
   };
+  const workflowRequest = useRef(0);
+  const workflowScope = useRef('');
+  workflowScope.current = academicYear + '::' + documentType;
+  const loadWorkflow = async () => {
+    const scope = academicYear + '::' + documentType;
+    if (workflowScope.current !== scope) return;
+    const request = ++workflowRequest.current;
+    if (!/^\d{4}-\d{4}$/.test(academicYear)) return;
+    try {
+      const { data } = await academicRecordsAPI.certificateWorkflow(academicYear, documentType);
+      if (workflowScope.current !== scope || request !== workflowRequest.current) return;
+      setWorkflow(Object.fromEntries((data.data ?? []).map((item: { studentId: string; status: 'READY' | 'SENT' }) => [item.studentId, item.status])));
+    } catch { if (workflowScope.current !== scope || request !== workflowRequest.current) return; setNotice(tr('Le classement serveur des certificats est indisponible. Actualisez avant de poursuivre.', 'The certificate workflow is unavailable. Refresh before continuing.')); }
+  };
+  useEffect(() => { setWorkflow({}); void loadWorkflow(); }, [academicYear, documentType]);
+  const workflowCards = students.filter(student => documentType !== 'completion' || eligibleGrades.includes(normalizeSchoolLevel(student.grade) || '')).map(student => ({ id: student.id, student, publicationStatus: workflow[student.id] === 'READY' ? 'APPROVED' : workflow[student.id] === 'SENT' ? 'EMAILED' : 'DRAFT' }));
   const load = async () => {
     setBusy(true);
     try {
       const response = await academicRecordsAPI.studentRegistry();
       setStudents(response.data.data ?? []);
+      await loadWorkflow();
       setNotice("");
     } catch (error: any) {
       setNotice(
@@ -145,6 +170,9 @@ export default function CertificateControlCenter() {
         )
           return false;
         if (grade !== "ALL" && normalizedGrade !== grade) return false;
+        if (workflowSection !== 'ALL' && student.section !== workflowSection) return false;
+        const status = workflow[student.id] === 'READY' ? 'READY' : workflow[student.id] === 'SENT' ? 'SENT' : 'WAITING';
+        if (workflowQueue !== 'ALL' && status !== workflowQueue) return false;
         const haystack = [
           fullName(student),
           student.studentNumber,
@@ -157,11 +185,11 @@ export default function CertificateControlCenter() {
       })
       .sort(
         (a, b) =>
-          eligibleGrades.indexOf(normalizeSchoolLevel(a.grade) ?? "") -
-            eligibleGrades.indexOf(normalizeSchoolLevel(b.grade) ?? "") ||
+          SCHOOL_LEVELS.indexOf(normalizeSchoolLevel(a.grade)!) -
+            SCHOOL_LEVELS.indexOf(normalizeSchoolLevel(b.grade)!) ||
           fullName(a).localeCompare(fullName(b), "fr", { sensitivity: "base" }),
       );
-  }, [documentType, grade, query, students]);
+  }, [documentType, grade, query, students, workflow, workflowQueue, workflowSection]);
   const selectedStudents = useMemo(
     () =>
       students
@@ -190,6 +218,7 @@ export default function CertificateControlCenter() {
             authenticated,
           );
     } finally {
+      void loadWorkflow();
       window.setTimeout(() => setPrintingId(""), 700);
     }
   };
@@ -208,11 +237,25 @@ export default function CertificateControlCenter() {
         setNotice,
       );
     } finally {
+      void loadWorkflow();
       setTimeout(() => setPrintingId(""), 700);
     }
   };
+  const prepare = async () => {
+    const targets = selectedStudents.length ? selectedStudents : visible;
+    if (!targets.length || busy) return;
+    setBusy(true);
+    try {
+      for (let start = 0; start < targets.length; start += 50) await academicRecordsAPI.prepareCertificates({ academicYear, documentType, language: documentLanguage, includeAuthentication: authenticated, studentIds: targets.slice(start, start + 50).map(student => student.id) });
+      await loadWorkflow(); setWorkflowQueue('READY');
+      setNotice(tr('Certificats préparés et classés dans « Prêts à envoyer ».', 'Certificates prepared and filed under “Ready to send”.'));
+    } catch (failure: any) { setNotice(failure?.response?.data?.message || tr('Préparation impossible.', 'Unable to prepare certificates.')); }
+    finally { setBusy(false); }
+  };
   return (
     <section className="space-y-5">
+      {deliveryOpen && <CertificateDeliveryDialog studentIds={deliveryScope} academicYear={academicYear} documentType={documentType} documentLanguage={documentLanguage} authenticated={authenticated} initialGrade={grade} onClose={() => { setDeliveryOpen(false); setDeliveryScope(undefined); void loadWorkflow() }}/>}
+      <div className="flex justify-end"><button type="button" onClick={() => { setDeliveryScope(undefined); setDeliveryOpen(true) }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white"><Send size={17}/>{tr('Envoyer les certificats aux parents', 'Send certificates to parents')}</button></div>
       <header className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-sky-50 p-5 shadow-sm dark:border-amber-800 dark:from-kcs-blue-900 dark:via-kcs-blue-950 dark:to-kcs-blue-900">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -433,7 +476,7 @@ export default function CertificateControlCenter() {
             {tr("Classe", "Grade")}
             <select
               value={grade}
-              onChange={(event) => setGrade(event.target.value)}
+              onChange={(event) => { setGrade(event.target.value); setWorkflowSection('ALL') }}
               className={inputClass + " mt-1"}
             >
               <option value="ALL">
@@ -554,12 +597,15 @@ export default function CertificateControlCenter() {
             ) : null}
           </section>
         ) : null}
+        <ReportCardWorkflowBoard documentKind="certificate" cards={workflowCards} grade={grade} section={workflowSection} queue={workflowQueue} busy={busy} onClass={(grade, section) => { setGrade(grade); setWorkflowSection(section) }} onQueue={setWorkflowQueue} onReadyDelivery={() => { setDeliveryScope(workflowCards.filter(card => reportCardQueue(card) === 'READY' && (grade === 'ALL' || normalizeSchoolLevel(card.student.grade) === grade) && (workflowSection === 'ALL' || card.student.section === workflowSection)).map(card => card.id)); setDeliveryOpen(true) }}/>
+        <button type="button" disabled={busy || !(selectedStudents.length || visible.length)} onClick={() => void prepare()} className="my-3 inline-flex items-center gap-2 rounded-xl bg-kcs-blue-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{busy && <Loader2 size={17} className="animate-spin"/>}{tr('Préparer', 'Prepare')} {selectedStudents.length || visible.length} {tr('certificat(s)', 'certificate(s)')}</button>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((student) => (
             <article
               key={student.id}
               className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 dark:border-kcs-blue-700 dark:bg-kcs-blue-900"
             >
+              <p className="mb-3 w-fit rounded-full bg-sky-100 px-3 py-1 text-xs font-bold text-kcs-blue-900 dark:bg-sky-200 dark:text-kcs-blue-950">{workflow[student.id] === 'READY' ? tr('Prêt à envoyer', 'Ready to send') : workflow[student.id] === 'SENT' ? tr('Envoi enregistré', 'Delivery recorded') : tr('À préparer', 'Awaiting preparation')}</p>
               <div className="flex items-center gap-3">
                 {documentType === "attendance" ? (
                   <input
