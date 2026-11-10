@@ -18,7 +18,7 @@ type Parent = {
   email?: string | null;
   phone?: string | null;
 };
-type DeliveryCard = {
+export type DeliveryCard = {
   id: string;
   term: string;
   publicationStatus: string;
@@ -33,6 +33,7 @@ type DeliveryCard = {
 type Selection = Record<string, string[]>;
 type Props = {
   cards: DeliveryCard[];
+  initialReview?: boolean;
   initialYear: string;
   initialTerm: string;
   initialGrade: string;
@@ -64,6 +65,7 @@ export default function ReportCardDeliveryDialog({
   initialYear,
   initialTerm,
   initialGrade,
+  initialReview = false,
   selected,
   onSelect,
   busy,
@@ -78,7 +80,7 @@ export default function ReportCardDeliveryDialog({
   const [year, setYear] = useState(initialYear);
   const [term, setTerm] = useState(initialTerm);
   const [query, setQuery] = useState("");
-  const [review, setReview] = useState(false);
+  const [review, setReview] = useState(initialReview);
   const rows = useMemo(
     () =>
       cards.flatMap((card) =>

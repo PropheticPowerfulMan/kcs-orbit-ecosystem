@@ -13,7 +13,7 @@ const imageBuffer = (value?: string | null) => {
 
 export async function officialReportCardPdf(input: {
   id: string; studentName: string; studentNumber: string; grade: string; term: string; average: number
-  publicationStatus: string; subjects: Subject[]; teacherComment?: string | null; conduct?: string | null
+  publicationStatus: string; studentPhoto?: string | null; subjects: Subject[]; teacherComment?: string | null; conduct?: string | null
   attendance?: { present?: number; absent?: number; late?: number; excused?: number; attendanceRate?: number | null } | null
   language: 'fr' | 'en'; principal: ImageSignature; mainTeacher?: ImageSignature | null; seal?: string | null
 }) {
@@ -23,7 +23,7 @@ export async function officialReportCardPdf(input: {
   const fingerprint = createHash('sha256').update(digestSource).digest('hex').toUpperCase()
   const documentId = `KCS-RC-${issued.toISOString().slice(0, 10).replace(/-/g, '')}-${fingerprint.slice(0, 16)}`
   const verifyUrl = `${process.env.FRONTEND_URL?.replace(/\/$/, '') || 'https://kinshasachristianschool.org'}/verify/report-card?document=${encodeURIComponent(documentId)}&fingerprint=${fingerprint}`
-  const qr = await QRCode.toBuffer(verifyUrl, { errorCorrectionLevel: 'H', width: 300, margin: 1 })
+  const qr = await QRCode.toBuffer(verifyUrl, { errorCorrectionLevel: 'H', width: 600, margin: 4 })
   const logo = await readFile(join(process.cwd(), 'assets', 'kcs-watermark.jpg')).catch(() => null)
   const watermark = await readFile(join(process.cwd(), 'assets', 'kcs-watermark.jpg')).catch(() => logo)
   const doc = new PDFDocument({ size: 'A4', margins: { top: 38, left: 38, right: 38, bottom: 20 }, bufferPages: true, info: { Title: `KCS Official Report Card · ${input.studentName}`, Author: 'Kinshasa Christian School', Subject: documentId } })
@@ -39,12 +39,16 @@ export async function officialReportCardPdf(input: {
   doc.fillColor('#073B70').fontSize(19).text(tr('BULLETIN SCOLAIRE OFFICIEL', 'OFFICIAL REPORT CARD'), 126, 59)
   doc.fillColor('#52677D').font('Helvetica').fontSize(8).text(documentId, 126, 84)
   doc.moveTo(43, 108).lineTo(w - 43, 108).lineWidth(1.5).strokeColor('#D6A62A').stroke()
+  if (!['APPROVED','POSTED_TO_PORTAL','EMAILED'].includes(input.publicationStatus)) doc.font('Helvetica-Bold').fontSize(7).fillColor('#8A5A00').text(tr('BROUILLON · SOUMIS À VALIDATION', 'DRAFT · SUBJECT TO APPROVAL'), 43, 110, { width: w - 86, align: 'center' })
   doc.roundedRect(43, 119, w - 86, 96, 10).fill('#F1F7FB')
-  doc.fillColor('#073B70').font('Helvetica-Bold').fontSize(input.studentName.length > 45 ? 10 : 13).text(input.studentName, 56, 132, { width: w - 240, height: 30 })
+  const portrait = imageBuffer(input.studentPhoto)
+  let identityX = 56
+  if (portrait) try { doc.image(portrait, 56, 132, { fit: [48, 62], align: 'center', valign: 'center' }); identityX = 116 } catch { /* The official portrait is optional. */ }
+  doc.fillColor('#073B70').font('Helvetica-Bold').fontSize(input.studentName.length > 45 ? 10 : 13).text(input.studentName, identityX, 132, { width: w - 184 - identityX, height: 30 })
   const periodLabel = input.language === 'fr' ? input.term.replace(/Semester/g, 'Semestre').replace('Annual final', 'Bilan annuel') : input.term
-  doc.font('Helvetica').fontSize(8).fillColor('#52677D').text(tr('Matricule', 'Student ID') + ' · ' + input.studentNumber, 56, 166, { width: w - 240 })
-  doc.text(tr('Classe', 'Class') + ' · ' + input.grade, 56, 178, { width: w - 240 })
-  doc.text(tr('Période', 'Period') + ' · ' + periodLabel, 56, 190, { width: w - 125 })
+  doc.font('Helvetica').fontSize(8).fillColor('#52677D').text(tr('Matricule', 'Student ID') + ' · ' + input.studentNumber, identityX, 166, { width: w - 184 - identityX })
+  doc.text(tr('Classe', 'Class') + ' · ' + input.grade, identityX, 178, { width: w - 184 - identityX })
+  doc.text(tr('Période', 'Period') + ' · ' + periodLabel, identityX, 190, { width: w - 60 - identityX })
   doc.font('Helvetica-Bold').fontSize(8).fillColor('#62788B').text(tr('MOYENNE OFFICIELLE', 'OFFICIAL AVERAGE'), w - 150, 132, { width: 90, align: 'right' })
   doc.fontSize(17).fillColor('#008B7B').text(`${input.average.toFixed(2)}%`, w - 150, 150, { width: 90, align: 'right' })
   let y = 232
@@ -58,17 +62,17 @@ export async function officialReportCardPdf(input: {
   doc.text(tr('NOTE', 'GRADE'), right - 38, y + 8, { width: 30, align: 'right' })
   y += 25
   const rows = input.subjects
-  const rowHeight = Math.max(11, Math.min(21, 235 / Math.max(1, rows.length)))
+  const rowHeight = Math.max(9.25, Math.min(21, 225 / Math.max(1, rows.length)))
   rows.forEach((subject, index) => {
-    if (y > 485) { doc.addPage(); drawWatermark(); y = 55 }
+    if (y > 565) { doc.addPage(); drawWatermark(); y = 55 }
     if (index % 2 === 0) doc.rect(left, y - 3, right - left, rowHeight).fill('#F4F8FB')
-    doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.name, left + 8, y, { width: 190, ellipsis: true })
-    doc.font('Helvetica').fontSize(rows.length > 16 ? 6 : 7).fillColor('#173D60').text(subject.teacherName || '—', left + 205, y, { width: 145, ellipsis: true })
+    doc.fillColor('#153B5D').font('Helvetica-Bold').fontSize(rows.length > 16 ? 6.5 : 8).text(subject.name, left + 8, y, { width: 190, height: rowHeight - 1, ellipsis: true })
+    doc.font('Helvetica').fontSize(rows.length > 16 ? 6 : 7).fillColor('#173D60').text(subject.teacherName || '—', left + 205, y, { width: 145, height: rowHeight - 1, ellipsis: true })
     doc.text(`${subject.percentage.toFixed(2)}%`, right - 91, y, { width: 48, align: 'right' })
     doc.font('Helvetica-Bold').fillColor('#008B7B').text(subject.letterGrade, right - 38, y, { width: 30, align: 'right' })
     y += rowHeight
   })
-  if (y > 500) { doc.addPage(); drawWatermark(); y = 55 }
+  if (y > 580) { doc.addPage(); drawWatermark(); y = 55 }
   y += 8
   doc.font('Helvetica-Bold').fontSize(9).fillColor('#073B70').text(tr('RÉSUMÉ DES PRÉSENCES', 'ATTENDANCE SUMMARY'), left, y)
   y += 15
@@ -76,10 +80,10 @@ export async function officialReportCardPdf(input: {
   doc.font('Helvetica').fontSize(8).fillColor('#284A68').text(attendance ? `${tr('Présent', 'Present')}: ${attendance.present ?? 0}     ${tr('Absent', 'Absent')}: ${attendance.absent ?? 0}     ${tr('Retard', 'Late')}: ${attendance.late ?? 0}     ${tr('Excusé', 'Excused')}: ${attendance.excused ?? 0}     ${tr('Taux', 'Rate')}: ${attendance.attendanceRate ?? '—'}%` : tr('Données de présence indisponibles.', 'Attendance data unavailable.'), left, y)
   y += 22
   doc.font('Helvetica-Bold').fontSize(8).fillColor('#073B70').text(tr('COMMENTAIRE DU TITULAIRE', 'MAIN TEACHER COMMENT'), left, y)
-  doc.font('Helvetica').fontSize(8).fillColor('#284A68').text(input.teacherComment || tr('Aucun commentaire.', 'No comment entered.'), left, y + 12, { width: 245, height: 42, ellipsis: true })
+  doc.font('Helvetica').fontSize(8).fillColor('#284A68').text(input.teacherComment || tr('Aucun commentaire.', 'No comment entered.'), left, y + 12, { width: 245, height: 30, ellipsis: true })
   doc.font('Helvetica-Bold').fontSize(8).fillColor('#073B70').text(tr('CONDUITE', 'CONDUCT'), left + 270, y)
-  doc.font('Helvetica').fontSize(8).fillColor('#284A68').text(input.conduct || tr('Non renseignée.', 'Not entered.'), left + 270, y + 12, { width: right - left - 270, height: 42, ellipsis: true })
-  y += 65
+  doc.font('Helvetica').fontSize(8).fillColor('#284A68').text(input.conduct || tr('Non renseignée.', 'Not entered.'), left + 270, y + 12, { width: right - left - 270, height: 30, ellipsis: true })
+  y += 51
   const drawSignature = (x: number, signature: ImageSignature | null | undefined, label: string) => {
     const image = imageBuffer(signature?.image)
     if (image) try { doc.image(image, x + 16, y - 27, { fit: [145, 28] }) } catch { /* Invalid optional upload; keep the signature line. */ }
@@ -91,10 +95,10 @@ export async function officialReportCardPdf(input: {
   drawSignature(right - 175, input.principal, tr('Principal / Autorité autorisée', 'Principal / Authorized official'))
   const seal = imageBuffer(input.seal)
   if (seal) try { doc.save().opacity(.82).image(seal, w / 2 - 26, y - 37, { fit: [52, 52] }).restore() } catch { /* Optional seal. */ }
-  const qrY = Math.min(doc.page.height - 92, y + 30)
-  doc.image(qr, left, qrY, { fit: [47, 47] })
-  doc.font('Helvetica-Bold').fontSize(7).fillColor('#073B70').text(tr('DOCUMENT OFFICIEL VÉRIFIABLE', 'VERIFIABLE OFFICIAL DOCUMENT'), left + 54, qrY + 5)
-  doc.font('Helvetica').fontSize(6).fillColor('#52677D').text(`${documentId}\nSHA-256 ${fingerprint}\nQR ISO/IEC 18004 · ECC H`, left + 54, qrY + 17, { width: right - left - 60 })
+  const qrY = Math.min(doc.page.height - 116, y + 27)
+  doc.image(qr, left, qrY, { fit: [64, 64] })
+  doc.font('Helvetica-Bold').fontSize(7).fillColor('#073B70').text(tr('DOCUMENT OFFICIEL VÉRIFIABLE', 'VERIFIABLE OFFICIAL DOCUMENT'), left + 72, qrY + 5)
+  doc.font('Helvetica').fontSize(6).fillColor('#52677D').text(`${documentId}\nSHA-256 ${fingerprint}\nQR ISO/IEC 18004 · ECC H`, left + 72, qrY + 17, { width: right - left - 78 })
   doc.font('Helvetica').fontSize(6).fillColor('#52677D').text(`Kinshasa Christian School · ${issued.toLocaleDateString(input.language === 'fr' ? 'fr-FR' : 'en-GB')}`, left, doc.page.height - 57, { width: right - left, align: 'center' })
   doc.text('Avenue de la République n° 1 · Macampagne, Ngaliema · Kinshasa, RDC · Réf. 80 jours\n+243 895 326 011 · +243 994 645 735 · kinshasachristianschool@gmail.com', left, doc.page.height - 48, { width: right - left, align: 'center' })
   doc.end()
