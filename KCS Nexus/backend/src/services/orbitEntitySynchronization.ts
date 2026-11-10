@@ -453,7 +453,7 @@ export async function synchronizeOrbitEntityToNexus(input: SynchronizationInput)
     ...(email ? { email } : {}),
     ...(accessCode ? { accessCode } : {}),
     ...(owns(input.entity, 'phone') ? { phone: clean(input.entity.phone) } : {}),
-    ...(input.entityType !== 'student' && owns(input.entity, 'photoData') ? { avatar: clean(input.entity.photoData) } : {}),
+    // Official portraits stay in Orbit. User.avatar is personal to Nexus for every role.
     ...(nextRole !== localUser.role ? { role: nextRole } : {}),
   }
   for (const field of ['orbitUserId', 'orbitOrganizationId', 'firstName', 'middleName', 'lastName', 'email', 'accessCode', 'phone', 'avatar', 'role']) {

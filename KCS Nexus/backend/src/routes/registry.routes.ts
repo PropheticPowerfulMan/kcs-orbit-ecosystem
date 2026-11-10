@@ -415,7 +415,7 @@ registryRouter.get('/directory', authenticate, asyncHandler(async (req, res) => 
       studentNumber: student.studentNumber,
       email: student.user.email,
       phone: null,
-      photoData: student.officialAvatar ?? student.user.avatar,
+      photoData: student.officialAvatar,
       dateOfBirth: null,
       status: student.status,
       mustChangePassword: false,

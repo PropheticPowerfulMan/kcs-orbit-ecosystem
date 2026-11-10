@@ -1,3 +1,4 @@
+import { replaceSubmittedSubjectCorrection } from '../utils/reportSubjectPresentation.js'
 import { academicPeriodAccess, protectAcademicPeriod } from './academicPeriodAccess.service.js'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma.js'
@@ -52,8 +53,8 @@ export async function submitCourseFinalGrades(actorId: string, payload: Submissi
     const cards = []
     for (const studentId of ids) {
       const current = currentCards.find(card => card.studentId === studentId && card.term === termLabel)
-      const corrections = (current?.academicCorrections ?? {}) as { subjects?: Array<{ courseId: string; percentage: number }>; hiddenCourseIds?: string[] }
-      const nextCorrections = { ...corrections, subjects: (corrections.subjects ?? []).filter(row => row.courseId !== course.id) }
+      const corrections = (current?.academicCorrections ?? {}) as { subjects?: Array<{ courseId: string; courseName?: string; percentage: number }>; hiddenCourseIds?: string[] }
+      const nextCorrections = { ...corrections, subjects: replaceSubmittedSubjectCorrection(corrections.subjects ?? [], course.id, [...aggregate.values()].find(row => row.studentId === studentId && row.courseId === course.id)?.percentage ?? null) }
       const visible = [...aggregate.values()].filter(row => row.studentId === studentId && row.percentage !== null && !(nextCorrections.hiddenCourseIds ?? []).includes(row.courseId))
       const overrides = new Map(nextCorrections.subjects.map(row => [row.courseId, row.percentage]))
       const weighted = visible.map(row => ({ percentage: overrides.get(row.courseId) ?? row.percentage!, credits: Math.max(1, grades.find(g => g.courseId === row.courseId)?.course.credits || 1) }))
@@ -72,8 +73,8 @@ export async function submitCourseFinalGrades(actorId: string, payload: Submissi
       const aggregateResults = aggregateReportCardResults(grades, payload.academicYear, derivedTerm)
       const derivedCards = currentCards.filter(card => card.term === payload.academicYear + ' · ' + derivedTerm)
       for (const card of derivedCards) {
-        const corrections = (card.academicCorrections ?? {}) as { subjects?: Array<{ courseId: string; percentage: number }>; hiddenCourseIds?: string[] }
-        const subjects = (corrections.subjects ?? []).filter(subject => subject.courseId !== course.id)
+        const corrections = (card.academicCorrections ?? {}) as { subjects?: Array<{ courseId: string; courseName?: string; percentage: number }>; hiddenCourseIds?: string[] }
+        const subjects = replaceSubmittedSubjectCorrection(corrections.subjects ?? [], course.id, [...aggregateResults.values()].find(row => row.studentId === card.studentId && row.courseId === course.id)?.percentage ?? null)
         const overrides = new Map(subjects.map(subject => [subject.courseId, subject.percentage]))
         const visible = [...aggregateResults.values()].filter(result => result.studentId === card.studentId && result.percentage !== null && !(corrections.hiddenCourseIds ?? []).includes(result.courseId))
         const weighted = visible.map(result => ({ percentage: overrides.get(result.courseId) ?? result.percentage!, credits: Math.max(1, grades.find(grade => grade.courseId === result.courseId)?.course.credits || 1) }))

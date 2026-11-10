@@ -1,0 +1,362 @@
+.elective-workspace main {
+  color: #183650;
+}
+.elective-workspace main > div {
+  max-width: 1600px;
+  margin-inline: auto;
+}
+.elective-workspace .elective-hero {
+  border: 1px solid #257fbc;
+  border-radius: 24px;
+  padding: 26px;
+  background: linear-gradient(120deg, #041f3c, #064779);
+  color: #f4f9ff;
+  box-shadow: 0 12px 32px #082c441a;
+}
+.elective-workspace .elective-hero-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.elective-workspace .elective-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #94e2ff;
+}
+.elective-workspace .elective-hero h1 {
+  margin-top: 12px;
+  font-size: clamp(22px, 2.3vw, 32px);
+  font-weight: 800;
+  line-height: 1.2;
+  color: #fff;
+}
+.elective-workspace .elective-hero p {
+  max-width: 760px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #d3e9fa;
+}
+.elective-workspace .elective-refresh {
+  flex-shrink: 0;
+  padding: 12px;
+  border: 1px solid #8fcbef88;
+  border-radius: 12px;
+  background: #07315b;
+  color: #e3f5ff;
+}
+.elective-workspace .elective-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
+}
+.elective-workspace .elective-steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid #6fa5cb55;
+  border-radius: 12px;
+  background: #06294499;
+  color: #d5e8f5;
+  font-size: 12px;
+  font-weight: 700;
+}
+.elective-workspace .elective-steps li[aria-current="step"] {
+  border-color: #5fd9eb;
+  background: #0b5873;
+  color: #fff;
+}
+.elective-workspace .elective-steps li span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #cbeeff24;
+  color: #fff;
+}
+.elective-workspace .elective-notice {
+  padding: 15px 18px;
+  border: 1px solid #9fcce6;
+  border-radius: 14px;
+  background: #e6f3fa;
+  color: #173f60;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.elective-workspace .elective-disclosure {
+  border: 1px solid #bed7e6;
+  border-radius: 20px;
+  background: #f4f8fb;
+  overflow: hidden;
+}
+.elective-workspace .elective-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 17px 20px;
+  cursor: pointer;
+  color: #074e80;
+  font-size: 14px;
+  font-weight: 800;
+  list-style: none;
+}
+.elective-workspace .elective-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.elective-workspace .elective-disclosure > summary::after {
+  content: "+";
+  margin-left: auto;
+  font-size: 20px;
+}
+.elective-workspace .elective-disclosure[open] > summary::after {
+  content: "−";
+}
+.elective-workspace .elective-disclosure form {
+  border-radius: 0;
+  border-top: 1px solid #d5e4ee;
+  box-shadow: none;
+}
+.elective-workspace .elective-label,
+.elective-workspace .elective-search label {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  align-content: start;
+  font-size: 12px;
+  font-weight: 700;
+  color: #27445e;
+}
+.elective-workspace .elective-cycle-picker {
+  max-width: 900px;
+}
+.elective-workspace main h2,
+.elective-workspace main h3 {
+  color: #123755;
+}
+.elective-workspace .elective-catalog-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.elective-workspace .elective-description {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #526a7f;
+}
+.elective-workspace .elective-count {
+  border: 1px solid #accfe5;
+  border-radius: 100px;
+  padding: 6px 10px;
+  color: #175b83;
+  background: #e2f1fa;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 800;
+}
+.elective-workspace .elective-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 12px;
+  padding-top: 20px;
+}
+.elective-workspace main article {
+  min-width: 0;
+  border-color: #bdd6e7;
+  background: #f8fbfd;
+  box-shadow: 0 5px 20px #0a345b09;
+}
+.elective-workspace main article h3 {
+  line-height: 1.45;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.elective-workspace main article p {
+  line-height: 1.7;
+}
+.elective-workspace .elective-status {
+  display: table;
+  margin-top: 10px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: #e5edf5;
+  color: #37516b;
+  font-size: 10px;
+  font-weight: 800;
+}
+.elective-workspace .elective-status[data-status="APPROVED"] {
+  background: #d9f1e6;
+  color: #146548;
+}
+.elective-workspace .elective-status[data-status="PROPOSED"] {
+  background: #fff0cd;
+  color: #795609;
+}
+.elective-workspace .elective-status[data-status="REJECTED"] {
+  background: #ffe4e7;
+  color: #913345;
+}
+.elective-workspace .elective-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 28px 18px;
+  border: 1px dashed #9bbfd8;
+  border-radius: 16px;
+  background: #eaf3f9;
+  color: #41647d;
+  font-size: 13px;
+  text-align: center;
+}
+.elective-workspace .elective-empty p {
+  max-width: 740px;
+  line-height: 1.7;
+}
+.elective-workspace .elective-roster {
+  padding: 22px;
+  border: 1px solid #bcd5e6;
+  border-radius: 22px;
+  background: #f4f8fb;
+}
+.elective-workspace .elective-roster h2 {
+  font-size: 19px;
+  font-weight: 800;
+}
+.elective-workspace .elective-roster > p {
+  margin-top: 8px;
+  color: #527087;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.elective-workspace .elective-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.elective-workspace .elective-roster-grid article {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #bdd8e8;
+  border-radius: 12px;
+  padding: 13px;
+  font-size: 12px;
+}
+.elective-workspace .elective-roster-grid span {
+  font-size: 10px;
+  color: #5e7488;
+}
+.elective-workspace button:focus-visible,
+.elective-workspace summary:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
+.elective-workspace button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.dark .elective-workspace main {
+  color: #e1edf8;
+}
+.dark .elective-workspace main h2,
+.dark .elective-workspace main h3,
+.dark .elective-workspace .elective-label,
+.dark .elective-workspace .elective-search label {
+  color: #edf5fd;
+}
+.dark .elective-workspace .elective-disclosure,
+.dark .elective-workspace .elective-roster {
+  background: #082744;
+  border-color: #245273;
+}
+.dark .elective-workspace .elective-disclosure > summary {
+  color: #b1e4ff;
+}
+.dark .elective-workspace .elective-disclosure form {
+  border-color: #245273;
+}
+.dark .elective-workspace .elective-notice {
+  background: #123953;
+  color: #d7efff;
+  border-color: #2e6483;
+}
+.dark .elective-workspace .elective-description,
+.dark .elective-workspace .elective-roster > p {
+  color: #b8cfe1;
+}
+.dark .elective-workspace main article {
+  background: #062039;
+  border-color: #245273;
+  color: #e4eff8;
+}
+.dark .elective-workspace .elective-count {
+  background: #0a3453;
+  border-color: #286180;
+  color: #abe1ff;
+}
+.dark .elective-workspace .elective-empty {
+  background: #061e36;
+  border-color: #2d6083;
+  color: #bfd7ea;
+}
+.dark .elective-workspace .elective-roster-grid span {
+  color: #b2cadc;
+}
+.dark .elective-workspace .elective-status {
+  background: #133a57;
+  color: #d0e9fb;
+}
+.dark .elective-workspace .elective-status[data-status="APPROVED"] {
+  background: #0c3c33;
+  color: #a8ead0;
+}
+.dark .elective-workspace .elective-status[data-status="PROPOSED"] {
+  background: #493a17;
+  color: #f5dea3;
+}
+.dark .elective-workspace .elective-status[data-status="REJECTED"] {
+  background: #471d2b;
+  color: #ffbcc8;
+}
+@media (max-width: 767px) {
+  .elective-workspace .elective-hero {
+    padding: 20px 17px;
+  }
+  .elective-workspace .elective-hero h1 {
+    font-size: 24px;
+  }
+  .elective-workspace .elective-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .elective-workspace .elective-steps li {
+    padding: 8px;
+    font-size: 11px;
+  }
+  .elective-workspace .elective-search {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .elective-workspace .elective-roster-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .elective-workspace .elective-catalog-title {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+@media (min-width: 768px) and (max-width: 1100px) {
+  .elective-workspace .elective-roster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

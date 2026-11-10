@@ -507,7 +507,7 @@ const extractStudentApiMessage = (error: unknown, fallback: string) => {
 
 const adminRosterSegments = new Set(['students', 'parents', 'teachers', 'employees', 'certificates', 'reports'])
 
-const getAdminRoster = () => studentsAPI.getAll(undefined, {
+const getAdminRoster = (refresh = false) => studentsAPI.getAll(refresh ? { refresh: true } : undefined, {
   headers: {
     'x-skip-auth-logout': 'true',
   },
@@ -536,7 +536,7 @@ const apiProfileToRosterRecord = (profile: any): AdminStudentRecord => {
     studentNumber: profile.studentNumber,
     email: profile.user?.email ?? '',
     dateOfBirth: profile.dateOfBirth ?? null,
-    photoData: profile.user?.avatar ?? profile.photoData ?? null,
+    photoData: Object.prototype.hasOwnProperty.call(profile, 'officialAvatar') ? profile.officialAvatar : profile.photoData ?? profile.user?.avatar ?? null,
     grade: normalizeSchoolLevel(profile.grade) ?? profile.grade,
     section: profile.section ?? '',
     parent: parent ? [parent.lastName, parent.middleName, parent.firstName].filter(Boolean).join(' ') : 'Parent record pending',
@@ -1577,6 +1577,7 @@ const AdminSectionView = ({
   const [apiSynced, setApiSynced] = useState(false)
   const [sharedDirectory, setSharedDirectory] = useState<SharedDirectoryPayload | null>(null)
   const sharedDirectoryRef = useRef<SharedDirectoryPayload | null>(null)
+  const rosterRequestRef = useRef(0)
   const [showCreateStudent, setShowCreateStudent] = useState(false)
   const [selectedTranscriptId, setSelectedTranscriptId] = useState('')
   const [transcriptQuery, setTranscriptQuery] = useState('')
@@ -1696,10 +1697,12 @@ const AdminSectionView = ({
   ) : null
 
   const refreshOfficialRoster = async (forceDirectory = false) => {
+    const requestId = ++rosterRequestRef.current
     const [response, directoryResponse] = await Promise.all([
-      getAdminRoster(),
+      getAdminRoster(forceDirectory),
       registryAPI.getDirectory(forceDirectory).catch(() => null),
     ])
+    if (requestId !== rosterRequestRef.current) throw new Error('A newer roster refresh is already in progress.')
     const directory = directoryResponse?.data?.data
     if (directory?.parents) {
       sharedDirectoryRef.current = directory
@@ -1731,13 +1734,14 @@ const AdminSectionView = ({
     }
 
     let mounted = true
+    const requestId = ++rosterRequestRef.current
     Promise.all([
       getAdminRoster(),
       registryAPI.getDirectory().catch(() => null),
     ])
       .then(([response, directoryResponse]) => {
         const profiles = response.data?.data
-        if (!mounted) return
+        if (!mounted || requestId !== rosterRequestRef.current) return
         const directory = directoryResponse?.data?.data
         if (directory?.parents) {
           sharedDirectoryRef.current = directory
@@ -1759,6 +1763,7 @@ const AdminSectionView = ({
         setApiSynced(true)
       })
       .catch(() => {
+        if (!mounted || requestId !== rosterRequestRef.current) return
         const fallbackRoster = readStoredRoster()
         const roster = fallbackRoster.length > 0 ? fallbackRoster : adminRosterSeed
         setOfficialRoster(roster)

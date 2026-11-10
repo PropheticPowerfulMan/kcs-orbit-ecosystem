@@ -71,16 +71,40 @@ export default function TeacherReportsHub({ academicReports }: Props) {
             to={"/portal/teacher/reports?view=" + section.id}
             aria-current={active === section.id ? "page" : undefined}
             className={
-              "flex min-w-0 items-start gap-3 rounded-2xl border p-4 shadow-sm transition " +
+              "flex min-w-0 items-start gap-3 rounded-2xl border p-4 shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-kcs-blue-950 " +
               (active === section.id
-                ? "border-kcs-blue-600 bg-kcs-blue-700 text-white dark:border-sky-400"
-                : "border-sky-200 bg-white text-kcs-blue-950 hover:border-sky-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:text-white")
+                ? "border-kcs-blue-600 bg-kcs-blue-700 text-white dark:border-cyan-300 dark:bg-sky-800 dark:!text-white"
+                : "border-sky-200 bg-white text-kcs-blue-950 hover:border-sky-500 dark:border-kcs-blue-700 dark:bg-kcs-blue-900 dark:!text-slate-100")
             }
           >
-            <section.icon size={23} className="mt-0.5 shrink-0" />
+            <section.icon
+              size={23}
+              className={
+                "mt-0.5 shrink-0 " +
+                (active === section.id
+                  ? "text-cyan-100"
+                  : "text-sky-700 dark:!text-cyan-300")
+              }
+            />
             <div className="min-w-0">
-              <b className="block text-sm">{section.title}</b>
-              <p className="mt-1 text-xs leading-relaxed opacity-80">
+              <b
+                className={
+                  "block text-sm " +
+                  (active === section.id
+                    ? "text-white dark:!text-white"
+                    : "text-kcs-blue-950 dark:!text-slate-100")
+                }
+              >
+                {section.title}
+              </b>
+              <p
+                className={
+                  "mt-1 text-xs leading-relaxed " +
+                  (active === section.id
+                    ? "text-sky-100 dark:!text-sky-100"
+                    : "text-slate-600 dark:!text-slate-300")
+                }
+              >
                 {section.description}
               </p>
             </div>

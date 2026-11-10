@@ -33,6 +33,10 @@ type ParentChild = {
     synchronizedAt?: string
   }
   academicSummary?: {
+    academicYear?: string | null
+    term?: string | null
+    source?: string
+
     average: number | null
     attendanceRate: number | null
     publishedGrades: number
@@ -235,7 +239,7 @@ export default function ParentPortal() {
   const academics = academicLocked ? financialLockCard : (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        {[['Verified average', academicSummary?.average != null ? academicSummary.average + '%' : '—'], ['Verified attendance', academicSummary?.attendanceRate != null ? academicSummary.attendanceRate + '%' : 'Aucune donnée'], ['Recorded grades', String(academicSummary?.publishedGrades ?? grades.length)]].map(([label, value]) => <div key={label} className={card}><p className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</p><p className="mt-2 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}
+        {[[[language === 'fr' ? 'Moyenne vérifiée' : 'Verified average', academicSummary?.academicYear, academicSummary?.term].filter(Boolean).join(' · '), academicSummary?.average != null ? academicSummary.average + '%' : '—'], ['Verified attendance', academicSummary?.attendanceRate != null ? academicSummary.attendanceRate + '%' : 'Aucune donnée'], ['Recorded grades', String(academicSummary?.publishedGrades ?? grades.length)]].map(([label, value]) => <div key={label} className={card}><p className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</p><p className="mt-2 text-3xl font-bold text-kcs-blue-900 dark:text-white">{value}</p></div>)}
       </div>
       <div className={card}>
         <h2 className="mb-4 font-bold text-kcs-blue-900 dark:text-white">Grades for {selectedChild?.name}</h2>

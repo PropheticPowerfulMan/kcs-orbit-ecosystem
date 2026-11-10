@@ -245,6 +245,7 @@ function orbitStudentsToProfiles(directory: OrbitSharedDirectory) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       dateOfBirth: student.dateOfBirth ?? null,
+      officialAvatar: student.photoData ?? null,
       user: {
         id: student.id,
         email: student.email ?? '',
@@ -462,10 +463,10 @@ function normalizeCreateStudentPayload(payload: unknown) {
   }
 }
 
-studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (_req, res) => {
+studentsRouter.get('/', authenticate, requireRoles('admin', 'staff'), asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   if (orbitRegistryIsEnabled()) {
-    const directory = await getSharedDirectoryFromOrbit()
+    const directory = await getSharedDirectoryFromOrbit(req.query.refresh === 'true')
     const orbitProfiles = orbitStudentsToProfiles(directory).filter((student) => String(student.status || 'active').toLowerCase() === 'active')
     // Orbit owns identity/class placement, while Nexus owns attendance and academic
     // evidence. Merge both sources so an entity "View" never loses the presence
@@ -549,12 +550,13 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
     await Promise.all(familyDirectory.students.map((student) => ensureOrbitStudentProfile(student)))
     const localProfiles = await prisma.studentProfile.findMany({
       where: { studentNumber: { in: orbitProfiles.map((student) => student.studentNumber) } },
-      select: { id: true, studentNumber: true, grades: { select: { percentage: true } }, attendanceRecords: { select: { status: true } }, submissions: { select: { status: true, assignment: { select: { dueDate: true } } } }, _count: { select: { enrollments: true } } },
+      select: { id: true, studentNumber: true, grades: { include: { course: { select: { credits: true } } } }, reportCards: { select: { term: true, average: true, publicationStatus: true, updatedAt: true, academicCorrections: true } }, attendanceRecords: { select: { status: true } }, submissions: { select: { status: true, assignment: { select: { dueDate: true } } } }, _count: { select: { enrollments: true } } },
     })
     const localByNumber = new Map(localProfiles.map((profile) => [profile.studentNumber.toLowerCase(), profile]))
     const children = orbitProfiles.map((profile) => {
       const local = localByNumber.get(profile.studentNumber.toLowerCase())
-      const average = local?.grades.length ? Number((local.grades.reduce((sum, grade) => sum + grade.percentage, 0) / local.grades.length).toFixed(1)) : null
+      const reportAverage = studentReportAverage(local?.grades ?? [], local?.reportCards ?? [])
+      const average = reportAverage.average
       const attendanceRate = attendanceRateFromStatuses(local?.attendanceRecords.map((record) => record.status) ?? [])
       const pendingAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING').length ?? 0
       const overdueAssignments = local?.submissions.filter((submission) => submission.status === 'PENDING' && submission.assignment.dueDate < new Date()).length ?? 0
@@ -565,6 +567,7 @@ studentsRouter.get('/me/children', authenticate, requireRoles('parent'), asyncHa
         attendanceRate: null,
         academicAccess,
         academicSummary: academicAccess.allowed ? {
+          ...reportAverage,
           average,
           attendanceRate,
           publishedGrades: local?.grades.length ?? 0,
