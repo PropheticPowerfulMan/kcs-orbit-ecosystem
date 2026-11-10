@@ -76,3 +76,15 @@ test('authorized browser-only recovery moves only the designated course and pres
  const activated=mergeTeacherWorkspaceState(result,future,{academicYear:'2026-2027',term:q2}).state as any
  assert.equal(activated.advancedGradebookByCycle[cycle].assignments[0].term,q2)
 })
+
+test('browser-retargeted Q1 columns keep their correction identity after the next quarter opens',()=>{
+ const cycle='spelling::2026-2027',q1='Semester 1 · Quarter 1',q2='Semester 1 · Quarter 2'
+ const previous={gradebookPeriodCorrectionsByCycle:{[cycle]:{from:q2,to:q1,assessmentIds:[],recoverBrowserWhileActive:true}}}
+ const incoming={advancedGradebookByCycle:{[cycle]:{assignments:[{id:'recovered',term:q1}],scores:{'recovered:s1':'0'}}}}
+ const saved=mergeTeacherWorkspaceState(previous,incoming,{academicYear:'2026-2027',term:q1}).state as any
+ assert.deepEqual(saved.gradebookPeriodCorrectionsByCycle[cycle].assessmentIds,['recovered'])
+ const stale=structuredClone(incoming);stale.advancedGradebookByCycle[cycle].assignments[0].term=q2
+ const next=mergeTeacherWorkspaceState(saved,stale,{academicYear:'2026-2027',term:q2}).state as any
+ assert.equal(next.advancedGradebookByCycle[cycle].assignments[0].term,q1)
+ assert.equal(next.advancedGradebookByCycle[cycle].scores['recovered:s1'],'0')
+})
