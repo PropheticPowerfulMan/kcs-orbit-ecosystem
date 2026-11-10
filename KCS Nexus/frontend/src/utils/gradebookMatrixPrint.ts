@@ -7,10 +7,13 @@ export type MatrixRow = {
 }
 export function gradebookMatrixPages(assessments: MatrixAssessment[], rows: MatrixRow[]) {
   const columns = [...assessments].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  // Reserve space for wrapped learner names and the authenticated footer.
+  const nameLines = Math.max(1, ...rows.map(row => Math.ceil(row.name.length / 32)));
+  const rowsPerPage = Math.max(2, Math.floor(24 / (nameLines + 1)));
   const pages: Array<{ assessments: MatrixAssessment[]; rows: MatrixRow[]; firstRow: number; firstColumn: number }> = [];
   for (let column = 0; column < Math.max(1, columns.length); column += 6) {
-    for (let row = 0; row < Math.max(1, rows.length); row += 16) {
-      pages.push({ assessments: columns.slice(column, column + 6), rows: rows.slice(row, row + 16), firstRow: row, firstColumn: column });
+    for (let row = 0; row < Math.max(1, rows.length); row += rowsPerPage) {
+      pages.push({ assessments: columns.slice(column, column + 6), rows: rows.slice(row, row + rowsPerPage), firstRow: row, firstColumn: column });
     }
   }
   return pages;
